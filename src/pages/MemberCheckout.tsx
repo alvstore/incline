@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { GymLoader } from '@/components/ui/gym-loader';
 import { CheckCircle, CreditCard, AlertCircle, Clock, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import {
 import { useNoindex } from '@/lib/seo/useNoindex';
+import {
   initializePayment,
   openRazorpayCheckout,
   verifyRazorpayPayment,
