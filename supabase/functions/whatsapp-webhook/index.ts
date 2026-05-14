@@ -1114,7 +1114,8 @@ INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
   if (shouldCaptureLead) {
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
-      goal: "Fitness Goal (e.g., Weight Loss, Muscle Gain, General Fitness)",
+      goal: "Fitness Goal (e.g., Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility)",
+      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, Annual, or Day Pass)",
       budget: "Monthly Budget (in ₹)", start_date: "When do you plan to start? (exact date or timeframe)",
       experience: "Fitness Experience Level (Beginner, Intermediate, or Advanced)",
       preferred_time: "Preferred workout time slot (e.g., Morning 6-8 AM, Evening 5-7 PM)",
@@ -1124,10 +1125,11 @@ INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
 You are also a lead generation assistant. Your secondary goal is to naturally collect the following information from this person during the conversation: ${fieldNames}.
 - Ask for these naturally, one or two at a time, weaving them into the conversation.
 - Do NOT ask for all fields at once.
-- When asking a question with limited choices (e.g., experience level, membership duration, preferred time), respond with ONLY this JSON format to show interactive buttons (max 3 options):
-  {"type":"interactive","body":"Your question text here","buttons":["Option 1","Option 2","Option 3"]}
-- For questions with more than 3 options, use a list format:
-  {"type":"interactive_list","body":"Your question text","button":"Select Option","sections":[{"title":"Section","rows":[{"id":"1","title":"Option 1","description":"Details"}]}]}
+- INTERACTIVE FORMAT (Meta WhatsApp Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use a list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
+  Buttons (≤3): {"type":"interactive","body":"Your question text","buttons":["A","B","C"]}
+  List (4–10):  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"Option 1","description":"Short detail"}, …]}]}
+- For "fitness goal" always offer 5 options as a list: Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility.
+- For "plan_interest" always offer the gym's actual plan durations as a list (Monthly, Quarterly, Half-Yearly, Annual, plus Day Pass if available).
 - For open-ended questions (name, email, budget amount), use normal text messages.
 
 ABSOLUTELY CRITICAL — DO NOT CAPTURE A LEAD UNTIL YOU HAVE COLLECTED ALL REQUIRED FIELDS:
