@@ -58,6 +58,8 @@ import { resolveIdentities, type ResolvedIdentity } from '@/lib/contacts/resolve
 import { upsertContact, CONTACT_CATEGORIES } from '@/services/contactService';
 import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/contacts/phone';
 import { Textarea } from '@/components/ui/textarea';
+import { useConversationPresence } from '@/hooks/useConversationPresence';
+import { AgentPresenceBar } from '@/components/whatsapp/AgentPresenceBar';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
