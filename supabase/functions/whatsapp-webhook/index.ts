@@ -1635,7 +1635,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
             .map((r: any) => ({
               user_id: r.user_id,
               branch_id: branchId,
-              title: "New WhatsApp Lead",
+              title: "🟢 WA",
               message: `${leadData.full_name} (${phoneNumber}) was captured via WhatsApp AI.`,
               type: "info",
               category: "lead",
