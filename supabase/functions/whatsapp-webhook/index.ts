@@ -1773,7 +1773,8 @@ async function sendAiReply(
   // Guarantees the 4 canonical durations (Monthly, Quarterly, Half-Yearly, Annual) are
   // always present, and strips any Day Pass / price-mentioning rows so the bot never
   // leaks pricing or an off-menu option.
-  const PLAN_BODY_RE = /plan|duration|membership|monthly|quarterly|yearly|annual/i;
+  // Strict: must mention plan/duration/membership context — avoids false-positive on "monthly budget".
+  const PLAN_BODY_RE = /\b(plan|duration|membership)\b/i;
   const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr/i;
   const CANONICAL_PLAN_LIST = {
     type: "list",
