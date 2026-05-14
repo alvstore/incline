@@ -1,79 +1,77 @@
-## Audit summary
+# WhatsApp AI Brain — 5-option lists, plan capture, agent presence & flow hardening
 
-### Confirmed root cause of the public website flash
-- `index.html` still contains a hard-coded `#lcp-shell` static hero.
-- That shell is exactly the first screenshot: no dumbbell, amber accent text, simplified layout.
-- React then loads `InclineAscent`, lazy-loads `Scene3D`, and only after `scene3d:ready` does the shell get removed.
-- Result: users see two different public website states on every hard load. This is not a branding/content bug in the React page; it is a deliberate static shell handoff that is now visually unacceptable.
+Noted on **Graph API v25.0** (released Feb 18, 2026 — latest stable). The interactive-message limits did not change in v25:
+- **Reply buttons:** still hard-capped at **3**
+- **Interactive list:** up to **10 rows per section**, multiple sections — this is the only way to show 5 options in one bubble
+- **Flows messages:** richer multi-screen forms, also unchanged
+- v25 mainly adds Calling API GA + new template categories; nothing relevant to our quick-reply flow
 
-### Performance finding
-- The preview shows about `8.3s` full load / DOMContentLoaded in dev mode because Vite loads many unbundled modules. Published build will be better, but the shell swap is still architecturally fragile.
-- The current optimization tried to improve LCP by painting fake content early, but it created a worse UX. The senior fix is to stop using fake content and make the real React hero paint fast.
+So the fix is the same: switch from buttons (3) → list (5–10).
 
-### System Health findings
-Open unresolved errors are mostly:
-- `/` critical: `Cannot read properties of undefined (reading 'add')` from `react-helmet-async` / landing render stack.
-- `/` critical: `Error creating WebGL context.` from the 3D scene on some devices.
-- Several stale/noisy network errors: `Load failed`, `Network error - check your internet connection`, stale dynamic import errors, and already-fixed `/incline` 404.
-- One real operational error: MIPS TCP timeout to the local device endpoint from attendance dashboard.
+---
 
-### Wider audit notes
-- Backend is healthy.
-- Database linter reports many warnings, but those are broad security-hardening items and should not be mixed into this public-landing emergency fix.
-- I also found old patterns to address in a later audit wave: some `hasAnyRole(...)` usage in fitness pages, broad dashboard scans needed for branch scoping/RBAC, and some direct communication/task writes that need closer review.
+## 1. Show 5+ options instead of 3
 
-## Implementation plan
+Today the AI brain prompt (`whatsapp-webhook/index.ts` lines 1097–1124, `_shared/ai-agent-brain.ts` lines 174–211) tells the model "max 3 options" and falls back to plain numbered text when there are more. The plumbing for `interactive_list` already exists (lines 1642–1651) and maps cleanly to Meta `type: list`.
 
-### 1. Remove the fake initial public page completely
-- Delete the `#lcp-shell` markup and shell-removal script from `index.html`.
-- Keep only safe, non-visual performance hints: logo preload, font preload, SEO tags.
-- This guarantees the first visible page and final page are the same React-rendered public website.
+**Changes:**
+- Drop the "max 3" wording. New rule in both prompts: *"1–3 choices → buttons. 4–10 choices → MUST emit `interactive_list`. Never emit a plain "1. … 2. … 3. … 4. … 5. …" text list."* Worked example with the 5-goal scenario from the message.
+- Bump the JSON examples to use realistic 5-option payloads.
+- **Runtime safety net** in the parser (around line 1630): if model still returns `type:"interactive"` with `buttons.length > 3`, auto-promote to a single-section `interactive_list` instead of silently slicing to the first 3.
+- Same change to plain-text fallback: if reply text contains a numbered list with ≥4 items and we have an interactive channel, repackage as a list.
+- Pin the Graph API base path to `/v25.0/` everywhere it appears (today some calls use older versions — quick grep + bump).
 
-### 2. Make the real React landing render immediately
-- Change `/` route from lazy-loaded to eager import for `InclineAscent` only.
-- Keep heavy 3D code lazy-loaded.
-- This removes the blank/fake interstitial without loading the whole app upfront.
+## 2. Audit & fix membership-plan-interest capture
 
-### 3. Provide a real lightweight fallback inside React
-- Add a lightweight hero layer in `InclineAscent` that matches the final public site visual language.
-- Keep the logo, headline, paragraph, and CTA positioning consistent with `ScrollOverlay`.
-- Mount the 3D scene after first paint/idle, but do not show a separate fake color/state.
-- The fallback remains visible if WebGL is unavailable, instead of throwing or flashing.
+Confirmed the gap: lead-capture target_fields are name / phone / email / goal / budget / start_date / experience / preferred_time (`AIFlowBuilderSettings.tsx` lines 17–26, brain field map at lines 196–202). **No "interested plan duration"** field anywhere → the AI never asks Monthly / Quarterly / Half-Yearly / Annual.
 
-### 4. Harden 3D/WebGL lifecycle
-- Wrap `Scene3D` with safer Canvas lifecycle handling.
-- Dispatch readiness only after Canvas exists and has rendered.
-- Add cleanup for `webglcontextlost` listener.
-- Avoid failing the whole landing page when WebGL cannot initialize.
+**Changes:**
+- Add `plan_interest` ("Interested Plan Duration") to:
+  - `AVAILABLE_FIELDS` in `AIFlowBuilderSettings.tsx`
+  - `fieldLabels` in both `whatsapp-webhook/index.ts` and `_shared/ai-agent-brain.ts`
+  - `leads` table — migration adds `plan_interest text` (nullable)
+- Wire the brain to read **actual plan rows** from `membership_plans` (already hydrated in `ai-agent-brain.ts` lines 324–344) and offer the gym's real durations as the 5-option list — kills two birds.
+- Default new flow configs to include `plan_interest` when lead capture is enabled, and surface it in the leads table / detail view so sales can sort by it.
 
-### 5. Fix the landing critical SEO/Helmet error
-- Remove duplicate static JSON-LD/head conflicts where safe, or make `SEO` injection stable for the public landing.
-- Ensure `react-helmet-async` does not crash the landing route on hydration/render.
+## 3. Multi-device agent presence (typing / viewing)
 
-### 6. Clean System Health noise without hiding real bugs
-- Improve error filtering for Safari `Load failed`, offline/network fetch failures, stale dynamic import chunks, and known preview/lovable wrapper warnings.
-- Keep real backend/function/database errors visible.
-- After code fixes, mark stale resolved System Health entries as resolved via a safe data update only for errors that are demonstrably addressed: `/incline` 404, stale chunk reload, old WebGL crashes if no longer reproducible, and old setup-check logging.
+`WhatsAppChat.tsx` has zero presence layer today, so two staff on web + mobile + desktop can both reply to the same lead. Same Supabase user across devices, so we just need a presence channel per conversation.
 
-### 7. Focused audit report for requested modules
-- Produce a concise follow-up audit list for Members, Memberships, Payroll, HRM, Invoices, Finance Dashboard, WhatsApp, and AI Brain.
-- Categorize issues as: critical data integrity, RBAC/branch scoping, performance/N+1, UX/loading states, and integration reliability.
-- Do not change those modules in this fix unless a live System Health error directly points to them.
+**Changes (frontend-only, Supabase Realtime presence — no extra infra):**
+- New hook `useConversationPresence(conversationId)` joining channel `whatsapp:conv:<id>` and tracking `{ user_id, name, avatar, status: 'viewing' | 'typing', ts }`.
+- New `<AgentPresenceBar />` in the conversation pane:
+  - Avatar pills of other agents currently viewing → "Priya is viewing", "Rahul is typing…"
+  - Soft-warn before sending if another agent is typing in the same convo: *"Rahul is also replying — send anyway?"*
+  - Broadcast `agent_replied` on send so others see "Rahul just replied 2s ago" toast.
+- Throttle typing events to 1/sec, auto-clear after 4s idle.
+- Fully ephemeral (no DB writes). Works on web, mobile PWA, and desktop because they share the Supabase auth session.
 
-## Validation plan
+## 4. Make the automation flow more robust
 
-- Hard-refresh `/` and verify there is no first-screenshot shell anymore.
-- Capture screenshot immediately after navigation and after a few seconds: both must be the same visual direction.
-- Check browser console for `/` errors.
-- Run browser performance profile again to confirm no new long blocking path from eager landing import.
-- Re-query System Health open errors after validation.
+Targeted hardening of failure modes seen in production logs:
 
-## Files expected to change
+- **Sticky lead progress per contact:** persist `lead_capture_progress` (JSONB) on `whatsapp_contacts` so the brain can't loop ("name?" → "name?" → "name?") on flaky JSON parses across turns.
+- **Robust JSON repair:** today's regex only catches single-line `{…}`. Replace with a brace-matched extractor that handles multi-line JSON and ```json``` markdown fences.
+- **Repeat-question guard:** keep `last_3_questions` in conversation memory; if the model tries to ask the same one 3× in a row → force `transfer_to_human`.
+- **Tool-error two-strike rule:** documented in the prompt but not enforced. Track `consecutive_tool_errors` on the conversation row, auto-handoff at 2.
+- **Send-time race lock:** before calling Meta `/v25.0/<phone_id>/messages`, take a 5-second `pg_advisory_xact_lock(hashtext('wa:'||conversation_id))` so two concurrent webhook invocations (Meta retries) can't double-reply.
+- **Lead-JSON resilience:** if the model emits the lead-captured JSON but is missing required fields, today we silently drop it. Instead → log to `automation_diagnostics`, ask only for the missing field, do not reset progress.
 
-- `index.html`
-- `src/App.tsx`
-- `src/pages/InclineAscent.tsx`
-- `src/components/3d/Scene3D.tsx`
-- `src/components/seo/SEO.tsx` if needed after Helmet review
-- `src/services/errorLogService.ts`
-- Possible safe data update to resolve stale System Health rows after validation
+---
+
+## Technical details
+
+Files touched:
+- `supabase/functions/whatsapp-webhook/index.ts` — prompt rewrite, list-promotion, JSON repair, advisory lock, repeat & error guards, v25 path pin
+- `supabase/functions/_shared/ai-agent-brain.ts` — same prompt + field-label changes for omnichannel agent
+- `src/components/settings/AIFlowBuilderSettings.tsx` — add `plan_interest` field
+- `src/pages/WhatsAppChat.tsx` + new `src/hooks/useConversationPresence.ts` + `AgentPresenceBar.tsx` — presence UI
+- Migration: `leads.plan_interest text`, `whatsapp_contacts.lead_capture_progress jsonb default '{}'::jsonb`, `automation_diagnostics` table for dropped JSON & repeat-loop incidents
+
+Non-goals (ask if you want them):
+- Replacing the brain with the Vercel AI SDK / proper agent loop refactor
+- Building a Flows-message onboarding (vs. simple list)
+- Hard "claim conversation" lock (vs. soft presence warning)
+- Adopting any v25-only features (Calling API, new template categories) — those are separate asks
+
+I'll ship in two waves once approved: **(a)** v25 pin + 5-option list + plan_interest + migration, **(b)** agent presence + robustness hardening.

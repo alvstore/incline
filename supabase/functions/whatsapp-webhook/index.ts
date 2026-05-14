@@ -1094,12 +1094,19 @@ RULES:
 - Be warm, professional, and concise. Use emoji sparingly.
 - For questions about pricing, new memberships, or complex issues, use transfer_to_human.
 
-INTERACTIVE RESPONSE FORMAT:
-When presenting options to the member (e.g., available time slots, facility choices, yes/no confirmations), respond with ONLY this JSON:
-  {"type":"interactive","body":"Your question text","buttons":["Option 1","Option 2","Option 3"]}
-For lists with more than 3 options:
-  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Section","rows":[{"id":"1","title":"Option 1","description":"Details"}]}]}
-Use normal text for confirmations and informational replies.`;
+INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
+- 1–3 choices → use a button block:
+  {"type":"interactive","body":"Your question text","buttons":["Option A","Option B","Option C"]}
+- 4–10 choices → you MUST use a list block (Meta hard-caps reply buttons at 3):
+  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Choose one","rows":[
+    {"id":"opt_1","title":"Option 1","description":"Short detail"},
+    {"id":"opt_2","title":"Option 2","description":"Short detail"},
+    {"id":"opt_3","title":"Option 3","description":"Short detail"},
+    {"id":"opt_4","title":"Option 4","description":"Short detail"},
+    {"id":"opt_5","title":"Option 5","description":"Short detail"}
+  ]}]}
+- NEVER emit a plain numbered text list ("1. … 2. … 3. … 4. … 5. …") when you have ≥4 choices — emit the interactive_list JSON instead.
+- Use normal text for confirmations and informational replies.`;
   }
 
   // Lead capture for non-members
@@ -1107,7 +1114,8 @@ Use normal text for confirmations and informational replies.`;
   if (shouldCaptureLead) {
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
-      goal: "Fitness Goal (e.g., Weight Loss, Muscle Gain, General Fitness)",
+      goal: "Fitness Goal (e.g., Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility)",
+      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, Annual, or Day Pass)",
       budget: "Monthly Budget (in ₹)", start_date: "When do you plan to start? (exact date or timeframe)",
       experience: "Fitness Experience Level (Beginner, Intermediate, or Advanced)",
       preferred_time: "Preferred workout time slot (e.g., Morning 6-8 AM, Evening 5-7 PM)",
@@ -1117,10 +1125,11 @@ Use normal text for confirmations and informational replies.`;
 You are also a lead generation assistant. Your secondary goal is to naturally collect the following information from this person during the conversation: ${fieldNames}.
 - Ask for these naturally, one or two at a time, weaving them into the conversation.
 - Do NOT ask for all fields at once.
-- When asking a question with limited choices (e.g., experience level, membership duration, preferred time), respond with ONLY this JSON format to show interactive buttons (max 3 options):
-  {"type":"interactive","body":"Your question text here","buttons":["Option 1","Option 2","Option 3"]}
-- For questions with more than 3 options, use a list format:
-  {"type":"interactive_list","body":"Your question text","button":"Select Option","sections":[{"title":"Section","rows":[{"id":"1","title":"Option 1","description":"Details"}]}]}
+- INTERACTIVE FORMAT (Meta WhatsApp Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use a list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
+  Buttons (≤3): {"type":"interactive","body":"Your question text","buttons":["A","B","C"]}
+  List (4–10):  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"Option 1","description":"Short detail"}, …]}]}
+- For "fitness goal" always offer 5 options as a list: Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility.
+- For "plan_interest" always offer the gym's actual plan durations as a list (Monthly, Quarterly, Half-Yearly, Annual, plus Day Pass if available).
 - For open-ended questions (name, email, budget amount), use normal text messages.
 
 ABSOLUTELY CRITICAL — DO NOT CAPTURE A LEAD UNTIL YOU HAVE COLLECTED ALL REQUIRED FIELDS:
@@ -1444,6 +1453,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
         expected_start_date: parsedLeadData.expected_start_date || parsedLeadData.start_date || null,
         fitness_experience: parsedLeadData.fitness_experience || parsedLeadData.experience || null,
         preferred_time: parsedLeadData.preferred_time || parsedLeadData.time || null,
+        plan_interest: parsedLeadData.plan_interest || parsedLeadData.plan || parsedLeadData.membership_duration || null,
         notes: `AI-captured via WhatsApp conversation`,
       };
 
@@ -1487,6 +1497,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
             expected_start_date: leadData.expected_start_date,
             fitness_experience: leadData.fitness_experience,
             preferred_time: leadData.preferred_time,
+            plan_interest: leadData.plan_interest,
             last_contacted_at: new Date().toISOString(),
           }).eq("id", _dupLead.id);
           await supabase.from("whatsapp_chat_settings").upsert(
@@ -1628,17 +1639,37 @@ async function sendAiReply(
   if (extraction) {
     const parsed = extraction.parsed;
     if (parsed.type === "interactive" && parsed.buttons?.length) {
-      interactivePayload = {
-        type: "button",
-        body: { text: parsed.body || "Please select an option:" },
-        action: {
-          buttons: parsed.buttons.slice(0, 3).map((btn: string, i: number) => ({
-            type: "reply",
-            reply: { id: `btn_${i}`, title: btn.substring(0, 20) },
-          })),
-        },
-      };
-      replyText = `${parsed.body}\n${parsed.buttons.map((b: string, i: number) => `${i + 1}. ${b}`).join("\n")}`;
+      const opts: string[] = parsed.buttons;
+      if (opts.length > 3) {
+        // SAFETY NET: Meta caps reply buttons at 3 — auto-promote to a list block
+        // so we never silently drop options 4+. Single section, one row per option.
+        interactivePayload = {
+          type: "list",
+          body: { text: parsed.body || "Please select an option:" },
+          action: {
+            button: "Select",
+            sections: [{
+              title: "Choose one",
+              rows: opts.slice(0, 10).map((title, i) => ({
+                id: `opt_${i + 1}`,
+                title: String(title).substring(0, 24),
+              })),
+            }],
+          },
+        };
+      } else {
+        interactivePayload = {
+          type: "button",
+          body: { text: parsed.body || "Please select an option:" },
+          action: {
+            buttons: opts.slice(0, 3).map((btn: string, i: number) => ({
+              type: "reply",
+              reply: { id: `btn_${i}`, title: String(btn).substring(0, 20) },
+            })),
+          },
+        };
+      }
+      replyText = `${parsed.body}\n${opts.map((b: string, i: number) => `${i + 1}. ${b}`).join("\n")}`;
     } else if (parsed.type === "interactive_list" && parsed.sections?.length) {
       interactivePayload = {
         type: "list",
