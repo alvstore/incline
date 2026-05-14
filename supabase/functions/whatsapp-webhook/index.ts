@@ -1497,6 +1497,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
             expected_start_date: leadData.expected_start_date,
             fitness_experience: leadData.fitness_experience,
             preferred_time: leadData.preferred_time,
+            plan_interest: leadData.plan_interest,
             last_contacted_at: new Date().toISOString(),
           }).eq("id", _dupLead.id);
           await supabase.from("whatsapp_chat_settings").upsert(
