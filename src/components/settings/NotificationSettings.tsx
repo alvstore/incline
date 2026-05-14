@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
-import { LeadNotificationSettings } from '@/components/settings/LeadNotificationSettings';
+import { useState, useEffect, useRef } from 'react';
+import {
+  LeadNotificationCards,
+  AdminRecipientsCard,
+  type LeadNotificationCardsHandle,
+} from '@/components/settings/LeadNotificationSettings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -47,11 +51,19 @@ export function NotificationSettings() {
     }
   }, [savedPreferences]);
 
+  const leadCardsRef = useRef<LeadNotificationCardsHandle>(null);
+
   const saveMutation = useMutation({
-    mutationFn: () => upsertPreferences(user!.id, preferences),
+    mutationFn: async () => {
+      await Promise.all([
+        upsertPreferences(user!.id, preferences),
+        leadCardsRef.current?.save() ?? Promise.resolve(),
+      ]);
+    },
     onSuccess: () => {
       toast.success('Notification preferences saved');
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-notification-rules'] });
     },
     onError: () => {
       toast.error('Failed to save preferences');
@@ -181,10 +193,12 @@ export function NotificationSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Lead Notification cards — same grid, same shell as Email + System Alerts */}
+        <LeadNotificationCards ref={leadCardsRef} />
       </div>
 
-      {/* Lead Notification Rules — styled to match Email + System Alerts */}
-      <LeadNotificationSettings />
+      <AdminRecipientsCard />
 
       <div className="flex justify-end">
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
