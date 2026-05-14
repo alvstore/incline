@@ -1094,12 +1094,19 @@ RULES:
 - Be warm, professional, and concise. Use emoji sparingly.
 - For questions about pricing, new memberships, or complex issues, use transfer_to_human.
 
-INTERACTIVE RESPONSE FORMAT:
-When presenting options to the member (e.g., available time slots, facility choices, yes/no confirmations), respond with ONLY this JSON:
-  {"type":"interactive","body":"Your question text","buttons":["Option 1","Option 2","Option 3"]}
-For lists with more than 3 options:
-  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Section","rows":[{"id":"1","title":"Option 1","description":"Details"}]}]}
-Use normal text for confirmations and informational replies.`;
+INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
+- 1–3 choices → use a button block:
+  {"type":"interactive","body":"Your question text","buttons":["Option A","Option B","Option C"]}
+- 4–10 choices → you MUST use a list block (Meta hard-caps reply buttons at 3):
+  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Choose one","rows":[
+    {"id":"opt_1","title":"Option 1","description":"Short detail"},
+    {"id":"opt_2","title":"Option 2","description":"Short detail"},
+    {"id":"opt_3","title":"Option 3","description":"Short detail"},
+    {"id":"opt_4","title":"Option 4","description":"Short detail"},
+    {"id":"opt_5","title":"Option 5","description":"Short detail"}
+  ]}]}
+- NEVER emit a plain numbered text list ("1. … 2. … 3. … 4. … 5. …") when you have ≥4 choices — emit the interactive_list JSON instead.
+- Use normal text for confirmations and informational replies.
   }
 
   // Lead capture for non-members
