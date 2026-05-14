@@ -33,23 +33,28 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch lead data
-    const { data: lead, error: leadErr } = await supabase
+    // 1. Atomic claim: only the first caller for this lead proceeds.
+    // Concurrent invocations (DB trigger + edge fetch) are serialized by Postgres;
+    // the loser gets 0 rows back and exits without sending.
+    const { data: claimed, error: claimErr } = await supabase
       .from("leads")
-      .select("id, full_name, phone, email, source, branch_id, notified_at")
+      .update({ notified_at: new Date().toISOString() })
       .eq("id", lead_id)
-      .single();
+      .is("notified_at", null)
+      .select("id, full_name, phone, email, source, branch_id")
+      .maybeSingle();
 
-    if (leadErr || !lead) {
-      console.error("Lead not found:", leadErr);
-      return json({ error: "Lead not found" }, 404);
+    if (claimErr) {
+      console.error("Lead claim error:", claimErr);
+      return json({ error: "Lead claim failed" }, 500);
     }
 
-    // Idempotency: short-circuit if we've already notified for this lead
-    if (lead.notified_at) {
-      console.log(`Lead ${lead_id} already notified at ${lead.notified_at}, skipping`);
-      return json({ success: true, sent: 0, skipped: true, reason: "already_notified" });
+    if (!claimed) {
+      console.log(`Lead ${lead_id} already claimed by another invocation, skipping`);
+      return json({ success: true, sent: 0, skipped: true, reason: "already_claimed" });
     }
+
+    const lead = claimed;
 
     // 2. Fetch branch name
     const { data: branch } = await supabase
