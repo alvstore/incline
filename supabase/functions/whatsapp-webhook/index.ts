@@ -1115,7 +1115,7 @@ INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
       goal: "Fitness Goal (e.g., Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility)",
-      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, Annual, or Day Pass)",
+      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, or Annual)",
       budget: "Monthly Budget (in ₹)", start_date: "When do you plan to start? (exact date or timeframe)",
       experience: "Fitness Experience Level (Beginner, Intermediate, or Advanced)",
       preferred_time: "Preferred workout time slot (e.g., Morning 6-8 AM, Evening 5-7 PM)",
@@ -1128,8 +1128,22 @@ You are also a lead generation assistant. Your secondary goal is to naturally co
 - INTERACTIVE FORMAT (Meta WhatsApp Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use a list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
   Buttons (≤3): {"type":"interactive","body":"Your question text","buttons":["A","B","C"]}
   List (4–10):  {"type":"interactive_list","body":"Your question text","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"Option 1","description":"Short detail"}, …]}]}
-- For "fitness goal" always offer 5 options as a list: Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility.
-- For "plan_interest" always offer the gym's actual plan durations as a list (Monthly, Quarterly, Half-Yearly, Annual, plus Day Pass if available).
+- For "fitness goal" always emit this EXACT list (5 rows, never buttons):
+  {"type":"interactive_list","body":"What's your primary fitness goal?","button":"Select Goal","sections":[{"title":"Your goal","rows":[
+    {"id":"goal_weight_loss","title":"🔥 Weight Loss","description":"Burn fat, get leaner"},
+    {"id":"goal_muscle_gain","title":"💪 Muscle Gain","description":"Build strength and mass"},
+    {"id":"goal_endurance","title":"🏃 Endurance","description":"Boost stamina and cardio"},
+    {"id":"goal_general","title":"✨ General Fitness","description":"Stay healthy and active"},
+    {"id":"goal_flexibility","title":"🧘 Flexibility","description":"Mobility and recovery"}
+  ]}]}
+- For "plan_interest" always emit this EXACT list (4 rows, never buttons, never include Day Pass, never mention prices/fees):
+  {"type":"interactive_list","body":"Which membership duration suits you best?","button":"View Plans","sections":[{"title":"Choose your plan","rows":[
+    {"id":"plan_monthly","title":"📅 Monthly","description":"Flexible — try us out, no commitment"},
+    {"id":"plan_quarterly","title":"⚡ Quarterly","description":"3 months — most popular starter"},
+    {"id":"plan_halfyearly","title":"💪 Half-Yearly","description":"6 months — better value, real results"},
+    {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
+  ]}]}
+- NEVER omit Annual. NEVER use a button block for plan_interest or goal — these always render as interactive_list. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
 - For open-ended questions (name, email, budget amount), use normal text messages.
 
 ABSOLUTELY CRITICAL — DO NOT CAPTURE A LEAD UNTIL YOU HAVE COLLECTED ALL REQUIRED FIELDS:
@@ -1753,6 +1767,54 @@ async function sendAiReply(
       const allRows = parsed.sections.flatMap((s: any) => s.rows || []);
       replyText = `${parsed.body}\n${allRows.map((r: any) => `• ${r.title}`).join("\n")}`;
     }
+  }
+
+  // SAFETY NET — plan/duration question normalization.
+  // Guarantees the 4 canonical durations (Monthly, Quarterly, Half-Yearly, Annual) are
+  // always present, and strips any Day Pass / price-mentioning rows so the bot never
+  // leaks pricing or an off-menu option.
+  // Strict: must mention plan/duration/membership context — avoids false-positive on "monthly budget".
+  const PLAN_BODY_RE = /\b(plan|duration|membership)\b/i;
+  const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr/i;
+  const CANONICAL_PLAN_LIST = {
+    type: "list",
+    body: { text: "Which membership duration suits you best?" },
+    action: {
+      button: "View Plans",
+      sections: [{
+        title: "Choose your plan",
+        rows: [
+          { id: "plan_monthly", title: "📅 Monthly", description: "Flexible — try us out, no commitment" },
+          { id: "plan_quarterly", title: "⚡ Quarterly", description: "3 months — most popular starter" },
+          { id: "plan_halfyearly", title: "💪 Half-Yearly", description: "6 months — better value, real results" },
+          { id: "plan_annual", title: "🏆 Annual", description: "12 months — our most committed members" },
+        ],
+      }],
+    },
+  };
+
+  const looksLikePlanQuestion = (body: string) => PLAN_BODY_RE.test(body || "");
+
+  if (interactivePayload) {
+    const bodyText = interactivePayload?.body?.text || "";
+    if (looksLikePlanQuestion(bodyText)) {
+      // Force canonical 4-row list whenever a plan question is detected.
+      interactivePayload = { ...CANONICAL_PLAN_LIST, body: { text: bodyText || CANONICAL_PLAN_LIST.body.text } };
+      const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
+      replyText = `${interactivePayload.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
+    } else if (interactivePayload.type === "list") {
+      // Strip Day Pass / price-mentioning rows from any other list as a final guard.
+      for (const section of interactivePayload.action?.sections || []) {
+        section.rows = (section.rows || []).filter((r: any) =>
+          !PRICE_DAYPASS_RE.test(`${r.title || ""} ${r.description || ""}`)
+        );
+      }
+    }
+  } else if (looksLikePlanQuestion(replyText)) {
+    // Model emitted plan question as plain text — promote to canonical list.
+    interactivePayload = CANONICAL_PLAN_LIST;
+    const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
+    replyText = `${CANONICAL_PLAN_LIST.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
   }
 
   const { data: aiMsg, error: insertErr } = await supabase
