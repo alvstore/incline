@@ -1106,7 +1106,7 @@ INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
     {"id":"opt_5","title":"Option 5","description":"Short detail"}
   ]}]}
 - NEVER emit a plain numbered text list ("1. … 2. … 3. … 4. … 5. …") when you have ≥4 choices — emit the interactive_list JSON instead.
-- Use normal text for confirmations and informational replies.
+- Use normal text for confirmations and informational replies.`;
   }
 
   // Lead capture for non-members
