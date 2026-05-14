@@ -11170,6 +11170,24 @@ export type Database = {
           },
         ]
       }
+      whatsapp_send_locks: {
+        Row: {
+          acquired_at: string
+          expires_at: string
+          phone_number: string
+        }
+        Insert: {
+          acquired_at?: string
+          expires_at: string
+          phone_number: string
+        }
+        Update: {
+          acquired_at?: string
+          expires_at?: string
+          phone_number?: string
+        }
+        Relationships: []
+      }
       whatsapp_send_queue: {
         Row: {
           attempts: number
@@ -12478,6 +12496,10 @@ export type Database = {
         Args: { p_assignment_id: string; p_release_date?: string }
         Returns: Json
       }
+      release_whatsapp_send_lock: {
+        Args: { _phone: string }
+        Returns: undefined
+      }
       remove_user_role: {
         Args: {
           p_reason: string
@@ -12699,6 +12721,10 @@ export type Database = {
       transition_member_lifecycle: {
         Args: { p_member_id: string; p_reason?: string; p_to_state: string }
         Returns: Json
+      }
+      try_whatsapp_send_lock: {
+        Args: { _phone: string; _ttl_seconds?: number }
+        Returns: boolean
       }
       user_visible_branch_ids: {
         Args: { p_user_id: string }
