@@ -234,3 +234,119 @@ export function LeadNotificationSettings() {
     </div>
   );
 }
+
+// === Per-admin recipient toggles ===
+interface AdminRow {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  whatsapp_enabled: boolean;
+  sms_enabled: boolean;
+}
+
+function maskPhone(p: string | null): string {
+  if (!p) return '—';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length < 4) return p;
+  return `${p.slice(0, p.length - digits.length + 2)}•••${digits.slice(-2)}`;
+}
+
+function AdminRecipientsPanel() {
+  const queryClient = useQueryClient();
+  const { data: admins, isLoading } = useQuery({
+    queryKey: ['lead-notification-admin-recipients'],
+    queryFn: async (): Promise<AdminRow[]> => {
+      const { data: roleRows, error: rErr } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['owner', 'admin']);
+      if (rErr) throw rErr;
+      const ids = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+      if (ids.length === 0) return [];
+
+      const [{ data: profiles }, { data: prefs }] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, phone').in('id', ids),
+        supabase
+          .from('lead_notification_admin_prefs')
+          .select('user_id, whatsapp_enabled, sms_enabled')
+          .in('user_id', ids),
+      ]);
+
+      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+      for (const p of prefs || []) prefMap.set((p as any).user_id, p as any);
+
+      return (profiles || []).map((p: any) => {
+        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true };
+        return {
+          id: p.id,
+          full_name: p.full_name,
+          phone: p.phone,
+          whatsapp_enabled: pref.whatsapp_enabled,
+          sms_enabled: pref.sms_enabled,
+        };
+      });
+    },
+  });
+
+  const updatePref = useMutation({
+    mutationFn: async (input: { user_id: string; whatsapp_enabled: boolean; sms_enabled: boolean }) => {
+      const { error } = await supabase
+        .from('lead_notification_admin_prefs')
+        .upsert(input, { onConflict: 'user_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lead-notification-admin-recipients'] }),
+    onError: (e: any) => toast.error(e.message || 'Failed to update preference'),
+  });
+
+  return (
+    <div className="space-y-3">
+      <h4 className="font-semibold text-sm flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" />
+        Admin Recipients
+      </h4>
+      <p className="text-xs text-muted-foreground -mt-1">
+        Choose which owners/admins receive lead alerts. Master toggles above must also be on.
+      </p>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+        </div>
+      ) : !admins || admins.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No owners/admins found.</p>
+      ) : (
+        <div className="rounded-xl border divide-y bg-card">
+          {admins.map((a) => (
+            <div key={a.id} className="flex items-center justify-between p-3 gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900 truncate">{a.full_name || 'Unnamed'}</p>
+                <p className="text-xs text-muted-foreground">{maskPhone(a.phone)}</p>
+              </div>
+              <div className="flex items-center gap-5">
+                <label className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">WhatsApp</span>
+                  <Switch
+                    checked={a.whatsapp_enabled}
+                    onCheckedChange={(v) =>
+                      updatePref.mutate({ user_id: a.id, whatsapp_enabled: v, sms_enabled: a.sms_enabled })
+                    }
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">SMS</span>
+                  <Switch
+                    checked={a.sms_enabled}
+                    onCheckedChange={(v) =>
+                      updatePref.mutate({ user_id: a.id, whatsapp_enabled: a.whatsapp_enabled, sms_enabled: v })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
