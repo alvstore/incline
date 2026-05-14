@@ -1453,6 +1453,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
         expected_start_date: parsedLeadData.expected_start_date || parsedLeadData.start_date || null,
         fitness_experience: parsedLeadData.fitness_experience || parsedLeadData.experience || null,
         preferred_time: parsedLeadData.preferred_time || parsedLeadData.time || null,
+        plan_interest: parsedLeadData.plan_interest || parsedLeadData.plan || parsedLeadData.membership_duration || null,
         notes: `AI-captured via WhatsApp conversation`,
       };
 
