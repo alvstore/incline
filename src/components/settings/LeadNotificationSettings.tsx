@@ -194,6 +194,9 @@ export function LeadNotificationSettings() {
             </div>
           </div>
 
+          {/* Per-admin recipient toggles */}
+          <AdminRecipientsPanel />
+
           {/* Conversion Notifications (Placeholder) */}
           <div className="space-y-2">
             <h4 className="font-semibold text-sm flex items-center gap-2 text-muted-foreground">
