@@ -1,82 +1,63 @@
-## Audit findings (facts, not assumptions)
+## Goal
+Make `Lead Notification Rules` visually consistent with `Email Notifications` and `System Alerts` on the Notification Settings page. Right now it uses a different shell (heavy red bell, badge, gradient-feeling sub-sections, full-width red save bar, framed Admin Recipients table, emoji headers, template-link callout) which clashes with the clean two-card grid above it.
 
-### 1. "Only Rajat gets the alert" — actually NOT true
-Nothing is hard-coded. `notify-lead-created` queries `user_roles WHERE role IN ('owner','admin')` and joins `profiles.phone`. The DB shows:
+## Audit findings (visual diffs)
 
-| Name | Phone | Roles |
+| Element | Email / System Alerts (target) | Lead Notification Rules (current) |
 |---|---|---|
-| Yogita Lekhari | +919928910901 | admin |
-| Rajat Lekhari | +919887601200 | admin, owner |
-
-`communication_logs` confirms BOTH numbers received every recent lead alert (Rakesh and Chirag). So Yogita is being sent the WhatsApp — likely it's landing on a number she doesn't actively check, or the device isn't logged into WhatsApp Business with that number. Worth verifying on her device before assuming the code is broken.
-
-### 2. Duplicate alerts — real bug
-Logs show 2 sends per recipient within ~1 second:
-- 15:16:25 + 15:16:26 → Rakesh (Rajat)
-- 15:16:29 + 15:16:31 → Rakesh (Yogita)
-
-Root cause: two writers race to call `notify-lead-created` for the same lead.
-
-```text
-INSERT INTO leads
-   ├─ DB trigger trg_notify_lead_created (pg_net async)  ──► notify-lead-created  (run A)
-   └─ Edge fn (capture-lead / webhook-lead-capture /                              
-        whatsapp-webhook / ai-agent-brain) does fire-and-forget fetch ──► notify-lead-created (run B)
-```
-
-Both A and B read `notified_at IS NULL` BEFORE either has set it, so the idempotency guard fails. The `UPDATE leads SET notified_at = now()` only happens AFTER all sends complete, which is way too late.
-
-### 3. The "two in-app notifications" (New WhatsApp Lead + New Lead Captured)
-Those are two **different** notification rows, not duplicates — one is emitted by the WhatsApp AI flow ("New WhatsApp Lead"), the other by the generic lead-created notifier ("New Lead Captured"). They fire in parallel. Confirm with the user whether they want these merged into a single in-app entry.
-
----
+| Card | Plain `Card` with header (icon + title + small description) | Same card, but extra `1 active` badge + long descriptor |
+| Sub-headers | None — flat list of toggle rows | Bold sub-headings `Lead Capture Alerts` / `Follow-up Reminders` with icons + helper text |
+| Toggle rows | `Label` + muted `p` + `Switch` | Same pattern (already matches) |
+| Spacing | `space-y-4` rows inside `CardContent` | `space-y-6` with nested `space-y-4` blocks (denser, inconsistent) |
+| Admin Recipients | n/a | Bordered framed list inside same card |
+| Save | Single `Save Preferences` button at page bottom (top-right, outline-ish) | Extra full-width red `Save Notification Settings` button under the card |
+| Conversion Notifications | n/a | Emoji 🎯 placeholder block |
+| Template link | n/a | Boxed callout with external-link icon |
 
 ## Plan
 
-### A. Per-admin opt-in toggles ("admin toggle controls")
-Add a section in `LeadNotificationSettings.tsx` listing every owner/admin user with:
-- Name, masked phone
-- A `Switch` per channel (WhatsApp / SMS) per admin
+### 1. `LeadNotificationSettings.tsx` — restructure into 2 sibling cards that match the upper grid
 
-Storage: new table `lead_notification_admin_optouts` (or simpler: a JSONB `disabled_admin_ids` column on `lead_notification_rules`). I'll go with a clean dedicated table:
+Replace the single mega-card with **two cards rendered in the same `md:grid-cols-2` grid as Email / System Alerts**, using identical structure:
 
-```sql
-CREATE TABLE lead_notification_admin_prefs (
-  user_id uuid PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
-  whatsapp_enabled boolean NOT NULL DEFAULT true,
-  sms_enabled boolean NOT NULL DEFAULT true,
-  updated_at timestamptz DEFAULT now()
-);
-```
-RLS: owners/admins can read all rows; each user can update their own row; owners can update anyone's.
+- **Card A — "Lead Alerts (to Lead)"**
+  - Header: `UserCheck` icon + title `Lead Alerts` + description `Notify the lead when they're captured`
+  - Rows: `SMS to Lead`, `WhatsApp to Lead`
+- **Card B — "Team Alerts"**
+  - Header: `Users` icon + title `Team Alerts` + description `Alert your team when new leads arrive`
+  - Rows: `SMS to Admins`, `WhatsApp to Admins`, `SMS to Managers`, `WhatsApp to Managers`
 
-`notify-lead-created` joins this table when expanding the admin recipient list and skips users with the relevant channel disabled. Same logic for managers (managers stay enabled by default; we keep this scoped to the admin list as you asked).
+Both use the exact same JSX pattern as the Email card: `<Card><CardHeader>… icon + CardTitle + CardDescription …</CardHeader><CardContent className="space-y-4"> … flex justify-between rows … </CardContent></Card>`.
 
-### B. Fix duplicate sends (atomic claim)
-Replace the "read then update" pattern in `notify-lead-created` with an atomic claim at the top:
+Drop:
+- The outer wrapper card with `1 active` badge.
+- The full-width red `Save Notification Settings` button (rely on the page-level `Save Preferences` button — extend it to also persist lead rules).
+- The 🎯 emoji "Conversion Notifications" placeholder (or keep as a compact muted line at the bottom of Card B without emoji, using `Target` lucide icon).
+- The boxed `Settings → Templates` callout (move to a single muted line under Card B, no border, no bg).
 
-```ts
-const { data: claimed } = await supabase
-  .from('leads')
-  .update({ notified_at: new Date().toISOString() })
-  .eq('id', lead_id)
-  .is('notified_at', null)
-  .select('id, full_name, phone, email, source, branch_id')
-  .maybeSingle();
+### 2. `AdminRecipientsPanel` — make it its own matching card (full width, below the grid)
 
-if (!claimed) {
-  return json({ success: true, skipped: true, reason: 'already_claimed' });
-}
-```
+- Wrap in same `Card` shell with header: `ShieldCheck` icon + `CardTitle="Admin Recipients"` + `CardDescription="Choose which owners/admins receive lead alerts. Master toggles above must also be on."`
+- Inside `CardContent`, drop the extra bordered `rounded-xl border divide-y` wrapper — just use `divide-y` rows directly so it visually breathes like the other cards.
+- Keep per-user WhatsApp / SMS switches.
 
-Whichever caller wins the `UPDATE … WHERE notified_at IS NULL` proceeds; the loser exits immediately. No more double sends regardless of how many places trigger the function. Remove the now-redundant `notified_at` write at the bottom.
+### 3. `NotificationSettings.tsx` — layout & save unification
 
-### C. Files touched
-1. `supabase/migrations/<new>.sql` — create `lead_notification_admin_prefs` + RLS
-2. `supabase/functions/notify-lead-created/index.ts` — atomic claim + filter admins by prefs
-3. `src/components/settings/LeadNotificationSettings.tsx` — new "Admin recipients" panel with per-admin toggles
+- Render the two new lead cards inside the SAME `<div className="grid gap-6 md:grid-cols-2">` wrapper that holds Email + System Alerts (4 cards, 2x2 grid on md+).
+- Render `AdminRecipientsPanel` (now a card) full-width below the grid.
+- Wire the existing page-level `Save Preferences` button to also call the lead-rules save mutation in parallel (expose a `useSaveLeadRules()` hook from `LeadNotificationSettings.tsx`, or lift state up). Single save action, single toast.
+- Remove the duplicate full-width red save button.
 
-No changes needed in `whatsapp-webhook`, `capture-lead`, `webhook-lead-capture`, or the DB trigger — they keep firing, but the atomic claim ensures only one wins.
+### 4. Styling tokens (match existing cards exactly)
+- No custom shadows / rounded overrides — use whatever default `Card` ships with so all 4 cards look identical.
+- Icons: `text-primary h-5 w-5` in card header (same as Email/System Alerts).
+- Sub-section icons: removed; each card is now single-purpose.
 
-### Open question (please confirm before I build)
-The two in-app notifications ("New WhatsApp Lead" + "New Lead Captured") — do you want me to suppress the generic one when the WhatsApp AI version already fired for the same lead? It's a separate code path from the WhatsApp duplicate above.
+## Files to touch
+- `src/components/settings/LeadNotificationSettings.tsx` — split into `LeadAlertsCard`, `TeamAlertsCard`, `AdminRecipientsCard`; export a save hook; remove inline save button + framed wrappers.
+- `src/components/settings/NotificationSettings.tsx` — place the 3 new cards in the layout; unify the save action.
+
+## Out of scope
+- No backend / schema / RLS changes.
+- No copy changes beyond removing emoji and boxed callouts.
+- No new toggles — same fields persist to `lead_notification_rules` and `lead_notification_admin_prefs`.
