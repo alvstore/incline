@@ -1769,6 +1769,53 @@ async function sendAiReply(
     }
   }
 
+  // SAFETY NET — plan/duration question normalization.
+  // Guarantees the 4 canonical durations (Monthly, Quarterly, Half-Yearly, Annual) are
+  // always present, and strips any Day Pass / price-mentioning rows so the bot never
+  // leaks pricing or an off-menu option.
+  const PLAN_BODY_RE = /plan|duration|membership|monthly|quarterly|yearly|annual/i;
+  const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr/i;
+  const CANONICAL_PLAN_LIST = {
+    type: "list",
+    body: { text: "Which membership duration suits you best?" },
+    action: {
+      button: "View Plans",
+      sections: [{
+        title: "Choose your plan",
+        rows: [
+          { id: "plan_monthly", title: "📅 Monthly", description: "Flexible — try us out, no commitment" },
+          { id: "plan_quarterly", title: "⚡ Quarterly", description: "3 months — most popular starter" },
+          { id: "plan_halfyearly", title: "💪 Half-Yearly", description: "6 months — better value, real results" },
+          { id: "plan_annual", title: "🏆 Annual", description: "12 months — our most committed members" },
+        ],
+      }],
+    },
+  };
+
+  const looksLikePlanQuestion = (body: string) => PLAN_BODY_RE.test(body || "");
+
+  if (interactivePayload) {
+    const bodyText = interactivePayload?.body?.text || "";
+    if (looksLikePlanQuestion(bodyText)) {
+      // Force canonical 4-row list whenever a plan question is detected.
+      interactivePayload = { ...CANONICAL_PLAN_LIST, body: { text: bodyText || CANONICAL_PLAN_LIST.body.text } };
+      const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
+      replyText = `${interactivePayload.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
+    } else if (interactivePayload.type === "list") {
+      // Strip Day Pass / price-mentioning rows from any other list as a final guard.
+      for (const section of interactivePayload.action?.sections || []) {
+        section.rows = (section.rows || []).filter((r: any) =>
+          !PRICE_DAYPASS_RE.test(`${r.title || ""} ${r.description || ""}`)
+        );
+      }
+    }
+  } else if (looksLikePlanQuestion(replyText)) {
+    // Model emitted plan question as plain text — promote to canonical list.
+    interactivePayload = CANONICAL_PLAN_LIST;
+    const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
+    replyText = `${CANONICAL_PLAN_LIST.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
+  }
+
   const { data: aiMsg, error: insertErr } = await supabase
     .from("whatsapp_messages")
     .insert({
