@@ -9,7 +9,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Bell, Save, UserCheck, Users, ExternalLink } from 'lucide-react';
+import { Bell, Save, UserCheck, Users, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function LeadNotificationSettings() {
