@@ -196,7 +196,7 @@ GENERAL RULES:
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
       goal: "Fitness Goal", budget: "Monthly Budget (in ₹)",
-      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, Annual, or Day Pass)",
+      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, or Annual)",
       start_date: "When do you plan to start?",
       experience: "Fitness Experience Level",
       preferred_time: "Preferred workout time slot",
@@ -208,8 +208,22 @@ Your secondary goal is to naturally collect: ${fieldNames}.
 - INTERACTIVE FORMAT (Meta Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use an interactive_list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
   Buttons: {"type":"interactive","body":"…","buttons":["A","B","C"]}
   List:    {"type":"interactive_list","body":"…","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"…"}, …]}]}
-- For "fitness goal" always offer 5 options as a list: Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility.
-- For "plan_interest" always offer the gym's actual plan durations as a list (Monthly, Quarterly, Half-Yearly, Annual, plus Day Pass when available).
+- For "fitness goal" always emit this EXACT list (5 rows, never buttons):
+  {"type":"interactive_list","body":"What's your primary fitness goal?","button":"Select Goal","sections":[{"title":"Your goal","rows":[
+    {"id":"goal_weight_loss","title":"🔥 Weight Loss","description":"Burn fat, get leaner"},
+    {"id":"goal_muscle_gain","title":"💪 Muscle Gain","description":"Build strength and mass"},
+    {"id":"goal_endurance","title":"🏃 Endurance","description":"Boost stamina and cardio"},
+    {"id":"goal_general","title":"✨ General Fitness","description":"Stay healthy and active"},
+    {"id":"goal_flexibility","title":"🧘 Flexibility","description":"Mobility and recovery"}
+  ]}]}
+- For "plan_interest" always emit this EXACT list (4 rows, never buttons, never include Day Pass, never mention prices):
+  {"type":"interactive_list","body":"Which membership duration suits you best?","button":"View Plans","sections":[{"title":"Choose your plan","rows":[
+    {"id":"plan_monthly","title":"📅 Monthly","description":"Flexible — try us out, no commitment"},
+    {"id":"plan_quarterly","title":"⚡ Quarterly","description":"3 months — most popular starter"},
+    {"id":"plan_halfyearly","title":"💪 Half-Yearly","description":"6 months — better value, real results"},
+    {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
+  ]}]}
+- NEVER omit Annual. NEVER use a button block for plan_interest or goal. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
 - You MUST collect full name + email + at least 1 other field before outputting lead_captured.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
 - When the user provides the LAST required field, respond with ONLY this JSON:
