@@ -484,6 +484,8 @@ export default function WhatsAppChatPage() {
     },
     onSuccess: () => {
       setNewMessage('');
+      setTyping(false);
+      broadcastReplied();
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
     },
