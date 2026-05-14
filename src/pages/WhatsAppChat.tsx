@@ -1417,6 +1417,7 @@ export default function WhatsAppChatPage() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setNewMessage(val);
+                        if (val.trim().length > 0) setTyping(true); else setTyping(false);
                         if (val === '/') {
                           setSlashMenuOpen(true);
                           setSlashFilter('');
