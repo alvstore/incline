@@ -1218,6 +1218,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
     // Execute each tool call
     const toolMessages: any[] = [];
     let humanHandoffTriggered = false;
+    let toolErrorsThisTurn = 0;
 
     for (const tc of toolCalls) {
       let parsedArgs: Record<string, any> = {};
@@ -1239,6 +1240,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
       );
       const toolElapsed = Date.now() - toolStartTime;
       const hasToolError = !!result.error;
+      if (hasToolError) toolErrorsThisTurn++;
 
       // Log tool execution
       await supabase.from("ai_tool_logs").insert({
@@ -1264,8 +1266,44 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
       }
     }
 
+    // Tool-error two-strike: bump consecutive_tool_errors and auto-handoff at ≥2.
+    try {
+      const cleanPhoneForState = phoneNumber.replace(/[\s\-\+]/g, "");
+      if (toolErrorsThisTurn > 0) {
+        const { data: state } = await supabase
+          .from("whatsapp_conversation_state")
+          .select("consecutive_tool_errors")
+          .eq("phone_number", cleanPhoneForState)
+          .maybeSingle();
+        const newCount = (state?.consecutive_tool_errors || 0) + toolErrorsThisTurn;
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhoneForState, branch_id: branchId, consecutive_tool_errors: newCount, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+        if (newCount >= 2) {
+          humanHandoffTriggered = true;
+          await supabase.from("automation_diagnostics").insert({
+            phone_number: cleanPhoneForState, branch_id: branchId,
+            kind: "tool_error_handoff", payload: { errors: newCount },
+          });
+        }
+      } else {
+        // success this turn → reset counter
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhoneForState, branch_id: branchId, consecutive_tool_errors: 0, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+      }
+    } catch (errStrikeErr) {
+      console.warn("tool-error strike tracking failed:", errStrikeErr);
+    }
+
     // If human handoff, send the final message directly
     if (humanHandoffTriggered) {
+      await supabase.from("whatsapp_chat_settings").upsert(
+        { branch_id: branchId, phone_number: phoneNumber.replace(/[\s\-\+]/g, ""), bot_active: false, paused_at: new Date().toISOString() },
+        { onConflict: "branch_id,phone_number" },
+      );
       await sendAiReply(
         "I'm connecting you with our front desk team. Someone will assist you shortly. 🙏",
         inboundMsg,
@@ -1367,18 +1405,51 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
     let leadCaptured = false;
     let parsedLeadData: Record<string, any> | null = null;
 
-    // Primary: try to parse the lead_captured JSON
+    // Primary: brace-matched JSON extractor (handles markdown fences,
+    // surrounding prose, multi-line, and nested braces).
     try {
-      const jsonMatch = replyText.match(/\{[\s\S]*"status"\s*:\s*"lead_captured"[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.status === "lead_captured" && parsed.data) {
-          parsedLeadData = parsed.data;
-          leadCaptured = true;
+      const fenceStripped = replyText.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, "$1");
+      const candidates: string[] = [];
+      let depth = 0;
+      let start = -1;
+      for (let i = 0; i < fenceStripped.length; i++) {
+        const ch = fenceStripped[i];
+        if (ch === "{") {
+          if (depth === 0) start = i;
+          depth++;
+        } else if (ch === "}") {
+          depth--;
+          if (depth === 0 && start !== -1) {
+            candidates.push(fenceStripped.slice(start, i + 1));
+            start = -1;
+          }
         }
       }
+      for (const c of candidates) {
+        if (!c.includes("lead_captured")) continue;
+        try {
+          const parsed = JSON.parse(c);
+          if (parsed.status === "lead_captured" && parsed.data) {
+            parsedLeadData = parsed.data;
+            leadCaptured = true;
+            break;
+          }
+        } catch { /* try next */ }
+      }
     } catch (parseErr) {
-      console.log("Primary JSON parse failed, trying fallback extraction");
+      console.log("Brace-matched JSON parse failed, trying fallback extraction");
+    }
+
+    // Diagnostics: if we expected a lead capture but none parsed, log it
+    if (!leadCaptured && /lead_captured|"status"\s*:/.test(replyText)) {
+      try {
+        await supabase.from("automation_diagnostics").insert({
+          phone_number: phoneNumber,
+          branch_id: branchId,
+          kind: "lead_json_parse_failed",
+          payload: { reply_excerpt: replyText.slice(0, 500) },
+        });
+      } catch { /* ignore */ }
     }
 
     // Fallback: extract fields from natural language if AI didn't output JSON
@@ -1713,6 +1784,22 @@ async function sendAiReply(
 
   const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
 
+  // Send-time race lock: prevents two parallel webhook invocations from
+  // sending duplicate replies to the same phone within 8 seconds.
+  try {
+    const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
+      _phone: cleanPhone,
+      _ttl_seconds: 8,
+    });
+    if (gotLock === false) {
+      console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone}`);
+      await supabase.from("whatsapp_messages").update({ status: "failed", error_message: "duplicate suppressed" }).eq("id", aiMsg.id);
+      return;
+    }
+  } catch (lockErr) {
+    console.warn("send-lock RPC failed, proceeding without lock:", lockErr);
+  }
+
   let metaUrl = `${META_API_BASE}/${phoneNumberId}/messages`;
   if (appSecret) {
     const proof = await computeAppSecretProof(accessToken, appSecret);
@@ -1734,10 +1821,7 @@ async function sendAiReply(
 
   const metaResponse = await fetch(metaUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(metaBody),
   });
 
@@ -1751,6 +1835,36 @@ async function sendAiReply(
         whatsapp_message_id: metaData?.messages?.[0]?.id || null,
       })
       .eq("id", aiMsg.id);
+
+    // Repeat-question guard: track last 3 AI questions; if same question 3×, force handoff.
+    try {
+      const firstQ = (replyText.match(/[^?!.]*\?/) || [])[0]?.trim().toLowerCase().slice(0, 200);
+      if (firstQ) {
+        const { data: state } = await supabase
+          .from("whatsapp_conversation_state")
+          .select("last_questions")
+          .eq("phone_number", cleanPhone)
+          .maybeSingle();
+        const prev: string[] = (state?.last_questions as string[]) || [];
+        const next = [...prev, firstQ].slice(-3);
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhone, branch_id: branchId, last_questions: next, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+        if (next.length === 3 && next[0] === next[1] && next[1] === next[2]) {
+          await supabase.from("whatsapp_chat_settings").upsert(
+            { branch_id: branchId, phone_number: cleanPhone, bot_active: false, paused_at: new Date().toISOString() },
+            { onConflict: "branch_id,phone_number" },
+          );
+          await supabase.from("automation_diagnostics").insert({
+            phone_number: cleanPhone, branch_id: branchId,
+            kind: "repeat_question_handoff", payload: { question: firstQ },
+          });
+        }
+      }
+    } catch (guardErr) {
+      console.warn("repeat-question guard failed:", guardErr);
+    }
   } else {
     console.error("AI auto-reply Meta send failed:", JSON.stringify(metaData));
     await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", aiMsg.id);

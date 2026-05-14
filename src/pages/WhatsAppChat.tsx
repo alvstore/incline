@@ -58,6 +58,8 @@ import { resolveIdentities, type ResolvedIdentity } from '@/lib/contacts/resolve
 import { upsertContact, CONTACT_CATEGORIES } from '@/services/contactService';
 import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/contacts/phone';
 import { Textarea } from '@/components/ui/textarea';
+import { useConversationPresence } from '@/hooks/useConversationPresence';
+import { AgentPresenceBar } from '@/components/whatsapp/AgentPresenceBar';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -167,6 +169,11 @@ export default function WhatsAppChatPage() {
   const [whisperMode, setWhisperMode] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
+
+  // Multi-device agent presence (typing/viewing) for the open conversation
+  const conversationKey = selectedContact ? normalizePhone(selectedContact.phone_number) : null;
+  const { typingOthers, viewingOthers, setTyping, broadcastReplied, lastPeerReplyAt } =
+    useConversationPresence(conversationKey);
 
   // Clear chat confirmation
   const [clearChatConfirmOpen, setClearChatConfirmOpen] = useState(false);
@@ -477,6 +484,8 @@ export default function WhatsAppChatPage() {
     },
     onSuccess: () => {
       setNewMessage('');
+      setTyping(false);
+      broadcastReplied();
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
     },
@@ -1107,7 +1116,14 @@ export default function WhatsAppChatPage() {
                   </div>
                 )}
 
-                {/* Messages Area — fixed height with overflow scroll */}
+                {/* Multi-device agent presence */}
+                <AgentPresenceBar viewing={viewingOthers} typing={typingOthers} />
+                {lastPeerReplyAt && (Date.now() - new Date(lastPeerReplyAt).getTime() < 8000) && (
+                  <div className="px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
+                    Another agent just replied to this conversation.
+                  </div>
+                )}
+
                 <div className="flex-1 min-h-0">
                   <div
                     ref={messagesContainerRef}
@@ -1401,6 +1417,7 @@ export default function WhatsAppChatPage() {
                       onChange={(e) => {
                         const val = e.target.value;
                         setNewMessage(val);
+                        if (val.trim().length > 0) setTyping(true); else setTyping(false);
                         if (val === '/') {
                           setSlashMenuOpen(true);
                           setSlashFilter('');
