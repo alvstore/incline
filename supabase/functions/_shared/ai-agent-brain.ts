@@ -196,6 +196,7 @@ GENERAL RULES:
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
       goal: "Fitness Goal", budget: "Monthly Budget (in ₹)",
+      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, Annual, or Day Pass)",
       start_date: "When do you plan to start?",
       experience: "Fitness Experience Level",
       preferred_time: "Preferred workout time slot",
@@ -204,6 +205,11 @@ GENERAL RULES:
     systemPrompt += `\n\nIMPORTANT LEAD CAPTURE INSTRUCTIONS:
 Your secondary goal is to naturally collect: ${fieldNames}.
 - Ask for these naturally, one or two at a time.
+- INTERACTIVE FORMAT (Meta Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use an interactive_list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
+  Buttons: {"type":"interactive","body":"…","buttons":["A","B","C"]}
+  List:    {"type":"interactive_list","body":"…","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"…"}, …]}]}
+- For "fitness goal" always offer 5 options as a list: Weight Loss, Muscle Gain, Endurance, General Fitness, Flexibility.
+- For "plan_interest" always offer the gym's actual plan durations as a list (Monthly, Quarterly, Half-Yearly, Annual, plus Day Pass when available).
 - You MUST collect full name + email + at least 1 other field before outputting lead_captured.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
 - When the user provides the LAST required field, respond with ONLY this JSON:
