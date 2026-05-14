@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       await logCommunication(supabase, branch_id, "whatsapp", lead.phone, msg, r.success ? "sent" : "failed");
     }
 
-    // 7. Send to admins (owners + admins)
+    // 7. Send to admins (owners + admins) — honour per-admin opt-out prefs
     if (rules.sms_to_admins || rules.whatsapp_to_admins) {
       const { data: adminProfiles } = await supabase
         .from("user_roles")
@@ -137,21 +137,29 @@ Deno.serve(async (req) => {
         .in("role", ["owner", "admin"]);
 
       if (adminProfiles?.length) {
-        const adminUserIds = adminProfiles.map((r: any) => r.user_id);
+        const adminUserIds = Array.from(new Set(adminProfiles.map((r: any) => r.user_id)));
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, phone")
           .in("id", adminUserIds)
           .not("phone", "is", null);
 
+        const { data: prefRows } = await supabase
+          .from("lead_notification_admin_prefs")
+          .select("user_id, whatsapp_enabled, sms_enabled")
+          .in("user_id", adminUserIds);
+        const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+        for (const p of prefRows || []) prefMap.set(p.user_id, p);
+
         for (const profile of profiles || []) {
-          if (rules.sms_to_admins && profile.phone && smsIntegration) {
+          const pref = prefMap.get(profile.id) ?? { whatsapp_enabled: true, sms_enabled: true };
+          if (rules.sms_to_admins && pref.sms_enabled && profile.phone && smsIntegration) {
             const msg = replacePlaceholders(rules.team_alert_sms);
             const r = await sendSMS(smsIntegration, profile.phone, msg);
             results.push({ channel: "sms", recipient: profile.phone, ...r });
             await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed");
           }
-          if (rules.whatsapp_to_admins && profile.phone && whatsappIntegration) {
+          if (rules.whatsapp_to_admins && pref.whatsapp_enabled && profile.phone && whatsappIntegration) {
             const msg = replacePlaceholders(rules.team_alert_whatsapp);
             const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
             results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
