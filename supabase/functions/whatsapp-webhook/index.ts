@@ -1218,6 +1218,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
     // Execute each tool call
     const toolMessages: any[] = [];
     let humanHandoffTriggered = false;
+    let toolErrorsThisTurn = 0;
 
     for (const tc of toolCalls) {
       let parsedArgs: Record<string, any> = {};
@@ -1239,6 +1240,7 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
       );
       const toolElapsed = Date.now() - toolStartTime;
       const hasToolError = !!result.error;
+      if (hasToolError) toolErrorsThisTurn++;
 
       // Log tool execution
       await supabase.from("ai_tool_logs").insert({
@@ -1264,8 +1266,44 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
       }
     }
 
+    // Tool-error two-strike: bump consecutive_tool_errors and auto-handoff at ≥2.
+    try {
+      const cleanPhoneForState = phoneNumber.replace(/[\s\-\+]/g, "");
+      if (toolErrorsThisTurn > 0) {
+        const { data: state } = await supabase
+          .from("whatsapp_conversation_state")
+          .select("consecutive_tool_errors")
+          .eq("phone_number", cleanPhoneForState)
+          .maybeSingle();
+        const newCount = (state?.consecutive_tool_errors || 0) + toolErrorsThisTurn;
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhoneForState, branch_id: branchId, consecutive_tool_errors: newCount, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+        if (newCount >= 2) {
+          humanHandoffTriggered = true;
+          await supabase.from("automation_diagnostics").insert({
+            phone_number: cleanPhoneForState, branch_id: branchId,
+            kind: "tool_error_handoff", payload: { errors: newCount },
+          });
+        }
+      } else {
+        // success this turn → reset counter
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhoneForState, branch_id: branchId, consecutive_tool_errors: 0, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+      }
+    } catch (errStrikeErr) {
+      console.warn("tool-error strike tracking failed:", errStrikeErr);
+    }
+
     // If human handoff, send the final message directly
     if (humanHandoffTriggered) {
+      await supabase.from("whatsapp_chat_settings").upsert(
+        { branch_id: branchId, phone_number: phoneNumber.replace(/[\s\-\+]/g, ""), bot_active: false, paused_at: new Date().toISOString() },
+        { onConflict: "branch_id,phone_number" },
+      );
       await sendAiReply(
         "I'm connecting you with our front desk team. Someone will assist you shortly. 🙏",
         inboundMsg,
