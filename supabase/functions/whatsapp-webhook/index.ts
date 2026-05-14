@@ -1367,18 +1367,51 @@ Your failure to output valid JSON means the lead data is PERMANENTLY LOST and th
     let leadCaptured = false;
     let parsedLeadData: Record<string, any> | null = null;
 
-    // Primary: try to parse the lead_captured JSON
+    // Primary: brace-matched JSON extractor (handles markdown fences,
+    // surrounding prose, multi-line, and nested braces).
     try {
-      const jsonMatch = replyText.match(/\{[\s\S]*"status"\s*:\s*"lead_captured"[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.status === "lead_captured" && parsed.data) {
-          parsedLeadData = parsed.data;
-          leadCaptured = true;
+      const fenceStripped = replyText.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, "$1");
+      const candidates: string[] = [];
+      let depth = 0;
+      let start = -1;
+      for (let i = 0; i < fenceStripped.length; i++) {
+        const ch = fenceStripped[i];
+        if (ch === "{") {
+          if (depth === 0) start = i;
+          depth++;
+        } else if (ch === "}") {
+          depth--;
+          if (depth === 0 && start !== -1) {
+            candidates.push(fenceStripped.slice(start, i + 1));
+            start = -1;
+          }
         }
       }
+      for (const c of candidates) {
+        if (!c.includes("lead_captured")) continue;
+        try {
+          const parsed = JSON.parse(c);
+          if (parsed.status === "lead_captured" && parsed.data) {
+            parsedLeadData = parsed.data;
+            leadCaptured = true;
+            break;
+          }
+        } catch { /* try next */ }
+      }
     } catch (parseErr) {
-      console.log("Primary JSON parse failed, trying fallback extraction");
+      console.log("Brace-matched JSON parse failed, trying fallback extraction");
+    }
+
+    // Diagnostics: if we expected a lead capture but none parsed, log it
+    if (!leadCaptured && /lead_captured|"status"\s*:/.test(replyText)) {
+      try {
+        await supabase.from("automation_diagnostics").insert({
+          phone_number: phoneNumber,
+          branch_id: branchId,
+          kind: "lead_json_parse_failed",
+          payload: { reply_excerpt: replyText.slice(0, 500) },
+        });
+      } catch { /* ignore */ }
     }
 
     // Fallback: extract fields from natural language if AI didn't output JSON
