@@ -1,4 +1,4 @@
-// v1.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
+// v1.2.0 — Atomic claim against duplicate sends + per-admin opt-in (lead_notification_admin_prefs).
 // Called after lead creation from any source (manual, capture-lead, webhook-lead-capture)
 // Reads lead_notification_rules + integration_settings to send SMS/WhatsApp to lead + team
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
