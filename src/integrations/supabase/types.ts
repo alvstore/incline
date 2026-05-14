@@ -5257,6 +5257,42 @@ export type Database = {
           },
         ]
       }
+      lead_notification_admin_prefs: {
+        Row: {
+          sms_enabled: boolean
+          updated_at: string
+          user_id: string
+          whatsapp_enabled: boolean
+        }
+        Insert: {
+          sms_enabled?: boolean
+          updated_at?: string
+          user_id: string
+          whatsapp_enabled?: boolean
+        }
+        Update: {
+          sms_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+          whatsapp_enabled?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_notification_admin_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "online_users_v"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "lead_notification_admin_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_notification_rules: {
         Row: {
           branch_id: string | null
