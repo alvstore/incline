@@ -1637,17 +1637,37 @@ async function sendAiReply(
   if (extraction) {
     const parsed = extraction.parsed;
     if (parsed.type === "interactive" && parsed.buttons?.length) {
-      interactivePayload = {
-        type: "button",
-        body: { text: parsed.body || "Please select an option:" },
-        action: {
-          buttons: parsed.buttons.slice(0, 3).map((btn: string, i: number) => ({
-            type: "reply",
-            reply: { id: `btn_${i}`, title: btn.substring(0, 20) },
-          })),
-        },
-      };
-      replyText = `${parsed.body}\n${parsed.buttons.map((b: string, i: number) => `${i + 1}. ${b}`).join("\n")}`;
+      const opts: string[] = parsed.buttons;
+      if (opts.length > 3) {
+        // SAFETY NET: Meta caps reply buttons at 3 — auto-promote to a list block
+        // so we never silently drop options 4+. Single section, one row per option.
+        interactivePayload = {
+          type: "list",
+          body: { text: parsed.body || "Please select an option:" },
+          action: {
+            button: "Select",
+            sections: [{
+              title: "Choose one",
+              rows: opts.slice(0, 10).map((title, i) => ({
+                id: `opt_${i + 1}`,
+                title: String(title).substring(0, 24),
+              })),
+            }],
+          },
+        };
+      } else {
+        interactivePayload = {
+          type: "button",
+          body: { text: parsed.body || "Please select an option:" },
+          action: {
+            buttons: opts.slice(0, 3).map((btn: string, i: number) => ({
+              type: "reply",
+              reply: { id: `btn_${i}`, title: String(btn).substring(0, 20) },
+            })),
+          },
+        };
+      }
+      replyText = `${parsed.body}\n${opts.map((b: string, i: number) => `${i + 1}. ${b}`).join("\n")}`;
     } else if (parsed.type === "interactive_list" && parsed.sections?.length) {
       interactivePayload = {
         type: "list",
