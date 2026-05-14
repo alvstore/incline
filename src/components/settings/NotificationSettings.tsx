@@ -193,10 +193,12 @@ export function NotificationSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Lead Notification cards — same grid, same shell as Email + System Alerts */}
+        <LeadNotificationCards ref={leadCardsRef} />
       </div>
 
-      {/* Lead Notification Rules — styled to match Email + System Alerts */}
-      <LeadNotificationSettings />
+      <AdminRecipientsCard />
 
       <div className="flex justify-end">
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
