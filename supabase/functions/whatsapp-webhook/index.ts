@@ -1746,6 +1746,22 @@ async function sendAiReply(
 
   const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
 
+  // Send-time race lock: prevents two parallel webhook invocations from
+  // sending duplicate replies to the same phone within 8 seconds.
+  try {
+    const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
+      _phone: cleanPhone,
+      _ttl_seconds: 8,
+    });
+    if (gotLock === false) {
+      console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone}`);
+      await supabase.from("whatsapp_messages").update({ status: "failed", error_message: "duplicate suppressed" }).eq("id", aiMsg.id);
+      return;
+    }
+  } catch (lockErr) {
+    console.warn("send-lock RPC failed, proceeding without lock:", lockErr);
+  }
+
   let metaUrl = `${META_API_BASE}/${phoneNumberId}/messages`;
   if (appSecret) {
     const proof = await computeAppSecretProof(accessToken, appSecret);
@@ -1767,10 +1783,7 @@ async function sendAiReply(
 
   const metaResponse = await fetch(metaUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(metaBody),
   });
 
@@ -1784,6 +1797,36 @@ async function sendAiReply(
         whatsapp_message_id: metaData?.messages?.[0]?.id || null,
       })
       .eq("id", aiMsg.id);
+
+    // Repeat-question guard: track last 3 AI questions; if same question 3×, force handoff.
+    try {
+      const firstQ = (replyText.match(/[^?!.]*\?/) || [])[0]?.trim().toLowerCase().slice(0, 200);
+      if (firstQ) {
+        const { data: state } = await supabase
+          .from("whatsapp_conversation_state")
+          .select("last_questions")
+          .eq("phone_number", cleanPhone)
+          .maybeSingle();
+        const prev: string[] = (state?.last_questions as string[]) || [];
+        const next = [...prev, firstQ].slice(-3);
+        await supabase.from("whatsapp_conversation_state").upsert(
+          { phone_number: cleanPhone, branch_id: branchId, last_questions: next, updated_at: new Date().toISOString() },
+          { onConflict: "phone_number" },
+        );
+        if (next.length === 3 && next[0] === next[1] && next[1] === next[2]) {
+          await supabase.from("whatsapp_chat_settings").upsert(
+            { branch_id: branchId, phone_number: cleanPhone, bot_active: false, paused_at: new Date().toISOString() },
+            { onConflict: "branch_id,phone_number" },
+          );
+          await supabase.from("automation_diagnostics").insert({
+            phone_number: cleanPhone, branch_id: branchId,
+            kind: "repeat_question_handoff", payload: { question: firstQ },
+          });
+        }
+      }
+    } catch (guardErr) {
+      console.warn("repeat-question guard failed:", guardErr);
+    }
   } else {
     console.error("AI auto-reply Meta send failed:", JSON.stringify(metaData));
     await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", aiMsg.id);
