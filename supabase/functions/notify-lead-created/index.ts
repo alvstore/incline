@@ -1,4 +1,4 @@
-// v1.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
+// v1.2.0 — Atomic claim against duplicate sends + per-admin opt-in (lead_notification_admin_prefs).
 // Called after lead creation from any source (manual, capture-lead, webhook-lead-capture)
 // Reads lead_notification_rules + integration_settings to send SMS/WhatsApp to lead + team
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -33,23 +33,28 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch lead data
-    const { data: lead, error: leadErr } = await supabase
+    // 1. Atomic claim: only the first caller for this lead proceeds.
+    // Concurrent invocations (DB trigger + edge fetch) are serialized by Postgres;
+    // the loser gets 0 rows back and exits without sending.
+    const { data: claimed, error: claimErr } = await supabase
       .from("leads")
-      .select("id, full_name, phone, email, source, branch_id, notified_at")
+      .update({ notified_at: new Date().toISOString() })
       .eq("id", lead_id)
-      .single();
+      .is("notified_at", null)
+      .select("id, full_name, phone, email, source, branch_id")
+      .maybeSingle();
 
-    if (leadErr || !lead) {
-      console.error("Lead not found:", leadErr);
-      return json({ error: "Lead not found" }, 404);
+    if (claimErr) {
+      console.error("Lead claim error:", claimErr);
+      return json({ error: "Lead claim failed" }, 500);
     }
 
-    // Idempotency: short-circuit if we've already notified for this lead
-    if (lead.notified_at) {
-      console.log(`Lead ${lead_id} already notified at ${lead.notified_at}, skipping`);
-      return json({ success: true, sent: 0, skipped: true, reason: "already_notified" });
+    if (!claimed) {
+      console.log(`Lead ${lead_id} already claimed by another invocation, skipping`);
+      return json({ success: true, sent: 0, skipped: true, reason: "already_claimed" });
     }
+
+    const lead = claimed;
 
     // 2. Fetch branch name
     const { data: branch } = await supabase
@@ -124,7 +129,7 @@ Deno.serve(async (req) => {
       await logCommunication(supabase, branch_id, "whatsapp", lead.phone, msg, r.success ? "sent" : "failed");
     }
 
-    // 7. Send to admins (owners + admins)
+    // 7. Send to admins (owners + admins) — honour per-admin opt-out prefs
     if (rules.sms_to_admins || rules.whatsapp_to_admins) {
       const { data: adminProfiles } = await supabase
         .from("user_roles")
@@ -132,21 +137,29 @@ Deno.serve(async (req) => {
         .in("role", ["owner", "admin"]);
 
       if (adminProfiles?.length) {
-        const adminUserIds = adminProfiles.map((r: any) => r.user_id);
+        const adminUserIds = Array.from(new Set(adminProfiles.map((r: any) => r.user_id)));
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, phone")
           .in("id", adminUserIds)
           .not("phone", "is", null);
 
+        const { data: prefRows } = await supabase
+          .from("lead_notification_admin_prefs")
+          .select("user_id, whatsapp_enabled, sms_enabled")
+          .in("user_id", adminUserIds);
+        const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+        for (const p of prefRows || []) prefMap.set(p.user_id, p);
+
         for (const profile of profiles || []) {
-          if (rules.sms_to_admins && profile.phone && smsIntegration) {
+          const pref = prefMap.get(profile.id) ?? { whatsapp_enabled: true, sms_enabled: true };
+          if (rules.sms_to_admins && pref.sms_enabled && profile.phone && smsIntegration) {
             const msg = replacePlaceholders(rules.team_alert_sms);
             const r = await sendSMS(smsIntegration, profile.phone, msg);
             results.push({ channel: "sms", recipient: profile.phone, ...r });
             await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed");
           }
-          if (rules.whatsapp_to_admins && profile.phone && whatsappIntegration) {
+          if (rules.whatsapp_to_admins && pref.whatsapp_enabled && profile.phone && whatsappIntegration) {
             const msg = replacePlaceholders(rules.team_alert_whatsapp);
             const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
             results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
@@ -193,16 +206,7 @@ Deno.serve(async (req) => {
 
     console.log(`Lead ${lead_id}: ${sent} sent, ${failed} failed out of ${results.length} notifications`);
 
-    // Mark lead as notified so trigger / fallbacks won't fire again
-    try {
-      await supabase
-        .from("leads")
-        .update({ notified_at: new Date().toISOString() })
-        .eq("id", lead_id);
-    } catch (e) {
-      console.error("Failed to set notified_at:", e);
-    }
-
+    // notified_at was already set atomically at the top of this handler.
     return json({ success: true, sent, failed, total: results.length });
   } catch (error) {
     console.error("notify-lead-created error:", error);
