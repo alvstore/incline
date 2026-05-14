@@ -646,6 +646,44 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_diagnostics: {
+        Row: {
+          branch_id: string | null
+          channel: string
+          conversation_key: string
+          created_at: string
+          id: string
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          branch_id?: string | null
+          channel?: string
+          conversation_key: string
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+        }
+        Update: {
+          branch_id?: string | null
+          channel?: string
+          conversation_key?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_diagnostics_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_rules: {
         Row: {
           ai_tone: string | null
@@ -5311,6 +5349,7 @@ export type Database = {
           notified_at: string | null
           owner_id: string | null
           phone: string
+          plan_interest: string | null
           preferred_contact_channel: string
           preferred_time: string | null
           referrer_url: string | null
@@ -5360,6 +5399,7 @@ export type Database = {
           notified_at?: string | null
           owner_id?: string | null
           phone: string
+          plan_interest?: string | null
           preferred_contact_channel?: string
           preferred_time?: string | null
           referrer_url?: string | null
@@ -5409,6 +5449,7 @@ export type Database = {
           notified_at?: string | null
           owner_id?: string | null
           phone?: string
+          plan_interest?: string | null
           preferred_contact_channel?: string
           preferred_time?: string | null
           referrer_url?: string | null
@@ -10985,6 +11026,47 @@ export type Database = {
             columns: ["captured_lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_conversation_state: {
+        Row: {
+          branch_id: string
+          consecutive_tool_errors: number
+          created_at: string
+          id: string
+          last_questions: string[]
+          lead_capture_progress: Json
+          phone_number: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          consecutive_tool_errors?: number
+          created_at?: string
+          id?: string
+          last_questions?: string[]
+          lead_capture_progress?: Json
+          phone_number: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          consecutive_tool_errors?: number
+          created_at?: string
+          id?: string
+          last_questions?: string[]
+          lead_capture_progress?: Json
+          phone_number?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversation_state_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
