@@ -206,16 +206,7 @@ Deno.serve(async (req) => {
 
     console.log(`Lead ${lead_id}: ${sent} sent, ${failed} failed out of ${results.length} notifications`);
 
-    // Mark lead as notified so trigger / fallbacks won't fire again
-    try {
-      await supabase
-        .from("leads")
-        .update({ notified_at: new Date().toISOString() })
-        .eq("id", lead_id);
-    } catch (e) {
-      console.error("Failed to set notified_at:", e);
-    }
-
+    // notified_at was already set atomically at the top of this handler.
     return json({ success: true, sent, failed, total: results.length });
   } catch (error) {
     console.error("notify-lead-created error:", error);
