@@ -19,6 +19,7 @@ const AVAILABLE_FIELDS = [
   { id: 'phone', label: 'Phone', required: false },
   { id: 'email', label: 'Email', required: true },
   { id: 'goal', label: 'Fitness Goal', required: false },
+  { id: 'plan_interest', label: 'Interested Plan Duration', required: false },
   { id: 'budget', label: 'Budget', required: false },
   { id: 'start_date', label: 'Expected Start Date', required: false },
   { id: 'experience', label: 'Fitness Experience', required: false },
