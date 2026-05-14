@@ -11,7 +11,7 @@ import { toast } from "sonner";
 const LAST_UPDATED = "April 1, 2026";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ENTITY = "The Incline Life by Incline";
-const CONTACT_EMAIL = "privacy@theincline.in";
+const CONTACT_EMAIL = "privacy@theinclinelife.com";
 
 export type LegalTab = "privacy" | "terms" | "deletion";
 
