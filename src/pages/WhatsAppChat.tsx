@@ -1116,7 +1116,14 @@ export default function WhatsAppChatPage() {
                   </div>
                 )}
 
-                {/* Messages Area — fixed height with overflow scroll */}
+                {/* Multi-device agent presence */}
+                <AgentPresenceBar viewing={viewingOthers} typing={typingOthers} />
+                {lastPeerReplyAt && (Date.now() - new Date(lastPeerReplyAt).getTime() < 8000) && (
+                  <div className="px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
+                    Another agent just replied to this conversation.
+                  </div>
+                )}
+
                 <div className="flex-1 min-h-0">
                   <div
                     ref={messagesContainerRef}
