@@ -170,6 +170,11 @@ export default function WhatsAppChatPage() {
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
 
+  // Multi-device agent presence (typing/viewing) for the open conversation
+  const conversationKey = selectedContact ? normalizePhone(selectedContact.phone_number) : null;
+  const { typingOthers, viewingOthers, setTyping, broadcastReplied, lastPeerReplyAt } =
+    useConversationPresence(conversationKey);
+
   // Clear chat confirmation
   const [clearChatConfirmOpen, setClearChatConfirmOpen] = useState(false);
   // Transfer to staff
