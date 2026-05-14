@@ -51,11 +51,19 @@ export function NotificationSettings() {
     }
   }, [savedPreferences]);
 
+  const leadCardsRef = useRef<LeadNotificationCardsHandle>(null);
+
   const saveMutation = useMutation({
-    mutationFn: () => upsertPreferences(user!.id, preferences),
+    mutationFn: async () => {
+      await Promise.all([
+        upsertPreferences(user!.id, preferences),
+        leadCardsRef.current?.save() ?? Promise.resolve(),
+      ]);
+    },
     onSuccess: () => {
       toast.success('Notification preferences saved');
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-notification-rules'] });
     },
     onError: () => {
       toast.error('Failed to save preferences');
