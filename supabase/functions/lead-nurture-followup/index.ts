@@ -22,7 +22,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    // AI provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data: orgSettings } = await supabase
