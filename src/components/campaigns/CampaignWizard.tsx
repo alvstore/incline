@@ -342,7 +342,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const totalCount = breakdown?.total ?? resolvedMemberIds.length;
   const isCsv = filter.audience_kind === 'csv_import';
   const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
-  const templatePicked = useApprovedTemplate && !!selectedTemplateId;
+  const templatePicked = useApprovedTemplate && !!selectedTemplateId && !selectedTemplateId.startsWith('__meta__:');
   const blockedByTemplate = requiresTemplate && !templatePicked;
 
   const handleSubmit = async () => {
