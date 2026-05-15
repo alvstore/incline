@@ -1788,10 +1788,15 @@ export type Database = {
           dispatched_at: string | null
           email: string | null
           error: string | null
+          error_code: string | null
+          error_reason: string | null
           full_name: string | null
           id: string
+          in_window: boolean | null
           phone: string | null
-          source_ref_id: string
+          read_at: string | null
+          source_label: string | null
+          source_ref_id: string | null
           source_type: string
           status: string
         }
@@ -1801,10 +1806,15 @@ export type Database = {
           dispatched_at?: string | null
           email?: string | null
           error?: string | null
+          error_code?: string | null
+          error_reason?: string | null
           full_name?: string | null
           id?: string
+          in_window?: boolean | null
           phone?: string | null
-          source_ref_id: string
+          read_at?: string | null
+          source_label?: string | null
+          source_ref_id?: string | null
           source_type: string
           status?: string
         }
@@ -1814,10 +1824,15 @@ export type Database = {
           dispatched_at?: string | null
           email?: string | null
           error?: string | null
+          error_code?: string | null
+          error_reason?: string | null
           full_name?: string | null
           id?: string
+          in_window?: boolean | null
           phone?: string | null
-          source_ref_id?: string
+          read_at?: string | null
+          source_label?: string | null
+          source_ref_id?: string | null
           source_type?: string
           status?: string
         }
@@ -12789,6 +12804,19 @@ export type Database = {
           email: string
           full_name: string
           phone: string
+          source_ref_id: string
+          source_type: string
+        }[]
+      }
+      resolve_campaign_audience_v2: {
+        Args: { p_branch_id: string; p_filter: Json; p_window_hours?: number }
+        Returns: {
+          contact_id: string
+          email: string
+          full_name: string
+          in_window: boolean
+          phone: string
+          source_label: string
           source_ref_id: string
           source_type: string
         }[]
