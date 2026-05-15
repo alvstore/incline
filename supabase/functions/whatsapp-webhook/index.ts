@@ -955,6 +955,21 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
   if (!inboundMsg?.content) return;
 
+  // ── DETERMINISTIC NON-FITNESS INTENT GUARD ─────────────────────────────────
+  // Hard short-circuit BEFORE any LLM call. The model occasionally tries to
+  // both acknowledge AND continue onboarding (resulting in raw interactive_list
+  // JSON leaking into the chat for a job seeker). This catches obvious cases
+  // and replies with the canonical redirect, then exits.
+  const NON_FITNESS_RE =
+    /\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\s]?data|interview\s+for|i(?:'?m)?\s+(?:looking\s+(?:for|out)\s+)?(?:a\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\s+(?:at|with|in)\s+(?:your|incline)|sales\s+(?:job|department|position)|trainer\s+(?:job|position|vacancy)|front\s*desk\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\s]?up)\b/i;
+  if (NON_FITNESS_RE.test(inboundMsg.content)) {
+    console.log(`[whatsapp-webhook] non-fitness intent detected for ${phoneNumber}, sending redirect`);
+    const REDIRECT =
+      "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏";
+    await sendAiReply(REDIRECT, { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name }, branchId);
+    return;
+  }
+
   // Optional delay
   const delaySeconds = aiConfig.reply_delay_seconds || 0;
   if (delaySeconds > 0 && delaySeconds <= 30) {
