@@ -48,7 +48,7 @@ export interface CallAIResult {
 }
 
 interface ProviderConfig {
-  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "openai_compatible";
+  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "anthropic" | "xai" | "openai_compatible";
   display_name: string;
   base_url: string | null;
   api_key_secret_name: string | null;
@@ -105,6 +105,28 @@ async function resolveProvider(
   };
 }
 
+// Mirror of src/lib/ai/providerCatalog.ts normalizeModelForProvider.
+// Prevents Lovable-namespaced model IDs (e.g. "google/gemini-3-flash-preview")
+// from being sent to providers that don't recognize them (Google direct API
+// returns 404, then we fall back to Lovable — exactly what we want to avoid).
+function normalizeModelForProvider(provider: string, model: string): string {
+  if (!model) return model;
+  if (provider === "google") {
+    let m = model.replace(/^google\//, "");
+    const map: Record<string, string> = {
+      "gemini-3-flash-preview": "gemini-flash-latest",
+      "gemini-3.1-flash-lite-preview": "gemini-flash-lite-latest",
+      "gemini-3.1-pro-preview": "gemini-pro-latest",
+      "gemini-2.0-flash": "gemini-flash-latest",
+    };
+    return map[m] ?? m;
+  }
+  if (provider === "lovable" && !model.includes("/")) {
+    return `google/${model}`;
+  }
+  return model;
+}
+
 function buildEndpoint(cfg: ProviderConfig): string {
   if (cfg.base_url && cfg.base_url.length > 0) return cfg.base_url;
   switch (cfg.provider) {
@@ -122,6 +144,10 @@ function buildEndpoint(cfg: ProviderConfig): string {
       return "https://api.together.xyz/v1/chat/completions";
     case "mistral":
       return "https://api.mistral.ai/v1/chat/completions";
+    case "anthropic":
+      return "https://api.anthropic.com/v1/chat/completions";
+    case "xai":
+      return "https://api.x.ai/v1/chat/completions";
     case "ollama":
       throw new Error("Ollama provider requires base_url to be set (e.g. https://ollama.example.com/v1/chat/completions)");
     case "openai_compatible":
@@ -135,7 +161,8 @@ async function executeCall(
 ): Promise<{ content: string; raw: any; model: string }> {
   const endpoint = buildEndpoint(cfg);
   const apiKey = cfg.api_key_secret_name ? Deno.env.get(cfg.api_key_secret_name) : null;
-  const model = opts.model || cfg.default_model;
+  const rawModel = opts.model || cfg.default_model;
+  const model = normalizeModelForProvider(cfg.provider, rawModel);
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
