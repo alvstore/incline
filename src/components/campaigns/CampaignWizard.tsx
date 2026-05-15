@@ -417,6 +417,62 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               </div>
             )}
 
+            {channel === 'whatsapp' && (
+              <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div className="min-w-0">
+                      <Label className="text-xs font-semibold text-emerald-900 block">Send via approved Meta template</Label>
+                      <p className="text-[11px] text-emerald-700">Required for cold leads / contacts outside the 24h messaging window.</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={useApprovedTemplate}
+                    onCheckedChange={(v) => {
+                      setUseApprovedTemplate(v);
+                      if (!v) setSelectedTemplateId(null);
+                    }}
+                  />
+                </div>
+                {useApprovedTemplate && (
+                  <div className="space-y-2">
+                    {approvedTemplates.length === 0 ? (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        No APPROVED WhatsApp templates yet. Submit one in Settings → Communication Templates → WhatsApp, then return here.
+                      </p>
+                    ) : (
+                      <Select
+                        value={selectedTemplateId || ''}
+                        onValueChange={(id) => {
+                          setSelectedTemplateId(id);
+                          const t: any = approvedTemplates.find((x: any) => x.id === id);
+                          if (t?.content) setMessage(t.content);
+                          if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
+                            toast.info(`This template needs a ${t.header_type} header — upload one below.`);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="rounded-xl bg-white"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
+                        <SelectContent>
+                          {approvedTemplates.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name} {t.header_type && t.header_type !== 'none' ? `· ${t.header_type} header` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {selectedTemplateId && (
+                      <p className="text-[11px] text-emerald-800">
+                        Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Message</Label>
