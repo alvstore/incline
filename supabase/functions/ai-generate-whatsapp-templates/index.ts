@@ -1,13 +1,8 @@
+// v3.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='template_generate').
 // v2.3.0 — Document events now PREFER header_type='document' with a sample PDF URL.
-//           manage-whatsapp-templates v2.4.0 auto-uploads the sample to Meta and
-//           converts it to a real `h:...` handle, so document templates are
-//           submittable & approvable end-to-end. The dispatcher (v1.8.0)
-//           injects the real PDF as the HEADER param at send-time → recipients
-//           get a NATIVE WhatsApp document attachment (not a link in the body).
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
-// v2.1.0: document-bearing events forced to header_type='none' + {{document_link}}.
-// Returns proposals (NOT submitted to Meta). Frontend reviews before save.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
