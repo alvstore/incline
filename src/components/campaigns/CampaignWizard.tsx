@@ -256,7 +256,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setSubmitting(true);
     try {
       const finalMessage = buildFinalMessage();
-      const campaign = await createCampaign({
+      const payload = {
         branch_id: branchId,
         name: name.trim(),
         channel,
@@ -276,10 +276,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           venue: eventVenue.trim() || null,
           rsvp_url: eventRsvpUrl.trim() || null,
         } : {},
-        status:
+        template_id: channel === 'whatsapp' && useApprovedTemplate ? selectedTemplateId : null,
+        status: (
           trigger === 'send_now' ? 'sending' :
-          trigger === 'scheduled' ? 'scheduled' : 'draft',
-      });
+          trigger === 'scheduled' ? 'scheduled' : 'draft'
+        ) as any,
+      };
+      const campaign = isEditing && editingCampaign
+        ? await updateCampaign(editingCampaign.id, payload as any).then((c) => c)
+        : await createCampaign(payload as any);
 
       if (trigger === 'send_now') {
         const useResolver = filter.audience_kind && filter.audience_kind !== 'members';
