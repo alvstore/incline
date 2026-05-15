@@ -322,7 +322,15 @@ async function sendSMS(integration: any, phone: string, message: string): Promis
 }
 
 // === WhatsApp sending (mirrors send-whatsapp logic) ===
-async function sendWhatsApp(integration: any, phone: string, message: string): Promise<{ success: boolean; error?: string }> {
+// Returns Meta wamid (provider_message_id) on success so silent drops outside the
+// 24h customer-service window are auditable. Meta accepts the API call (HTTP 2xx)
+// even when delivery is dropped — the wamid is still issued, but no `delivered`
+// webhook arrives. Pair this with a UI badge for "sent but never delivered".
+async function sendWhatsApp(
+  integration: any,
+  phone: string,
+  message: string,
+): Promise<{ success: boolean; error?: string; messageId?: string; raw?: any }> {
   const config = integration.config || {};
   const credentials = integration.credentials || {};
   const provider = integration.provider;
@@ -333,18 +341,25 @@ async function sendWhatsApp(integration: any, phone: string, message: string): P
 
     if (!accessToken) return { success: false, error: "No WhatsApp access token configured" };
 
+    const sendMeta = async (cleanPhone: string) => {
+      const resp = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        return { success: false, error: data?.error?.message || `Meta API error (${resp.status})`, raw: data };
+      }
+      const wamid = data?.messages?.[0]?.id;
+      return { success: true, messageId: wamid, raw: data };
+    };
+
     switch (provider) {
       case "meta_cloud":
       case "custom": {
         if (!phoneNumberId) return { success: false, error: "No phone_number_id configured" };
-        const cleanPhone = phone.replace(/[\s\-\+]/g, "");
-        const resp = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } }),
-        });
-        const data = await resp.json();
-        return resp.ok ? { success: true } : { success: false, error: data?.error?.message || "Meta API error" };
+        return await sendMeta(phone.replace(/[\s\-\+]/g, ""));
       }
       case "wati": {
         const endpoint = config.api_endpoint_url;
@@ -354,21 +369,13 @@ async function sendWhatsApp(integration: any, phone: string, message: string): P
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        const data = await resp.json();
-        return data.result ? { success: true } : { success: false, error: data.info || "WATI error" };
+        const data = await resp.json().catch(() => ({}));
+        return data.result
+          ? { success: true, messageId: data?.id || undefined, raw: data }
+          : { success: false, error: data.info || "WATI error", raw: data };
       }
       default:
-        // For gupshup, interakt, aisensy — attempt Meta-style as fallback
-        if (phoneNumberId) {
-          const cleanPhone = phone.replace(/[\s\-\+]/g, "");
-          const resp = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } }),
-          });
-          const data = await resp.json();
-          return resp.ok ? { success: true } : { success: false, error: data?.error?.message || "WhatsApp API error" };
-        }
+        if (phoneNumberId) return await sendMeta(phone.replace(/[\s\-\+]/g, ""));
         return { success: false, error: `WhatsApp provider ${provider} not fully supported for text messages` };
     }
   } catch (e) {
@@ -377,15 +384,27 @@ async function sendWhatsApp(integration: any, phone: string, message: string): P
 }
 
 // === Communication logging ===
-async function logCommunication(supabase: any, branchId: string, type: string, recipient: string, content: string, status: string) {
+async function logCommunication(
+  supabase: any,
+  branchId: string,
+  type: string,
+  recipient: string,
+  content: string,
+  status: string,
+  extras?: { provider_message_id?: string | null; error_message?: string | null; delivery_metadata?: any },
+) {
   try {
     await supabase.from("communication_logs").insert({
       branch_id: branchId,
       type,
+      channel: type,
       recipient,
       content: content.slice(0, 500),
       status,
       sent_at: new Date().toISOString(),
+      provider_message_id: extras?.provider_message_id ?? null,
+      error_message: extras?.error_message ?? null,
+      delivery_metadata: extras?.delivery_metadata ?? {},
     });
   } catch (e) {
     console.error("Failed to log communication:", e);
