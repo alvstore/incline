@@ -180,16 +180,22 @@ This person is a CONFIRMED ACTIVE MEMBER of the gym. Their identity is already k
   - If the user sends short replies like "ok", "hmm", "yes", treat it as acknowledgment and ask a NEW question.
   - For pricing, always mention the plan name, duration, and price. If the gym has a day pass, mention it first for casual inquirers.`;
 
-  // Member tool instructions
+  // Member tool instructions — gated by ai_purposes.tools_allowed (UI-managed)
+  // with legacy organization_settings.ai_tool_config as a fallback.
   let tools: any[] | undefined;
   if (memberCtx.isMember && memberCtx.memberId) {
     tools = getAllToolDefinitions();
-    try {
-      const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
-      const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
-      tools = tools.filter((t: any) => cfg[t.function.name] !== false);
-      if (tools.length === 0) tools = undefined;
-    } catch { /* keep all */ }
+    const allowList = (aiConfig as any)._tools_allowed as string[] | undefined;
+    if (allowList && allowList.length > 0) {
+      tools = tools.filter((t: any) => allowList.includes(t.function.name));
+    } else {
+      try {
+        const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
+        const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
+        tools = tools.filter((t: any) => cfg[t.function.name] !== false);
+      } catch { /* keep all */ }
+    }
+    if (tools.length === 0) tools = undefined;
 
     if (tools) {
       systemPrompt += `\n\nIMPORTANT TOOL USAGE INSTRUCTIONS:
