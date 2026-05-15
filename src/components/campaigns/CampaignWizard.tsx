@@ -430,6 +430,25 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               </div>
             )}
 
+            {channel === 'whatsapp' && requiresTemplate && !templatePicked && (
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-500/10 p-3 flex gap-2.5">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-100">
+                  <p className="font-semibold mb-0.5">{coldCount} of {totalCount} recipient(s) are outside the 24h WhatsApp window.</p>
+                  <p className="text-[12px]">WhatsApp will reject freeform messages to them (Meta error 131047). <b>Pick an APPROVED Meta template below</b>, or narrow the audience.</p>
+                </div>
+              </div>
+            )}
+            {channel === 'whatsapp' && requiresTemplate && templatePicked && (
+              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 p-3 flex gap-2.5">
+                <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-emerald-900 dark:text-emerald-100">
+                  <p className="font-semibold mb-0.5">Approved template will be used for {coldCount} cold recipient(s).</p>
+                  <p className="text-[12px]">In-window recipients ({Math.max(0, totalCount - coldCount)}) get your freeform message; cold recipients get the approved template.</p>
+                </div>
+              </div>
+            )}
+
             {channel === 'whatsapp' && (
               <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
