@@ -1094,6 +1094,18 @@ RULES:
 - Be warm, professional, and concise. Use emoji sparingly.
 - For questions about pricing, new memberships, or complex issues, use transfer_to_human.
 
+NON-FITNESS INTENTS — DO NOT CAPTURE AS LEAD, DO NOT ASK FITNESS-GOAL/PLAN/BRANCH:
+If the message is clearly about any of the following, you MUST NOT call the lead capture flow and MUST NOT ask the onboarding questions (goal, plan_interest, budget, branch):
+  • Job application / careers / hiring / CV / resume / "looking for a job" / "vacancy"
+  • Vendor / supplier / wholesale / B2B inquiry
+  • Press / media / interview / collaboration / influencer / sponsorship
+  • Partnership / corporate tie-up
+  • Complaint about an existing member's experience that needs human follow-up
+  • Wrong number / spam / unrelated greeting with zero fitness intent
+For any of these, reply with this single short message (no JSON, no list, no buttons):
+  "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏"
+Then stop. Do NOT continue the onboarding sequence.
+
 INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
 - 1–3 choices → use a button block:
   {"type":"interactive","body":"Your question text","buttons":["Option A","Option B","Option C"]}
@@ -1106,6 +1118,7 @@ INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
     {"id":"opt_5","title":"Option 5","description":"Short detail"}
   ]}]}
 - NEVER emit a plain numbered text list ("1. … 2. … 3. … 4. … 5. …") when you have ≥4 choices — emit the interactive_list JSON instead.
+- When you do emit interactive JSON, output ONLY the JSON object — NO prose, no greeting, no acknowledgement before or after. Mixing prose with JSON causes the raw JSON to leak to the user.
 - Use normal text for confirmations and informational replies.`;
   }
 
@@ -1685,9 +1698,11 @@ async function sendAiReply(
 ) {
   let interactivePayload: any = null;
 
-  // Extract interactive JSON from mixed prose — handle markdown fences too
+  // Extract interactive JSON from mixed prose — handles nested JSON via brace-balanced scan.
+  // v2 — fixes a bug where the prior regex `[^{}]*` could not match nested objects
+  // (e.g. interactive_list with sections[].rows[]) so payloads leaked as raw text.
   function tryExtractInteractiveJson(text: string): { parsed: any; cleanText: string } | null {
-    // Try 1: exact JSON string
+    // Try 1: whole string is the JSON
     const trimmed = text.trim();
     if (trimmed.startsWith("{") && trimmed.includes('"type"')) {
       try {
@@ -1706,16 +1721,38 @@ async function sendAiReply(
         }
       } catch {}
     }
-    // Try 3: inline JSON block in prose
-    const inlineMatch = text.match(/(\{[^{}]*"type"\s*:\s*"interactive[^{}]*\})/);
-    if (inlineMatch) {
-      try {
-        const p = JSON.parse(inlineMatch[1]);
-        if (p.type === "interactive" || p.type === "interactive_list") {
-          const prose = text.replace(inlineMatch[0], "").trim();
-          return { parsed: p, cleanText: prose || p.body || "" };
+    // Try 3: brace-balanced extractor — finds an embedded {"type":"interactive…"} object
+    // even when it contains nested objects/arrays. Walks the string tracking string
+    // literals + escapes so braces inside strings don't fool the counter.
+    const typeMarkerRe = /\{[\s\n]*"type"\s*:\s*"interactive(?:_list)?"/;
+    const m = text.match(typeMarkerRe);
+    if (m && typeof m.index === "number") {
+      const start = m.index;
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+        if (escape) { escape = false; continue; }
+        if (ch === "\\") { escape = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            const slice = text.slice(start, i + 1);
+            try {
+              const p = JSON.parse(slice);
+              if (p.type === "interactive" || p.type === "interactive_list") {
+                const prose = (text.slice(0, start) + text.slice(i + 1)).trim();
+                return { parsed: p, cleanText: prose || p.body || "" };
+              }
+            } catch {}
+            break;
+          }
         }
-      } catch {}
+      }
     }
     return null;
   }

@@ -1,9 +1,9 @@
-// v2.1.0 — Unified AI Agent Brain
-// 2.1.0: Variant-aware phone matching (uses _shared/phone.ts), fixed broken
-//        column refs (members.phone_number / profiles.user_id never existed),
-//        member-first hard rule in system prompt, and member-first dedupe
-//        guard inside lead capture so an existing member never gets re-
-//        captured as a lead through IG/FB/Messenger.
+// v2.2.0 — Unified AI Agent Brain
+// 2.2.0: Non-fitness intent guard — job/CV, vendor, press, partnership,
+//        complaint, wrong-number replies redirect to info@theinclinelife.com
+//        and skip the lead-capture flow. Hardened "JSON-only" rule for
+//        interactive blocks so prose doesn't leak alongside the payload.
+// 2.1.0: Variant-aware phone matching, member-first dedupe.
 // Shared across meta-webhook (Instagram/Messenger) and whatsapp-webhook.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -205,9 +205,23 @@ GENERAL RULES:
     systemPrompt += `\n\nIMPORTANT LEAD CAPTURE INSTRUCTIONS:
 Your secondary goal is to naturally collect: ${fieldNames}.
 - Ask for these naturally, one or two at a time.
+
+NON-FITNESS INTENTS — DO NOT CAPTURE AS LEAD, DO NOT ASK FITNESS-GOAL/PLAN/BRANCH:
+If the message is clearly about any of the following, you MUST NOT call the lead capture flow and MUST NOT ask the onboarding questions:
+  • Job application / careers / hiring / CV / resume / "looking for a job" / "vacancy"
+  • Vendor / supplier / wholesale / B2B inquiry
+  • Press / media / interview / collaboration / influencer / sponsorship
+  • Partnership / corporate tie-up
+  • Complaint about an existing member's experience that needs human follow-up
+  • Wrong number / spam / unrelated greeting with zero fitness intent
+For any of these, reply with this single short message (plain text only, no JSON, no list, no buttons):
+  "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏"
+Then stop — do NOT continue onboarding and do NOT output the lead_captured JSON.
+
 - INTERACTIVE FORMAT (Meta Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use an interactive_list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
   Buttons: {"type":"interactive","body":"…","buttons":["A","B","C"]}
   List:    {"type":"interactive_list","body":"…","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"…"}, …]}]}
+- When you emit interactive JSON, output ONLY the JSON object — NO prose, greeting, or acknowledgement before or after. Mixing prose with JSON causes the raw JSON to leak to the user as text.
 - For "fitness goal" always emit this EXACT list (5 rows, never buttons):
   {"type":"interactive_list","body":"What's your primary fitness goal?","button":"Select Goal","sections":[{"title":"Your goal","rows":[
     {"id":"goal_weight_loss","title":"🔥 Weight Loss","description":"Burn fat, get leaner"},
