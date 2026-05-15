@@ -157,7 +157,8 @@ async function executeCall(
 ): Promise<{ content: string; raw: any; model: string }> {
   const endpoint = buildEndpoint(cfg);
   const apiKey = cfg.api_key_secret_name ? Deno.env.get(cfg.api_key_secret_name) : null;
-  const model = opts.model || cfg.default_model;
+  const rawModel = opts.model || cfg.default_model;
+  const model = normalizeModelForProvider(cfg.provider, rawModel);
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
