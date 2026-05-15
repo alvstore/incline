@@ -244,11 +244,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return body;
   };
 
+  // Cold-audience template enforcement (only meaningful for WhatsApp)
+  const coldCount = breakdown?.cold ?? 0;
+  const totalCount = breakdown?.total ?? resolvedMemberIds.length;
+  const isCsv = filter.audience_kind === 'csv_import';
+  const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
+  const templatePicked = useApprovedTemplate && !!selectedTemplateId;
+  const blockedByTemplate = requiresTemplate && !templatePicked;
+
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (!message.trim()) { toast.error('Message required'); return; }
-    const isMembersKind = !filter.audience_kind || filter.audience_kind === 'members';
-    if (isMembersKind && resolvedMemberIds.length === 0) { toast.error('Audience is empty'); return; }
+    if (totalCount === 0) { toast.error('Audience is empty'); return; }
+    if (blockedByTemplate) {
+      toast.error(`${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`);
+      return;
+    }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
