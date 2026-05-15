@@ -60,6 +60,7 @@ import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/
 import { Textarea } from '@/components/ui/textarea';
 import { useConversationPresence } from '@/hooks/useConversationPresence';
 import { AgentPresenceBar } from '@/components/whatsapp/AgentPresenceBar';
+import { WhatsAppMediaAttachment } from '@/components/whatsapp/WhatsAppMediaAttachment';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -82,6 +83,16 @@ interface ChatContact {
   assigned_staff?: { full_name: string; avatar_url: string | null } | null;
 }
 
+interface MessageMediaMeta {
+  meta_id?: string | null;
+  filename?: string | null;
+  mime_type?: string | null;
+  bucket?: string | null;
+  size?: number | null;
+  error?: string | null;
+  kind?: string | null;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -91,6 +102,7 @@ interface Message {
   message_type: string;
   is_internal_note?: boolean;
   media_url?: string | null;
+  media_meta?: MessageMediaMeta | null;
 }
 
 interface ChatSettingsRow {
@@ -1211,47 +1223,35 @@ export default function WhatsAppChatPage() {
                                 }`}
                               >
                                 {msg.message_type === 'image' && msg.media_url && (
-                                  <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="block mb-2 -mx-1">
-                                    <img
-                                      src={msg.media_url}
-                                      alt={msg.content || 'Photo'}
-                                      className="rounded-lg max-h-64 w-auto object-cover border border-black/5"
-                                      loading="lazy"
-                                    />
-                                  </a>
+                                  <WhatsAppMediaAttachment
+                                    mediaUrl={msg.media_url}
+                                    mediaMeta={msg.media_meta}
+                                    messageType="image"
+                                    direction={msg.direction}
+                                  />
                                 )}
                                 {msg.message_type === 'document' && msg.media_url && (
-                                  <a
-                                    href={msg.media_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`mb-2 -mx-1 flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                                      msg.direction === 'outbound'
-                                        ? 'bg-white/15 hover:bg-white/25 text-white'
-                                        : 'bg-muted/60 hover:bg-muted text-foreground'
-                                    }`}
-                                  >
-                                    <div className={`h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0 ${
-                                      msg.direction === 'outbound' ? 'bg-white/20' : 'bg-rose-500/10 text-rose-600'
-                                    }`}>
-                                      <FileText className="h-5 w-5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="text-xs font-semibold truncate">
-                                        {decodeURIComponent(msg.media_url.split('/').pop() || 'document.pdf')}
-                                      </div>
-                                      <div className={`text-[10px] ${msg.direction === 'outbound' ? 'text-white/70' : 'text-muted-foreground'}`}>
-                                        Tap to open · PDF
-                                      </div>
-                                    </div>
-                                  </a>
+                                  <WhatsAppMediaAttachment
+                                    mediaUrl={msg.media_url}
+                                    mediaMeta={msg.media_meta}
+                                    messageType="document"
+                                    direction={msg.direction}
+                                  />
                                 )}
                                 {msg.message_type === 'template' && (
                                   <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
                                     <FileText className="h-3 w-3" /> Template
                                   </div>
                                 )}
-                                {!['text','image','template','document'].includes(msg.message_type) && (
+                                {!['text','image','template','document'].includes(msg.message_type) && msg.media_url && (
+                                  <WhatsAppMediaAttachment
+                                    mediaUrl={msg.media_url}
+                                    mediaMeta={msg.media_meta}
+                                    messageType={msg.message_type}
+                                    direction={msg.direction}
+                                  />
+                                )}
+                                {!['text','image','template','document'].includes(msg.message_type) && !msg.media_url && (
                                   <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
                                     <Paperclip className="h-3 w-3" /> {msg.message_type}
                                   </div>

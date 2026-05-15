@@ -196,7 +196,7 @@ async function handleEvent(req: Request) {
         console.warn("Unable to resolve branch_id for WhatsApp webhook event", phoneNumberId);
       }
 
-      const insertedMessageIds = await processIncomingMessages(value, resolvedBranchId);
+      const insertedMessageIds = await processIncomingMessages(value, resolvedBranchId, integration);
       await processStatusUpdates(value, resolvedBranchId);
 
       if (insertedMessageIds.length > 0 && resolvedBranchId) {
@@ -251,7 +251,7 @@ async function processTemplateStatusUpdate(value: any) {
 
 // ─── Incoming Messages ─────────────────────────────────────────────────────────
 
-async function processIncomingMessages(value: any, branchId: string | null): Promise<{ id: string; phone_number: string }[]> {
+async function processIncomingMessages(value: any, branchId: string | null, integration: WhatsAppIntegration | null): Promise<{ id: string; phone_number: string }[]> {
   if (!branchId) return [];
 
   const messages = Array.isArray(value.messages) ? value.messages : [];
@@ -269,13 +269,19 @@ async function processIncomingMessages(value: any, branchId: string | null): Pro
 
     if (existing) continue;
 
+    // Download inbound media (PDF/image/video/audio) from Meta to our storage.
+    // Meta only stores raw IDs and gives 5-min signed URLs; we persist a copy
+    // and store the storage path in media_url + metadata in media_meta.
+    const mediaResolved = await resolveInboundMedia(message, integration);
+
     const msgPayload = {
       branch_id: branchId,
       phone_number: message.from,
       contact_name: contactName,
       message_type: message.type ?? "text",
       content: extractMessageContent(message),
-      media_url: extractMediaUrl(message),
+      media_url: mediaResolved?.storage_path ?? null,
+      media_meta: mediaResolved?.meta ?? null,
       direction: "inbound",
       status: "received",
       whatsapp_message_id: message.id,
@@ -2087,7 +2093,104 @@ function extractMessageContent(message: any): string | null {
 }
 
 function extractMediaUrl(message: any): string | null {
-  return message?.image?.id ?? message?.video?.id ?? message?.document?.id ?? null;
+  return message?.image?.id ?? message?.video?.id ?? message?.document?.id ?? message?.audio?.id ?? null;
+}
+
+// Download an inbound WA media object from Meta and persist into the
+// `whatsapp-media` storage bucket. Returns a storage_path + filename/mime
+// metadata that the chat UI uses to render an attachment tile.
+async function resolveInboundMedia(
+  message: any,
+  integration: WhatsAppIntegration | null,
+): Promise<{ storage_path: string; meta: Record<string, unknown> } | null> {
+  const mediaObj =
+    message?.image ?? message?.video ?? message?.document ?? message?.audio ?? message?.sticker ?? null;
+  if (!mediaObj?.id) return null;
+
+  const mediaId = String(mediaObj.id);
+  const baseMeta: Record<string, unknown> = {
+    meta_id: mediaId,
+    filename: mediaObj.filename ?? null,
+    mime_type: mediaObj.mime_type ?? null,
+    kind: message.type ?? null,
+  };
+
+  const accessToken = integration?.credentials?.access_token as string | undefined;
+  if (!accessToken) {
+    return { storage_path: mediaId, meta: { ...baseMeta, error: "no_access_token" } };
+  }
+
+  try {
+    // Step 1: Get short-lived signed URL from Graph API.
+    const metaRes = await fetch(`${META_API_BASE}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) {
+      const text = await metaRes.text().catch(() => "");
+      console.error("Meta media metadata fetch failed", metaRes.status, text);
+      return { storage_path: mediaId, meta: { ...baseMeta, error: `meta_fetch_${metaRes.status}` } };
+    }
+    const metaJson = await metaRes.json();
+    const downloadUrl = metaJson?.url as string | undefined;
+    const mimeType = (metaJson?.mime_type as string | undefined) ?? (mediaObj.mime_type as string | undefined) ?? "application/octet-stream";
+    if (!downloadUrl) {
+      return { storage_path: mediaId, meta: { ...baseMeta, error: "no_download_url" } };
+    }
+
+    // Step 2: Download binary with bearer token.
+    const binRes = await fetch(downloadUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!binRes.ok) {
+      console.error("Meta media binary download failed", binRes.status);
+      return { storage_path: mediaId, meta: { ...baseMeta, error: `download_${binRes.status}` } };
+    }
+    const blob = await binRes.blob();
+
+    // Step 3: Upload into our storage bucket.
+    const now = new Date();
+    const yyyy = now.getUTCFullYear();
+    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const safeName = (mediaObj.filename ?? mediaId)
+      .toString()
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(0, 120);
+    const ext = safeName.includes(".") ? "" : guessExtension(mimeType);
+    const path = `${yyyy}/${mm}/${mediaId}-${safeName}${ext}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from("whatsapp-media")
+      .upload(path, blob, { contentType: mimeType, upsert: true });
+    if (uploadErr) {
+      console.error("WA media storage upload failed", uploadErr);
+      return { storage_path: mediaId, meta: { ...baseMeta, error: "upload_failed", mime_type: mimeType } };
+    }
+
+    return {
+      storage_path: path,
+      meta: {
+        ...baseMeta,
+        mime_type: mimeType,
+        size: blob.size,
+        bucket: "whatsapp-media",
+      },
+    };
+  } catch (err) {
+    console.error("resolveInboundMedia exception", err);
+    return { storage_path: mediaId, meta: { ...baseMeta, error: String(err) } };
+  }
+}
+
+function guessExtension(mime: string): string {
+  if (!mime) return "";
+  if (mime.includes("pdf")) return ".pdf";
+  if (mime.includes("jpeg")) return ".jpg";
+  if (mime.includes("png")) return ".png";
+  if (mime.includes("webp")) return ".webp";
+  if (mime.includes("mp4")) return ".mp4";
+  if (mime.includes("ogg")) return ".ogg";
+  if (mime.includes("mpeg")) return ".mp3";
+  return "";
 }
 
 function extractPhoneNumberIds(payload: any): string[] {
