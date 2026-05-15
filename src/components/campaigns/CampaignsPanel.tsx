@@ -108,17 +108,34 @@ export function CampaignsPanel() {
         </div>
       )}
 
+      {branchId && campaigns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Input className="rounded-xl pl-8 h-9" placeholder="Search campaigns" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="h-9 rounded-xl border bg-card px-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="sending">Sending</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+      )}
+
       {branchId && isLoading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
-      ) : branchId && campaigns.length === 0 ? (
+      ) : branchId && filteredCampaigns.length === 0 ? (
         <div className="rounded-2xl bg-card border border-dashed border-border p-12 text-center">
           <Megaphone className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-          <h3 className="text-lg font-semibold text-foreground">No campaigns yet</h3>
-          <p className="text-sm text-muted-foreground mt-1">Create your first marketing campaign to engage with members.</p>
+          <h3 className="text-lg font-semibold text-foreground">{campaigns.length === 0 ? 'No campaigns yet' : 'No campaigns match your filters'}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{campaigns.length === 0 ? 'Create your first marketing campaign to engage with members.' : 'Try a different search or status.'}</p>
         </div>
       ) : branchId && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {campaigns.map((c: Campaign) => {
+          {filteredCampaigns.map((c: Campaign) => {
             const Icon = channelIcon(c.channel);
             const sb = statusBadge(c.status);
             const Sicon = sb.icon;
