@@ -60,6 +60,7 @@ import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/
 import { Textarea } from '@/components/ui/textarea';
 import { useConversationPresence } from '@/hooks/useConversationPresence';
 import { AgentPresenceBar } from '@/components/whatsapp/AgentPresenceBar';
+import { WhatsAppMediaAttachment } from '@/components/whatsapp/WhatsAppMediaAttachment';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
