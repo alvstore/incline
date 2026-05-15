@@ -287,6 +287,109 @@ export type Database = {
           },
         ]
       }
+      ai_knowledge: {
+        Row: {
+          branch_id: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          tags: string[]
+          title: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          tags?: string[]
+          title: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          tags?: string[]
+          title?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_knowledge_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_memory: {
+        Row: {
+          asked_questions: string[]
+          branch_id: string | null
+          contact_key: string
+          created_at: string
+          current_intent: string | null
+          do_not_ask: string[]
+          facts: Json
+          id: string
+          last_seen_at: string
+          platform: string
+          profile: Json
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          asked_questions?: string[]
+          branch_id?: string | null
+          contact_key: string
+          created_at?: string
+          current_intent?: string | null
+          do_not_ask?: string[]
+          facts?: Json
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          profile?: Json
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asked_questions?: string[]
+          branch_id?: string | null
+          contact_key?: string
+          created_at?: string
+          current_intent?: string | null
+          do_not_ask?: string[]
+          facts?: Json
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          profile?: Json
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_memory_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_provider_configs: {
         Row: {
           api_key_secret_name: string | null
@@ -337,6 +440,81 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      ai_purposes: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          description: string | null
+          enabled: boolean
+          extra: Json
+          guards: Json
+          id: string
+          max_tokens: number | null
+          model: string | null
+          provider_id: string | null
+          purpose: string
+          reply_delay_seconds: number
+          system_prompt: string
+          temperature: number | null
+          tools_allowed: string[]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          extra?: Json
+          guards?: Json
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          provider_id?: string | null
+          purpose: string
+          reply_delay_seconds?: number
+          system_prompt?: string
+          temperature?: number | null
+          tools_allowed?: string[]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          extra?: Json
+          guards?: Json
+          id?: string
+          max_tokens?: number | null
+          model?: string | null
+          provider_id?: string | null
+          purpose?: string
+          reply_delay_seconds?: number
+          system_prompt?: string
+          temperature?: number | null
+          tools_allowed?: string[]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_purposes_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_purposes_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_provider_configs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_tool_logs: {
         Row: {
@@ -12105,6 +12283,34 @@ export type Database = {
         Returns: Json
       }
       generate_renewal_invoices: { Args: never; Returns: undefined }
+      get_ai_purpose: {
+        Args: { _branch_id?: string; _purpose: string }
+        Returns: {
+          branch_id: string | null
+          created_at: string
+          description: string | null
+          enabled: boolean
+          extra: Json
+          guards: Json
+          id: string
+          max_tokens: number | null
+          model: string | null
+          provider_id: string | null
+          purpose: string
+          reply_delay_seconds: number
+          system_prompt: string
+          temperature: number | null
+          tools_allowed: string[]
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ai_purposes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_howbody_public_report: {
         Args: { _report_type: string; _token: string }
         Returns: Json
