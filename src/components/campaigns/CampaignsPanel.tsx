@@ -168,6 +168,9 @@ export function CampaignsPanel() {
                         <DropdownMenuItem onClick={() => setDetailCampaign(c)}>
                           <CheckCircle2 className="h-4 w-4 mr-2" /> View details
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setReportCampaign(c)}>
+                          <BarChart3 className="h-4 w-4 mr-2" /> View report
+                        </DropdownMenuItem>
                         <DropdownMenuItem disabled={!editable || inFlight} onClick={() => openEdit(c)}>
                           <Pencil className="h-4 w-4 mr-2" /> Edit
                         </DropdownMenuItem>
