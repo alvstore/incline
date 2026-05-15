@@ -184,7 +184,7 @@ serve(async (req) => {
       // Generate contextual nudge message
       let nudgeMessage: string | undefined;
 
-      if (LOVABLE_API_KEY && (partialData || lead) && !outsideWindow) {
+      if ((partialData || lead) && !outsideWindow) {
         const missingFields: string[] = [];
         if (!partialData?.email && !lead) missingFields.push("email address");
         if (!partialData?.name && !lead?.full_name) missingFields.push("full name");
