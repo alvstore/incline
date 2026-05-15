@@ -170,17 +170,47 @@ export interface PurposeDefaults {
 }
 
 // Recommended generation params per purpose. Used to prefill in Purposes editor.
+// Tightened to cut API spend; users can still override per-purpose.
 export const PURPOSE_DEFAULTS: Record<string, PurposeDefaults> = {
-  whatsapp_reply: { temperature: 0.6, max_tokens: 600, hint: 'Conversational, short replies' },
-  lead_nurture: { temperature: 0.7, max_tokens: 400, hint: 'Warm, persuasive nudges' },
+  whatsapp_reply: { temperature: 0.6, max_tokens: 350, hint: 'Conversational, short replies' },
+  lead_nurture: { temperature: 0.7, max_tokens: 250, hint: 'Warm, persuasive nudges' },
   lead_score: { temperature: 0.2, max_tokens: 500, hint: 'Deterministic JSON scoring' },
   campaign_draft: { temperature: 0.8, max_tokens: 800, hint: 'Creative marketing copy' },
   template_generate: { temperature: 0.4, max_tokens: 600, hint: 'Structured WhatsApp templates' },
-  dashboard_insight: { temperature: 0.3, max_tokens: 1200, hint: 'Analytical, factual summaries' },
+  dashboard_insight: { temperature: 0.3, max_tokens: 800, hint: 'Analytical, factual summaries' },
   fitness_plan: { temperature: 0.5, max_tokens: 2500, hint: 'Detailed structured plans' },
-  review_reply: { temperature: 0.6, max_tokens: 400, hint: 'Personal, on-brand replies' },
-  automation_rule: { temperature: 0.5, max_tokens: 400, hint: 'Short rule-driven sends' },
+  review_reply: { temperature: 0.6, max_tokens: 250, hint: 'Personal, on-brand replies' },
+  automation_rule: { temperature: 0.5, max_tokens: 200, hint: 'Short rule-driven sends' },
 };
+
+// Heuristic: returns true when the model id strongly suggests a free / low-cost tier.
+// Used by the Purposes editor to surface a "FREE / CHEAP" badge and a one-click
+// "Use cheapest available model" picker.
+export function isCheapModel(model: string): boolean {
+  if (!model) return false;
+  const m = model.toLowerCase();
+  return (
+    m.includes(':free') ||
+    m.includes('-free') ||
+    m.includes('flash-lite') ||
+    m.includes('lite-latest') ||
+    m.includes('nano') ||
+    m.includes('mini') ||
+    m.includes('haiku') ||
+    m.includes('flash') ||
+    m.includes('8b') ||
+    m.includes('3b') ||
+    m.includes('phi3')
+  );
+}
+
+// Pick the first model in the provider's catalog that looks free/cheap.
+// Falls back to the provider default if nothing matches.
+export function cheapestModelFor(provider: string): string {
+  const preset = PROVIDER_DEFAULTS[provider];
+  if (!preset) return '';
+  return preset.models.find(isCheapModel) ?? preset.default_model;
+}
 
 // Mirror server-side normalizer. Returns the model that will actually be sent
 // to the underlying provider after dispatcher cleanup.
