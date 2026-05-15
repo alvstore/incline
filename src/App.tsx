@@ -33,7 +33,7 @@ const PublicRegistrationPage = lazy(() => import("./pages/PublicRegistration"));
 
 // All other pages — lazy loaded for code splitting
 const DashboardPage = lazy(() => import("./pages/Dashboard"));
-const AIControlCenterPage = lazy(() => import("./pages/AIControlCenter"));
+
 const MembersPage = lazy(() => import("./pages/Members"));
 const LeadsPage = lazy(() => import("./pages/Leads"));
 const PlansPage = lazy(() => import("./pages/Plans"));
@@ -268,7 +268,7 @@ function RoutedContent() {
           <Route path="/audit-logs" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><AuditLogsPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><SettingsPage /></ProtectedRoute>} />
-          <Route path="/ai-control-center" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><AIControlCenterPage /></ProtectedRoute>} />
+          <Route path="/ai-control-center" element={<Navigate to="/settings?tab=ai-agent" replace />} />
           <Route path="/store" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><StorePage /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><POSPage /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><ReferralsPage /></ProtectedRoute>} />
