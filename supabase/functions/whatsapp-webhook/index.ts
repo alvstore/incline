@@ -251,7 +251,7 @@ async function processTemplateStatusUpdate(value: any) {
 
 // ─── Incoming Messages ─────────────────────────────────────────────────────────
 
-async function processIncomingMessages(value: any, branchId: string | null): Promise<{ id: string; phone_number: string }[]> {
+async function processIncomingMessages(value: any, branchId: string | null, integration: WhatsAppIntegration | null): Promise<{ id: string; phone_number: string }[]> {
   if (!branchId) return [];
 
   const messages = Array.isArray(value.messages) ? value.messages : [];
@@ -269,13 +269,19 @@ async function processIncomingMessages(value: any, branchId: string | null): Pro
 
     if (existing) continue;
 
+    // Download inbound media (PDF/image/video/audio) from Meta to our storage.
+    // Meta only stores raw IDs and gives 5-min signed URLs; we persist a copy
+    // and store the storage path in media_url + metadata in media_meta.
+    const mediaResolved = await resolveInboundMedia(message, integration);
+
     const msgPayload = {
       branch_id: branchId,
       phone_number: message.from,
       contact_name: contactName,
       message_type: message.type ?? "text",
       content: extractMessageContent(message),
-      media_url: extractMediaUrl(message),
+      media_url: mediaResolved?.storage_path ?? null,
+      media_meta: mediaResolved?.meta ?? null,
       direction: "inbound",
       status: "received",
       whatsapp_message_id: message.id,
