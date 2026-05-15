@@ -196,7 +196,7 @@ async function handleEvent(req: Request) {
         console.warn("Unable to resolve branch_id for WhatsApp webhook event", phoneNumberId);
       }
 
-      const insertedMessageIds = await processIncomingMessages(value, resolvedBranchId);
+      const insertedMessageIds = await processIncomingMessages(value, resolvedBranchId, integration);
       await processStatusUpdates(value, resolvedBranchId);
 
       if (insertedMessageIds.length > 0 && resolvedBranchId) {
