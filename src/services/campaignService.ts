@@ -275,6 +275,7 @@ export async function sendCampaignNow(
       member_ids: audience.memberIds,
       recipients: audience.recipients,
       campaign_id: campaign.id,
+      template_id: (campaign as any).template_id ?? undefined,
       attachment_url: (campaign as any).attachment_url ?? undefined,
       attachment_kind: (campaign as any).attachment_kind ?? undefined,
       attachment_filename: (campaign as any).attachment_filename ?? undefined,
