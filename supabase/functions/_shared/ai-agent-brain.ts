@@ -278,7 +278,7 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
   ]}]}
 - NEVER omit Annual. NEVER use a button block for plan_interest or goal. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
-- You MUST collect full name + email + at least 1 other field before outputting lead_captured.
+- You MUST collect full name + email + at least 1 other field before outputting lead_captured, and you MUST follow the ONBOARDING ORDER above (name → email → goal → plan_interest → rest).
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
 - When the user provides the LAST required field, respond with ONLY this JSON:
 {"status":"lead_captured","data":{${(leadCaptureConfig!.target_fields || []).map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
