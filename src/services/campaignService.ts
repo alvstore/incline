@@ -451,3 +451,61 @@ export async function deleteSegment(id: string): Promise<void> {
   const { error } = await supabase.from('contact_segments' as any).delete().eq('id', id);
   if (error) throw error;
 }
+
+// ---------- Campaign report (per-recipient delivery + grouped failures) ----------
+export interface CampaignRecipientRow {
+  id: string;
+  source_type: string;
+  source_label?: string | null;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  error_code?: string | null;
+  error_reason?: string | null;
+  in_window?: boolean | null;
+  read_at?: string | null;
+  dispatched_at?: string | null;
+}
+
+export interface FailureGroup {
+  code: string;
+  reason: string;
+  count: number;
+  hint?: string;
+}
+
+const FAILURE_HINTS: Record<string, string> = {
+  '131047': 'Outside the 24-hour window — only an APPROVED Meta template can reach this recipient.',
+  '131026': 'Recipient hasn\'t opted in / unreachable on WhatsApp.',
+  'no_template': 'Cold recipient and no approved template was selected for this campaign.',
+  'no_phone': 'Recipient has no phone number on file.',
+  'opted_out': 'Recipient has opted out of marketing messages.',
+};
+
+export async function getCampaignReport(campaignId: string): Promise<{
+  recipients: CampaignRecipientRow[];
+  groups: FailureGroup[];
+}> {
+  const { data, error } = await supabase
+    .from('campaign_recipients' as any)
+    .select('id, source_type, source_label, full_name, phone, email, status, error_code, error_reason, in_window, read_at, dispatched_at')
+    .eq('campaign_id', campaignId)
+    .order('dispatched_at', { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  const rows = (data as any as CampaignRecipientRow[]) || [];
+
+  const failures = rows.filter((r) => r.status === 'failed');
+  const map = new Map<string, FailureGroup>();
+  for (const f of failures) {
+    const code = f.error_code || 'unknown';
+    const reason = f.error_reason || 'Unknown error';
+    const k = `${code}::${reason}`;
+    const hit = map.get(k);
+    if (hit) hit.count++;
+    else map.set(k, { code, reason, count: 1, hint: FAILURE_HINTS[code] });
+  }
+  const groups = Array.from(map.values()).sort((a, b) => b.count - a.count);
+  return { recipients: rows, groups };
+}
+
