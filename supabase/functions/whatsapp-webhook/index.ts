@@ -1,17 +1,18 @@
-// v5.3.0 — Hotfix: deterministic non-fitness intent guard (job/vendor/press/etc.)
-//          short-circuits BEFORE the LLM call. Top-level non-fitness rule in
-//          system prompt (no longer member-only). Fixes raw interactive_list
-//          JSON leaking to job seekers.
-// v5.2.0 — Variant-aware phone matching, member-first dedupe guard before
-//          lead INSERT, member-first hard rule injected into AI system prompt.
+// v6.0.0 — SSOT: routes through `runUnifiedAgent` from _shared/ai-agent-brain.ts.
+//          Deletes the 800-line duplicate brain (system prompt, tool loop,
+//          summarizer, lead-capture parsing) — all of that is now centralized
+//          and configurable via the `ai_purposes` table from the AI Control
+//          Center UI. Member context, deterministic non-fitness guard, tool
+//          gating, and lead capture are all handled inside the shared brain.
+// v5.3.0 — Hotfix: deterministic non-fitness intent guard (now in shared brain).
+// v5.2.0 — Variant-aware phone matching, member-first dedupe guard.
 // v5.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
 // v5.0.0 — Transactional AI Agent: 25+ self-service tools, payments, IG/FB parity
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getAllToolDefinitions } from "../_shared/ai-tools.ts";
-import { executeSharedToolCall } from "../_shared/ai-tool-executor.ts";
 import { META_API_BASE } from "../_shared/meta-config.ts";
 import { phoneVariants } from "../_shared/phone.ts";
+import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
