@@ -193,9 +193,11 @@ export function AIPurposesTab() {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
         const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
         const resolved = resolveProvider(scope, providers);
+        const inherited = isInherited(scope, resolved);
         const rawModel = p.model || resolved?.default_model || "—";
         const effectiveModel = resolved ? normalizeModelForProvider(resolved.provider, rawModel) : rawModel;
         const overridden = !!p.model;
+        const cheap = isCheapModel(effectiveModel);
         const defaults = PURPOSE_DEFAULTS[p.purpose];
         return (
           <Card key={p.id} className="rounded-2xl shadow-lg shadow-slate-200/50 p-5 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
@@ -213,10 +215,17 @@ export function AIPurposesTab() {
                     {resolved?.provider ?? "lovable"}
                   </Badge>
                   <Badge variant="outline" className="text-xs font-mono">{effectiveModel}</Badge>
+                  {cheap && (
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] gap-1">
+                      <Leaf className="h-3 w-3" /> low-cost
+                    </Badge>
+                  )}
                   {overridden && (
                     <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">override</Badge>
                   )}
-                  <Badge variant="outline" className="text-xs">scope: {scope}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    scope: {scope}{inherited && <span className="text-amber-600 ml-1">(inherited from "all")</span>}
+                  </Badge>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">{meta.desc}</p>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
