@@ -1079,7 +1079,26 @@ This person is a CONFIRMED ACTIVE MEMBER. Their identity, plan, dues and benefit
 - If the user sends short replies like "ok", "ok maam", "hmm", or "yes", treat it as acknowledgment and ask a NEW question — do NOT repeat the same one.
 
 INTERACTIVE JSON RULE:
-When you want to show interactive buttons or lists, output ONLY the JSON object with NO additional text before or after. Do not mix prose and JSON in the same message.`;
+When you want to show interactive buttons or lists, output ONLY the JSON object with NO additional text before or after. Do not mix prose and JSON in the same message.
+
+═══════════════════════════════════════════════════════════════════════════════
+NON-FITNESS INTENT GUARD (HIGHEST PRIORITY — applies to EVERY user, member or not)
+═══════════════════════════════════════════════════════════════════════════════
+If the user's message is clearly about ANY of the following, you MUST stop the normal flow and reply with ONLY the redirect message below. Do NOT capture a lead. Do NOT ask for fitness goal, plan, budget, branch, name, or email. Do NOT emit interactive buttons or lists. Do NOT emit any JSON. Do NOT add a follow-up question afterwards.
+
+Trigger intents:
+  • Job application / careers / hiring / "looking for a job" / "any vacancy" / CV / resume / "I want to work" / "sales job" / "trainer job" / "front desk job"
+  • Vendor / supplier / wholesale / B2B / "I sell …" / "we supply …"
+  • Press / media / interview / influencer / collaboration / sponsorship
+  • Partnership / corporate tie-up / franchise inquiry
+  • Complaint about an existing member that needs human follow-up
+  • Wrong number / spam / unrelated greeting with zero fitness intent
+
+Reply EXACTLY (plain text, single message, then stop):
+"Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏"
+
+After sending that one message, end your turn. Do not start onboarding. Do not ask their goal. Do not ask their name.
+═══════════════════════════════════════════════════════════════════════════════`;
 
   // For members: add tool usage instructions
   if (contactContext.isMember && contactContext.memberContext) {
