@@ -1,5 +1,6 @@
-// AI Purposes tab — SSOT editor for ai_purposes (lifted from former /ai-control-center page).
-import { useState } from "react";
+// AI Purposes tab — SSOT editor for ai_purposes. Shows resolved provider per purpose
+// and a "Test" button that pings the active provider via ai-test-purpose edge fn.
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Pencil, FlaskConical, Info, Zap } from "lucide-react";
 
 interface PurposeRow {
   id: string;
@@ -26,6 +27,14 @@ interface PurposeRow {
   updated_at: string;
 }
 
+interface ProviderRow {
+  scope: string;
+  provider: string;
+  default_model: string;
+  is_active: boolean;
+  is_default: boolean;
+}
+
 const PURPOSE_LABELS: Record<string, { title: string; desc: string }> = {
   whatsapp_reply: { title: "WhatsApp / Meta Replies", desc: "Conversational AI brain for WhatsApp, Instagram, Messenger" },
   lead_nurture: { title: "Lead Nurture Nudges", desc: "Re-engagement messages for cold leads" },
@@ -38,9 +47,31 @@ const PURPOSE_LABELS: Record<string, { title: string; desc: string }> = {
   automation_rule: { title: "Automation Rules", desc: "AI-tone for birthday wishes & rule-driven sends" },
 };
 
+// Mirrors SCOPE_MAP in supabase/functions/_shared/ai-runtime.ts
+const PURPOSE_TO_SCOPE: Record<string, string> = {
+  whatsapp_reply: "whatsapp_ai",
+  lead_nurture: "lead_nurture",
+  lead_score: "lead_scoring",
+  campaign_draft: "all",
+  template_generate: "all",
+  dashboard_insight: "dashboard_insights",
+  fitness_plan: "fitness_plans",
+  review_reply: "all",
+  automation_rule: "all",
+};
+
+function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow | null {
+  const scoped = providers.find(p => p.scope === scope && p.is_active && p.is_default);
+  if (scoped) return scoped;
+  const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
+  if (all) return all;
+  return { scope: "all", provider: "lovable", default_model: "google/gemini-3-flash-preview", is_active: true, is_default: true };
+}
+
 export function AIPurposesTab() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<PurposeRow | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
 
   const { data: purposes = [], isLoading } = useQuery({
     queryKey: ["ai_purposes"],
@@ -52,6 +83,17 @@ export function AIPurposesTab() {
         .order("purpose");
       if (error) throw error;
       return (data as PurposeRow[]) ?? [];
+    },
+  });
+
+  const { data: providers = [] } = useQuery({
+    queryKey: ["ai_provider_configs_active"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ai_provider_configs")
+        .select("scope, provider, default_model, is_active, is_default")
+        .eq("is_active", true);
+      return (data as ProviderRow[]) ?? [];
     },
   });
 
@@ -79,14 +121,49 @@ export function AIPurposesTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const handleTest = async (purpose: string) => {
+    setTesting(purpose);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-test-purpose", {
+        body: { purpose },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(
+          `${data.provider} · ${data.model} · ${data.latency_ms}ms${data.fallback_used ? " (fallback)" : ""}`,
+          { description: data.sample?.slice(0, 120) || undefined }
+        );
+      } else {
+        toast.error(data?.error || "Test failed");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Test failed");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const editingResolved = useMemo(
+    () => editing ? resolveProvider(PURPOSE_TO_SCOPE[editing.purpose] ?? "all", providers) : null,
+    [editing, providers],
+  );
+
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">
-        Single source of truth for every AI feature. Edit prompts and models live — no redeploy needed.
-      </p>
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+        <Info className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+        <p className="text-xs text-slate-600">
+          Single source of truth for every AI feature. The <b>provider</b> (Google, OpenRouter, Lovable, etc.) is
+          chosen per scope in the <b>Providers</b> tab; this screen controls the prompt, model override, temperature,
+          and tokens for each purpose. Changes apply instantly — no redeploy.
+        </p>
+      </div>
       {isLoading && <div className="text-sm text-slate-500">Loading…</div>}
       {purposes.map((p) => {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
+        const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
+        const resolved = resolveProvider(scope, providers);
+        const effectiveModel = p.model || resolved?.default_model || "—";
         return (
           <Card key={p.id} className="rounded-2xl shadow-lg shadow-slate-200/50 p-5 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
             <div className="flex items-start justify-between gap-4">
@@ -98,16 +175,33 @@ export function AIPurposesTab() {
                   ) : (
                     <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">Disabled</Badge>
                   )}
-                  <Badge variant="outline" className="text-xs">{p.model ?? "default model"}</Badge>
+                  <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 gap-1">
+                    <Zap className="h-3 w-3" />
+                    {resolved?.provider ?? "lovable"}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs font-mono">{effectiveModel}</Badge>
+                  <Badge variant="outline" className="text-xs">scope: {scope}</Badge>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">{meta.desc}</p>
                 <p className="text-xs text-slate-600 line-clamp-2 font-mono bg-slate-50 p-2 rounded">
                   {p.system_prompt?.slice(0, 220) || "(no system prompt set)"}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
-                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-              </Button>
+              <div className="flex flex-col gap-2 shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleTest(p.purpose)}
+                  disabled={testing === p.purpose}
+                  className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                >
+                  <FlaskConical className="h-3.5 w-3.5 mr-1" />
+                  {testing === p.purpose ? "Testing…" : "Test"}
+                </Button>
+              </div>
             </div>
           </Card>
         );
@@ -120,6 +214,16 @@ export function AIPurposesTab() {
           </SheetHeader>
           {editing && (
             <div className="space-y-4 mt-6">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-100">
+                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-900">
+                  Provider for this purpose is <b>{editingResolved?.provider ?? "lovable"}</b> (scope:
+                  {" "}<code className="font-mono">{PURPOSE_TO_SCOPE[editing.purpose] ?? "all"}</code>). Change the
+                  provider in the <b>Providers</b> tab. Leave <b>Model</b> blank to use the provider's default
+                  ({editingResolved?.default_model}); only override if you need a different model on this provider.
+                </p>
+              </div>
+
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <Label htmlFor="enabled" className="text-sm font-medium">Enabled</Label>
                 <Switch
@@ -129,11 +233,11 @@ export function AIPurposesTab() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="model" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Model</Label>
+                <Label htmlFor="model" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Model override (optional)</Label>
                 <Input
                   id="model"
                   value={editing.model ?? ""}
-                  placeholder="google/gemini-3-flash-preview"
+                  placeholder={editingResolved?.default_model ?? "google/gemini-3-flash-preview"}
                   onChange={(e) => setEditing({ ...editing, model: e.target.value })}
                 />
               </div>
