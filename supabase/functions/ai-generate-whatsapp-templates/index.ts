@@ -145,35 +145,24 @@ Deno.serve(async (req) => {
         (body.existing || []).slice(0, 60).map((e) => `• ${e.name}: ${e.body.slice(0, 140).replace(/\n/g, " ")}`).join("\n") || "(none)",
       ].join("\n");
 
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPTS[channel] },
-            { role: "user", content: userPrompt },
-          ],
+      try {
+        const r = await generateOnce({
+          purpose: "template_generate",
+          userMessage: userPrompt,
+          systemOverride: SYSTEM_PROMPTS[channel],
           tools: [TOOL_SCHEMA],
-          tool_choice: { type: "function", function: { name: "propose_templates" } },
-        }),
-      });
-
-      if (aiRes.status === 429) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
-      if (aiRes.status === 402) return json({ error: "AI credits exhausted — top up Lovable AI usage." }, 402);
-      if (!aiRes.ok) {
-        const t = await aiRes.text();
-        console.error("AI gateway error", aiRes.status, t);
-        return json({ error: "AI gateway error", details: t.slice(0, 400) }, 502);
+          toolChoice: { type: "function", function: { name: "propose_templates" } },
+        });
+        const parsed = r.toolCallArgs;
+        if (!parsed) continue;
+        const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
+        for (const t of templates) allTemplates.push(t);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "AI gateway error";
+        if (/429|rate/i.test(msg)) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
+        if (/402|credits/i.test(msg)) return json({ error: "AI credits exhausted — top up Lovable AI usage." }, 402);
+        return json({ error: "AI gateway error", details: msg.slice(0, 400) }, 502);
       }
-
-      const aiJson = await aiRes.json();
-      const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-      if (!toolCall?.function?.arguments) continue;
-      let parsed: any;
-      try { parsed = JSON.parse(toolCall.function.arguments); } catch { continue; }
-      const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
-      for (const t of templates) allTemplates.push(t);
     }
 
     // Document events: prefer native document header. If the model returned
