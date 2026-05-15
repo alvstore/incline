@@ -308,6 +308,10 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Counting…
               </div>
+            ) : error ? (
+              <p className="text-sm font-semibold text-red-600">
+                Audience query failed — {(error as Error).message}
+              </p>
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {data?.recipients ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>
