@@ -84,20 +84,82 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
-  const { data: approvedTemplates = [] } = useQuery({
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+
+  // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
+  // is selectable, even if there's no local CRM `templates` row yet.
+  // We left-join `templates.id` by meta_template_name so the send pipeline still
+  // receives a valid `template_id` UUID.
+  const { data: approvedTemplates = [], refetch: refetchTemplates } = useQuery({
     queryKey: ['approved-whatsapp-templates', branchId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('templates')
-        .select('id, name, content, header_type, meta_template_status, meta_template_name')
-        .eq('type', 'whatsapp')
-        .eq('meta_template_status', 'APPROVED')
-        .order('name');
+      let q = supabase
+        .from('whatsapp_templates')
+        .select('id, name, language, category, components, branch_id, status')
+        .eq('status', 'APPROVED');
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data: meta, error } = await q.order('name');
       if (error) throw error;
-      return data || [];
+
+      const names = (meta || []).map((m: any) => m.name);
+      const { data: locals } = names.length
+        ? await supabase
+            .from('templates')
+            .select('id, meta_template_name, header_type, header_media_url')
+            .in('meta_template_name', names)
+        : { data: [] as any[] };
+
+      const byName = new Map<string, any>();
+      for (const l of (locals || [])) byName.set(l.meta_template_name, l);
+
+      return (meta || []).map((m: any) => {
+        const local = byName.get(m.name);
+        const bodyText = (m.components || []).find((c: any) => c?.type === 'BODY')?.text || '';
+        const headerComp = (m.components || []).find((c: any) => c?.type === 'HEADER');
+        const headerFmt = (headerComp?.format || 'NONE').toLowerCase();
+        return {
+          id: local?.id || null, // local templates.id (UUID) for the send pipeline
+          name: m.name,
+          language: m.language || 'en',
+          category: m.category,
+          header_type: local?.header_type || headerFmt,
+          content: bodyText,
+          meta_template_status: 'APPROVED' as const,
+          meta_template_name: m.name,
+        };
+      });
     },
     enabled: open && channel === 'whatsapp',
   });
+
+  // Realtime: any change in whatsapp_templates / templates re-fetches the picker.
+  useEffect(() => {
+    if (!open || channel !== 'whatsapp') return;
+    const ch = supabase
+      .channel('campaign-wizard-templates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => refetchTemplates())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'templates' }, () => refetchTemplates())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [open, channel, refetchTemplates]);
+
+  const handleSyncFromMeta = async () => {
+    if (!branchId) { toast.error('No branch available'); return; }
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
+        body: { action: 'list', branch_id: branchId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Synced ${data?.templates?.length || 0} templates from Meta`);
+      await refetchTemplates();
+    } catch (e: any) {
+      toast.error(e?.message || 'Sync failed');
+    } finally {
+      setSyncingTemplates(false);
+    }
+  };
 
   // Auto-prefill from a saved segment (set by Contact Book → Segments → Send) — skip when editing.
   useEffect(() => {
