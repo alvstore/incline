@@ -1,9 +1,11 @@
+// v4.0.0 — SSOT: AI nudge text now generated via shared ai-runtime.generateOnce
+//          (purpose='lead_nurture'). Hardcoded prompt + direct fetch removed.
 // v3.4.0 — Enforce Meta 24h customer-service window. If the lead has not
 //          replied within 24h, do NOT send a freeform AI nudge (Meta rejects
 //          with 131047). Instead, send the approved `lead_nurture_followup`
 //          WhatsApp template via dispatch-communication, or skip & cool down.
-// v3.3.0 — Move chatPlatform decl above use; nurture inbound-only chats too.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -194,33 +196,24 @@ serve(async (req) => {
           ? `Lead exists: ${lead.full_name}. This is a re-engagement nudge.`
           : "No data collected yet.";
 
-        const systemPrompt = `You are a friendly gym assistant for Incline Fitness. Write a single short WhatsApp follow-up message (max 2 sentences) to re-engage a lead who stopped responding.
-${nurturePrompt ? `Additional context from admin: ${nurturePrompt}` : ""}
-${contextInfo}
-${missingFields.length > 0 ? `Naturally ask for their ${missingFields[0]} in the message.` : "Just encourage them to visit or reply."}
-Keep it warm, casual, and use 1-2 emoji. Do NOT mention that they stopped replying.`;
+        const userMsg = [
+          nurturePrompt ? `Additional context from admin: ${nurturePrompt}` : "",
+          contextInfo,
+          missingFields.length > 0
+            ? `Naturally ask for their ${missingFields[0]} in the message.`
+            : "Just encourage them to visit or reply.",
+          "Generate the follow-up message.",
+        ].filter(Boolean).join("\n");
 
         try {
-          const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash-lite",
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: "Generate the follow-up message." },
-              ],
-            }),
+          const r = await generateOnce({
+            purpose: "lead_nurture",
+            branchId: chat.branch_id,
+            userMessage: userMsg,
+            supabase,
           });
-
-          if (aiRes.ok) {
-            const aiResult = await aiRes.json();
-            const generated = aiResult.choices?.[0]?.message?.content?.trim();
-            if (generated) nudgeMessage = generated;
-          }
+          const generated = r.content?.trim();
+          if (generated) nudgeMessage = generated;
         } catch (aiErr) {
           console.warn("AI nudge generation failed, using fallback:", aiErr);
         }

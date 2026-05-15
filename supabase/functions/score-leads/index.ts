@@ -1,6 +1,7 @@
-// v1.0.0 — AI Lead Scoring Edge Function
+// v2.0.0 — AI Lead Scoring Edge Function (SSOT: routes through ai-runtime)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,62 +74,34 @@ Recent activities (${(activities || []).length} total):
 ${(activities || []).slice(0, 10).map((a: any) => `- ${a.activity_type}: ${a.title || a.notes || "no details"} (${a.created_at})`).join("\n")}`;
 
       try {
-        const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
-            messages: [
-              { role: "system", content: "You are a lead scoring AI for a gym CRM. Always return valid JSON with keys: score (number 0-100), reasoning (string), next_best_action (string). Nothing else." },
-              { role: "user", content: prompt },
-            ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "score_lead",
-                description: "Return lead score, reasoning, and next best action",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    score: { type: "number", description: "Lead score 0-100" },
-                    reasoning: { type: "string", description: "Brief explanation" },
-                    next_best_action: { type: "string", description: "Specific actionable suggestion" },
-                  },
-                  required: ["score", "reasoning", "next_best_action"],
-                  additionalProperties: false,
+        const r = await generateOnce({
+          purpose: "lead_score",
+          branchId: lead.branch_id ?? null,
+          userMessage: prompt,
+          supabase,
+          tools: [{
+            type: "function",
+            function: {
+              name: "score_lead",
+              description: "Return lead score, reasoning, and next best action",
+              parameters: {
+                type: "object",
+                properties: {
+                  score: { type: "number", description: "Lead score 0-100" },
+                  reasoning: { type: "string", description: "Brief explanation" },
+                  next_best_action: { type: "string", description: "Specific actionable suggestion" },
                 },
+                required: ["score", "reasoning", "next_best_action"],
+                additionalProperties: false,
               },
-            }],
-            tool_choice: { type: "function", function: { name: "score_lead" } },
-          }),
+            },
+          }],
+          toolChoice: { type: "function", function: { name: "score_lead" } },
         });
 
-        if (!aiResp.ok) {
-          const errText = await aiResp.text();
-          if (aiResp.status === 429) {
-            results.push({ id, error: "Rate limited, try again later" });
-            continue;
-          }
-          if (aiResp.status === 402) {
-            results.push({ id, error: "AI credits exhausted" });
-            continue;
-          }
-          results.push({ id, error: `AI error: ${errText}` });
-          continue;
-        }
-
-        const aiData = await aiResp.json();
-        const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-        let parsed;
-
-        if (toolCall?.function?.arguments) {
-          parsed = JSON.parse(toolCall.function.arguments);
-        } else {
-          // Fallback: try parsing content directly
-          const content = aiData.choices?.[0]?.message?.content || "";
+        let parsed: any = r.toolCallArgs;
+        if (!parsed) {
+          const content = r.content || "";
           const jsonMatch = content.match(/\{[\s\S]*\}/);
           parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
         }

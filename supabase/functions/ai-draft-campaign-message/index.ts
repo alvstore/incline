@@ -1,7 +1,7 @@
+// v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='campaign_draft').
 // v1.0.0 — AI campaign message drafter (WhatsApp / SMS / Email).
-// Used by the Campaign Wizard "Draft with AI" button. Returns a single
-// proposal: subject (email), preheader (email), body, body_html (email).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,14 +66,13 @@ Deno.serve(async (req) => {
       ? `Event: ${body.event_meta.name}${body.event_meta.date ? " on " + body.event_meta.date : ""}${body.event_meta.time ? " at " + body.event_meta.time : ""}${body.event_meta.venue ? " · " + body.event_meta.venue : ""}${body.event_meta.rsvp_url ? " · RSVP: " + body.event_meta.rsvp_url : ""}.`
       : "";
 
-    const system = `You draft ${body.channel} marketing/comms copy for ${brand}, a premium Indian gym brand.
+    const systemOverride = `You draft ${body.channel} marketing/comms copy for ${brand}, a premium Indian gym brand.
 ${CHANNEL_RULES[body.channel]}
 Tone: ${tone}. Campaign type: ${body.campaign_type ?? "announcement"}.
 ${body.audience_hint ? "Audience: " + body.audience_hint + "." : ""}
 ${eventLine}
 Output ONLY via the propose_message tool — no prose.`;
 
-    // Tool schema is channel-shaped
     const props: Record<string, unknown> = {
       body: { type: "string", description: "Plain-text body. For email = text fallback." },
       variables: { type: "array", items: { type: "string" } },
@@ -83,64 +82,38 @@ Output ONLY via the propose_message tool — no prose.`;
       props.preheader = { type: "string" };
       props.body_html = { type: "string", description: "Inline-styled responsive HTML, ≤600px wide." };
     }
-
     const required = body.channel === "email"
       ? ["subject", "body", "body_html", "variables"]
       : ["body", "variables"];
 
-    const aiBody = {
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: body.prompt },
-      ],
-      tools: [{
-        type: "function",
-        function: {
-          name: "propose_message",
-          description: `Return a single ${body.channel} message draft.`,
-          parameters: { type: "object", properties: props, required, additionalProperties: false },
-        },
-      }],
-      tool_choice: { type: "function", function: { name: "propose_message" } },
-    };
+    try {
+      const r = await generateOnce({
+        purpose: "campaign_draft",
+        userMessage: body.prompt,
+        systemOverride,
+        supabase,
+        tools: [{
+          type: "function",
+          function: {
+            name: "propose_message",
+            description: `Return a single ${body.channel} message draft.`,
+            parameters: { type: "object", properties: props, required, additionalProperties: false },
+          },
+        }],
+        toolChoice: { type: "function", function: { name: "propose_message" } },
+      });
 
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(aiBody),
-    });
-    if (r.status === 429) {
-      return new Response(JSON.stringify({ error: "Rate limit, try again shortly." }), {
-        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const parsed = r.toolCallArgs ?? {};
+      return new Response(JSON.stringify({ proposal: parsed }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "AI gateway error";
+      const status = /rate limit|429/i.test(msg) ? 429 : /credits|402/i.test(msg) ? 402 : 500;
+      return new Response(JSON.stringify({ error: msg }), {
+        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (r.status === 402) {
-      return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-        status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!r.ok) {
-      const t = await r.text();
-      console.error("ai-draft-campaign-message gateway", r.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const json = await r.json();
-    const call = json?.choices?.[0]?.message?.tool_calls?.[0];
-    if (!call) {
-      return new Response(JSON.stringify({ error: "No proposal returned" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    let parsed: any;
-    try { parsed = JSON.parse(call.function.arguments); }
-    catch { parsed = {}; }
-
-    return new Response(JSON.stringify({ proposal: parsed }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (e) {
     console.error("ai-draft-campaign-message error", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {

@@ -1,6 +1,7 @@
+// v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='dashboard_insight').
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { captureEdgeError } from '../_shared/capture-edge-error.ts'
-
+import { generateOnce } from '../_shared/ai-runtime.ts'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -136,83 +137,44 @@ Gym Dashboard Metrics (as of ${today}):
 - New Leads This Month: ${newLeads || 0}
 `;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a gym business analytics AI assistant. Given gym metrics, provide exactly 4-5 brief, actionable insights. Each insight should be 1-2 sentences max. Use emoji icons at the start. Focus on: revenue trends, member retention risks, operational efficiency, and growth opportunities. Be specific with numbers. Format as a JSON array of objects with "icon", "title", and "description" fields.`
-          },
-          { role: 'user', content: metricsContext }
-        ],
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'provide_insights',
-              description: 'Return actionable business insights based on gym metrics',
-              parameters: {
-                type: 'object',
-                properties: {
-                  insights: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        icon: { type: 'string', description: 'Single emoji icon' },
-                        title: { type: 'string', description: 'Short insight title (3-6 words)' },
-                        description: { type: 'string', description: 'Actionable insight in 1-2 sentences' },
-                        severity: { type: 'string', enum: ['info', 'warning', 'success', 'critical'] }
-                      },
-                      required: ['icon', 'title', 'description', 'severity'],
-                      additionalProperties: false
-                    }
-                  }
-                },
-                required: ['insights'],
-                additionalProperties: false
+    const r = await generateOnce({
+      purpose: 'dashboard_insight',
+      userMessage: metricsContext,
+      systemOverride: 'Format: produce 4-5 brief insights via the provide_insights tool. Each insight: emoji icon + 3-6 word title + 1-2 sentence actionable description + severity (info|warning|success|critical). Be specific with numbers.',
+      tools: [{
+        type: 'function',
+        function: {
+          name: 'provide_insights',
+          description: 'Return actionable business insights based on gym metrics',
+          parameters: {
+            type: 'object',
+            properties: {
+              insights: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    icon: { type: 'string' },
+                    title: { type: 'string' },
+                    description: { type: 'string' },
+                    severity: { type: 'string', enum: ['info', 'warning', 'success', 'critical'] }
+                  },
+                  required: ['icon', 'title', 'description', 'severity'],
+                  additionalProperties: false
+                }
               }
-            }
+            },
+            required: ['insights'],
+            additionalProperties: false
           }
-        ],
-        tool_choice: { type: 'function', function: { name: 'provide_insights' } }
-      }),
+        }
+      }],
+      toolChoice: { type: 'function', function: { name: 'provide_insights' } }
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI credits exhausted. Please top up in workspace settings.' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      const errText = await response.text();
-      console.error('AI gateway error:', response.status, errText);
-      throw new Error('AI gateway error');
-    }
-
-    const aiResult = await response.json();
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-    let insights = [];
-    
-    if (toolCall?.function?.arguments) {
-      try {
-        const parsed = JSON.parse(toolCall.function.arguments);
-        insights = parsed.insights || [];
-      } catch {
-        insights = [{ icon: '📊', title: 'Analysis Complete', description: 'Unable to parse detailed insights.', severity: 'info' }];
-      }
-    }
+    const insights = r.toolCallArgs?.insights ?? [
+      { icon: '📊', title: 'Analysis Complete', description: 'Unable to parse detailed insights.', severity: 'info' }
+    ];
 
     return new Response(
       JSON.stringify({ insights, metrics: { totalMembers, activeMembers, thisMonthRevenue, lastMonthRevenue, revenueChange, todayAttendance, expiringCount, overdueCount, overdueAmount, newLeads, frozenCount } }),
