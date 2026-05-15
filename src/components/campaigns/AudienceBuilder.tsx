@@ -2,15 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info } from 'lucide-react';
+import {
+  Loader2, Users, UserPlus, Briefcase, Contact2, Layers, Bookmark, Info,
+  UserMinus, FileSpreadsheet, MessageCircle, Snowflake,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   resolveAudienceMemberIds,
-  resolveCampaignAudience,
+  getAudienceBreakdown,
   type AudienceFilter,
+  type AudienceBreakdown,
   type AudienceKind,
   type StaffRole,
 } from '@/services/campaignService';
@@ -20,16 +25,19 @@ interface Props {
   value: AudienceFilter;
   onChange: (filter: AudienceFilter) => void;
   onResolved: (memberIds: string[]) => void;
+  onBreakdown?: (b: AudienceBreakdown | null) => void;
   channel?: 'whatsapp' | 'email' | 'sms';
 }
 
-const KIND_OPTIONS: { id: AudienceKind; label: string; desc: string; icon: any; color: string }[] = [
-  { id: 'members',  label: 'Members',          desc: 'Gym members in this branch',      icon: Users,     color: 'violet' },
-  { id: 'leads',    label: 'Leads',            desc: 'Prospects from CRM pipeline',     icon: UserPlus,  color: 'amber' },
-  { id: 'staff',    label: 'Staff & Trainers', desc: 'Owners, managers, staff, trainers', icon: Briefcase, color: 'blue' },
-  { id: 'contacts', label: 'Contacts (CRM)',   desc: 'Saved contacts and tagged lists', icon: Contact2,  color: 'emerald' },
-  { id: 'mixed',    label: 'Mixed',            desc: 'Combine multiple audiences',      icon: Layers,    color: 'indigo' },
-  { id: 'segment',  label: 'Saved Segment',    desc: 'Use a previously saved audience', icon: Bookmark,  color: 'rose' },
+const KIND_OPTIONS: { id: AudienceKind; label: string; desc: string; icon: any }[] = [
+  { id: 'members',    label: 'Members',          desc: 'Gym members in this branch',        icon: Users },
+  { id: 'leads',      label: 'Leads',            desc: 'Active prospects from CRM',         icon: UserPlus },
+  { id: 'lost_leads', label: 'Lost leads',       desc: 'Status=lost or no contact 60d+',    icon: UserMinus },
+  { id: 'contacts',   label: 'All contacts',     desc: 'Full contact book',                 icon: Contact2 },
+  { id: 'staff',      label: 'Staff',            desc: 'Owners, managers, staff, trainers', icon: Briefcase },
+  { id: 'mixed',      label: 'Mixed',            desc: 'Members + leads + contacts',        icon: Layers },
+  { id: 'segment',    label: 'Saved segment',    desc: 'Reuse a saved audience',            icon: Bookmark },
+  { id: 'csv_import', label: 'CSV / Paste',      desc: 'One-shot list (phone,name)',        icon: FileSpreadsheet },
 ];
 
 const STAFF_ROLES: { id: StaffRole; label: string }[] = [
@@ -40,8 +48,23 @@ const STAFF_ROLES: { id: StaffRole; label: string }[] = [
   { id: 'trainer', label: 'Trainer' },
 ];
 
-export function AudienceBuilder({ branchId, value, onChange, onResolved, channel }: Props) {
-  // Normalize legacy `status` field into the new shape on first mount
+function parseCsv(raw: string): Array<{ name?: string; phone: string; email?: string }> {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/[,\t;]/).map((p) => p.trim());
+      // try to detect: phone is the part with digits
+      const phone = parts.find((p) => /\+?\d[\d\s-]{6,}/.test(p)) || parts[0];
+      const email = parts.find((p) => /@/.test(p));
+      const name = parts.find((p) => p !== phone && p !== email);
+      return { phone: phone.replace(/\s+/g, ''), name, email };
+    })
+    .filter((r) => !!r.phone);
+}
+
+export function AudienceBuilder({ branchId, value, onChange, onResolved, onBreakdown, channel }: Props) {
   const initial: AudienceFilter = useMemo(() => {
     const v = { ...value };
     if (!v.audience_kind) v.audience_kind = 'members';
@@ -52,11 +75,13 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [filter, setFilter] = useState<AudienceFilter>(initial);
+  const [csvText, setCsvText] = useState<string>(
+    (initial.csv_recipients || []).map((r) => `${r.phone},${r.name || ''}`).join('\n'),
+  );
   const kind = filter.audience_kind || 'members';
 
   useEffect(() => { onChange(filter); }, [filter, onChange]);
 
-  // Live segments list (only relevant for 'segment' kind)
   const { data: segments } = useQuery({
     queryKey: ['contact-segments', branchId],
     queryFn: async () => {
@@ -71,47 +96,55 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
     enabled: !!branchId && kind === 'segment',
   });
 
-  // Resolve audience size + sample for ALL kinds via the SQL resolver
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['campaign-audience-v2', branchId, filter],
+  const { data: breakdown, isLoading, error } = useQuery({
+    queryKey: ['campaign-audience-breakdown', branchId, filter, channel],
     queryFn: async () => {
-      // Members fast path keeps existing behavior so member_ids still flow through
-      if (kind === 'members') {
-        const r = await resolveAudienceMemberIds(branchId, filter);
-        return {
-          recipients: r.memberIds.length,
-          sample: r.sample.map(s => s.name),
-          memberIds: r.memberIds,
-        };
-      }
-      const recs = await resolveCampaignAudience(branchId, filter);
-      // Channel-aware count: skip recipients without phone (whatsapp/sms) or email
-      const usable = recs.filter(r => {
-        if (channel === 'email') return !!r.email;
-        return !!r.phone;
-      });
-      return {
-        recipients: usable.length,
-        sample: usable.slice(0, 6).map(r => r.full_name || r.phone || r.email || '—'),
-        memberIds: [] as string[],
-      };
+      const b = await getAudienceBreakdown(branchId, filter);
+      // channel-aware: drop recipients without phone (whatsapp/sms) or email
+      // Approximation: when channel=email and filter doesn't filter by email,
+      // we leave the count as-is; dispatcher will skip rowless ones.
+      return b;
     },
     enabled: !!branchId,
     staleTime: 5_000,
     retry: false,
   });
 
-  // Pass member ids to wizard (only meaningful for 'members' kind; non-members use the resolver path)
-  useEffect(() => { onResolved(data?.memberIds || []); }, [data, onResolved]);
+  // Members fast-path for memberIds (used by send-broadcast)
+  const { data: memberData } = useQuery({
+    queryKey: ['campaign-member-ids', branchId, filter],
+    queryFn: () => resolveAudienceMemberIds(branchId, filter),
+    enabled: !!branchId && kind === 'members',
+    staleTime: 5_000,
+  });
 
-  const setKind = (k: AudienceKind) => setFilter({ audience_kind: k });
+  useEffect(() => { onResolved(memberData?.memberIds || []); }, [memberData, onResolved]);
+  useEffect(() => { onBreakdown?.(breakdown ?? null); }, [breakdown, onBreakdown]);
+
+  const setKind = (k: AudienceKind) => {
+    if (k === 'csv_import') {
+      setFilter({ audience_kind: k, csv_recipients: parseCsv(csvText) });
+    } else {
+      setFilter({ audience_kind: k });
+    }
+  };
+
+  const sourceColor = (src: string) => {
+    switch (src) {
+      case 'member': return 'bg-violet-100 text-violet-700';
+      case 'lead': return 'bg-amber-100 text-amber-700';
+      case 'lost_lead': return 'bg-slate-200 text-slate-700';
+      case 'contact': return 'bg-emerald-100 text-emerald-700';
+      case 'csv': return 'bg-blue-100 text-blue-700';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
 
   return (
     <div className="space-y-5">
-      {/* Audience kind picker */}
       <div>
         <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Who should receive this?</Label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {KIND_OPTIONS.map(opt => {
             const active = kind === opt.id;
             const Icon = opt.icon;
@@ -135,7 +168,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
         </div>
       </div>
 
-      {/* Sub-filters */}
+      {/* Kind-specific filters */}
       {kind === 'members' && (
         <div className="space-y-4">
           <div>
@@ -177,7 +210,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
         <div>
           <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Lead status</Label>
           <div className="flex flex-wrap gap-1.5">
-            {['new','contacted','qualified','trial_scheduled','negotiation','lost','converted'].map(s => {
+            {['new','contacted','qualified','trial_scheduled','negotiation','converted'].map(s => {
               const selected = (filter.lead_status || []).includes(s);
               return (
                 <button
@@ -199,7 +232,14 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
               );
             })}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">Leave empty to target every lead in this branch.</p>
+          <p className="text-[11px] text-muted-foreground mt-2">Leave empty to target every active lead. Lost leads are excluded — pick "Lost leads" instead.</p>
+        </div>
+      )}
+
+      {kind === 'lost_leads' && (
+        <div className="rounded-xl border border-dashed bg-muted/30 p-3 flex gap-2 text-[11px] text-muted-foreground">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-rose-600" />
+          <span>Targets leads marked <b>lost</b> or any lead with no contact in the last <b>60 days</b>. These are cold by definition — you'll need an APPROVED Meta template on the Message step.</span>
         </div>
       )}
 
@@ -229,34 +269,11 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
               );
             })}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">Leave empty to include every staff member, trainer, manager, admin and owner of this branch.</p>
         </div>
       )}
 
       {kind === 'contacts' && (
         <div className="space-y-4">
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Source types</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {(['member','lead','manual','ai'] as const).map(s => {
-                const selected = (filter.source_types || []).includes(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      const cur = new Set(filter.source_types || []);
-                      if (cur.has(s)) cur.delete(s); else cur.add(s);
-                      setFilter({ ...filter, source_types: Array.from(cur) as any });
-                    }}
-                    className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${
-                      selected ? 'bg-violet-600 text-white border-violet-600' : 'bg-card border-border text-muted-foreground'
-                    }`}
-                  >{s}</button>
-                );
-              })}
-            </div>
-          </div>
           <div>
             <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Tags (comma separated)</Label>
             <Input
@@ -272,7 +289,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
       {kind === 'mixed' && (
         <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-[11px] text-muted-foreground flex gap-2">
           <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-violet-600" />
-          <span>Mixed mode includes <b>all members, leads, contacts and staff</b> in this branch. Use sub-filters from individual kinds in a future release for finer control.</span>
+          <span>Includes <b>all members, leads and contacts</b> in this branch. Use sub-filters from individual kinds in a future release for finer control.</span>
         </div>
       )}
 
@@ -296,7 +313,26 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
         </div>
       )}
 
-      {/* Live audience size */}
+      {kind === 'csv_import' && (
+        <div className="space-y-2">
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-1 block">Paste recipients</Label>
+          <Textarea
+            className="rounded-xl font-mono text-xs"
+            rows={6}
+            placeholder={'+919876543210, Aman Verma\n+919812345678, Priya Singh\n+918888888888'}
+            value={csvText}
+            onChange={(e) => {
+              setCsvText(e.target.value);
+              setFilter({ audience_kind: 'csv_import', csv_recipients: parseCsv(e.target.value) });
+            }}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            One per line. Format: <code>phone, name, email</code>. Email is optional. CSV imports are always treated as <b>cold</b> — an APPROVED Meta template is required.
+          </p>
+        </div>
+      )}
+
+      {/* Live audience breakdown */}
       <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-500/10 dark:to-indigo-500/10 p-5 shadow-sm shadow-violet-200/40">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-violet-600 text-white flex items-center justify-center">
@@ -314,7 +350,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
               </p>
             ) : (
               <p className="text-2xl font-bold text-foreground">
-                {data?.recipients ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>
+                {breakdown?.total ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>
               </p>
             )}
             {channel && (
@@ -324,13 +360,47 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
             )}
           </div>
         </div>
-        {!!data?.sample?.length && (
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {data.sample.map((s, i) => <Badge key={i} variant="outline" className="text-[11px] rounded-full">{s}</Badge>)}
-            {((data.recipients || 0) > data.sample.length) && (
-              <Badge variant="outline" className="text-[11px] rounded-full">+{(data.recipients || 0) - data.sample.length} more</Badge>
+
+        {!!breakdown && breakdown.total > 0 && (
+          <>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-2.5 flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-emerald-600" />
+                <div>
+                  <p className="text-base font-bold text-emerald-700">{breakdown.in_window}</p>
+                  <p className="text-[10px] uppercase text-emerald-700/80">In 24h window · freeform OK</p>
+                </div>
+              </div>
+              <div className={`rounded-xl p-2.5 flex items-center gap-2 ${breakdown.cold > 0 ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-muted/50'}`}>
+                <Snowflake className={`h-4 w-4 ${breakdown.cold > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className={`text-base font-bold ${breakdown.cold > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>{breakdown.cold}</p>
+                  <p className="text-[10px] uppercase text-amber-700/80">Cold · needs Meta template</p>
+                </div>
+              </div>
+            </div>
+
+            {Object.keys(breakdown.by_source).length > 1 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {Object.entries(breakdown.by_source).map(([src, n]) => (
+                  <span key={src} className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${sourceColor(src)}`}>
+                    {src.replace('_', ' ')} · {n}
+                  </span>
+                ))}
+              </div>
             )}
-          </div>
+
+            {!!breakdown.sample.length && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {breakdown.sample.map((s, i) => (
+                  <Badge key={i} variant="outline" className="text-[11px] rounded-full">{s.name}</Badge>
+                ))}
+                {(breakdown.total > breakdown.sample.length) && (
+                  <Badge variant="outline" className="text-[11px] rounded-full">+{breakdown.total - breakdown.sample.length} more</Badge>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
