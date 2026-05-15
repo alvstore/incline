@@ -1,9 +1,11 @@
+// v4.0.0 — SSOT: AI nudge text now generated via shared ai-runtime.generateOnce
+//          (purpose='lead_nurture'). Hardcoded prompt + direct fetch removed.
 // v3.4.0 — Enforce Meta 24h customer-service window. If the lead has not
 //          replied within 24h, do NOT send a freeform AI nudge (Meta rejects
 //          with 131047). Instead, send the approved `lead_nurture_followup`
 //          WhatsApp template via dispatch-communication, or skip & cool down.
-// v3.3.0 — Move chatPlatform decl above use; nurture inbound-only chats too.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
