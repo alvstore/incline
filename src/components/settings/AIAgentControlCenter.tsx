@@ -26,6 +26,8 @@ import { WhatsAppAISettings } from '@/components/settings/WhatsAppAISettings';
 import { AIFlowBuilderSettings } from '@/components/settings/AIFlowBuilderSettings';
 import { LeadNurtureSettings } from '@/components/settings/LeadNurtureSettings';
 import { AIProvidersSettings } from '@/components/settings/AIProvidersSettings';
+import { AIPurposesTab } from '@/components/settings/AIPurposesTab';
+import { AICallLogsTab } from '@/components/settings/AICallLogsTab';
 
 type ToolDef = {
   name: string;
@@ -166,10 +168,14 @@ export function AIAgentControlCenter() {
       </div>
 
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid grid-cols-6 w-full max-w-3xl h-auto p-1">
+        <TabsList className="grid grid-cols-4 lg:grid-cols-8 w-full h-auto p-1">
           <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5 py-2">
             <Activity className="h-3.5 w-3.5 hidden sm:block" />
             Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="purposes" className="text-xs sm:text-sm gap-1.5 py-2">
+            <Brain className="h-3.5 w-3.5 hidden sm:block" />
+            Purposes
           </TabsTrigger>
           <TabsTrigger value="tools" className="text-xs sm:text-sm gap-1.5 py-2">
             <ToggleLeft className="h-3.5 w-3.5 hidden sm:block" />
@@ -191,10 +197,18 @@ export function AIAgentControlCenter() {
             <Brain className="h-3.5 w-3.5 hidden sm:block" />
             Providers
           </TabsTrigger>
+          <TabsTrigger value="call-logs" className="text-xs sm:text-sm gap-1.5 py-2">
+            <Activity className="h-3.5 w-3.5 hidden sm:block" />
+            Call Logs
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
           <DashboardTab />
+        </TabsContent>
+
+        <TabsContent value="purposes">
+          <AIPurposesTab />
         </TabsContent>
 
         <TabsContent value="tools">
@@ -215,6 +229,10 @@ export function AIAgentControlCenter() {
 
         <TabsContent value="providers">
           <AIProvidersSettings />
+        </TabsContent>
+
+        <TabsContent value="call-logs">
+          <AICallLogsTab />
         </TabsContent>
       </Tabs>
     </div>
