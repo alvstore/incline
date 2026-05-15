@@ -15,6 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
 import { phoneVariants } from "./phone.ts";
+import { callAI } from "./ai-dispatcher.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
