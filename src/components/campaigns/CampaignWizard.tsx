@@ -563,7 +563,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 onChange={(e) => setMessage(e.target.value)}
               />
               <div className="flex items-center justify-between mt-1.5 gap-2">
-                <p className="text-xs text-muted-foreground">{message.length} chars · {resolvedMemberIds.length} recipients</p>
+                <p className="text-xs text-muted-foreground">{message.length} chars · {totalCount} recipients{coldCount > 0 ? ` · ${coldCount} cold` : ''}</p>
                 {channel === 'whatsapp' && message.trim().length > 0 && (
                   <Button
                     type="button"
