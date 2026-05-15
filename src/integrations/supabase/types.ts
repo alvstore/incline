@@ -215,35 +215,47 @@ export type Database = {
       }
       ai_call_logs: {
         Row: {
+          branch_id: string | null
+          completion_tokens: number | null
           created_at: string
           duration_ms: number | null
           error_message: string | null
           fallback_used: boolean
           id: string
           model: string | null
+          prompt_tokens: number | null
           provider: string
+          purpose: string | null
           scope: string | null
           status: string
         }
         Insert: {
+          branch_id?: string | null
+          completion_tokens?: number | null
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
           fallback_used?: boolean
           id?: string
           model?: string | null
+          prompt_tokens?: number | null
           provider: string
+          purpose?: string | null
           scope?: string | null
           status: string
         }
         Update: {
+          branch_id?: string | null
+          completion_tokens?: number | null
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
           fallback_used?: boolean
           id?: string
           model?: string | null
+          prompt_tokens?: number | null
           provider?: string
+          purpose?: string | null
           scope?: string | null
           status?: string
         }
