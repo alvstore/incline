@@ -11121,6 +11121,7 @@ export type Database = {
           failure_reason: string | null
           id: string
           is_internal_note: boolean
+          media_meta: Json | null
           media_url: string | null
           member_id: string | null
           message_type: string
@@ -11148,6 +11149,7 @@ export type Database = {
           failure_reason?: string | null
           id?: string
           is_internal_note?: boolean
+          media_meta?: Json | null
           media_url?: string | null
           member_id?: string | null
           message_type?: string
@@ -11175,6 +11177,7 @@ export type Database = {
           failure_reason?: string | null
           id?: string
           is_internal_note?: boolean
+          media_meta?: Json | null
           media_url?: string | null
           member_id?: string | null
           message_type?: string
