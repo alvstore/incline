@@ -178,6 +178,7 @@ export async function createCampaign(input: Omit<Campaign,
   attachment_filename?: string | null;
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
+  template_id?: string | null;
 }): Promise<Campaign> {
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -197,12 +198,66 @@ export async function createCampaign(input: Omit<Campaign,
       attachment_filename: input.attachment_filename ?? null,
       campaign_type: input.campaign_type ?? 'announcement',
       event_meta: input.event_meta ?? {},
+      template_id: input.template_id ?? null,
       created_by: user?.id,
     } as any)
     .select()
     .single();
   if (error) throw error;
   return data as any;
+}
+
+// ---------- Edit / delete / duplicate / cancel ----------
+export async function updateCampaign(
+  id: string,
+  patch: Partial<Pick<Campaign,
+    'name' | 'message' | 'subject' | 'channel' | 'audience_filter' |
+    'scheduled_at' | 'attachment_url' | 'attachment_kind' | 'attachment_filename' |
+    'campaign_type' | 'event_meta' | 'template_id' | 'trigger_type' | 'status'
+  >>,
+): Promise<Campaign> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(patch as any)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as any;
+}
+
+export async function deleteCampaign(id: string): Promise<void> {
+  // Best-effort clean-up of run rows first (FK may already be ON DELETE CASCADE).
+  await supabase.from('campaign_runs' as any).delete().eq('campaign_id', id);
+  const { error } = await supabase.from('campaigns').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function cancelScheduledCampaign(id: string): Promise<Campaign> {
+  return updateCampaign(id, { status: 'draft' as CampaignStatus, scheduled_at: null, trigger_type: 'send_now' as CampaignTriggerType });
+}
+
+export async function duplicateCampaign(id: string): Promise<Campaign> {
+  const { data: src, error } = await supabase.from('campaigns').select('*').eq('id', id).single();
+  if (error || !src) throw error || new Error('Campaign not found');
+  const s: any = src;
+  return createCampaign({
+    branch_id: s.branch_id,
+    name: `${s.name} (copy)`,
+    channel: s.channel,
+    audience_filter: s.audience_filter,
+    message: s.message,
+    subject: s.subject,
+    trigger_type: 'send_now',
+    scheduled_at: null,
+    attachment_url: s.attachment_url,
+    attachment_kind: s.attachment_kind,
+    attachment_filename: s.attachment_filename,
+    campaign_type: s.campaign_type,
+    event_meta: s.event_meta,
+    template_id: s.template_id,
+    status: 'draft',
+  });
 }
 
 export async function sendCampaignNow(
