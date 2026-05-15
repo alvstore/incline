@@ -179,7 +179,14 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     const r = await callAI(callOpts);
     const dur = Date.now() - started;
     let parsedJson: any = undefined;
-    if (responseFormat === "json") {
+    let toolCallArgs: any = undefined;
+
+    // Extract first tool_call.function.arguments if tools were used
+    const firstToolCall = r.raw?.choices?.[0]?.message?.tool_calls?.[0];
+    if (firstToolCall?.function?.arguments) {
+      try { toolCallArgs = JSON.parse(firstToolCall.function.arguments); } catch { /* noop */ }
+    }
+    if (responseFormat === "json" && !toolCallArgs) {
       try {
         const cleaned = r.content
           .replace(/^```(?:json)?\s*/i, "")
@@ -201,7 +208,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     });
     return {
       content: r.content,
-      json: parsedJson,
+      json: parsedJson ?? toolCallArgs,
+      toolCallArgs,
       provider: r.provider,
       model: r.model,
       fallback_used: r.fallback_used,
