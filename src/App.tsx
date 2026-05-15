@@ -268,6 +268,7 @@ function RoutedContent() {
           <Route path="/audit-logs" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><AuditLogsPage /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AnnouncementsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><SettingsPage /></ProtectedRoute>} />
+          <Route path="/ai-control-center" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><AIControlCenterPage /></ProtectedRoute>} />
           <Route path="/store" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><StorePage /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><POSPage /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><ReferralsPage /></ProtectedRoute>} />
