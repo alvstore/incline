@@ -1,11 +1,7 @@
-// automation-brain v1.3.0
-// Single tick orchestrator: reads automation_rules, dispatches due ones, updates next_run_at.
-// v1.1.0 — Birthday worker rewritten as two-step query (no auto-gen FK aliases).
+// automation-brain v2.0.0 — SSOT: AI message generation routed via ai-runtime (purpose='automation_rule')
 // v1.4.0 — apikey must be ANON_KEY (gateway requirement); Authorization stays SERVICE_KEY for service-role bypass.
-//          Mirror failures into error_logs via log_error_event for System Health.
-// v1.3.0 — Re-add `apikey` using SERVICE_KEY (same value as Authorization) so gateway
-//          accepts the request without raising "Conflicting API key".
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
