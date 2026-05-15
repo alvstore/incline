@@ -1,3 +1,7 @@
+// v5.3.0 — Hotfix: deterministic non-fitness intent guard (job/vendor/press/etc.)
+//          short-circuits BEFORE the LLM call. Top-level non-fitness rule in
+//          system prompt (no longer member-only). Fixes raw interactive_list
+//          JSON leaking to job seekers.
 // v5.2.0 — Variant-aware phone matching, member-first dedupe guard before
 //          lead INSERT, member-first hard rule injected into AI system prompt.
 // v5.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
