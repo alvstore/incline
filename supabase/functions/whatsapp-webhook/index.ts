@@ -1,4 +1,5 @@
 // v6.0.1 — Hotfix: import computeAppSecretProof (was undefined → all AI replies crashed).
+// v6.0.0 — SSOT: routes through `runUnifiedAgent` from _shared/ai-agent-brain.ts.
 //          Deletes the 800-line duplicate brain (system prompt, tool loop,
 //          summarizer, lead-capture parsing) — all of that is now centralized
 //          and configurable via the `ai_purposes` table from the AI Control
