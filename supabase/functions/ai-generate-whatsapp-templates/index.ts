@@ -124,8 +124,7 @@ Deno.serve(async (req) => {
     if (body.events.length > 60) return json({ error: "Max 60 events per call" }, 400);
 
     const channel: Channel = (body.channel === 'sms' || body.channel === 'email') ? body.channel : 'whatsapp';
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) return json({ error: "AI Gateway not configured" }, 500);
+    // Provider/key handled by ai-runtime → ai-dispatcher (per active provider config).
 
     const TOOL_SCHEMA = buildToolSchema(channel);
 
