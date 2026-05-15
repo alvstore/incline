@@ -121,6 +121,8 @@ export async function getAudienceBreakdown(
     })),
   };
 }
+
+export interface Campaign {
   id: string;
   branch_id: string;
   name: string;
