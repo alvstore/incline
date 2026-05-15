@@ -35,7 +35,11 @@ const SYSTEM_PROMPTS: Record<Channel, string> = {
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
 - Each body ≤ 850 chars; named variables in {{snake_case}}; never duplicate the existing list.
-- Categories: UTILITY (transactional/lifecycle), MARKETING (promo/birthday/referral/offer), AUTHENTICATION (OTPs only).
+- Categories — pick STRICTLY by event semantics (this is what Meta will reject if wrong):
+  • MARKETING — promo / offer / discount / event invite / birthday wish / referral reward / win_back / re_engagement / wait_is_over / launch / announcement / newsletter.
+  • UTILITY — receipts, invoices, booking confirmations, reminders, expiry warnings, document deliveries (diet/workout/scan PDF), lifecycle status changes.
+  • AUTHENTICATION — OTPs only.
+  Pattern hints in the event name: contains "offer/promo/promotion/event/birthday/referral/win_back/re_engagement/wait_is_over/launch/announcement/newsletter" → MARKETING. Contains "otp/verification_code" → AUTHENTICATION. Everything else → UTILITY.
 - No emojis on UTILITY; max 1 tasteful emoji on MARKETING; no URLs / phone numbers in body.
 - Tone: warm, concise, Indian-English, premium fitness.
 - Names: lower_snake_case ≤ 50 chars, descriptive.
