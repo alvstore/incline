@@ -1,80 +1,151 @@
-## Audit findings
 
-**1. Edit / Delete UI is missing on campaign cards**
-`src/components/campaigns/CampaignsPanel.tsx` renders campaign cards that only open `CampaignDetailDrawer` (read-only). There is no menu, no edit, no delete, no "duplicate", and no cancel-schedule. `campaignService.ts` also has no `updateCampaign` / `deleteCampaign` / `cancelScheduledCampaign` helpers.
+# Robust Campaign Manager v2
 
-**2. Wizard cannot pick an approved Meta template**
-`CampaignWizard.tsx` only sends freeform text. It has a "Submit body to Meta" button (line 416) but never lets you pick an already-approved template. The downstream stack already supports it end-to-end:
-- `send-broadcast` v3.1.0 already accepts `template_id` and forwards it to `dispatch-communication` (line 92).
-- `dispatch-communication` v1.11.0 already resolves `template_id` → `templates` row → Meta `template_name` and sends as a native WhatsApp template (header_type document/image/video supported, line 460+).
-- `send-whatsapp` already has `message_type === 'template'` branch (line 258).
+Goal: turn Marketing & Campaigns into a single reliable surface for promotions, events, announcements and lead re-engagement across **members, leads, lost leads and all contacts** — with **honest Meta-template gating** so cold-audience broadcasts never silently bounce.
 
-So nothing in the backend is missing — the wizard just never offers the picker, which is exactly why marketing video/PDF sends fail with Meta error 131047 outside the 24h window.
+---
 
-**3. AI template "syncing for approval" is actually working**
-`AIGenerateTemplatesDrawer.tsx` (line 161) already calls `manage-whatsapp-templates` with `action: 'create'`, which submits to Meta. `manage-whatsapp-templates` v2.3.0 has full `create` / `edit` / `list` (sync) / `get_status` actions. The "stuck syncing" perception is because:
-- After submit, status shows `PENDING` until Meta approves (this is normal, takes minutes to hours).
-- The CRM Templates tab doesn't aggressively re-poll Meta for status — user must hit "Sync from Meta" manually.
-- No automated `get_status` poll for recently-submitted templates.
+## 1. The Meta gating problem (root cause + fix)
 
-## Plan
+WhatsApp Cloud API rules:
+- Inside a 24h customer service window (member messaged us in last 24h) → **freeform allowed**
+- Outside the window (leads, lost leads, dormant members, scheduled blasts) → **only APPROVED Meta templates** are delivered. Anything else returns error 131047/131026 → counts as "failed" in our logs.
 
-### A. Campaign list — add edit / delete / duplicate / cancel
+Today the wizard lets users send freeform text to any audience, which is why broadcasts to leads/cold members bounce.
 
-**`src/services/campaignService.ts`** — add four helpers:
-- `deleteCampaign(id)` — hard delete row (cascades to `campaign_runs`).
-- `updateCampaign(id, patch)` — for draft/scheduled only (name, message, subject, scheduled_at, audience_filter, attachment_*, template_id). Block for `sending`/`sent`.
-- `duplicateCampaign(id)` — clone as a new `draft`.
-- `cancelScheduledCampaign(id)` — flip `scheduled` → `draft`, null `scheduled_at`.
+### Fix — three coordinated changes
 
-**`src/components/campaigns/CampaignsPanel.tsx`** — add a `DropdownMenu` (three-dots `MoreVertical` button, top-right of each card, `e.stopPropagation()` so it doesn't open the drawer) with:
-- View details (existing behaviour)
-- Edit — opens `CampaignWizard` in edit mode (only when status ∈ {draft, scheduled})
-- Duplicate — clones, opens wizard on the clone
-- Cancel schedule — only when `scheduled`
-- Delete — `AlertDialog` confirm, then `deleteCampaign` + `invalidateQueries(['campaigns'])`
+**A. Audience classification at resolve time** (`resolveAudienceMemberIds` + a new `classifyAudienceWindow` helper):
+- Tag each resolved recipient with `in_24h_window: boolean` (computed from `whatsapp_messages.last_inbound_at` for that phone in last 24h).
+- Return aggregate counts: `{ total, in_window, cold }`.
 
-Wire `useMutation` for each, with toast feedback. Disable edit/cancel/delete when status ∈ {sending, sent}.
+**B. Wizard "Send Path" auto-decides and enforces:**
+- If `cold > 0` AND channel = whatsapp → **approved Meta template is REQUIRED** (toggle becomes mandatory, not optional). Block "Send now" / "Schedule" until template selected.
+- If `cold === 0` → freeform allowed (current behavior).
+- Show a clear banner on the Message step:
 
-**`src/components/campaigns/CampaignWizard.tsx`** — accept optional `editingCampaign?: Campaign` prop. When present:
-- Pre-fill all fields (name, channel, message, subject, audience_filter, attachment_*, scheduled_at, template_id).
-- On save: call `updateCampaign(id, …)` instead of `createCampaign(…)`.
-- Hide "Send Now" when editing a `scheduled` campaign (only "Save schedule").
+  ```text
+  ⚠ 412 of 530 recipients are outside the 24h window.
+     WhatsApp will reject freeform messages to them.
+     → Pick an APPROVED template, or narrow audience to "Active members in last 24h".
+  ```
 
-### B. Approved Meta template picker (cold-audience fix)
+**C. Dispatcher already supports `template_id` end-to-end** (verified: `send-broadcast` v3.1.0 → `dispatch-communication` v1.11.0 → `send-whatsapp`). No edge changes needed for the happy path. We will add **per-recipient routing**: if a recipient is in-window, send freeform body; if cold, send the chosen template. This avoids forcing the in-window members through a stiff template.
 
-**`src/components/campaigns/CampaignWizard.tsx`** — on Message step, when `channel === 'whatsapp'`:
-- Add a "Send via approved Meta template (recommended for cold leads)" toggle.
-- When ON, show a `Select` populated from `whatsapp_templates` filtered by `branch_id`, `meta_template_status = 'APPROVED'`. Show name + category + preview of body.
-- Selecting a template:
-  - Auto-fills the message body with the template body (read-only when toggle is ON).
-  - Stores `template_id` in wizard state.
-  - If template `header_type ∈ {image, video, document}`, force the Creative step's attachment kind to match and require an upload (Meta needs the header media at send time).
-- Persist `template_id` on `campaigns.template_id` (column needs to exist; if not, add it via migration: `ALTER TABLE campaigns ADD COLUMN template_id uuid REFERENCES templates(id);`).
-- Pass `template_id` through `createCampaign` → `sendCampaignNow` → `send-broadcast` (already plumbed).
-- Show an explainer card: "Approved templates can be sent to anyone, no 24h window. Freeform messages only deliver to contacts who messaged you in the last 24h."
-- When toggle is OFF and audience contains leads/contacts → show the existing 24h warning.
+---
 
-### C. Template approval visibility (small UX nudge)
+## 2. Audience expansion — members, leads, lost leads, all contacts
 
-**`src/components/settings/CommunicationTemplatesHub.tsx` / CRM Templates sub-tab** — add an auto-poll: every 30s, if any local templates have `meta_template_status = 'PENDING'`, invoke `manage-whatsapp-templates` `action: 'get_status'` for each and refresh. Stop polling when none are pending. This removes the "is it approved yet?" friction without manual sync.
+Today `AudienceBuilder` supports: members (by status), segments, mixed. Expand to a unified contact model:
 
-### D. Database migration (only if `campaigns.template_id` is missing)
+New `audience_kind` values added to `resolve_campaign_audience` RPC:
+- `members` (existing — filter by status, plan, branch, last_visit)
+- `leads` — from `leads` table, filter by stage (new/contacted/qualified/trial)
+- `lost_leads` — leads with stage = lost OR no activity > 60d
+- `contacts` — union of members + leads + walk-ins from `contacts` view
+- `segment` (existing saved segment)
+- `mixed` (existing — pick any combination)
+- `csv_import` (NEW — paste/upload phone+name list, one-shot)
 
-```sql
-ALTER TABLE public.campaigns
-  ADD COLUMN IF NOT EXISTS template_id uuid REFERENCES public.templates(id) ON DELETE SET NULL;
+Each recipient row carries: `id, name, phone, email, source: 'member'|'lead'|'lost_lead'|'contact'|'csv', in_24h_window`.
+
+The Audience step shows a **breakdown chip row**:
+`Members 312 · Leads 154 · Lost 64 · Custom 0 · In-window 118 · Cold 412`
+
+---
+
+## 3. Campaign types — drive sane defaults
+
+The wizard already has 4 types. Make them actually change behavior:
+
+| Type | Default audience | Default channel | Forces template? |
+|---|---|---|---|
+| Promotion | members(active) + leads(qualified) | whatsapp + email | Yes if cold |
+| Event | members(active) + segment | whatsapp | Yes if cold; auto-include RSVP CTA + ICS link |
+| Announcement | members(all active) | whatsapp + in-app | No (mostly in-window) |
+| Lead Re-engagement | lost_leads + leads(no activity 30d) | whatsapp | **Always yes** (cold by definition) |
+
+---
+
+## 4. UI/UX overhaul
+
+Wizard becomes a 5-step rail with a persistent right-side **Live Preview panel** (audience size, sample 5 recipients, channel preview bubble):
+
+```text
+┌─ Type ─┬─ Audience ─┬─ Message ─┬─ Schedule ─┬─ Review ─┐
+│        │            │           │            │          │
+│ Pick   │ Filters +  │ Template  │ Send now / │ Final    │
+│ purpose│ live count │ or AI     │ schedule / │ confirm  │
+│        │ + window   │ draft +   │ recurring  │ + cost   │
+│        │ breakdown  │ preview   │            │ estimate │
+└────────┴────────────┴───────────┴────────────┴──────────┘
+                                                  │
+                                          ┌───────┴────────┐
+                                          │ Live Preview   │
+                                          │ • 530 reach    │
+                                          │ • 118 in-win   │
+                                          │ • 412 cold ⚠   │
+                                          │ • template ✓   │
+                                          │ • cost ~₹62    │
+                                          └────────────────┘
 ```
 
-### Files touched
-- `src/services/campaignService.ts` (add CRUD helpers + `template_id` on Campaign type)
-- `src/components/campaigns/CampaignsPanel.tsx` (dropdown menu, mutations, edit-mode handoff)
-- `src/components/campaigns/CampaignWizard.tsx` (edit mode, Meta template picker, attachment-kind sync)
-- `src/components/settings/CommunicationTemplatesHub.tsx` (pending-status auto-poll)
-- New migration only if `campaigns.template_id` doesn't exist (verify on apply)
+Specific UI additions:
+- **CampaignsPanel header**: filter bar (status: all/draft/scheduled/sending/sent/failed) + search by name + sort (recent/best-performing).
+- **Card stats**: add a 4th stat "Read" (from `whatsapp_messages.status='read'` aggregation) and a small sparkline of delivered-vs-failed.
+- **Card actions** (already added: edit/delete/duplicate/cancel) — add **"View report"** that opens an analytics drawer with per-recipient delivery status, error reasons grouped (e.g., "412 failed: outside 24h window — needs template"), CSV export.
+- **Empty state** gets two CTAs: "New campaign" + "Browse template gallery".
+- **Recurring campaigns** get a calendar preview ("Next 4 sends: Mon 18 May, Mon 25 May…").
 
-### Acceptance
-- Each campaign card has a 3-dot menu with Edit, Duplicate, Cancel schedule, Delete (gated by status).
-- Editing a draft/scheduled campaign re-opens the wizard pre-filled and saves in place.
-- Wizard offers a "Use approved Meta template" toggle for WhatsApp; selecting one stores `template_id` and the resulting send goes through Meta's native template path (delivers to cold leads outside the 24h window).
-- Pending Meta templates auto-refresh their status every 30s in the CRM Templates list.
+---
+
+## 5. Meta template lifecycle visibility
+
+`MetaTemplatesPanel` (Settings → Communication Templates → Meta Approved):
+- Auto-poll Meta status every 30s for any template in `PENDING` (calls existing `manage-whatsapp-templates` `action: 'get_status'`).
+- Status badges: PENDING (amber pulse) · APPROVED (emerald) · REJECTED (red, with reason expander).
+- "Submit similar" button on rejected templates → opens AI drawer pre-filled with original body for revision.
+- Banner in CampaignWizard Message step linking to the template panel: "Need a new template? It typically takes 1–24h for Meta approval."
+
+---
+
+## 6. Failure transparency
+
+Today a campaign just shows aggregate `success/failure`. Add:
+- `campaign_recipients.error_code` + `error_reason` columns (migration).
+- `dispatch-communication` already returns Meta error codes — pipe them into the recipient row.
+- Report drawer groups failures by reason so the user understands "412 failed because no approved template was used", not a mystery.
+
+---
+
+## 7. Files affected
+
+**Database (1 migration)**
+- `campaign_recipients`: add `error_code text`, `error_reason text`, `in_window boolean`, `source text`, `read_at timestamptz`.
+- Update `resolve_campaign_audience` RPC to support `leads`, `lost_leads`, `contacts`, `csv_import` and return window classification.
+
+**Frontend**
+- `src/services/campaignService.ts` — extend `AudienceFilter`, add `classifyAudienceWindow`, return breakdown counts, surface error reasons in report query.
+- `src/components/campaigns/AudienceBuilder.tsx` — new audience kinds, breakdown chips, in-window chip.
+- `src/components/campaigns/CampaignWizard.tsx` — 5-step rail, Live Preview panel, template enforcement banner, type-driven defaults, recurring calendar preview.
+- `src/components/campaigns/CampaignsPanel.tsx` — filter+search bar, "Read" stat, View Report action.
+- `src/components/campaigns/CampaignReportDrawer.tsx` — **NEW** analytics drawer with grouped failure reasons + CSV export.
+- `src/components/settings/MetaTemplatesPanel.tsx` — 30s auto-poll, "Submit similar" action.
+
+**Edge functions**
+- `dispatch-communication` — per-recipient routing (template if cold, freeform if in-window); write `error_code`/`error_reason` to `campaign_recipients`.
+- `send-broadcast` — accept the new audience kinds (pass through, RPC does the work).
+
+No breaking API changes. All new columns nullable, all new audience kinds additive.
+
+---
+
+## 8. Out of scope (this plan)
+
+- A/B testing templates (could be v3).
+- WhatsApp marketing template categories beyond UTILITY/MARKETING toggle.
+- Cross-channel orchestration (email + SMS + WhatsApp same campaign as one entity) — currently 1 campaign = 1 channel, will stay so.
+
+---
+
+**One question before I build:** for the **CSV import audience** — do you want it as a manual paste (phone,name per line) inside the wizard, or a full file upload with column mapping? Manual paste is ~1h work; file upload with mapping is ~3h. I'll default to manual paste unless you say otherwise.

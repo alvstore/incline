@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { supabase } from '@/integrations/supabase/client';
 import { AudienceBuilder } from './AudienceBuilder';
 import {
   type AudienceFilter,
+  type AudienceBreakdown,
   type CampaignChannel,
   type CampaignTriggerType,
   type RecurrencePreset,
@@ -64,6 +65,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [eventVenue, setEventVenue] = useState('');
   const [eventRsvpUrl, setEventRsvpUrl] = useState('');
   const [resolvedMemberIds, setResolvedMemberIds] = useState<string[]>([]);
+  const [breakdown, setBreakdown] = useState<AudienceBreakdown | null>(null);
   const [message, setMessage] = useState('');
   const [subject, setSubject] = useState('');
   const [trigger, setTrigger] = useState<CampaignTriggerType>('send_now');
@@ -242,11 +244,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return body;
   };
 
+  // Cold-audience template enforcement (only meaningful for WhatsApp)
+  const coldCount = breakdown?.cold ?? 0;
+  const totalCount = breakdown?.total ?? resolvedMemberIds.length;
+  const isCsv = filter.audience_kind === 'csv_import';
+  const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
+  const templatePicked = useApprovedTemplate && !!selectedTemplateId;
+  const blockedByTemplate = requiresTemplate && !templatePicked;
+
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (!message.trim()) { toast.error('Message required'); return; }
-    const isMembersKind = !filter.audience_kind || filter.audience_kind === 'members';
-    if (isMembersKind && resolvedMemberIds.length === 0) { toast.error('Audience is empty'); return; }
+    if (totalCount === 0) { toast.error('Audience is empty'); return; }
+    if (blockedByTemplate) {
+      toast.error(`${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`);
+      return;
+    }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
@@ -385,7 +398,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Campaign name</Label>
               <Input className="rounded-xl" placeholder="e.g. New Year membership push" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <AudienceBuilder branchId={branchId} value={filter} onChange={setFilter} onResolved={setResolvedMemberIds} channel={channel} />
+            <AudienceBuilder branchId={branchId} value={filter} onChange={setFilter} onResolved={setResolvedMemberIds} onBreakdown={setBreakdown} channel={channel} />
           </div>
         )}
 
@@ -414,6 +427,25 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Subject</Label>
                 <Input className="rounded-xl" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" />
+              </div>
+            )}
+
+            {channel === 'whatsapp' && requiresTemplate && !templatePicked && (
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-500/10 p-3 flex gap-2.5">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-100">
+                  <p className="font-semibold mb-0.5">{coldCount} of {totalCount} recipient(s) are outside the 24h WhatsApp window.</p>
+                  <p className="text-[12px]">WhatsApp will reject freeform messages to them (Meta error 131047). <b>Pick an APPROVED Meta template below</b>, or narrow the audience.</p>
+                </div>
+              </div>
+            )}
+            {channel === 'whatsapp' && requiresTemplate && templatePicked && (
+              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 p-3 flex gap-2.5">
+                <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-emerald-900 dark:text-emerald-100">
+                  <p className="font-semibold mb-0.5">Approved template will be used for {coldCount} cold recipient(s).</p>
+                  <p className="text-[12px]">In-window recipients ({Math.max(0, totalCount - coldCount)}) get your freeform message; cold recipients get the approved template.</p>
+                </div>
               </div>
             )}
 
@@ -531,7 +563,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 onChange={(e) => setMessage(e.target.value)}
               />
               <div className="flex items-center justify-between mt-1.5 gap-2">
-                <p className="text-xs text-muted-foreground">{message.length} chars · {resolvedMemberIds.length} recipients</p>
+                <p className="text-xs text-muted-foreground">{message.length} chars · {totalCount} recipients{coldCount > 0 ? ` · ${coldCount} cold` : ''}</p>
                 {channel === 'whatsapp' && message.trim().length > 0 && (
                   <Button
                     type="button"
@@ -728,7 +760,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium capitalize">{campaignType.replace('_', ' ')}</span></div>
                 <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{name || '—'}</span></div>
                 <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{channel.toUpperCase()}</span></div>
-                <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{resolvedMemberIds.length}</span></div>
+                <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
+                {requiresTemplate && (
+                  <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-emerald-700' : 'text-amber-700'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
+                )}
                 {isEvent && eventName && <div><span className="text-muted-foreground">Event:</span> <span className="font-medium">{eventName}{eventDate ? ` · ${eventDate}` : ''}</span></div>}
               </div>
             </div>
@@ -747,7 +782,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :

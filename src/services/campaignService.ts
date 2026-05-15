@@ -4,7 +4,7 @@ export type CampaignChannel = 'whatsapp' | 'email' | 'sms';
 export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused';
 export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 
-export type AudienceKind = 'members' | 'leads' | 'contacts' | 'staff' | 'segment' | 'mixed';
+export type AudienceKind = 'members' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
 export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff' | 'trainer';
 
 export interface AudienceFilter {
@@ -26,27 +26,100 @@ export interface AudienceFilter {
   status?: 'active' | 'lead' | 'expired' | 'all';
   last_attendance_before?: string | null;
   last_attendance_after?: string | null;
+  // csv import (one-shot)
+  csv_recipients?: Array<{ name?: string; phone: string; email?: string }>;
 }
 
 export interface ResolvedRecipient {
-  source_type: 'member' | 'lead' | 'contact';
-  source_ref_id: string;
+  source_type: 'member' | 'lead' | 'lost_lead' | 'contact' | 'csv';
+  source_ref_id: string | null;
   full_name: string | null;
   phone: string | null;
   email: string | null;
   contact_id: string | null;
+  in_window?: boolean;
+  source_label?: string;
+}
+
+export interface AudienceBreakdown {
+  total: number;
+  in_window: number;
+  cold: number;
+  by_source: Record<string, number>;
+  sample: Array<{ id: string; name: string; phone?: string | null; source?: string }>;
 }
 
 export async function resolveCampaignAudience(
   branchId: string,
   filter: AudienceFilter
 ): Promise<ResolvedRecipient[]> {
-  const { data, error } = await supabase.rpc('resolve_campaign_audience' as any, {
+  // CSV one-shot bypasses the DB resolver.
+  if (filter.audience_kind === 'csv_import') {
+    return (filter.csv_recipients || [])
+      .filter((r) => !!r.phone)
+      .map((r, i) => ({
+        source_type: 'csv' as const,
+        source_ref_id: null,
+        full_name: r.name || null,
+        phone: r.phone,
+        email: r.email || null,
+        contact_id: null,
+        in_window: false, // CSV uploads are always treated as cold
+        source_label: 'CSV import',
+      }));
+  }
+  const { data, error } = await supabase.rpc('resolve_campaign_audience_v2' as any, {
     p_branch_id: branchId,
     p_filter: filter as any,
+    p_window_hours: 24,
   });
-  if (error) throw error;
+  if (error) {
+    // Fallback to v1 resolver if v2 not yet deployed (defensive)
+    const v1 = await supabase.rpc('resolve_campaign_audience' as any, {
+      p_branch_id: branchId,
+      p_filter: filter as any,
+    });
+    if (v1.error) throw v1.error;
+    return (v1.data as any) || [];
+  }
   return (data as any) || [];
+}
+
+/**
+ * Aggregate breakdown for the wizard live preview.
+ * Returns total / in-window / cold / by-source counts + 5-row sample.
+ */
+export async function getAudienceBreakdown(
+  branchId: string,
+  filter: AudienceFilter,
+): Promise<AudienceBreakdown> {
+  const recipients = await resolveCampaignAudience(branchId, filter);
+  const seen = new Set<string>();
+  const dedup: ResolvedRecipient[] = [];
+  for (const r of recipients) {
+    const key = (r.phone || '').replace(/\s+/g, '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(r);
+  }
+  const by_source: Record<string, number> = {};
+  let in_window = 0;
+  for (const r of dedup) {
+    by_source[r.source_type] = (by_source[r.source_type] || 0) + 1;
+    if (r.in_window) in_window++;
+  }
+  return {
+    total: dedup.length,
+    in_window,
+    cold: dedup.length - in_window,
+    by_source,
+    sample: dedup.slice(0, 5).map((r) => ({
+      id: r.source_ref_id || r.phone || '',
+      name: r.full_name || 'Unknown',
+      phone: r.phone,
+      source: r.source_label || r.source_type,
+    })),
+  };
 }
 
 export interface Campaign {
@@ -378,3 +451,61 @@ export async function deleteSegment(id: string): Promise<void> {
   const { error } = await supabase.from('contact_segments' as any).delete().eq('id', id);
   if (error) throw error;
 }
+
+// ---------- Campaign report (per-recipient delivery + grouped failures) ----------
+export interface CampaignRecipientRow {
+  id: string;
+  source_type: string;
+  source_label?: string | null;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  error_code?: string | null;
+  error_reason?: string | null;
+  in_window?: boolean | null;
+  read_at?: string | null;
+  dispatched_at?: string | null;
+}
+
+export interface FailureGroup {
+  code: string;
+  reason: string;
+  count: number;
+  hint?: string;
+}
+
+const FAILURE_HINTS: Record<string, string> = {
+  '131047': 'Outside the 24-hour window — only an APPROVED Meta template can reach this recipient.',
+  '131026': 'Recipient hasn\'t opted in / unreachable on WhatsApp.',
+  'no_template': 'Cold recipient and no approved template was selected for this campaign.',
+  'no_phone': 'Recipient has no phone number on file.',
+  'opted_out': 'Recipient has opted out of marketing messages.',
+};
+
+export async function getCampaignReport(campaignId: string): Promise<{
+  recipients: CampaignRecipientRow[];
+  groups: FailureGroup[];
+}> {
+  const { data, error } = await supabase
+    .from('campaign_recipients' as any)
+    .select('id, source_type, source_label, full_name, phone, email, status, error_code, error_reason, in_window, read_at, dispatched_at')
+    .eq('campaign_id', campaignId)
+    .order('dispatched_at', { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  const rows = (data as any as CampaignRecipientRow[]) || [];
+
+  const failures = rows.filter((r) => r.status === 'failed');
+  const map = new Map<string, FailureGroup>();
+  for (const f of failures) {
+    const code = f.error_code || 'unknown';
+    const reason = f.error_reason || 'Unknown error';
+    const k = `${code}::${reason}`;
+    const hit = map.get(k);
+    if (hit) hit.count++;
+    else map.set(k, { code, reason, count: 1, hint: FAILURE_HINTS[code] });
+  }
+  const groups = Array.from(map.values()).sort((a, b) => b.count - a.count);
+  return { recipients: rows, groups };
+}
+
