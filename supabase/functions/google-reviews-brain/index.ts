@@ -484,7 +484,7 @@ async function classifyOne(inbound_id: string) {
   let classification = "genuine";
   let reasoning = "Default heuristic — no AI key.";
   let draft = "";
-  if (LOVABLE_API_KEY) {
+  if (true) {
     // Use AI to classify + draft reply
     try {
       const sysOverride =
