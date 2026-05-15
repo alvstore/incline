@@ -1,6 +1,7 @@
-// AI Purposes tab — SSOT editor for ai_purposes. Shows resolved provider per purpose
-// and a "Test" button that pings the active provider via ai-test-purpose edge fn.
-import { useMemo, useState } from "react";
+// AI Purposes tab — SSOT editor for ai_purposes. Shows resolved provider per purpose,
+// per-provider model picker, smart temperature/max_tokens defaults, and a "Test"
+// button that pings the active provider via ai-test-purpose.
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -11,8 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Pencil, FlaskConical, Info, Zap } from "lucide-react";
+import { Pencil, FlaskConical, Info, Zap, RotateCcw, AlertTriangle } from "lucide-react";
+import { PROVIDER_DEFAULTS, PURPOSE_DEFAULTS, normalizeModelForProvider } from "@/lib/ai/providerCatalog";
 
 interface PurposeRow {
   id: string;
@@ -65,7 +68,7 @@ function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow |
   if (scoped) return scoped;
   const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
   if (all) return all;
-  return { scope: "all", provider: "lovable", default_model: "google/gemini-3-flash-preview", is_active: true, is_default: true };
+  return { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
 }
 
 export function AIPurposesTab() {
@@ -129,10 +132,14 @@ export function AIPurposesTab() {
       });
       if (error) throw error;
       if (data?.success) {
-        toast.success(
-          `${data.provider} · ${data.model} · ${data.latency_ms}ms${data.fallback_used ? " (fallback)" : ""}`,
-          { description: data.sample?.slice(0, 120) || undefined }
-        );
+        const label = `${data.provider} · ${data.model} · ${data.latency_ms}ms`;
+        if (data.fallback_used) {
+          toast.warning(`${label} (fallback to Lovable)`, {
+            description: "Primary provider failed — check Call Logs for the underlying error and fix the model override.",
+          });
+        } else {
+          toast.success(label, { description: data.sample?.slice(0, 120) || undefined });
+        }
       } else {
         toast.error(data?.error || "Test failed");
       }
@@ -143,10 +150,30 @@ export function AIPurposesTab() {
     }
   };
 
+  const editingScope = editing ? (PURPOSE_TO_SCOPE[editing.purpose] ?? "all") : "all";
   const editingResolved = useMemo(
-    () => editing ? resolveProvider(PURPOSE_TO_SCOPE[editing.purpose] ?? "all", providers) : null,
-    [editing, providers],
+    () => editing ? resolveProvider(editingScope, providers) : null,
+    [editing, providers, editingScope],
   );
+  const editingPresets = editingResolved ? PROVIDER_DEFAULTS[editingResolved.provider] : null;
+  const editingPurposeDefaults = editing ? PURPOSE_DEFAULTS[editing.purpose] : null;
+  const effectiveModelForEditor = editing && editingResolved
+    ? normalizeModelForProvider(editingResolved.provider, editing.model || editingResolved.default_model)
+    : "";
+
+  // Auto-prefill recommended temperature/max_tokens when opening a purpose
+  // that still has nulls (defensive — DB backfill should already have filled).
+  useEffect(() => {
+    if (!editing || !editingPurposeDefaults) return;
+    if (editing.temperature == null || editing.max_tokens == null) {
+      setEditing({
+        ...editing,
+        temperature: editing.temperature ?? editingPurposeDefaults.temperature,
+        max_tokens: editing.max_tokens ?? editingPurposeDefaults.max_tokens,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id]);
 
   return (
     <div className="space-y-3">
@@ -163,7 +190,10 @@ export function AIPurposesTab() {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
         const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
         const resolved = resolveProvider(scope, providers);
-        const effectiveModel = p.model || resolved?.default_model || "—";
+        const rawModel = p.model || resolved?.default_model || "—";
+        const effectiveModel = resolved ? normalizeModelForProvider(resolved.provider, rawModel) : rawModel;
+        const overridden = !!p.model;
+        const defaults = PURPOSE_DEFAULTS[p.purpose];
         return (
           <Card key={p.id} className="rounded-2xl shadow-lg shadow-slate-200/50 p-5 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
             <div className="flex items-start justify-between gap-4">
@@ -180,9 +210,23 @@ export function AIPurposesTab() {
                     {resolved?.provider ?? "lovable"}
                   </Badge>
                   <Badge variant="outline" className="text-xs font-mono">{effectiveModel}</Badge>
+                  {overridden && (
+                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">override</Badge>
+                  )}
                   <Badge variant="outline" className="text-xs">scope: {scope}</Badge>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">{meta.desc}</p>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600">
+                    temp {p.temperature ?? defaults?.temperature ?? "—"}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600">
+                    max {p.max_tokens ?? defaults?.max_tokens ?? "—"} tok
+                  </Badge>
+                  {defaults && (
+                    <span className="text-[10px] text-slate-400">{defaults.hint}</span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-600 line-clamp-2 font-mono bg-slate-50 p-2 rounded">
                   {p.system_prompt?.slice(0, 220) || "(no system prompt set)"}
                 </p>
@@ -218,9 +262,9 @@ export function AIPurposesTab() {
                 <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                 <p className="text-xs text-amber-900">
                   Provider for this purpose is <b>{editingResolved?.provider ?? "lovable"}</b> (scope:
-                  {" "}<code className="font-mono">{PURPOSE_TO_SCOPE[editing.purpose] ?? "all"}</code>). Change the
-                  provider in the <b>Providers</b> tab. Leave <b>Model</b> blank to use the provider's default
-                  ({editingResolved?.default_model}); only override if you need a different model on this provider.
+                  {" "}<code className="font-mono">{editingScope}</code>). Change the provider in
+                  the <b>Providers</b> tab. Pick a model below from the active provider's catalog,
+                  or leave on default.
                 </p>
               </div>
 
@@ -232,15 +276,46 @@ export function AIPurposesTab() {
                   onCheckedChange={(v) => setEditing({ ...editing, enabled: v })}
                 />
               </div>
+
               <div className="space-y-1.5">
-                <Label htmlFor="model" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Model override (optional)</Label>
-                <Input
-                  id="model"
-                  value={editing.model ?? ""}
-                  placeholder={editingResolved?.default_model ?? "google/gemini-3-flash-preview"}
-                  onChange={(e) => setEditing({ ...editing, model: e.target.value })}
-                />
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Model ({editingResolved?.provider})
+                </Label>
+                <Select
+                  value={editing.model ?? "__default__"}
+                  onValueChange={(v) =>
+                    setEditing({ ...editing, model: v === "__default__" ? null : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">
+                      Use provider default ({editingResolved?.default_model})
+                    </SelectItem>
+                    {(editingPresets?.models ?? []).map((m) => (
+                      <SelectItem key={m} value={m} className="font-mono text-xs">
+                        {m}
+                      </SelectItem>
+                    ))}
+                    {editing.model && !(editingPresets?.models ?? []).includes(editing.model) && (
+                      <SelectItem value={editing.model} className="font-mono text-xs">
+                        {editing.model} (custom)
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-slate-500">
+                  Will send to provider as: <code className="font-mono text-slate-700">{effectiveModelForEditor}</code>
+                  {effectiveModelForEditor !== (editing.model || editingResolved?.default_model) && (
+                    <span className="ml-1 inline-flex items-center gap-1 text-amber-600">
+                      <AlertTriangle className="h-3 w-3" /> auto-normalized
+                    </span>
+                  )}
+                </p>
               </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="prompt" className="text-xs font-semibold uppercase tracking-wider text-slate-500">System Prompt</Label>
                 <Textarea
@@ -253,7 +328,9 @@ export function AIPurposesTab() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Temperature</Label>
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Temperature {editingPurposeDefaults && <span className="text-slate-400 normal-case font-normal">(rec. {editingPurposeDefaults.temperature})</span>}
+                  </Label>
                   <Input
                     type="number" step="0.1" min="0" max="2"
                     value={editing.temperature ?? ""}
@@ -261,7 +338,9 @@ export function AIPurposesTab() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Max Tokens</Label>
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Max Tokens {editingPurposeDefaults && <span className="text-slate-400 normal-case font-normal">(rec. {editingPurposeDefaults.max_tokens})</span>}
+                  </Label>
                   <Input
                     type="number" min="1"
                     value={editing.max_tokens ?? ""}
@@ -269,6 +348,26 @@ export function AIPurposesTab() {
                   />
                 </div>
               </div>
+
+              {editingPurposeDefaults && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  onClick={() =>
+                    setEditing({
+                      ...editing,
+                      model: null,
+                      temperature: editingPurposeDefaults.temperature,
+                      max_tokens: editingPurposeDefaults.max_tokens,
+                    })
+                  }
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Reset to recommended defaults
+                </Button>
+              )}
+
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
                 <Button
