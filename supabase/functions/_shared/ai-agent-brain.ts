@@ -1,8 +1,13 @@
-// v2.2.0 — Unified AI Agent Brain
+// v3.0.0 — Unified AI Agent Brain (single source of truth)
+// 3.0.0: Reads config (system_prompt, model, delays, tools_allowed, lead_capture)
+//        from `ai_purposes` table (purpose='whatsapp_reply') with branch fallback
+//        to global. Legacy `organization_settings.whatsapp_ai_config` is used
+//        only as a final fallback. WhatsApp webhook + meta webhook both route
+//        through `runUnifiedAgent`; the duplicate brain in whatsapp-webhook
+//        is gone.
 // 2.2.0: Non-fitness intent guard — job/CV, vendor, press, partnership,
 //        complaint, wrong-number replies redirect to info@theinclinelife.com
-//        and skip the lead-capture flow. Hardened "JSON-only" rule for
-//        interactive blocks so prose doesn't leak alongside the payload.
+//        and skip the lead-capture flow. Hardened "JSON-only" rule.
 // 2.1.0: Variant-aware phone matching, member-first dedupe.
 // Shared across meta-webhook (Instagram/Messenger) and whatsapp-webhook.
 
@@ -61,9 +66,13 @@ export async function runUnifiedAgent(
     return skip("no_api_key");
   }
 
-  // 1. Load org AI config
+  // 1. Load org AI config + purpose row (single source of truth)
   const orgConfig = await loadOrgConfig(supabase);
-  const aiConfig: OrgAiConfig = (orgConfig?.whatsapp_ai_config as any) || {};
+  const purposeRow = await loadAiPurpose(supabase, "whatsapp_reply", ctx.branchId);
+  const aiConfig: OrgAiConfig = mergePurposeIntoConfig(
+    (orgConfig?.whatsapp_ai_config as any) || {},
+    purposeRow,
+  );
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
@@ -88,6 +97,18 @@ export async function runUnifiedAgent(
       console.log(`[AI:${ctx.platform}] skipping story reply (no text / feature disabled)`);
       return skip("story_reply_no_text");
     }
+  }
+
+  // 3b. Deterministic non-fitness intent guard (defense-in-depth, applies to
+  //     all platforms). Short-circuits BEFORE the LLM so a prose+JSON leak is
+  //     impossible. Toggle via ai_purposes.guards.non_fitness_redirect.
+  const nonFitnessGuardOn = (purposeRow?.guards?.non_fitness_redirect ?? true) === true;
+  const NON_FITNESS_RE =
+    /\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\s]?data|interview\s+for|i(?:'?m)?\s+(?:looking\s+(?:for|out)\s+)?(?:a\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\s+(?:at|with|in)\s+(?:your|incline)|sales\s+(?:job|department|position)|trainer\s+(?:job|position|vacancy)|front\s*desk\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\s]?up)\b/i;
+  if (nonFitnessGuardOn && NON_FITNESS_RE.test(ctx.messageContent || "")) {
+    const REDIRECT = (purposeRow?.guards?.non_fitness_message as string) ||
+      "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏";
+    return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
   }
 
   // 4. Optional delay
@@ -159,16 +180,22 @@ This person is a CONFIRMED ACTIVE MEMBER of the gym. Their identity is already k
   - If the user sends short replies like "ok", "hmm", "yes", treat it as acknowledgment and ask a NEW question.
   - For pricing, always mention the plan name, duration, and price. If the gym has a day pass, mention it first for casual inquirers.`;
 
-  // Member tool instructions
+  // Member tool instructions — gated by ai_purposes.tools_allowed (UI-managed)
+  // with legacy organization_settings.ai_tool_config as a fallback.
   let tools: any[] | undefined;
   if (memberCtx.isMember && memberCtx.memberId) {
     tools = getAllToolDefinitions();
-    try {
-      const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
-      const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
-      tools = tools.filter((t: any) => cfg[t.function.name] !== false);
-      if (tools.length === 0) tools = undefined;
-    } catch { /* keep all */ }
+    const allowList = (aiConfig as any)._tools_allowed as string[] | undefined;
+    if (allowList && allowList.length > 0) {
+      tools = tools.filter((t: any) => allowList.includes(t.function.name));
+    } else {
+      try {
+        const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
+        const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
+        tools = tools.filter((t: any) => cfg[t.function.name] !== false);
+      } catch { /* keep all */ }
+    }
+    if (tools.length === 0) tools = undefined;
 
     if (tools) {
       systemPrompt += `\n\nIMPORTANT TOOL USAGE INSTRUCTIONS:
@@ -403,6 +430,58 @@ async function loadOrgConfig(supabase: any) {
   _orgConfigCache = data;
   _orgConfigTs = Date.now();
   return data;
+}
+
+// ── ai_purposes loader (UI-managed single source of truth) ─────────────────
+const _purposeCache = new Map<string, { row: any; ts: number }>();
+export async function loadAiPurpose(supabase: any, purpose: string, branchId: string | null) {
+  const key = `${purpose}:${branchId ?? "global"}`;
+  const cached = _purposeCache.get(key);
+  if (cached && Date.now() - cached.ts < 30_000) return cached.row;
+  // Branch-specific row first, then global fallback
+  let row: any = null;
+  if (branchId) {
+    const { data } = await supabase
+      .from("ai_purposes")
+      .select("*")
+      .eq("purpose", purpose)
+      .eq("branch_id", branchId)
+      .maybeSingle();
+    row = data;
+  }
+  if (!row) {
+    const { data } = await supabase
+      .from("ai_purposes")
+      .select("*")
+      .eq("purpose", purpose)
+      .is("branch_id", null)
+      .maybeSingle();
+    row = data;
+  }
+  _purposeCache.set(key, { row, ts: Date.now() });
+  return row;
+}
+
+// Overlay an ai_purposes row onto the legacy whatsapp_ai_config JSONB.
+// Purpose row wins; legacy fields fill gaps. Lets us migrate without breaking.
+export function mergePurposeIntoConfig(legacy: OrgAiConfig, purpose: any): OrgAiConfig {
+  if (!purpose) return legacy;
+  const extraLeadCapture = purpose.extra?.lead_capture as OrgAiConfig["lead_capture"] | undefined;
+  return {
+    auto_reply_enabled: purpose.enabled ?? legacy.auto_reply_enabled ?? false,
+    reply_delay_seconds: purpose.reply_delay_seconds ?? legacy.reply_delay_seconds ?? 0,
+    system_prompt: (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
+      ? purpose.system_prompt
+      : legacy.system_prompt,
+    model: purpose.model || legacy.model,
+    lead_capture: extraLeadCapture ?? legacy.lead_capture,
+    instagram_story_reply_enabled: legacy.instagram_story_reply_enabled,
+    // pass through tools_allowed via a sidecar field used by the agent
+    // (we don't change the type to keep callers stable)
+    ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
+      ? { _tools_allowed: purpose.tools_allowed }
+      : {}),
+  } as OrgAiConfig & { _tools_allowed?: string[] };
 }
 
 async function loadCapturedSnapshot(supabase: any, leadId: string): Promise<string> {

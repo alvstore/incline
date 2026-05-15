@@ -1,137 +1,140 @@
-# Why the raw JSON leaked into your chat box
+## Audit findings
 
-Your screenshot shows two AI turns merged into one outbound:
+Today the project runs **5 different AI code paths** that all hit the Lovable gateway directly with their own prompts, configs, and model names. There is no single source of truth and the UI cannot fully control them.
 
-> "Received! I'll make sure this reaching our hiring team."
-> "Just to complete your profile … `{"type":"interactive_list", … }`"
+**Brains (duplicated reply logic):**
+1. `_shared/ai-agent-brain.ts` — `runUnifiedAgent` (canonical, used by `meta-webhook`)
+2. `whatsapp-webhook/index.ts` lines 1040–1450 — full duplicate prompt + 3-step tool loop (the one WhatsApp actually runs)
+3. `ai-auto-reply/index.ts` — third copy of the same idea
 
-Root causes (audited in code):
+**One-shot AI callers (each builds its own prompt + fetch):**
+- `lead-nurture-followup`, `score-leads`, `automation-brain`,
+- `ai-generate-whatsapp-templates`, `ai-draft-campaign-message`,
+- `ai-dashboard-insights`, `generate-fitness-plan`, `google-reviews-brain`
 
-1. **Two parallel "AI brains" exist and have diverged.**
-   - `supabase/functions/_shared/ai-agent-brain.ts` (the canonical one, v2.2.0 with the job-intent guard).
-   - `supabase/functions/whatsapp-webhook/index.ts` lines **1055–1193** — a full *duplicate* prompt+chat-completions block that WhatsApp actually executes. The non-fitness guard we added was only fully wired into the shared brain. WhatsApp still falls through to onboarding after a vague job acknowledgement.
+**Config sources (fragmented):**
+- `settings.whatsapp_ai_config` jsonb (system_prompt, model, lead_capture, delays)
+- `ai_provider_configs` table (providers, models, fallback)
+- Hard-coded prompts inside each edge function
+- Hard-coded model strings (`google/gemini-3-flash-preview`) scattered everywhere
 
-2. **Prompt contradiction.** The system prompt says: *"For job/CV/vendor … reply with this single short message and stop."* It also says: *"Your secondary goal is to collect name+email+goal …"* and *"For 'fitness goal' always emit this EXACT list JSON."* The model resolved that conflict by doing **both** — hence prose + JSON in one message.
+**UI surfaces (also fragmented):**
+- `WhatsAppAISettings`, `AIAgentControlCenter`, `AIFlowBuilderSettings`, `AIProvidersSettings`, `AI Studio` tab in `CommunicationTemplatesHub` — each edits a different slice; none is the SSOT.
 
-3. **JSON extractor is a band-aid.** `tryExtractInteractiveJson` (whatsapp-webhook 1707-1764) recovers most cases, but any time the model emits *two* messages worth of content, or the JSON is slightly malformed (smart quote, trailing comma, unicode), the brace walker fails and the raw JSON ships to the user.
-
-4. **No structured-output contract with the gateway.** We're asking a chat model to hand-write valid Meta Cloud API JSON inside free-form prose. That is the wrong primitive — every LLM will eventually leak it.
-
-5. **No real memory.** "Memory" today = last 20 message rows + a `conversation_summary` text blob. There is no canonical intent state, no captured-fact store the model can read/write through tools, no per-thread profile. So every turn re-derives intent from scratch and re-asks already-answered questions.
-
----
-
-# The upgrade — model-first, code-thin
-
-Move the smarts into the model with a **single brain, structured outputs, and durable memory**, and shrink the backend to a thin executor. No more regex post-processors, no more "force canonical plan list" hacks.
-
-## 1. Collapse to one brain
-- Delete the duplicated prompt block in `whatsapp-webhook/index.ts` (1055–1193) and the `sendAiReply` post-processors that re-write the model's output (1815–1861).
-- Route WhatsApp through `runUnifiedAgent` from `_shared/ai-agent-brain.ts`, the same path Instagram/Messenger use. One prompt, one place to evolve.
-
-## 2. Structured outputs via the AI SDK
-Replace raw `fetch` to `ai.gateway.lovable.dev` with the **Vercel AI SDK** + Lovable AI Gateway provider (per project knowledge `ai-sdk-lovable-gateway`).
-
-Define a single discriminated-union response schema with Zod and pass it as `Output.object({ schema })`. The model can no longer ship malformed JSON or mixed prose:
-
-```text
-AgentReply =
-  | { kind: "text",         body: string }
-  | { kind: "buttons",      body: string, buttons: [{id,title}] (1..3) }
-  | { kind: "list",         body: string, button: string,
-                            sections: [{title, rows:[{id,title,description?}] }] }
-  | { kind: "handoff",      body: string, reason: "job"|"vendor"|"press"|... }
-  | { kind: "lead_captured",data: {...} }
-  | { kind: "tool_call",    name: string, args: object }    // for member tools
-```
-
-The webhook's only job becomes: switch on `kind` → translate to the Meta payload. No JSON scraping, no canonical-list overrides, no plan-question regex.
-
-## 3. Intent classification as a first-class step
-Before the conversational turn, run a tiny classifier call (cheap `gemini-3.1-flash-lite-preview`) that returns:
-
-```text
-Intent = membership_inquiry | pricing | location | timings
-       | facility_booking   | account_question
-       | job_application    | vendor | press | partnership
-       | complaint          | spam | greeting_only | other
-ConfidenceScore: 0..1
-```
-
-Persist `current_intent` on `whatsapp_conversation_state`. The main brain receives the intent in its system prompt and is *told* which conversational track to run (onboarding vs. polite-redirect vs. member-tools). This removes the "do both" failure mode that produced your screenshot.
-
-## 4. Persistent, structured memory
-Replace the free-text `conversation_summary` with a typed memory record per phone+branch:
-
-```text
-chat_memory (
-  branch_id, phone,
-  intent text,              -- last classified intent
-  intent_locked_at timestamptz,
-  profile jsonb,            -- {name,email,goal,plan_interest,budget,...}
-  facts jsonb,              -- gym facts the user already heard (don't repeat)
-  asked_questions text[],   -- last 5 questions, prevents loops
-  do_not_ask text[],        -- ["goal","budget"] once captured
-  last_summary text,        -- rolling 200-token summary
-  last_seen timestamptz
-)
-```
-
-The brain reads it into the system prompt as a compact JSON block and *writes back* through two new tools:
-- `remember_fact(key, value)` — upsert into `profile`/`facts`.
-- `mark_intent(intent)` — locks intent until user changes topic.
-
-This is the "context/training" you asked for: memory the model curates itself, no backend rules.
-
-## 5. Lead capture as a tool, not a JSON convention
-Today the model emits `{"status":"lead_captured", ...}` and we regex-match it. Instead, expose `capture_lead(fields)` as an AI SDK tool with `needsApproval: false` and Zod-validated args. The model calls the tool; the executor inserts the lead and returns confirmation. No more JSON parsing.
-
-For non-fitness intents the prompt simply forbids calling `capture_lead` and provides `polite_redirect(reason)` — also a tool — that returns the canonical "email info@theinclinelife.com" message. The model can no longer "almost capture" a job seeker.
-
-## 6. Knowledge grounding
-Move the `hydrateGymFacts` blob (plans, hours, USPs, FAQs) into a small `gym_knowledge` table per branch with a `topic` column, and inject only the topics relevant to the current intent. Saves tokens and makes the model answer factual questions deterministically.
-
-## 7. Observability
-- Log every turn to `ai_turn_log` with: intent, model, latency, prompt-tokens, completion-tokens, structured-output validation result, tool calls, and final `kind`. Surface in System Health.
-- A failed Zod parse increments a metric so we *see* model regressions instead of users seeing raw JSON.
+**Dispatcher already exists but is barely used:** `_shared/ai-dispatcher.ts` (`callAI`) supports provider routing + fallback. Only a couple of callers use it.
 
 ---
 
-## Technical changes (files)
+## Goal
 
-| File | Change |
-|---|---|
-| `supabase/functions/_shared/ai-agent-brain.ts` | Rewrite to use Vercel AI SDK + `createLovableAiGatewayProvider`, structured `Output.object`, intent pre-classifier, memory read/write, tools (`capture_lead`, `polite_redirect`, `remember_fact`, `mark_intent`, existing member tools). Single source of truth. |
-| `supabase/functions/whatsapp-webhook/index.ts` | Remove duplicate brain (1055-1193). Remove `tryExtractInteractiveJson`, `CANONICAL_PLAN_LIST` overrides, plan/duration regex (1707-1861). `sendAiReply` becomes a thin switch over `AgentReply.kind` → Meta payload. |
-| `supabase/functions/meta-webhook/*` | Same simplification — call `runUnifiedAgent`, render reply by `kind`. |
-| `supabase/functions/_shared/ai-tools.ts` | Add `capture_lead`, `polite_redirect`, `remember_fact`, `mark_intent` tool definitions with Zod schemas. |
-| `supabase/functions/_shared/ai-tool-executor.ts` | Implement the four new tools against `leads`, `chat_memory`, `whatsapp_conversation_state`. |
-| `supabase/migrations/<new>.sql` | `chat_memory` table + RLS, `gym_knowledge` table + RLS, `ai_turn_log` table + RLS, indexes on `(branch_id, phone)`. |
-| `src/pages/SystemHealth.tsx` | New "AI Brain" card: turns/day, structured-parse failure rate, intent distribution, avg latency, top failed intents. |
-| `src/pages/Settings.tsx` (Communication Templates → AI Studio) | UI to view/edit `gym_knowledge` rows per branch and inspect `chat_memory` for any phone (debug aid). |
-
-## Migration & rollout
-
-1. Ship migrations + new tools.
-2. Implement new brain behind a feature flag `organization_settings.whatsapp_ai_config.brain_v3 = true`.
-3. Shadow-mode for 24h: run v3 in parallel, log only, compare output kinds.
-4. Cut over WhatsApp first, then IG/Messenger.
-5. Delete legacy duplicate prompt + extractor + canonical-list overrides once metrics confirm zero structured-parse failures for 48h.
-
-## Out of scope (this plan)
-
-- Replacing the `WhatsAppMediaAttachment` flow (already shipped).
-- Changing Meta number routing or template registration.
-- Adding new lead fields beyond what `lead_capture.target_fields` already declares.
+One brain. One config table. One UI. Every AI feature (WhatsApp replies, lead scoring, nudges, templates, dashboard insights, fitness plans, review replies, automation rules) flows through the same pipeline and is configurable from the UI without touching code.
 
 ---
 
-## Immediate hotfix (optional, while v3 is built)
+## Plan
 
-If you want today's leak stopped before the full rewrite:
+### 1. Single AI runtime — `_shared/ai-runtime.ts`
 
-- Wire the WhatsApp inbound through `runUnifiedAgent` (delete the duplicate prompt block) so the **non-fitness guard you already approved actually runs on WhatsApp**. That single change would have produced: *"Thanks for reaching out! For careers, partnerships … please email info@theinclinelife.com"* — and nothing else — for the job-seeker chat in your screenshot.
+New module exposing exactly two entry points used by **every** edge function:
 
-Tell me whether to:
-**(a)** ship just the hotfix now, then do the full v3 brain after, or
-**(b)** go straight to v3.
+```text
+runAgent({ purpose, branchId, userMessage?, messages?, context?, tools? })
+   → unified chat / agent loop (replaces the 3 brains)
+generateOnce({ purpose, branchId, input, schema? })
+   → single-shot text or structured output (replaces the 8 one-shot callers)
+```
+
+Both internally use `callAI` from the existing dispatcher, so provider/model/fallback is honored. `generateOnce` uses Vercel AI SDK `Output.object` when a Zod schema is provided.
+
+### 2. Single config table — `ai_purposes`
+
+Replaces `whatsapp_ai_config` jsonb soup and scattered hard-coded prompts.
+
+```text
+ai_purposes
+├─ id
+├─ branch_id (nullable = global default)
+├─ purpose (enum/text: whatsapp_reply, lead_nurture, lead_score,
+│           campaign_draft, template_generate, dashboard_insight,
+│           fitness_plan, review_reply, automation_rule, ...)
+├─ enabled
+├─ provider_id  → ai_provider_configs.id   (nullable = use default)
+├─ model        (nullable = provider default)
+├─ system_prompt
+├─ temperature, max_tokens, reply_delay_seconds
+├─ tools_allowed text[]   (subset of tool registry)
+├─ guards jsonb           ({ non_fitness_redirect, quiet_hours, ... })
+├─ extra jsonb            (purpose-specific knobs e.g. lead_capture fields)
+└─ updated_at, updated_by
+```
+
+`runAgent`/`generateOnce` always load the row for `(purpose, branchId)` with global fallback. Nothing in code carries a default prompt or model.
+
+### 3. Knowledge / memory — `ai_knowledge` + `ai_memory`
+
+- `ai_knowledge(branch_id, topic, content, embeddings?)` — gym facts, FAQs, tone, escalation rules; injected by `runAgent` based on classified intent. Replaces `hydrateGymFacts` and inline canned text.
+- `ai_memory(phone, branch_id, profile jsonb, facts jsonb, intent, asked_questions text[], summary, last_seen)` — replaces today's free-text `conversation_summary`.
+
+Both fully editable from UI.
+
+### 4. Tool registry — `_shared/ai-tool-registry.ts`
+
+Single Zod-typed registry (extends current `ai-tools.ts` + `ai-tool-executor.ts`):
+
+```text
+capture_lead, polite_redirect, mark_intent, remember_fact,
+book_class, lookup_member, escalate_to_human, send_template, ...
+```
+
+Each purpose row whitelists which tools the agent may call. No more JSON-scraping inside webhooks.
+
+### 5. Observability — `ai_call_logs` (already exists, formalize)
+
+Every `runAgent`/`generateOnce` call writes one row: purpose, branch, provider, model, tokens, latency, tool calls, validation errors, final reply kind. Powers SystemHealth and the new UI.
+
+### 6. Single UI — `Settings → AI Control Center`
+
+Collapses today's 4–5 separate AI screens into one tabbed page:
+
+- **Purposes** (table of `ai_purposes`): toggle, choose provider/model, edit prompt, pick allowed tools, set guards, "Test" button → calls `generateOnce` and shows reply.
+- **Providers** (existing `AIProvidersSettings` content, kept).
+- **Knowledge Base** (`ai_knowledge` CRUD per branch, with topics).
+- **Memory Inspector** (`ai_memory` viewer per phone, with reset button).
+- **Logs** (`ai_call_logs` with filters by purpose/branch/status).
+- **Playground** (free-form runner that lets owner pick purpose + send a test prompt).
+
+All training/configuration happens here. Code only ships defaults via a seed migration.
+
+### 7. Deletions / consolidation
+
+- Delete duplicate brain block in `whatsapp-webhook/index.ts` (lines ~1040–1450), `tryExtractInteractiveJson`, hard-coded summarizer fetch, canonical-list overrides. WhatsApp webhook becomes thin: parse → `runAgent({ purpose: 'whatsapp_reply' })` → translate reply kind to Meta payload.
+- Delete `ai-auto-reply` edge function (third brain copy). Anything still pointing at it is rerouted to `runAgent`.
+- Refactor `lead-nurture-followup`, `score-leads`, `automation-brain`, `ai-generate-whatsapp-templates`, `ai-draft-campaign-message`, `ai-dashboard-insights`, `generate-fitness-plan`, `google-reviews-brain` to a single `generateOnce({ purpose: '<their purpose>' })` call. Each loses its inline `fetch('https://ai.gateway.lovable.dev/...')` block and its hard-coded prompt.
+- Retire `whatsapp_ai_config` jsonb after data migration into `ai_purposes`.
+- Retire scattered prompt strings; seed them into `ai_purposes` once.
+- Collapse `WhatsAppAISettings`, `AIAgentControlCenter`, `AIFlowBuilderSettings`, AI Studio tab into the new Control Center; keep `AIProvidersSettings` as a sub-tab.
+
+### 8. Migration & rollout
+
+1. Migration: create `ai_purposes`, `ai_knowledge`, `ai_memory`; seed purposes from current hard-coded prompts; backfill `whatsapp_ai_config` → `ai_purposes('whatsapp_reply', branch)`.
+2. Ship `_shared/ai-runtime.ts` + tool registry; add unit tests for `runAgent` reply schema.
+3. Refactor edge functions one at a time (webhook first, then one-shots). Each PR removes its old fetch block.
+4. Build new UI; hide old AI settings pages behind a feature flag, then delete after one week of green logs.
+5. Final cleanup: delete `ai-auto-reply` function, drop `whatsapp_ai_config` column, remove `tryExtractInteractiveJson`.
+
+### Acceptance
+
+- `rg "ai.gateway.lovable.dev" supabase/functions` returns hits **only** in `_shared/ai-dispatcher.ts`.
+- Every prompt, model, tool list, and guard for every AI feature is editable from the UI; redeploys are not required to change behavior.
+- The job-seeker scenario (and any other non-fitness intent) routes through the same `runAgent` path that WhatsApp uses, with the redirect rule coming from the `whatsapp_reply` purpose row.
+- `ai_call_logs` shows one row per AI invocation across the whole product, tagged by `purpose`.
+
+---
+
+### Technical details (for engineers)
+
+- `runAgent` returns a discriminated union `{ kind: 'text'|'list'|'buttons'|'handoff'|'lead_captured'|'tool_only', payload }`; webhooks switch on `kind`.
+- Use Vercel AI SDK (`npm:ai`, `npm:@ai-sdk/openai-compatible`) inside the runtime; keep `callAI` for non-SDK providers (groq, mistral, ollama) via the existing dispatcher.
+- `stopWhen: stepCountIs(50)` for tool loops.
+- All writes go through `dispatchCommunication` as today; the runtime never sends messages itself.
+- `ai_purposes`, `ai_knowledge`, `ai_memory` get RLS: owner/admin write, manager read+edit own branch, staff read.
