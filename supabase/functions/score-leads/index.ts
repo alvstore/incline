@@ -15,8 +15,7 @@ serve(async (req: Request) => {
 
   try {
     const { lead_id, lead_ids } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    // AI provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

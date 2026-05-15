@@ -31,8 +31,8 @@ const CHANNEL_RULES: Record<Channel, string> = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+    // Provider/key handled by ai-runtime → ai-dispatcher.
+
 
     // Auth gate
     const auth = req.headers.get("Authorization") ?? "";

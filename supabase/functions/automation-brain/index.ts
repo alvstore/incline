@@ -12,7 +12,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+// AI provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -136,7 +136,7 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
     const profile = profileByUser.get((m as any).user_id);
     const memberName = profile?.full_name ?? "there";
     let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline Fitness.`;
-    if (rule.use_ai && LOVABLE_API_KEY) {
+    if (rule.use_ai) {
       try {
         const r = await generateOnce({
           purpose: "automation_rule",

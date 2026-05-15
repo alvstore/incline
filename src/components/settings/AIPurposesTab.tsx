@@ -14,8 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Pencil, FlaskConical, Info, Zap, RotateCcw, AlertTriangle } from "lucide-react";
-import { PROVIDER_DEFAULTS, PURPOSE_DEFAULTS, normalizeModelForProvider } from "@/lib/ai/providerCatalog";
+import { Pencil, FlaskConical, Info, Zap, RotateCcw, AlertTriangle, Sparkles, Leaf } from "lucide-react";
+import { PROVIDER_DEFAULTS, PURPOSE_DEFAULTS, normalizeModelForProvider, isCheapModel, cheapestModelFor } from "@/lib/ai/providerCatalog";
 
 interface PurposeRow {
   id: string;
@@ -63,12 +63,15 @@ const PURPOSE_TO_SCOPE: Record<string, string> = {
   automation_rule: "all",
 };
 
-function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow | null {
+function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow {
   const scoped = providers.find(p => p.scope === scope && p.is_active && p.is_default);
   if (scoped) return scoped;
   const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
   if (all) return all;
   return { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
+}
+function isInherited(scope: string, resolved: ProviderRow): boolean {
+  return resolved.scope !== scope;
 }
 
 export function AIPurposesTab() {
@@ -190,9 +193,11 @@ export function AIPurposesTab() {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
         const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
         const resolved = resolveProvider(scope, providers);
+        const inherited = isInherited(scope, resolved);
         const rawModel = p.model || resolved?.default_model || "—";
         const effectiveModel = resolved ? normalizeModelForProvider(resolved.provider, rawModel) : rawModel;
         const overridden = !!p.model;
+        const cheap = isCheapModel(effectiveModel);
         const defaults = PURPOSE_DEFAULTS[p.purpose];
         return (
           <Card key={p.id} className="rounded-2xl shadow-lg shadow-slate-200/50 p-5 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
@@ -210,10 +215,17 @@ export function AIPurposesTab() {
                     {resolved?.provider ?? "lovable"}
                   </Badge>
                   <Badge variant="outline" className="text-xs font-mono">{effectiveModel}</Badge>
+                  {cheap && (
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] gap-1">
+                      <Leaf className="h-3 w-3" /> low-cost
+                    </Badge>
+                  )}
                   {overridden && (
                     <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">override</Badge>
                   )}
-                  <Badge variant="outline" className="text-xs">scope: {scope}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    scope: {scope}{inherited && <span className="text-amber-600 ml-1">(inherited from "all")</span>}
+                  </Badge>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">{meta.desc}</p>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -349,24 +361,42 @@ export function AIPurposesTab() {
                 </div>
               </div>
 
-              {editingPurposeDefaults && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      model: null,
-                      temperature: editingPurposeDefaults.temperature,
-                      max_tokens: editingPurposeDefaults.max_tokens,
-                    })
-                  }
-                >
-                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Reset to recommended defaults
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {editingPurposeDefaults && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        model: null,
+                        temperature: editingPurposeDefaults.temperature,
+                        max_tokens: editingPurposeDefaults.max_tokens,
+                      })
+                    }
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Reset to recommended defaults
+                  </Button>
+                )}
+                {editingResolved && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                    onClick={() => {
+                      const cheap = cheapestModelFor(editingResolved.provider);
+                      if (!cheap) { toast.info("No cheap preset for this provider"); return; }
+                      setEditing({ ...editing, model: cheap });
+                      toast.success(`Picked low-cost model: ${cheap}`);
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Use cheapest available
+                  </Button>
+                )}
+              </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>

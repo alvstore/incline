@@ -12902,6 +12902,7 @@ export type Database = {
         }[]
       }
       set_active_branch: { Args: { p_branch_id: string }; Returns: undefined }
+      set_default_ai_provider: { Args: { p_id: string }; Returns: undefined }
       set_handoff:
         | {
             Args: { _phone: string; _reason?: string; _urgency?: string }
