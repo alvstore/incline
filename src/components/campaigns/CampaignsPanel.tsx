@@ -76,6 +76,16 @@ export function CampaignsPanel() {
   const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
   const openEdit = (c: Campaign) => { setEditingCampaign(c); setWizardOpen(true); };
 
+  const filteredCampaigns = useMemo(() => {
+    let out = campaigns as Campaign[];
+    if (statusFilter !== 'all') out = out.filter((c) => c.status === statusFilter);
+    if (search) {
+      const q = search.toLowerCase();
+      out = out.filter((c) => c.name.toLowerCase().includes(q) || (c.message || '').toLowerCase().includes(q));
+    }
+    return out;
+  }, [campaigns, statusFilter, search]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
