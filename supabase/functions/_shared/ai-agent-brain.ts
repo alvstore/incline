@@ -1,4 +1,8 @@
-// v3.0.0 — Unified AI Agent Brain (single source of truth)
+// v3.1.0 — Unified AI Agent Brain (single source of truth)
+// 3.1.0: Routes ALL model calls through `_shared/ai-dispatcher.ts → callAI`
+//        with scope='whatsapp_ai' so providers in `ai_provider_configs` are
+//        honored (no more hardcoded Lovable fetch). Legacy whatsapp_ai_config
+//        system_prompt is APPENDED to the purpose prompt as overlay context.
 // 3.0.0: Reads config (system_prompt, model, delays, tools_allowed, lead_capture)
 //        from `ai_purposes` table (purpose='whatsapp_reply') with branch fallback
 //        to global. Legacy `organization_settings.whatsapp_ai_config` is used
