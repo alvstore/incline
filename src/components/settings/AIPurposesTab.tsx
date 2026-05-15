@@ -361,24 +361,42 @@ export function AIPurposesTab() {
                 </div>
               </div>
 
-              {editingPurposeDefaults && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      model: null,
-                      temperature: editingPurposeDefaults.temperature,
-                      max_tokens: editingPurposeDefaults.max_tokens,
-                    })
-                  }
-                >
-                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Reset to recommended defaults
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {editingPurposeDefaults && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        model: null,
+                        temperature: editingPurposeDefaults.temperature,
+                        max_tokens: editingPurposeDefaults.max_tokens,
+                      })
+                    }
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Reset to recommended defaults
+                  </Button>
+                )}
+                {editingResolved && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                    onClick={() => {
+                      const cheap = cheapestModelFor(editingResolved.provider);
+                      if (!cheap) { toast.info("No cheap preset for this provider"); return; }
+                      setEditing({ ...editing, model: cheap });
+                      toast.success(`Picked low-cost model: ${cheap}`);
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Use cheapest available
+                  </Button>
+                )}
+              </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
