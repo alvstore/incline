@@ -48,7 +48,7 @@ export interface CallAIResult {
 }
 
 interface ProviderConfig {
-  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "openai_compatible";
+  provider: "lovable" | "openrouter" | "ollama" | "deepseek" | "google" | "groq" | "together" | "mistral" | "anthropic" | "xai" | "openai_compatible";
   display_name: string;
   base_url: string | null;
   api_key_secret_name: string | null;
