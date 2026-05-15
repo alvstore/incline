@@ -65,6 +65,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [eventVenue, setEventVenue] = useState('');
   const [eventRsvpUrl, setEventRsvpUrl] = useState('');
   const [resolvedMemberIds, setResolvedMemberIds] = useState<string[]>([]);
+  const [breakdown, setBreakdown] = useState<AudienceBreakdown | null>(null);
   const [message, setMessage] = useState('');
   const [subject, setSubject] = useState('');
   const [trigger, setTrigger] = useState<CampaignTriggerType>('send_now');
