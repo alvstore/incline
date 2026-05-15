@@ -82,6 +82,16 @@ interface ChatContact {
   assigned_staff?: { full_name: string; avatar_url: string | null } | null;
 }
 
+interface MessageMediaMeta {
+  meta_id?: string | null;
+  filename?: string | null;
+  mime_type?: string | null;
+  bucket?: string | null;
+  size?: number | null;
+  error?: string | null;
+  kind?: string | null;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -91,6 +101,7 @@ interface Message {
   message_type: string;
   is_internal_note?: boolean;
   media_url?: string | null;
+  media_meta?: MessageMediaMeta | null;
 }
 
 interface ChatSettingsRow {
