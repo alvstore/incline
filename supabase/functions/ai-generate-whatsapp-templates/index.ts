@@ -202,6 +202,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Server-side category guard — Meta rejects mis-categorized templates.
+    // Map by event-name pattern regardless of what the model returned.
+    const MARKETING_RX = /(offer|promo|promotion|event|birthday|referral|win[_-]?back|re[_-]?engagement|wait[_-]?is[_-]?over|launch|announcement|newsletter|gift|festive|sale|deal)/i;
+    const AUTH_RX = /(otp|verification[_-]?code|2fa)/i;
+    for (const t of allTemplates) {
+      const ev = String(t.event || t.name || '');
+      if (AUTH_RX.test(ev)) t.category = 'AUTHENTICATION';
+      else if (MARKETING_RX.test(ev)) t.category = 'MARKETING';
+      else if (!t.category || !['UTILITY','MARKETING','AUTHENTICATION'].includes(String(t.category).toUpperCase())) {
+        t.category = 'UTILITY';
+      } else {
+        t.category = String(t.category).toUpperCase();
+      }
+    }
+
     if (allTemplates.length === 0) return json({ error: "AI returned no proposals" }, 500);
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
