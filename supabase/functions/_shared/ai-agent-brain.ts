@@ -1,9 +1,9 @@
-// v2.1.0 — Unified AI Agent Brain
-// 2.1.0: Variant-aware phone matching (uses _shared/phone.ts), fixed broken
-//        column refs (members.phone_number / profiles.user_id never existed),
-//        member-first hard rule in system prompt, and member-first dedupe
-//        guard inside lead capture so an existing member never gets re-
-//        captured as a lead through IG/FB/Messenger.
+// v2.2.0 — Unified AI Agent Brain
+// 2.2.0: Non-fitness intent guard — job/CV, vendor, press, partnership,
+//        complaint, wrong-number replies redirect to info@theinclinelife.com
+//        and skip the lead-capture flow. Hardened "JSON-only" rule for
+//        interactive blocks so prose doesn't leak alongside the payload.
+// 2.1.0: Variant-aware phone matching, member-first dedupe.
 // Shared across meta-webhook (Instagram/Messenger) and whatsapp-webhook.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
