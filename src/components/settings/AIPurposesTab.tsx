@@ -63,15 +63,15 @@ const PURPOSE_TO_SCOPE: Record<string, string> = {
   automation_rule: "all",
 };
 
-function resolveProvider(scope: string, providers: ProviderRow[]): { row: ProviderRow; inherited: boolean } {
+function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow {
   const scoped = providers.find(p => p.scope === scope && p.is_active && p.is_default);
-  if (scoped) return { row: scoped, inherited: false };
+  if (scoped) return scoped;
   const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
-  if (all) return { row: all, inherited: scope !== "all" };
-  return {
-    row: { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true },
-    inherited: scope !== "all",
-  };
+  if (all) return all;
+  return { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
+}
+function isInherited(scope: string, resolved: ProviderRow): boolean {
+  return resolved.scope !== scope;
 }
 
 export function AIPurposesTab() {
