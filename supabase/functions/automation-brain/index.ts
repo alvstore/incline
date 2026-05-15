@@ -138,22 +138,15 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
     let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline Fitness.`;
     if (rule.use_ai && LOVABLE_API_KEY) {
       try {
-        const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
-            messages: [
-              { role: "system", content: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emojis overload. Sign off as "Incline Fitness".` },
-              { role: "user", content: `Member name: ${memberName}` },
-            ],
-          }),
+        const r = await generateOnce({
+          purpose: "automation_rule",
+          branchId: m.branch_id,
+          userMessage: `Member name: ${memberName}`,
+          systemOverride: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emojis overload. Sign off as "Incline Fitness".`,
+          supabase: admin,
         });
-        if (aiResp.ok) {
-          const j = await aiResp.json();
-          const text = j?.choices?.[0]?.message?.content;
-          if (text) body = String(text).trim();
-        }
+        const text = r.content?.trim();
+        if (text) body = text;
       } catch (_) { /* fall back to default */ }
     }
     try {
