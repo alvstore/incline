@@ -414,6 +414,58 @@ async function loadOrgConfig(supabase: any) {
   return data;
 }
 
+// ── ai_purposes loader (UI-managed single source of truth) ─────────────────
+const _purposeCache = new Map<string, { row: any; ts: number }>();
+export async function loadAiPurpose(supabase: any, purpose: string, branchId: string | null) {
+  const key = `${purpose}:${branchId ?? "global"}`;
+  const cached = _purposeCache.get(key);
+  if (cached && Date.now() - cached.ts < 30_000) return cached.row;
+  // Branch-specific row first, then global fallback
+  let row: any = null;
+  if (branchId) {
+    const { data } = await supabase
+      .from("ai_purposes")
+      .select("*")
+      .eq("purpose", purpose)
+      .eq("branch_id", branchId)
+      .maybeSingle();
+    row = data;
+  }
+  if (!row) {
+    const { data } = await supabase
+      .from("ai_purposes")
+      .select("*")
+      .eq("purpose", purpose)
+      .is("branch_id", null)
+      .maybeSingle();
+    row = data;
+  }
+  _purposeCache.set(key, { row, ts: Date.now() });
+  return row;
+}
+
+// Overlay an ai_purposes row onto the legacy whatsapp_ai_config JSONB.
+// Purpose row wins; legacy fields fill gaps. Lets us migrate without breaking.
+export function mergePurposeIntoConfig(legacy: OrgAiConfig, purpose: any): OrgAiConfig {
+  if (!purpose) return legacy;
+  const extraLeadCapture = purpose.extra?.lead_capture as OrgAiConfig["lead_capture"] | undefined;
+  return {
+    auto_reply_enabled: purpose.enabled ?? legacy.auto_reply_enabled ?? false,
+    reply_delay_seconds: purpose.reply_delay_seconds ?? legacy.reply_delay_seconds ?? 0,
+    system_prompt: (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
+      ? purpose.system_prompt
+      : legacy.system_prompt,
+    model: purpose.model || legacy.model,
+    lead_capture: extraLeadCapture ?? legacy.lead_capture,
+    instagram_story_reply_enabled: legacy.instagram_story_reply_enabled,
+    // pass through tools_allowed via a sidecar field used by the agent
+    // (we don't change the type to keep callers stable)
+    ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
+      ? { _tools_allowed: purpose.tools_allowed }
+      : {}),
+  } as OrgAiConfig & { _tools_allowed?: string[] };
+}
+
 async function loadCapturedSnapshot(supabase: any, leadId: string): Promise<string> {
   const { data: existingLead } = await supabase
     .from("leads")
