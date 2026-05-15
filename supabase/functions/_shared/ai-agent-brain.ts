@@ -1,4 +1,8 @@
-// v3.0.0 — Unified AI Agent Brain (single source of truth)
+// v3.1.0 — Unified AI Agent Brain (single source of truth)
+// 3.1.0: Routes ALL model calls through `_shared/ai-dispatcher.ts → callAI`
+//        with scope='whatsapp_ai' so providers in `ai_provider_configs` are
+//        honored (no more hardcoded Lovable fetch). Legacy whatsapp_ai_config
+//        system_prompt is APPENDED to the purpose prompt as overlay context.
 // 3.0.0: Reads config (system_prompt, model, delays, tools_allowed, lead_capture)
 //        from `ai_purposes` table (purpose='whatsapp_reply') with branch fallback
 //        to global. Legacy `organization_settings.whatsapp_ai_config` is used
@@ -15,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
 import { phoneVariants } from "./phone.ts";
+import { callAI } from "./ai-dispatcher.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,11 +65,10 @@ export async function runUnifiedAgent(
   serviceKey: string,
   ctx: AgentContext,
 ): Promise<AgentResult> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    console.log(`[AI:${ctx.platform}] LOVABLE_API_KEY missing`);
-    return skip("no_api_key");
-  }
+  // Note: provider routing is handled by callAI (ai-dispatcher) using the
+  // `whatsapp_ai` scope from `ai_provider_configs`. We no longer hard-require
+  // LOVABLE_API_KEY here — the dispatcher will resolve the active provider key
+  // (Google/OpenRouter/Lovable/etc.) and fall back to Lovable if needed.
 
   // 1. Load org AI config + purpose row (single source of truth)
   const orgConfig = await loadOrgConfig(supabase);
@@ -272,36 +276,37 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 - Use the exact field keys: ${(leadCaptureConfig!.target_fields || []).join(", ")}`;
   }
 
-  // 8. Call Lovable AI
+  // 8. Call AI via the SSOT dispatcher (respects ai_provider_configs scope=whatsapp_ai)
   const aiMessages: any[] = [
     { role: "system", content: systemPrompt },
     ...history,
   ];
 
-  const aiRequestBody: any = {
-    model: aiConfig.model || "google/gemini-3-flash-preview",
-    messages: aiMessages,
-  };
-  if (tools) {
-    aiRequestBody.tools = tools;
-    aiRequestBody.tool_choice = "auto";
-  }
-
   let aiResult: any;
   try {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify(aiRequestBody),
+    const r = await callAI({
+      scope: "whatsapp_ai",
+      messages: aiMessages,
+      supabase,
+      model: aiConfig.model || undefined,
+      tools: tools || undefined,
+      tool_choice: tools ? "auto" : undefined,
     });
-    if (!resp.ok) {
-      console.error(`[AI:${ctx.platform}] gateway error ${resp.status}`);
-      return skip("ai_gateway_error");
-    }
-    aiResult = await resp.json();
+    aiResult = r.raw;
+    // Log resolved provider for observability
+    try { await supabase.from("ai_call_logs").insert({
+      purpose: "whatsapp_reply",
+      scope: "whatsapp_ai",
+      branch_id: ctx.branchId,
+      provider: r.provider,
+      model: r.model,
+      status: r.fallback_used ? "fallback" : "success",
+      duration_ms: 0,
+      fallback_used: r.fallback_used,
+    }); } catch { /* noop */ }
   } catch (e) {
-    console.error(`[AI:${ctx.platform}] fetch failed:`, e);
-    return skip("ai_fetch_error");
+    console.error(`[AI:${ctx.platform}] dispatcher failed:`, e);
+    return skip("ai_gateway_error");
   }
 
   const choice = aiResult?.choices?.[0];
@@ -331,16 +336,13 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
       toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
     }
     try {
-      const followup = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: aiConfig.model || "google/gemini-3-flash-preview",
-          messages: [...aiMessages, choice.message, ...toolMessages],
-        }),
+      const r2 = await callAI({
+        scope: "whatsapp_ai",
+        supabase,
+        model: aiConfig.model || undefined,
+        messages: [...aiMessages, choice.message, ...toolMessages],
       });
-      const followupData = await followup.json();
-      replyText = followupData?.choices?.[0]?.message?.content || replyText;
+      replyText = r2.raw?.choices?.[0]?.message?.content || replyText;
     } catch (e) {
       console.error(`[AI:${ctx.platform}] tool follow-up failed:`, e);
     }
@@ -463,21 +465,26 @@ export async function loadAiPurpose(supabase: any, purpose: string, branchId: st
 }
 
 // Overlay an ai_purposes row onto the legacy whatsapp_ai_config JSONB.
-// Purpose row wins; legacy fields fill gaps. Lets us migrate without breaking.
+// SSOT model: purpose.system_prompt is the base; legacy.system_prompt is
+// APPENDED as a per-org "Extra Gym Context" overlay (offers, branch notes).
+// Other fields: purpose wins, legacy fills gaps.
 export function mergePurposeIntoConfig(legacy: OrgAiConfig, purpose: any): OrgAiConfig {
   if (!purpose) return legacy;
   const extraLeadCapture = purpose.extra?.lead_capture as OrgAiConfig["lead_capture"] | undefined;
+  const base = (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
+    ? purpose.system_prompt.trim()
+    : "";
+  const overlay = (legacy.system_prompt && legacy.system_prompt.trim().length > 0)
+    ? legacy.system_prompt.trim()
+    : "";
+  const merged = [base, overlay].filter(Boolean).join("\n\n");
   return {
     auto_reply_enabled: purpose.enabled ?? legacy.auto_reply_enabled ?? false,
     reply_delay_seconds: purpose.reply_delay_seconds ?? legacy.reply_delay_seconds ?? 0,
-    system_prompt: (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
-      ? purpose.system_prompt
-      : legacy.system_prompt,
+    system_prompt: merged || base || overlay,
     model: purpose.model || legacy.model,
     lead_capture: extraLeadCapture ?? legacy.lead_capture,
     instagram_story_reply_enabled: legacy.instagram_story_reply_enabled,
-    // pass through tools_allowed via a sidecar field used by the agent
-    // (we don't change the type to keep callers stable)
     ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
       ? { _tools_allowed: purpose.tools_allowed }
       : {}),

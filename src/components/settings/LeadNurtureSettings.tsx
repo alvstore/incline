@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Clock, Brain, Play, CheckCircle, RefreshCw } from 'lucide-react';
+import { Clock, Brain, Play, CheckCircle, RefreshCw, Info, Eye, EyeOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export function LeadNurtureSettings() {
@@ -61,6 +61,20 @@ export function LeadNurtureSettings() {
   const [delayHours, setDelayHours] = useState(String(config.delay_hours ?? 4));
   const [maxRetries, setMaxRetries] = useState(String(config.max_retries ?? 2));
   const [nurturePrompt, setNurturePrompt] = useState(config.nurture_prompt ?? '');
+  const [showPreview, setShowPreview] = useState(false);
+
+  const { data: purposePrompt = '' } = useQuery({
+    queryKey: ['ai_purpose_prompt', 'lead_nurture'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ai_purposes')
+        .select('system_prompt')
+        .eq('purpose', 'lead_nurture')
+        .is('branch_id', null)
+        .maybeSingle();
+      return (data?.system_prompt as string) ?? '';
+    },
+  });
 
   useEffect(() => {
     if (orgSettings?.lead_nurture_config) {
@@ -231,24 +245,44 @@ export function LeadNurtureSettings() {
             <div className="p-2 rounded-full bg-violet-50">
               <Brain className="h-5 w-5 text-violet-600" />
             </div>
-            Nurture AI Context
+            Extra Nurture Context (overlay)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Provide additional context to the AI when generating follow-up messages. Mention current offers, gym USPs, or specific talking points.
+            This text is <b>appended</b> to the base Lead Nurture prompt configured in
+            {' '}<b>Settings → AI Agent → Purposes</b> (lead_nurture). Use it for current offers, gym USPs, or
+            specific talking points. Provider/model is set in the <b>Providers</b> tab.
           </p>
           <div className="space-y-2">
-            <Label>AI Nurture Prompt</Label>
+            <Label>Overlay Prompt</Label>
             <Textarea
               value={nurturePrompt}
               onChange={e => setNurturePrompt(e.target.value)}
               placeholder="e.g., We're running a 20% off New Year offer. Mention our premium sauna and ice bath facilities. Our trainers are nationally certified..."
               rows={4}
             />
-            <p className="text-xs text-muted-foreground">
-              This context is injected into the AI's system prompt when generating nurture messages. Leave empty for default behavior.
-            </p>
+            <div className="flex items-start gap-2 p-2.5 rounded-md bg-indigo-50/60 border border-indigo-100">
+              <Info className="h-3.5 w-3.5 text-indigo-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-slate-600">
+                Leave empty to use only the base purpose prompt. Edit the base persona in the Purposes tab.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs gap-1.5 px-0 h-7"
+              onClick={() => setShowPreview(v => !v)}
+            >
+              {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showPreview ? 'Hide' : 'Show'} merged final prompt
+            </Button>
+            {showPreview && (
+              <pre className="text-[11px] font-mono whitespace-pre-wrap bg-slate-50 border rounded-md p-3 max-h-64 overflow-y-auto text-slate-700">
+                {[purposePrompt.trim(), nurturePrompt.trim()].filter(Boolean).join('\n\n') || '(empty — set a base prompt in Purposes tab)'}
+              </pre>
+            )}
           </div>
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Saving...' : 'Save Nurture Settings'}
