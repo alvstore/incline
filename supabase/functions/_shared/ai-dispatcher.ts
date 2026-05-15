@@ -144,6 +144,10 @@ function buildEndpoint(cfg: ProviderConfig): string {
       return "https://api.together.xyz/v1/chat/completions";
     case "mistral":
       return "https://api.mistral.ai/v1/chat/completions";
+    case "anthropic":
+      return "https://api.anthropic.com/v1/chat/completions";
+    case "xai":
+      return "https://api.x.ai/v1/chat/completions";
     case "ollama":
       throw new Error("Ollama provider requires base_url to be set (e.g. https://ollama.example.com/v1/chat/completions)");
     case "openai_compatible":
