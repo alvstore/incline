@@ -1,3 +1,7 @@
+// v5.3.0 — Hotfix: deterministic non-fitness intent guard (job/vendor/press/etc.)
+//          short-circuits BEFORE the LLM call. Top-level non-fitness rule in
+//          system prompt (no longer member-only). Fixes raw interactive_list
+//          JSON leaking to job seekers.
 // v5.2.0 — Variant-aware phone matching, member-first dedupe guard before
 //          lead INSERT, member-first hard rule injected into AI system prompt.
 // v5.1.0 — Phase G: pinned to shared META_API_BASE (v25.0).
@@ -955,6 +959,21 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
   if (!inboundMsg?.content) return;
 
+  // ── DETERMINISTIC NON-FITNESS INTENT GUARD ─────────────────────────────────
+  // Hard short-circuit BEFORE any LLM call. The model occasionally tries to
+  // both acknowledge AND continue onboarding (resulting in raw interactive_list
+  // JSON leaking into the chat for a job seeker). This catches obvious cases
+  // and replies with the canonical redirect, then exits.
+  const NON_FITNESS_RE =
+    /\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\s]?data|interview\s+for|i(?:'?m)?\s+(?:looking\s+(?:for|out)\s+)?(?:a\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\s+(?:at|with|in)\s+(?:your|incline)|sales\s+(?:job|department|position)|trainer\s+(?:job|position|vacancy)|front\s*desk\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\s]?up)\b/i;
+  if (NON_FITNESS_RE.test(inboundMsg.content)) {
+    console.log(`[whatsapp-webhook] non-fitness intent detected for ${phoneNumber}, sending redirect`);
+    const REDIRECT =
+      "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏";
+    await sendAiReply(REDIRECT, { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name }, branchId);
+    return;
+  }
+
   // Optional delay
   const delaySeconds = aiConfig.reply_delay_seconds || 0;
   if (delaySeconds > 0 && delaySeconds <= 30) {
@@ -1079,7 +1098,26 @@ This person is a CONFIRMED ACTIVE MEMBER. Their identity, plan, dues and benefit
 - If the user sends short replies like "ok", "ok maam", "hmm", or "yes", treat it as acknowledgment and ask a NEW question — do NOT repeat the same one.
 
 INTERACTIVE JSON RULE:
-When you want to show interactive buttons or lists, output ONLY the JSON object with NO additional text before or after. Do not mix prose and JSON in the same message.`;
+When you want to show interactive buttons or lists, output ONLY the JSON object with NO additional text before or after. Do not mix prose and JSON in the same message.
+
+═══════════════════════════════════════════════════════════════════════════════
+NON-FITNESS INTENT GUARD (HIGHEST PRIORITY — applies to EVERY user, member or not)
+═══════════════════════════════════════════════════════════════════════════════
+If the user's message is clearly about ANY of the following, you MUST stop the normal flow and reply with ONLY the redirect message below. Do NOT capture a lead. Do NOT ask for fitness goal, plan, budget, branch, name, or email. Do NOT emit interactive buttons or lists. Do NOT emit any JSON. Do NOT add a follow-up question afterwards.
+
+Trigger intents:
+  • Job application / careers / hiring / "looking for a job" / "any vacancy" / CV / resume / "I want to work" / "sales job" / "trainer job" / "front desk job"
+  • Vendor / supplier / wholesale / B2B / "I sell …" / "we supply …"
+  • Press / media / interview / influencer / collaboration / sponsorship
+  • Partnership / corporate tie-up / franchise inquiry
+  • Complaint about an existing member that needs human follow-up
+  • Wrong number / spam / unrelated greeting with zero fitness intent
+
+Reply EXACTLY (plain text, single message, then stop):
+"Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏"
+
+After sending that one message, end your turn. Do not start onboarding. Do not ask their goal. Do not ask their name.
+═══════════════════════════════════════════════════════════════════════════════`;
 
   // For members: add tool usage instructions
   if (contactContext.isMember && contactContext.memberContext) {
@@ -1100,17 +1138,8 @@ RULES:
 - Be warm, professional, and concise. Use emoji sparingly.
 - For questions about pricing, new memberships, or complex issues, use transfer_to_human.
 
-NON-FITNESS INTENTS — DO NOT CAPTURE AS LEAD, DO NOT ASK FITNESS-GOAL/PLAN/BRANCH:
-If the message is clearly about any of the following, you MUST NOT call the lead capture flow and MUST NOT ask the onboarding questions (goal, plan_interest, budget, branch):
-  • Job application / careers / hiring / CV / resume / "looking for a job" / "vacancy"
-  • Vendor / supplier / wholesale / B2B inquiry
-  • Press / media / interview / collaboration / influencer / sponsorship
-  • Partnership / corporate tie-up
-  • Complaint about an existing member's experience that needs human follow-up
-  • Wrong number / spam / unrelated greeting with zero fitness intent
-For any of these, reply with this single short message (no JSON, no list, no buttons):
-  "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This WhatsApp is for membership and fitness queries only. 🙏"
-Then stop. Do NOT continue the onboarding sequence.
+
+
 
 INTERACTIVE RESPONSE FORMAT (CRITICAL — Meta WhatsApp Cloud API v25.0 limits):
 - 1–3 choices → use a button block:
