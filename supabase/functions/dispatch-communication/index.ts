@@ -1,4 +1,6 @@
-// dispatch-communication v1.12.0
+// dispatch-communication v1.13.0
+// v1.13.0: Freeform WhatsApp video attachments are now sent as native video
+//          (was previously force-collapsed to document, which Meta rejected).
 // v1.12.0: Channel-level kill switch — if Settings → Integrations has the
 //          target channel (whatsapp/sms/email) toggled OFF for the branch
 //          (with global fallback), suppress the send cleanly. Logs a single
