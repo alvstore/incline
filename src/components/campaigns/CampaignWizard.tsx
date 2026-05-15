@@ -20,17 +20,23 @@ import {
   type CampaignChannel,
   type CampaignTriggerType,
   type RecurrencePreset,
+  type Campaign,
   createCampaign,
+  updateCampaign,
   createRecurringCampaignRule,
   recurrencePresetToCron,
   sendCampaignNow,
 } from '@/services/campaignService';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { ShieldCheck } from 'lucide-react';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   branchId: string;
+  editingCampaign?: Campaign | null;
 }
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
