@@ -1,10 +1,24 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle,
+  Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX,
+} from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 import { useBranchContext } from '@/contexts/BranchContext';
-import { listCampaigns, type Campaign } from '@/services/campaignService';
+import {
+  listCampaigns, deleteCampaign, duplicateCampaign, cancelScheduledCampaign,
+  type Campaign,
+} from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -21,10 +35,13 @@ const statusBadge = (s: string) => {
 };
 
 export function CampaignsPanel() {
+  const qc = useQueryClient();
   const { selectedBranch } = useBranchContext();
   const branchId = selectedBranch && selectedBranch !== 'all' ? selectedBranch : null;
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Campaign | null>(null);
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ['campaigns', branchId],
@@ -32,6 +49,27 @@ export function CampaignsPanel() {
     enabled: !!branchId,
     refetchInterval: 30000,
   });
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => deleteCampaign(id),
+    onSuccess: () => { toast.success('Campaign deleted'); setConfirmDelete(null); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Delete failed'),
+  });
+  const dupMut = useMutation({
+    mutationFn: (id: string) => duplicateCampaign(id),
+    onSuccess: (c) => { toast.success('Duplicated as draft'); refresh(); setEditingCampaign(c); setWizardOpen(true); },
+    onError: (e: any) => toast.error(e?.message || 'Duplicate failed'),
+  });
+  const cancelMut = useMutation({
+    mutationFn: (id: string) => cancelScheduledCampaign(id),
+    onSuccess: () => { toast.success('Schedule cancelled — moved to draft'); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Cancel failed'),
+  });
+
+  const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
+  const openEdit = (c: Campaign) => { setEditingCampaign(c); setWizardOpen(true); };
 
   return (
     <div className="space-y-4">
@@ -41,7 +79,7 @@ export function CampaignsPanel() {
           <p className="text-sm text-muted-foreground">Promotional events, offers, images and PDFs to members, leads and contacts. For quick one-shot announcements use the <strong>New Announcement</strong> button above.</p>
         </div>
         <Button
-          onClick={() => setWizardOpen(true)}
+          onClick={openCreate}
           className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white gap-2"
           disabled={!branchId}
         >
@@ -70,21 +108,56 @@ export function CampaignsPanel() {
             const sb = statusBadge(c.status);
             const Sicon = sb.icon;
             const isScheduled = c.status === 'scheduled' && c.scheduled_at;
+            const editable = c.status === 'draft' || c.status === 'scheduled';
+            const inFlight = c.status === 'sending';
             return (
-              <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow-slate-200/50 hover:shadow-lg hover:ring-1 hover:ring-violet-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500">
+              <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow-slate-200/50 hover:shadow-lg hover:ring-1 hover:ring-violet-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 relative">
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 text-violet-600 flex items-center justify-center">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 text-violet-600 flex items-center justify-center shrink-0">
                       <Icon className="h-4 w-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-foreground line-clamp-1">{c.name}</h3>
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{c.channel}</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={`${sb.c} rounded-full text-[10px] uppercase`}>
-                    <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {c.status}
-                  </Badge>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge variant="outline" className={`${sb.c} rounded-full text-[10px] uppercase`}>
+                      <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {c.status}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" aria-label="Campaign actions">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-xl" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setDetailCampaign(c)}>
+                          <CheckCircle2 className="h-4 w-4 mr-2" /> View details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={!editable || inFlight} onClick={() => openEdit(c)}>
+                          <Pencil className="h-4 w-4 mr-2" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => dupMut.mutate(c.id)} disabled={dupMut.isPending}>
+                          <Copy className="h-4 w-4 mr-2" /> Duplicate
+                        </DropdownMenuItem>
+                        {c.status === 'scheduled' && (
+                          <DropdownMenuItem onClick={() => cancelMut.mutate(c.id)} disabled={cancelMut.isPending}>
+                            <CalendarX className="h-4 w-4 mr-2" /> Cancel schedule
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                          disabled={inFlight}
+                          onClick={() => setConfirmDelete(c)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.message}</p>
                 {isScheduled && (
@@ -119,9 +192,35 @@ export function CampaignsPanel() {
       )}
 
       {branchId && (
-        <CampaignWizard open={wizardOpen} onOpenChange={setWizardOpen} branchId={branchId} />
+        <CampaignWizard
+          open={wizardOpen}
+          onOpenChange={(o) => { setWizardOpen(o); if (!o) setEditingCampaign(null); }}
+          branchId={branchId}
+          editingCampaign={editingCampaign}
+        />
       )}
       <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={detailCampaign} />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <strong>{confirmDelete?.name}</strong> and all its delivery history. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-red-600 hover:bg-red-700"
+              onClick={() => confirmDelete && delMut.mutate(confirmDelete.id)}
+              disabled={delMut.isPending}
+            >
+              {delMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
