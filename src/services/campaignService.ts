@@ -65,6 +65,12 @@ export interface Campaign {
   scheduled_at: string | null;
   sent_at: string | null;
   created_at: string;
+  template_id?: string | null;
+  attachment_url?: string | null;
+  attachment_kind?: 'image' | 'document' | 'video' | null;
+  attachment_filename?: string | null;
+  campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
+  event_meta?: Record<string, any>;
 }
 
 /**
