@@ -51,13 +51,16 @@ export interface GenerateOnceOptions {
   temperature?: number;
   maxTokens?: number;
   responseFormat?: "text" | "json";
+  tools?: any[];               // OpenAI-style tool definitions (function calling)
+  toolChoice?: any;            // optional forced tool choice
   supabase?: SupabaseClient;
   context?: Record<string, unknown>; // logged for debugging
 }
 
 export interface GenerateOnceResult {
   content: string;
-  json?: any;                   // parsed JSON when responseFormat='json'
+  json?: any;                   // parsed JSON when responseFormat='json' OR tool args
+  toolCallArgs?: any;           // parsed first tool_call.function.arguments
   provider: string;
   model: string;
   fallback_used: boolean;
