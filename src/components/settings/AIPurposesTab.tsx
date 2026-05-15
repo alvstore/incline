@@ -14,8 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Pencil, FlaskConical, Info, Zap, RotateCcw, AlertTriangle } from "lucide-react";
-import { PROVIDER_DEFAULTS, PURPOSE_DEFAULTS, normalizeModelForProvider } from "@/lib/ai/providerCatalog";
+import { Pencil, FlaskConical, Info, Zap, RotateCcw, AlertTriangle, Sparkles, Leaf } from "lucide-react";
+import { PROVIDER_DEFAULTS, PURPOSE_DEFAULTS, normalizeModelForProvider, isCheapModel, cheapestModelFor } from "@/lib/ai/providerCatalog";
 
 interface PurposeRow {
   id: string;
