@@ -239,42 +239,33 @@ serve(async (req) => {
 
     console.log(`Generating ${type} plan for member:`, memberInfo.name, `with ${availableMeals.length} catalog meals, ${availableEquipment.length} equipment items, prevPlan=${!!previousPlanContext}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
+    let content: string | undefined;
+    try {
+      const r = await generateOnce({
+        purpose: "fitness_plan",
+        branchId: memberInfo?.branch_id ?? null,
+        userMessage: userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt,
+        systemOverride: systemPrompt,
+        responseFormat: "json",
+        supabase,
+      });
+      content = r.content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "AI gateway error";
+      if (/429|rate/i.test(msg)) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (/402|credits/i.test(msg)) {
         return new Response(
           JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw err;
     }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
       throw new Error("No content in AI response");
