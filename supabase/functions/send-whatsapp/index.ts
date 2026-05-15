@@ -1,3 +1,4 @@
+// v2.6.0 — native video message_type (server-uploads MP4 to Meta with video/mp4).
 // v2.5.0 — harden IN phone normalization for Meta digits-only E.164 payloads.
 // v2.4.0 — document/image media is fetched server-side and uploaded to Meta first;
 //           this avoids signed storage URLs being re-fetched/rewritten by WhatsApp.
@@ -208,7 +209,7 @@ serve(async (req) => {
     };
 
     let uploadedMediaId: string | null = null;
-    if ((message_type === "image" || message_type === "document") && media_url) {
+    if ((message_type === "image" || message_type === "document" || message_type === "video") && media_url) {
       try {
         uploadedMediaId = await uploadMediaToMeta({
           phoneNumberId,
@@ -216,7 +217,10 @@ serve(async (req) => {
           appSecret,
           proof,
           mediaUrl: media_url,
-          fallbackType: message_type === "image" ? "image/jpeg" : "application/pdf",
+          fallbackType:
+            message_type === "image" ? "image/jpeg" :
+            message_type === "video" ? "video/mp4" :
+            "application/pdf",
         });
       } catch (mediaErr) {
         const errMsg = mediaErr instanceof Error ? mediaErr.message : "Media upload failed";
@@ -233,6 +237,12 @@ serve(async (req) => {
     if (message_type === "image") {
       metaPayload.type = "image";
       metaPayload.image = {
+        ...(uploadedMediaId ? { id: uploadedMediaId } : { link: media_url }),
+        ...(caption ? { caption } : {}),
+      };
+    } else if (message_type === "video") {
+      metaPayload.type = "video";
+      metaPayload.video = {
         ...(uploadedMediaId ? { id: uploadedMediaId } : { link: media_url }),
         ...(caption ? { caption } : {}),
       };

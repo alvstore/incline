@@ -72,7 +72,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
   });
 
   // Resolve audience size + sample for ALL kinds via the SQL resolver
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['campaign-audience-v2', branchId, filter],
     queryFn: async () => {
       // Members fast path keeps existing behavior so member_ids still flow through
@@ -98,6 +98,7 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
     },
     enabled: !!branchId,
     staleTime: 5_000,
+    retry: false,
   });
 
   // Pass member ids to wizard (only meaningful for 'members' kind; non-members use the resolver path)
@@ -307,6 +308,10 @@ export function AudienceBuilder({ branchId, value, onChange, onResolved, channel
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Counting…
               </div>
+            ) : error ? (
+              <p className="text-sm font-semibold text-red-600">
+                Audience query failed — {(error as Error).message}
+              </p>
             ) : (
               <p className="text-2xl font-bold text-foreground">
                 {data?.recipients ?? 0} <span className="text-sm font-normal text-muted-foreground">recipients</span>

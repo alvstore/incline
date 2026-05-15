@@ -1,100 +1,81 @@
-## Diagnosis (root cause of "all models showing google")
+## What's broken
 
-I queried `ai_provider_configs`:
+Two independent bugs in the Marketing & Campaigns wizard for "WAIT IS OVER":
 
+### Bug 1 — Audience size always shows 0 (Leads / Mixed)
+The Postgres RPC `resolve_campaign_audience(branch_id, filter)` raises:
 ```
-scope          | provider    | default_model                | active | default
-all            | google      | gemini-flash-latest          | t      | t
-all            | lovable     | google/gemini-2.5-flash      | f      | f
-fitness_plans  | openrouter  | inclusionai/ring-2.6-1t:free | t      | f   ← NOT default
+ERROR: operator does not exist: lead_status = text
+WHERE l.branch_id = p_branch_id
+  AND (cardinality(v_lead_status)=0 OR l.status = ANY(v_lead_status))
 ```
+`leads.status` is enum `lead_status`; the filter array is built as `text[]`. Without a cast the RPC errors for **Leads, Mixed, and any audience that touches lead_status**. `AudienceBuilder` swallows the error in TanStack Query, so the live size badge stays at "0 recipients" even though there are 34 leads in the branch. Same RPC is called by `send-broadcast` resolver path → 0 recipients sent → campaign "delivers" to nobody.
 
-The OpenRouter row you set up for `fitness_plans` is **active but not marked default**. The dispatcher (`_shared/ai-dispatcher.ts::resolveProvider`) requires `is_active=true AND is_default=true` for the scope, so it falls back to the `all` scope (google) — which is why every Purpose card and the Edit drawer show Google models. The architecture is correct; the row is just missing the default flag and the UI doesn't surface this clearly.
+**Fix:** migration to redefine `resolve_campaign_audience` with `l.status::text = ANY(v_lead_status)` (and the same cast for any other enum compared against the JSONB string arrays — `member_status`, `contact_segment_id`, etc., audited in the migration). Bump the function comment to `v2`.
 
-I also audited every AI edge function. Good news: all 9 AI functions (`ai-auto-reply`, `ai-dashboard-insights`, `ai-draft-campaign-message`, `ai-generate-whatsapp-templates`, `automation-brain`, `generate-fitness-plan`, `google-reviews-brain`, `lead-nurture-followup`, `score-leads`) already route through `_shared/ai-runtime.generateOnce → callAI → resolveProvider`. So once the provider rows are correct, every purpose will honor OpenRouter / Groq / etc. with Lovable as fallback only.
+Also surface RPC errors in `AudienceBuilder` so the live-size card shows a red "Audience query failed: …" instead of silently rendering 0.
 
-What's wrong is a mix of dead leftover code and weak UX.
+### Bug 2 — WhatsApp video attachment never delivers
+Audit of `CampaignWizard → send-broadcast → dispatch-communication → send-whatsapp → Meta`:
+
+1. **`send-whatsapp` has no `video` branch.** Today MP4 is uploaded to Meta with `Content-Type: application/pdf` (the document fallback) and Meta rejects it.
+2. **Dispatcher v1.6.0 force-collapses `kind=video` → `document`** in the freeform path.
+3. **Marketing freeform to leads is blocked outside the 24h window** (Meta error 131047). The wizard never asks for an approved Meta template, so even a perfect MP4 fails for cold leads.
+4. **Wizard accepts `.mov`/`.webm`** which Meta rejects, with no preview and no client-side mime check.
 
 ---
 
-## Plan
+## Fix plan
 
-### 1. Data fix (one-shot migration)
+### A. Database (single migration)
+Redefine `public.resolve_campaign_audience(uuid, jsonb)` so all enum comparisons cast to text:
+- `l.status::text = ANY(v_lead_status)`
+- `m.status::text = ANY(v_member_status)` (verify the column type, apply same cast if enum)
+- Re-grant `EXECUTE` to `authenticated`.
 
-Promote the only-active provider for a scope to `is_default=true` automatically, and add a partial unique index so the invariant holds going forward.
+### B. Edge functions
 
-```sql
--- Promote scopes where exactly one active provider exists but none is default
-UPDATE ai_provider_configs a SET is_default = true
-WHERE is_active = true AND is_default = false
-  AND NOT EXISTS (SELECT 1 FROM ai_provider_configs b
-                  WHERE b.scope = a.scope AND b.is_active AND b.is_default);
+1. **`send-whatsapp/index.ts` → v2.5.0**
+   - Add `message_type === 'video'` branch with `metaPayload.video = { link | id, caption? }`.
+   - Extend the Meta upload pre-step to accept `video`, `fallbackType: 'video/mp4'`.
 
--- Enforce: at most one default per scope
-CREATE UNIQUE INDEX IF NOT EXISTS ai_provider_configs_default_per_scope
-  ON ai_provider_configs (scope) WHERE is_default = true;
-```
+2. **`dispatch-communication/index.ts` → v1.7.0**
+   - Stop collapsing video to document in the freeform branch:
+     `kind = rawKind === 'image' ? 'image' : rawKind === 'video' ? 'video' : 'document'`
+   - For video: pass `media_mime_type: 'video/mp4'`, omit filename.
+   - Native template-header path is already video-aware, leave untouched.
 
-After this, `fitness_plans` resolves to OpenRouter `inclusionai/ring-2.6-1t:free`, and the Purposes editor for *Fitness Plan Generator* will show OpenRouter's model list.
+3. **`send-broadcast/index.ts`** — version bump only (`v3.4.0`).
 
-### 2. Providers tab UX (`AIProvidersSettings.tsx`)
+Deploy: `send-whatsapp`, `dispatch-communication`, `send-broadcast`.
 
-- Add an inline **"Set as default for this scope"** button on every active row that isn't already default — one click, no drawer.
-- Show a red **"Active but not default — won't be used"** warning chip on those rows.
-- When saving a provider config with `is_active=true` and no other default exists for the scope, auto-set `is_default=true`.
-- When marking a row default, atomically demote any other default row for the same scope (single RPC `set_default_ai_provider(scope, id)` to avoid the unique-index race).
+### C. Wizard UX (`src/components/campaigns/CampaignWizard.tsx` + `AudienceBuilder.tsx`)
 
-### 3. Purposes tab UX (`AIPurposesTab.tsx`)
+- `AudienceBuilder`: render RPC error inline (red card) instead of falling back to 0.
+- Step 3 (Message / Creative):
+  - Inline notice when `channel === 'whatsapp'` + audience contains leads/contacts: "Cold WhatsApp marketing requires an approved Meta template — pick one below or change audience."
+  - Optional Meta template picker (filtered to `header_type IN ('image','video','document','none')`); selected `template_id` is forwarded to `sendCampaignNow` (already plumbed).
+  - File picker: enforce `file.type === 'video/mp4'` (reject `.mov`/`.webm` with toast), keep 16 MB cap, show "WhatsApp limit: 16 MB · MP4 / H.264 / AAC".
+  - Show `<video controls>` thumbnail preview after upload.
+  - Surface dispatcher error verbatim in the result toast.
 
-- At the top of each purpose card, badge the **resolved scope source** (`scope: fitness_plans` vs `scope: all (inherited)`) so it's obvious whether the Providers tab needs work.
-- In the Edit drawer, replace the static amber banner with an **inline "Change provider" link** that opens the Providers tab pre-filtered to that scope — eliminates the two-tab dance.
-- Add a **"Use cheapest available model"** quick-pick button per purpose; reads from `PROVIDER_DEFAULTS[provider].models` filtered to entries containing `:free`, `lite`, `nano`, `mini`, or `flash` and picks the first.
-- Test toast: when `fallback_used=true`, also show the underlying error (currently just says "fallback to Lovable").
-
-### 4. Cost reduction defaults
-
-In `src/lib/ai/providerCatalog.ts`, lower `PURPOSE_DEFAULTS.max_tokens` for chatty purposes that don't need long output:
-- `whatsapp_reply` 600 → 350, `lead_nurture` 400 → 250, `review_reply` 400 → 250, `automation_rule` 400 → 200, `dashboard_insight` 1200 → 800.
-- Backfill the same values into `ai_purposes` rows where the user hasn't customized them (only update where current value matches the old default).
-
-Also add a `tier` field (`free | cheap | premium`) to each entry in `PROVIDER_DEFAULTS[].models` so the picker can render a tiny green "FREE" badge next to OpenRouter `:free`, Groq, Together free Llama, etc., nudging selection toward zero-cost tiers.
-
-### 5. Dead-code cleanup in edge functions
-
-These functions all delegate to `ai-runtime`/dispatcher but still carry top-level `Deno.env.get("LOVABLE_API_KEY")` reads (and in two cases throw if missing) — that's misleading: the key isn't used in the call path anymore, and it makes it look like the function is hard-wired to Lovable.
-
-- `ai-dashboard-insights/index.ts` — remove lines 16–17
-- `ai-draft-campaign-message/index.ts` — remove lines 34–35
-- `ai-generate-whatsapp-templates/index.ts` — remove the unused `apiKey` block
-- `automation-brain/index.ts` — drop the `LOVABLE_API_KEY` const and the `&& LOVABLE_API_KEY` guard (use `rule.use_ai` only)
-- `generate-fitness-plan/index.ts` — remove lines 118–121
-- `google-reviews-brain/index.ts` — remove unused `LOVABLE_API_KEY` constant
-- `lead-nurture-followup/index.ts` — remove unused constant + `LOVABLE_API_KEY &&` guard
-- `score-leads/index.ts` — remove the throw at lines 18–19
-- `process-email-queue/index.ts` — only AI usage is the welcome-email helper; verify whether it should also route through dispatcher (separate decision).
-
-### 6. Test functions — keep all three, document scope
-
-Not duplicates after audit; each has one unique caller:
-- `ai-test-purpose` ← Purposes tab "Test" button (pings resolved provider for a purpose)
-- `test-ai-provider` ← Providers tab "Test connection" (pings a specific provider config)
-- `test-ai-tool` ← Agent Control Center (executes a single AI tool)
-
-I'll add a one-line header comment to each clarifying its role and confirm their import graphs are minimal. No deletions.
-
-### 7. Edge function dependency audit (lightweight)
-
-Quick sweep using `rg` to confirm no edge function still pulls a hard-coded provider URL outside the dispatcher (other than the three test functions, which legitimately do). Already confirmed clean for the 9 production AI functions; just ship as a note in the commit.
+### D. QA
+1. Open wizard → pick Leads → live size shows 34, not 0.
+2. Send "WAIT IS OVER" MP4 to a member who messaged us in last 24h → freeform video arrives.
+3. Same campaign to cold leads with no template → wizard blocks send with clear reason.
+4. Same campaign with approved video-header template → native template video arrives, no 24h restriction.
+5. Upload 20 MB MP4 → blocked client-side. Upload `.mov` → blocked client-side.
 
 ---
 
 ## Files touched
 
-- migration: promote single-active-to-default + unique partial index + `set_default_ai_provider` RPC + `ai_purposes` token backfill
-- `src/components/settings/AIProvidersSettings.tsx` — inline "Set as default", warning chip, auto-default on save
-- `src/components/settings/AIPurposesTab.tsx` — inheritance badge, "Change provider" link, cheapest-model button, richer fallback toast
-- `src/lib/ai/providerCatalog.ts` — lower `PURPOSE_DEFAULTS`, add `tier` per model
-- 8 edge functions listed above — strip dead `LOVABLE_API_KEY` reads, bump version comments
-- 3 test edge functions — header comment only
+- **Migration**: redefine `resolve_campaign_audience` with enum→text casts.
+- `supabase/functions/send-whatsapp/index.ts` (add video branch + Meta upload)
+- `supabase/functions/dispatch-communication/index.ts` (stop downgrading video)
+- `supabase/functions/send-broadcast/index.ts` (version comment)
+- `src/components/campaigns/AudienceBuilder.tsx` (surface RPC error)
+- `src/components/campaigns/CampaignWizard.tsx` (template picker, mime/preview, error toast)
+- `src/services/campaignService.ts` (verify `template_id` is forwarded; tiny patch if not)
 
-No schema changes beyond `ai_provider_configs` index and the RPC; no breaking changes to dispatcher signature.
+No schema change beyond the function body.
