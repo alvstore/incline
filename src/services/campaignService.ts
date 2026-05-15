@@ -26,15 +26,27 @@ export interface AudienceFilter {
   status?: 'active' | 'lead' | 'expired' | 'all';
   last_attendance_before?: string | null;
   last_attendance_after?: string | null;
+  // csv import (one-shot)
+  csv_recipients?: Array<{ name?: string; phone: string; email?: string }>;
 }
 
 export interface ResolvedRecipient {
-  source_type: 'member' | 'lead' | 'contact';
-  source_ref_id: string;
+  source_type: 'member' | 'lead' | 'lost_lead' | 'contact' | 'csv';
+  source_ref_id: string | null;
   full_name: string | null;
   phone: string | null;
   email: string | null;
   contact_id: string | null;
+  in_window?: boolean;
+  source_label?: string;
+}
+
+export interface AudienceBreakdown {
+  total: number;
+  in_window: number;
+  cold: number;
+  by_source: Record<string, number>;
+  sample: Array<{ id: string; name: string; phone?: string | null; source?: string }>;
 }
 
 export async function resolveCampaignAudience(
