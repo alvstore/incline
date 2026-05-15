@@ -43,7 +43,10 @@ export function CampaignsPanel() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
+  const [reportCampaign, setReportCampaign] = useState<Campaign | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Campaign | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ['campaigns', branchId],
