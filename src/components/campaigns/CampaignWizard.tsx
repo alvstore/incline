@@ -84,20 +84,82 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
-  const { data: approvedTemplates = [] } = useQuery({
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+
+  // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
+  // is selectable, even if there's no local CRM `templates` row yet.
+  // We left-join `templates.id` by meta_template_name so the send pipeline still
+  // receives a valid `template_id` UUID.
+  const { data: approvedTemplates = [], refetch: refetchTemplates } = useQuery({
     queryKey: ['approved-whatsapp-templates', branchId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('templates')
-        .select('id, name, content, header_type, meta_template_status, meta_template_name')
-        .eq('type', 'whatsapp')
-        .eq('meta_template_status', 'APPROVED')
-        .order('name');
+      let q = supabase
+        .from('whatsapp_templates')
+        .select('id, name, language, category, components, branch_id, status')
+        .eq('status', 'APPROVED');
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data: meta, error } = await q.order('name');
       if (error) throw error;
-      return data || [];
+
+      const names = (meta || []).map((m: any) => m.name);
+      const { data: locals } = names.length
+        ? await supabase
+            .from('templates')
+            .select('id, meta_template_name, header_type, header_media_url')
+            .in('meta_template_name', names)
+        : { data: [] as any[] };
+
+      const byName = new Map<string, any>();
+      for (const l of (locals || [])) byName.set(l.meta_template_name, l);
+
+      return (meta || []).map((m: any) => {
+        const local = byName.get(m.name);
+        const bodyText = (m.components || []).find((c: any) => c?.type === 'BODY')?.text || '';
+        const headerComp = (m.components || []).find((c: any) => c?.type === 'HEADER');
+        const headerFmt = (headerComp?.format || 'NONE').toLowerCase();
+        return {
+          id: local?.id || null, // local templates.id (UUID) for the send pipeline
+          name: m.name,
+          language: m.language || 'en',
+          category: m.category,
+          header_type: local?.header_type || headerFmt,
+          content: bodyText,
+          meta_template_status: 'APPROVED' as const,
+          meta_template_name: m.name,
+        };
+      });
     },
     enabled: open && channel === 'whatsapp',
   });
+
+  // Realtime: any change in whatsapp_templates / templates re-fetches the picker.
+  useEffect(() => {
+    if (!open || channel !== 'whatsapp') return;
+    const ch = supabase
+      .channel('campaign-wizard-templates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_templates' }, () => refetchTemplates())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'templates' }, () => refetchTemplates())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [open, channel, refetchTemplates]);
+
+  const handleSyncFromMeta = async () => {
+    if (!branchId) { toast.error('No branch available'); return; }
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
+        body: { action: 'list', branch_id: branchId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Synced ${data?.templates?.length || 0} templates from Meta`);
+      await refetchTemplates();
+    } catch (e: any) {
+      toast.error(e?.message || 'Sync failed');
+    } finally {
+      setSyncingTemplates(false);
+    }
+  };
 
   // Auto-prefill from a saved segment (set by Contact Book → Segments → Send) — skip when editing.
   useEffect(() => {
@@ -153,30 +215,61 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const handleSubmitMetaTemplate = async () => {
     if (channel !== 'whatsapp') return;
     if (!message.trim()) { toast.error('Draft a message first'); return; }
+
+    // Category by campaign type — Meta rejects mis-categorized templates.
+    const category =
+      campaignType === 'promotion' || campaignType === 'event' || campaignType === 'lead_reengagement'
+        ? 'MARKETING'
+        : 'UTILITY';
+
     setSubmittingMeta(true);
     try {
       const safeName = (name || `campaign_${Date.now()}`).toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 48);
+
+      // Create a local CRM row first so the Meta sync + send pipeline can resolve it.
+      const { data: localRow, error: localErr } = await supabase
+        .from('templates')
+        .insert({
+          branch_id: branchId,
+          type: 'whatsapp',
+          name: safeName,
+          content: message.trim(),
+          is_active: true,
+          header_type: attachment?.kind || 'none',
+          header_media_url: attachment?.url || null,
+        })
+        .select('id')
+        .single();
+      if (localErr) throw localErr;
+
       const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
         body: {
           action: 'create',
           branch_id: branchId,
           template_data: {
             name: safeName,
-            category: campaignType === 'promotion' || campaignType === 'event' ? 'MARKETING' : 'UTILITY',
+            category,
             language: 'en',
             body_text: message.trim(),
-            header_type: attachment?.kind === 'image' ? 'image' : attachment?.kind === 'video' ? 'video' : 'none',
-            header_sample_url: attachment?.kind && attachment.kind !== 'document' ? attachment.url : undefined,
+            local_template_id: localRow!.id,
+            header_type: attachment?.kind === 'image' ? 'image'
+              : attachment?.kind === 'video' ? 'video'
+              : attachment?.kind === 'document' ? 'document'
+              : 'none',
+            header_sample_url: attachment?.url || undefined,
           },
         },
       });
       if (error) throw error;
       const r = data as any;
       if (r?.success === false) {
-        toast.error(r?.error || 'Meta rejected the template');
+        const detail = r?.meta_error?.user_msg || r?.meta_error?.message || r?.error || 'Meta rejected the template';
+        toast.error(`Meta rejected: ${detail}`, { duration: 9000 });
         return;
       }
       toast.success(`Submitted to Meta as "${r?.name}" — status: ${r?.status || 'PENDING'}`);
+      qc.invalidateQueries({ queryKey: ['approved-whatsapp-templates'] });
+      qc.invalidateQueries({ queryKey: ['communication-templates'] });
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit to Meta');
     } finally { setSubmittingMeta(false); }
@@ -249,7 +342,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const totalCount = breakdown?.total ?? resolvedMemberIds.length;
   const isCsv = filter.audience_kind === 'csv_import';
   const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
-  const templatePicked = useApprovedTemplate && !!selectedTemplateId;
+  const templatePicked = useApprovedTemplate && !!selectedTemplateId && !selectedTemplateId.startsWith('__meta__:');
   const blockedByTemplate = requiresTemplate && !templatePicked;
 
   const handleSubmit = async () => {
@@ -289,7 +382,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           venue: eventVenue.trim() || null,
           rsvp_url: eventRsvpUrl.trim() || null,
         } : {},
-        template_id: channel === 'whatsapp' && useApprovedTemplate ? selectedTemplateId : null,
+        template_id: channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') ? selectedTemplateId : null,
         status: (
           trigger === 'send_now' ? 'sending' :
           trigger === 'scheduled' ? 'scheduled' : 'draft'
@@ -459,20 +552,34 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       <p className="text-[11px] text-emerald-700">Required for cold leads / contacts outside the 24h messaging window.</p>
                     </div>
                   </div>
-                  <Switch
-                    checked={useApprovedTemplate}
-                    onCheckedChange={(v) => {
-                      setUseApprovedTemplate(v);
-                      if (!v) setSelectedTemplateId(null);
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncFromMeta}
+                      disabled={syncingTemplates}
+                      className="h-7 px-2 text-[11px]"
+                      title="Refresh approved template list from Meta"
+                    >
+                      {syncingTemplates ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Sync from Meta'}
+                    </Button>
+                    <Switch
+                      checked={useApprovedTemplate}
+                      onCheckedChange={(v) => {
+                        setUseApprovedTemplate(v);
+                        if (!v) setSelectedTemplateId(null);
+                      }}
+                    />
+                  </div>
                 </div>
                 {useApprovedTemplate && (
                   <div className="space-y-2">
                     {approvedTemplates.length === 0 ? (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                        No APPROVED WhatsApp templates yet. Submit one in Settings → Communication Templates → WhatsApp, then return here.
-                      </p>
+                      <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 space-y-1">
+                        <p className="font-semibold">No approved Meta templates yet.</p>
+                        <p>Generate one in <strong>Settings → Communication Templates → AI Studio</strong>, or click <strong>Sync from Meta</strong> above to pull the latest approval list.</p>
+                      </div>
                     ) : (
                       <Select
                         value={selectedTemplateId || ''}
@@ -488,14 +595,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                         <SelectTrigger className="rounded-xl bg-white"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
                         <SelectContent>
                           {approvedTemplates.map((t: any) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name} {t.header_type && t.header_type !== 'none' ? `· ${t.header_type} header` : ''}
+                            <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
+                              {t.name}
+                              {t.category ? ` · ${t.category.toLowerCase()}` : ''}
+                              {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
+                              {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
-                    {selectedTemplateId && (
+                    {selectedTemplateId && selectedTemplateId.startsWith('__meta__:') && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        This Meta template has no local CRM row yet. Click <strong>Sync from Meta</strong> once to materialize it before sending.
+                      </p>
+                    )}
+                    {selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') && (
                       <p className="text-[11px] text-emerald-800">
                         Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
                       </p>

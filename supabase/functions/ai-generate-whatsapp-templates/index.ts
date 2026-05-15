@@ -1,4 +1,4 @@
-// v3.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='template_generate').
+// v3.1.0 — Deterministic category mapping for marketing/utility/auth events.
 // v2.3.0 — Document events now PREFER header_type='document' with a sample PDF URL.
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -35,7 +35,11 @@ const SYSTEM_PROMPTS: Record<Channel, string> = {
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
 - Each body ≤ 850 chars; named variables in {{snake_case}}; never duplicate the existing list.
-- Categories: UTILITY (transactional/lifecycle), MARKETING (promo/birthday/referral/offer), AUTHENTICATION (OTPs only).
+- Categories — pick STRICTLY by event semantics (this is what Meta will reject if wrong):
+  • MARKETING — promo / offer / discount / event invite / birthday wish / referral reward / win_back / re_engagement / wait_is_over / launch / announcement / newsletter.
+  • UTILITY — receipts, invoices, booking confirmations, reminders, expiry warnings, document deliveries (diet/workout/scan PDF), lifecycle status changes.
+  • AUTHENTICATION — OTPs only.
+  Pattern hints in the event name: contains "offer/promo/promotion/event/birthday/referral/win_back/re_engagement/wait_is_over/launch/announcement/newsletter" → MARKETING. Contains "otp/verification_code" → AUTHENTICATION. Everything else → UTILITY.
 - No emojis on UTILITY; max 1 tasteful emoji on MARKETING; no URLs / phone numbers in body.
 - Tone: warm, concise, Indian-English, premium fitness.
 - Names: lower_snake_case ≤ 50 chars, descriptive.
@@ -195,6 +199,21 @@ Deno.serve(async (req) => {
         if (typeof t.body_html === 'string' && !t.body_html.includes('{{document_link}}')) {
           t.body_html = `${t.body_html}\n<p style="margin-top:16px"><a href="{{document_link}}" style="background:#6d28d9;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Open Document</a></p>`;
         }
+      }
+    }
+
+    // Server-side category guard — Meta rejects mis-categorized templates.
+    // Map by event-name pattern regardless of what the model returned.
+    const MARKETING_RX = /(offer|promo|promotion|event|birthday|referral|win[_-]?back|re[_-]?engagement|wait[_-]?is[_-]?over|launch|announcement|newsletter|gift|festive|sale|deal)/i;
+    const AUTH_RX = /(otp|verification[_-]?code|2fa)/i;
+    for (const t of allTemplates) {
+      const ev = String(t.event || t.name || '');
+      if (AUTH_RX.test(ev)) t.category = 'AUTHENTICATION';
+      else if (MARKETING_RX.test(ev)) t.category = 'MARKETING';
+      else if (!t.category || !['UTILITY','MARKETING','AUTHENTICATION'].includes(String(t.category).toUpperCase())) {
+        t.category = 'UTILITY';
+      } else {
+        t.category = String(t.category).toUpperCase();
       }
     }
 
