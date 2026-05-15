@@ -760,7 +760,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium capitalize">{campaignType.replace('_', ' ')}</span></div>
                 <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{name || '—'}</span></div>
                 <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{channel.toUpperCase()}</span></div>
-                <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{resolvedMemberIds.length}</span></div>
+                <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
+                {requiresTemplate && (
+                  <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-emerald-700' : 'text-amber-700'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
+                )}
                 {isEvent && eventName && <div><span className="text-muted-foreground">Event:</span> <span className="font-medium">{eventName}{eventDate ? ` · ${eventDate}` : ''}</span></div>}
               </div>
             </div>
