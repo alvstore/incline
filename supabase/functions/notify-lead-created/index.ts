@@ -1,4 +1,4 @@
-// v1.2.0 — Atomic claim against duplicate sends + per-admin opt-in (lead_notification_admin_prefs).
+// v1.3.0 — Capture Meta wamid (provider_message_id) + error_message + raw payload for every WhatsApp send so silent drops outside the 24h customer-service window are auditable from the Live Feed.
 // Called after lead creation from any source (manual, capture-lead, webhook-lead-capture)
 // Reads lead_notification_rules + integration_settings to send SMS/WhatsApp to lead + team
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -119,14 +119,14 @@ Deno.serve(async (req) => {
       const msg = replacePlaceholders(rules.lead_welcome_sms);
       const r = await sendSMS(smsIntegration, lead.phone, msg);
       results.push({ channel: "sms", recipient: lead.phone, ...r });
-      await logCommunication(supabase, branch_id, "sms", lead.phone, msg, r.success ? "sent" : "failed");
+      await logCommunication(supabase, branch_id, "sms", lead.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
     }
 
     if (rules.whatsapp_to_lead && lead.phone && whatsappIntegration) {
       const msg = replacePlaceholders(rules.lead_welcome_whatsapp);
       const r = await sendWhatsApp(whatsappIntegration, lead.phone, msg);
       results.push({ channel: "whatsapp", recipient: lead.phone, ...r });
-      await logCommunication(supabase, branch_id, "whatsapp", lead.phone, msg, r.success ? "sent" : "failed");
+      await logCommunication(supabase, branch_id, "whatsapp", lead.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
     }
 
     // 7. Send to admins (owners + admins) — honour per-admin opt-out prefs
@@ -157,13 +157,13 @@ Deno.serve(async (req) => {
             const msg = replacePlaceholders(rules.team_alert_sms);
             const r = await sendSMS(smsIntegration, profile.phone, msg);
             results.push({ channel: "sms", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed");
+            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
           }
           if (rules.whatsapp_to_admins && pref.whatsapp_enabled && profile.phone && whatsappIntegration) {
             const msg = replacePlaceholders(rules.team_alert_whatsapp);
             const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
             results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed");
+            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
           }
         }
       }
@@ -189,13 +189,13 @@ Deno.serve(async (req) => {
             const msg = replacePlaceholders(rules.team_alert_sms);
             const r = await sendSMS(smsIntegration, profile.phone, msg);
             results.push({ channel: "sms", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed");
+            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
           }
           if (rules.whatsapp_to_managers && profile.phone && whatsappIntegration) {
             const msg = replacePlaceholders(rules.team_alert_whatsapp);
             const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
             results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed");
+            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
           }
         }
       }
