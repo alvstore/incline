@@ -521,20 +521,34 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       <p className="text-[11px] text-emerald-700">Required for cold leads / contacts outside the 24h messaging window.</p>
                     </div>
                   </div>
-                  <Switch
-                    checked={useApprovedTemplate}
-                    onCheckedChange={(v) => {
-                      setUseApprovedTemplate(v);
-                      if (!v) setSelectedTemplateId(null);
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncFromMeta}
+                      disabled={syncingTemplates}
+                      className="h-7 px-2 text-[11px]"
+                      title="Refresh approved template list from Meta"
+                    >
+                      {syncingTemplates ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Sync from Meta'}
+                    </Button>
+                    <Switch
+                      checked={useApprovedTemplate}
+                      onCheckedChange={(v) => {
+                        setUseApprovedTemplate(v);
+                        if (!v) setSelectedTemplateId(null);
+                      }}
+                    />
+                  </div>
                 </div>
                 {useApprovedTemplate && (
                   <div className="space-y-2">
                     {approvedTemplates.length === 0 ? (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                        No APPROVED WhatsApp templates yet. Submit one in Settings → Communication Templates → WhatsApp, then return here.
-                      </p>
+                      <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 space-y-1">
+                        <p className="font-semibold">No approved Meta templates yet.</p>
+                        <p>Generate one in <strong>Settings → Communication Templates → AI Studio</strong>, or click <strong>Sync from Meta</strong> above to pull the latest approval list.</p>
+                      </div>
                     ) : (
                       <Select
                         value={selectedTemplateId || ''}
@@ -550,14 +564,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                         <SelectTrigger className="rounded-xl bg-white"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
                         <SelectContent>
                           {approvedTemplates.map((t: any) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name} {t.header_type && t.header_type !== 'none' ? `· ${t.header_type} header` : ''}
+                            <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
+                              {t.name}
+                              {t.category ? ` · ${t.category.toLowerCase()}` : ''}
+                              {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
+                              {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
-                    {selectedTemplateId && (
+                    {selectedTemplateId && selectedTemplateId.startsWith('__meta__:') && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        This Meta template has no local CRM row yet. Click <strong>Sync from Meta</strong> once to materialize it before sending.
+                      </p>
+                    )}
+                    {selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') && (
                       <p className="text-[11px] text-emerald-800">
                         Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
                       </p>
