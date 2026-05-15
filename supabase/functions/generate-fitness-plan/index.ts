@@ -1,6 +1,7 @@
-// generate-fitness-plan v1.3.0 — adds daysPerWeek + rotationIntervalDays
+// generate-fitness-plan v2.0.0 — SSOT: routes through ai-runtime (purpose='fitness_plan')
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
