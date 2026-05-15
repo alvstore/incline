@@ -53,15 +53,74 @@ export async function resolveCampaignAudience(
   branchId: string,
   filter: AudienceFilter
 ): Promise<ResolvedRecipient[]> {
-  const { data, error } = await supabase.rpc('resolve_campaign_audience' as any, {
+  // CSV one-shot bypasses the DB resolver.
+  if (filter.audience_kind === 'csv_import') {
+    return (filter.csv_recipients || [])
+      .filter((r) => !!r.phone)
+      .map((r, i) => ({
+        source_type: 'csv' as const,
+        source_ref_id: null,
+        full_name: r.name || null,
+        phone: r.phone,
+        email: r.email || null,
+        contact_id: null,
+        in_window: false, // CSV uploads are always treated as cold
+        source_label: 'CSV import',
+      }));
+  }
+  const { data, error } = await supabase.rpc('resolve_campaign_audience_v2' as any, {
     p_branch_id: branchId,
     p_filter: filter as any,
+    p_window_hours: 24,
   });
-  if (error) throw error;
+  if (error) {
+    // Fallback to v1 resolver if v2 not yet deployed (defensive)
+    const v1 = await supabase.rpc('resolve_campaign_audience' as any, {
+      p_branch_id: branchId,
+      p_filter: filter as any,
+    });
+    if (v1.error) throw v1.error;
+    return (v1.data as any) || [];
+  }
   return (data as any) || [];
 }
 
-export interface Campaign {
+/**
+ * Aggregate breakdown for the wizard live preview.
+ * Returns total / in-window / cold / by-source counts + 5-row sample.
+ */
+export async function getAudienceBreakdown(
+  branchId: string,
+  filter: AudienceFilter,
+): Promise<AudienceBreakdown> {
+  const recipients = await resolveCampaignAudience(branchId, filter);
+  const seen = new Set<string>();
+  const dedup: ResolvedRecipient[] = [];
+  for (const r of recipients) {
+    const key = (r.phone || '').replace(/\s+/g, '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dedup.push(r);
+  }
+  const by_source: Record<string, number> = {};
+  let in_window = 0;
+  for (const r of dedup) {
+    by_source[r.source_type] = (by_source[r.source_type] || 0) + 1;
+    if (r.in_window) in_window++;
+  }
+  return {
+    total: dedup.length,
+    in_window,
+    cold: dedup.length - in_window,
+    by_source,
+    sample: dedup.slice(0, 5).map((r) => ({
+      id: r.source_ref_id || r.phone || '',
+      name: r.full_name || 'Unknown',
+      phone: r.phone,
+      source: r.source_label || r.source_type,
+    })),
+  };
+}
   id: string;
   branch_id: string;
   name: string;
