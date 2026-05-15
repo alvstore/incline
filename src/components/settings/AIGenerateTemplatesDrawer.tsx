@@ -325,7 +325,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 All proposals saved.
               </div>
             )}
-            {proposals.map((p, i) => (
+            {proposals.map((p, i) => {
+              const evIsMarketing = /(offer|promo|promotion|event|birthday|referral|win[_-]?back|re[_-]?engagement|wait[_-]?is[_-]?over|launch|announcement|newsletter|gift|festive|sale|deal)/i.test(p.event || p.name);
+              const categoryMismatch = evIsMarketing && p.category !== 'MARKETING';
+              return (
               <div key={`${p.event}-${i}`} className="rounded-xl border p-3 space-y-2 bg-card">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -335,19 +338,68 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                       onChange={(e) => updateProposal(i, { name: e.target.value })}
                       className="h-8 w-56 font-mono text-xs"
                     />
-                    <Badge variant="outline" className="text-[10px]">{p.category}</Badge>
                     {p.dlt_category && <Badge variant="outline" className="text-[10px]">{p.dlt_category}</Badge>}
-                    {p.header_type && p.header_type !== 'none' && (
-                      <Badge variant="outline" className="text-[10px] bg-violet-500/10 text-violet-600">
-                        {p.header_type} header
-                      </Badge>
-                    )}
                   </div>
                   <Button size="sm" onClick={() => submitOne(p)} disabled={submitting === p.name}>
                     {submitting === p.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Event: {p.event}</p>
+
+                {channel === 'whatsapp' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</Label>
+                      <select
+                        value={p.category}
+                        onChange={(e) => updateProposal(i, { category: e.target.value })}
+                        className={`mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs ${categoryMismatch ? 'border-amber-500' : ''}`}
+                      >
+                        <option value="MARKETING">MARKETING</option>
+                        <option value="UTILITY">UTILITY</option>
+                        <option value="AUTHENTICATION">AUTHENTICATION</option>
+                      </select>
+                      {categoryMismatch && (
+                        <p className="text-[10px] text-amber-600 mt-1">Event looks promotional — Meta usually requires MARKETING.</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Header type</Label>
+                      <select
+                        value={p.header_type || 'none'}
+                        onChange={(e) => updateProposal(i, { header_type: e.target.value as any })}
+                        className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs"
+                      >
+                        <option value="none">None (text only)</option>
+                        <option value="image">Image (JPG/PNG)</option>
+                        <option value="video">Video (MP4)</option>
+                        <option value="document">Document (PDF)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {channel === 'whatsapp' && p.header_type && p.header_type !== 'none' && (
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Sample {p.header_type} URL (used by Meta to approve the template)
+                    </Label>
+                    <Input
+                      value={p.header_sample_url || ''}
+                      onChange={(e) => updateProposal(i, { header_sample_url: e.target.value })}
+                      placeholder={
+                        p.header_type === 'video' ? 'https://example.com/sample.mp4' :
+                        p.header_type === 'image' ? 'https://example.com/sample.jpg' :
+                        'https://example.com/sample.pdf'
+                      }
+                      className="h-8 text-xs font-mono mt-1"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Must be a publicly reachable URL. The platform uploads it once to Meta and stores the returned media handle.
+                    </p>
+                  </div>
+                )}
+
                 {channel === 'email' && (
                   <Input
                     value={p.subject || ''}
@@ -378,7 +430,8 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                   ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
