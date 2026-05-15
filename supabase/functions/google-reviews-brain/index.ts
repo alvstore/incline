@@ -485,12 +485,13 @@ async function classifyOne(inbound_id: string) {
   let reasoning = "Default heuristic — no AI key.";
   let draft = "";
   if (LOVABLE_API_KEY) {
+    // Use AI to classify + draft reply
     try {
-      const sys =
+      const sysOverride =
         "You are a gym customer-service AI helping owners triage Google reviews. " +
         "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
-        "Then draft a polite, professional reply (≤500 chars). " +
-        "Use the 'classify_review' tool. Never accuse the reviewer of being a competitor.";
+        "Then draft a polite, professional reply (≤500 chars). Use the 'classify_review' tool. " +
+        "Never accuse the reviewer of being a competitor.";
       const userPrompt = JSON.stringify({
         branch_name: (row.branches as any)?.name ?? "our gym",
         rating: row.rating,
@@ -499,49 +500,35 @@ async function classifyOne(inbound_id: string) {
         match_type: match.match_type,
         match_evidence: match.evidence,
       });
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: sys },
-            { role: "user", content: userPrompt },
-          ],
-          tools: [{
-            type: "function",
-            function: {
-              name: "classify_review",
-              description: "Classify and draft reply.",
-              parameters: {
-                type: "object",
-                properties: {
-                  classification: { type: "string", enum: ["genuine", "unhappy_member", "suspected_fake", "spam"] },
-                  reasoning: { type: "string" },
-                  draft_reply: { type: "string" },
-                },
-                required: ["classification", "reasoning", "draft_reply"],
-                additionalProperties: false,
+      const r = await generateOnce({
+        purpose: "review_reply",
+        branchId: row.branch_id ?? null,
+        userMessage: userPrompt,
+        systemOverride: sysOverride,
+        tools: [{
+          type: "function",
+          function: {
+            name: "classify_review",
+            description: "Classify and draft reply.",
+            parameters: {
+              type: "object",
+              properties: {
+                classification: { type: "string", enum: ["genuine", "unhappy_member", "suspected_fake", "spam"] },
+                reasoning: { type: "string" },
+                draft_reply: { type: "string" },
               },
+              required: ["classification", "reasoning", "draft_reply"],
+              additionalProperties: false,
             },
-          }],
-          tool_choice: { type: "function", function: { name: "classify_review" } },
-        }),
+          },
+        }],
+        toolChoice: { type: "function", function: { name: "classify_review" } },
       });
-      if (resp.ok) {
-        const j = await resp.json();
-        const args = j.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-        if (args) {
-          const parsed = JSON.parse(args);
-          classification = parsed.classification ?? classification;
-          reasoning = parsed.reasoning ?? reasoning;
-          draft = parsed.draft_reply ?? "";
-        }
-      } else {
-        console.error("AI gateway error", resp.status, await resp.text());
+      const parsed = r.toolCallArgs;
+      if (parsed) {
+        classification = parsed.classification ?? classification;
+        reasoning = parsed.reasoning ?? reasoning;
+        draft = parsed.draft_reply ?? "";
       }
     } catch (e) {
       console.error("AI classify error", e);
