@@ -221,7 +221,13 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
           ? { recipients: await (await import('@/services/campaignService')).resolveCampaignAudience(branchId, filter) }
           : { memberIds: resolvedMemberIds };
         const result = await sendCampaignNow(campaign, audience);
-        toast.success(`Campaign sent — ${result.sent} delivered, ${result.failed} failed`);
+        if (result.failed > 0 && result.sent === 0) {
+          toast.error(`Campaign failed — 0 delivered, ${result.failed} failed${(result as any).first_error ? `: ${(result as any).first_error}` : ''}`);
+        } else if (result.failed > 0) {
+          toast.warning(`Campaign sent with errors — ${result.sent} delivered, ${result.failed} failed`);
+        } else {
+          toast.success(`Campaign sent — ${result.sent} delivered`);
+        }
       } else if (trigger === 'scheduled') {
         toast.success(`Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`);
       } else {
