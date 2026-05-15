@@ -136,7 +136,7 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
     const profile = profileByUser.get((m as any).user_id);
     const memberName = profile?.full_name ?? "there";
     let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline Fitness.`;
-    if (rule.use_ai && LOVABLE_API_KEY) {
+    if (rule.use_ai) {
       try {
         const r = await generateOnce({
           purpose: "automation_rule",
