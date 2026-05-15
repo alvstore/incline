@@ -1,3 +1,4 @@
+// v2.6.0 — native video message_type (server-uploads MP4 to Meta with video/mp4).
 // v2.5.0 — harden IN phone normalization for Meta digits-only E.164 payloads.
 // v2.4.0 — document/image media is fetched server-side and uploaded to Meta first;
 //           this avoids signed storage URLs being re-fetched/rewritten by WhatsApp.
