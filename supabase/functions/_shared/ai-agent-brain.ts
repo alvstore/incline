@@ -66,9 +66,13 @@ export async function runUnifiedAgent(
     return skip("no_api_key");
   }
 
-  // 1. Load org AI config
+  // 1. Load org AI config + purpose row (single source of truth)
   const orgConfig = await loadOrgConfig(supabase);
-  const aiConfig: OrgAiConfig = (orgConfig?.whatsapp_ai_config as any) || {};
+  const purposeRow = await loadAiPurpose(supabase, "whatsapp_reply", ctx.branchId);
+  const aiConfig: OrgAiConfig = mergePurposeIntoConfig(
+    (orgConfig?.whatsapp_ai_config as any) || {},
+    purposeRow,
+  );
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
