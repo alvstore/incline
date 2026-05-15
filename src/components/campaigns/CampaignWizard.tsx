@@ -221,6 +221,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setMessage(''); setSubject(''); setTrigger('send_now'); setScheduledAt('');
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
+    setUseApprovedTemplate(false); setSelectedTemplateId(null);
   };
 
   const close = () => { reset(); onOpenChange(false); };
