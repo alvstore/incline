@@ -782,7 +782,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :
