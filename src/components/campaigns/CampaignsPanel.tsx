@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle,
-  Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX,
+  Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX, Search, BarChart3,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -21,6 +22,7 @@ import {
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
+import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
 import { format, formatDistanceToNow } from 'date-fns';
 
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
