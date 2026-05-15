@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AudienceBuilder } from './AudienceBuilder';
 import {
   type AudienceFilter,
+  type AudienceBreakdown,
   type CampaignChannel,
   type CampaignTriggerType,
   type RecurrencePreset,
