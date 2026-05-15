@@ -215,30 +215,61 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const handleSubmitMetaTemplate = async () => {
     if (channel !== 'whatsapp') return;
     if (!message.trim()) { toast.error('Draft a message first'); return; }
+
+    // Category by campaign type — Meta rejects mis-categorized templates.
+    const category =
+      campaignType === 'promotion' || campaignType === 'event' || campaignType === 'lead_reengagement'
+        ? 'MARKETING'
+        : 'UTILITY';
+
     setSubmittingMeta(true);
     try {
       const safeName = (name || `campaign_${Date.now()}`).toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 48);
+
+      // Create a local CRM row first so the Meta sync + send pipeline can resolve it.
+      const { data: localRow, error: localErr } = await supabase
+        .from('templates')
+        .insert({
+          branch_id: branchId,
+          type: 'whatsapp',
+          name: safeName,
+          content: message.trim(),
+          is_active: true,
+          header_type: attachment?.kind || 'none',
+          header_media_url: attachment?.url || null,
+        })
+        .select('id')
+        .single();
+      if (localErr) throw localErr;
+
       const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
         body: {
           action: 'create',
           branch_id: branchId,
           template_data: {
             name: safeName,
-            category: campaignType === 'promotion' || campaignType === 'event' ? 'MARKETING' : 'UTILITY',
+            category,
             language: 'en',
             body_text: message.trim(),
-            header_type: attachment?.kind === 'image' ? 'image' : attachment?.kind === 'video' ? 'video' : 'none',
-            header_sample_url: attachment?.kind && attachment.kind !== 'document' ? attachment.url : undefined,
+            local_template_id: localRow!.id,
+            header_type: attachment?.kind === 'image' ? 'image'
+              : attachment?.kind === 'video' ? 'video'
+              : attachment?.kind === 'document' ? 'document'
+              : 'none',
+            header_sample_url: attachment?.url || undefined,
           },
         },
       });
       if (error) throw error;
       const r = data as any;
       if (r?.success === false) {
-        toast.error(r?.error || 'Meta rejected the template');
+        const detail = r?.meta_error?.user_msg || r?.meta_error?.message || r?.error || 'Meta rejected the template';
+        toast.error(`Meta rejected: ${detail}`, { duration: 9000 });
         return;
       }
       toast.success(`Submitted to Meta as "${r?.name}" — status: ${r?.status || 'PENDING'}`);
+      qc.invalidateQueries({ queryKey: ['approved-whatsapp-templates'] });
+      qc.invalidateQueries({ queryKey: ['communication-templates'] });
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit to Meta');
     } finally { setSubmittingMeta(false); }
