@@ -1,7 +1,7 @@
+// v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='campaign_draft').
 // v1.0.0 — AI campaign message drafter (WhatsApp / SMS / Email).
-// Used by the Campaign Wizard "Draft with AI" button. Returns a single
-// proposal: subject (email), preheader (email), body, body_html (email).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
