@@ -168,7 +168,10 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     temperature: opts.temperature ?? purposeRow?.temperature ?? undefined,
     max_tokens: opts.maxTokens ?? purposeRow?.max_tokens ?? undefined,
   };
-  if (responseFormat === "json") {
+  if (opts.tools?.length) {
+    callOpts.tools = opts.tools;
+    if (opts.toolChoice) callOpts.tool_choice = opts.toolChoice;
+  } else if (responseFormat === "json") {
     callOpts.response_format = { type: "json_object" };
   }
 
