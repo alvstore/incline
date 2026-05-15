@@ -422,14 +422,22 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
                   <Paperclip className="h-3.5 w-3.5" /> Flyer / Poster / Video (optional)
                 </Label>
                 {attachment ? (
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-muted/30">
-                    {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-emerald-500" /> :
-                     attachment.kind === 'video' ? <Film className="h-4 w-4 text-violet-500" /> :
-                     <FileText className="h-4 w-4 text-amber-500" />}
-                    <span className="text-sm flex-1 truncate">{attachment.filename}</span>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setAttachment(null)} aria-label="Remove">
-                      <X className="h-4 w-4" />
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-muted/30">
+                      {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-emerald-500" /> :
+                       attachment.kind === 'video' ? <Film className="h-4 w-4 text-violet-500" /> :
+                       <FileText className="h-4 w-4 text-amber-500" />}
+                      <span className="text-sm flex-1 truncate">{attachment.filename}</span>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setAttachment(null)} aria-label="Remove">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {attachment.kind === 'video' && (
+                      <video src={attachment.url} controls playsInline className="rounded-xl border w-full max-h-56 bg-black" />
+                    )}
+                    {attachment.kind === 'image' && (
+                      <img src={attachment.url} alt={attachment.filename} className="rounded-xl border w-full max-h-56 object-cover" />
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -441,7 +449,14 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        if (file.size > 16 * 1024 * 1024) { toast.error('Max 16MB'); return; }
+                        if (file.size > 16 * 1024 * 1024) { toast.error('Max 16MB (WhatsApp limit)'); return; }
+                        // WhatsApp Cloud API only reliably accepts MP4 (H.264/AAC).
+                        // Reject .mov / .webm / .mkv etc. before upload.
+                        if (file.type.startsWith('video/') && file.type !== 'video/mp4') {
+                          toast.error('WhatsApp accepts MP4 only — please convert to .mp4 (H.264 / AAC)');
+                          e.target.value = '';
+                          return;
+                        }
                         setIsUploading(true);
                         try {
                           const kind: 'image' | 'document' | 'video' = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document';
@@ -457,8 +472,13 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
                   </div>
                 )}
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  Image, PDF or short MP4 (≤16MB). Used for class/event flyers, promo posters, supplement deals.
+                  Image (JPG/PNG), PDF or MP4 video (H.264 / AAC, ≤16MB). WhatsApp limit: 16MB.
                 </p>
+                {channel === 'whatsapp' && attachment?.kind === 'video' && (filter.audience_kind === 'leads' || filter.audience_kind === 'mixed' || filter.audience_kind === 'contacts') && (
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                    <strong>Heads up:</strong> WhatsApp blocks freeform marketing video to leads/contacts who haven&apos;t messaged you in the last 24 hours (Meta error 131047). For cold outreach, use an approved Meta video-header template instead.
+                  </div>
+                )}
               </div>
             )}
           </div>
