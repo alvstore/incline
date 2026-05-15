@@ -235,6 +235,7 @@ export function CampaignsPanel() {
         />
       )}
       <CampaignDetailDrawer open={!!detailCampaign} onOpenChange={(o) => !o && setDetailCampaign(null)} campaign={detailCampaign} />
+      <CampaignReportDrawer open={!!reportCampaign} onOpenChange={(o) => !o && setReportCampaign(null)} campaign={reportCampaign} />
 
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent className="rounded-2xl">
