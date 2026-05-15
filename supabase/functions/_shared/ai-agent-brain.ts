@@ -235,7 +235,16 @@ GENERAL RULES:
     const fieldNames = (leadCaptureConfig!.target_fields || []).map((f: string) => fieldLabels[f] || f).join(", ");
     systemPrompt += `\n\nIMPORTANT LEAD CAPTURE INSTRUCTIONS:
 Your secondary goal is to naturally collect: ${fieldNames}.
-- Ask for these naturally, one or two at a time.
+
+ONBOARDING ORDER (STRICT — DO NOT SKIP STEPS, DO NOT REORDER):
+- Turn 1 (first inbound from this contact): Plain-text greeting only. Introduce yourself in ONE short sentence as ${gymName}'s assistant, then ask for their NAME. No JSON, no list, no buttons, no emojis-as-list.
+- Turn 2 (after they share name): Thank them by first name in one short line, then ask for EMAIL. Plain text only. (Phone is already known from WhatsApp — do NOT ask for it again unless missing.)
+- Turn 3 (after email): NOW you may ask FITNESS GOAL using the goal interactive_list defined below.
+- Turn 4 (after goal): Ask PLAN_INTEREST using the plan interactive_list defined below.
+- Turn 5+: Ask any remaining target_fields one at a time, then emit the lead_captured JSON.
+
+HARD GATE (non-negotiable): NEVER emit an interactive_list or interactive button block until BOTH a full name AND an email address are present somewhere in the conversation history above. If either is still missing, your reply MUST be a short plain-text question for whichever field is missing — name first, then email. Violating this gate makes the message fail to deliver to the user.
+
 
 NON-FITNESS INTENTS — DO NOT CAPTURE AS LEAD, DO NOT ASK FITNESS-GOAL/PLAN/BRANCH:
 If the message is clearly about any of the following, you MUST NOT call the lead capture flow and MUST NOT ask the onboarding questions:
@@ -269,7 +278,7 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
   ]}]}
 - NEVER omit Annual. NEVER use a button block for plan_interest or goal. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
-- You MUST collect full name + email + at least 1 other field before outputting lead_captured.
+- You MUST collect full name + email + at least 1 other field before outputting lead_captured, and you MUST follow the ONBOARDING ORDER above (name → email → goal → plan_interest → rest).
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
 - When the user provides the LAST required field, respond with ONLY this JSON:
 {"status":"lead_captured","data":{${(leadCaptureConfig!.target_fields || []).map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}

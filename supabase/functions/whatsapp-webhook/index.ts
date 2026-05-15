@@ -1,3 +1,4 @@
+// v6.0.1 — Hotfix: import computeAppSecretProof (was undefined → all AI replies crashed).
 // v6.0.0 — SSOT: routes through `runUnifiedAgent` from _shared/ai-agent-brain.ts.
 //          Deletes the 800-line duplicate brain (system prompt, tool loop,
 //          summarizer, lead-capture parsing) — all of that is now centralized
@@ -10,7 +11,7 @@
 // v5.0.0 — Transactional AI Agent: 25+ self-service tools, payments, IG/FB parity
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { META_API_BASE } from "../_shared/meta-config.ts";
+import { META_API_BASE, computeAppSecretProof } from "../_shared/meta-config.ts";
 import { phoneVariants } from "../_shared/phone.ts";
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 
