@@ -8,15 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Bot, Save, Loader2 } from 'lucide-react';
+import { Bot, Save, Loader2, Info, Eye, EyeOff } from 'lucide-react';
 
-const DEFAULT_SYSTEM_PROMPT = `You are a friendly gym assistant for our fitness center. Answer questions about:
-- Membership plans and pricing
-- Gym timings and facilities
-- Class schedules and trainers
-- Trial sessions and offers
-
-Keep responses short (1-3 sentences), professional, and helpful. If you don't know the answer, suggest they visit the gym or call the front desk.`;
+const DEFAULT_SYSTEM_PROMPT = '';
 
 interface AiConfig {
   auto_reply_enabled: boolean;
@@ -44,6 +38,21 @@ export function WhatsAppAISettings() {
       return data;
     },
   });
+
+  const { data: purposePrompt = '' } = useQuery({
+    queryKey: ['ai_purpose_prompt', 'whatsapp_reply'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ai_purposes')
+        .select('system_prompt')
+        .eq('purpose', 'whatsapp_reply')
+        .is('branch_id', null)
+        .maybeSingle();
+      return (data?.system_prompt as string) ?? '';
+    },
+  });
+
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (orgSettings?.whatsapp_ai_config) {
@@ -125,17 +134,37 @@ export function WhatsAppAISettings() {
         </div>
 
         <div className="space-y-2">
-          <Label className="font-semibold">AI System Prompt / Gym Context</Label>
+          <Label className="font-semibold">Extra Gym Context (overlay)</Label>
           <Textarea
-            rows={8}
+            rows={6}
             value={config.system_prompt}
             onChange={(e) => setConfig({ ...config, system_prompt: e.target.value })}
-            placeholder="Describe your gym, services, pricing, and any rules for the AI..."
+            placeholder="Add current offers, branch-specific notes, pricing tweaks, or talking points the AI should mention. Leave blank to use only the base purpose prompt."
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">
-            This prompt tells the AI about your gym. Include pricing, timings, facilities, and any specific instructions.
-          </p>
+          <div className="flex items-start gap-2 p-2.5 rounded-md bg-indigo-50/60 border border-indigo-100">
+            <Info className="h-3.5 w-3.5 text-indigo-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-slate-600">
+              This text is <b>appended</b> to the base WhatsApp Replies prompt configured in
+              <b> Settings → AI Agent → Purposes</b>. Edit the base prompt there to change the AI's core persona;
+              use this box for short-lived context like seasonal offers.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-xs gap-1.5 px-0 h-7"
+            onClick={() => setShowPreview(v => !v)}
+          >
+            {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showPreview ? 'Hide' : 'Show'} merged final prompt
+          </Button>
+          {showPreview && (
+            <pre className="text-[11px] font-mono whitespace-pre-wrap bg-slate-50 border rounded-md p-3 max-h-64 overflow-y-auto text-slate-700">
+              {[purposePrompt.trim(), config.system_prompt.trim()].filter(Boolean).join('\n\n') || '(empty — set a base prompt in Purposes tab)'}
+            </pre>
+          )}
         </div>
 
         <Button
