@@ -284,6 +284,8 @@ function ProviderDrawer({
                 <SelectItem value="together">Together AI (free Llama models)</SelectItem>
                 <SelectItem value="deepseek">DeepSeek (very cheap)</SelectItem>
                 <SelectItem value="mistral">Mistral AI</SelectItem>
+                <SelectItem value="anthropic">Anthropic Claude</SelectItem>
+                <SelectItem value="xai">xAI Grok</SelectItem>
                 <SelectItem value="ollama">Ollama (self-hosted on your VPS)</SelectItem>
                 <SelectItem value="openai_compatible">Custom OpenAI-compatible endpoint</SelectItem>
               </SelectContent>
