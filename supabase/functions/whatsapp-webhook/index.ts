@@ -1685,9 +1685,11 @@ async function sendAiReply(
 ) {
   let interactivePayload: any = null;
 
-  // Extract interactive JSON from mixed prose — handle markdown fences too
+  // Extract interactive JSON from mixed prose — handles nested JSON via brace-balanced scan.
+  // v2 — fixes a bug where the prior regex `[^{}]*` could not match nested objects
+  // (e.g. interactive_list with sections[].rows[]) so payloads leaked as raw text.
   function tryExtractInteractiveJson(text: string): { parsed: any; cleanText: string } | null {
-    // Try 1: exact JSON string
+    // Try 1: whole string is the JSON
     const trimmed = text.trim();
     if (trimmed.startsWith("{") && trimmed.includes('"type"')) {
       try {
@@ -1706,16 +1708,38 @@ async function sendAiReply(
         }
       } catch {}
     }
-    // Try 3: inline JSON block in prose
-    const inlineMatch = text.match(/(\{[^{}]*"type"\s*:\s*"interactive[^{}]*\})/);
-    if (inlineMatch) {
-      try {
-        const p = JSON.parse(inlineMatch[1]);
-        if (p.type === "interactive" || p.type === "interactive_list") {
-          const prose = text.replace(inlineMatch[0], "").trim();
-          return { parsed: p, cleanText: prose || p.body || "" };
+    // Try 3: brace-balanced extractor — finds an embedded {"type":"interactive…"} object
+    // even when it contains nested objects/arrays. Walks the string tracking string
+    // literals + escapes so braces inside strings don't fool the counter.
+    const typeMarkerRe = /\{[\s\n]*"type"\s*:\s*"interactive(?:_list)?"/;
+    const m = text.match(typeMarkerRe);
+    if (m && typeof m.index === "number") {
+      const start = m.index;
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+        if (escape) { escape = false; continue; }
+        if (ch === "\\") { escape = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) {
+            const slice = text.slice(start, i + 1);
+            try {
+              const p = JSON.parse(slice);
+              if (p.type === "interactive" || p.type === "interactive_list") {
+                const prose = (text.slice(0, start) + text.slice(i + 1)).trim();
+                return { parsed: p, cleanText: prose || p.body || "" };
+              }
+            } catch {}
+            break;
+          }
         }
-      } catch {}
+      }
     }
     return null;
   }
