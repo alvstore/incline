@@ -1,6 +1,7 @@
-// v1.0.0 — AI Lead Scoring Edge Function
+// v2.0.0 — AI Lead Scoring Edge Function (SSOT: routes through ai-runtime)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
