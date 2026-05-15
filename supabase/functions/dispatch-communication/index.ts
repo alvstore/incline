@@ -560,7 +560,7 @@ Deno.serve(async (req) => {
           if (input.attachment && !templateName && !sendAsNativeHeaderTemplate) {
             // Freeform document/image fallback (no approved header template).
             const rawKind = (input.attachment.kind ?? 'document') as string;
-            const kind = rawKind === 'image' ? 'image' : 'document';
+            const kind = rawKind === 'image' ? 'image' : rawKind === 'video' ? 'video' : 'document';
             const { data: waRow, error: waErr } = await supabase
               .from('whatsapp_messages')
               .insert({
