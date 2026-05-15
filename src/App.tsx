@@ -33,6 +33,7 @@ const PublicRegistrationPage = lazy(() => import("./pages/PublicRegistration"));
 
 // All other pages — lazy loaded for code splitting
 const DashboardPage = lazy(() => import("./pages/Dashboard"));
+const AIControlCenterPage = lazy(() => import("./pages/AIControlCenter"));
 const MembersPage = lazy(() => import("./pages/Members"));
 const LeadsPage = lazy(() => import("./pages/Leads"));
 const PlansPage = lazy(() => import("./pages/Plans"));
