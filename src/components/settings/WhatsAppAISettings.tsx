@@ -101,7 +101,8 @@ export function WhatsAppAISettings() {
           AI Auto-Reply
         </CardTitle>
         <CardDescription>
-          Automatically reply to incoming WhatsApp messages using AI. The bot uses your gym context to generate helpful responses.
+          Toggle AI auto-replies and add overlay context. The base persona, model and provider live in
+          {' '}<b>Settings → AI Agent → Purposes</b> (whatsapp_reply) and <b>Providers</b>.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
