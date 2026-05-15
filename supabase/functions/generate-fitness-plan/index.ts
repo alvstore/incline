@@ -115,11 +115,7 @@ serve(async (req) => {
     const variantCount = rotationIntervalDays && rotationIntervalDays > 0
       ? Math.max(2, Math.min(4, Math.ceil((durationWeeks * 7) / rotationIntervalDays)))
       : 0;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    // Provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
 
     const systemPrompt = type === "workout" 
       ? `You are an expert fitness trainer creating personalized workout plans. Generate detailed, safe, and effective workout programs.
