@@ -1,10 +1,8 @@
-// v1.3.0 — Adds masked client_id diagnostic to oauth_start + maps deleted_client / invalid_client / redirect_uri_mismatch errors with actionable guidance.
-// v1.2.0 — Adds OAuth connect/callback + updated Google Business Profile API guidance.
-// v1.1.0 — Single edge function handling all Google Reviews operations.
+// v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
+// v1.3.0 — Adds masked client_id diagnostic to oauth_start
 // Actions: test_connection | list_accounts | list_locations | fetch_reviews | classify | reply | request_member_review
-// Reads OAuth credentials from integration_settings(provider='google_business', branch_id=…)
-// Uses LOVABLE_API_KEY (Lovable AI Gateway) for classification + draft reply generation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateOnce } from "../_shared/ai-runtime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
