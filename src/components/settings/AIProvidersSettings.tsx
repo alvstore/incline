@@ -121,9 +121,28 @@ export function AIProvidersSettings() {
                         <Badge variant="secondary" className="w-fit">Disabled</Badge>
                       )}
                       {p.is_default && <Badge className="bg-violet-100 text-violet-700 border border-violet-200 w-fit text-[10px]">Default for scope</Badge>}
+                      {p.is_active && !p.is_default && (
+                        <Badge className="bg-amber-100 text-amber-700 border border-amber-200 w-fit text-[10px]">Active but not default — won't be used</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
+                    {p.is_active && !p.is_default && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mr-1 text-violet-700 border-violet-200 hover:bg-violet-50"
+                        onClick={async () => {
+                          const { error } = await (supabase as any).rpc('set_default_ai_provider', { p_id: p.id });
+                          if (error) { toast.error(error.message); return; }
+                          toast.success(`Default for "${p.scope}" set to ${p.provider}`);
+                          qc.invalidateQueries({ queryKey: ['ai-provider-configs'] });
+                          qc.invalidateQueries({ queryKey: ['ai_provider_configs_active'] });
+                        }}
+                      >
+                        Set as default
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(p); setDrawerOpen(true); }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
