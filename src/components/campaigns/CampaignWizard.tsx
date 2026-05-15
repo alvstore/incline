@@ -20,17 +20,23 @@ import {
   type CampaignChannel,
   type CampaignTriggerType,
   type RecurrencePreset,
+  type Campaign,
   createCampaign,
+  updateCampaign,
   createRecurringCampaignRule,
   recurrencePresetToCron,
   sendCampaignNow,
 } from '@/services/campaignService';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { ShieldCheck } from 'lucide-react';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   branchId: string;
+  editingCampaign?: Campaign | null;
 }
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
@@ -44,8 +50,9 @@ const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: st
   { id: 'lead_reengagement', label: 'Lead Re-engagement', desc: 'Win back cold leads', emoji: '🔁', color: 'emerald' },
 ];
 
-export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
+export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }: Props) {
   const qc = useQueryClient();
+  const isEditing = !!editingCampaign;
   const [step, setStep] = useState(1);
   const [campaignType, setCampaignType] = useState<CampaignType>('announcement');
   const [name, setName] = useState('');
@@ -56,18 +63,6 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
   const [eventTime, setEventTime] = useState('');
   const [eventVenue, setEventVenue] = useState('');
   const [eventRsvpUrl, setEventRsvpUrl] = useState('');
-
-  // Auto-prefill from a saved segment (set by Contact Book → Segments → Send)
-  useEffect(() => {
-    const segId = sessionStorage.getItem('campaign_prefill_segment');
-    const segName = sessionStorage.getItem('campaign_prefill_segment_name');
-    if (segId) {
-      setFilter({ audience_kind: 'segment', segment_id: segId });
-      if (segName) setName(`Segment: ${segName}`);
-      sessionStorage.removeItem('campaign_prefill_segment');
-      sessionStorage.removeItem('campaign_prefill_segment_name');
-    }
-  }, []);
   const [resolvedMemberIds, setResolvedMemberIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [subject, setSubject] = useState('');
@@ -82,6 +77,76 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
   const [submittingMeta, setSubmittingMeta] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrencePreset>('weekly_mon');
   const [customCron, setCustomCron] = useState('0 10 * * 1');
+
+  // Approved Meta WhatsApp template (cold-audience-compliant path)
+  const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const { data: approvedTemplates = [] } = useQuery({
+    queryKey: ['approved-whatsapp-templates', branchId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('id, name, content, header_type, meta_template_status, meta_template_name')
+        .eq('type', 'whatsapp')
+        .eq('meta_template_status', 'APPROVED')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && channel === 'whatsapp',
+  });
+
+  // Auto-prefill from a saved segment (set by Contact Book → Segments → Send) — skip when editing.
+  useEffect(() => {
+    if (isEditing) return;
+    const segId = sessionStorage.getItem('campaign_prefill_segment');
+    const segName = sessionStorage.getItem('campaign_prefill_segment_name');
+    if (segId) {
+      setFilter({ audience_kind: 'segment', segment_id: segId });
+      if (segName) setName(`Segment: ${segName}`);
+      sessionStorage.removeItem('campaign_prefill_segment');
+      sessionStorage.removeItem('campaign_prefill_segment_name');
+    }
+  }, [isEditing]);
+
+  // Pre-fill all fields when editing an existing campaign.
+  useEffect(() => {
+    if (!open || !editingCampaign) return;
+    const c = editingCampaign;
+    setCampaignType((c.campaign_type as CampaignType) || 'announcement');
+    setName(c.name);
+    setChannel(c.channel);
+    setFilter(c.audience_filter || { status: 'active' });
+    setMessage(c.message || '');
+    setSubject(c.subject || '');
+    setTrigger(c.trigger_type || 'send_now');
+    setScheduledAt(c.scheduled_at ? c.scheduled_at.slice(0, 16) : '');
+    if (c.attachment_url && c.attachment_kind) {
+      setAttachment({
+        url: c.attachment_url,
+        filename: c.attachment_filename || 'attachment',
+        kind: c.attachment_kind,
+      });
+    } else {
+      setAttachment(null);
+    }
+    const ev: any = c.event_meta || {};
+    setEventName(ev.name || '');
+    setEventDate(ev.date || '');
+    setEventTime(ev.time || '');
+    setEventVenue(ev.venue || '');
+    setEventRsvpUrl(ev.rsvp_url || '');
+    if (c.template_id) {
+      setUseApprovedTemplate(true);
+      setSelectedTemplateId(c.template_id);
+    } else {
+      setUseApprovedTemplate(false);
+      setSelectedTemplateId(null);
+    }
+  }, [open, editingCampaign?.id]);
+
+
 
   const handleSubmitMetaTemplate = async () => {
     if (channel !== 'whatsapp') return;
@@ -156,6 +221,7 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
     setMessage(''); setSubject(''); setTrigger('send_now'); setScheduledAt('');
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
+    setUseApprovedTemplate(false); setSelectedTemplateId(null);
   };
 
   const close = () => { reset(); onOpenChange(false); };
@@ -190,7 +256,7 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
     setSubmitting(true);
     try {
       const finalMessage = buildFinalMessage();
-      const campaign = await createCampaign({
+      const payload = {
         branch_id: branchId,
         name: name.trim(),
         channel,
@@ -210,10 +276,15 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
           venue: eventVenue.trim() || null,
           rsvp_url: eventRsvpUrl.trim() || null,
         } : {},
-        status:
+        template_id: channel === 'whatsapp' && useApprovedTemplate ? selectedTemplateId : null,
+        status: (
           trigger === 'send_now' ? 'sending' :
-          trigger === 'scheduled' ? 'scheduled' : 'draft',
-      });
+          trigger === 'scheduled' ? 'scheduled' : 'draft'
+        ) as any,
+      };
+      const campaign = isEditing && editingCampaign
+        ? await updateCampaign(editingCampaign.id, payload as any).then((c) => c)
+        : await createCampaign(payload as any);
 
       if (trigger === 'send_now') {
         const useResolver = filter.audience_kind && filter.audience_kind !== 'members';
@@ -343,6 +414,62 @@ export function CampaignWizard({ open, onOpenChange, branchId }: Props) {
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Subject</Label>
                 <Input className="rounded-xl" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" />
+              </div>
+            )}
+
+            {channel === 'whatsapp' && (
+              <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div className="min-w-0">
+                      <Label className="text-xs font-semibold text-emerald-900 block">Send via approved Meta template</Label>
+                      <p className="text-[11px] text-emerald-700">Required for cold leads / contacts outside the 24h messaging window.</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={useApprovedTemplate}
+                    onCheckedChange={(v) => {
+                      setUseApprovedTemplate(v);
+                      if (!v) setSelectedTemplateId(null);
+                    }}
+                  />
+                </div>
+                {useApprovedTemplate && (
+                  <div className="space-y-2">
+                    {approvedTemplates.length === 0 ? (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        No APPROVED WhatsApp templates yet. Submit one in Settings → Communication Templates → WhatsApp, then return here.
+                      </p>
+                    ) : (
+                      <Select
+                        value={selectedTemplateId || ''}
+                        onValueChange={(id) => {
+                          setSelectedTemplateId(id);
+                          const t: any = approvedTemplates.find((x: any) => x.id === id);
+                          if (t?.content) setMessage(t.content);
+                          if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
+                            toast.info(`This template needs a ${t.header_type} header — upload one below.`);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="rounded-xl bg-white"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
+                        <SelectContent>
+                          {approvedTemplates.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name} {t.header_type && t.header_type !== 'none' ? `· ${t.header_type} header` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {selectedTemplateId && (
+                      <p className="text-[11px] text-emerald-800">
+                        Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

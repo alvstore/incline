@@ -1,81 +1,80 @@
-## What's broken
+## Audit findings
 
-Two independent bugs in the Marketing & Campaigns wizard for "WAIT IS OVER":
+**1. Edit / Delete UI is missing on campaign cards**
+`src/components/campaigns/CampaignsPanel.tsx` renders campaign cards that only open `CampaignDetailDrawer` (read-only). There is no menu, no edit, no delete, no "duplicate", and no cancel-schedule. `campaignService.ts` also has no `updateCampaign` / `deleteCampaign` / `cancelScheduledCampaign` helpers.
 
-### Bug 1 — Audience size always shows 0 (Leads / Mixed)
-The Postgres RPC `resolve_campaign_audience(branch_id, filter)` raises:
+**2. Wizard cannot pick an approved Meta template**
+`CampaignWizard.tsx` only sends freeform text. It has a "Submit body to Meta" button (line 416) but never lets you pick an already-approved template. The downstream stack already supports it end-to-end:
+- `send-broadcast` v3.1.0 already accepts `template_id` and forwards it to `dispatch-communication` (line 92).
+- `dispatch-communication` v1.11.0 already resolves `template_id` → `templates` row → Meta `template_name` and sends as a native WhatsApp template (header_type document/image/video supported, line 460+).
+- `send-whatsapp` already has `message_type === 'template'` branch (line 258).
+
+So nothing in the backend is missing — the wizard just never offers the picker, which is exactly why marketing video/PDF sends fail with Meta error 131047 outside the 24h window.
+
+**3. AI template "syncing for approval" is actually working**
+`AIGenerateTemplatesDrawer.tsx` (line 161) already calls `manage-whatsapp-templates` with `action: 'create'`, which submits to Meta. `manage-whatsapp-templates` v2.3.0 has full `create` / `edit` / `list` (sync) / `get_status` actions. The "stuck syncing" perception is because:
+- After submit, status shows `PENDING` until Meta approves (this is normal, takes minutes to hours).
+- The CRM Templates tab doesn't aggressively re-poll Meta for status — user must hit "Sync from Meta" manually.
+- No automated `get_status` poll for recently-submitted templates.
+
+## Plan
+
+### A. Campaign list — add edit / delete / duplicate / cancel
+
+**`src/services/campaignService.ts`** — add four helpers:
+- `deleteCampaign(id)` — hard delete row (cascades to `campaign_runs`).
+- `updateCampaign(id, patch)` — for draft/scheduled only (name, message, subject, scheduled_at, audience_filter, attachment_*, template_id). Block for `sending`/`sent`.
+- `duplicateCampaign(id)` — clone as a new `draft`.
+- `cancelScheduledCampaign(id)` — flip `scheduled` → `draft`, null `scheduled_at`.
+
+**`src/components/campaigns/CampaignsPanel.tsx`** — add a `DropdownMenu` (three-dots `MoreVertical` button, top-right of each card, `e.stopPropagation()` so it doesn't open the drawer) with:
+- View details (existing behaviour)
+- Edit — opens `CampaignWizard` in edit mode (only when status ∈ {draft, scheduled})
+- Duplicate — clones, opens wizard on the clone
+- Cancel schedule — only when `scheduled`
+- Delete — `AlertDialog` confirm, then `deleteCampaign` + `invalidateQueries(['campaigns'])`
+
+Wire `useMutation` for each, with toast feedback. Disable edit/cancel/delete when status ∈ {sending, sent}.
+
+**`src/components/campaigns/CampaignWizard.tsx`** — accept optional `editingCampaign?: Campaign` prop. When present:
+- Pre-fill all fields (name, channel, message, subject, audience_filter, attachment_*, scheduled_at, template_id).
+- On save: call `updateCampaign(id, …)` instead of `createCampaign(…)`.
+- Hide "Send Now" when editing a `scheduled` campaign (only "Save schedule").
+
+### B. Approved Meta template picker (cold-audience fix)
+
+**`src/components/campaigns/CampaignWizard.tsx`** — on Message step, when `channel === 'whatsapp'`:
+- Add a "Send via approved Meta template (recommended for cold leads)" toggle.
+- When ON, show a `Select` populated from `whatsapp_templates` filtered by `branch_id`, `meta_template_status = 'APPROVED'`. Show name + category + preview of body.
+- Selecting a template:
+  - Auto-fills the message body with the template body (read-only when toggle is ON).
+  - Stores `template_id` in wizard state.
+  - If template `header_type ∈ {image, video, document}`, force the Creative step's attachment kind to match and require an upload (Meta needs the header media at send time).
+- Persist `template_id` on `campaigns.template_id` (column needs to exist; if not, add it via migration: `ALTER TABLE campaigns ADD COLUMN template_id uuid REFERENCES templates(id);`).
+- Pass `template_id` through `createCampaign` → `sendCampaignNow` → `send-broadcast` (already plumbed).
+- Show an explainer card: "Approved templates can be sent to anyone, no 24h window. Freeform messages only deliver to contacts who messaged you in the last 24h."
+- When toggle is OFF and audience contains leads/contacts → show the existing 24h warning.
+
+### C. Template approval visibility (small UX nudge)
+
+**`src/components/settings/CommunicationTemplatesHub.tsx` / CRM Templates sub-tab** — add an auto-poll: every 30s, if any local templates have `meta_template_status = 'PENDING'`, invoke `manage-whatsapp-templates` `action: 'get_status'` for each and refresh. Stop polling when none are pending. This removes the "is it approved yet?" friction without manual sync.
+
+### D. Database migration (only if `campaigns.template_id` is missing)
+
+```sql
+ALTER TABLE public.campaigns
+  ADD COLUMN IF NOT EXISTS template_id uuid REFERENCES public.templates(id) ON DELETE SET NULL;
 ```
-ERROR: operator does not exist: lead_status = text
-WHERE l.branch_id = p_branch_id
-  AND (cardinality(v_lead_status)=0 OR l.status = ANY(v_lead_status))
-```
-`leads.status` is enum `lead_status`; the filter array is built as `text[]`. Without a cast the RPC errors for **Leads, Mixed, and any audience that touches lead_status**. `AudienceBuilder` swallows the error in TanStack Query, so the live size badge stays at "0 recipients" even though there are 34 leads in the branch. Same RPC is called by `send-broadcast` resolver path → 0 recipients sent → campaign "delivers" to nobody.
 
-**Fix:** migration to redefine `resolve_campaign_audience` with `l.status::text = ANY(v_lead_status)` (and the same cast for any other enum compared against the JSONB string arrays — `member_status`, `contact_segment_id`, etc., audited in the migration). Bump the function comment to `v2`.
+### Files touched
+- `src/services/campaignService.ts` (add CRUD helpers + `template_id` on Campaign type)
+- `src/components/campaigns/CampaignsPanel.tsx` (dropdown menu, mutations, edit-mode handoff)
+- `src/components/campaigns/CampaignWizard.tsx` (edit mode, Meta template picker, attachment-kind sync)
+- `src/components/settings/CommunicationTemplatesHub.tsx` (pending-status auto-poll)
+- New migration only if `campaigns.template_id` doesn't exist (verify on apply)
 
-Also surface RPC errors in `AudienceBuilder` so the live-size card shows a red "Audience query failed: …" instead of silently rendering 0.
-
-### Bug 2 — WhatsApp video attachment never delivers
-Audit of `CampaignWizard → send-broadcast → dispatch-communication → send-whatsapp → Meta`:
-
-1. **`send-whatsapp` has no `video` branch.** Today MP4 is uploaded to Meta with `Content-Type: application/pdf` (the document fallback) and Meta rejects it.
-2. **Dispatcher v1.6.0 force-collapses `kind=video` → `document`** in the freeform path.
-3. **Marketing freeform to leads is blocked outside the 24h window** (Meta error 131047). The wizard never asks for an approved Meta template, so even a perfect MP4 fails for cold leads.
-4. **Wizard accepts `.mov`/`.webm`** which Meta rejects, with no preview and no client-side mime check.
-
----
-
-## Fix plan
-
-### A. Database (single migration)
-Redefine `public.resolve_campaign_audience(uuid, jsonb)` so all enum comparisons cast to text:
-- `l.status::text = ANY(v_lead_status)`
-- `m.status::text = ANY(v_member_status)` (verify the column type, apply same cast if enum)
-- Re-grant `EXECUTE` to `authenticated`.
-
-### B. Edge functions
-
-1. **`send-whatsapp/index.ts` → v2.5.0**
-   - Add `message_type === 'video'` branch with `metaPayload.video = { link | id, caption? }`.
-   - Extend the Meta upload pre-step to accept `video`, `fallbackType: 'video/mp4'`.
-
-2. **`dispatch-communication/index.ts` → v1.7.0**
-   - Stop collapsing video to document in the freeform branch:
-     `kind = rawKind === 'image' ? 'image' : rawKind === 'video' ? 'video' : 'document'`
-   - For video: pass `media_mime_type: 'video/mp4'`, omit filename.
-   - Native template-header path is already video-aware, leave untouched.
-
-3. **`send-broadcast/index.ts`** — version bump only (`v3.4.0`).
-
-Deploy: `send-whatsapp`, `dispatch-communication`, `send-broadcast`.
-
-### C. Wizard UX (`src/components/campaigns/CampaignWizard.tsx` + `AudienceBuilder.tsx`)
-
-- `AudienceBuilder`: render RPC error inline (red card) instead of falling back to 0.
-- Step 3 (Message / Creative):
-  - Inline notice when `channel === 'whatsapp'` + audience contains leads/contacts: "Cold WhatsApp marketing requires an approved Meta template — pick one below or change audience."
-  - Optional Meta template picker (filtered to `header_type IN ('image','video','document','none')`); selected `template_id` is forwarded to `sendCampaignNow` (already plumbed).
-  - File picker: enforce `file.type === 'video/mp4'` (reject `.mov`/`.webm` with toast), keep 16 MB cap, show "WhatsApp limit: 16 MB · MP4 / H.264 / AAC".
-  - Show `<video controls>` thumbnail preview after upload.
-  - Surface dispatcher error verbatim in the result toast.
-
-### D. QA
-1. Open wizard → pick Leads → live size shows 34, not 0.
-2. Send "WAIT IS OVER" MP4 to a member who messaged us in last 24h → freeform video arrives.
-3. Same campaign to cold leads with no template → wizard blocks send with clear reason.
-4. Same campaign with approved video-header template → native template video arrives, no 24h restriction.
-5. Upload 20 MB MP4 → blocked client-side. Upload `.mov` → blocked client-side.
-
----
-
-## Files touched
-
-- **Migration**: redefine `resolve_campaign_audience` with enum→text casts.
-- `supabase/functions/send-whatsapp/index.ts` (add video branch + Meta upload)
-- `supabase/functions/dispatch-communication/index.ts` (stop downgrading video)
-- `supabase/functions/send-broadcast/index.ts` (version comment)
-- `src/components/campaigns/AudienceBuilder.tsx` (surface RPC error)
-- `src/components/campaigns/CampaignWizard.tsx` (template picker, mime/preview, error toast)
-- `src/services/campaignService.ts` (verify `template_id` is forwarded; tiny patch if not)
-
-No schema change beyond the function body.
+### Acceptance
+- Each campaign card has a 3-dot menu with Edit, Duplicate, Cancel schedule, Delete (gated by status).
+- Editing a draft/scheduled campaign re-opens the wizard pre-filled and saves in place.
+- Wizard offers a "Use approved Meta template" toggle for WhatsApp; selecting one stores `template_id` and the resulting send goes through Meta's native template path (delivers to cold leads outside the 24h window).
+- Pending Meta templates auto-refresh their status every 30s in the CRM Templates list.

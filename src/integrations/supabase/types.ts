@@ -1901,6 +1901,7 @@ export type Database = {
           status: string
           subject: string | null
           success_count: number
+          template_id: string | null
           timezone: string
           trigger_type: string
           updated_at: string
@@ -1927,6 +1928,7 @@ export type Database = {
           status?: string
           subject?: string | null
           success_count?: number
+          template_id?: string | null
           timezone?: string
           trigger_type?: string
           updated_at?: string
@@ -1953,6 +1955,7 @@ export type Database = {
           status?: string
           subject?: string | null
           success_count?: number
+          template_id?: string | null
           timezone?: string
           trigger_type?: string
           updated_at?: string
@@ -1963,6 +1966,20 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "v_template_with_meta_status"
             referencedColumns: ["id"]
           },
         ]
