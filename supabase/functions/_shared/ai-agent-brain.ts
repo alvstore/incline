@@ -1,8 +1,13 @@
-// v2.2.0 — Unified AI Agent Brain
+// v3.0.0 — Unified AI Agent Brain (single source of truth)
+// 3.0.0: Reads config (system_prompt, model, delays, tools_allowed, lead_capture)
+//        from `ai_purposes` table (purpose='whatsapp_reply') with branch fallback
+//        to global. Legacy `organization_settings.whatsapp_ai_config` is used
+//        only as a final fallback. WhatsApp webhook + meta webhook both route
+//        through `runUnifiedAgent`; the duplicate brain in whatsapp-webhook
+//        is gone.
 // 2.2.0: Non-fitness intent guard — job/CV, vendor, press, partnership,
 //        complaint, wrong-number replies redirect to info@theinclinelife.com
-//        and skip the lead-capture flow. Hardened "JSON-only" rule for
-//        interactive blocks so prose doesn't leak alongside the payload.
+//        and skip the lead-capture flow. Hardened "JSON-only" rule.
 // 2.1.0: Variant-aware phone matching, member-first dedupe.
 // Shared across meta-webhook (Instagram/Messenger) and whatsapp-webhook.
 
