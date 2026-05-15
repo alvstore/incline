@@ -1,4 +1,4 @@
-// v3.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='template_generate').
+// v3.1.0 — Deterministic category mapping for marketing/utility/auth events.
 // v2.3.0 — Document events now PREFER header_type='document' with a sample PDF URL.
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
