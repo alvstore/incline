@@ -299,17 +299,36 @@ serve(async (req) => {
           );
       }
 
-      // Also update legacy templates table
+      // Mirror Meta status into legacy `templates`. UPDATE existing rows; if no
+      // row matches `meta_template_name`, INSERT a stub so the Campaign Wizard
+      // picker (which queries `templates`) sees every approved Meta template.
       for (const mt of templates) {
-        await supabase
-          .from("templates")
+        const bodyText = (mt.components || []).find((c: any) => c?.type === 'BODY')?.text || '';
+        const headerComp = (mt.components || []).find((c: any) => c?.type === 'HEADER');
+        const headerType = (headerComp?.format || 'NONE').toLowerCase();
+
+        const { data: updated } = await supabase
+          .from('templates')
           .update({
             meta_template_status: mt.status,
             meta_rejection_reason: mt.rejected_reason || null,
           })
-          .eq("meta_template_name", mt.name)
-          .not("meta_template_name", "is", null)
-          .or(`branch_id.eq.${branch_id},branch_id.is.null`);
+          .eq('meta_template_name', mt.name)
+          .select('id');
+
+        if (!updated || updated.length === 0) {
+          await supabase.from('templates').insert({
+            branch_id,
+            type: 'whatsapp',
+            name: mt.name,
+            content: bodyText,
+            meta_template_name: mt.name,
+            meta_template_status: mt.status,
+            meta_rejection_reason: mt.rejected_reason || null,
+            header_type: headerType,
+            is_active: true,
+          });
+        }
       }
 
       return new Response(
