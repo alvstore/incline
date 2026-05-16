@@ -19,6 +19,7 @@ import { DYNAMIC_PDF_PRESETS, type TemplatePreset } from '@/lib/templates/dynami
 import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MetaSyncControls } from './MetaSyncControls';
 
 const TEMPLATE_TYPES = [
   { value: 'sms', label: 'SMS', icon: Phone },
