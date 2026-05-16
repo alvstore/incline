@@ -10542,11 +10542,13 @@ export type Database = {
           branch_id: string | null
           content: string
           created_at: string
+          evergreen_kind: string | null
           header_media_handle: string | null
           header_media_url: string | null
           header_type: string | null
           id: string
           is_active: boolean | null
+          is_evergreen: boolean
           last_validated_at: string | null
           meta_rejection_reason: string | null
           meta_template_name: string | null
@@ -10565,11 +10567,13 @@ export type Database = {
           branch_id?: string | null
           content: string
           created_at?: string
+          evergreen_kind?: string | null
           header_media_handle?: string | null
           header_media_url?: string | null
           header_type?: string | null
           id?: string
           is_active?: boolean | null
+          is_evergreen?: boolean
           last_validated_at?: string | null
           meta_rejection_reason?: string | null
           meta_template_name?: string | null
@@ -10588,11 +10592,13 @@ export type Database = {
           branch_id?: string | null
           content?: string
           created_at?: string
+          evergreen_kind?: string | null
           header_media_handle?: string | null
           header_media_url?: string | null
           header_type?: string | null
           id?: string
           is_active?: boolean | null
+          is_evergreen?: boolean
           last_validated_at?: string | null
           meta_rejection_reason?: string | null
           meta_template_name?: string | null
