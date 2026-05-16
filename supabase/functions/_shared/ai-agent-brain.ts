@@ -128,10 +128,14 @@ export async function runUnifiedAgent(
     await new Promise((r) => setTimeout(r, delaySeconds * 1000));
   }
 
-  // 5. Resolve member/lead context
+  // 5. Resolve member/lead context + persistent ai_memory
   const memberCtx = await resolveMemberContext(supabase, ctx.senderId, ctx.branchId, ctx.platform);
   const alreadyCaptured = chatSettings?.captured_lead_id ? await loadCapturedSnapshot(supabase, chatSettings.captured_lead_id) : "";
   const summaryBlock = chatSettings?.conversation_summary ? `\n\n[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}\n` : "";
+
+  // 5b. Hydrate persistent contact memory (ai_memory)
+  const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+  const memoryBlock = renderMemoryBlock(memory);
 
   // 6. Build conversation history (cross-platform, no channel tags)
   const { data: recentMessages } = await supabase
@@ -147,8 +151,10 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
-  // 7. Hydrate gym facts (plans, facilities, timings)
+  // 7. Hydrate gym facts (plans, facilities, timings) + custom knowledge base
   const gymFacts = await hydrateGymFacts(supabase, ctx.branchId);
+  const kbRows = await loadKnowledge(supabase, ctx.branchId);
+  const kbBlock = renderKnowledgeBlock(kbRows);
 
   // 8. Build system prompt
   const gymName = orgConfig?.name || "Incline Fitness";
