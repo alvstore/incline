@@ -161,7 +161,8 @@ export async function runUnifiedAgent(
   const platformLabel = ctx.platform === "instagram" ? "Instagram DM" : ctx.platform === "messenger" ? "Facebook Messenger" : "WhatsApp";
   const customPrompt = aiConfig.system_prompt || `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`;
 
-  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}\n\n${customPrompt}`;
+  const memoryPrefix = memoryBlock ? `\n\n${memoryBlock}` : "";
+  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}${memoryPrefix}\n\n${customPrompt}`;
 
   // ── HARD RULE #1 — member-first identity ────────────────────────────────────
   if (memberCtx.isMember) {
