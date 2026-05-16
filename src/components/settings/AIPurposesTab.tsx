@@ -22,6 +22,7 @@ interface PurposeRow {
   branch_id: string | null;
   purpose: string;
   enabled: boolean;
+  provider_id: string | null;
   model: string | null;
   system_prompt: string;
   temperature: number | null;
@@ -31,6 +32,7 @@ interface PurposeRow {
 }
 
 interface ProviderRow {
+  id: string;
   scope: string;
   provider: string;
   default_model: string;
