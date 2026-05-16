@@ -22,6 +22,7 @@ interface PurposeRow {
   branch_id: string | null;
   purpose: string;
   enabled: boolean;
+  provider_id: string | null;
   model: string | null;
   system_prompt: string;
   temperature: number | null;
@@ -31,6 +32,7 @@ interface PurposeRow {
 }
 
 interface ProviderRow {
+  id: string;
   scope: string;
   provider: string;
   default_model: string;
@@ -68,7 +70,7 @@ function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow {
   if (scoped) return scoped;
   const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
   if (all) return all;
-  return { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
+  return { id: "__fallback__", scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
 }
 function isInherited(scope: string, resolved: ProviderRow): boolean {
   return resolved.scope !== scope;
@@ -97,11 +99,23 @@ export function AIPurposesTab() {
     queryFn: async () => {
       const { data } = await supabase
         .from("ai_provider_configs")
-        .select("scope, provider, default_model, is_active, is_default")
+        .select("id, scope, provider, default_model, is_active, is_default")
         .eq("is_active", true);
       return (data as ProviderRow[]) ?? [];
     },
   });
+
+  // Distinct enabled providers (prefer scope='all' row for the provider_id)
+  const providerOptions = useMemo(() => {
+    const byProvider = new Map<string, ProviderRow>();
+    for (const p of providers) {
+      const existing = byProvider.get(p.provider);
+      if (!existing || (p.scope === "all" && existing.scope !== "all")) {
+        byProvider.set(p.provider, p);
+      }
+    }
+    return Array.from(byProvider.values());
+  }, [providers]);
 
   const saveMut = useMutation({
     mutationFn: async (row: Partial<PurposeRow> & { id: string }) => {
@@ -109,6 +123,7 @@ export function AIPurposesTab() {
         .from("ai_purposes")
         .update({
           enabled: row.enabled,
+          provider_id: row.provider_id ?? null,
           model: row.model || null,
           system_prompt: row.system_prompt ?? "",
           temperature: row.temperature,
@@ -154,10 +169,16 @@ export function AIPurposesTab() {
   };
 
   const editingScope = editing ? (PURPOSE_TO_SCOPE[editing.purpose] ?? "all") : "all";
-  const editingResolved = useMemo(
+  const editingScopeResolved = useMemo(
     () => editing ? resolveProvider(editingScope, providers) : null,
     [editing, providers, editingScope],
   );
+  // Per-purpose override wins over scope default
+  const editingOverride = useMemo(
+    () => editing?.provider_id ? providers.find((p) => p.id === editing.provider_id) ?? null : null,
+    [editing?.provider_id, providers],
+  );
+  const editingResolved = editingOverride ?? editingScopeResolved;
   const editingPresets = editingResolved ? PROVIDER_DEFAULTS[editingResolved.provider] : null;
   const editingPurposeDefaults = editing ? PURPOSE_DEFAULTS[editing.purpose] : null;
   const effectiveModelForEditor = editing && editingResolved
@@ -192,11 +213,13 @@ export function AIPurposesTab() {
       {purposes.map((p) => {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
         const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
-        const resolved = resolveProvider(scope, providers);
-        const inherited = isInherited(scope, resolved);
+        const scopeResolved = resolveProvider(scope, providers);
+        const override = p.provider_id ? providers.find((pr) => pr.id === p.provider_id) ?? null : null;
+        const resolved = override ?? scopeResolved;
+        const inherited = !override && isInherited(scope, scopeResolved);
         const rawModel = p.model || resolved?.default_model || "—";
         const effectiveModel = resolved ? normalizeModelForProvider(resolved.provider, rawModel) : rawModel;
-        const overridden = !!p.model;
+        const overridden = !!p.model || !!override;
         const cheap = isCheapModel(effectiveModel);
         const defaults = PURPOSE_DEFAULTS[p.purpose];
         return (
@@ -270,13 +293,12 @@ export function AIPurposesTab() {
           </SheetHeader>
           {editing && (
             <div className="space-y-4 mt-6">
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-100">
-                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-900">
-                  Provider for this purpose is <b>{editingResolved?.provider ?? "lovable"}</b> (scope:
-                  {" "}<code className="font-mono">{editingScope}</code>). Change the provider in
-                  the <b>Providers</b> tab. Pick a model below from the active provider's catalog,
-                  or leave on default.
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+                <Info className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-slate-700">
+                  Default provider for scope <code className="font-mono">{editingScope}</code> is{" "}
+                  <b>{editingScopeResolved?.provider ?? "lovable"}</b> (set in the <b>Providers</b> tab).
+                  Override the provider and model for just this purpose below.
                 </p>
               </div>
 
@@ -289,43 +311,81 @@ export function AIPurposesTab() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Model ({editingResolved?.provider})
-                </Label>
-                <Select
-                  value={editing.model ?? "__default__"}
-                  onValueChange={(v) =>
-                    setEditing({ ...editing, model: v === "__default__" ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__default__">
-                      Use provider default ({editingResolved?.default_model})
-                    </SelectItem>
-                    {(editingPresets?.models ?? []).map((m) => (
-                      <SelectItem key={m} value={m} className="font-mono text-xs">
-                        {m}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Provider
+                  </Label>
+                  <Select
+                    value={editing.provider_id ?? "__scope_default__"}
+                    onValueChange={(v) =>
+                      setEditing({
+                        ...editing,
+                        provider_id: v === "__scope_default__" ? null : v,
+                        // Reset model so we don't carry a model that doesn't belong to the new provider
+                        model: null,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__scope_default__">
+                        Use scope default ({editingScopeResolved?.provider ?? "lovable"})
                       </SelectItem>
-                    ))}
-                    {editing.model && !(editingPresets?.models ?? []).includes(editing.model) && (
-                      <SelectItem value={editing.model} className="font-mono text-xs">
-                        {editing.model} (custom)
+                      {providerOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id} className="capitalize">
+                          {opt.provider}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">
+                    {editingOverride
+                      ? <>Overridden — using <b>{editingOverride.provider}</b>.</>
+                      : <>Inheriting scope default.</>}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Model ({editingResolved?.provider})
+                  </Label>
+                  <Select
+                    value={editing.model ?? "__default__"}
+                    onValueChange={(v) =>
+                      setEditing({ ...editing, model: v === "__default__" ? null : v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        Use provider default ({editingResolved?.default_model})
                       </SelectItem>
+                      {(editingPresets?.models ?? []).map((m) => (
+                        <SelectItem key={m} value={m} className="font-mono text-xs">
+                          {m}
+                        </SelectItem>
+                      ))}
+                      {editing.model && !(editingPresets?.models ?? []).includes(editing.model) && (
+                        <SelectItem value={editing.model} className="font-mono text-xs">
+                          {editing.model} (custom)
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">
+                    Will send as: <code className="font-mono text-slate-700">{effectiveModelForEditor}</code>
+                    {effectiveModelForEditor !== (editing.model || editingResolved?.default_model) && (
+                      <span className="ml-1 inline-flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3 w-3" /> auto-normalized
+                      </span>
                     )}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-slate-500">
-                  Will send to provider as: <code className="font-mono text-slate-700">{effectiveModelForEditor}</code>
-                  {effectiveModelForEditor !== (editing.model || editingResolved?.default_model) && (
-                    <span className="ml-1 inline-flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" /> auto-normalized
-                    </span>
-                  )}
-                </p>
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -370,6 +430,7 @@ export function AIPurposesTab() {
                     onClick={() =>
                       setEditing({
                         ...editing,
+                        provider_id: null,
                         model: null,
                         temperature: editingPurposeDefaults.temperature,
                         max_tokens: editingPurposeDefaults.max_tokens,
