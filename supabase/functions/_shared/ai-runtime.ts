@@ -21,6 +21,7 @@ export type Purpose =
 
 interface PurposeRow {
   enabled: boolean;
+  provider_id: string | null;
   model: string | null;
   system_prompt: string;
   temperature: number | null;
