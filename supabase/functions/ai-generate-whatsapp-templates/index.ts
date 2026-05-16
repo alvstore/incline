@@ -1,3 +1,6 @@
+// v3.2.0 — Hard rule: bodies must use {{1}}/{{member_name}} placeholders for ANY personalization
+//          (never write a literal example like "Hi Sample"). Validator strips obvious literal-name
+//          openings post-generation so Meta never receives a static-greeting template.
 // v3.1.0 — Deterministic category mapping for marketing/utility/auth events.
 // v2.3.0 — Document events now PREFER header_type='document' with a sample PDF URL.
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
