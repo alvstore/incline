@@ -169,10 +169,16 @@ export function AIPurposesTab() {
   };
 
   const editingScope = editing ? (PURPOSE_TO_SCOPE[editing.purpose] ?? "all") : "all";
-  const editingResolved = useMemo(
+  const editingScopeResolved = useMemo(
     () => editing ? resolveProvider(editingScope, providers) : null,
     [editing, providers, editingScope],
   );
+  // Per-purpose override wins over scope default
+  const editingOverride = useMemo(
+    () => editing?.provider_id ? providers.find((p) => p.id === editing.provider_id) ?? null : null,
+    [editing?.provider_id, providers],
+  );
+  const editingResolved = editingOverride ?? editingScopeResolved;
   const editingPresets = editingResolved ? PROVIDER_DEFAULTS[editingResolved.provider] : null;
   const editingPurposeDefaults = editing ? PURPOSE_DEFAULTS[editing.purpose] : null;
   const effectiveModelForEditor = editing && editingResolved
