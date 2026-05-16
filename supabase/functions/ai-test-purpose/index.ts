@@ -1,4 +1,6 @@
-// v1.0.0 — Test the resolved provider for a given AI purpose by sending a 1-token ping.
+// v1.1.0 — Test the resolved provider for a given AI purpose by sending a 1-token ping.
+//           Honors per-purpose provider_id override. Accepts inline { providerId, model }
+//           in the request body so the UI can test unsaved drawer edits.
 // Used by AI Purposes tab "Test" button. Owner/admin only.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAI, type AIScope } from "../_shared/ai-dispatcher.ts";
