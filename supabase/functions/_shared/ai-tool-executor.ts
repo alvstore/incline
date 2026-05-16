@@ -141,6 +141,10 @@ export async function executeSharedToolCall(
             error_code: result?.error_code,
           };
         }
+        await upsertMemory(supabase, branchId, platform, phoneNumber, {
+          facts: { last_booking_id: result.booking_id, last_booking_slot: args.slot_id, last_booking_at: new Date().toISOString() },
+          current_intent: "facility_booked",
+        });
         return {
           success: true,
           booking_id: result.booking_id,
