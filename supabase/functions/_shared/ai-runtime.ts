@@ -165,6 +165,7 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     scope: SCOPE_MAP[opts.purpose],
     messages,
     supabase: sb,
+    providerId: purposeRow?.provider_id ?? undefined,
     model: opts.model ?? purposeRow?.model ?? undefined,
     temperature: opts.temperature ?? purposeRow?.temperature ?? undefined,
     max_tokens: opts.maxTokens ?? purposeRow?.max_tokens ?? undefined,
