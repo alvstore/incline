@@ -378,6 +378,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
+    setEvergreenAppliedFor(null); setEvergreenPickedName(null);
   };
 
   const close = () => { reset(); onOpenChange(false); };
