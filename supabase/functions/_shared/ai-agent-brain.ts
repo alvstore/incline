@@ -20,6 +20,13 @@ import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
+import {
+  loadMemory,
+  upsertMemory,
+  renderMemoryBlock,
+  loadKnowledge,
+  renderKnowledgeBlock,
+} from "./ai-memory.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
