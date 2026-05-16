@@ -70,7 +70,7 @@ function resolveProvider(scope: string, providers: ProviderRow[]): ProviderRow {
   if (scoped) return scoped;
   const all = providers.find(p => p.scope === "all" && p.is_active && p.is_default);
   if (all) return all;
-  return { scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
+  return { id: "__fallback__", scope: "all", provider: "lovable", default_model: PROVIDER_DEFAULTS.lovable.default_model, is_active: true, is_default: true };
 }
 function isInherited(scope: string, resolved: ProviderRow): boolean {
   return resolved.scope !== scope;
