@@ -728,12 +728,16 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   ))}
                 </div>
               )}
-              <Card>
+              <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0">
                 <CardContent className="pt-4">
                   {!groupedTemplates[value]?.length ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No {label} templates yet. Click "Add Template" to create one.
-                    </p>
+                    <div className="py-12 text-center">
+                      <div className="inline-flex bg-indigo-50 text-indigo-600 p-3 rounded-2xl mb-3">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">No {label} templates yet</p>
+                      <p className="text-xs text-slate-500 mt-1">Click "Add Template" to create one.</p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {groupedTemplates[value].map((template) => (
