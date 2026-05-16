@@ -12326,7 +12326,9 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_employee_code: { Args: { p_branch_id: string }; Returns: string }
       generate_renewal_invoices: { Args: never; Returns: undefined }
+      generate_trainer_code: { Args: { p_branch_id: string }; Returns: string }
       get_ai_purpose: {
         Args: { _branch_id?: string; _purpose: string }
         Returns: {
