@@ -213,11 +213,13 @@ export function AIPurposesTab() {
       {purposes.map((p) => {
         const meta = PURPOSE_LABELS[p.purpose] ?? { title: p.purpose, desc: "" };
         const scope = PURPOSE_TO_SCOPE[p.purpose] ?? "all";
-        const resolved = resolveProvider(scope, providers);
-        const inherited = isInherited(scope, resolved);
+        const scopeResolved = resolveProvider(scope, providers);
+        const override = p.provider_id ? providers.find((pr) => pr.id === p.provider_id) ?? null : null;
+        const resolved = override ?? scopeResolved;
+        const inherited = !override && isInherited(scope, scopeResolved);
         const rawModel = p.model || resolved?.default_model || "—";
         const effectiveModel = resolved ? normalizeModelForProvider(resolved.provider, rawModel) : rawModel;
-        const overridden = !!p.model;
+        const overridden = !!p.model || !!override;
         const cheap = isCheapModel(effectiveModel);
         const defaults = PURPOSE_DEFAULTS[p.purpose];
         return (
