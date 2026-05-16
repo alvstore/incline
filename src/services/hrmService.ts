@@ -301,7 +301,7 @@ export async function fetchAllPayrollStaff(branchId?: string): Promise<PayrollSt
       return {
         id: `trainer-${t.id}`,
         user_id: t.user_id,
-        code: `TR-${(t as any).trainer_code || t.id.slice(0, 6).toUpperCase()}`,
+        code: (t as any).trainer_code || `TR-${t.id.slice(0, 6).toUpperCase()}`,
         name: p?.full_name || 'N/A',
         email: p?.email || null,
         department: 'Training',
