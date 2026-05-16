@@ -1,104 +1,106 @@
-## Audit findings (confirmed in DB + code)
+# Audit & Resolution Plan
 
-### 1. WhatsApp Error 131049 — "not delivered to maintain healthy ecosystem engagement"
+## 1. AI Tables — Cleanup & Consolidation
 
-**Reality check:** there is **no separate "Marketing API"**. Marketing templates use the same Cloud API. 131049 is Meta's *pacing/ecosystem* drop applied to MARKETING templates when:
-- recipient hasn't engaged with your number recently,
-- your template's quality rating is low/medium,
-- you send the same template repeatedly to the same number, or
-- the recipient has many recent marketing messages from other senders.
+**Findings (live DB):**
+- 7 `ai_*` tables exist: `ai_call_logs`, `ai_tool_logs`, `ai_dashboard_insights`, `ai_knowledge`, `ai_memory`, `ai_provider_configs`, `ai_purposes`.
+- `ai_knowledge` and `ai_memory` are empty → the WhatsApp AI agent currently keeps short-term context in the edge function only; nothing is persisted.
+- `ai_call_logs` and `ai_tool_logs` overlap (one logs LLM calls, the other tool invocations) and have no admin UI to clear/inspect.
 
-It is **not a code bug** — it's a deliverability signal. We can only mitigate it.
+**Plan:**
+1. **Consolidate:** keep `ai_call_logs` (LLM request/response/tokens/cost) and `ai_tool_logs` (tool name, args, result, latency). Document the split in a header comment — they serve different debug axes (LLM vs tool layer), so we keep both but stop creating new variants.
+2. **Wire memory persistence:** update `_shared/ai-runtime.ts` and `_shared/ai-tool-executor.ts` to:
+   - Write per-conversation short-term turns to `ai_memory` (scope=`conversation`, ttl 7d).
+   - Write durable facts the agent extracts ("member prefers evening slots", "lead is price-sensitive") to `ai_knowledge` (scope=`contact`/`member`).
+   - Add nightly pg_cron to purge `ai_memory` rows older than TTL.
+3. **Admin UI — `Settings → AI Studio → Logs & Memory`:**
+   - Tabs: Call Logs · Tool Logs · Memory · Knowledge.
+   - Filters: provider, purpose, date range, conversation, contact.
+   - Bulk actions: **Clear selected**, **Clear all older than N days**, **Export CSV**.
+   - Row drawer with full request/response JSON, token cost, error.
 
-**Mitigations to ship:**
-- Per-recipient cooldown (default 7 days for same MARKETING template) inside `dispatch-communication`.
-- Honour `communication_preferences.marketing_opt_in = false` and skip those recipients up-front (we already drop on category, but UI must expose it on Member profile + a 1-click STOP keyword handler in `meta-webhook`).
-- Throttle `send-broadcast` MARKETING sends to ≤ 50 / minute per WABA.
-- Surface Meta `error_code` + `error_subcode` + human-readable hint in the Campaign Report (`131049 → "Meta paced this message — recipient hasn't engaged recently. Lower frequency, improve template quality, or move to UTILITY"`).
-- Add a "Template Quality" column on the Templates Hub that mirrors `whatsapp_templates.quality_score` so the user sees when a template is dropping to LOW.
+## 2. System Health Audit
 
-### 2. Yogita (admin) didn't receive WhatsApp for new leads
+**Plan:**
+1. Run `supabase--linter` + sweep `error_logs` for top fingerprints from the last 30 days.
+2. Build a one-shot audit report in `/mnt/documents/` covering: missing FKs, orphan rows, RLS gaps, dead tables, duplicate ai_* writes, edge-fn 5xx hotspots.
+3. Add a **System Health → Audit** tab in the existing `SystemHealth.tsx` page that surfaces: linter findings, top error fingerprints, dead/empty tables, last cron run per job, edge fn health. Each row has a "Mark resolved" / "Open runbook" action.
+4. Auto-resolve obvious issues via a follow-up migration (drop dead columns, add missing indexes, tighten RLS).
 
-Root cause confirmed in `supabase/functions/notify-lead-created/index.ts` lines 162-167: admin alerts are sent as **freeform `type:"text"`** WhatsApp messages. Admins are almost always **outside the 24h customer-service window** for our number → Meta silently drops the message (HTTP 200, wamid issued, no `delivered` webhook). That's why we have no error to look at — the API call succeeded.
+## 3. WhatsApp / SMS / Email Template Manager UI
 
-**Fix:**
-- Add a system event `lead_captured_staff_alert` (UTILITY) to `systemEvents.ts` and seed an approved template (`lead_alert`) with body `New lead: {{1}} ({{2}}) from {{3}} for {{4}}` mapped to `{{lead_name}}, {{lead_phone}}, {{lead_source}}, {{branch_name}}`.
-- Rewrite `notify-lead-created` to call `dispatch-communication` with `template_id` for staff/admin/manager alerts (instead of building text body manually). Lead's own welcome message stays as-is (lead just submitted form → they ARE in 24h window).
-- Until the new template is APPROVED, fall back to the existing **`lead_notification`** template if already approved (the wizard sync already pulls Meta-approved rows into `templates`).
-- Add a delivery-watchdog: if `communication_logs.status='sent'` for >10 min with no `delivered` webhook AND channel='whatsapp' AND no template_id, mark `silently_dropped` and queue an SMS fallback to admins.
+**Findings:** `Settings → Communication Templates` lets you generate via AI and sync from Meta, but there is **no manual create / edit form** for any channel and no edit-then-resubmit flow for WhatsApp.
 
-### 3. "Hi Sample" is being sent literally
+**Plan — `TemplateEditorDrawer` (right-side Sheet, single component for all 3 channels):**
+- Header: channel chip · category dropdown (MARKETING / UTILITY / AUTHENTICATION for WA; simple for SMS/Email).
+- Body editor with `{{1}}`, `{{2}}` insertion chips + live preview rendered with sample data.
+- WhatsApp-specific: header type (none/text/image/video/document) + sample URL, footer text, up to 3 buttons (quick reply / URL / phone).
+- Email-specific: subject, from name, HTML editor (TipTap) with merge-tag chips.
+- SMS-specific: 160-char counter, DLT principal/template ID inputs.
+- Live validation: placeholder count vs variables provided, Meta category-rule guard (reuse server validator), DLT length check.
+- Actions: **Save Draft** · **Submit to Meta** (WA only) · **Test Send** (sends to logged-in admin's number).
+- Reachable from every tab (CRM Templates, Meta Approved, SMS Templates, Email Templates) via "New Template" and "Edit" buttons on each row.
 
-Confirmed in DB. The approved row `whatsapp_templates.wait_is_over_july` was submitted to Meta with body:
+## 4. Smarter Campaign Manager — Reduce Meta Approval Dependency
 
-```
-Hi Sample👋
-I'm excited to finally share what we've been building at Incline…
-```
+**Research summary (Meta Cloud API rules, 2025):**
+- Cold/outside-24h sends MUST use an approved template — no workaround.
+- Inside the 24h customer service window you can send free-form text/media → use it for engaged contacts.
+- Approved templates with `{{1}}`...`{{n}}` variables and dynamic header media are reusable across many campaigns.
+- Meta now supports **Authentication, Utility, Marketing** categories and **Marketing Lite** pacing — over-blasting marketing triggers 131049.
 
-There is **no `{{1}}` placeholder** in the BODY component and `variables` is `[]`. Meta has nothing to substitute, so every recipient sees the literal example string "Sample". This is an **AI generator regression** — it dropped the variable into the example instead of keeping it as `{{1}}` in the body.
+**Plan — "Reusable Template Library" model:**
+1. **Seed a small library of 8-10 evergreen templates** (covers 90% of sends) — submit once, reuse forever:
+   - `promo_offer_generic` (MARKETING, image header + `{{1}}=name, {{2}}=offer, {{3}}=cta_url`)
+   - `event_invite_generic` (MARKETING, image/video header + name/event/date/venue/rsvp_url)
+   - `announcement_generic` (UTILITY, name + headline + details + link)
+   - `reengage_lost_lead` (MARKETING, name + reason + offer + link)
+   - `birthday_wish`, `renewal_reminder`, `class_reminder`, `payment_due` (UTILITY)
+   - `lead_alert_internal` (UTILITY → staff)
+2. **CampaignWizard upgrade:**
+   - Step "Template" auto-picks the right approved template by campaign type and shows only the variables/media slots that need filling (no more "pick from 50 templates").
+   - "Why this template?" tooltip explains category + estimated deliverability.
+   - **Audience splitting:** automatically splits recipients into (a) **in 24h window** → free-form rich message and (b) **outside window** → reusable approved template. UI shows both previews.
+   - **Deliverability guardrails:** per-day MARKETING cap per recipient (default 1), per-campaign throttle, 131049 trend warning before send.
+   - **A/B header media:** upload 2 images; campaign sends 50/50 and reports CTR.
+3. **Auto-submit-on-demand:** if user truly needs a custom template, the wizard offers "Submit & schedule for tomorrow" — submits to Meta, waits for `APPROVED` webhook, then auto-launches the campaign.
+4. **Smart fallback chain:** WhatsApp blocked / 131049 → auto-retry via SMS (DLT) → Email → in-app, configurable per campaign.
 
-**Fix:**
-- In `ai-generate-whatsapp-templates`, before POSTing to Meta, run a validator:
-  - If category = MARKETING/UTILITY and the body contains a name-like word (`Sample`, `friend`, `there`, `Member`) that is **not** wrapped in `{{…}}`, force-replace with `{{1}}` and add `{{1}}: "Sample"` to `example.body_text`.
-  - Reject submission if BODY has zero variables but the prompt referenced personalization.
-- Mirror the same guard server-side in `manage-whatsapp-templates` so a manually entered template can't reach Meta without placeholders.
-- Resubmit a corrected template (Meta does not allow editing an APPROVED template's body — submit `wait_is_over_v2` with `Hi {{1}}👋…`). Existing approved row stays read-only with a warning badge "Static body — no personalization" in the Templates Hub.
+## 5. Trainer Code Bugs
 
-### 4. Trainer/Staff code missing (`—` in Staff table)
+**Findings (live DB):**
+- DB trigger correctly produces `TR-INC-00001`.
+- `src/services/hrmService.ts:304` does `code: \`TR-${trainer_code || ...}\`` → re-prefixes "TR-" producing **`TR-TR-INC-00001`** (matches the user report).
+- `src/pages/Employees.tsx:163` sets `code: null` for trainer rows in its merged list → trainers show `-` in the Employees page.
 
-`trainers.trainer_code` is nullable and has no auto-generation trigger. New trainers created via UI never get a code, so payslips/contracts use the random `id.slice(0,6)` fallback in `hrmService.ts` line 304.
+**Plan:**
+1. Remove the `TR-` re-prefix in `hrmService.getUnifiedPayrollStaff` — use `trainer_code` as-is.
+2. In `Employees.tsx`, set `code: trainer.trainer_code` for trainer rows.
+3. Backfill: normalise any historical `TR-TR-*` rows with an UPDATE migration. Also standardise sequence padding (one row is `TR-INC-0004`, others are `TR-INC-00001` — fix trigger to always use 5-digit padding and backfill).
 
-**Fix (migration):**
-- Add SQL function `generate_trainer_code(branch_id)` returning `TR-{branch_code}-{seq}` (same pattern as `EMP-{branch_code}-{seq}`).
-- Add `BEFORE INSERT` trigger on `trainers` to set `trainer_code` when NULL.
-- Backfill existing rows where `trainer_code IS NULL`.
-- Same audit on `employees.employee_code` — Bhagirath shows `EMP-MOZWZUNA` (random suffix) because the UI generator at `AddEmployeeDrawer.tsx:94` uses `Math.random()` instead of a sequence. Replace with DB-side function for both.
+## 6. Single Source of Truth for Trainer CRUD
 
-### 5. Edit Trainer drawer fetches blank fields when opened from HRM page
+**Findings:** `AddTrainerDrawer.tsx` and `EditTrainerDrawer.tsx` are two separate components with diverging field sets (Edit drawer was just patched to refetch full profile, Add drawer collects different fields).
 
-Root cause in `src/services/hrmService.ts` line 270:
-
-```ts
-.select('id, full_name, email, avatar_url')  // missing phone, dob, address, etc.
-```
-
-`EditTrainerDrawer` reads `trainer.profile.address / date_of_birth / phone / gender / postal_code / emergency_contact_*`. From HRM page these are all undefined → form shows blank. (Trainers page uses `useTrainers` which already selects the full set, so the bug is HRM-specific.)
-
-**Fix:**
-- Expand the profile SELECT in `getUnifiedPayrollStaff` to: `id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number`.
-- As defence-in-depth, change `EditTrainerDrawer`'s `useEffect` to refetch the trainer via `getTrainer(trainer.id)` when `open` flips to true. This guarantees fresh data even if the caller passes a thin record.
+**Plan:**
+1. Create `TrainerFormDrawer.tsx` (mode: `create | edit`) — single Sheet, single Zod schema, single TanStack mutation.
+2. Sections: Identity (name/email/phone/DOB/gender/address/govt-id) · Role & Branch · Compensation (salary type, fixed, PT share, hourly) · Specializations & Certifications · Biometric (photo + MIPS sync) · Weekly off.
+3. Replace both `AddTrainerDrawer` and `EditTrainerDrawer` usages with the unified component. Delete the old files.
+4. Apply the same unification to employees (`EmployeeFormDrawer`) so both staff types follow the same pattern.
 
 ---
 
-## Files to change
+## Technical Notes
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `supabase/functions/dispatch-communication/index.ts` | Per-recipient MARKETING cooldown, surface 131049 hint in `error_message`, throttle. |
-| 1 | `supabase/functions/meta-webhook/index.ts` | STOP keyword → set `communication_preferences.marketing_opt_in=false`. |
-| 1 | `src/components/communications/CampaignReportDrawer.tsx` | Show error-code hint table including 131049. |
-| 2 | `supabase/migrations/...` | Seed `lead_alert` (UTILITY) template + system event. |
-| 2 | `supabase/functions/notify-lead-created/index.ts` | Switch admin/manager sends to `dispatch-communication` w/ `template_id`. |
-| 2 | `supabase/functions/process-comm-retry-queue/index.ts` | Add "silently_dropped" watchdog + SMS fallback. |
-| 3 | `supabase/functions/ai-generate-whatsapp-templates/index.ts` | Placeholder validator before Meta POST. |
-| 3 | `supabase/functions/manage-whatsapp-templates/index.ts` | Same server-side guard for manual submits. |
-| 3 | `src/components/settings/TemplateManager.tsx` | Badge "Static body — no personalization" for approved rows with 0 variables. |
-| 4 | new migration | `generate_trainer_code()` + trigger + backfill; same for `employees.employee_code`. |
-| 4 | `src/components/employees/AddEmployeeDrawer.tsx` & `AddTrainerDrawer.tsx` | Stop generating code client-side; let DB trigger assign it. |
-| 5 | `src/services/hrmService.ts` | Expand profile SELECT in `getUnifiedPayrollStaff`. |
-| 5 | `src/components/trainers/EditTrainerDrawer.tsx` | Refetch via `getTrainer(id)` on open as safety net. |
+- All new tables/columns via `supabase--migration` with RLS.
+- AI memory writes go through a new helper `ai-memory.ts` in `_shared` — never raw inserts.
+- Template editor reuses existing `manage-whatsapp-templates`, `send-email`, `send-sms` edge fns; no new dispatcher.
+- Campaign wizard audience splitter uses existing `resolve_campaign_audience` RPC + a new `is_in_24h_window(contact_id)` SQL helper.
+- Trainer/Employee form unification keeps existing `trainerService` / `hrmService` APIs unchanged; only UI is refactored.
 
-## Out of scope (will not touch)
+## Files Touched (high level)
 
-- Switching to a different WhatsApp BSP.
-- Editing the already-approved `wait_is_over_july` body (Meta forbids it — we'll submit `_v2`).
-- Replacing the existing dispatcher architecture.
-
-## Verification
-
-- 131049: trigger a marketing send to a number with no recent engagement; confirm log row shows `error_code=131049` + hint, and the same recipient is skipped on retry within 7 days.
-- Lead alert: create a test lead with Yogita as admin; confirm `communication_logs` row has `template_id` set and a `delivered` webhook arrives.
-- "Hi Sample": run AI generator with a personalised prompt; confirm body contains `{{1}}` and `example.body_text=[["Sample"]]` before POST to Meta.
-- Trainer code: insert a trainer via UI; confirm `trainer_code` is `TR-INC-0004` (next in sequence).
-- Edit Trainer: open Ritesh Sharma from HRM page; confirm DOB / address / phone / gender pre-fill.
+- **New:** `TemplateEditorDrawer.tsx`, `TrainerFormDrawer.tsx`, `EmployeeFormDrawer.tsx`, `AIStudioLogsPanel.tsx`, `SystemHealthAuditTab.tsx`, `_shared/ai-memory.ts`.
+- **Edited:** `hrmService.ts`, `Employees.tsx`, `CampaignWizard.tsx`, `SystemHealth.tsx`, `Settings.tsx` (route AI Studio Logs), `ai-runtime.ts`, `ai-tool-executor.ts`.
+- **Deleted:** `AddTrainerDrawer.tsx`, `EditTrainerDrawer.tsx`, `AddEmployeeDrawer.tsx`, `EditEmployeeDrawer.tsx`.
+- **Migrations:** trainer-code padding fix + backfill, ai_memory TTL cron, seed library of evergreen WhatsApp templates, indexes from audit.
