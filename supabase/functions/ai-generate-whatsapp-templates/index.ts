@@ -46,6 +46,7 @@ Rules:
 - No emojis on UTILITY; max 1 tasteful emoji on MARKETING; no URLs / phone numbers in body.
 - Tone: warm, concise, Indian-English, premium fitness.
 - Names: lower_snake_case ≤ 50 chars, descriptive.
+- PERSONALIZATION RULE — **NEVER** hard-code a sample name. Write "Hi {{member_name}}" / "Hi {{1}}" — NOT "Hi Sample", "Hi friend", "Dear Member". Every body that addresses the recipient MUST include a {{}} placeholder for the name. Failing this rule will be rejected.
 - For events tagged "[DOCUMENT]" PREFER header_type='document' with header_sample_url='https://www.africau.edu/images/default/sample.pdf' (the platform auto-uploads it to Meta as the approval handle). Body must NOT include {{document_link}} — the file is delivered natively as the header attachment.
 - For other attachment events (e.g. flyers, posters) header_type='image' is allowed with header_sample_url='https://placehold.co/600x400.png'.
 - One template per event.`,
