@@ -49,17 +49,14 @@ export function AICallLogsTab() {
   const clearMutation = useMutation({
     mutationFn: async () => {
       const win = WINDOWS.find((w) => w.value === windowKey)!;
-      let query = supabase.from("ai_call_logs").delete();
-      if (win.days !== null) {
-        const cutoff = new Date(Date.now() - win.days * 24 * 60 * 60 * 1000).toISOString();
-        query = query.lt("created_at", cutoff);
-      } else {
-        // delete-all needs a tautology filter (PostgREST requires WHERE clause)
-        query = query.not("id", "is", null);
-      }
-      const { error, count } = await query.select("id", { count: "exact", head: true });
+      const cutoff = win.days !== null
+        ? new Date(Date.now() - win.days * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+      const del = supabase.from("ai_call_logs").delete();
+      const q = cutoff ? del.lt("created_at", cutoff) : del.not("id", "is", null);
+      const { error, data } = await q.select("id");
       if (error) throw error;
-      return count ?? 0;
+      return data?.length ?? 0;
     },
     onSuccess: (count) => {
       toast.success(`Cleared ${count} AI call log${count === 1 ? "" : "s"}`);
