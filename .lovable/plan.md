@@ -1,43 +1,32 @@
-## Audit findings
+## Diagnosis
 
-**1. OpenRouter free model 404s** — All three failing IDs have been retired by OpenRouter:
-- `qwen/qwen3-235b-a22b:free` — gone
-- `mistralai/mistral-7b-instruct:free` — gone
-- `google/gemini-2.0-flash-exp:free` — gone (Google deprecated the experimental endpoint)
+Ran curl + Python TLS probe against `https://ai.yacispl.com`:
 
-The legacy `meta-llama/llama-3.1-8b-instruct:free` and `meta-llama/llama-3.3-70b-instruct:free` IDs in our catalog are also no longer in OpenRouter's free collection (May 2026 ranking). That's why everything errors with "No endpoints found".
+1. **"Expired certificate" — STALE / NO LONGER TRUE.** The Let's Encrypt cert was just renewed today: valid `May 16 2026 → Aug 14 2026`. Python's stdlib SSL accepts it; curl accepts it. The Deno error was from a previous run before the renewal. A fresh Test will not reproduce it.
 
-Currently-live free models from `openrouter.ai/collections/free-models` we should ship:
-- `openrouter/auto` *(router that always picks an available free model — best default)*
-- `openai/gpt-oss-120b:free`
-- `openai/gpt-oss-20b:free`
-- `deepseek/deepseek-v4-flash:free`
-- `nvidia/nemotron-3-super-120b-a12b:free`
-- `nvidia/nemotron-3-nano-30b-a3b:free`
-- `nvidia/nemotron-nano-9b-v2:free`
-- `z-ai/glm-4.5-air:free`
-- `minimax/minimax-m2.5:free`
-- `google/gemma-4-31b-it:free`
+2. **HTTP 405 — REAL.** Server responds fine on `POST /v1/chat/completions` (returned a valid chat completion). Returns 405 on `POST /`. So the saved Ollama provider's `base_url` is `https://ai.yacispl.com/` (root) instead of the full chat-completions path. Our dispatcher (`ai-dispatcher.ts` line 132) uses `base_url` as-is, so it POSTs to root → 405.
 
-**2. Ollama (`http://31.97.232.17:11434`)** — Provider exists in dispatcher + catalog, but:
-- Catalog still has placeholder `https://your-vps.example.com/v1/chat/completions` as base_url.
-- Catalog forces `OLLAMA_API_KEY` secret_name (Ollama doesn't need one; dispatcher already skips `Authorization` if env var is empty — fine, no code change there).
-- Model list is generic (`llama3.1:8b`, etc.) — should match what's actually pullable + add `qwen2.5`, `llama3.2`.
+Confirmed pullable models on this server: `llama3.1:latest`, `qwen2.5:latest`.
 
-The edge dispatcher will accept the http:// URL — calls run server-side, no mixed-content issue.
+## Fix
 
-## Changes
+**`supabase/functions/_shared/ai-dispatcher.ts`** — Make `buildEndpoint` resilient for `ollama` and `openai_compatible` providers: if `base_url` is set but doesn't already include `/chat/completions`, auto-append the correct suffix.
+- Strip trailing `/`.
+- If URL ends with `/v1` → append `/chat/completions`.
+- If URL has no `/v1` segment → append `/v1/chat/completions`.
+- If URL already ends with `/chat/completions` → use as-is.
 
-**`src/lib/ai/providerCatalog.ts`**
-1. Replace `openrouter.models[]` with the live free list above; set `default_model` to `openrouter/auto` so any new install "just works".
-2. Update `openrouter.help` to mention auto-router + link to `openrouter.ai/models?free=true`.
-3. Update `ollama.base_url` placeholder to `http://31.97.232.17:11434/v1/chat/completions` (the user's VPS) and `ollama.help` to clarify the `/v1/chat/completions` suffix + that API key is optional.
+This makes the provider work whether the user types `https://ai.yacispl.com`, `https://ai.yacispl.com/v1`, or the full path.
 
-**No edge-function changes needed** — `ai-dispatcher.ts` already handles Ollama (http + optional key) and OpenRouter correctly.
+**`src/lib/ai/providerCatalog.ts`** — Update Ollama defaults:
+- `default_model`: change to `qwen2.5:latest` (actually pulled on this VPS).
+- `models[]`: replace generic list with the two confirmed-available ones (`llama3.1:latest`, `qwen2.5:latest`) plus a help note to run `ollama pull <model>` for more.
+- `base_url` placeholder/help text: explicitly state either root host or full path works.
 
-## After the change — what user needs to do
+No DB migration. No catalog DB changes. Only the dispatcher edge function needs redeploy (auto on save).
 
-1. **OpenRouter rule**: open the rule in AI Purposes, re-pick provider = OpenRouter, model = `openrouter/auto` (or any of the new free IDs), hit Test → should return 200.
-2. **Ollama**: in Settings → AI Providers, add Ollama, base URL `http://31.97.232.17:11434/v1/chat/completions`, leave API key blank, pick a model you've `ollama pull`'d (e.g. `llama3.1:8b`), Save → Test.
+## Post-fix steps for the user
 
-No DB migration. No edge function redeploy.
+1. Open the Ollama provider in Settings → AI Providers, hit Save (no edit needed — existing `https://ai.yacispl.com/` will now auto-resolve to `/v1/chat/completions`).
+2. Pick model `qwen2.5:latest` (or `llama3.1:latest`) → click **Test** → should return 200 with "Pong".
+3. The "expired certificate" message will not return — server cert is now valid through Aug 14 2026.
