@@ -143,6 +143,67 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return () => { supabase.removeChannel(ch); };
   }, [open, channel, refetchTemplates]);
 
+  // ─── Evergreen template library ────────────────────────────────────────────
+  // Pull the active evergreen `templates` rows that match the current campaign
+  // type + channel. These are reusable, generic bodies (seeded globally) that
+  // the wizard auto-picks so the marketer doesn't need fresh Meta approval per
+  // campaign. When the linked `meta_template_name` is APPROVED in
+  // `whatsapp_templates`, we auto-toggle the "send via approved template" mode
+  // and pre-select the local templates.id.
+  const { data: evergreenTemplates = [] } = useQuery({
+    queryKey: ['evergreen-templates', channel, campaignType, branchId],
+    queryFn: async () => {
+      let q = supabase
+        .from('templates')
+        .select('id, name, content, subject, header_type, meta_template_name, meta_template_status, evergreen_kind, branch_id, variables')
+        .eq('is_evergreen', true)
+        .eq('is_active', true)
+        .eq('type', channel)
+        .eq('evergreen_kind', campaignType);
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q.order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && (channel === 'whatsapp' || channel === 'email' || channel === 'sms'),
+  });
+
+  const [evergreenAppliedFor, setEvergreenAppliedFor] = useState<string | null>(null);
+  const [evergreenPickedName, setEvergreenPickedName] = useState<string | null>(null);
+
+  // Auto-apply evergreen on campaign-type / channel switch (only when not editing
+  // and user hasn't typed a custom message yet, or when the prior body came from
+  // a different evergreen).
+  useEffect(() => {
+    if (!open || isEditing) return;
+    const key = `${channel}:${campaignType}`;
+    if (evergreenAppliedFor === key) return;
+    const ever = (evergreenTemplates as any[])[0];
+    if (!ever) {
+      // No evergreen for this combo — keep whatever the user has.
+      setEvergreenAppliedFor(key);
+      return;
+    }
+    // Don't blow away user's custom edits — only apply if message is empty or
+    // still matches the previously-applied evergreen body.
+    const messageIsCustom = message.trim().length > 0 &&
+      !(evergreenPickedName && message.trim() === (evergreenTemplates as any[])
+        .find((t: any) => t.name === evergreenPickedName)?.content?.trim());
+    if (!messageIsCustom) {
+      setMessage(ever.content || '');
+      if (channel === 'email' && ever.subject) setSubject(ever.subject);
+      setEvergreenPickedName(ever.name);
+      // If the linked Meta template is APPROVED, auto-route through the
+      // approved-template path so cold recipients don't get blocked.
+      if (channel === 'whatsapp' && ever.id && ever.meta_template_status === 'approved') {
+        setUseApprovedTemplate(true);
+        setSelectedTemplateId(ever.id);
+      }
+    }
+    setEvergreenAppliedFor(key);
+  }, [open, isEditing, channel, campaignType, evergreenTemplates, evergreenAppliedFor, evergreenPickedName, message]);
+
+
   const handleSyncFromMeta = async () => {
     if (!branchId) { toast.error('No branch available'); return; }
     setSyncingTemplates(true);
@@ -317,6 +378,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
+    setEvergreenAppliedFor(null); setEvergreenPickedName(null);
   };
 
   const close = () => { reset(); onOpenChange(false); };
@@ -617,6 +679,42 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {evergreenPickedName && (
+              <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/60 dark:bg-indigo-500/10 p-3 flex items-start gap-2.5">
+                <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-indigo-900 dark:text-indigo-100 flex-1">
+                  <p className="font-semibold mb-0.5">Evergreen template applied: <span className="font-mono text-[12px]">{evergreenPickedName}</span></p>
+                  <p className="text-[11px]">Reusable Meta-friendly base for <b>{campaignType.replace('_', ' ')}</b> campaigns. Edit freely or pick a different evergreen below.</p>
+                  {evergreenTemplates.length > 1 && (
+                    <Select
+                      value={evergreenPickedName}
+                      onValueChange={(n) => {
+                        const t: any = (evergreenTemplates as any[]).find((x) => x.name === n);
+                        if (!t) return;
+                        setMessage(t.content || '');
+                        if (channel === 'email' && t.subject) setSubject(t.subject);
+                        setEvergreenPickedName(t.name);
+                        if (channel === 'whatsapp' && t.id && t.meta_template_status === 'approved') {
+                          setUseApprovedTemplate(true); setSelectedTemplateId(t.id);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="rounded-lg bg-white mt-2 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(evergreenTemplates as any[]).map((t: any) => (
+                          <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]"
+                  onClick={() => { setEvergreenPickedName(null); setMessage(''); }}>
+                  Clear
+                </Button>
               </div>
             )}
 
