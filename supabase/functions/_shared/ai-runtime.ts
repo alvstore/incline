@@ -85,7 +85,7 @@ export async function loadPurpose(
   if (branchId) {
     const { data } = await supabase
       .from("ai_purposes")
-      .select("enabled, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
+      .select("enabled, provider_id, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
       .eq("purpose", purpose)
       .eq("branch_id", branchId)
       .maybeSingle();
@@ -93,7 +93,7 @@ export async function loadPurpose(
   }
   const { data: globalRow } = await supabase
     .from("ai_purposes")
-    .select("enabled, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
+    .select("enabled, provider_id, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
     .eq("purpose", purpose)
     .is("branch_id", null)
     .maybeSingle();
