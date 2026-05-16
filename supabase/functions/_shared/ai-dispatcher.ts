@@ -29,6 +29,7 @@ export interface CallAIOptions {
   scope: AIScope;
   messages: ChatMessage[];
   supabase?: SupabaseClient;
+  providerId?: string;       // explicit provider config row override (wins over scope)
   model?: string;            // override the provider's default
   tools?: any[];
   tool_choice?: any;
