@@ -8,25 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { X, UserPlus, Link } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCreateTrainer } from '@/hooks/useTrainers';
-import { UserPlus, Link } from 'lucide-react';
 import { StaffAvatarUpload } from '@/components/common/StaffAvatarUpload';
 import { DefaultPasswordCard, DEFAULT_TEMP_PASSWORD } from '@/components/auth/TempPasswordField';
-
-const SALARY_TYPES = [
-  { value: 'hourly', label: 'Hourly Rate' },
-  { value: 'fixed', label: 'Fixed Salary' },
-];
-
-const GOVERNMENT_ID_TYPES = [
-  { value: 'aadhaar', label: 'Aadhaar Card' },
-  { value: 'pan', label: 'PAN Card' },
-  { value: 'driving_license', label: 'Driving License' },
-  { value: 'voter_id', label: 'Voter ID' },
-  { value: 'passport', label: 'Passport' },
-];
+import {
+  SPECIALIZATION_OPTIONS,
+  TRAINER_SALARY_TYPES,
+  GOVERNMENT_ID_TYPES,
+} from '@/constants/trainerConstants';
 
 interface AddTrainerDrawerProps {
   open: boolean;
@@ -34,75 +27,87 @@ interface AddTrainerDrawerProps {
   branchId: string;
 }
 
+type FormState = {
+  // Auth-bound (new user only)
+  email: string;
+  // Profile
+  full_name: string;
+  phone: string;
+  gender: string;
+  date_of_birth: string;
+  address: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  // Trainer
+  bio: string;
+  specializations: string[];
+  certifications: string[];
+  max_clients: number;
+  salary_type: string;
+  hourly_rate: number;
+  fixed_salary: number;
+  pt_share_percentage: number;
+  government_id_type: string;
+  government_id_number: string;
+  // Link mode
+  user_id: string;
+};
+
+const emptyForm = (): FormState => ({
+  email: '',
+  full_name: '',
+  phone: '',
+  gender: '',
+  date_of_birth: '',
+  address: '',
+  city: '',
+  state: '',
+  postal_code: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  bio: '',
+  specializations: [],
+  certifications: [],
+  max_clients: 10,
+  salary_type: 'fixed',
+  hourly_rate: 0,
+  fixed_salary: 0,
+  pt_share_percentage: 50,
+  government_id_type: '',
+  government_id_number: '',
+  user_id: '',
+});
+
 export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDrawerProps) {
   const [availableUsers, setAvailableUsers] = useState<{ id: string; email: string; full_name: string | null }[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [activeTab, setActiveTab] = useState<'new' | 'link'>('new');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [newCertification, setNewCertification] = useState('');
   const createTrainer = useCreateTrainer();
   const queryClient = useQueryClient();
 
-  // Form data for linking existing user
-  const [linkFormData, setLinkFormData] = useState({
-    user_id: '',
-    specializations: '',
-    certifications: '',
-    bio: '',
-    salary_type: 'hourly',
-    hourly_rate: 0,
-    fixed_salary: 0,
-    pt_share_percentage: 40,
-    government_id_type: '',
-    government_id_number: '',
-  });
+  const [newUserForm, setNewUserForm] = useState<FormState>(emptyForm());
+  const [linkForm, setLinkForm] = useState<FormState>(emptyForm());
 
-  // Form data for creating new user
-  const [newUserFormData, setNewUserFormData] = useState({
-    email: '',
-    full_name: '',
-    phone: '',
-    specializations: '',
-    certifications: '',
-    bio: '',
-    salary_type: 'hourly',
-    hourly_rate: 0,
-    fixed_salary: 0,
-    pt_share_percentage: 40,
-    government_id_type: '',
-    government_id_number: '',
-  });
+  const isLink = activeTab === 'link';
+  const form = isLink ? linkForm : newUserForm;
+  const setForm = isLink ? setLinkForm : setNewUserForm;
 
   const loadAvailableUsers = async () => {
     if (!branchId) return;
     setLoadingUsers(true);
     try {
-      // Get existing trainer user IDs
-      const { data: existingTrainers } = await supabase
-        .from('trainers')
-        .select('user_id')
-        .eq('branch_id', branchId);
-
+      const { data: existingTrainers } = await supabase.from('trainers').select('user_id').eq('branch_id', branchId);
       const existingTrainerIds = (existingTrainers || []).map((t) => t.user_id);
-
-      // Get member user IDs (trainers should not be members)
-      const { data: existingMembers } = await supabase
-        .from('members')
-        .select('user_id')
-        .not('user_id', 'is', null);
-      
+      const { data: existingMembers } = await supabase.from('members').select('user_id').not('user_id', 'is', null);
       const existingMemberIds = (existingMembers || []).map((m) => m.user_id);
-
-      // Get all profiles
-      const { data: users } = await supabase
-        .from('profiles')
-        .select('id, email, full_name');
-
-      // Filter out users who are already trainers or members
-      const filtered = (users || []).filter((u) => 
-        !existingTrainerIds.includes(u.id) && 
-        !existingMemberIds.includes(u.id)
-      );
+      const { data: users } = await supabase.from('profiles').select('id, email, full_name');
+      const filtered = (users || []).filter((u) => !existingTrainerIds.includes(u.id) && !existingMemberIds.includes(u.id));
       setAvailableUsers(filtered);
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -112,90 +117,134 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
   };
 
   useEffect(() => {
-    if (open) {
-      loadAvailableUsers();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (open) loadAvailableUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, branchId]);
+
+  const resetForms = () => {
+    setAvatarUrl('');
+    setNewUserForm(emptyForm());
+    setLinkForm(emptyForm());
+    setNewCertification('');
+  };
+
+  const toggleSpec = (spec: string) => {
+    setForm({
+      ...form,
+      specializations: form.specializations.includes(spec)
+        ? form.specializations.filter((s) => s !== spec)
+        : [...form.specializations, spec],
+    });
+  };
+
+  const addCertification = () => {
+    const v = newCertification.trim();
+    if (!v || form.certifications.includes(v)) return;
+    setForm({ ...form, certifications: [...form.certifications, v] });
+    setNewCertification('');
+  };
+
+  const removeCertification = (c: string) => {
+    setForm({ ...form, certifications: form.certifications.filter((x) => x !== c) });
+  };
+
+  const buildProfileUpdate = (f: FormState) => ({
+    full_name: f.full_name || null,
+    phone: f.phone || null,
+    gender: (f.gender || null) as 'male' | 'female' | 'other' | null,
+    date_of_birth: f.date_of_birth || null,
+    address: f.address || null,
+    city: f.city || null,
+    state: f.state || null,
+    postal_code: f.postal_code || null,
+    emergency_contact_name: f.emergency_contact_name || null,
+    emergency_contact_phone: f.emergency_contact_phone || null,
+  });
 
   const handleLinkExisting = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkFormData.user_id || !branchId) {
+    if (!linkForm.user_id || !branchId) {
       toast.error('Please select a user');
       return;
     }
-
+    setIsSubmitting(true);
     try {
       await createTrainer.mutateAsync({
         branch_id: branchId,
-        user_id: linkFormData.user_id,
-        specializations: linkFormData.specializations
-          ? linkFormData.specializations.split(',').map((s) => s.trim())
-          : null,
-        certifications: linkFormData.certifications
-          ? linkFormData.certifications.split(',').map((s) => s.trim())
-          : null,
-        bio: linkFormData.bio || null,
-        hourly_rate: linkFormData.salary_type === 'hourly' ? linkFormData.hourly_rate : null,
-        salary_type: linkFormData.salary_type,
-        fixed_salary: linkFormData.salary_type === 'fixed' ? linkFormData.fixed_salary : null,
-        pt_share_percentage: linkFormData.pt_share_percentage,
-        government_id_type: linkFormData.government_id_type || null,
-        government_id_number: linkFormData.government_id_number || null,
+        user_id: linkForm.user_id,
+        specializations: linkForm.specializations.length ? linkForm.specializations : null,
+        certifications: linkForm.certifications.length ? linkForm.certifications : null,
+        bio: linkForm.bio || null,
+        max_clients: linkForm.max_clients,
+        hourly_rate: linkForm.hourly_rate || null,
+        salary_type: linkForm.salary_type,
+        fixed_salary: linkForm.fixed_salary || null,
+        pt_share_percentage: linkForm.pt_share_percentage,
+        government_id_type: linkForm.government_id_type || null,
+        government_id_number: linkForm.government_id_number || null,
       });
 
-      // Assign trainer role
-      await supabase.from('user_roles').insert({
-        user_id: linkFormData.user_id,
-        role: 'trainer',
-      });
+      // Update profile with personal details
+      await supabase.from('profiles').update(buildProfileUpdate(linkForm)).eq('id', linkForm.user_id);
 
-      // Add to staff_branches
-      await supabase.from('staff_branches').insert({
-        user_id: linkFormData.user_id,
-        branch_id: branchId,
-      });
+      // Assign trainer role + branch (best-effort, ignore duplicates)
+      await supabase.from('user_roles').insert({ user_id: linkForm.user_id, role: 'trainer' });
+      await supabase.from('staff_branches').insert({ user_id: linkForm.user_id, branch_id: branchId });
 
       toast.success('Trainer profile created');
       await queryClient.invalidateQueries({ queryKey: ['trainers'] });
       onOpenChange(false);
       resetForms();
-    } catch (error) {
-      toast.error('Failed to create trainer profile');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to create trainer profile';
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleCreateNew = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserFormData.email || !branchId) {
+    if (!newUserForm.email || !branchId) {
       toast.error('Please fill in all required fields');
       return;
     }
-
     setIsSubmitting(true);
     try {
-      // Create user via new edge function that handles trainer creation
       const { data: userData, error: createError } = await supabase.functions.invoke('create-staff-user', {
         body: {
-          email: newUserFormData.email,
-          fullName: newUserFormData.full_name,
-          phone: newUserFormData.phone,
+          email: newUserForm.email,
+          fullName: newUserForm.full_name,
+          phone: newUserForm.phone,
           role: 'trainer',
-          branchId: branchId,
-          salaryType: newUserFormData.salary_type,
-          fixedSalary: newUserFormData.salary_type === 'fixed' ? newUserFormData.fixed_salary : null,
-          hourlyRate: newUserFormData.salary_type === 'hourly' ? newUserFormData.hourly_rate : null,
-          ptSharePercentage: newUserFormData.pt_share_percentage,
-          governmentIdType: newUserFormData.government_id_type || null,
-          governmentIdNumber: newUserFormData.government_id_number || null,
-          specializations: newUserFormData.specializations
-            ? newUserFormData.specializations.split(',').map((s) => s.trim())
-            : [],
+          branchId,
+          gender: newUserForm.gender,
+          dateOfBirth: newUserForm.date_of_birth,
+          address: newUserForm.address,
+          city: newUserForm.city,
+          state: newUserForm.state,
+          postalCode: newUserForm.postal_code,
+          emergencyContactName: newUserForm.emergency_contact_name,
+          emergencyContactPhone: newUserForm.emergency_contact_phone,
+          salaryType: newUserForm.salary_type,
+          fixedSalary: newUserForm.fixed_salary || null,
+          hourlyRate: newUserForm.hourly_rate || null,
+          ptSharePercentage: newUserForm.pt_share_percentage,
+          maxClients: newUserForm.max_clients,
+          governmentIdType: newUserForm.government_id_type || null,
+          governmentIdNumber: newUserForm.government_id_number || null,
+          specializations: newUserForm.specializations,
+          certifications: newUserForm.certifications,
+          bio: newUserForm.bio,
         },
       });
-
       if (createError) throw createError;
       if (userData?.error) throw new Error(userData.error);
+
+      // Avatar (post-create, since we need user_id)
+      if (avatarUrl && userData?.userId) {
+        await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', userData.userId);
+      }
 
       toast.success(`Trainer created. Default password: ${DEFAULT_TEMP_PASSWORD}`, {
         duration: 12000,
@@ -204,135 +253,195 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
       await queryClient.invalidateQueries({ queryKey: ['trainers'] });
       onOpenChange(false);
       resetForms();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating trainer:', error);
-      toast.error(error.message || 'Failed to create trainer');
+      const msg = error instanceof Error ? error.message : 'Failed to create trainer';
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const resetForms = () => {
-    setAvatarUrl('');
-    setLinkFormData({
-      user_id: '',
-      specializations: '',
-      certifications: '',
-      bio: '',
-      salary_type: 'hourly',
-      hourly_rate: 0,
-      fixed_salary: 0,
-      pt_share_percentage: 40,
-      government_id_type: '',
-      government_id_number: '',
-    });
-    setNewUserFormData({
-      email: '',
-      full_name: '',
-      phone: '',
-      specializations: '',
-      certifications: '',
-      bio: '',
-      salary_type: 'hourly',
-      hourly_rate: 0,
-      fixed_salary: 0,
-      pt_share_percentage: 40,
-      government_id_type: '',
-      government_id_number: '',
-    });
-  };
+  const renderPersonalDetails = (f: FormState, setF: (v: FormState) => void, includeNameEmail: boolean) => (
+    <div className="space-y-3 p-4 border rounded-lg">
+      <h4 className="font-medium text-sm">Personal Details</h4>
+      <div className="grid grid-cols-2 gap-3">
+        {includeNameEmail && (
+          <>
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} placeholder="John Doe" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <PhoneInput value={f.phone} onChange={(value) => setF({ ...f, phone: value })} />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label>Email *</Label>
+              <Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="trainer@gym.com" required />
+            </div>
+          </>
+        )}
+        <div className="space-y-2">
+          <Label>Gender</Label>
+          <Select
+            value={f.gender || 'unspecified'}
+            onValueChange={(v) => setF({ ...f, gender: v === 'unspecified' ? '' : v })}
+          >
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unspecified">—</SelectItem>
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Date of Birth</Label>
+          <Input type="date" value={f.date_of_birth} onChange={(e) => setF({ ...f, date_of_birth: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Postal Code</Label>
+          <Input value={f.postal_code} onChange={(e) => setF({ ...f, postal_code: e.target.value })} />
+        </div>
+        <div className="space-y-2 col-span-2">
+          <Label>Address</Label>
+          <Textarea rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>City</Label>
+          <Input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>State</Label>
+          <Input value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Emergency Contact Name</Label>
+          <Input value={f.emergency_contact_name} onChange={(e) => setF({ ...f, emergency_contact_name: e.target.value })} />
+        </div>
+        <div className="space-y-2">
+          <Label>Emergency Contact Phone</Label>
+          <Input value={f.emergency_contact_phone} onChange={(e) => setF({ ...f, emergency_contact_phone: e.target.value })} />
+        </div>
+      </div>
+    </div>
+  );
 
-  const renderCompensationFields = (formData: any, setFormData: any) => (
-    <>
+  const renderSpecializations = (f: FormState) => (
+    <div className="space-y-2">
+      <Label>Specializations</Label>
+      <div className="flex flex-wrap gap-2">
+        {SPECIALIZATION_OPTIONS.map((spec) => (
+          <Badge
+            key={spec}
+            variant={f.specializations.includes(spec) ? 'default' : 'outline'}
+            className="cursor-pointer"
+            onClick={() => toggleSpec(spec)}
+          >
+            {spec}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderCertifications = (f: FormState) => (
+    <div className="space-y-2">
+      <Label>Certifications</Label>
+      <div className="flex gap-2">
+        <Input
+          value={newCertification}
+          onChange={(e) => setNewCertification(e.target.value)}
+          placeholder="Add certification..."
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCertification())}
+        />
+        <Button type="button" variant="outline" onClick={addCertification}>Add</Button>
+      </div>
+      {f.certifications.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {f.certifications.map((cert) => (
+            <Badge key={cert} variant="secondary" className="gap-1">
+              {cert}
+              <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => removeCertification(cert)} />
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderCompensation = (f: FormState, setF: (v: FormState) => void) => (
+    <div className="space-y-4 p-4 border rounded-lg">
+      <h4 className="font-medium">Compensation</h4>
       <div className="space-y-2">
         <Label>Salary Type</Label>
-        <Select
-          value={formData.salary_type}
-          onValueChange={(value) => setFormData({ ...formData, salary_type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+        <Select value={f.salary_type} onValueChange={(v) => setF({ ...f, salary_type: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SALARY_TYPES.map((type) => (
-              <SelectItem key={type.value} value={type.value}>
-                {type.label}
-              </SelectItem>
-            ))}
+            {TRAINER_SALARY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-
-      {formData.salary_type === 'hourly' ? (
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Max Clients</Label>
+          <Input type="number" value={f.max_clients}
+            onChange={(e) => setF({ ...f, max_clients: parseInt(e.target.value) || 10 })} />
+        </div>
         <div className="space-y-2">
           <Label>Hourly Rate (₹)</Label>
-          <Input
-            type="number"
-            value={formData.hourly_rate}
-            onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
-          />
+          <Input type="number" value={f.hourly_rate}
+            onChange={(e) => setF({ ...f, hourly_rate: parseFloat(e.target.value) || 0 })} />
         </div>
-      ) : (
         <div className="space-y-2">
-          <Label>Fixed Salary (₹/month)</Label>
-          <Input
-            type="number"
-            value={formData.fixed_salary}
-            onChange={(e) => setFormData({ ...formData, fixed_salary: parseFloat(e.target.value) || 0 })}
-          />
+          <Label>Fixed Salary (₹)</Label>
+          <Input type="number" value={f.fixed_salary} disabled={f.salary_type === 'commission'}
+            onChange={(e) => setF({ ...f, fixed_salary: parseFloat(e.target.value) || 0 })} />
         </div>
-      )}
-
-      <div className="space-y-2">
-        <Label>PT Share Percentage (%)</Label>
-        <Input
-          type="number"
-          min={0}
-          max={100}
-          value={formData.pt_share_percentage}
-          onChange={(e) => setFormData({ ...formData, pt_share_percentage: parseFloat(e.target.value) || 40 })}
-        />
-        <p className="text-xs text-muted-foreground">
-          Trainer gets {formData.pt_share_percentage}%, Owner gets {100 - formData.pt_share_percentage}% (before GST)
-        </p>
+        <div className="space-y-2">
+          <Label>PT Share (%)</Label>
+          <Input type="number" min={0} max={100} value={f.pt_share_percentage}
+            onChange={(e) => setF({ ...f, pt_share_percentage: parseFloat(e.target.value) || 50 })} />
+        </div>
       </div>
-    </>
+      <p className="text-xs text-muted-foreground">
+        Trainer gets {f.pt_share_percentage}%, Owner gets {100 - f.pt_share_percentage}% (before GST)
+      </p>
+    </div>
   );
 
-  const renderGovernmentIdFields = (formData: any, setFormData: any) => (
+  const renderGovernmentId = (f: FormState, setF: (v: FormState) => void) => (
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-2">
         <Label>Government ID Type</Label>
-        <Select
-          value={formData.government_id_type}
-          onValueChange={(value) => setFormData({ ...formData, government_id_type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select ID type" />
-          </SelectTrigger>
+        <Select value={f.government_id_type} onValueChange={(v) => setF({ ...f, government_id_type: v })}>
+          <SelectTrigger><SelectValue placeholder="Select ID type" /></SelectTrigger>
           <SelectContent>
-            {GOVERNMENT_ID_TYPES.map((type) => (
-              <SelectItem key={type.value} value={type.value}>
-                {type.label}
-              </SelectItem>
-            ))}
+            {GOVERNMENT_ID_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
         <Label>ID Number</Label>
-        <Input
-          value={formData.government_id_number}
-          onChange={(e) => setFormData({ ...formData, government_id_number: e.target.value })}
-          placeholder="Enter ID number"
-        />
+        <Input value={f.government_id_number}
+          onChange={(e) => setF({ ...f, government_id_number: e.target.value })} placeholder="Enter ID number" />
       </div>
+    </div>
+  );
+
+  const renderBio = (f: FormState, setF: (v: FormState) => void) => (
+    <div className="space-y-2">
+      <Label>Bio</Label>
+      <Textarea value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })}
+        placeholder="Trainer bio and experience..." rows={3} />
     </div>
   );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Add Trainer Profile</SheetTitle>
           <SheetDescription>Create a new trainer or link an existing user profile</SheetDescription>
@@ -340,17 +449,11 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'new' | 'link')} className="mt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="new" className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Create New User
-            </TabsTrigger>
-            <TabsTrigger value="link" className="gap-2">
-              <Link className="h-4 w-4" />
-              Link Existing
-            </TabsTrigger>
+            <TabsTrigger value="new" className="gap-2"><UserPlus className="h-4 w-4" />Create New User</TabsTrigger>
+            <TabsTrigger value="link" className="gap-2"><Link className="h-4 w-4" />Link Existing</TabsTrigger>
           </TabsList>
 
-          {/* Create New User Tab */}
+          {/* Create New */}
           <TabsContent value="new">
             <form onSubmit={handleCreateNew} className="space-y-4 py-4">
               <div className="p-3 rounded-lg bg-info/10 border border-info/30 text-sm">
@@ -358,86 +461,25 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
                 <p className="text-muted-foreground">This will create a new user account and trainer profile.</p>
               </div>
 
-              {/* Avatar Upload */}
               <div className="flex justify-center pb-2">
                 <StaffAvatarUpload
                   avatarUrl={avatarUrl}
-                  name={newUserFormData.full_name || 'New Trainer'}
+                  name={newUserForm.full_name || 'New Trainer'}
                   onAvatarChange={setAvatarUrl}
                   size="lg"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Full Name *</Label>
-                  <Input
-                    value={newUserFormData.full_name}
-                    onChange={(e) => setNewUserFormData({ ...newUserFormData, full_name: e.target.value })}
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
-                  <PhoneInput
-                    value={newUserFormData.phone}
-                    onChange={(value) => setNewUserFormData({ ...newUserFormData, phone: value })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input
-                  type="email"
-                  value={newUserFormData.email}
-                  onChange={(e) => setNewUserFormData({ ...newUserFormData, email: e.target.value })}
-                  placeholder="trainer@gym.com"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">Trainer will sign in with the default password and change it on first login</p>
-              </div>
-
+              {renderPersonalDetails(newUserForm, setNewUserForm, true)}
               <DefaultPasswordCard />
-
-
-              {renderGovernmentIdFields(newUserFormData, setNewUserFormData)}
-
-              <div className="space-y-2">
-                <Label>Specializations</Label>
-                <Input
-                  value={newUserFormData.specializations}
-                  onChange={(e) => setNewUserFormData({ ...newUserFormData, specializations: e.target.value })}
-                  placeholder="Yoga, HIIT, Strength (comma-separated)"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Certifications</Label>
-                <Input
-                  value={newUserFormData.certifications}
-                  onChange={(e) => setNewUserFormData({ ...newUserFormData, certifications: e.target.value })}
-                  placeholder="ACE, NASM, CPR (comma-separated)"
-                />
-              </div>
-
-              {renderCompensationFields(newUserFormData, setNewUserFormData)}
-
-              <div className="space-y-2">
-                <Label>Bio</Label>
-                <Textarea
-                  value={newUserFormData.bio}
-                  onChange={(e) => setNewUserFormData({ ...newUserFormData, bio: e.target.value })}
-                  placeholder="Trainer bio and experience..."
-                  rows={3}
-                />
-              </div>
+              {renderGovernmentId(newUserForm, setNewUserForm)}
+              {renderSpecializations(newUserForm)}
+              {renderCertifications(newUserForm)}
+              {renderCompensation(newUserForm, setNewUserForm)}
+              {renderBio(newUserForm, setNewUserForm)}
 
               <SheetFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button type="submit" disabled={isSubmitting || createTrainer.isPending}>
                   {isSubmitting || createTrainer.isPending ? 'Creating...' : 'Create Trainer'}
                 </Button>
@@ -445,7 +487,7 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
             </form>
           </TabsContent>
 
-          {/* Link Existing User Tab */}
+          {/* Link Existing */}
           <TabsContent value="link">
             <form onSubmit={handleLinkExisting} className="space-y-4 py-4">
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm">
@@ -455,67 +497,33 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
 
               <div className="space-y-2">
                 <Label>User *</Label>
-                <Select
-                  value={linkFormData.user_id}
-                  onValueChange={(value) => setLinkFormData({ ...linkFormData, user_id: value })}
-                >
+                <Select value={linkForm.user_id} onValueChange={(v) => setLinkForm({ ...linkForm, user_id: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder={loadingUsers ? 'Loading...' : 'Select user'} />
                   </SelectTrigger>
                   <SelectContent>
                     {availableUsers.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        No available users found
-                      </div>
+                      <div className="p-2 text-sm text-muted-foreground text-center">No available users found</div>
                     ) : (
                       availableUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.full_name || user.email}
-                        </SelectItem>
+                        <SelectItem key={user.id} value={user.id}>{user.full_name || user.email}</SelectItem>
                       ))
                     )}
                   </SelectContent>
                 </Select>
               </div>
 
-              {renderGovernmentIdFields(linkFormData, setLinkFormData)}
-
-              <div className="space-y-2">
-                <Label>Specializations</Label>
-                <Input
-                  value={linkFormData.specializations}
-                  onChange={(e) => setLinkFormData({ ...linkFormData, specializations: e.target.value })}
-                  placeholder="Yoga, HIIT, Strength (comma-separated)"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Certifications</Label>
-                <Input
-                  value={linkFormData.certifications}
-                  onChange={(e) => setLinkFormData({ ...linkFormData, certifications: e.target.value })}
-                  placeholder="ACE, NASM, CPR (comma-separated)"
-                />
-              </div>
-
-              {renderCompensationFields(linkFormData, setLinkFormData)}
-
-              <div className="space-y-2">
-                <Label>Bio</Label>
-                <Textarea
-                  value={linkFormData.bio}
-                  onChange={(e) => setLinkFormData({ ...linkFormData, bio: e.target.value })}
-                  placeholder="Trainer bio and experience..."
-                  rows={3}
-                />
-              </div>
+              {renderPersonalDetails(linkForm, setLinkForm, false)}
+              {renderGovernmentId(linkForm, setLinkForm)}
+              {renderSpecializations(linkForm)}
+              {renderCertifications(linkForm)}
+              {renderCompensation(linkForm, setLinkForm)}
+              {renderBio(linkForm, setLinkForm)}
 
               <SheetFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createTrainer.isPending || availableUsers.length === 0}>
-                  {createTrainer.isPending ? 'Creating...' : 'Add Trainer'}
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button type="submit" disabled={isSubmitting || createTrainer.isPending || availableUsers.length === 0}>
+                  {isSubmitting || createTrainer.isPending ? 'Creating...' : 'Add Trainer'}
                 </Button>
               </SheetFooter>
             </form>

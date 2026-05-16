@@ -15,25 +15,17 @@ import { StaffAvatarUpload } from '@/components/common/StaffAvatarUpload';
 import { queueTrainerSync } from '@/services/biometricService';
 import { supabase } from '@/integrations/supabase/client';
 import { StaffBiometricsTab } from '@/components/common/StaffBiometricsTab';
+import {
+  SPECIALIZATION_OPTIONS,
+  TRAINER_SALARY_TYPES as SALARY_TYPES,
+  GOVERNMENT_ID_TYPES,
+} from '@/constants/trainerConstants';
 
 interface EditTrainerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trainer: any;
 }
-
-const SPECIALIZATION_OPTIONS = [
-  'Weight Training', 'Cardio', 'HIIT', 'Yoga', 'Pilates', 
-  'CrossFit', 'Boxing', 'Zumba', 'Strength Training', 'Functional Training',
-  'Calisthenics', 'Martial Arts', 'Swimming', 'Sports Conditioning'
-];
-
-const SALARY_TYPES = [
-  { value: 'fixed', label: 'Fixed Monthly' },
-  { value: 'hourly', label: 'Hourly' },
-  { value: 'commission', label: 'Commission Only' },
-  { value: 'hybrid', label: 'Fixed + Commission' },
-];
 
 export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDrawerProps) {
   const updateTrainer = useUpdateTrainer();
@@ -48,6 +40,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
     pt_share_percentage: 50,
     specializations: [] as string[],
     certifications: [] as string[],
+    government_id_type: '',
     government_id: '',
     is_active: true,
   });
@@ -101,6 +94,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
         pt_share_percentage: fresh.pt_share_percentage || 50,
         specializations: fresh.specializations || [],
         certifications: fresh.certifications || [],
+        government_id_type: (fresh as any).government_id_type || fresh.profile?.government_id_type || '',
         government_id: fresh.government_id || (fresh as any).government_id_number || fresh.profile?.government_id_number || '',
         is_active: fresh.is_active ?? true,
       });
@@ -163,6 +157,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
           pt_share_percentage: formData.pt_share_percentage,
           specializations: formData.specializations,
           certifications: formData.certifications,
+          government_id_type: formData.government_id_type || null,
           government_id_number: formData.government_id || null,
           is_active: formData.is_active,
         },
@@ -441,13 +436,29 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
           </div>
 
           {/* Government ID */}
-          <div className="space-y-2">
-            <Label>Government ID</Label>
-            <Input
-              value={formData.government_id}
-              onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
-              placeholder="Aadhar/PAN number"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Government ID Type</Label>
+              <Select
+                value={formData.government_id_type}
+                onValueChange={(v) => setFormData({ ...formData, government_id_type: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select ID type" /></SelectTrigger>
+                <SelectContent>
+                  {GOVERNMENT_ID_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>ID Number</Label>
+              <Input
+                value={formData.government_id}
+                onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
+                placeholder="Enter ID number"
+              />
+            </div>
           </div>
 
           {/* Hardware & Biometrics */}

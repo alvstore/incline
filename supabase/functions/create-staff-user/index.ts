@@ -14,7 +14,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[0-9\s\-\(\)]{10,20}$/;
 const ALLOWED_ROLES = ['trainer', 'staff', 'manager', 'admin', 'owner'];
-const ALLOWED_SALARY_TYPES = ['hourly', 'monthly', 'fixed', 'commission'];
+const ALLOWED_SALARY_TYPES = ['hourly', 'monthly', 'fixed', 'commission', 'hybrid'];
 const ALLOWED_ID_TYPES = ['aadhaar', 'pan', 'passport', 'driving_license', 'voter_id'];
 
 // Sanitize string input
@@ -136,16 +136,27 @@ Deno.serve(async (req) => {
     const branchId = sanitizeString(body.branchId || body.branch_id, 36);
     const gender = sanitizeString(body.gender, 10);
     const dateOfBirth = sanitizeString(body.dateOfBirth || body.date_of_birth, 10);
-    
+    const address = sanitizeString(body.address, 500);
+    const city = sanitizeString(body.city, 100);
+    const state = sanitizeString(body.state, 100);
+    const postalCode = sanitizeString(body.postalCode || body.postal_code, 20);
+    const emergencyContactName = sanitizeString(body.emergencyContactName || body.emergency_contact_name, MAX_NAME_LENGTH);
+    const emergencyContactPhone = sanitizeString(body.emergencyContactPhone || body.emergency_contact_phone, MAX_PHONE_LENGTH);
+    const bio = sanitizeString(body.bio, MAX_BIO_LENGTH);
+
     // Trainer-specific fields
     const salaryType = sanitizeString(body.salaryType || body.salary_type, 20);
     const fixedSalary = body.fixedSalary || body.fixed_salary;
     const hourlyRate = body.hourlyRate || body.hourly_rate;
     const ptSharePercentage = body.ptSharePercentage || body.pt_share_percentage;
+    const maxClients = body.maxClients || body.max_clients;
     const governmentIdType = sanitizeString(body.governmentIdType || body.government_id_type, 20);
     const governmentIdNumber = sanitizeString(body.governmentIdNumber || body.government_id_number, 50);
-    const specializations = Array.isArray(body.specializations) 
-      ? body.specializations.slice(0, 10).map((s: unknown) => sanitizeString(String(s), 50))
+    const specializations = Array.isArray(body.specializations)
+      ? body.specializations.slice(0, 20).map((s: unknown) => sanitizeString(String(s), 50)).filter(Boolean)
+      : [];
+    const certifications = Array.isArray(body.certifications)
+      ? body.certifications.slice(0, 20).map((s: unknown) => sanitizeString(String(s), 100)).filter(Boolean)
       : [];
 
     // Validate required fields
@@ -265,12 +276,18 @@ Deno.serve(async (req) => {
     // Update profile with additional fields
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({ 
-        full_name: fullName, 
+      .update({
+        full_name: fullName,
         phone: phone || null,
         gender: gender || null,
         date_of_birth: dateOfBirth || null,
-        must_set_password: true 
+        address: address || null,
+        city: city || null,
+        state: state || null,
+        postal_code: postalCode || null,
+        emergency_contact_name: emergencyContactName || null,
+        emergency_contact_phone: emergencyContactPhone || null,
+        must_set_password: true,
       })
       .eq('id', authData.user.id)
 
@@ -308,6 +325,9 @@ Deno.serve(async (req) => {
           user_id: authData.user.id,
           branch_id: branchId,
           specializations: specializations,
+          certifications: certifications,
+          bio: bio || null,
+          max_clients: maxClients ? Number(maxClients) : 10,
           salary_type: salaryType || 'hourly',
           fixed_salary: fixedSalary || null,
           hourly_rate: hourlyRate || null,
