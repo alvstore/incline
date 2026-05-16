@@ -58,9 +58,15 @@ export function WhatsAppRoutingSettings() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          When the AI hands off a chat, we'll ping your personal WhatsApp with a deep link back to the
-          shared inbox. (Meta doesn't support transferring conversations to a different number — replies
-          still go through our business number.)
+          We'll ping your personal WhatsApp with a deep link to the shared inbox when:
+        </p>
+        <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
+          <li>the AI escalates a chat (member asks for a manager, complains, or the bot can't help),</li>
+          <li>a teammate clicks <span className="font-medium">Take over</span> in the inbox, or</li>
+          <li>a new member completes registration.</li>
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          Replies still go through the business number — Meta doesn't allow transferring a conversation to a different phone.
         </p>
         {loading ? (
           <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-violet-600" /></div>
