@@ -19,6 +19,7 @@ import { DYNAMIC_PDF_PRESETS, type TemplatePreset } from '@/lib/templates/dynami
 import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MetaSyncControls } from './MetaSyncControls';
 
 const TEMPLATE_TYPES = [
   { value: 'sms', label: 'SMS', icon: Phone },
@@ -600,9 +601,11 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     }
   };
 
-  // Status counts (across all channels — relevant only for whatsapp but shown unified)
+  // Status counts — scoped to WhatsApp only (status sub-tabs are WhatsApp-specific).
+  // `All` = sum of WhatsApp approval buckets so the chip math reconciles with the filter.
   const statusCounts = templates.reduce((acc: Record<string, number>, t: any) => {
-    const s = (t.approval_status as string) || (t.type === 'whatsapp' ? 'draft' : 'not_applicable');
+    if (t.type !== 'whatsapp') return acc;
+    const s = (t.approval_status as string) || 'draft';
     acc[s] = (acc[s] || 0) + 1;
     acc.all = (acc.all || 0) + 1;
     return acc;
@@ -726,6 +729,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                       <span className="ml-1.5 opacity-70">{statusCounts[s.v] ?? 0}</span>
                     </button>
                   ))}
+                  <MetaSyncControls />
                 </div>
               )}
               <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0">

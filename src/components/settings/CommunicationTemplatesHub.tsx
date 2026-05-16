@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { MessageSquare, Mail, Phone, Sparkles, Workflow, PhoneForwarded, FileText, BadgeCheck, Wand2 } from 'lucide-react';
+import { MessageSquare, Mail, Phone, Sparkles, Workflow, PhoneForwarded, FileText, Wand2 } from 'lucide-react';
 import { TemplateManager } from './TemplateManager';
 import { WhatsAppAutomations } from './WhatsAppAutomations';
 import { TemplateCoverageMatrix } from './TemplateCoverageMatrix';
-import { MetaTemplatesPanel } from './MetaTemplatesPanel';
+
 // AI Agent settings live in their own settings entry; not duplicated here.
 import { WhatsAppRoutingSettings } from './WhatsAppRoutingSettings';
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
@@ -89,7 +89,6 @@ export function CommunicationTemplatesHub() {
             <TabsList className="flex flex-wrap gap-1 h-auto bg-muted/50 p-1 rounded-xl">
               <TabsTrigger value="crm" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> CRM Templates</TabsTrigger>
               <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
-              <TabsTrigger value="meta" className="gap-1.5"><BadgeCheck className="h-3.5 w-3.5" /> Meta Approved</TabsTrigger>
               <TabsTrigger value="auto" className="gap-1.5"><Workflow className="h-3.5 w-3.5" /> Automations</TabsTrigger>
               <TabsTrigger value="routing" className="gap-1.5"><PhoneForwarded className="h-3.5 w-3.5" /> Number Routing</TabsTrigger>
             </TabsList>
@@ -111,19 +110,11 @@ export function CommunicationTemplatesHub() {
               <TemplateCoverageMatrix channel="whatsapp" />
             </TabsContent>
 
-            <TabsContent value="meta" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
-                <CardContent className="pt-6"><MetaTemplatesPanel /></CardContent>
-              </Card>
-            </TabsContent>
-
             <TabsContent value="auto" className="mt-4">
               <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
                 <CardContent className="pt-6"><WhatsAppAutomations /></CardContent>
               </Card>
             </TabsContent>
-
-
 
             <TabsContent value="routing" className="mt-4">
               <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">

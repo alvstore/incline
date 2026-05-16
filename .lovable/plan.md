@@ -1,94 +1,51 @@
-# Plan: System Health Audit + Lint Sweep + Template Manager UI polish
+## Audit findings
 
-Three independent workstreams, executed in order.
+### 1. "Meta Approved" tab is redundant
+The sub-tab only hosts two actions: **Test Connection** and **Sync from Meta** (`MetaTemplatesPanel.tsx`, 300 lines, mostly status display). Everything else it shows (per-template Approved/Pending/Rejected) is already visible on the **CRM Templates** tab via the status chips and per-row badge.
 
----
+**Fix:** Drop the `Meta Approved` sub-tab. Move the two buttons (`Test Connection`, `Sync from Meta` + the "Last synced" timestamp) into the status-filter row on the CRM Templates tab, right of the `Draft` chip. The full diagnostic panel (WABA ID, errors, deletion hint) collapses into a small "Meta connection" popover behind a `Settings` icon next to those buttons — keeps it 1-click but out of the way.
 
-## 1. System Health — fix all errors recorded in `error_logs`
+### 2. Why "All = 95" when there aren't 95 WhatsApp templates
+DB reality (just queried):
 
-Triage of the 46 rows in today's export (grouped by root cause):
+| type | status | count |
+|---|---|---|
+| whatsapp | approved | 49 |
+| whatsapp | pending | 9 |
+| whatsapp | draft | 8 |
+| email | n/a | 22 |
+| sms | n/a | 7 |
+| **total** | | **95** |
 
-### A. Automation Brain 502s (3 rows, 2026-05-16)
-- `run_retention_nudges`, `process_whatsapp_retry_queue`, `process_comm_retry_queue` all returned 502 once.
-- These are transient edge-function cold-start failures. Fix: in `automation-brain/index.ts`, wrap each rule invocation with **one retry** (300ms backoff) on 5xx **before** calling `log_error_event`. Bumps reliability without spamming the log.
+The chips are scoped to WhatsApp (`approved 49`, `pending 9`, `rejected 0`, `draft 8` — sum 66), but the **All** chip counts the whole `templates` array including SMS + Email (95). That's why the math doesn't add up (49+9+0+8 ≠ 95). UI also shows `Approved 48` while DB has 49 — one approved row is missing `meta_template_status='APPROVED'` even though `approval_status='approved'`, so the count code disagrees with the filter code.
 
-### B. Database error: `operator does not exist: lead_status = text` (22 hits on /announcements)
-- A query compares the `lead_status` enum to a raw text value. Find the offending `.eq('lead_status', someString)` in announcement audience resolution (likely `resolve_campaign_audience` RPC or contact_segments filter). Cast with `::text` or use the enum value. **Action**: grep `lead_status` in SQL + ts, add explicit cast in the SQL function and migration.
+**Fix in `TemplateManager.tsx` (lines 604–615):**
+- Compute `statusCounts` only over `templates.filter(t => t.type === 'whatsapp')`.
+- Make `All` count = sum of the four WhatsApp buckets (so 66 here), not the entire array.
+- Use a single source of truth: `approval_status` from `v_template_with_meta_status` for both the chip count and the filter (drop the `meta_template_status` fallback). That eliminates the 48-vs-49 drift.
 
-### C. Dialog accessibility (2 hits, /my-clients + /trainer-dashboard)
-- Radix warning: `DialogContent` missing `DialogTitle`. Audit every `Dialog`/`DialogContent` in `src/components` and `src/pages` and ensure either a visible `DialogTitle` or `<VisuallyHidden><DialogTitle>…</DialogTitle></VisuallyHidden>`.
+### 3. My WhatsApp Routing — does the handoff actually fire?
 
-### D. `Cannot read properties of undefined (reading 'add')` on `/` (2 hits, critical)
-- Most likely a `classList.add` or `Set.add` on a nullable ref. Add a console.log line + null guard. Will inspect Index.tsx / Dashboard.tsx root effects.
+Data: `staff_whatsapp_routing` has 1 row, phone set, `is_available=true`. The edge function `notify-staff-handoff` exists and correctly reads that row and dispatches WhatsApp.
 
-### E. "Failed to fetch dynamically imported module" (4 critical hits)
-- Classic stale-bundle issue after deploys (chunks for `MembersCountingChart`, `Trainers`, `Settings`, `Scene3D` 404 after redeploy). Fix:
-  1. Add a `vite-plugin-pwa`-style **chunk-reload handler**: catch `import()` rejection in lazy boundaries → `window.location.reload()` once (guarded by sessionStorage flag to avoid loops).
-  2. Wrap all `React.lazy(() => import(...))` calls via a `lazyWithRetry()` helper.
+**Callers audited (`rg notify-staff-handoff`):**
+- `src/pages/WhatsAppChat.tsx:1721` — fires when a staff member clicks **Take over** in the inbox. **Works.**
+- `supabase/functions/register-member/index.ts:510` — fires on new member registration. **Works.**
+- `supabase/functions/_shared/ai-runtime.ts` / `ai-dispatcher.ts` / `ai-auto-reply/index.ts` — **no calls. Zero references to handoff / escalation anywhere in the AI brain.**
 
-### F. Network errors (8 frontend hits, several routes)
-- Already logged by `errorReporter`; reduce noise by **not logging** `TypeError: Failed to fetch` when `navigator.onLine === false`. Patch `src/lib/errorReporter.ts`.
+So the card's copy ("when the AI hands off a chat, we'll ping your personal WhatsApp") is **misleading**. The AI never triggers it — only the manual *Take over* button and new-member registration do. If the AI decides a conversation needs a human, nothing pings the assigned staff.
 
-### G. `signal is aborted without reason` (/auth, 1 hit)
-- Benign React-Query abort during navigation. Add filter in `errorReporter` to drop `AbortError` / `signal is aborted` messages.
+**Fix:** Two parts.
+1. **Wire AI auto-handoff** in `_shared/ai-runtime.ts`: when the agent emits the existing `human_handoff` signal (or low-confidence / escalation tool-call), invoke `notify-staff-handoff` with the conversation id + reason. Dedupe per conversation (don't re-ping within 30 min).
+2. **Tighten the UI copy** in `WhatsAppRoutingSettings.tsx` so it accurately lists the three triggers: AI escalation, manual "Take over", and new-member signup.
 
-### H. `Invalid login credentials` (/auth, 1 hit)
-- User typo, not a bug. Filter from logging (auth errors with status 400 from Supabase login).
+## Plan
 
-### I. `/whatsapp-chat not_found` (10 hits)
-- Probably a missing conversation lookup. Add 404-tolerant handling in `useConversation*` hook — return `null` instead of throwing.
+1. **`TemplateManager.tsx`** — scope `statusCounts` & `All` chip to WhatsApp rows only; switch chip + filter both to `approval_status` (single source). Add `Test Connection` + `Sync from Meta` buttons (+ a small "Meta connection" popover for diagnostics) inline with the status chip row, reusing the logic from `MetaTemplatesPanel.tsx`.
+2. **`CommunicationTemplatesHub.tsx`** — remove the `meta` sub-tab from the WhatsApp section (lines 92 + matching `<TabsContent value="meta">`).
+3. **Delete `MetaTemplatesPanel.tsx`** once its sync/test logic is lifted into a small `<MetaSyncControls />` helper used by `TemplateManager`.
+4. **`_shared/ai-runtime.ts`** — on AI handoff/escalation, fire-and-forget `notify-staff-handoff` (admin-client invoke) with 30-min dedupe keyed on `conversation_id`.
+5. **`WhatsAppRoutingSettings.tsx`** — replace the description with: *"We'll ping your personal WhatsApp with a deep link to the shared inbox when (1) the AI escalates a chat, (2) a teammate clicks Take over, or (3) a new member registers. Replies still go through the business number — Meta doesn't allow transferring a conversation to a different phone."*
+6. Verify: open WhatsApp tab → All count equals WhatsApp-only sum; Sync/Test buttons visible inline; tab list is 4 (CRM/Coverage/Automations/Routing). Trigger a handoff from a test AI conversation → confirm `notify-staff-handoff` log entry + WhatsApp received.
 
----
-
-## 2. Lint deep-clean
-
-Current: **1 error + 62 warnings**.
-
-### Error (must fix)
-- `src/components/members/MemberProfileDrawer.tsx:959` — `no-unused-expressions`. Inspect and convert to a proper statement.
-
-### Warning groups
-| Group | Count | Fix strategy |
-|------|------|-------------|
-| `react-refresh/only-export-components` on shadcn ui files | ~9 | Add `// eslint-disable-next-line react-refresh/only-export-components` above the exported constants (these are shadcn boilerplate, splitting them breaks the upstream pattern) |
-| `react-hooks/exhaustive-deps` | ~12 | Case-by-case: add missing deps, or wrap callback in `useCallback`, or split into two effects |
-| `prefer-const` | 4 | Mechanical change `let` → `const` |
-| `no-useless-escape` (planNormalizer) | 1 | Drop the `\-` in regex |
-| Unused `eslint-disable` (Invoices.tsx) | 1 | Remove directive |
-| Context files | 3 | Disable rule on the file (contexts intentionally export hook + provider) |
-
-Goal: **0 errors, ≤10 deliberate warnings** (only the shadcn react-refresh ones, with disable comments justified).
-
----
-
-## 3. Template Manager UI polish (skill: my-uiux)
-
-Targets:
-- `src/components/settings/CommunicationTemplatesHub.tsx`
-- `src/components/settings/TemplateManager.tsx`
-- `src/components/settings/MetaTemplatesPanel.tsx`
-- `src/components/settings/WhatsAppTemplatesHealth.tsx`
-
-Apply Vuexy aesthetic per project rules:
-- Replace flat cards with `rounded-2xl bg-white shadow-lg shadow-slate-200/50`
-- Status chips (approved/pending/rejected/draft) → colored badges (green/amber/red/slate)
-- Convert all "Create / Edit Template" Dialogs to right-side **Sheets** (`sm:max-w-xl`, sticky header + footer) — strict no-Dialog policy
-- Header KPI strip (Total / Approved / Pending / Coverage %) as gradient hero card (`from-violet-600 to-indigo-600`)
-- Add Skeleton loading + empty state + per-row hover (`hover:bg-slate-50`)
-- Inline preview pane on the right when editing (variable substitution preview)
-- All icons from `lucide-react` only
-
-No business-logic changes — pure presentation refactor inside the existing components.
-
----
-
-## Execution order
-1. Lint error + a11y Dialog fixes (unblocks CI)
-2. error_logs root-causes (B, D, F, G, H, I)
-3. Automation 502 retry (A)
-4. Lazy-chunk retry helper (E)
-5. Template Manager UI refactor (#3)
-6. Sweep remaining lint warnings
-7. Verify with `bun run lint` + clear `error_logs` open count
-
-No database schema changes required (the `lead_status` cast is inside an existing function — replaced via migration).
+No DB migrations needed.
