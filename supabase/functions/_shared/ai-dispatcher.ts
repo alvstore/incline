@@ -128,8 +128,20 @@ function normalizeModelForProvider(provider: string, model: string): string {
   return model;
 }
 
+function normalizeOpenAICompatibleUrl(url: string): string {
+  let u = url.trim().replace(/\/+$/, "");
+  if (/\/chat\/completions$/.test(u)) return u;
+  if (/\/v\d+(?:beta)?$/.test(u)) return `${u}/chat/completions`;
+  return `${u}/v1/chat/completions`;
+}
+
 function buildEndpoint(cfg: ProviderConfig): string {
-  if (cfg.base_url && cfg.base_url.length > 0) return cfg.base_url;
+  if (cfg.base_url && cfg.base_url.length > 0) {
+    if (cfg.provider === "ollama" || cfg.provider === "openai_compatible") {
+      return normalizeOpenAICompatibleUrl(cfg.base_url);
+    }
+    return cfg.base_url;
+  }
   switch (cfg.provider) {
     case "lovable":
       return LOVABLE_GATEWAY;
@@ -150,7 +162,7 @@ function buildEndpoint(cfg: ProviderConfig): string {
     case "xai":
       return "https://api.x.ai/v1/chat/completions";
     case "ollama":
-      throw new Error("Ollama provider requires base_url to be set (e.g. https://ollama.example.com/v1/chat/completions)");
+      throw new Error("Ollama provider requires base_url to be set (e.g. https://ollama.example.com)");
     case "openai_compatible":
       throw new Error("openai_compatible provider requires base_url to be set");
   }
