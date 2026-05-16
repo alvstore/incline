@@ -39,7 +39,7 @@ const META_ERROR_HINTS: Record<string, string> = {
 
 function explainError(raw: string | null | undefined): { code?: string; title: string; hint?: string } {
   if (!raw) return { title: 'Delivery failed' };
-  const m = raw.match(/^\s*(\d{2,5})\s*[:\-]\s*(.+)$/);
+  const m = raw.match(/^\s*(\d{2,5})\s*[:-]\s*(.+)$/);
   if (m) {
     const code = m[1];
     return { code, title: m[2].trim(), hint: META_ERROR_HINTS[code] };
