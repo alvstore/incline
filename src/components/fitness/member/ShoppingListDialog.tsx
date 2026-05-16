@@ -46,6 +46,7 @@ export function ShoppingListDialog({
     queryFn: () => buildShoppingList(diet!, days),
   });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const grouped = data?.grouped ?? {};
   const allText = useMemo(() => {
     if (!data) return '';

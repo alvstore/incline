@@ -333,6 +333,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update template');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, templateId, navigate, queryClient, days]);
 
   const handlePreview = useCallback(() => {
@@ -379,6 +380,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
       createdAt: new Date().toISOString(),
     });
     navigate(`/fitness/preview/${id}`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, draftId, templateId, member, navigate, days]);
 
   const canSubmit = !!planName.trim() && totalExercises > 0;

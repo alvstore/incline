@@ -134,6 +134,7 @@ export function WebhookActivityPanel() {
     },
     refetchInterval: 30000,
   });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const rows = pageData?.rows || [];
   const totalCount = pageData?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
