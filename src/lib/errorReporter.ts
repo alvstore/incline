@@ -1,5 +1,7 @@
 // Frontend error reporter — pipes uncaught errors and ErrorBoundary failures to
 // the unified error_logs table via log_error_event RPC.
+// v1.2.0 — filters benign noise (offline, abort, login errors, Radix dev warnings)
+// and auto-recovers from stale dynamic-import chunks after deploys.
 import { supabase } from '@/integrations/supabase/client';
 
 const RELEASE_SHA = (import.meta.env.VITE_RELEASE_SHA as string) || 'dev';
@@ -7,6 +9,41 @@ const RELEASE_SHA = (import.meta.env.VITE_RELEASE_SHA as string) || 'dev';
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
 
 let reporterDisabled = false;
+
+// Patterns we never want in error_logs (user-driven, transient, or library noise).
+const NOISE_PATTERNS: RegExp[] = [
+  /signal is aborted/i,
+  /\bAbortError\b/,
+  /Invalid login credentials/i,
+  /DialogContent.*requires a.*DialogTitle/i,
+  /ResizeObserver loop/i,
+  /^not_found$/i,
+  /Non-Error promise rejection captured/i,
+];
+
+function isNoise(message: string): boolean {
+  if (!message) return true;
+  // Drop network failures while offline — those are environmental.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    if (/Failed to fetch|NetworkError|Load failed|Network error/i.test(message)) return true;
+  }
+  return NOISE_PATTERNS.some((re) => re.test(message));
+}
+
+// Handle stale-chunk failures after a deploy: reload the page once.
+function handleStaleChunk(message: string): boolean {
+  if (!/Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(message)) {
+    return false;
+  }
+  if (typeof window === 'undefined') return false;
+  const KEY = '__incline_chunk_reloaded';
+  try {
+    if (sessionStorage.getItem(KEY)) return false; // already tried once this session
+    sessionStorage.setItem(KEY, String(Date.now()));
+    window.location.reload();
+  } catch { /* noop */ }
+  return true;
+}
 
 export async function reportError(
   message: string,
@@ -19,12 +56,15 @@ export async function reportError(
   } = {},
 ) {
   if (reporterDisabled) return;
+  const msg = String(message || '').slice(0, 2000);
+  if (isNoise(msg)) return;
+  if (handleStaleChunk(msg)) return; // reloads, no log needed
   try {
     const { data: userResult } = await supabase.auth.getUser();
     const { error } = await (supabase.rpc as any)('log_error_event', {
       p_severity: opts.severity || 'error',
       p_source: 'frontend',
-      p_message: String(message).slice(0, 2000),
+      p_message: msg,
       p_function_name: null,
       p_route: opts.route || (typeof window !== 'undefined' ? window.location.pathname : null),
       p_table_name: null,

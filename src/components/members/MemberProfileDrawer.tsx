@@ -956,7 +956,7 @@ export function MemberProfileDrawer({
   const toggleGroup = (key: string) =>
     setExpandedGroups((s) => {
       const n = new Set(s);
-      n.has(key) ? n.delete(key) : n.add(key);
+      if (n.has(key)) n.delete(key); else n.add(key);
       return n;
     });
 
