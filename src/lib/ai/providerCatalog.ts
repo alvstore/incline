@@ -155,11 +155,12 @@ export const PROVIDER_DEFAULTS: Record<string, ProviderPreset> = {
   },
   ollama: {
     label: 'Ollama (self-hosted)',
-    base_url: 'https://your-vps.example.com/v1/chat/completions',
+    // Example points at the user's VPS. Replace host if you move it.
+    base_url: 'http://31.97.232.17:11434/v1/chat/completions',
     secret_name: 'OLLAMA_API_KEY',
     default_model: 'llama3.1:8b',
-    models: ['llama3.1:8b', 'llama3.1:70b', 'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'phi3:mini', 'gemma2:9b'],
-    help: 'Self-hosted on your VPS. API key optional.',
+    models: ['llama3.1:8b', 'llama3.1:70b', 'llama3.2:3b', 'llama3.2:1b', 'qwen2.5:7b', 'qwen2.5:14b', 'mistral:7b', 'phi3:mini', 'gemma2:9b', 'gemma2:2b'],
+    help: 'Self-hosted Ollama. Base URL must end with /v1/chat/completions (OpenAI-compatible path). API key is optional — leave OLLAMA_API_KEY blank unless you put a reverse proxy in front. Pull models on the server first: `ollama pull llama3.1:8b`.',
   },
   openai_compatible: {
     label: 'Custom OpenAI-compatible',
