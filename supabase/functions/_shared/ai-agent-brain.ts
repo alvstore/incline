@@ -188,6 +188,9 @@ This person is a CONFIRMED ACTIVE MEMBER of the gym. Their identity is already k
   if (gymFacts) {
     systemPrompt += `\n\n${gymFacts}`;
   }
+  if (kbBlock) {
+    systemPrompt += `\n\n${kbBlock}`;
+  }
 
   // Global behavioral rules
   systemPrompt += `\n\nCRITICAL BEHAVIORAL RULE:
