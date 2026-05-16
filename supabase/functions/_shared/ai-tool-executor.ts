@@ -1,6 +1,7 @@
 // Shared AI tool executor — used by whatsapp-webhook + meta-webhook
-// v1.1.0 — added classes booking, renewal, addon intent, branch services, request status
+// v1.2.0 — persists tool-derived facts to ai_memory (contact, bookings)
 import type { MemberContext } from "./ai-tools.ts";
+import { upsertMemory } from "./ai-memory.ts";
 
 type SB = any; // SupabaseClient (kept loose to avoid duplicate imports)
 
