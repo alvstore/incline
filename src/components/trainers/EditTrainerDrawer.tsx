@@ -40,6 +40,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
     pt_share_percentage: 50,
     specializations: [] as string[],
     certifications: [] as string[],
+    government_id_type: '',
     government_id: '',
     is_active: true,
   });
@@ -93,6 +94,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
         pt_share_percentage: fresh.pt_share_percentage || 50,
         specializations: fresh.specializations || [],
         certifications: fresh.certifications || [],
+        government_id_type: (fresh as any).government_id_type || fresh.profile?.government_id_type || '',
         government_id: fresh.government_id || (fresh as any).government_id_number || fresh.profile?.government_id_number || '',
         is_active: fresh.is_active ?? true,
       });
@@ -155,6 +157,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
           pt_share_percentage: formData.pt_share_percentage,
           specializations: formData.specializations,
           certifications: formData.certifications,
+          government_id_type: formData.government_id_type || null,
           government_id_number: formData.government_id || null,
           is_active: formData.is_active,
         },
