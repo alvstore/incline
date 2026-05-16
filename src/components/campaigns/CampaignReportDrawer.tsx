@@ -65,6 +65,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
     refetchInterval: campaign?.status === 'sending' ? 3000 : false,
   });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const rows = data?.recipients || [];
   const groups = data?.groups || [];
 

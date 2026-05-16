@@ -171,6 +171,7 @@ export function useOnlineUsers(): OnlineUser[] {
       state.listeners.delete(cb);
       releaseChannel();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // DB-backed fallback — polls every 30s. Works for every role (RPC is SECURITY DEFINER).

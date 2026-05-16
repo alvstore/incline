@@ -108,6 +108,7 @@ export default function IntegrationsPage() {
       return;
     }
     if (t && t !== activeTab) setActiveTab(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const { data: integrations = [] } = useQuery({

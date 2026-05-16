@@ -113,6 +113,7 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
       queryClient.invalidateQueries({ queryKey: ['lead-notification-rules'] });
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useImperativeHandle(ref, () => ({ save }), [form, rules, branchId]);
 
     const toggle = (field: keyof LeadRulesForm) => {

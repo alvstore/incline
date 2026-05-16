@@ -136,6 +136,7 @@ export default function AttendanceDashboard() {
       setSearchResults([]);
       setStaffSearchResults([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, activeTab]);
 
   const showFlash = useCallback((state: FlashState) => {

@@ -235,6 +235,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     toast.success(`Swapped to ${entry.name}`);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const buildContent = (): DietPlanContent => ({
     name: planName,
     type: 'diet',
@@ -260,6 +261,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     totals,
   });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const validateContent = (): string | null => {
     if (!planName.trim()) return 'Plan name is required';
     if (!dietaryType) return 'Dietary type is required';

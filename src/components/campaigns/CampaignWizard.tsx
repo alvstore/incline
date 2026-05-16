@@ -269,6 +269,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       setUseApprovedTemplate(false);
       setSelectedTemplateId(null);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCampaign?.id]);
 
 

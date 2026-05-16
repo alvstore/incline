@@ -18,6 +18,7 @@ import { TEMPLATE_EVENTS, getEvent, validateTemplate, renderPreview } from '@/li
 import { DYNAMIC_PDF_PRESETS, type TemplatePreset } from '@/lib/templates/dynamicAttachment';
 import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const TEMPLATE_TYPES = [
   { value: 'sms', label: 'SMS', icon: Phone },
@@ -463,7 +464,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
   const openMetaDialog = (template: Template) => {
     // Meta requires lowercase with underscores only (hyphens not permitted)
-    const slugName = template.name.toLowerCase().replace(/[\s\-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const slugName = template.name.toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '');
     // Auto-convert {{named}} placeholders → {{1}}, {{2}}, ... for Meta.
     let i = 0;
     const map: Record<string, number> = {};
@@ -626,49 +627,62 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
   return (
     <div className="space-y-6">
       {!hideHeader && (
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Communication Templates</h3>
-          <p className="text-sm text-muted-foreground">
-            Manage SMS, Email, and WhatsApp message templates
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Sparkles className="mr-2 h-4 w-4" />
-                Quick Presets
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {DYNAMIC_PDF_PRESETS.map((p) => (
-                <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                  <FileText className="h-4 w-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{p.label}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {p.attachment_filename_template}
-                    </p>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={() => openEditor()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Template
-          </Button>
+      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 shadow-lg shadow-indigo-500/20 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-white/15 backdrop-blur-sm p-2.5 rounded-xl">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold leading-tight">Communication Templates</h3>
+              <p className="text-sm text-white/80 mt-0.5">
+                Manage SMS, Email and WhatsApp message templates · {templates.length} total
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" className="bg-white/15 hover:bg-white/25 text-white border-0 backdrop-blur-sm">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Quick Presets
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {DYNAMIC_PDF_PRESETS.map((p) => (
+                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
+                    <FileText className="h-4 w-4 mt-0.5 text-violet-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{p.label}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {p.attachment_filename_template}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => openEditor()} className="bg-white text-indigo-700 hover:bg-white/90 shadow-sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Template
+            </Button>
+          </div>
         </div>
       </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-4">
+              <Skeleton className="h-5 w-1/3 mb-2" />
+              <Skeleton className="h-4 w-2/3 mb-2" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
         </div>
       ) : (
         <>
@@ -714,18 +728,22 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   ))}
                 </div>
               )}
-              <Card>
+              <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0">
                 <CardContent className="pt-4">
                   {!groupedTemplates[value]?.length ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No {label} templates yet. Click "Add Template" to create one.
-                    </p>
+                    <div className="py-12 text-center">
+                      <div className="inline-flex bg-indigo-50 text-indigo-600 p-3 rounded-2xl mb-3">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">No {label} templates yet</p>
+                      <p className="text-xs text-slate-500 mt-1">Click "Add Template" to create one.</p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {groupedTemplates[value].map((template) => (
                         <div
                           key={template.id}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                          className="flex items-center justify-between p-4 rounded-xl border border-slate-200/70 bg-white hover:bg-slate-50 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">

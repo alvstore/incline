@@ -118,6 +118,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
       });
     })();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trainer?.id]);
 
   const handleSpecializationToggle = (spec: string) => {

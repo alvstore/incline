@@ -9,6 +9,7 @@ export const DEFAULT_TEMP_PASSWORD = 'Incline@123';
  * @deprecated Kept for backwards compatibility. New users get the fixed
  * default password `Incline@123` and must change it on first login.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function generateTempPassword(): string {
   return DEFAULT_TEMP_PASSWORD;
 }

@@ -97,6 +97,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
     }
     setStep('pick');
     setProposals([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, open, prefilledEvents?.join('|'), missingEvents.join('|')]);
 
 

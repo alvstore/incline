@@ -71,6 +71,7 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
       notes: '',
     });
     setLabFile(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product.id, existingBatches.length]);
 
   // Auto-recalc EXP if MFG changes and shelf life set

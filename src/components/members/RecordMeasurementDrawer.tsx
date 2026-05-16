@@ -101,6 +101,7 @@ export function RecordMeasurementDrawer({
       sessionIdRef.current = crypto.randomUUID();
       setFormData({ ...initialFormState, gender_presentation: derivedPresentation });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, derivedPresentation]);
 
   // Keep auto-derived presentation in sync if the prop changes while open

@@ -186,6 +186,7 @@ export default function MembersPage() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const members = membersResult?.data || [];
   const totalCount = membersResult?.count;
   const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : null;

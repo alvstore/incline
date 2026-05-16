@@ -44,4 +44,12 @@ export default tseslint.config(
       "react-hooks/rules-of-hooks": "error",
     },
   },
+  {
+    // shadcn UI primitives and Context providers legitimately export hooks/constants
+    // alongside components. Fast-refresh warning is noise here.
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/contexts/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );
