@@ -293,13 +293,12 @@ export function AIPurposesTab() {
           </SheetHeader>
           {editing && (
             <div className="space-y-4 mt-6">
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-100">
-                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-900">
-                  Provider for this purpose is <b>{editingResolved?.provider ?? "lovable"}</b> (scope:
-                  {" "}<code className="font-mono">{editingScope}</code>). Change the provider in
-                  the <b>Providers</b> tab. Pick a model below from the active provider's catalog,
-                  or leave on default.
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+                <Info className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-slate-700">
+                  Default provider for scope <code className="font-mono">{editingScope}</code> is{" "}
+                  <b>{editingScopeResolved?.provider ?? "lovable"}</b> (set in the <b>Providers</b> tab).
+                  Override the provider and model for just this purpose below.
                 </p>
               </div>
 
@@ -312,43 +311,81 @@ export function AIPurposesTab() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Model ({editingResolved?.provider})
-                </Label>
-                <Select
-                  value={editing.model ?? "__default__"}
-                  onValueChange={(v) =>
-                    setEditing({ ...editing, model: v === "__default__" ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__default__">
-                      Use provider default ({editingResolved?.default_model})
-                    </SelectItem>
-                    {(editingPresets?.models ?? []).map((m) => (
-                      <SelectItem key={m} value={m} className="font-mono text-xs">
-                        {m}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Provider
+                  </Label>
+                  <Select
+                    value={editing.provider_id ?? "__scope_default__"}
+                    onValueChange={(v) =>
+                      setEditing({
+                        ...editing,
+                        provider_id: v === "__scope_default__" ? null : v,
+                        // Reset model so we don't carry a model that doesn't belong to the new provider
+                        model: null,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__scope_default__">
+                        Use scope default ({editingScopeResolved?.provider ?? "lovable"})
                       </SelectItem>
-                    ))}
-                    {editing.model && !(editingPresets?.models ?? []).includes(editing.model) && (
-                      <SelectItem value={editing.model} className="font-mono text-xs">
-                        {editing.model} (custom)
+                      {providerOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id} className="capitalize">
+                          {opt.provider}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">
+                    {editingOverride
+                      ? <>Overridden — using <b>{editingOverride.provider}</b>.</>
+                      : <>Inheriting scope default.</>}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Model ({editingResolved?.provider})
+                  </Label>
+                  <Select
+                    value={editing.model ?? "__default__"}
+                    onValueChange={(v) =>
+                      setEditing({ ...editing, model: v === "__default__" ? null : v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        Use provider default ({editingResolved?.default_model})
                       </SelectItem>
+                      {(editingPresets?.models ?? []).map((m) => (
+                        <SelectItem key={m} value={m} className="font-mono text-xs">
+                          {m}
+                        </SelectItem>
+                      ))}
+                      {editing.model && !(editingPresets?.models ?? []).includes(editing.model) && (
+                        <SelectItem value={editing.model} className="font-mono text-xs">
+                          {editing.model} (custom)
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">
+                    Will send as: <code className="font-mono text-slate-700">{effectiveModelForEditor}</code>
+                    {effectiveModelForEditor !== (editing.model || editingResolved?.default_model) && (
+                      <span className="ml-1 inline-flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3 w-3" /> auto-normalized
+                      </span>
                     )}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-slate-500">
-                  Will send to provider as: <code className="font-mono text-slate-700">{effectiveModelForEditor}</code>
-                  {effectiveModelForEditor !== (editing.model || editingResolved?.default_model) && (
-                    <span className="ml-1 inline-flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" /> auto-normalized
-                    </span>
-                  )}
-                </p>
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-1.5">
