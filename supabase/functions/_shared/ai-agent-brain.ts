@@ -20,6 +20,13 @@ import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
+import {
+  loadMemory,
+  upsertMemory,
+  renderMemoryBlock,
+  loadKnowledge,
+  renderKnowledgeBlock,
+} from "./ai-memory.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,10 +128,14 @@ export async function runUnifiedAgent(
     await new Promise((r) => setTimeout(r, delaySeconds * 1000));
   }
 
-  // 5. Resolve member/lead context
+  // 5. Resolve member/lead context + persistent ai_memory
   const memberCtx = await resolveMemberContext(supabase, ctx.senderId, ctx.branchId, ctx.platform);
   const alreadyCaptured = chatSettings?.captured_lead_id ? await loadCapturedSnapshot(supabase, chatSettings.captured_lead_id) : "";
   const summaryBlock = chatSettings?.conversation_summary ? `\n\n[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}\n` : "";
+
+  // 5b. Hydrate persistent contact memory (ai_memory)
+  const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+  const memoryBlock = renderMemoryBlock(memory);
 
   // 6. Build conversation history (cross-platform, no channel tags)
   const { data: recentMessages } = await supabase
@@ -140,15 +151,18 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
-  // 7. Hydrate gym facts (plans, facilities, timings)
+  // 7. Hydrate gym facts (plans, facilities, timings) + custom knowledge base
   const gymFacts = await hydrateGymFacts(supabase, ctx.branchId);
+  const kbRows = await loadKnowledge(supabase, ctx.branchId);
+  const kbBlock = renderKnowledgeBlock(kbRows);
 
   // 8. Build system prompt
   const gymName = orgConfig?.name || "Incline Fitness";
   const platformLabel = ctx.platform === "instagram" ? "Instagram DM" : ctx.platform === "messenger" ? "Facebook Messenger" : "WhatsApp";
   const customPrompt = aiConfig.system_prompt || `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`;
 
-  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}\n\n${customPrompt}`;
+  const memoryPrefix = memoryBlock ? `\n\n${memoryBlock}` : "";
+  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}${memoryPrefix}\n\n${customPrompt}`;
 
   // ── HARD RULE #1 — member-first identity ────────────────────────────────────
   if (memberCtx.isMember) {
@@ -173,6 +187,9 @@ This person is a CONFIRMED ACTIVE MEMBER of the gym. Their identity is already k
   // Inject gym knowledge so the AI can answer common questions directly
   if (gymFacts) {
     systemPrompt += `\n\n${gymFacts}`;
+  }
+  if (kbBlock) {
+    systemPrompt += `\n\n${kbBlock}`;
   }
 
   // Global behavioral rules
@@ -365,7 +382,14 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
       supabase, replyText, ctx, leadCaptureConfig!, supabaseUrl, serviceKey,
     );
     if (leadResult.captured) {
-      // Send handoff message instead of AI's JSON
+      // Persist captured fields into ai_memory + mark do-not-ask for those keys
+      const capturedKeys = leadResult.partialData ? Object.keys(leadResult.partialData) : [];
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: leadResult.partialData || {},
+        do_not_ask_add: capturedKeys,
+        current_intent: "lead_captured",
+        summary: memory?.summary ?? null,
+      });
       const handoffMsg = leadCaptureConfig!.handoff_message || "Thanks for sharing! Our team will reach out to you shortly. 💪";
       return { replyText: handoffMsg, leadCaptured: true, leadId: leadResult.leadId, handoffTriggered: false, skipped: false };
     }
@@ -375,8 +399,33 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
         { branch_id: ctx.branchId, phone_number: ctx.senderId, partial_lead_data: leadResult.partialData },
         { onConflict: "branch_id,phone_number" },
       );
+      // Also persist partial fields into long-term memory
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: leadResult.partialData,
+        current_intent: "lead_in_progress",
+      });
     }
   }
+
+  // 10b. Always touch memory with member identity + last-seen + last question asked
+  const profilePatch: Record<string, any> = {};
+  if (memberCtx.isMember) {
+    profilePatch.is_member = true;
+    if (memberCtx.memberId) profilePatch.member_id = memberCtx.memberId;
+    if (memberCtx.memberName) profilePatch.name = memberCtx.memberName;
+  }
+  // Heuristic: if the reply ends with "?" treat it as an asked question we remember
+  const askedNow: string[] = [];
+  const trimmed = (replyText || "").trim();
+  if (trimmed.endsWith("?")) {
+    const lastSentence = trimmed.split(/(?<=[.!?])\s+/).pop() || trimmed;
+    askedNow.push(lastSentence.slice(0, 200));
+  }
+  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+    profile: profilePatch,
+    asked_questions_add: askedNow,
+    current_intent: memberCtx.isMember ? "member_assist" : (memory?.current_intent ?? null),
+  });
 
   return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }

@@ -1,6 +1,7 @@
 // Shared AI tool executor — used by whatsapp-webhook + meta-webhook
-// v1.1.0 — added classes booking, renewal, addon intent, branch services, request status
+// v1.2.0 — persists tool-derived facts to ai_memory (contact, bookings)
 import type { MemberContext } from "./ai-tools.ts";
+import { upsertMemory } from "./ai-memory.ts";
 
 type SB = any; // SupabaseClient (kept loose to avoid duplicate imports)
 
@@ -47,6 +48,10 @@ export async function executeSharedToolCall(
         if (!m?.user_id) return { error: "Profile not linked." };
         const { error } = await supabase.from("profiles").update(updates).eq("id", m.user_id);
         if (error) return { error: "Update failed." };
+        await upsertMemory(supabase, branchId, platform, phoneNumber, {
+          profile: updates,
+          do_not_ask_add: Object.keys(updates),
+        });
         return { success: true, message: "Contact updated. ✅" };
       }
 
@@ -136,6 +141,10 @@ export async function executeSharedToolCall(
             error_code: result?.error_code,
           };
         }
+        await upsertMemory(supabase, branchId, platform, phoneNumber, {
+          facts: { last_booking_id: result.booking_id, last_booking_slot: args.slot_id, last_booking_at: new Date().toISOString() },
+          current_intent: "facility_booked",
+        });
         return {
           success: true,
           booking_id: result.booking_id,
