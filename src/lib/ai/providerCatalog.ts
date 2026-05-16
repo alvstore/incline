@@ -156,11 +156,11 @@ export const PROVIDER_DEFAULTS: Record<string, ProviderPreset> = {
   ollama: {
     label: 'Ollama (self-hosted)',
     // Example points at the user's VPS. Replace host if you move it.
-    base_url: 'http://31.97.232.17:11434/v1/chat/completions',
+    base_url: 'https://ai.yacispl.com/v1/chat/completions',
     secret_name: 'OLLAMA_API_KEY',
-    default_model: 'llama3.1:8b',
-    models: ['llama3.1:8b', 'llama3.1:70b', 'llama3.2:3b', 'llama3.2:1b', 'qwen2.5:7b', 'qwen2.5:14b', 'mistral:7b', 'phi3:mini', 'gemma2:9b', 'gemma2:2b'],
-    help: 'Self-hosted Ollama. Base URL must end with /v1/chat/completions (OpenAI-compatible path). API key is optional — leave OLLAMA_API_KEY blank unless you put a reverse proxy in front. Pull models on the server first: `ollama pull llama3.1:8b`.',
+    default_model: 'qwen2.5:latest',
+    models: ['qwen2.5:latest', 'llama3.1:latest'],
+    help: 'Self-hosted Ollama. Base URL can be the host root (e.g. https://ai.yacispl.com) or the full /v1/chat/completions path — the dispatcher will auto-append the path if missing. API key is optional. Pull models on the server first: `ollama pull qwen2.5`.',
   },
   openai_compatible: {
     label: 'Custom OpenAI-compatible',
