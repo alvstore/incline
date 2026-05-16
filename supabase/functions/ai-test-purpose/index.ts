@@ -1,4 +1,6 @@
-// v1.0.0 — Test the resolved provider for a given AI purpose by sending a 1-token ping.
+// v1.1.0 — Test the resolved provider for a given AI purpose by sending a 1-token ping.
+//           Honors per-purpose provider_id override. Accepts inline { providerId, model }
+//           in the request body so the UI can test unsaved drawer edits.
 // Used by AI Purposes tab "Test" button. Owner/admin only.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAI, type AIScope } from "../_shared/ai-dispatcher.ts";
@@ -54,20 +56,28 @@ Deno.serve(async (req) => {
     const scope = SCOPE_MAP[purpose];
     if (!scope) return json({ error: "Unknown purpose" }, 400);
 
-    // Pull purpose model override (if any)
+    // Inline overrides from drawer (test unsaved edits) win over the DB row.
+    const inlineProviderId = typeof body?.providerId === "string" && body.providerId.length > 0 ? body.providerId : null;
+    const inlineModel = typeof body?.model === "string" && body.model.length > 0 ? body.model : null;
+
+    // Pull purpose provider_id + model override (if any)
     const { data: purposeRow } = await supabase
       .from("ai_purposes")
-      .select("model")
+      .select("provider_id, model")
       .eq("purpose", purpose)
       .is("branch_id", null)
       .maybeSingle();
+
+    const providerId = inlineProviderId ?? purposeRow?.provider_id ?? undefined;
+    const model = inlineModel ?? purposeRow?.model ?? undefined;
 
     const start = Date.now();
     try {
       const r = await callAI({
         scope,
         supabase,
-        model: purposeRow?.model || undefined,
+        providerId,
+        model,
         max_tokens: 10,
         messages: [{ role: "user", content: "Reply with the single word: pong" }],
       });

@@ -29,6 +29,7 @@ export interface CallAIOptions {
   scope: AIScope;
   messages: ChatMessage[];
   supabase?: SupabaseClient;
+  providerId?: string;       // explicit provider config row override (wins over scope)
   model?: string;            // override the provider's default
   tools?: any[];
   tool_choice?: any;
@@ -239,7 +240,17 @@ async function logCall(
 
 export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
   const supabase = opts.supabase ?? getServiceSupabase();
-  const primary = await resolveProvider(supabase, opts.scope);
+  let primary: ProviderConfig | null = null;
+  if (opts.providerId) {
+    const { data } = await supabase
+      .from("ai_provider_configs")
+      .select("provider, display_name, base_url, api_key_secret_name, default_model, enable_fallback, extra_config")
+      .eq("id", opts.providerId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data) primary = data as ProviderConfig;
+  }
+  if (!primary) primary = await resolveProvider(supabase, opts.scope);
   const start = Date.now();
 
   try {

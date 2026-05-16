@@ -21,6 +21,7 @@ export type Purpose =
 
 interface PurposeRow {
   enabled: boolean;
+  provider_id: string | null;
   model: string | null;
   system_prompt: string;
   temperature: number | null;
@@ -84,7 +85,7 @@ export async function loadPurpose(
   if (branchId) {
     const { data } = await supabase
       .from("ai_purposes")
-      .select("enabled, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
+      .select("enabled, provider_id, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
       .eq("purpose", purpose)
       .eq("branch_id", branchId)
       .maybeSingle();
@@ -92,7 +93,7 @@ export async function loadPurpose(
   }
   const { data: globalRow } = await supabase
     .from("ai_purposes")
-    .select("enabled, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
+    .select("enabled, provider_id, model, system_prompt, temperature, max_tokens, tools_allowed, guards, extra")
     .eq("purpose", purpose)
     .is("branch_id", null)
     .maybeSingle();
@@ -164,6 +165,7 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     scope: SCOPE_MAP[opts.purpose],
     messages,
     supabase: sb,
+    providerId: purposeRow?.provider_id ?? undefined,
     model: opts.model ?? purposeRow?.model ?? undefined,
     temperature: opts.temperature ?? purposeRow?.temperature ?? undefined,
     max_tokens: opts.maxTokens ?? purposeRow?.max_tokens ?? undefined,
