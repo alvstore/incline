@@ -296,7 +296,8 @@ export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
           enable_fallback: false,
           extra_config: {},
         };
-        const result = await executeCall(fallback, opts);
+        // Strip primary-specific model so Lovable uses its own default (primary model IDs are invalid here)
+        const result = await executeCall(fallback, { ...opts, model: undefined });
         logCall(supabase, {
           provider: "lovable",
           scope: opts.scope,
