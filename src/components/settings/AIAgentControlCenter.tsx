@@ -28,6 +28,7 @@ import { LeadNurtureSettings } from '@/components/settings/LeadNurtureSettings';
 import { AIProvidersSettings } from '@/components/settings/AIProvidersSettings';
 import { AIPurposesTab } from '@/components/settings/AIPurposesTab';
 import { AICallLogsTab } from '@/components/settings/AICallLogsTab';
+import { AIToolLogsTab } from '@/components/settings/AIToolLogsTab';
 
 type ToolDef = {
   name: string;
@@ -201,6 +202,10 @@ export function AIAgentControlCenter() {
             <Activity className="h-3.5 w-3.5 hidden sm:block" />
             Call Logs
           </TabsTrigger>
+          <TabsTrigger value="tool-logs" className="text-xs sm:text-sm gap-1.5 py-2">
+            <Activity className="h-3.5 w-3.5 hidden sm:block" />
+            Tool Logs
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -233,6 +238,10 @@ export function AIAgentControlCenter() {
 
         <TabsContent value="call-logs">
           <AICallLogsTab />
+        </TabsContent>
+
+        <TabsContent value="tool-logs">
+          <AIToolLogsTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,4 +1,4 @@
-// AI Call Logs tab — recent calls from ai_call_logs with filters + bulk clear.
+// AI Tool Logs tab — recent tool invocations from ai_tool_logs with bulk clear.
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Activity, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import { Wrench, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 type WindowKey = "1" | "7" | "30" | "all";
@@ -29,16 +29,16 @@ const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
   { value: "all", label: "All logs", days: null },
 ];
 
-export function AICallLogsTab() {
+export function AIToolLogsTab() {
   const qc = useQueryClient();
   const [windowKey, setWindowKey] = useState<WindowKey>("7");
 
   const { data: logs = [], isLoading } = useQuery({
-    queryKey: ["ai_call_logs_recent"],
+    queryKey: ["ai_tool_logs_recent"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("ai_call_logs")
-        .select("id, purpose, provider, model, status, duration_ms, fallback_used, error_message, created_at")
+        .from("ai_tool_logs")
+        .select("id, tool_name, status, execution_time_ms, error_message, created_at, phone_number")
         .order("created_at", { ascending: false })
         .limit(100);
       return data ?? [];
@@ -52,15 +52,15 @@ export function AICallLogsTab() {
       const cutoff = win.days !== null
         ? new Date(Date.now() - win.days * 24 * 60 * 60 * 1000).toISOString()
         : null;
-      const del = supabase.from("ai_call_logs").delete();
+      const del = supabase.from("ai_tool_logs").delete();
       const q = cutoff ? del.lt("created_at", cutoff) : del.not("id", "is", null);
       const { error, data } = await q.select("id");
       if (error) throw error;
       return data?.length ?? 0;
     },
     onSuccess: (count) => {
-      toast.success(`Cleared ${count} AI call log${count === 1 ? "" : "s"}`);
-      qc.invalidateQueries({ queryKey: ["ai_call_logs_recent"] });
+      toast.success(`Cleared ${count} tool log${count === 1 ? "" : "s"}`);
+      qc.invalidateQueries({ queryKey: ["ai_tool_logs_recent"] });
     },
     onError: (e: any) => toast.error(e?.message || "Failed to clear logs"),
   });
@@ -69,7 +69,7 @@ export function AICallLogsTab() {
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
       <div className="flex items-center justify-between gap-3 p-4 border-b bg-slate-50/50">
         <div className="text-sm text-slate-600">
-          Showing latest <span className="font-semibold text-slate-900">{logs.length}</span> AI calls
+          Showing latest <span className="font-semibold text-slate-900">{logs.length}</span> tool invocations
         </div>
         <div className="flex items-center gap-2">
           <Select value={windowKey} onValueChange={(v) => setWindowKey(v as WindowKey)}>
@@ -98,10 +98,11 @@ export function AICallLogsTab() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Clear AI call logs?</AlertDialogTitle>
+                <AlertDialogTitle>Clear AI tool logs?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This permanently deletes <strong>{WINDOWS.find((w) => w.value === windowKey)?.label.toLowerCase()}</strong>{" "}
-                  from <code className="text-xs">ai_call_logs</code>. This cannot be undone.
+                  This permanently deletes{" "}
+                  <strong>{WINDOWS.find((w) => w.value === windowKey)?.label.toLowerCase()}</strong> from{" "}
+                  <code className="text-xs">ai_tool_logs</code>. This cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -122,28 +123,25 @@ export function AICallLogsTab() {
         {isLoading && <div className="p-6 text-sm text-slate-500">Loading…</div>}
         {!isLoading && logs.length === 0 && (
           <div className="p-8 text-center text-sm text-slate-500 flex flex-col items-center gap-2">
-            <Activity className="h-8 w-8 text-slate-300" />
-            No AI calls logged yet.
+            <Wrench className="h-8 w-8 text-slate-300" />
+            No tool invocations logged yet.
           </div>
         )}
         {logs.map((l: any) => (
           <div key={l.id} className="p-3 flex items-center gap-3 text-sm hover:bg-slate-50">
             {l.status === "success" ? (
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-            ) : l.status === "fallback" ? (
-              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
             ) : (
               <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
             )}
             <Badge variant="outline" className="text-xs shrink-0">
-              {l.purpose ?? "—"}
+              {l.tool_name ?? "—"}
             </Badge>
             <span className="text-slate-600 truncate flex-1">
-              {l.provider} · {l.model ?? "—"}
-              {l.fallback_used && <span className="ml-2 text-amber-600">(fallback)</span>}
+              {l.phone_number && <span className="text-slate-400">{l.phone_number}</span>}
               {l.error_message && <span className="ml-2 text-red-600 truncate">— {l.error_message}</span>}
             </span>
-            <span className="text-xs text-slate-400 shrink-0">{l.duration_ms}ms</span>
+            <span className="text-xs text-slate-400 shrink-0">{l.execution_time_ms}ms</span>
             <span className="text-xs text-slate-400 shrink-0">{new Date(l.created_at).toLocaleString()}</span>
           </div>
         ))}
