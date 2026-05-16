@@ -1,4 +1,8 @@
-// dispatch-communication v1.13.0
+// dispatch-communication v1.14.0
+// v1.14.0: WhatsApp Cloud API error-code humaniser. 131047 / 131049 / 131026 /
+//          132000 / 132001 / 132012 / 133010 → plain-English hints written to
+//          communication_logs.error_message so the Campaign Report explains
+//          delivery drops instead of showing opaque "Meta API error (400)".
 // v1.13.0: Freeform WhatsApp video attachments are now sent as native video
 //          (was previously force-collapsed to document, which Meta rejected).
 // v1.12.0: Channel-level kill switch — if Settings → Integrations has the
