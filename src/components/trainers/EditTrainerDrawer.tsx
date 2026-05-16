@@ -15,25 +15,17 @@ import { StaffAvatarUpload } from '@/components/common/StaffAvatarUpload';
 import { queueTrainerSync } from '@/services/biometricService';
 import { supabase } from '@/integrations/supabase/client';
 import { StaffBiometricsTab } from '@/components/common/StaffBiometricsTab';
+import {
+  SPECIALIZATION_OPTIONS,
+  TRAINER_SALARY_TYPES as SALARY_TYPES,
+  GOVERNMENT_ID_TYPES,
+} from '@/constants/trainerConstants';
 
 interface EditTrainerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trainer: any;
 }
-
-const SPECIALIZATION_OPTIONS = [
-  'Weight Training', 'Cardio', 'HIIT', 'Yoga', 'Pilates', 
-  'CrossFit', 'Boxing', 'Zumba', 'Strength Training', 'Functional Training',
-  'Calisthenics', 'Martial Arts', 'Swimming', 'Sports Conditioning'
-];
-
-const SALARY_TYPES = [
-  { value: 'fixed', label: 'Fixed Monthly' },
-  { value: 'hourly', label: 'Hourly' },
-  { value: 'commission', label: 'Commission Only' },
-  { value: 'hybrid', label: 'Fixed + Commission' },
-];
 
 export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDrawerProps) {
   const updateTrainer = useUpdateTrainer();
