@@ -592,40 +592,55 @@ export async function executeSharedToolCall(
       }
 
       // ─── Request Status & Escalation ──────────────────────
+      case "transfer_to_human":
       case "escalate_request": {
-        if (!ctx.memberId) return { error: "Not a registered member." };
-        if (!args.reason) return { error: "reason required." };
+        if (!ctx.memberId && toolName === "escalate_request") return { error: "Not a registered member." };
+        const reason = args.reason || args.summary || "Member requested human assistance";
         const { data, error } = await supabase
           .from("approval_requests")
           .insert({
             branch_id: branchId,
             approval_type: "manual_escalation",
             reference_type: "member",
-            reference_id: ctx.memberId,
+            reference_id: ctx.memberId ?? null,
             status: "pending",
             request_data: {
-              member_id: ctx.memberId,
+              member_id: ctx.memberId ?? null,
+              phone: phoneNumber,
               category: args.category || "general",
-              reason: args.reason,
+              reason,
               channel: platform,
             },
           })
           .select("id")
           .single();
         if (error) return { error: "Failed to escalate." };
-        // Also flip bot off so a human can take over.
+        // Flip bot off so a human can take over.
         await supabase
           .from("whatsapp_chat_settings")
           .upsert(
             { branch_id: branchId, phone_number: phoneNumber, bot_active: false },
             { onConflict: "branch_id,phone_number" },
           );
+        // Fire-and-forget WhatsApp + in-app ping to all available staff on the branch.
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          fetch(`${supabaseUrl}/functions/v1/notify-staff-handoff`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ member_phone: phoneNumber, branch_id: branchId, reason }),
+          }).catch((e) => console.error("[handoff notify] dispatch failed:", e?.message));
+        } catch (e: any) {
+          console.error("[handoff notify] setup failed:", e?.message);
+        }
         return {
           success: true,
           request_id: data.id,
           message: "Flagged for staff review — a team member will be in touch shortly. 🙋",
         };
       }
+
 
       case "get_request_status": {
         if (!ctx.memberId) return { error: "Not a registered member." };
