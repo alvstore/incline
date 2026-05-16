@@ -56,20 +56,28 @@ Deno.serve(async (req) => {
     const scope = SCOPE_MAP[purpose];
     if (!scope) return json({ error: "Unknown purpose" }, 400);
 
-    // Pull purpose model override (if any)
+    // Inline overrides from drawer (test unsaved edits) win over the DB row.
+    const inlineProviderId = typeof body?.providerId === "string" && body.providerId.length > 0 ? body.providerId : null;
+    const inlineModel = typeof body?.model === "string" && body.model.length > 0 ? body.model : null;
+
+    // Pull purpose provider_id + model override (if any)
     const { data: purposeRow } = await supabase
       .from("ai_purposes")
-      .select("model")
+      .select("provider_id, model")
       .eq("purpose", purpose)
       .is("branch_id", null)
       .maybeSingle();
+
+    const providerId = inlineProviderId ?? purposeRow?.provider_id ?? undefined;
+    const model = inlineModel ?? purposeRow?.model ?? undefined;
 
     const start = Date.now();
     try {
       const r = await callAI({
         scope,
         supabase,
-        model: purposeRow?.model || undefined,
+        providerId,
+        model,
         max_tokens: 10,
         messages: [{ role: "user", content: "Reply with the single word: pong" }],
       });
