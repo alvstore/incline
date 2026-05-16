@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getTrainer } from '@/services/trainerService';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
