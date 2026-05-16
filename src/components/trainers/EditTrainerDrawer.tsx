@@ -436,13 +436,29 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
           </div>
 
           {/* Government ID */}
-          <div className="space-y-2">
-            <Label>Government ID</Label>
-            <Input
-              value={formData.government_id}
-              onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
-              placeholder="Aadhar/PAN number"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Government ID Type</Label>
+              <Select
+                value={formData.government_id_type}
+                onValueChange={(v) => setFormData({ ...formData, government_id_type: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select ID type" /></SelectTrigger>
+                <SelectContent>
+                  {GOVERNMENT_ID_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>ID Number</Label>
+              <Input
+                value={formData.government_id}
+                onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
+                placeholder="Enter ID number"
+              />
+            </div>
           </div>
 
           {/* Hardware & Biometrics */}
