@@ -12363,6 +12363,54 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_db_audit_rls_status: {
+        Args: never
+        Returns: {
+          policy_count: number
+          rls_enabled: boolean
+          table_name: string
+        }[]
+      }
+      get_error_audit_breakdown: {
+        Args: { _days?: number }
+        Returns: {
+          open_count: number
+          severity: string
+          source: string
+          total: number
+        }[]
+      }
+      get_error_audit_daily_trend: {
+        Args: { _days?: number }
+        Returns: {
+          critical_count: number
+          day: string
+          total: number
+        }[]
+      }
+      get_error_audit_top_fingerprints: {
+        Args: { _days?: number; _limit?: number }
+        Returns: {
+          error_message: string
+          fingerprint: string
+          first_seen: string
+          function_name: string
+          last_seen: string
+          open_count: number
+          route: string
+          severity: string
+          source: string
+          total_occurrences: number
+        }[]
+      }
+      get_error_audit_top_routes: {
+        Args: { _days?: number; _limit?: number }
+        Returns: {
+          open_count: number
+          route: string
+          total: number
+        }[]
+      }
       get_howbody_public_report: {
         Args: { _report_type: string; _token: string }
         Returns: Json

@@ -19,6 +19,7 @@ import { CommunicationFunnelCard } from '@/components/system/CommunicationFunnel
 import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFindingsCard';
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
+import { SystemAuditTab } from '@/components/system/SystemAuditTab';
 
 
 interface ErrorLog {
@@ -349,137 +350,152 @@ export default function SystemHealth() {
         </div>
 
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {stats.map((s) => (
-            <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2 rounded-xl bg-muted ${s.color}`}>
-                  <s.icon className="h-5 w-5" />
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="rounded-xl">
+            <TabsTrigger value="overview" className="rounded-lg">Overview</TabsTrigger>
+            <TabsTrigger value="errors" className="rounded-lg">Errors</TabsTrigger>
+            <TabsTrigger value="audit" className="rounded-lg">Audit</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {stats.map((s) => (
+                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={`p-2 rounded-xl bg-muted ${s.color}`}>
+                      <s.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-foreground">{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <CommunicationFunnelCard />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <ReconciliationFindingsCard />
+              <WhatsAppDeliveryHealthCard />
+            </div>
+
+            <PolicyAuditCard />
+          </TabsContent>
+
+          <TabsContent value="errors" className="space-y-6 mt-4">
+            <Card className="rounded-2xl border-border/50 shadow-lg">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="text-lg">Error Logs</CardTitle>
+                  <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                    <SelectTrigger className="w-[180px] rounded-xl">
+                      <SelectValue placeholder="Filter by source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sources</SelectItem>
+                      <SelectItem value="frontend">Frontend</SelectItem>
+                      <SelectItem value="edge_function">Backend Functions</SelectItem>
+                      <SelectItem value="database">Database</SelectItem>
+                      <SelectItem value="trigger">Triggers</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                </div>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={statusTab} onValueChange={setStatusTab}>
+                  <TabsList className="mb-4 rounded-xl">
+                    <TabsTrigger value="all" className="rounded-lg">All ({errors.length})</TabsTrigger>
+                    <TabsTrigger value="open" className="rounded-lg">Open ({openErrors.length})</TabsTrigger>
+                    <TabsTrigger value="resolved" className="rounded-lg">Resolved ({resolvedErrors.length})</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value={statusTab}>
+                    {isLoading ? (
+                      <p className="text-muted-foreground text-sm py-8 text-center">Loading...</p>
+                    ) : errors.length === 0 ? (
+                      <div className="text-center py-12">
+                        <CheckCircle className="h-12 w-12 text-primary mx-auto mb-3" />
+                        <p className="text-muted-foreground">No errors found. System is healthy!</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Last Seen</TableHead>
+                              <TableHead>Severity</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead>Function / Route</TableHead>
+                              <TableHead>Message</TableHead>
+                              <TableHead className="text-right">Count</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {errors.map((err) => {
+                              const src = getSourceConfig(err.source);
+                              const sev = (err.severity || 'error').toLowerCase();
+                              const sevBadgeClass =
+                                sev === 'critical' ? 'bg-rose-100 text-rose-700' :
+                                sev === 'error' ? 'bg-red-100 text-red-700' :
+                                sev === 'warning' ? 'bg-amber-100 text-amber-700' :
+                                'bg-slate-100 text-slate-700';
+                              const lastTime = err.last_seen || err.created_at;
+                              return (
+                                <TableRow key={err.id}>
+                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {format(new Date(lastTime), 'MMM d, HH:mm')}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={`${sevBadgeClass} rounded-full text-xs font-medium`} variant="secondary">{sev}</Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="gap-1 text-xs">
+                                      <src.icon className={`h-3 w-3 ${src.color}`} />
+                                      {src.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs max-w-[180px] truncate">{err.function_name || err.route || '—'}</TableCell>
+                                  <TableCell className="max-w-[280px] truncate text-sm">{err.error_message}</TableCell>
+                                  <TableCell className="text-right text-xs font-semibold">{err.occurrence_count ?? 1}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={err.status === 'open' ? 'destructive' : 'secondary'}>{err.status}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-1">
+                                      {err.status === 'resolved' && (
+                                        <Button size="sm" variant="ghost" onClick={() => reopenError.mutate(err.id)} title="Reopen">
+                                          <RotateCcw className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      <Button size="sm" variant="ghost" onClick={() => handleViewError(err)}>
+                                        <Eye className="h-4 w-4 mr-1" /> View
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
-          ))}
-        </div>
 
-        <CommunicationFunnelCard />
+            {/* Database Audit: Empty/Unused Tables */}
+            <DatabaseAuditCard />
+          </TabsContent>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <ReconciliationFindingsCard />
-          <WhatsAppDeliveryHealthCard />
-        </div>
-
-        <PolicyAuditCard />
-
-
-        <Card className="rounded-2xl border-border/50 shadow-lg">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <CardTitle className="text-lg">Error Logs</CardTitle>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-[180px] rounded-xl">
-                  <SelectValue placeholder="Filter by source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sources</SelectItem>
-                  <SelectItem value="frontend">Frontend</SelectItem>
-                  <SelectItem value="edge_function">Backend Functions</SelectItem>
-                  <SelectItem value="database">Database</SelectItem>
-                  <SelectItem value="trigger">Triggers</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={statusTab} onValueChange={setStatusTab}>
-              <TabsList className="mb-4 rounded-xl">
-                <TabsTrigger value="all" className="rounded-lg">All ({errors.length})</TabsTrigger>
-                <TabsTrigger value="open" className="rounded-lg">Open ({openErrors.length})</TabsTrigger>
-                <TabsTrigger value="resolved" className="rounded-lg">Resolved ({resolvedErrors.length})</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value={statusTab}>
-                {isLoading ? (
-                  <p className="text-muted-foreground text-sm py-8 text-center">Loading...</p>
-                ) : errors.length === 0 ? (
-                  <div className="text-center py-12">
-                    <CheckCircle className="h-12 w-12 text-primary mx-auto mb-3" />
-                    <p className="text-muted-foreground">No errors found. System is healthy!</p>
-                  </div>
-                ) : (
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Last Seen</TableHead>
-                          <TableHead>Severity</TableHead>
-                          <TableHead>Source</TableHead>
-                          <TableHead>Function / Route</TableHead>
-                          <TableHead>Message</TableHead>
-                          <TableHead className="text-right">Count</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {errors.map((err) => {
-                          const src = getSourceConfig(err.source);
-                          const sev = (err.severity || 'error').toLowerCase();
-                          const sevClass =
-                            sev === 'critical' ? 'bg-rose-100 text-rose-700' :
-                            sev === 'error' ? 'bg-red-100 text-red-700' :
-                            sev === 'warning' ? 'bg-amber-100 text-amber-700' :
-                            'bg-slate-100 text-slate-700';
-                          const lastTime = err.last_seen || err.created_at;
-                          return (
-                            <TableRow key={err.id}>
-                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                {format(new Date(lastTime), 'MMM d, HH:mm')}
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`${sevClass} rounded-full text-xs font-medium`} variant="secondary">{sev}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="gap-1 text-xs">
-                                  <src.icon className={`h-3 w-3 ${src.color}`} />
-                                  {src.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs max-w-[180px] truncate">{err.function_name || err.route || '—'}</TableCell>
-                              <TableCell className="max-w-[280px] truncate text-sm">{err.error_message}</TableCell>
-                              <TableCell className="text-right text-xs font-semibold">{err.occurrence_count ?? 1}</TableCell>
-                              <TableCell>
-                                <Badge variant={err.status === 'open' ? 'destructive' : 'secondary'}>{err.status}</Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-1">
-                                  {err.status === 'resolved' && (
-                                    <Button size="sm" variant="ghost" onClick={() => reopenError.mutate(err.id)} title="Reopen">
-                                      <RotateCcw className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <Button size="sm" variant="ghost" onClick={() => handleViewError(err)}>
-                                    <Eye className="h-4 w-4 mr-1" /> View
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        {/* Database Audit: Empty/Unused Tables */}
-        <DatabaseAuditCard />
+          <TabsContent value="audit" className="mt-4">
+            <SystemAuditTab />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Clear Resolved Confirmation */}
