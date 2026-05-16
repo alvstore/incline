@@ -139,8 +139,8 @@ export function AutomationsControlRoom() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const rules = rulesQuery.data ?? [];
-  const runs = runsQuery.data ?? [];
+  const rules = useMemo(() => rulesQuery.data ?? [], [rulesQuery.data]);
+  const runs = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
 
   const stats = useMemo(() => {
     const last24 = Date.now() - 24 * 3600 * 1000;
