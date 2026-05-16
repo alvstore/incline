@@ -19,6 +19,7 @@ import { CommunicationFunnelCard } from '@/components/system/CommunicationFunnel
 import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFindingsCard';
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
+import { SystemAuditTab } from '@/components/system/SystemAuditTab';
 
 
 interface ErrorLog {
