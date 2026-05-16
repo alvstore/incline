@@ -7,7 +7,7 @@ import { MessageSquare, Mail, Phone, Sparkles, Workflow, PhoneForwarded, FileTex
 import { TemplateManager } from './TemplateManager';
 import { WhatsAppAutomations } from './WhatsAppAutomations';
 import { TemplateCoverageMatrix } from './TemplateCoverageMatrix';
-import { MetaTemplatesPanel } from './MetaTemplatesPanel';
+
 // AI Agent settings live in their own settings entry; not duplicated here.
 import { WhatsAppRoutingSettings } from './WhatsAppRoutingSettings';
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
