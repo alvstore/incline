@@ -48,6 +48,10 @@ export async function executeSharedToolCall(
         if (!m?.user_id) return { error: "Profile not linked." };
         const { error } = await supabase.from("profiles").update(updates).eq("id", m.user_id);
         if (error) return { error: "Update failed." };
+        await upsertMemory(supabase, branchId, platform, phoneNumber, {
+          profile: updates,
+          do_not_ask_add: Object.keys(updates),
+        });
         return { success: true, message: "Contact updated. ✅" };
       }
 
