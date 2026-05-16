@@ -1,3 +1,11 @@
+// v2.0.0 — Staff/admin/manager WhatsApp lead alerts now route through
+//          dispatch-communication with the `lead_alert` approved Meta template
+//          (template_id resolved by meta_template_name='lead_alert'). This is
+//          REQUIRED because admins are almost always outside the 24h customer-
+//          service window for our number, so freeform text was silently dropped
+//          by Meta (HTTP 200, wamid issued, no `delivered` webhook). Lead's own
+//          welcome message still uses freeform text — leads ARE in-window when
+//          they submit the form.
 // v1.3.0 — Capture Meta wamid (provider_message_id) + error_message + raw payload for every WhatsApp send so silent drops outside the 24h customer-service window are auditable from the Live Feed.
 // Called after lead creation from any source (manual, capture-lead, webhook-lead-capture)
 // Reads lead_notification_rules + integration_settings to send SMS/WhatsApp to lead + team

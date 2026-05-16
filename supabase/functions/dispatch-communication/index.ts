@@ -1,4 +1,8 @@
-// dispatch-communication v1.13.0
+// dispatch-communication v1.14.0
+// v1.14.0: WhatsApp Cloud API error-code humaniser. 131047 / 131049 / 131026 /
+//          132000 / 132001 / 132012 / 133010 → plain-English hints written to
+//          communication_logs.error_message so the Campaign Report explains
+//          delivery drops instead of showing opaque "Meta API error (400)".
 // v1.13.0: Freeform WhatsApp video attachments are now sent as native video
 //          (was previously force-collapsed to document, which Meta rejected).
 // v1.12.0: Channel-level kill switch — if Settings → Integrations has the
@@ -716,6 +720,30 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       sendError = (e as Error).message ?? 'send_failed';
+    }
+
+    // ── Meta error-code humaniser ────────────────────────────────────────
+    // Surface specific WhatsApp Cloud API failure modes in plain English so
+    // the Campaign Report / SystemHealth can guide the operator instead of
+    // showing an opaque "Meta API error (400)". Codes referenced from
+    // https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes
+    if (sendError && input.channel === 'whatsapp') {
+      const errStr = String(sendError);
+      const matchCode = errStr.match(/\b(13\d{4})\b/);
+      const code = matchCode?.[1];
+      const META_HINTS: Record<string, string> = {
+        '131047': 'Outside 24h customer-service window — submit an APPROVED Meta template and resend.',
+        '131049': 'Meta paced this MARKETING message (ecosystem engagement). Recipient is inactive — lower frequency, improve template quality, or switch to UTILITY.',
+        '131026': 'Recipient cannot receive this message (likely not on WhatsApp or blocked our number).',
+        '131051': 'Unsupported message type for this template — re-check header/body components.',
+        '132000': 'Template parameter count mismatch — the body has {{n}} placeholders that were not provided at send time.',
+        '132001': 'Template does not exist in this WABA — re-sync from Meta in Templates Hub.',
+        '132012': 'Template parameter format invalid — usually a missing variable value.',
+        '133010': 'Phone number is not registered with WhatsApp.',
+      };
+      if (code && META_HINTS[code]) {
+        sendError = `${code}: ${META_HINTS[code]} (raw: ${errStr.slice(0, 200)})`;
+      }
     }
 
     // ── 6) finalize log ──

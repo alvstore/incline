@@ -1,3 +1,6 @@
+// v2.5.0 — Personalization guard: auto-fix "Hi Sample" / "Hello Member" bodies by
+//          replacing the literal name with {{1}}; reject MARKETING bodies with no
+//          placeholder at all (fixes the wait_is_over_july "Hi Sample" regression).
 // v2.4.0 — Auto-uploads sample header media (URL → Meta resumable-upload `h:...` handle)
 //           so DOCUMENT/IMAGE/VIDEO templates can be approved without manual sample handles.
 //           Falls back to text-only if upload fails (preserves v2.3.0 behavior).
@@ -357,12 +360,40 @@ serve(async (req) => {
 
       const safeName = name.toLowerCase().replace(/[\s\-]+/g, "_").replace(/[^a-z0-9_]/g, "");
 
+      // ── Personalization guard ─────────────────────────────────────────────
+      // Reject (or auto-fix) bodies that hard-code an example name like
+      // "Hi Sample 👋", "Hello friend", "Dear Member" without a {{}} placeholder.
+      // This is the regression that produced the public `wait_is_over_july`
+      // template which sends "Hi Sample" to every recipient.
+      let workingBody: string = String(body_text);
+      const hasAnyPlaceholder = /\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(workingBody);
+      if (!hasAnyPlaceholder) {
+        // Look for greeting + literal name pattern at the start
+        const greetMatch = workingBody.match(/^(\s*)(Hi|Hello|Hey|Dear|Hola|Namaste)\s+([A-Z][a-zA-Z]{1,20})(\b[^\n]{0,3})/);
+        if (greetMatch) {
+          // Replace the literal name with {{1}}
+          workingBody = workingBody.replace(greetMatch[0], `${greetMatch[1]}${greetMatch[2]} {{1}}${greetMatch[4] || ''}`);
+          console.log(`[manage-whatsapp-templates] auto-fixed personalization: "${greetMatch[0].trim()}" → "${greetMatch[2]} {{1}}"`);
+        } else if (String(category).toUpperCase() === 'MARKETING') {
+          // For marketing templates, refuse silent static-body sends — every recipient
+          // would otherwise get the literal example value at scale.
+          return new Response(
+            JSON.stringify({
+              error: "Template body has no personalization placeholder ({{1}}). " +
+                     "Add a name variable (e.g. 'Hi {{1}}') so each recipient sees their own name. " +
+                     "Static-body marketing templates trigger 'Hi Sample' style bugs.",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       // Auto-convert named variables like {{member_name}} to numbered {{1}}, {{2}}, etc.
-      let convertedBody = body_text;
+      let convertedBody = workingBody;
       const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
       const namedVars: string[] = [];
       let match;
-      while ((match = namedVarRegex.exec(body_text)) !== null) {
+      while ((match = namedVarRegex.exec(workingBody)) !== null) {
         if (!namedVars.includes(match[1])) {
           namedVars.push(match[1]);
         }

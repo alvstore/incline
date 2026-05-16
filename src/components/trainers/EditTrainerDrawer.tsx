@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getTrainer } from '@/services/trainerService';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,35 +83,42 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
     }
   };
 
+  // Defense in depth: refetch the trainer (with full profile) when the drawer opens,
+  // because some callers (e.g. HRM page) pass a thin record that lacks address/dob/etc.
   useEffect(() => {
-    if (trainer) {
-      setAvatarUrl(trainer.profile_avatar || trainer.biometric_photo_url || '');
+    if (!open || !trainer?.id) return;
+    let cancelled = false;
+    (async () => {
+      const fresh = (await getTrainer(trainer.id).catch(() => null)) || trainer;
+      if (cancelled) return;
+      setAvatarUrl(fresh.profile_avatar || fresh.biometric_photo_url || '');
       setFormData({
-        bio: trainer.bio || '',
-        hourly_rate: trainer.hourly_rate || 0,
-        max_clients: trainer.max_clients || 10,
-        fixed_salary: trainer.fixed_salary || 0,
-        salary_type: trainer.salary_type || 'fixed',
-        pt_share_percentage: trainer.pt_share_percentage || 50,
-        specializations: trainer.specializations || [],
-        certifications: trainer.certifications || [],
-        government_id: trainer.government_id || trainer.government_id_number || '',
-        is_active: trainer.is_active ?? true,
+        bio: fresh.bio || '',
+        hourly_rate: fresh.hourly_rate || 0,
+        max_clients: fresh.max_clients || 10,
+        fixed_salary: fresh.fixed_salary || 0,
+        salary_type: fresh.salary_type || 'fixed',
+        pt_share_percentage: fresh.pt_share_percentage || 50,
+        specializations: fresh.specializations || [],
+        certifications: fresh.certifications || [],
+        government_id: fresh.government_id || (fresh as any).government_id_number || fresh.profile?.government_id_number || '',
+        is_active: fresh.is_active ?? true,
       });
       setProfileData({
-        full_name: trainer.profile_name || trainer.profile?.full_name || '',
-        phone: trainer.profile_phone || trainer.profile?.phone || '',
-        gender: trainer.profile?.gender || '',
-        date_of_birth: trainer.profile?.date_of_birth || '',
-        address: trainer.profile?.address || '',
-        city: trainer.profile?.city || '',
-        state: trainer.profile?.state || '',
-        postal_code: trainer.profile?.postal_code || '',
-        emergency_contact_name: trainer.profile?.emergency_contact_name || '',
-        emergency_contact_phone: trainer.profile?.emergency_contact_phone || '',
+        full_name: fresh.profile_name || fresh.profile?.full_name || '',
+        phone: fresh.profile_phone || fresh.profile?.phone || '',
+        gender: fresh.profile?.gender || '',
+        date_of_birth: fresh.profile?.date_of_birth || '',
+        address: fresh.profile?.address || '',
+        city: fresh.profile?.city || '',
+        state: fresh.profile?.state || '',
+        postal_code: fresh.profile?.postal_code || '',
+        emergency_contact_name: fresh.profile?.emergency_contact_name || '',
+        emergency_contact_phone: fresh.profile?.emergency_contact_phone || '',
       });
-    }
-  }, [trainer]);
+    })();
+    return () => { cancelled = true; };
+  }, [open, trainer?.id]);
 
   const handleSpecializationToggle = (spec: string) => {
     setFormData(prev => ({

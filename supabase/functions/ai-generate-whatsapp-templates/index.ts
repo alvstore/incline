@@ -1,3 +1,6 @@
+// v3.2.0 — Hard rule: bodies must use {{1}}/{{member_name}} placeholders for ANY personalization
+//          (never write a literal example like "Hi Sample"). Validator strips obvious literal-name
+//          openings post-generation so Meta never receives a static-greeting template.
 // v3.1.0 — Deterministic category mapping for marketing/utility/auth events.
 // v2.3.0 — Document events now PREFER header_type='document' with a sample PDF URL.
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
@@ -43,6 +46,7 @@ Rules:
 - No emojis on UTILITY; max 1 tasteful emoji on MARKETING; no URLs / phone numbers in body.
 - Tone: warm, concise, Indian-English, premium fitness.
 - Names: lower_snake_case ≤ 50 chars, descriptive.
+- PERSONALIZATION RULE — **NEVER** hard-code a sample name. Write "Hi {{member_name}}" / "Hi {{1}}" — NOT "Hi Sample", "Hi friend", "Dear Member". Every body that addresses the recipient MUST include a {{}} placeholder for the name. Failing this rule will be rejected.
 - For events tagged "[DOCUMENT]" PREFER header_type='document' with header_sample_url='https://www.africau.edu/images/default/sample.pdf' (the platform auto-uploads it to Meta as the approval handle). Body must NOT include {{document_link}} — the file is delivered natively as the header attachment.
 - For other attachment events (e.g. flyers, posters) header_type='image' is allowed with header_sample_url='https://placehold.co/600x400.png'.
 - One template per event.`,
@@ -215,6 +219,28 @@ Deno.serve(async (req) => {
       } else {
         t.category = String(t.category).toUpperCase();
       }
+    }
+
+    // ── Personalization validator ────────────────────────────────────────
+    // The AI sometimes hallucinates a literal example name in the body
+    // ("Hi Sample 👋", "Hello friend", "Dear Member") with no {{}} placeholder.
+    // When that template gets approved by Meta it sends the literal string to
+    // every recipient. Auto-fix here so the bug can never reach Meta.
+    for (const t of allTemplates) {
+      const fixBody = (raw: unknown): unknown => {
+        if (typeof raw !== 'string') return raw;
+        const hasPlaceholder = /\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(raw);
+        if (hasPlaceholder) return raw;
+        const m = raw.match(/^(\s*)(Hi|Hello|Hey|Dear|Hola|Namaste)\s+([A-Z][a-zA-Z]{1,20}|friend|member|there|sample)(\b[^\n]{0,3})/i);
+        if (!m) return raw;
+        const fixed = raw.replace(m[0], `${m[1]}${m[2]} {{member_name}}${m[4] || ''}`);
+        const vars: string[] = Array.isArray(t.variables) ? t.variables : [];
+        if (!vars.includes('member_name')) vars.unshift('member_name');
+        t.variables = vars;
+        return fixed;
+      };
+      t.body_text = fixBody(t.body_text);
+      if (typeof t.body_html === 'string') t.body_html = fixBody(t.body_html);
     }
 
     if (allTemplates.length === 0) return json({ error: "AI returned no proposals" }, 500);
