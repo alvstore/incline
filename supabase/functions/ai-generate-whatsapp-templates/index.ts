@@ -221,6 +221,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Personalization validator ────────────────────────────────────────
+    // The AI sometimes hallucinates a literal example name in the body
+    // ("Hi Sample 👋", "Hello friend", "Dear Member") with no {{}} placeholder.
+    // When that template gets approved by Meta it sends the literal string to
+    // every recipient. Auto-fix here so the bug can never reach Meta.
+    for (const t of allTemplates) {
+      const fixBody = (raw: unknown): unknown => {
+        if (typeof raw !== 'string') return raw;
+        const hasPlaceholder = /\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(raw);
+        if (hasPlaceholder) return raw;
+        const m = raw.match(/^(\s*)(Hi|Hello|Hey|Dear|Hola|Namaste)\s+([A-Z][a-zA-Z]{1,20}|friend|member|there|sample)(\b[^\n]{0,3})/i);
+        if (!m) return raw;
+        const fixed = raw.replace(m[0], `${m[1]}${m[2]} {{member_name}}${m[4] || ''}`);
+        const vars: string[] = Array.isArray(t.variables) ? t.variables : [];
+        if (!vars.includes('member_name')) vars.unshift('member_name');
+        t.variables = vars;
+        return fixed;
+      };
+      t.body_text = fixBody(t.body_text);
+      if (typeof t.body_html === 'string') t.body_html = fixBody(t.body_html);
+    }
+
     if (allTemplates.length === 0) return json({ error: "AI returned no proposals" }, 500);
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
