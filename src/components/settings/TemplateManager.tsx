@@ -626,49 +626,62 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
   return (
     <div className="space-y-6">
       {!hideHeader && (
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Communication Templates</h3>
-          <p className="text-sm text-muted-foreground">
-            Manage SMS, Email, and WhatsApp message templates
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Sparkles className="mr-2 h-4 w-4" />
-                Quick Presets
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {DYNAMIC_PDF_PRESETS.map((p) => (
-                <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                  <FileText className="h-4 w-4 mt-0.5 text-violet-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{p.label}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {p.attachment_filename_template}
-                    </p>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={() => openEditor()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Template
-          </Button>
+      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 shadow-lg shadow-indigo-500/20 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-white/15 backdrop-blur-sm p-2.5 rounded-xl">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold leading-tight">Communication Templates</h3>
+              <p className="text-sm text-white/80 mt-0.5">
+                Manage SMS, Email and WhatsApp message templates · {templates.length} total
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" className="bg-white/15 hover:bg-white/25 text-white border-0 backdrop-blur-sm">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Quick Presets
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {DYNAMIC_PDF_PRESETS.map((p) => (
+                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
+                    <FileText className="h-4 w-4 mt-0.5 text-violet-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{p.label}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {p.attachment_filename_template}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => openEditor()} className="bg-white text-indigo-700 hover:bg-white/90 shadow-sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Template
+            </Button>
+          </div>
         </div>
       </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-4">
+              <Skeleton className="h-5 w-1/3 mb-2" />
+              <Skeleton className="h-4 w-2/3 mb-2" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
         </div>
       ) : (
         <>
