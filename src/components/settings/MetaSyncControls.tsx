@@ -27,7 +27,7 @@ export function MetaSyncControls() {
     queryFn: async () => {
       let q = supabase
         .from('integration_settings')
-        .select('id, branch_id, settings')
+        .select('id, branch_id, config')
         .eq('integration_type', 'whatsapp')
         .eq('is_active', true);
       if (selectedBranch !== 'all') {
