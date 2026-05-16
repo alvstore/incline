@@ -382,7 +382,14 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
       supabase, replyText, ctx, leadCaptureConfig!, supabaseUrl, serviceKey,
     );
     if (leadResult.captured) {
-      // Send handoff message instead of AI's JSON
+      // Persist captured fields into ai_memory + mark do-not-ask for those keys
+      const capturedKeys = leadResult.partialData ? Object.keys(leadResult.partialData) : [];
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: leadResult.partialData || {},
+        do_not_ask_add: capturedKeys,
+        current_intent: "lead_captured",
+        summary: memory?.summary ?? null,
+      });
       const handoffMsg = leadCaptureConfig!.handoff_message || "Thanks for sharing! Our team will reach out to you shortly. 💪";
       return { replyText: handoffMsg, leadCaptured: true, leadId: leadResult.leadId, handoffTriggered: false, skipped: false };
     }
@@ -392,8 +399,33 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
         { branch_id: ctx.branchId, phone_number: ctx.senderId, partial_lead_data: leadResult.partialData },
         { onConflict: "branch_id,phone_number" },
       );
+      // Also persist partial fields into long-term memory
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: leadResult.partialData,
+        current_intent: "lead_in_progress",
+      });
     }
   }
+
+  // 10b. Always touch memory with member identity + last-seen + last question asked
+  const profilePatch: Record<string, any> = {};
+  if (memberCtx.isMember) {
+    profilePatch.is_member = true;
+    if (memberCtx.memberId) profilePatch.member_id = memberCtx.memberId;
+    if (memberCtx.memberName) profilePatch.name = memberCtx.memberName;
+  }
+  // Heuristic: if the reply ends with "?" treat it as an asked question we remember
+  const askedNow: string[] = [];
+  const trimmed = (replyText || "").trim();
+  if (trimmed.endsWith("?")) {
+    const lastSentence = trimmed.split(/(?<=[.!?])\s+/).pop() || trimmed;
+    askedNow.push(lastSentence.slice(0, 200));
+  }
+  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+    profile: profilePatch,
+    asked_questions_add: askedNow,
+    current_intent: memberCtx.isMember ? "member_assist" : (memory?.current_intent ?? null),
+  });
 
   return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }
