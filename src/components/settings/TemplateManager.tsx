@@ -743,7 +743,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                       {groupedTemplates[value].map((template) => (
                         <div
                           key={template.id}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                          className="flex items-center justify-between p-4 rounded-xl border border-slate-200/70 bg-white hover:bg-slate-50 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
