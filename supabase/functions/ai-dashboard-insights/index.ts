@@ -43,13 +43,13 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // ---- Authorization: only owner / admin / manager can see financial KPIs ----
-    const { data: roleRow } = await supabase
+    const { data: roleRows } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', userId)
       .in('role', ['owner', 'admin', 'manager'])
-      .maybeSingle();
-    if (!roleRow) {
+      .limit(1);
+    if (!roleRows || roleRows.length === 0) {
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
