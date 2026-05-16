@@ -14,7 +14,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[0-9\s\-\(\)]{10,20}$/;
 const ALLOWED_ROLES = ['trainer', 'staff', 'manager', 'admin', 'owner'];
-const ALLOWED_SALARY_TYPES = ['hourly', 'monthly', 'fixed', 'commission'];
+const ALLOWED_SALARY_TYPES = ['hourly', 'monthly', 'fixed', 'commission', 'hybrid'];
 const ALLOWED_ID_TYPES = ['aadhaar', 'pan', 'passport', 'driving_license', 'voter_id'];
 
 // Sanitize string input
