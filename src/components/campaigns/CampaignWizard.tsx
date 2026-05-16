@@ -143,6 +143,67 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     return () => { supabase.removeChannel(ch); };
   }, [open, channel, refetchTemplates]);
 
+  // ─── Evergreen template library ────────────────────────────────────────────
+  // Pull the active evergreen `templates` rows that match the current campaign
+  // type + channel. These are reusable, generic bodies (seeded globally) that
+  // the wizard auto-picks so the marketer doesn't need fresh Meta approval per
+  // campaign. When the linked `meta_template_name` is APPROVED in
+  // `whatsapp_templates`, we auto-toggle the "send via approved template" mode
+  // and pre-select the local templates.id.
+  const { data: evergreenTemplates = [] } = useQuery({
+    queryKey: ['evergreen-templates', channel, campaignType, branchId],
+    queryFn: async () => {
+      let q = supabase
+        .from('templates')
+        .select('id, name, content, subject, header_type, meta_template_name, meta_template_status, evergreen_kind, branch_id, variables')
+        .eq('is_evergreen', true)
+        .eq('is_active', true)
+        .eq('type', channel)
+        .eq('evergreen_kind', campaignType);
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q.order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && (channel === 'whatsapp' || channel === 'email' || channel === 'sms'),
+  });
+
+  const [evergreenAppliedFor, setEvergreenAppliedFor] = useState<string | null>(null);
+  const [evergreenPickedName, setEvergreenPickedName] = useState<string | null>(null);
+
+  // Auto-apply evergreen on campaign-type / channel switch (only when not editing
+  // and user hasn't typed a custom message yet, or when the prior body came from
+  // a different evergreen).
+  useEffect(() => {
+    if (!open || isEditing) return;
+    const key = `${channel}:${campaignType}`;
+    if (evergreenAppliedFor === key) return;
+    const ever = (evergreenTemplates as any[])[0];
+    if (!ever) {
+      // No evergreen for this combo — keep whatever the user has.
+      setEvergreenAppliedFor(key);
+      return;
+    }
+    // Don't blow away user's custom edits — only apply if message is empty or
+    // still matches the previously-applied evergreen body.
+    const messageIsCustom = message.trim().length > 0 &&
+      !(evergreenPickedName && message.trim() === (evergreenTemplates as any[])
+        .find((t: any) => t.name === evergreenPickedName)?.content?.trim());
+    if (!messageIsCustom) {
+      setMessage(ever.content || '');
+      if (channel === 'email' && ever.subject) setSubject(ever.subject);
+      setEvergreenPickedName(ever.name);
+      // If the linked Meta template is APPROVED, auto-route through the
+      // approved-template path so cold recipients don't get blocked.
+      if (channel === 'whatsapp' && ever.id && ever.meta_template_status === 'approved') {
+        setUseApprovedTemplate(true);
+        setSelectedTemplateId(ever.id);
+      }
+    }
+    setEvergreenAppliedFor(key);
+  }, [open, isEditing, channel, campaignType, evergreenTemplates, evergreenAppliedFor, evergreenPickedName, message]);
+
+
   const handleSyncFromMeta = async () => {
     if (!branchId) { toast.error('No branch available'); return; }
     setSyncingTemplates(true);
