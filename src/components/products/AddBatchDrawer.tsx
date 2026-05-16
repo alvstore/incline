@@ -78,7 +78,7 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
     if (product.default_shelf_life_days && form.mfg_date) {
       setForm((f) => ({ ...f, exp_date: addDaysISO(f.mfg_date, product.default_shelf_life_days!) }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [form.mfg_date, product.default_shelf_life_days]);
 
   const save = useMutation({

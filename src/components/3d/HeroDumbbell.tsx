@@ -43,7 +43,7 @@ const HeroDumbbell = ({ scrollProgress, isMobile }: HeroDumbbellProps) => {
     const xOffset = isMobile ? 1.5 : 3.0;
 
     let posX = 0, posY = 0, scale = baseScale;
-    let rotY = time * 0.3;
+    const rotY = time * 0.3;
     let rotZ = Math.PI / 2;
     let plateSpread = 0;
 

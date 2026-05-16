@@ -101,7 +101,7 @@ class GltfErrorBoundary extends Component<
     return { failed: true };
   }
   componentDidCatch(err: unknown) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[AvatarGltf] GLB load failed, falling back to procedural model:', err);
   }
   render() {

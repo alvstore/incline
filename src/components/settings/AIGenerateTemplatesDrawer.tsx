@@ -220,7 +220,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
 
   const submitAll = async () => {
     for (const p of proposals.slice()) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await submitOne(p);
     }
   };

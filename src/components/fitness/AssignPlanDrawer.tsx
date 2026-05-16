@@ -98,7 +98,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
       setValidityOverridden(false);
       setValidUntil(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [open, plan?.is_common, planWeeks]);
 
   const { data: searchResults = [], isLoading: isSearching } = useQuery({

@@ -217,7 +217,7 @@ export function cheapestModelFor(provider: string): string {
 export function normalizeModelForProvider(provider: string, model: string): string {
   if (!model) return model;
   if (provider === 'google') {
-    let m = model.replace(/^google\//, '');
+    const m = model.replace(/^google\//, '');
     const map: Record<string, string> = {
       'gemini-3-flash-preview': 'gemini-flash-latest',
       'gemini-3.1-flash-lite-preview': 'gemini-flash-lite-latest',
