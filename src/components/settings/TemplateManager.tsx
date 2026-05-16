@@ -728,6 +728,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                       <span className="ml-1.5 opacity-70">{statusCounts[s.v] ?? 0}</span>
                     </button>
                   ))}
+                  <MetaSyncControls />
                 </div>
               )}
               <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0">
