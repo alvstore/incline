@@ -682,6 +682,42 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               </div>
             )}
 
+            {evergreenPickedName && (
+              <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/60 dark:bg-indigo-500/10 p-3 flex items-start gap-2.5">
+                <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-indigo-900 dark:text-indigo-100 flex-1">
+                  <p className="font-semibold mb-0.5">Evergreen template applied: <span className="font-mono text-[12px]">{evergreenPickedName}</span></p>
+                  <p className="text-[11px]">Reusable Meta-friendly base for <b>{campaignType.replace('_', ' ')}</b> campaigns. Edit freely or pick a different evergreen below.</p>
+                  {evergreenTemplates.length > 1 && (
+                    <Select
+                      value={evergreenPickedName}
+                      onValueChange={(n) => {
+                        const t: any = (evergreenTemplates as any[]).find((x) => x.name === n);
+                        if (!t) return;
+                        setMessage(t.content || '');
+                        if (channel === 'email' && t.subject) setSubject(t.subject);
+                        setEvergreenPickedName(t.name);
+                        if (channel === 'whatsapp' && t.id && t.meta_template_status === 'approved') {
+                          setUseApprovedTemplate(true); setSelectedTemplateId(t.id);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="rounded-lg bg-white mt-2 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(evergreenTemplates as any[]).map((t: any) => (
+                          <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]"
+                  onClick={() => { setEvergreenPickedName(null); setMessage(''); }}>
+                  Clear
+                </Button>
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Message</Label>
