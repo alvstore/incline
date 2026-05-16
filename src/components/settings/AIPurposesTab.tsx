@@ -430,6 +430,7 @@ export function AIPurposesTab() {
                     onClick={() =>
                       setEditing({
                         ...editing,
+                        provider_id: null,
                         model: null,
                         temperature: editingPurposeDefaults.temperature,
                         max_tokens: editingPurposeDefaults.max_tokens,
