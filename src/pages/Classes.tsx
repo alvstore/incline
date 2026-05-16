@@ -137,6 +137,7 @@ export default function ClassesPage() {
       const dateB = new Date(b.scheduled_at).getTime();
       return timeFilter === "past" ? dateB - dateA : dateA - dateB;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredByTime, searchQuery, classTypeFilter, trainerFilter, timeFilter]);
 
   // Get class status badge

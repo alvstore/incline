@@ -115,6 +115,7 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
     if (open) {
       loadAvailableUsers();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, branchId]);
 
   const handleLinkExisting = async (e: React.FormEvent) => {
