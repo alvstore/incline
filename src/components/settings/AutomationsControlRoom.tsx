@@ -319,6 +319,7 @@ function EditDrawer({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
       setName(rule.name);
       setDesc(rule.description ?? '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rule?.id]);
 
   if (!rule) return null;
