@@ -100,7 +100,7 @@ export default function InvoicesPage() {
     })();
     return () => { cancelled = true; };
   // Run once on mount; subsequent navigations within the page won't change ?invoice=
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Strip ?invoice= from the URL whenever the view drawer closes so a refresh

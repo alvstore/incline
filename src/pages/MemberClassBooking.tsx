@@ -177,7 +177,7 @@ export default function MemberClassBooking() {
         .order('scheduled_at', { ascending: true });
       if (error) throw error;
       const trainerIds = [...new Set((data || []).map(s => s.trainer_id).filter(Boolean))] as string[];
-      let trainersMap: Record<string, string> = {};
+      const trainersMap: Record<string, string> = {};
       if (trainerIds.length > 0) {
         const { data: trainers } = await supabase.from('trainers').select('id, user_id').in('id', trainerIds);
         if (trainers) {

@@ -104,7 +104,7 @@ export function useGlobalChatSound(enabled: boolean = true) {
 
     let cancelled = false;
     let channel: any = null;
-    let mountedAt = Date.now();
+    const mountedAt = Date.now();
 
     import('@/integrations/supabase/client').then(({ supabase }) => {
       if (cancelled) return;

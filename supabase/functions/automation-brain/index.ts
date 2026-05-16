@@ -73,15 +73,28 @@ async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; 
   // New signing-keys gateway rejects when both `apikey` and `Authorization`
   // are sb_ keys ("Conflicting API keys"). Send SERVICE_KEY in `apikey` only;
   // child functions detect the system call via a custom header.
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SERVICE_KEY,
-      "x-system-call": "automation-brain",
-    },
-    body: JSON.stringify(payload ?? {}),
-  });
+  // v1.5.0 — one retry on 5xx / network failure (cold-start mitigation).
+  const doFetch = async () =>
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SERVICE_KEY,
+        "x-system-call": "automation-brain",
+      },
+      body: JSON.stringify(payload ?? {}),
+    });
+  let r: Response;
+  try {
+    r = await doFetch();
+    if (r.status >= 500 && r.status <= 599) {
+      await new Promise((res) => setTimeout(res, 300));
+      r = await doFetch();
+    }
+  } catch (_e) {
+    await new Promise((res) => setTimeout(res, 300));
+    r = await doFetch();
+  }
   const body = await r.text();
   return { ok: r.ok, status: r.status, body: body.slice(0, 500) };
 }

@@ -33,7 +33,7 @@ export default function MyPTSessions() {
       
       // Fetch trainer info separately to avoid deep type recursion
       const trainerIds = [...new Set((data || []).map(s => s.trainer_id).filter(Boolean))] as string[];
-      let trainersMap: Record<string, { profiles?: { full_name: string } }> = {};
+      const trainersMap: Record<string, { profiles?: { full_name: string } }> = {};
       
       if (trainerIds.length > 0) {
         const { data: trainers } = await supabase
