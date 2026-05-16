@@ -600,9 +600,11 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     }
   };
 
-  // Status counts (across all channels — relevant only for whatsapp but shown unified)
+  // Status counts — scoped to WhatsApp only (status sub-tabs are WhatsApp-specific).
+  // `All` = sum of WhatsApp approval buckets so the chip math reconciles with the filter.
   const statusCounts = templates.reduce((acc: Record<string, number>, t: any) => {
-    const s = (t.approval_status as string) || (t.type === 'whatsapp' ? 'draft' : 'not_applicable');
+    if (t.type !== 'whatsapp') return acc;
+    const s = (t.approval_status as string) || 'draft';
     acc[s] = (acc[s] || 0) + 1;
     acc.all = (acc.all || 0) + 1;
     return acc;
