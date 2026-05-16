@@ -463,7 +463,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
   const openMetaDialog = (template: Template) => {
     // Meta requires lowercase with underscores only (hyphens not permitted)
-    const slugName = template.name.toLowerCase().replace(/[\s\-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const slugName = template.name.toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '');
     // Auto-convert {{named}} placeholders → {{1}}, {{2}}, ... for Meta.
     let i = 0;
     const map: Record<string, number> = {};
