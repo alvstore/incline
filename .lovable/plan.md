@@ -1,106 +1,94 @@
-# Audit & Resolution Plan
+# Plan: System Health Audit + Lint Sweep + Template Manager UI polish
 
-## 1. AI Tables — Cleanup & Consolidation
-
-**Findings (live DB):**
-- 7 `ai_*` tables exist: `ai_call_logs`, `ai_tool_logs`, `ai_dashboard_insights`, `ai_knowledge`, `ai_memory`, `ai_provider_configs`, `ai_purposes`.
-- `ai_knowledge` and `ai_memory` are empty → the WhatsApp AI agent currently keeps short-term context in the edge function only; nothing is persisted.
-- `ai_call_logs` and `ai_tool_logs` overlap (one logs LLM calls, the other tool invocations) and have no admin UI to clear/inspect.
-
-**Plan:**
-1. **Consolidate:** keep `ai_call_logs` (LLM request/response/tokens/cost) and `ai_tool_logs` (tool name, args, result, latency). Document the split in a header comment — they serve different debug axes (LLM vs tool layer), so we keep both but stop creating new variants.
-2. **Wire memory persistence:** update `_shared/ai-runtime.ts` and `_shared/ai-tool-executor.ts` to:
-   - Write per-conversation short-term turns to `ai_memory` (scope=`conversation`, ttl 7d).
-   - Write durable facts the agent extracts ("member prefers evening slots", "lead is price-sensitive") to `ai_knowledge` (scope=`contact`/`member`).
-   - Add nightly pg_cron to purge `ai_memory` rows older than TTL.
-3. **Admin UI — `Settings → AI Studio → Logs & Memory`:**
-   - Tabs: Call Logs · Tool Logs · Memory · Knowledge.
-   - Filters: provider, purpose, date range, conversation, contact.
-   - Bulk actions: **Clear selected**, **Clear all older than N days**, **Export CSV**.
-   - Row drawer with full request/response JSON, token cost, error.
-
-## 2. System Health Audit
-
-**Plan:**
-1. Run `supabase--linter` + sweep `error_logs` for top fingerprints from the last 30 days.
-2. Build a one-shot audit report in `/mnt/documents/` covering: missing FKs, orphan rows, RLS gaps, dead tables, duplicate ai_* writes, edge-fn 5xx hotspots.
-3. Add a **System Health → Audit** tab in the existing `SystemHealth.tsx` page that surfaces: linter findings, top error fingerprints, dead/empty tables, last cron run per job, edge fn health. Each row has a "Mark resolved" / "Open runbook" action.
-4. Auto-resolve obvious issues via a follow-up migration (drop dead columns, add missing indexes, tighten RLS).
-
-## 3. WhatsApp / SMS / Email Template Manager UI
-
-**Findings:** `Settings → Communication Templates` lets you generate via AI and sync from Meta, but there is **no manual create / edit form** for any channel and no edit-then-resubmit flow for WhatsApp.
-
-**Plan — `TemplateEditorDrawer` (right-side Sheet, single component for all 3 channels):**
-- Header: channel chip · category dropdown (MARKETING / UTILITY / AUTHENTICATION for WA; simple for SMS/Email).
-- Body editor with `{{1}}`, `{{2}}` insertion chips + live preview rendered with sample data.
-- WhatsApp-specific: header type (none/text/image/video/document) + sample URL, footer text, up to 3 buttons (quick reply / URL / phone).
-- Email-specific: subject, from name, HTML editor (TipTap) with merge-tag chips.
-- SMS-specific: 160-char counter, DLT principal/template ID inputs.
-- Live validation: placeholder count vs variables provided, Meta category-rule guard (reuse server validator), DLT length check.
-- Actions: **Save Draft** · **Submit to Meta** (WA only) · **Test Send** (sends to logged-in admin's number).
-- Reachable from every tab (CRM Templates, Meta Approved, SMS Templates, Email Templates) via "New Template" and "Edit" buttons on each row.
-
-## 4. Smarter Campaign Manager — Reduce Meta Approval Dependency
-
-**Research summary (Meta Cloud API rules, 2025):**
-- Cold/outside-24h sends MUST use an approved template — no workaround.
-- Inside the 24h customer service window you can send free-form text/media → use it for engaged contacts.
-- Approved templates with `{{1}}`...`{{n}}` variables and dynamic header media are reusable across many campaigns.
-- Meta now supports **Authentication, Utility, Marketing** categories and **Marketing Lite** pacing — over-blasting marketing triggers 131049.
-
-**Plan — "Reusable Template Library" model:**
-1. **Seed a small library of 8-10 evergreen templates** (covers 90% of sends) — submit once, reuse forever:
-   - `promo_offer_generic` (MARKETING, image header + `{{1}}=name, {{2}}=offer, {{3}}=cta_url`)
-   - `event_invite_generic` (MARKETING, image/video header + name/event/date/venue/rsvp_url)
-   - `announcement_generic` (UTILITY, name + headline + details + link)
-   - `reengage_lost_lead` (MARKETING, name + reason + offer + link)
-   - `birthday_wish`, `renewal_reminder`, `class_reminder`, `payment_due` (UTILITY)
-   - `lead_alert_internal` (UTILITY → staff)
-2. **CampaignWizard upgrade:**
-   - Step "Template" auto-picks the right approved template by campaign type and shows only the variables/media slots that need filling (no more "pick from 50 templates").
-   - "Why this template?" tooltip explains category + estimated deliverability.
-   - **Audience splitting:** automatically splits recipients into (a) **in 24h window** → free-form rich message and (b) **outside window** → reusable approved template. UI shows both previews.
-   - **Deliverability guardrails:** per-day MARKETING cap per recipient (default 1), per-campaign throttle, 131049 trend warning before send.
-   - **A/B header media:** upload 2 images; campaign sends 50/50 and reports CTR.
-3. **Auto-submit-on-demand:** if user truly needs a custom template, the wizard offers "Submit & schedule for tomorrow" — submits to Meta, waits for `APPROVED` webhook, then auto-launches the campaign.
-4. **Smart fallback chain:** WhatsApp blocked / 131049 → auto-retry via SMS (DLT) → Email → in-app, configurable per campaign.
-
-## 5. Trainer Code Bugs
-
-**Findings (live DB):**
-- DB trigger correctly produces `TR-INC-00001`.
-- `src/services/hrmService.ts:304` does `code: \`TR-${trainer_code || ...}\`` → re-prefixes "TR-" producing **`TR-TR-INC-00001`** (matches the user report).
-- `src/pages/Employees.tsx:163` sets `code: null` for trainer rows in its merged list → trainers show `-` in the Employees page.
-
-**Plan:**
-1. Remove the `TR-` re-prefix in `hrmService.getUnifiedPayrollStaff` — use `trainer_code` as-is.
-2. In `Employees.tsx`, set `code: trainer.trainer_code` for trainer rows.
-3. Backfill: normalise any historical `TR-TR-*` rows with an UPDATE migration. Also standardise sequence padding (one row is `TR-INC-0004`, others are `TR-INC-00001` — fix trigger to always use 5-digit padding and backfill).
-
-## 6. Single Source of Truth for Trainer CRUD
-
-**Findings:** `AddTrainerDrawer.tsx` and `EditTrainerDrawer.tsx` are two separate components with diverging field sets (Edit drawer was just patched to refetch full profile, Add drawer collects different fields).
-
-**Plan:**
-1. Create `TrainerFormDrawer.tsx` (mode: `create | edit`) — single Sheet, single Zod schema, single TanStack mutation.
-2. Sections: Identity (name/email/phone/DOB/gender/address/govt-id) · Role & Branch · Compensation (salary type, fixed, PT share, hourly) · Specializations & Certifications · Biometric (photo + MIPS sync) · Weekly off.
-3. Replace both `AddTrainerDrawer` and `EditTrainerDrawer` usages with the unified component. Delete the old files.
-4. Apply the same unification to employees (`EmployeeFormDrawer`) so both staff types follow the same pattern.
+Three independent workstreams, executed in order.
 
 ---
 
-## Technical Notes
+## 1. System Health — fix all errors recorded in `error_logs`
 
-- All new tables/columns via `supabase--migration` with RLS.
-- AI memory writes go through a new helper `ai-memory.ts` in `_shared` — never raw inserts.
-- Template editor reuses existing `manage-whatsapp-templates`, `send-email`, `send-sms` edge fns; no new dispatcher.
-- Campaign wizard audience splitter uses existing `resolve_campaign_audience` RPC + a new `is_in_24h_window(contact_id)` SQL helper.
-- Trainer/Employee form unification keeps existing `trainerService` / `hrmService` APIs unchanged; only UI is refactored.
+Triage of the 46 rows in today's export (grouped by root cause):
 
-## Files Touched (high level)
+### A. Automation Brain 502s (3 rows, 2026-05-16)
+- `run_retention_nudges`, `process_whatsapp_retry_queue`, `process_comm_retry_queue` all returned 502 once.
+- These are transient edge-function cold-start failures. Fix: in `automation-brain/index.ts`, wrap each rule invocation with **one retry** (300ms backoff) on 5xx **before** calling `log_error_event`. Bumps reliability without spamming the log.
 
-- **New:** `TemplateEditorDrawer.tsx`, `TrainerFormDrawer.tsx`, `EmployeeFormDrawer.tsx`, `AIStudioLogsPanel.tsx`, `SystemHealthAuditTab.tsx`, `_shared/ai-memory.ts`.
-- **Edited:** `hrmService.ts`, `Employees.tsx`, `CampaignWizard.tsx`, `SystemHealth.tsx`, `Settings.tsx` (route AI Studio Logs), `ai-runtime.ts`, `ai-tool-executor.ts`.
-- **Deleted:** `AddTrainerDrawer.tsx`, `EditTrainerDrawer.tsx`, `AddEmployeeDrawer.tsx`, `EditEmployeeDrawer.tsx`.
-- **Migrations:** trainer-code padding fix + backfill, ai_memory TTL cron, seed library of evergreen WhatsApp templates, indexes from audit.
+### B. Database error: `operator does not exist: lead_status = text` (22 hits on /announcements)
+- A query compares the `lead_status` enum to a raw text value. Find the offending `.eq('lead_status', someString)` in announcement audience resolution (likely `resolve_campaign_audience` RPC or contact_segments filter). Cast with `::text` or use the enum value. **Action**: grep `lead_status` in SQL + ts, add explicit cast in the SQL function and migration.
+
+### C. Dialog accessibility (2 hits, /my-clients + /trainer-dashboard)
+- Radix warning: `DialogContent` missing `DialogTitle`. Audit every `Dialog`/`DialogContent` in `src/components` and `src/pages` and ensure either a visible `DialogTitle` or `<VisuallyHidden><DialogTitle>…</DialogTitle></VisuallyHidden>`.
+
+### D. `Cannot read properties of undefined (reading 'add')` on `/` (2 hits, critical)
+- Most likely a `classList.add` or `Set.add` on a nullable ref. Add a console.log line + null guard. Will inspect Index.tsx / Dashboard.tsx root effects.
+
+### E. "Failed to fetch dynamically imported module" (4 critical hits)
+- Classic stale-bundle issue after deploys (chunks for `MembersCountingChart`, `Trainers`, `Settings`, `Scene3D` 404 after redeploy). Fix:
+  1. Add a `vite-plugin-pwa`-style **chunk-reload handler**: catch `import()` rejection in lazy boundaries → `window.location.reload()` once (guarded by sessionStorage flag to avoid loops).
+  2. Wrap all `React.lazy(() => import(...))` calls via a `lazyWithRetry()` helper.
+
+### F. Network errors (8 frontend hits, several routes)
+- Already logged by `errorReporter`; reduce noise by **not logging** `TypeError: Failed to fetch` when `navigator.onLine === false`. Patch `src/lib/errorReporter.ts`.
+
+### G. `signal is aborted without reason` (/auth, 1 hit)
+- Benign React-Query abort during navigation. Add filter in `errorReporter` to drop `AbortError` / `signal is aborted` messages.
+
+### H. `Invalid login credentials` (/auth, 1 hit)
+- User typo, not a bug. Filter from logging (auth errors with status 400 from Supabase login).
+
+### I. `/whatsapp-chat not_found` (10 hits)
+- Probably a missing conversation lookup. Add 404-tolerant handling in `useConversation*` hook — return `null` instead of throwing.
+
+---
+
+## 2. Lint deep-clean
+
+Current: **1 error + 62 warnings**.
+
+### Error (must fix)
+- `src/components/members/MemberProfileDrawer.tsx:959` — `no-unused-expressions`. Inspect and convert to a proper statement.
+
+### Warning groups
+| Group | Count | Fix strategy |
+|------|------|-------------|
+| `react-refresh/only-export-components` on shadcn ui files | ~9 | Add `// eslint-disable-next-line react-refresh/only-export-components` above the exported constants (these are shadcn boilerplate, splitting them breaks the upstream pattern) |
+| `react-hooks/exhaustive-deps` | ~12 | Case-by-case: add missing deps, or wrap callback in `useCallback`, or split into two effects |
+| `prefer-const` | 4 | Mechanical change `let` → `const` |
+| `no-useless-escape` (planNormalizer) | 1 | Drop the `\-` in regex |
+| Unused `eslint-disable` (Invoices.tsx) | 1 | Remove directive |
+| Context files | 3 | Disable rule on the file (contexts intentionally export hook + provider) |
+
+Goal: **0 errors, ≤10 deliberate warnings** (only the shadcn react-refresh ones, with disable comments justified).
+
+---
+
+## 3. Template Manager UI polish (skill: my-uiux)
+
+Targets:
+- `src/components/settings/CommunicationTemplatesHub.tsx`
+- `src/components/settings/TemplateManager.tsx`
+- `src/components/settings/MetaTemplatesPanel.tsx`
+- `src/components/settings/WhatsAppTemplatesHealth.tsx`
+
+Apply Vuexy aesthetic per project rules:
+- Replace flat cards with `rounded-2xl bg-white shadow-lg shadow-slate-200/50`
+- Status chips (approved/pending/rejected/draft) → colored badges (green/amber/red/slate)
+- Convert all "Create / Edit Template" Dialogs to right-side **Sheets** (`sm:max-w-xl`, sticky header + footer) — strict no-Dialog policy
+- Header KPI strip (Total / Approved / Pending / Coverage %) as gradient hero card (`from-violet-600 to-indigo-600`)
+- Add Skeleton loading + empty state + per-row hover (`hover:bg-slate-50`)
+- Inline preview pane on the right when editing (variable substitution preview)
+- All icons from `lucide-react` only
+
+No business-logic changes — pure presentation refactor inside the existing components.
+
+---
+
+## Execution order
+1. Lint error + a11y Dialog fixes (unblocks CI)
+2. error_logs root-causes (B, D, F, G, H, I)
+3. Automation 502 retry (A)
+4. Lazy-chunk retry helper (E)
+5. Template Manager UI refactor (#3)
+6. Sweep remaining lint warnings
+7. Verify with `bun run lint` + clear `error_logs` open count
+
+No database schema changes required (the `lead_status` cast is inside an existing function — replaced via migration).
