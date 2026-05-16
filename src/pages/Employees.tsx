@@ -160,7 +160,7 @@ export default function EmployeesPage() {
           profile: p || null,
           roles: ['trainer'],
           trainer: t,
-          code: null, // employee_code wins if both
+          code: t.trainer_code || null, // employee_code wins if both (upsert preserves earlier value)
           department: 'Training',
           position: 'Trainer',
           specialization: t.specializations?.join(', ') || null,
