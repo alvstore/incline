@@ -1,3 +1,6 @@
+// v2.5.0 — Personalization guard: auto-fix "Hi Sample" / "Hello Member" bodies by
+//          replacing the literal name with {{1}}; reject MARKETING bodies with no
+//          placeholder at all (fixes the wait_is_over_july "Hi Sample" regression).
 // v2.4.0 — Auto-uploads sample header media (URL → Meta resumable-upload `h:...` handle)
 //           so DOCUMENT/IMAGE/VIDEO templates can be approved without manual sample handles.
 //           Falls back to text-only if upload fails (preserves v2.3.0 behavior).
