@@ -99,11 +99,23 @@ export function AIPurposesTab() {
     queryFn: async () => {
       const { data } = await supabase
         .from("ai_provider_configs")
-        .select("scope, provider, default_model, is_active, is_default")
+        .select("id, scope, provider, default_model, is_active, is_default")
         .eq("is_active", true);
       return (data as ProviderRow[]) ?? [];
     },
   });
+
+  // Distinct enabled providers (prefer scope='all' row for the provider_id)
+  const providerOptions = useMemo(() => {
+    const byProvider = new Map<string, ProviderRow>();
+    for (const p of providers) {
+      const existing = byProvider.get(p.provider);
+      if (!existing || (p.scope === "all" && existing.scope !== "all")) {
+        byProvider.set(p.provider, p);
+      }
+    }
+    return Array.from(byProvider.values());
+  }, [providers]);
 
   const saveMut = useMutation({
     mutationFn: async (row: Partial<PurposeRow> & { id: string }) => {
@@ -111,6 +123,7 @@ export function AIPurposesTab() {
         .from("ai_purposes")
         .update({
           enabled: row.enabled,
+          provider_id: row.provider_id ?? null,
           model: row.model || null,
           system_prompt: row.system_prompt ?? "",
           temperature: row.temperature,
