@@ -1,85 +1,44 @@
-# Plan — Loader theme, blank screen, performance audit
+# Consolidate all attendance into one screen
 
-## 1. "Warming up..." loader background (quick visual fix)
+## Why
+- **Sidebar "Staff Attendance"** (owner/admin/manager) currently points to `/staff-attendance`, which in `App.tsx` is just a `<Navigate to="/attendance-dashboard" />`. It's a dead duplicate of the "Attendance" entry already in the sidebar — pure noise.
+- **"PT Attendance"** lives on its own page `/pt-attendance` and gets its own sidebar entry for trainers, staff, managers, owners, admins. Splitting member/staff attendance from PT attendance forces users to bounce between two screens. Merging it into the existing `AttendanceDashboard` tabs gives one control room, and lets reception staff mark PT attendance on a trainer's behalf without leaving the page.
 
-**Root cause:** `src/pages/Auth.tsx` (line 47) and `src/pages/SetPassword.tsx` (line ~14) wrap `<GymLoader>` in a div styled with `background: var(--gradient-hero)`, which resolves to the dark navy hero gradient. That's the dark-blue screen in your screenshot.
+## What changes
 
-**Fix (no loader changes):**
-- Replace the inline `style={{ background: 'var(--gradient-hero)' }}` with `className="bg-background"` (or `bg-slate-50`) on both Auth.tsx and SetPassword.tsx loader wrappers.
-- Result: loader sits on the same near-white surface as the rest of the auth screen — the red dumbbell + halo reads cleanly and there's no flash from dark → light when warming completes.
+### 1. Sidebar (`src/config/menu.ts`)
+Remove these redundant entries (5 lines total):
+- `Staff Attendance → /staff-attendance` for owner/admin/manager (line 233)
+- `Staff Attendance → /staff-attendance` for manager (line 307)
+- `PT Attendance → /pt-attendance` for trainer (line 78)
+- `PT Attendance → /pt-attendance` for staff (line 128)
+- `PT Attendance → /pt-attendance` for owner/admin/manager (line 191)
+- `PT Attendance → /pt-attendance` for manager (line 268)
 
-## 2. Blank `/auth` screen (second screenshot)
+Keep the single `Attendance → /attendance-dashboard` entry that every role already has.
 
-**Likely cause chain (in order of probability):**
-1. `checkingSetup` finishes → component re-renders → `AuthVisualPanel` (left desktop column) or a child throws and the suspense/error boundary swallows it silently. We have an `ErrorBoundary` higher up but `<Suspense fallback={null}>` in `App.tsx` means a transient lazy-chunk failure renders nothing.
-2. `getHomePath(roles)` redirect happens before `user` is populated → instant Navigate to a route that itself bails to null.
-3. Console already shows `FunctionsFetchError: Failed to send a request to the Edge Function` from `check-setup` — when offline/blocked the warn path runs fine, so this is not the blank cause, but it adds load latency (~1–3s).
+### 2. Routes (`src/App.tsx`)
+- Keep `/staff-attendance → /attendance-dashboard` redirect (for old bookmarks).
+- Add `/pt-attendance → /attendance-dashboard?tab=pt` redirect (replaces the standalone page route). The `PtAttendance` lazy import can stay for one release as a safety net, or be removed — recommend removing.
 
-**Audit steps (no behavior change yet):**
-- Open `/auth` with devtools → confirm whether DOM is empty `<div id="root"></div>` (white-screen crash) or has markup but no paint (CSS issue with `incline-auth` class).
-- Inspect `AuthVisualPanel` for any top-level hook that can throw (e.g., reading window/localStorage at render).
-- Replace `<Suspense fallback={null}>` around the route tree with `<Suspense fallback={<PageLoader />}>` so a stuck lazy chunk shows the thin progress bar instead of a white page.
-- Wrap `RoutedContent` children in a route-scoped `ErrorBoundary` that renders a "Reload" button instead of crashing to white.
+### 3. `AttendanceDashboard.tsx` — add a "PT Sessions" tab
+- Add a 5th `TabsTrigger value="pt"` next to Members / Staff Check-in / Staff Log / History, gated by capability: visible to owner, admin, manager, staff, and trainer.
+- Read `?tab=pt` from the URL on mount so the redirect lands on the right tab.
+- Tab body renders the existing PT attendance UI extracted from `src/pages/PtAttendance.tsx` (today's sessions list, mark present/absent/late/no-show actions, trainer filter for managers, member search). No business-logic changes — same `ptService` calls, same RPCs, same RLS.
+- **Trainer scope:** when the logged-in user is a trainer, the tab auto-filters to their own sessions (current `PtAttendance` behaviour). When the user is staff/manager/owner/admin, they see all trainers' sessions with a trainer filter and can mark status on behalf of any trainer — this is the new capability the user asked for. Backed by the existing `markPtSessionStatus` mutation; the RPC already accepts any authorized caller, so no DB change required.
 
-## 3. App-wide performance audit (rapid-fast goal)
+### 4. Cleanup
+- Delete `src/pages/PtAttendance.tsx` after the tab is wired up.
+- Delete `src/pages/StaffAttendance.tsx` if it exists and is unused (the route already redirects).
 
-The codebase is large (100+ lazy routes, heavy vendors). Here's the phased, **non-breaking** plan:
+## Out of scope
+- No changes to PT attendance business logic, RPCs, RLS, or `markPtSessionStatus` permissions.
+- No changes to the Members or Staff tabs already in the dashboard.
+- No styling overhaul — the new tab uses the same Vuexy card/table patterns already on the page.
 
-### Phase A — Frontend quick wins (1 pass, zero functional change)
-
-1. **Drop the eager `check-setup` edge call on every Auth mount.** Cache result in `sessionStorage` for the session, fall through immediately on cache hit. Removes 1–3s blocking spinner.
-2. **Add `<Suspense fallback={<PageLoader/>}>` and a real `ErrorBoundary` around lazy routes** — fixes blank screens on chunk load failures (root cause of many "blank screen" reports).
-3. **Preconnect cleanups** — `index.html` already preconnects Supabase; add `<link rel="preload" as="style">` only for the LCP route's CSS chunk and remove any preload that didn't get used (e.g., the logo preload we already removed; confirm nothing else lingers).
-4. **Defer `initGlobalErrorLogging()`** to `requestIdleCallback` so it doesn't add work to the critical path in `main.tsx`.
-5. **Move `React.StrictMode` only to dev** — in prod it double-mounts which doubles effect work. Wrap with `import.meta.env.DEV`.
-6. **`vite.config.ts` — set `build.target: 'es2022'`** to skip unnecessary transpile on modern browsers (smaller bundle), and add `optimizeDeps.include` for the heavy commonly-used deps so dev cold-start stops blanking on first request.
-
-### Phase B — TanStack Query defaults (huge perceived speed-up)
-
-`src/App.tsx` uses default `new QueryClient()`. Set:
-- `staleTime: 60_000` (default is 0 → every mount refetches)
-- `gcTime: 5 * 60_000`
-- `refetchOnWindowFocus: false`
-- `retry: 1`
-
-This single change cuts redundant Supabase calls 50–80% in normal navigation. No data correctness loss because mutations already `invalidateQueries`.
-
-### Phase C — Backend / DB audit (read-only, then targeted indexes)
-
-1. Run `supabase--linter` and capture all `query-missing-indexes` and `security-` warnings.
-2. Pull top-20 slow queries from `pg_stat_statements` via `supabase--read_query` (mean exec time × calls) — usually highlights 2–3 culprit tables.
-3. Add `CREATE INDEX CONCURRENTLY` migrations only for hot filters (`branch_id`, `member_id`, `created_at DESC`, `status`) that appear in `EXPLAIN` plans.
-4. Audit `useRealtimeInvalidate` channels — each open subscription costs a websocket frame on every write. Confirm we're only subscribing where the page is visible.
-5. Confirm Lovable Cloud instance size — if usage is high we'll surface the upgrade path:
-   *Project → Backend → Advanced settings → Upgrade instance*.
-
-### Phase D — Bundle audit
-
-- Run `bunx vite build --report` (or `rollup-plugin-visualizer`) to confirm no route is dragging in `three`, `jspdf`, or `xlsx` accidentally via a static import. Today `manualChunks` already splits these — we just verify.
-- Convert any remaining `import X from '...'` of `lucide-react` icons in landing-route components to per-icon paths (`lucide-react/dist/esm/icons/...`) only if the icons chunk is still > 60 KB on the LCP route.
-
-## Technical summary (for review)
-
-| File | Change |
-|------|--------|
-| `src/pages/Auth.tsx` | Loader wrapper bg: `var(--gradient-hero)` → `bg-slate-50` |
-| `src/pages/SetPassword.tsx` | Same loader wrapper bg fix |
-| `src/App.tsx` | QueryClient defaults; Suspense fallback = PageLoader; route-scoped ErrorBoundary; conditional StrictMode |
-| `src/main.tsx` | Defer `initGlobalErrorLogging` via `requestIdleCallback` |
-| `src/pages/Auth.tsx` | Cache `check-setup` result in sessionStorage |
-| `vite.config.ts` | `build.target: 'es2022'`, `optimizeDeps.include` |
-| `supabase/migrations/*` | Targeted `CREATE INDEX CONCURRENTLY` only after linter + pg_stat_statements review |
-
-## What I will NOT touch
-- `GymLoader` visuals
-- Any business logic, RPC, RLS policy, or edge function
-- Existing query keys / mutation flows
-- The 3D landing page (`InclineAscent`) — already IO-gated
-
-## Order of execution after approval
-1. Phase A + loader bg fix (single commit, ~5 file edits)
-2. Phase B QueryClient defaults
-3. Phase C diagnostic (read-only) → propose index migrations as a separate approval
-4. Phase D bundle report → only act if a regression is found
-
-Approve and I'll start with Phase A + the loader fix.
+## Files touched
+- `src/config/menu.ts` — remove 6 entries
+- `src/App.tsx` — swap `/pt-attendance` route to a redirect, drop lazy import
+- `src/pages/AttendanceDashboard.tsx` — add PT tab + URL-param tab sync
+- `src/pages/PtAttendance.tsx` — delete (logic moves into the tab)
+- `src/pages/StaffAttendance.tsx` — delete if present
