@@ -53,7 +53,8 @@ const LockersPage = lazy(() => import("./pages/Lockers"));
 const EmployeesPage = lazy(() => import("./pages/Employees"));
 const HRMPage = lazy(() => import("./pages/HRM"));
 const TrainersPage = lazy(() => import("./pages/Trainers"));
-const StaffAttendancePage = lazy(() => import("./pages/StaffAttendance"));
+// StaffAttendance + PtAttendance pages merged into AttendanceDashboard tabs
+// (routes below redirect for backward compatibility).
 const AttendanceDashboardPage = lazy(() => import("./pages/AttendanceDashboard"));
 const TasksPage = lazy(() => import("./pages/Tasks"));
 const AnalyticsPage = lazy(() => import("./pages/Analytics"));
@@ -83,7 +84,7 @@ const MyAttendance = lazy(() => import("./pages/MyAttendance"));
 const MyProgress = lazy(() => import("./pages/MyProgress"));
 const MemberClassBooking = lazy(() => import("./pages/MemberClassBooking"));
 const MyPTSessions = lazy(() => import("./pages/MyPTSessions"));
-const PtAttendance = lazy(() => import("./pages/PtAttendance"));
+
 const MyInvoices = lazy(() => import("./pages/MyInvoices"));
 const MemberRequests = lazy(() => import("./pages/MemberRequests"));
 const MemberStore = lazy(() => import("./pages/MemberStore"));
