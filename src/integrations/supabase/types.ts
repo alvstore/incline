@@ -2194,6 +2194,13 @@ export type Database = {
             foreignKeyName: "classes_trainer_id_fkey"
             columns: ["trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classes_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -2778,6 +2785,13 @@ export type Database = {
             foreignKeyName: "contracts_trainer_id_fkey"
             columns: ["trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -3076,6 +3090,13 @@ export type Database = {
             columns: ["trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diet_plans_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
             referencedColumns: ["id"]
           },
           {
@@ -4144,6 +4165,13 @@ export type Database = {
             columns: ["trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
             referencedColumns: ["id"]
           },
           {
@@ -7060,6 +7088,13 @@ export type Database = {
             foreignKeyName: "member_pt_packages_trainer_id_fkey"
             columns: ["trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_pt_packages_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -7257,6 +7292,13 @@ export type Database = {
             columns: ["assigned_trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_assigned_trainer_id_fkey"
+            columns: ["assigned_trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
             referencedColumns: ["id"]
           },
           {
@@ -9255,6 +9297,13 @@ export type Database = {
             foreignKeyName: "pt_sessions_trainer_id_fkey"
             columns: ["trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_sessions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -10703,6 +10752,13 @@ export type Database = {
             foreignKeyName: "trainer_availability_trainer_id_fkey"
             columns: ["trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trainer_availability_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -10760,6 +10816,13 @@ export type Database = {
             foreignKeyName: "trainer_change_requests_current_trainer_id_fkey"
             columns: ["current_trainer_id"]
             isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trainer_change_requests_current_trainer_id_fkey"
+            columns: ["current_trainer_id"]
+            isOneToOne: false
             referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
@@ -10775,6 +10838,13 @@ export type Database = {
             columns: ["requested_trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trainer_change_requests_requested_trainer_id_fkey"
+            columns: ["requested_trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
             referencedColumns: ["id"]
           },
           {
@@ -10871,6 +10941,13 @@ export type Database = {
             columns: ["trainer_id"]
             isOneToOne: false
             referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trainer_commissions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
             referencedColumns: ["id"]
           },
           {
@@ -11884,6 +11961,70 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainers_directory: {
+        Row: {
+          avatar_storage_path: string | null
+          bio: string | null
+          branch_id: string | null
+          certifications: string[] | null
+          id: string | null
+          is_active: boolean | null
+          max_clients: number | null
+          specializations: string[] | null
+          trainer_code: string | null
+          user_id: string | null
+          weekly_off: string | null
+        }
+        Insert: {
+          avatar_storage_path?: string | null
+          bio?: string | null
+          branch_id?: string | null
+          certifications?: string[] | null
+          id?: string | null
+          is_active?: boolean | null
+          max_clients?: number | null
+          specializations?: string[] | null
+          trainer_code?: string | null
+          user_id?: string | null
+          weekly_off?: string | null
+        }
+        Update: {
+          avatar_storage_path?: string | null
+          bio?: string | null
+          branch_id?: string | null
+          certifications?: string[] | null
+          id?: string | null
+          is_active?: boolean | null
+          max_clients?: number | null
+          specializations?: string[] | null
+          trainer_code?: string | null
+          user_id?: string | null
+          weekly_off?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trainers_user_id_profiles_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "online_users_v"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "trainers_user_id_profiles_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

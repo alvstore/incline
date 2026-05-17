@@ -147,16 +147,16 @@ export default function MemberRequests() {
       // all active trainers in the branch.
       const assignees: string[] = [];
       if (member!.assigned_trainer_id) {
-        const { data: t } = await supabase
-          .from('trainers')
+        const { data: t } = await (supabase as any)
+          .from('trainers_directory')
           .select('user_id')
           .eq('id', member!.assigned_trainer_id)
           .maybeSingle();
         if (t?.user_id) assignees.push(t.user_id);
       }
       if (assignees.length === 0) {
-        const { data: branchTrainers } = await supabase
-          .from('trainers')
+        const { data: branchTrainers } = await (supabase as any)
+          .from('trainers_directory')
           .select('user_id')
           .eq('branch_id', member!.branch_id)
           .eq('is_active', true);
