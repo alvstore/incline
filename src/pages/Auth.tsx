@@ -21,19 +21,30 @@ export default function AuthPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    // Cache result for the session — avoids a 1–3s blocking edge-fn call
+    // on every Auth mount (and works fine offline / when the fn is blocked).
+    const CACHE_KEY = '__incline_setup_check';
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached !== null) {
+      if (cached === '1') setNeedsSetup(true);
+      setCheckingSetup(false);
+      return;
+    }
     const checkSetup = async () => {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 3000);
         const { data, error } = await supabase.functions.invoke('check-setup', {
           signal: controller.signal as any,
         });
         clearTimeout(timeout);
         if (error) throw error;
-        if (data?.needsSetup) setNeedsSetup(true);
+        const needs = !!data?.needsSetup;
+        sessionStorage.setItem(CACHE_KEY, needs ? '1' : '0');
+        if (needs) setNeedsSetup(true);
       } catch (error) {
-        // Non-fatal: setup-check is best-effort. Use warn so the global
-        // console-error interceptor doesn't write it to error_logs.
+        // Non-fatal: assume no setup needed so the user isn't blocked.
+        sessionStorage.setItem(CACHE_KEY, '0');
         console.warn('Setup check skipped:', error);
       } finally {
         setCheckingSetup(false);
@@ -44,7 +55,7 @@ export default function AuthPage() {
 
   if (isLoading || checkingSetup) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--gradient-hero)' }}>
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <GymLoader text="Warming up..." />
       </div>
     );

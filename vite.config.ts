@@ -16,7 +16,26 @@ export default defineConfig(() => ({
   plugins: [
     react(),
   ],
+  optimizeDeps: {
+    // Pre-bundle heavy, ubiquitous deps so dev cold-starts don't pause on
+    // first navigation. Production builds are unaffected.
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react-router-dom",
+      "react-helmet-async",
+      "@tanstack/react-query",
+      "@supabase/supabase-js",
+      "lucide-react",
+      "date-fns",
+      "clsx",
+      "tailwind-merge",
+    ],
+  },
   build: {
+    // Modern browsers — skip needless transpile, smaller/faster bundle.
+    target: "es2022",
     // Raised after vendor split lands. Charts/data vendors legitimately
     // approach 600 KB; anything above that is a regression worth investigating.
     chunkSizeWarningLimit: 700,

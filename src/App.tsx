@@ -164,7 +164,7 @@ function RoutedContent() {
 
   return (
     <>
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageLoader />}>
         <Routes location={displayLocation}>
           {/* Public Website — InclineAscent 3D experience */}
           <Route path="/" element={<InclineAscent />} />
@@ -310,9 +310,16 @@ function RoutedContent() {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 2,
+      // Cut redundant refetches that made the app feel "slow":
+      // - 5min stale window keeps cached data fresh across navigations
+      // - no window-focus refetch storm when users alt-tab back
+      // - single retry (default 3) so transient failures fail fast and
+      //   show error UI instead of a long spinner.
+      retry: 1,
       staleTime: 1000 * 60 * 5,
-      refetchOnWindowFocus: true,
+      gcTime: 1000 * 60 * 10,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
     },
     mutations: {
       retry: 1,
