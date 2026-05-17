@@ -102,8 +102,10 @@ export default defineConfig(() => ({
           // Radix primitives (one chunk for all radix packages)
           if (id.includes('@radix-ui/')) return 'radix-vendor';
 
-          // Lucide icons — large, isolated so it can be cached separately
-          if (id.includes('lucide-react')) return 'icons-vendor';
+          // Lucide icons — intentionally NOT chunked. Forcing them into a
+          // single vendor bundle shipped the union of all 317 files' icons
+          // (~780KB / 137KB gz) to every visitor. Letting Rollup tree-shake
+          // per-route inlines only the icons each chunk actually uses.
 
           // Misc UI utilities frequently shared
           if (
