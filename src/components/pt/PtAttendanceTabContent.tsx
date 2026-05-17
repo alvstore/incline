@@ -10,7 +10,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { PtStatusBadge } from '@/components/pt/PtStatusBadge';
-import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
 import { Download, Search, Loader2 } from 'lucide-react';
 import { exportToCSV } from '@/lib/csvExport';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
