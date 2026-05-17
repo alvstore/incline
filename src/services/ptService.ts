@@ -68,7 +68,8 @@ export async function updatePTPackage(
   return data;
 }
 
-// Purchase PT package — uses unified settlement (8-arg variant routes through record_payment)
+// Purchase PT package — uses unified settlement (10-arg variant routes through record_payment)
+// Pass `subtotal`/`taxAmount` so the trainer commission is computed on the pre-GST base.
 export async function purchasePTPackage(
   memberId: string,
   packageId: string,
@@ -77,6 +78,8 @@ export async function purchasePTPackage(
   pricePaid: number,
   paymentMethod: string = 'cash',
   idempotencyKey?: string,
+  subtotal?: number,
+  taxAmount?: number,
 ): Promise<{ success: boolean; member_package_id?: string; invoice_id?: string; error?: string }> {
   const idem = idempotencyKey ?? `pt-${memberId}-${packageId}-${Date.now()}`;
   const { data, error } = await supabase.rpc("purchase_pt_package", {
@@ -87,7 +90,9 @@ export async function purchasePTPackage(
     _price_paid: pricePaid,
     _payment_method: paymentMethod,
     _idempotency_key: idem,
-  });
+    ...(subtotal !== undefined ? { _subtotal: subtotal } : {}),
+    ...(taxAmount !== undefined ? { _tax_amount: taxAmount } : {}),
+  } as any);
   if (error) throw error;
   return data as { success: boolean; member_package_id?: string; invoice_id?: string; error?: string };
 }
