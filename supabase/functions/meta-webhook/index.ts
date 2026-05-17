@@ -445,6 +445,24 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     .select("id")
     .single();
 
+  // Persist display name / avatar for IG (and any future platform with a
+  // profile resolver) so the chat list/header stay populated even when the
+  // most recent message row lacks them.
+  if (!isOutbound && (contactName || contactAvatarUrl)) {
+    try {
+      await supabase.rpc("upsert_meta_contact_profile", {
+        p_branch_id: branchId,
+        p_phone: contactId,
+        p_platform: platform,
+        p_external_id: contactId,
+        p_display_name: contactName,
+        p_avatar_url: contactAvatarUrl,
+      });
+    } catch (profileErr) {
+      console.warn(`[${platform}] profile upsert failed:`, profileErr);
+    }
+  }
+
   if (error) {
     console.error(`[${platform}] insert failed:`, error.message);
     return;
