@@ -5578,6 +5578,7 @@ export type Database = {
         Row: {
           ad_id: string | null
           assigned_to: string | null
+          avatar_url: string | null
           bot_active: boolean
           branch_id: string
           budget: string | null
@@ -5633,6 +5634,7 @@ export type Database = {
         Insert: {
           ad_id?: string | null
           assigned_to?: string | null
+          avatar_url?: string | null
           bot_active?: boolean
           branch_id: string
           budget?: string | null
@@ -5688,6 +5690,7 @@ export type Database = {
         Update: {
           ad_id?: string | null
           assigned_to?: string | null
+          avatar_url?: string | null
           bot_active?: boolean
           branch_id?: string
           budget?: string | null
@@ -11246,6 +11249,8 @@ export type Database = {
           bot_active: boolean | null
           branch_id: string | null
           captured_lead_id: string | null
+          contact_avatar_url: string | null
+          contact_name: string | null
           conversation_summary: string | null
           created_at: string | null
           do_not_contact: boolean
@@ -11273,6 +11278,8 @@ export type Database = {
           bot_active?: boolean | null
           branch_id?: string | null
           captured_lead_id?: string | null
+          contact_avatar_url?: string | null
+          contact_name?: string | null
           conversation_summary?: string | null
           created_at?: string | null
           do_not_contact?: boolean
@@ -11300,6 +11307,8 @@ export type Database = {
           bot_active?: boolean | null
           branch_id?: string | null
           captured_lead_id?: string | null
+          contact_avatar_url?: string | null
+          contact_name?: string | null
           conversation_summary?: string | null
           created_at?: string | null
           do_not_contact?: boolean
@@ -13143,6 +13152,17 @@ export type Database = {
       try_whatsapp_send_lock: {
         Args: { _phone: string; _ttl_seconds?: number }
         Returns: boolean
+      }
+      upsert_meta_contact_profile: {
+        Args: {
+          p_avatar_url: string
+          p_branch_id: string
+          p_display_name: string
+          p_external_id: string
+          p_phone: string
+          p_platform: string
+        }
+        Returns: undefined
       }
       user_visible_branch_ids: {
         Args: { p_user_id: string }

@@ -1,104 +1,114 @@
-# Plan — Dialog centering + AI follow-up opt-out
-
-## Issue 1 — "Clear logs" / "Resolve all" dialogs not visually centered
+## Epic 1 — Single source of truth for chat audio
 
 ### Root cause
-`src/components/ui/alert-dialog.tsx` uses `fixed left-[50%] top-[50%] translate-x/y(-50%)` — correct *viewport* centering. But on desktop the visible content area sits to the right of a ~256px sidebar, so a viewport-centered modal looks shifted **left** relative to where the user's eye is focused (the content table). The screenshots also show inconsistent styling vs. the rest of the app (square `rounded-lg`, no Vuexy shadow, dense padding).
+Three independent hooks all play the WebAudio ping on the same inbound event:
 
-### Fix
-Upgrade the shared `AlertDialog` primitive used by all three dialogs (SystemHealth resolve-all, SystemHealth clear-resolved, AICallLogs clear):
+1. `useGlobalChatSound()` in `AppHeader` → realtime INSERT on `whatsapp_messages`.
+2. `useChatSound(inboundCount, phone)` in `WhatsAppChat` → fires on count delta.
+3. `useChatSound(unreadCount)` in `NotificationBell` → fires when notification row arrives ~real‑time.
 
-1. **Sidebar-aware centering on desktop**
-   - Read `--sidebar-width` (already exposed by `components/ui/sidebar.tsx`) and offset the overlay + content by half that width on `md:` and up, so the modal optically centers over the main content area.
-   - Mobile (< md) stays viewport-centered.
-   - When sidebar is collapsed/offcanvas, fall back to viewport center (use `peer-data-[state=collapsed]` or check the CSS var resolves to 0).
+Result: 2–3 pings per inbound. Opening a chat can also ping when an invalidation refetch makes `inboundCount` rise without a `resetKey` change (e.g. realtime insert mid‑load), and there is no focus/active‑chat awareness.
 
-2. **Vuexy visual polish** (per project knowledge)
-   - `rounded-2xl`, `shadow-2xl shadow-slate-900/10`, `border-0`, `p-7`, `max-w-md`
-   - Header: 40px circular icon badge slot (destructive = `bg-red-50 text-red-600`, default = `bg-indigo-50 text-indigo-600`)
-   - Title `text-lg font-bold text-slate-900`, description `text-sm text-slate-500 leading-relaxed`
-   - Footer: right-aligned, `gap-2`, primary action takes brand/destructive variant from `buttonVariants`
-   - Overlay: `bg-slate-900/40 backdrop-blur-sm` instead of solid `bg-black/80`
+### Implementation
 
-3. **Accessibility**
-   - Keep Radix focus trap, add `aria-describedby` link, ensure 44px min touch targets on footer buttons.
+**New file `src/lib/audio/chatAudio.ts` — global singleton**
+- `notifyInbound({ branchId, conversationKey, isInternalNote })` is the only entry point.
+- Internal state: `activeConversationKey`, last‑play timestamp, shared `AudioContext` (lazy, resumed on first user gesture captured at module init via one‑time `pointerdown`/`keydown` listener).
+- Decision matrix:
+  - `isInternalNote` → no sound.
+  - `!isChatSoundEnabled()` → no sound.
+  - `document.hidden` OR `!document.hasFocus()` → `playPing()` (current 880→1320 Hz tone, gain 0.18).
+  - Focused AND `conversationKey === activeConversationKey` → `playPop()` (single 520 Hz sine, 60 ms, gain 0.04) — barely audible ack.
+  - Focused AND different conversation → `playPing()` but at reduced gain (0.10).
+- Debounce: ignore calls within 250 ms of the previous to coalesce burst inserts.
+- Exposes `setActiveConversation(key | null)` and `playTest()` for the Settings "Test sound" button.
 
-No call-site changes needed — all three dialogs inherit automatically.
+**`src/hooks/useChatSound.ts`**
+- Keep `isChatSoundEnabled`, `setChatSoundEnabled`, `useChatSoundPreference`, `playPing` (re‑export from singleton for the test button).
+- Replace `useGlobalChatSound` body with a single Realtime subscription that calls `notifyInbound(...)` for `whatsapp_messages` inbound inserts (filter `direction=eq.inbound`). Skip backlog using the existing `mountedAt − 1s` guard.
+- **Delete** the `useChatSound(trigger, resetKey)` counter hook (the source of the click‑to‑open ping). Migrate callers below.
 
-### Files
-- `src/components/ui/alert-dialog.tsx` — overlay + content styling, sidebar-aware offset
-- (optional) add a tiny `icon` slot prop to `AlertDialogHeader` so SystemHealth/AICallLogs can pass a `Trash2` / `CheckCheck` icon — backward compatible.
+**Callers**
+- `src/components/layout/AppHeader.tsx` — keep `useGlobalChatSound(!!user?.id)` (now routes through singleton).
+- `src/pages/WhatsAppChat.tsx`
+  - Remove the `useChatSound(inboundCount, phone)` line.
+  - Add `useEffect(() => { setActiveConversation(selectedContact?.phone_number ?? null); return () => setActiveConversation(null); }, [selectedContact?.phone_number])`.
+  - Ensure the contact‑list `onClick` only calls `setSelectedContact(...)` and `markAsRead(...)` — no sound, no message‑query side effect that could ping (singleton already gates on `activeConversationKey`).
+- `src/components/notifications/NotificationBell.tsx`
+  - Remove `useChatSound(unreadCount)` entirely. The bell already has its realtime channel for visual badge updates; sound is now owned by the global WhatsApp realtime subscription, so non‑chat notifications stay silent (correct behaviour — bell pings were a side effect, not a spec).
+
+### Verification
+- Open `/whatsapp` on the currently‑selected contact, send an inbound from another phone → one soft pop.
+- Same, but with a different contact open → one normal ping.
+- Switch tab away, send inbound → one full ping on return‑to‑focus is **not** played (we play at receive time, focus check happens then).
+- Click between 5 chats rapidly → zero sounds.
 
 ---
 
-## Issue 2 — AI keeps following up after lead said "don't message me"
+## Epic 2 — Meta profile enrichment & UI sync
 
-### Evidence
-WhatsApp transcript:
-> Lead 20:43: "Tb tk baar baar msg mat kro" (don't message me again and again)
-> AI 20:43: "Bilkul Yogita, main aapko disturb nahi karungi…"
-> AI next day 01:30: sends `Hi Yogita! We're closing our Founding Member entries soon…`
+### Current state
+- `whatsapp-webhook` parses `value.contacts[0].profile.name` and writes it to `whatsapp_messages.contact_name` only — never upserts into `leads`/`whatsapp_chat_settings.contact_name`, and never to `members.full_name`. WhatsApp Cloud API does **not** expose a profile photo (Meta restricts it) — we will not fabricate a fetch for it.
+- `meta-webhook` already resolves IG `name + profile_pic_url` via Graph (`fetchIgProfile`) and writes `contact_avatar_url` on the message row, but does not propagate to `leads`.
+- UI (`WhatsAppChat.tsx`) renders `<Avatar>` with `contact_avatar_url` + initials fallback already, but contact list groups by `phone_number` and only keeps the **first** non‑null avatar seen — when the most recent inbound has `null`, the avatar can disappear.
 
-### Root cause
-`supabase/functions/lead-nurture-followup/index.ts` only checks:
-- `nurture_retry_count` < max
-- `last_nurture_at` cooldown
-- 24h Meta window / approved template
-It has **no opt-out / do-not-contact gate**. The WhatsApp AI agent acknowledges the request conversationally but never persists a flag, and the nurture cron has no signal to skip the lead.
+### Implementation
 
-`supabase/functions/run-retention-nudges/index.ts` has the same gap for members.
+**DB — new helper RPC (migration)**
+```
+create or replace function public.upsert_meta_contact_profile(
+  p_branch_id uuid,
+  p_phone text,
+  p_platform text,           -- 'whatsapp' | 'instagram' | 'messenger'
+  p_external_id text,        -- wa_id or ig-scoped id or psid
+  p_display_name text,
+  p_avatar_url text
+) returns void
+language plpgsql security definer set search_path = public as $$ ... $$;
+```
+Behaviour:
+- `whatsapp_chat_settings`: upsert `(branch_id, phone_number)` with `contact_name = coalesce(p_display_name, contact_name)` and a new `contact_avatar_url text` column (add via this migration; nullable).
+- `leads`: if a lead row exists with the same phone in this branch, update `name = coalesce(name, p_display_name)` and new `avatar_url text` column (add); never overwrite a human‑edited name.
+- Idempotent, no error if no lead row.
 
-### Fix (3 layers)
+**`supabase/functions/whatsapp-webhook/index.ts`**
+- After the message insert in `processIncomingMessages`, when `contactName` is non‑null call `supabase.rpc('upsert_meta_contact_profile', { p_branch_id: branchId, p_phone: message.from, p_platform: 'whatsapp', p_external_id: value.contacts?.[0]?.wa_id ?? message.from, p_display_name: contactName, p_avatar_url: null })`.
 
-**A. Schema**
-Add to `whatsapp_chats` (and mirror on `leads` for already-converted leads):
-- `do_not_contact boolean default false`
-- `do_not_contact_reason text` (e.g. `lead_request`, `manual`, `keyword_match`)
-- `do_not_contact_until timestamptz null` (null = forever; allow temporary "after July" style snoozes)
-- `do_not_contact_set_at timestamptz`
+**`supabase/functions/meta-webhook/index.ts`**
+- In the IG path that already calls `fetchIgProfile`, after `contact_avatar_url` is resolved, call the same RPC with `p_platform: 'instagram'` and `p_avatar_url: profile.avatar_url`.
+- Messenger path: same RPC with `p_platform: 'messenger'`, avatar nullable (FB Graph requires page‑scoped token + extra perms — out of scope, leave null and let initials render).
 
-**B. Detection (incoming message pipeline)**
-In `dispatch` of inbound WhatsApp messages (the existing AI auto-reply / inbox webhook handler), add a `detectOptOut(text)` step:
-1. **Fast regex (multi-lingual incl. Hinglish)** — `stop|unsubscribe|don'?t (call|message|text|contact)|do not (call|message|text|contact)|msg mat kar|baat mat kar|disturb mat kar|call mat kar|band kar|remove me`
-2. If no keyword hit, run a cheap Lovable AI classification (`gemini-3-flash-preview`, JSON output `{opt_out: bool, until: iso|null, reason: string}`) — only when message tone is negative (skip on simple greetings).
-3. On positive detection:
-   - Set `do_not_contact = true`, `do_not_contact_reason='lead_request'`, `do_not_contact_until = parsed.until` (or null).
-   - Log an `audit_log` entry and create a `tasks` row for staff visibility.
-   - Send a single confirmation reply (template-safe), then stop.
+**Frontend — `src/pages/WhatsAppChat.tsx`**
+- Contact‑list grouping reducer: change the "keep first avatar" logic to "prefer non‑null avatar across the thread" (`existing.contact_avatar_url ||= msg.contact_avatar_url`) — already half‑done at line 334; mirror the same for `contact_name` (`||= msg.contact_name`).
+- Pull `contact_avatar_url` and `contact_name` from `whatsapp_chat_settings` in the contacts query and merge as the authoritative source when present (covers chats with zero recent inbounds in the page window).
+- Extract a tiny `<ChatAvatar contact={…} size="sm|md|lg" />` component in `src/components/communications/ChatAvatar.tsx` that wraps `<Avatar>` + `<AvatarImage src={avatar_url}>` + `<AvatarFallback>{initialsOf(name ?? phone)}</AvatarFallback>` with fixed `h-w` classes so layout never shifts between image and fallback. Use it in:
+  - Contact list row (h‑11)
+  - Conversation header (h‑10)
+  - Empty‑state hero (h‑16)
+  - Message bubble inbound (h‑8)
+- Initials helper: first letters of up to two whitespace‑separated tokens; fall back to last 2 digits of phone for unnamed senders.
 
-**C. Honor the flag everywhere**
-- `lead-nurture-followup`: extend the `.select(...)` to include `do_not_contact, do_not_contact_until`, and add a `.eq('do_not_contact', false).or('do_not_contact_until.is.null,do_not_contact_until.lt.now()')`-equivalent JS filter that **also early-returns** before any AI call.
-- `run-retention-nudges`: same filter on members.
-- `send-broadcast` / `run-campaign` / `dispatch-communication`: drop recipients whose contact (matched by phone) has `do_not_contact=true` and log `skipped_do_not_contact` in `campaign_recipients`.
-- WhatsApp AI agent tool registry: add `setDoNotContact(lead_id, until?, reason)` so the agent itself can flip the flag when it understands the user's intent, instead of only replying conversationally.
-
-**D. UI surface**
-- Member/Lead profile drawer: small "Do not contact" toggle badge with reason + set_at + optional until-date; staff can clear it.
-- ContactBook list: show a red `Do not contact` chip on rows with the flag.
-
-**E. Memory backfill**
-Add a new memory entry `mem://features/do-not-contact-engine` and a Core line:
-> All outbound nurture/campaign/retention sends MUST check `do_not_contact` on whatsapp_chats/leads/members. Inbound pipeline auto-detects opt-out via regex + AI classifier and sets the flag.
-
-### Files
-- New migration: columns + index on `(do_not_contact, branch_id)`
-- `supabase/functions/_shared/optOutDetector.ts` — regex + AI classifier helper
-- `supabase/functions/ai-auto-reply/index.ts` (and/or the WhatsApp inbox webhook) — call detector before AI reply
-- `supabase/functions/lead-nurture-followup/index.ts` — filter
-- `supabase/functions/run-retention-nudges/index.ts` — filter
-- `supabase/functions/send-broadcast/index.ts` + `run-campaign/index.ts` — filter
-- `supabase/functions/_shared/ai-tools.ts` + `ai-tool-executor.ts` — new `set_do_not_contact` tool
-- WhatsApp agent system prompt — instruct: "If user asks to stop/pause messages, call `set_do_not_contact` and confirm once."
-- `src/components/leads/LeadProfileDrawer.tsx` + `src/pages/ContactBook.tsx` — UI badge + toggle
-- Memory file `mem://features/do-not-contact-engine` + index update
+### Out of scope (called out so we don't promise it)
+- WhatsApp profile picture: Meta Cloud API does **not** expose it. Initials fallback is the correct UX.
+- Messenger avatar via Page‑scoped Graph: requires `pages_messaging` + page token plumbing — separate ticket.
 
 ---
 
-## Out of scope (flag for follow-up if you want)
-- Bulk import of historical "opt-out" mentions from past conversations (we can run a one-time backfill script after the detector ships).
-- SMS/Email STOP-keyword DLT-compliant handling (separate work, India regs).
+## Files touched
 
-## Questions before I implement
-1. **Dialog centering**: do you want it optically centered over the content area (sidebar-aware, my recommendation), or strictly viewport-centered with just the Vuexy restyle?
-2. **Opt-out scope**: should detection set the flag *globally* (no campaign/nurture/retention ever) or only stop AI nurture while still allowing manual staff outreach? My recommendation: global with a staff "Override & message anyway" confirmation.
-3. **Confirmation reply** after auto opt-out — single-line template ("Got it, I won't message again. Reach us anytime at <branch phone>.") OK, or you want different copy?
+```
+NEW  src/lib/audio/chatAudio.ts
+NEW  src/components/communications/ChatAvatar.tsx
+EDIT src/hooks/useChatSound.ts
+EDIT src/components/layout/AppHeader.tsx
+EDIT src/components/notifications/NotificationBell.tsx
+EDIT src/pages/WhatsAppChat.tsx
+EDIT supabase/functions/whatsapp-webhook/index.ts
+EDIT supabase/functions/meta-webhook/index.ts
+NEW  supabase/migrations/<ts>_meta_contact_profile.sql
+```
+
+## Acceptance
+- No duplicate pings under any combination of (WhatsApp page open / closed, NotificationBell mounted, tab focused / hidden).
+- Clicking a chat list item never triggers a sound.
+- Inbound from a known WhatsApp number shows the saved name immediately on first contact; IG inbound shows fetched name + profile pic; absent avatar always renders aligned initials of the same dimensions as the image variant.

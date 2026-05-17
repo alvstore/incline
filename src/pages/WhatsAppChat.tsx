@@ -53,7 +53,7 @@ const PlatformIcon = ({ platform, className = "h-3.5 w-3.5" }: { platform?: stri
 };
 import { AddLeadDrawer } from '@/components/leads/AddLeadDrawer';
 import { ContactMemberContext } from '@/components/communications/ContactMemberContext';
-import { useChatSound } from '@/hooks/useChatSound';
+import { useActiveConversation } from '@/hooks/useChatSound';
 import { resolveIdentities, type ResolvedIdentity } from '@/lib/contacts/resolveIdentity';
 import { upsertContact, CONTACT_CATEGORIES } from '@/services/contactService';
 import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/contacts/phone';
@@ -110,6 +110,8 @@ interface ChatSettingsRow {
   bot_active: boolean | null;
   is_unread: boolean | null;
   assigned_to: string | null;
+  contact_name: string | null;
+  contact_avatar_url: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -246,7 +248,7 @@ export default function WhatsAppChatPage() {
       if (!selectedBranch || selectedBranch === 'all') return [];
       const { data, error } = await supabase
         .from('whatsapp_chat_settings')
-        .select('phone_number, bot_active, is_unread, assigned_to')
+        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url')
         .eq('branch_id', selectedBranch);
       if (error) throw error;
       return (data ?? []) as ChatSettingsRow[];
@@ -331,9 +333,14 @@ export default function WhatsAppChatPage() {
             unread_count: 0,
             platform: msg.platform || 'whatsapp',
           });
-        } else if (!existing.contact_avatar_url && msg.contact_avatar_url) {
-          // Backfill avatar from older inbound msg if newest didn't have one
-          existing.contact_avatar_url = msg.contact_avatar_url;
+        } else {
+          // Backfill name/avatar from older messages if newest didn't have them
+          if (!existing.contact_avatar_url && msg.contact_avatar_url) {
+            existing.contact_avatar_url = msg.contact_avatar_url;
+          }
+          if (!existing.contact_name && msg.contact_name) {
+            existing.contact_name = msg.contact_name;
+          }
         }
       });
       return Array.from(contactMap.values());
@@ -354,12 +361,16 @@ export default function WhatsAppChatPage() {
     const normalized = normalizePhone(c.phone_number);
     const s = settingsMap.get(c.phone_number) || settingsMap.get(normalized) || settingsMap.get('+' + normalized);
     const ident = identityMap?.get(normalizePhoneE164(c.phone_number));
+    // Display-name priority: resolved identity > chat-settings (Meta profile) > inline message > null
     const resolvedName = ident && ident.source !== 'unknown'
       ? ident.display_name
-      : c.contact_name;
+      : (s?.contact_name ?? c.contact_name);
+    // Avatar priority: inline message > chat-settings (covers chats with no recent inbound).
+    const resolvedAvatar = c.contact_avatar_url ?? s?.contact_avatar_url ?? null;
     return {
       ...c,
       contact_name: resolvedName,
+      contact_avatar_url: resolvedAvatar,
       member_id: ident?.member_id ?? c.member_id,
       is_unread: s?.is_unread ?? false,
       bot_active: s?.bot_active ?? true,
@@ -387,11 +398,11 @@ export default function WhatsAppChatPage() {
     enabled: !!selectedContact,
   });
 
-  // Play sound on incoming inbound message arrival.
-  // Pass selectedContact?.phone_number as resetKey so switching contacts
-  // re-baselines the counter and doesn't ping for previously-loaded messages.
-  const inboundCount = messages.filter((m) => m.direction === 'inbound').length;
-  useChatSound(inboundCount, selectedContact?.phone_number ?? null);
+  // Tell the global chat-audio singleton which conversation is open so it
+  // can play a barely-audible "pop" (instead of a full ping) for inbound
+  // messages on this thread. Clicking between contacts never triggers audio
+  // here — sound is owned exclusively by useGlobalChatSound in AppHeader.
+  useActiveConversation(selectedContact?.phone_number ?? null);
 
   // AI Tool Logs for this contact (for thought banners)
   const { data: aiToolLogs = [] } = useQuery({

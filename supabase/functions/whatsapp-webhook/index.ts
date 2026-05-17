@@ -297,6 +297,25 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
         { onConflict: "branch_id,phone_number" },
       );
 
+      // Persist contact display name across the thread (and backfill the
+      // lead row if one exists). WhatsApp Cloud API does not expose a
+      // profile picture, so avatar stays null and the UI falls back to
+      // gradient initials.
+      if (contactName) {
+        try {
+          await supabase.rpc("upsert_meta_contact_profile", {
+            p_branch_id: branchId,
+            p_phone: message.from,
+            p_platform: "whatsapp",
+            p_external_id: value.contacts?.[0]?.wa_id ?? message.from,
+            p_display_name: contactName,
+            p_avatar_url: null,
+          });
+        } catch (profileErr) {
+          console.warn("[whatsapp-webhook] profile upsert failed:", profileErr);
+        }
+      }
+
       // Meta Ads attribution: extract referral data if present
       if (message.referral) {
         try {
