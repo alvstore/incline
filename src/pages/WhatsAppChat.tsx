@@ -53,7 +53,7 @@ const PlatformIcon = ({ platform, className = "h-3.5 w-3.5" }: { platform?: stri
 };
 import { AddLeadDrawer } from '@/components/leads/AddLeadDrawer';
 import { ContactMemberContext } from '@/components/communications/ContactMemberContext';
-import { useChatSound } from '@/hooks/useChatSound';
+import { useActiveConversation } from '@/hooks/useChatSound';
 import { resolveIdentities, type ResolvedIdentity } from '@/lib/contacts/resolveIdentity';
 import { upsertContact, CONTACT_CATEGORIES } from '@/services/contactService';
 import { formatPhoneDisplay, normalizePhone as normalizePhoneE164 } from '@/lib/contacts/phone';
@@ -387,11 +387,11 @@ export default function WhatsAppChatPage() {
     enabled: !!selectedContact,
   });
 
-  // Play sound on incoming inbound message arrival.
-  // Pass selectedContact?.phone_number as resetKey so switching contacts
-  // re-baselines the counter and doesn't ping for previously-loaded messages.
-  const inboundCount = messages.filter((m) => m.direction === 'inbound').length;
-  useChatSound(inboundCount, selectedContact?.phone_number ?? null);
+  // Tell the global chat-audio singleton which conversation is open so it
+  // can play a barely-audible "pop" (instead of a full ping) for inbound
+  // messages on this thread. Clicking between contacts never triggers audio
+  // here — sound is owned exclusively by useGlobalChatSound in AppHeader.
+  useActiveConversation(selectedContact?.phone_number ?? null);
 
   // AI Tool Logs for this contact (for thought banners)
   const { data: aiToolLogs = [] } = useQuery({

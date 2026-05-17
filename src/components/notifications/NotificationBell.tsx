@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } from '@/services/notificationService';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
-import { useChatSound, isChatSoundEnabled, setChatSoundEnabled } from '@/hooks/useChatSound';
+import { isChatSoundEnabled, setChatSoundEnabled } from '@/hooks/useChatSound';
 
 const typeIcons = {
   info: Info,
@@ -74,8 +74,8 @@ export function NotificationBell() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  // Play sound on new unread (only when count increases)
-  useChatSound(unreadCount);
+  // Sound for inbound chats is owned globally by useGlobalChatSound in
+  // AppHeader. The bell only updates its visual badge — no audio here.
 
 
   const { data: notifications = [] } = useQuery({
