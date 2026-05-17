@@ -1,44 +1,87 @@
-# Consolidate all attendance into one screen
+## PT Attendance — Roster-Style Redesign
 
-## Why
-- **Sidebar "Staff Attendance"** (owner/admin/manager) currently points to `/staff-attendance`, which in `App.tsx` is just a `<Navigate to="/attendance-dashboard" />`. It's a dead duplicate of the "Attendance" entry already in the sidebar — pure noise.
-- **"PT Attendance"** lives on its own page `/pt-attendance` and gets its own sidebar entry for trainers, staff, managers, owners, admins. Splitting member/staff attendance from PT attendance forces users to bounce between two screens. Merging it into the existing `AttendanceDashboard` tabs gives one control room, and lets reception staff mark PT attendance on a trainer's behalf without leaving the page.
+Replace the current filter+table view inside the **PT** tab of `/attendance-dashboard` with a roster-first workflow: pick a date, pick a trainer, see that trainer's PT clients as cards, mark attendance in one tap.
 
-## What changes
+Scope: `src/components/pt/PtAttendanceTabContent.tsx` only. No DB schema changes. Reuses existing `log_pt_session` RPC and existing `pt_sessions` / `member_pt_packages` / `trainers` tables.
 
-### 1. Sidebar (`src/config/menu.ts`)
-Remove these redundant entries (5 lines total):
-- `Staff Attendance → /staff-attendance` for owner/admin/manager (line 233)
-- `Staff Attendance → /staff-attendance` for manager (line 307)
-- `PT Attendance → /pt-attendance` for trainer (line 78)
-- `PT Attendance → /pt-attendance` for staff (line 128)
-- `PT Attendance → /pt-attendance` for owner/admin/manager (line 191)
-- `PT Attendance → /pt-attendance` for manager (line 268)
+---
 
-Keep the single `Attendance → /attendance-dashboard` entry that every role already has.
+### Layout (3 zones)
 
-### 2. Routes (`src/App.tsx`)
-- Keep `/staff-attendance → /attendance-dashboard` redirect (for old bookmarks).
-- Add `/pt-attendance → /attendance-dashboard?tab=pt` redirect (replaces the standalone page route). The `PtAttendance` lazy import can stay for one release as a safety net, or be removed — recommend removing.
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  Week strip:  Mon 12 · Tue 13 · [Wed 14] · Thu 15 · …   ◀ ▶ │
+├────────────────┬─────────────────────────────────────────────┤
+│  Trainers      │  Clients of {Trainer} · {Date}              │
+│  ─────────     │  ┌────────┐ ┌────────┐ ┌────────┐           │
+│  ● Avatar A    │  │ Member │ │ Member │ │ Member │           │
+│  ○ Avatar B    │  │ 8/12   │ │ Monthly│ │ 3/10   │           │
+│  ○ Avatar C    │  │[Mark ✓]│ │[Present│ │[Mark ✓]│           │
+│  ○ Avatar D    │  └────────┘ └────────┘ └────────┘           │
+└────────────────┴─────────────────────────────────────────────┘
+```
 
-### 3. `AttendanceDashboard.tsx` — add a "PT Sessions" tab
-- Add a 5th `TabsTrigger value="pt"` next to Members / Staff Check-in / Staff Log / History, gated by capability: visible to owner, admin, manager, staff, and trainer.
-- Read `?tab=pt` from the URL on mount so the redirect lands on the right tab.
-- Tab body renders the existing PT attendance UI extracted from `src/pages/PtAttendance.tsx` (today's sessions list, mark present/absent/late/no-show actions, trainer filter for managers, member search). No business-logic changes — same `ptService` calls, same RPCs, same RLS.
-- **Trainer scope:** when the logged-in user is a trainer, the tab auto-filters to their own sessions (current `PtAttendance` behaviour). When the user is staff/manager/owner/admin, they see all trainers' sessions with a trainer filter and can mark status on behalf of any trainer — this is the new capability the user asked for. Backed by the existing `markPtSessionStatus` mutation; the RPC already accepts any authorized caller, so no DB change required.
+- **Week strip (top):** 7 day-pills, horizontally scrollable, defaults to today. Arrows shift the window ±1 week. Active day uses indigo gradient pill; other days are slate. Tap to select.
+- **Trainer rail (left, ~220px):** vertical list of active trainers with avatar + name. Selected trainer gets indigo accent bar + `bg-indigo-50` background. Trainer-role users see only themselves (auto-selected, rail hidden).
+- **Roster grid (right):** responsive `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` of client cards.
 
-### 4. Cleanup
-- Delete `src/pages/PtAttendance.tsx` after the tab is wired up.
-- Delete `src/pages/StaffAttendance.tsx` if it exists and is unused (the route already redirects).
+### Client Card
 
-## Out of scope
-- No changes to PT attendance business logic, RPCs, RLS, or `markPtSessionStatus` permissions.
-- No changes to the Members or Staff tabs already in the dashboard.
-- No styling overhaul — the new tab uses the same Vuexy card/table patterns already on the page.
+For each member with an active `member_pt_packages` row under the selected trainer:
 
-## Files touched
-- `src/config/menu.ts` — remove 6 entries
-- `src/App.tsx` — swap `/pt-attendance` route to a redirect, drop lazy import
-- `src/pages/AttendanceDashboard.tsx` — add PT tab + URL-param tab sync
-- `src/pages/PtAttendance.tsx` — delete (logic moves into the tab)
-- `src/pages/StaffAttendance.tsx` — delete if present
+- Avatar + name + member code
+- Package badge:
+  - Session-based → progress bar `sessions_used / sessions_total` + "X sessions left"
+  - Monthly → calendar icon + "Monthly · valid till {date}"
+- Today's session status (computed from `pt_sessions` for selected date + this member_pt_package):
+  - **Not logged** → prominent full-width `Mark Present` button (indigo gradient). Long-press / kebab opens `MarkPtStatusMenu` for Late / Absent / Holiday / Cancelled.
+  - **Logged (completed/late)** → disabled green pill "Present ✓ · {HH:mm}" + small "Undo" link visible to owner/admin/manager only.
+  - **Other status** → coloured badge via existing `PtStatusBadge`.
+
+### Data Flow
+
+1. **Trainers query** (`['pt-roster-trainers', branchId]`): `trainers` joined to `profiles` where `is_active = true` and branch matches selection. Cached 5 min.
+2. **Clients query** (`['pt-roster-clients', branchId, trainerId]`): `member_pt_packages` where `assigned_trainer_id = trainerId` AND `status = 'active'`, joined to `members` → `profiles` and `pt_packages` for name/type/totals.
+3. **Sessions query** (`['pt-roster-sessions', trainerId, dateISO]`): `pt_sessions` where `trainer_id = trainerId` AND `scheduled_at` between `startOfDay(date)` and `endOfDay(date)`. Map `member_pt_package_id → session row` for O(1) lookup in cards.
+4. **Mutation:** call existing `logPtSession({ memberPackageId, trainerId, status })` from `ptService.ts`. On success:
+   - Optimistically set the card's session status to "completed" and decrement remaining sessions in the clients cache.
+   - Toast: "Session logged for {member}. {N} sessions left."
+   - Invalidate `['pt-roster-sessions', ...]`, `['pt-roster-clients', ...]`, and the parent `['pt-attendance-roster']` history key on success.
+   - On error, roll back and toast the friendly message from `PT_LOG_ERROR_MAP`.
+
+### History Section (kept, collapsed)
+
+Below the roster, keep a collapsible "Recent attendance" panel that reuses the existing range/status/trainer filters + table from today's `PtAttendanceTabContent` so the audit/export-CSV workflow is not lost. Default collapsed.
+
+### Empty / Loading / Error States
+
+- No trainers → centered illustration + "No active trainers in this branch."
+- Trainer selected, no clients → "No active PT clients assigned to {trainer}." with link to PT Packages.
+- Loading → skeleton trainer rows + 6 skeleton cards.
+- Mutation error → inline toast; button re-enables.
+
+### Permissions
+
+- **owner / admin / manager / trainer** → can mark (matches `log_pt_session` RPC).
+- **staff** → roster is **read-only**: card shows status but `Mark Present` button is hidden with a tooltip "Staff cannot log PT sessions." Reason: the RPC explicitly rejects the `staff` role. If staff must log on behalf of trainers, that requires a DB migration to widen `has_any_role` in `log_pt_session` — out of scope for this UI plan, please confirm separately.
+- Trainer-only users: rail auto-hidden, layout becomes a single column locked to their own roster.
+
+### Realtime
+
+Existing `useRealtimeInvalidate({ tables: ['pt_sessions'] })` is kept and rebound to the new query keys so a second device's logging reflects instantly.
+
+---
+
+### Technical Notes
+
+- File touched: `src/components/pt/PtAttendanceTabContent.tsx` (rewrite). Extract `WeekStrip`, `TrainerRail`, `ClientRosterCard`, `HistoryPanel` as sibling components in the same folder (`src/components/pt/roster/`).
+- Date handling via `date-fns` (`startOfWeek`, `addDays`, `isSameDay`, `startOfDay`, `endOfDay`).
+- Reuse `MarkPtStatusMenu`, `PtStatusBadge`, `PtPackageBadge`.
+- Branch filter (`selectedBranch`) applied to every query; "All Branches" view shows trainers across branches.
+- No edge functions, no migrations, no nav changes.
+
+### Out of Scope
+
+- Schema/RPC changes (incl. enabling staff to log).
+- PT scheduling, package purchase, or trainer commission logic.
+- The Members / Staff-Record / Staff-Log / History tabs.
