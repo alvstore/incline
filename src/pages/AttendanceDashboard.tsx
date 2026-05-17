@@ -811,8 +811,14 @@ export default function AttendanceDashboard() {
                 <TabsTrigger value="members" className="gap-2"><Users className="h-4 w-4" />Members ({filteredMemberAttendance.length})</TabsTrigger>
                 <TabsTrigger value="staff-record" className="gap-2"><UserCheck className="h-4 w-4" />Staff Check-in</TabsTrigger>
                 <TabsTrigger value="staff-log" className="gap-2"><Clock className="h-4 w-4" />Staff Log ({filteredStaffAttendance.length})</TabsTrigger>
+                <TabsTrigger value="pt" className="gap-2"><Dumbbell className="h-4 w-4" />PT Sessions</TabsTrigger>
                 <TabsTrigger value="history" className="gap-2"><History className="h-4 w-4" />History</TabsTrigger>
               </TabsList>
+
+              {/* PT Sessions Tab */}
+              <TabsContent value="pt">
+                <PtAttendanceTabContent />
+              </TabsContent>
 
               {/* Members Tab */}
               <TabsContent value="members">
