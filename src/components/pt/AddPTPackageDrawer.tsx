@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { useCreatePTPackage } from '@/hooks/usePTPackages';
+import { useGstRates } from '@/hooks/useGstRates';
 import { Package, Calendar } from 'lucide-react';
 
 const SESSION_TYPES = [
@@ -25,6 +26,7 @@ interface AddPTPackageDrawerProps {
 
 export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackageDrawerProps) {
   const createPackage = useCreatePTPackage();
+  const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -34,11 +36,14 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     validity_days: 90,
     session_type: 'per_session',
     auto_renew: false,
+    gst_enabled: false,           // PT is GST-exempt by default
     gst_inclusive: false,
     gst_percentage: 18,
     package_type: 'session_based' as 'session_based' | 'monthly',
     duration_months: 3,
   });
+
+  const effectiveGstPct = formData.gst_enabled ? formData.gst_percentage : 0;
 
   const isSubscription = formData.session_type === 'monthly' || formData.session_type === 'quarterly';
   const isDurationBased = formData.package_type === 'monthly';
