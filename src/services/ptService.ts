@@ -370,10 +370,13 @@ export async function generateFitnessPlan(
 import { dispatchCommunication, buildDedupeKey } from '@/lib/comms/dispatch';
 import { format as _fmtDate } from 'date-fns';
 
+export type PtSessionStatusInput = 'present' | 'completed' | 'late' | 'absent' | 'holiday';
+
 export interface LogPtSessionInput {
   memberPackageId: string;
   trainerId: string;
   notes?: string | null;
+  status?: PtSessionStatusInput;
 }
 
 export interface LogPtSessionResult {
@@ -381,8 +384,10 @@ export interface LogPtSessionResult {
   member_id: string;
   branch_id: string;
   package_type: 'session_based' | 'monthly';
+  status: 'completed' | 'late' | 'absent' | 'holiday';
   sessions_remaining: number | null;
   expiry_date: string | null;
+  gym_check_in_created: boolean;
 }
 
 const PT_LOG_ERROR_MAP: Record<string, string> = {
@@ -399,6 +404,7 @@ export async function logPtSession(
   const { data, error } = await supabase.rpc('log_pt_session' as any, {
     p_member_pt_package_id: input.memberPackageId,
     p_trainer_id: input.trainerId,
+    p_status: input.status ?? 'completed',
     p_notes: input.notes ?? null,
   });
   if (error) {
@@ -406,7 +412,10 @@ export async function logPtSession(
     throw new Error(friendly);
   }
   const result = data as unknown as LogPtSessionResult;
-  firePtReceipt(result).catch(() => undefined);
+  // Only fire member receipts for actual attended sessions
+  if (result.status === 'completed' || result.status === 'late') {
+    firePtReceipt(result).catch(() => undefined);
+  }
   return result;
 }
 
