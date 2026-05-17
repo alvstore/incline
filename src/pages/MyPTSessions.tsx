@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemberData } from '@/hooks/useMemberData';
 import { PurchasePTPackageDrawer } from '@/components/pt/PurchasePTPackageDrawer';
+import { PtStatusHero } from '@/components/member/PtStatusHero';
 import { Dumbbell, Calendar, User, AlertCircle, Loader2, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -115,44 +116,25 @@ export default function MyPTSessions() {
           </Button>
         </div>
 
-        {/* Active Package Card */}
-        <Card className="border-border/50 bg-gradient-to-br from-accent/5 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5" />
-              Active PT Package
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activePackage ? (
-              <div className="grid md:grid-cols-4 gap-6">
-                <div>
-                  <p className="text-sm text-muted-foreground">Package</p>
-                  <p className="font-semibold">{(activePackage.package as any)?.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sessions Remaining</p>
-                  <p className="text-2xl font-bold text-accent">{activePackage.sessions_remaining}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sessions Used</p>
-                  <p className="font-semibold">{activePackage.sessions_used || 0} of {activePackage.sessions_total}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Expires On</p>
-                  <p className="font-semibold">{format(new Date(activePackage.expiry_date), 'dd MMM yyyy')}</p>
-                </div>
-                {activePackage.trainer && (
-                  <div className="md:col-span-4 flex items-center gap-3 pt-4 border-t">
-                    <User className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Your Trainer</p>
-                      <p className="font-semibold">{(activePackage.trainer as any)?.profiles?.full_name}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
+        {/* Active Package Hero */}
+        {activePackage ? (
+          <PtStatusHero
+            packageType={((activePackage as any).package_type ?? (activePackage.package as any)?.package_type ?? 'session_based') as 'session_based' | 'monthly'}
+            packageName={(activePackage.package as any)?.name ?? 'PT Package'}
+            trainerName={(activePackage.trainer as any)?.profiles?.full_name ?? null}
+            sessionsRemaining={activePackage.sessions_remaining}
+            sessionsTotal={activePackage.sessions_total}
+            startDate={(activePackage as any).start_date}
+            expiryDate={activePackage.expiry_date}
+          />
+        ) : (
+          <Card className="border-border/50 bg-gradient-to-br from-accent/5 to-transparent">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Dumbbell className="h-5 w-5" /> Active PT Package
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="text-center py-6">
                 <Dumbbell className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground mb-2">No active PT package</p>
@@ -161,9 +143,9 @@ export default function MyPTSessions() {
                   <ShoppingBag className="h-4 w-4 mr-2" /> Buy PT Package
                 </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Sessions Tabs */}
         <Tabs defaultValue="upcoming">

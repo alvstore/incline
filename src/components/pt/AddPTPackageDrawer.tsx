@@ -36,12 +36,12 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     auto_renew: false,
     gst_inclusive: false,
     gst_percentage: 18,
-    package_type: 'session_based' as 'session_based' | 'duration_based',
+    package_type: 'session_based' as 'session_based' | 'monthly',
     duration_months: 3,
   });
 
   const isSubscription = formData.session_type === 'monthly' || formData.session_type === 'quarterly';
-  const isDurationBased = formData.package_type === 'duration_based';
+  const isDurationBased = formData.package_type === 'monthly';
 
   const calculateGSTAmount = (price: number, gstPercentage: number, isInclusive: boolean) => {
     if (isInclusive) {
@@ -97,7 +97,7 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
       name: '', description: '', total_sessions: 10, sessions_per_month: 8,
       price: 0, validity_days: 90, session_type: 'per_session',
       auto_renew: false, gst_inclusive: false, gst_percentage: 18,
-      package_type: 'session_based', duration_months: 3,
+      package_type: 'session_based' as 'session_based' | 'monthly', duration_months: 3,
     });
   };
 
@@ -123,34 +123,34 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
           {/* Package Type Toggle */}
           <div className="space-y-3">
             <Label className="text-sm font-semibold">Package Type *</Label>
-            <RadioGroup
-              value={formData.package_type}
-              onValueChange={(v) => setFormData({ ...formData, package_type: v as 'session_based' | 'duration_based' })}
-              className="grid grid-cols-2 gap-3"
-            >
-              <Label
-                htmlFor="session_based"
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                  formData.package_type === 'session_based' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
-                }`}
+              <RadioGroup
+                value={formData.package_type}
+                onValueChange={(v) => setFormData({ ...formData, package_type: v as 'session_based' | 'monthly' })}
+                className="grid grid-cols-2 gap-3"
               >
-                <RadioGroupItem value="session_based" id="session_based" className="sr-only" />
-                <Package className="h-6 w-6 text-primary" />
-                <span className="text-sm font-medium">Session Pack</span>
-                <span className="text-xs text-muted-foreground text-center">Fixed number of sessions</span>
-              </Label>
-              <Label
-                htmlFor="duration_based"
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                  formData.package_type === 'duration_based' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
-                }`}
-              >
-                <RadioGroupItem value="duration_based" id="duration_based" className="sr-only" />
-                <Calendar className="h-6 w-6 text-accent" />
-                <span className="text-sm font-medium">Monthly Duration</span>
-                <span className="text-xs text-muted-foreground text-center">Time-based (e.g., 3 months)</span>
-              </Label>
-            </RadioGroup>
+                <Label
+                  htmlFor="session_based"
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    formData.package_type === 'session_based' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <RadioGroupItem value="session_based" id="session_based" className="sr-only" />
+                  <Package className="h-6 w-6 text-primary" />
+                  <span className="text-sm font-medium">Session Pack</span>
+                  <span className="text-xs text-muted-foreground text-center">Fixed number of sessions</span>
+                </Label>
+                <Label
+                  htmlFor="monthly"
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                    formData.package_type === 'monthly' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <RadioGroupItem value="monthly" id="monthly" className="sr-only" />
+                  <Calendar className="h-6 w-6 text-accent" />
+                  <span className="text-sm font-medium">Monthly Plan</span>
+                  <span className="text-xs text-muted-foreground text-center">Time-based (e.g., 3 months)</span>
+                </Label>
+              </RadioGroup>
           </div>
 
           {!isDurationBased && (
