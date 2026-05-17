@@ -399,6 +399,46 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
   if (!inboundMsg?.content) return;
 
+  // ── Do-Not-Contact opt-out gate ─────────────────────────────────────────────
+  // If the inbound message asks us to stop messaging, mark the contact across
+  // chats/leads/members and send a single confirmation. Do NOT invoke the AI
+  // brain — that's exactly what produced the next-day follow-up loop.
+  try {
+    const { detectOptOut, OPT_OUT_CONFIRMATION } = await import("../_shared/optOutDetector.ts");
+    const detection = detectOptOut(inboundMsg.content);
+    if (detection.optOut) {
+      console.log(`[whatsapp-webhook] opt-out detected (${detection.reason}) for ${phoneNumber}`);
+      await supabase.rpc("mark_do_not_contact", {
+        p_phone: phoneNumber,
+        p_branch_id: branchId,
+        p_reason: detection.reason || "lead_request",
+        p_until: null,
+        p_source: "inbound_detector",
+      });
+      // Disable the bot for this chat so freeform AI never picks up again.
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          { branch_id: branchId, phone_number: phoneNumber, bot_active: false },
+          { onConflict: "branch_id,phone_number" },
+        );
+      // One-time confirmation reply (skipped if we're already outside the 24h
+      // window — Meta would reject freeform and that's fine, we still stopped).
+      try {
+        await sendAiReply(
+          OPT_OUT_CONFIRMATION,
+          { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name },
+          branchId,
+        );
+      } catch (sendErr) {
+        console.warn("[whatsapp-webhook] opt-out confirmation send failed:", sendErr);
+      }
+      return;
+    }
+  } catch (gateErr) {
+    console.warn("[whatsapp-webhook] opt-out gate failed (continuing to AI):", gateErr);
+  }
+
   try {
     const result = await runUnifiedAgent(
       supabase,

@@ -5587,6 +5587,11 @@ export type Database = {
           converted_member_id: string | null
           created_at: string
           date_of_birth: string | null
+          do_not_contact: boolean
+          do_not_contact_reason: string | null
+          do_not_contact_set_at: string | null
+          do_not_contact_set_by: string | null
+          do_not_contact_until: string | null
           duplicate_of: string | null
           email: string | null
           expected_start_date: string | null
@@ -5637,6 +5642,11 @@ export type Database = {
           converted_member_id?: string | null
           created_at?: string
           date_of_birth?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           duplicate_of?: string | null
           email?: string | null
           expected_start_date?: string | null
@@ -5687,6 +5697,11 @@ export type Database = {
           converted_member_id?: string | null
           created_at?: string
           date_of_birth?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           duplicate_of?: string | null
           email?: string | null
           expected_start_date?: string | null
@@ -7098,6 +7113,11 @@ export type Database = {
           cuisine_preference: string | null
           custom_welcome_message: string | null
           dietary_preference: string | null
+          do_not_contact: boolean
+          do_not_contact_reason: string | null
+          do_not_contact_set_at: string | null
+          do_not_contact_set_by: string | null
+          do_not_contact_until: string | null
           equipment_availability: string[]
           fitness_goals: string | null
           fitness_level: string | null
@@ -7140,6 +7160,11 @@ export type Database = {
           cuisine_preference?: string | null
           custom_welcome_message?: string | null
           dietary_preference?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           equipment_availability?: string[]
           fitness_goals?: string | null
           fitness_level?: string | null
@@ -7182,6 +7207,11 @@ export type Database = {
           cuisine_preference?: string | null
           custom_welcome_message?: string | null
           dietary_preference?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           equipment_availability?: string[]
           fitness_goals?: string | null
           fitness_level?: string | null
@@ -11218,6 +11248,11 @@ export type Database = {
           captured_lead_id: string | null
           conversation_summary: string | null
           created_at: string | null
+          do_not_contact: boolean
+          do_not_contact_reason: string | null
+          do_not_contact_set_at: string | null
+          do_not_contact_set_by: string | null
+          do_not_contact_until: string | null
           handoff_reason: string | null
           handoff_requested_at: string | null
           id: string
@@ -11240,6 +11275,11 @@ export type Database = {
           captured_lead_id?: string | null
           conversation_summary?: string | null
           created_at?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -11262,6 +11302,11 @@ export type Database = {
           captured_lead_id?: string | null
           conversation_summary?: string | null
           created_at?: string | null
+          do_not_contact?: boolean
+          do_not_contact_reason?: string | null
+          do_not_contact_set_at?: string | null
+          do_not_contact_set_by?: string | null
+          do_not_contact_until?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -12119,6 +12164,10 @@ export type Database = {
         Returns: Json
       }
       cleanup_old_notifications: { Args: never; Returns: Json }
+      clear_do_not_contact: {
+        Args: { p_branch_id: string; p_phone: string }
+        Returns: Json
+      }
       complete_pt_session: {
         Args: { _notes?: string; _session_id: string }
         Returns: Json
@@ -12545,6 +12594,16 @@ export type Database = {
       }
       mark_class_attendance: {
         Args: { _attended: boolean; _booking_id: string }
+        Returns: Json
+      }
+      mark_do_not_contact: {
+        Args: {
+          p_branch_id: string
+          p_phone: string
+          p_reason?: string
+          p_source?: string
+          p_until?: string
+        }
         Returns: Json
       }
       mark_no_show_bookings: { Args: never; Returns: number }

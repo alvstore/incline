@@ -55,6 +55,19 @@ Deno.serve(async (req) => {
       for (const member of inactiveMembers) {
         const daysAbsent = member.days_absent || 0;
 
+        // DO-NOT-CONTACT GUARD: skip if member opted out of outreach.
+        const { data: dncRow } = await adminClient
+          .from("members")
+          .select("do_not_contact, do_not_contact_until")
+          .eq("id", member.member_id)
+          .maybeSingle();
+        if (dncRow?.do_not_contact) {
+          continue;
+        }
+        if (dncRow?.do_not_contact_until && new Date(dncRow.do_not_contact_until) > new Date()) {
+          continue;
+        }
+
         // FREEZE GUARD: skip if member has any frozen membership currently
         const { count: frozenCount } = await adminClient
           .from("memberships")

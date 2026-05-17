@@ -814,6 +814,32 @@ async function triggerAiReply(
     .eq("id", messageId)
     .single();
 
+  // ── Do-Not-Contact opt-out gate (same behaviour as whatsapp-webhook) ─────
+  try {
+    const { detectOptOut } = await import("../_shared/optOutDetector.ts");
+    const detection = detectOptOut(inboundMsg?.content || "");
+    if (detection.optOut) {
+      console.log(`[AI:${platform}] opt-out detected (${detection.reason}) for ${senderId}`);
+      await supabase.rpc("mark_do_not_contact", {
+        p_phone: senderId,
+        p_branch_id: branchId,
+        p_reason: detection.reason || "lead_request",
+        p_until: null,
+        p_source: "inbound_detector",
+      });
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          { branch_id: branchId, phone_number: senderId, bot_active: false },
+          { onConflict: "branch_id,phone_number" },
+        );
+      // Note: meta/IG/FB freeform window rules differ — we just stop here.
+      return;
+    }
+  } catch (gateErr) {
+    console.warn(`[AI:${platform}] opt-out gate failed (continuing):`, gateErr);
+  }
+
   const result = await runUnifiedAgent(supabase, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     senderId,
     branchId,

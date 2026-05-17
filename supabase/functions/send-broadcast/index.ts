@@ -60,9 +60,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Do-Not-Contact filter: load opted-out phones (digits-only) for this branch
+    // up-front so both recipient paths can skip them. Email is matched via the
+    // member/lead rows we already join.
+    const digits = (s: string | null | undefined) => String(s ?? "").replace(/\D/g, "");
+    const dncDigits = new Set<string>();
+    try {
+      const [dncChats, dncLeads, dncMembers] = await Promise.all([
+        adminClient.from("whatsapp_chat_settings").select("phone_number").eq("branch_id", branch_id).eq("do_not_contact", true),
+        adminClient.from("leads").select("phone").eq("branch_id", branch_id).eq("do_not_contact", true),
+        adminClient.from("members").select("phone_number").eq("branch_id", branch_id).eq("do_not_contact", true),
+      ]);
+      for (const r of (dncChats.data || [])) dncDigits.add(digits((r as any).phone_number));
+      for (const r of (dncLeads.data || [])) dncDigits.add(digits((r as any).phone));
+      for (const r of (dncMembers.data || [])) dncDigits.add(digits((r as any).phone_number));
+    } catch (e) {
+      console.warn("[send-broadcast] do-not-contact load failed (continuing):", e);
+    }
+
     // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
     if (Array.isArray(recipients) && recipients.length > 0) {
-      let sent = 0, failed = 0;
+      let sent = 0, failed = 0, skipped_dnc = 0;
       const recipientRows: any[] = [];
 
       for (const r of recipients) {
@@ -73,6 +91,17 @@ Deno.serve(async (req) => {
             source_type: r.source_type, source_ref_id: r.source_ref_id,
             full_name: r.full_name, phone: r.phone, email: r.email,
             status: 'skipped', error: 'missing_channel_address',
+          });
+          continue;
+        }
+        // DNC skip — phone-based; we always have a phone on every source.
+        if (r.phone && dncDigits.has(digits(r.phone))) {
+          skipped_dnc++;
+          recipientRows.push({
+            campaign_id: campaign_id ?? null,
+            source_type: r.source_type, source_ref_id: r.source_ref_id,
+            full_name: r.full_name, phone: r.phone, email: r.email,
+            status: 'skipped', error: 'do_not_contact',
           });
           continue;
         }
@@ -138,11 +167,12 @@ Deno.serve(async (req) => {
       return json({ success: true, sent, failed, total: recipients.length });
     }
 
-    // Resolve recipients
+    // Resolve recipients (skip members who asked us to stop messaging).
     let membersQuery = adminClient
       .from("members")
       .select("id, user_id, member_code, profiles:user_id (full_name, phone, email)")
-      .eq("branch_id", branch_id);
+      .eq("branch_id", branch_id)
+      .eq("do_not_contact", false);
 
     // Explicit member id list (used by Campaign Builder) takes priority over audience preset
     if (Array.isArray(member_ids) && member_ids.length > 0) {
@@ -182,9 +212,15 @@ Deno.serve(async (req) => {
     let sent = 0;
     let failed = 0;
 
+    let skippedDnc = 0;
     for (const member of members) {
       const profile = (member as any).profiles;
       if (!profile) continue;
+      // Defence-in-depth — phone match against pre-loaded DNC set.
+      if (profile.phone && dncDigits.has(digits(profile.phone))) {
+        skippedDnc++;
+        continue;
+      }
 
       const personalizedMsg = message
         .replace(/\{\{member_name\}\}/g, profile.full_name || "Member")
