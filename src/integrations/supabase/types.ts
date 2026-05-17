@@ -6977,6 +6977,7 @@ export type Database = {
           id: string
           member_id: string
           package_id: string
+          package_type: Database["public"]["Enums"]["pt_package_type"]
           price_paid: number
           sessions_remaining: number
           sessions_total: number
@@ -6993,6 +6994,7 @@ export type Database = {
           id?: string
           member_id: string
           package_id: string
+          package_type?: Database["public"]["Enums"]["pt_package_type"]
           price_paid: number
           sessions_remaining: number
           sessions_total: number
@@ -7009,6 +7011,7 @@ export type Database = {
           id?: string
           member_id?: string
           package_id?: string
+          package_type?: Database["public"]["Enums"]["pt_package_type"]
           price_paid?: number
           sessions_remaining?: number
           sessions_total?: number
@@ -9129,10 +9132,10 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
-          package_type: string
+          package_type: Database["public"]["Enums"]["pt_package_type"]
           price: number
           session_type: string | null
-          total_sessions: number
+          total_sessions: number | null
           updated_at: string
           validity_days: number
         }
@@ -9146,10 +9149,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
-          package_type?: string
+          package_type?: Database["public"]["Enums"]["pt_package_type"]
           price: number
           session_type?: string | null
-          total_sessions: number
+          total_sessions?: number | null
           updated_at?: string
           validity_days: number
         }
@@ -9163,10 +9166,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
-          package_type?: string
+          package_type?: Database["public"]["Enums"]["pt_package_type"]
           price?: number
           session_type?: string | null
-          total_sessions?: number
+          total_sessions?: number | null
           updated_at?: string
           validity_days?: number
         }
@@ -12597,6 +12600,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_pt_session: {
+        Args: {
+          p_member_pt_package_id: string
+          p_notes?: string
+          p_trainer_id: string
+        }
+        Returns: Json
+      }
       manages_branch: {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
@@ -13304,6 +13315,7 @@ export type Database = {
         | "failed"
         | "voided"
       pt_package_status: "active" | "expired" | "exhausted" | "cancelled"
+      pt_package_type: "session_based" | "monthly"
       pt_session_status:
         | "scheduled"
         | "completed"
@@ -13582,6 +13594,7 @@ export const Constants = {
         "voided",
       ],
       pt_package_status: ["active", "expired", "exhausted", "cancelled"],
+      pt_package_type: ["session_based", "monthly"],
       pt_session_status: [
         "scheduled",
         "completed",
