@@ -30,7 +30,11 @@ export function TrainerTodayPanel({ trainerId, ptClients }: TrainerTodayPanelPro
 
   const mark = useMutation({
     mutationFn: async (packageId: string) => {
-      return logPtSession(packageId, trainerId, notes.trim() || undefined);
+      return logPtSession({
+        memberPackageId: packageId,
+        trainerId,
+        notes: notes.trim() || undefined,
+      });
     },
     onSuccess: (res: any) => {
       const left = res?.sessions_remaining;
