@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemberData } from '@/hooks/useMemberData';
 import { PurchasePTPackageDrawer } from '@/components/pt/PurchasePTPackageDrawer';
+import { PtStatusHero } from '@/components/member/PtStatusHero';
 import { Dumbbell, Calendar, User, AlertCircle, Loader2, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
 import { format } from 'date-fns';
 

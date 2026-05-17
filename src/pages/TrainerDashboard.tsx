@@ -14,6 +14,7 @@ import {
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 
 export default function TrainerDashboard() {
   const { profile } = useAuth();
@@ -259,17 +260,22 @@ export default function TrainerDashboard() {
                     </div>
                   ))}
                   {ptClients.slice(0, 3).map((client: any) => (
-                    <div key={client.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center">
+                    <div key={client.id} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
                           <Dumbbell className="h-5 w-5 text-warning" />
                         </div>
-                        <div>
-                          <p className="font-medium">{client.member?.profile?.full_name || client.member?.member_code}</p>
-                          <p className="text-sm text-muted-foreground">{client.sessions_remaining} sessions left</p>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{client.member?.profile?.full_name || client.member?.member_code}</p>
+                          <p className="text-xs text-muted-foreground truncate">{client.package?.name}</p>
                         </div>
                       </div>
-                      <Badge variant="secondary">{client.package?.name}</Badge>
+                      <PtPackageBadge
+                        packageType={(client.package_type ?? client.package?.package_type ?? 'session_based') as 'session_based' | 'monthly'}
+                        sessionsRemaining={client.sessions_remaining}
+                        sessionsTotal={client.sessions_total}
+                        expiryDate={client.expiry_date}
+                      />
                     </div>
                   ))}
                 </div>
