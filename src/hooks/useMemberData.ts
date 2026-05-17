@@ -164,8 +164,8 @@ export function useMemberData() {
       const bookingsWithTrainers = await Promise.all(
         futureBookings.map(async (booking: any) => {
           if (booking.class?.trainer_id) {
-            const { data: trainer } = await supabase
-              .from('trainers')
+            const { data: trainer } = await (supabase as any)
+              .from('trainers_directory')
               .select('id, user_id')
               .eq('id', booking.class.trainer_id)
               .maybeSingle();
