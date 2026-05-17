@@ -167,11 +167,12 @@ Deno.serve(async (req) => {
       return json({ success: true, sent, failed, total: recipients.length });
     }
 
-    // Resolve recipients
+    // Resolve recipients (skip members who asked us to stop messaging).
     let membersQuery = adminClient
       .from("members")
       .select("id, user_id, member_code, profiles:user_id (full_name, phone, email)")
-      .eq("branch_id", branch_id);
+      .eq("branch_id", branch_id)
+      .eq("do_not_contact", false);
 
     // Explicit member id list (used by Campaign Builder) takes priority over audience preset
     if (Array.isArray(member_ids) && member_ids.length > 0) {
@@ -211,9 +212,15 @@ Deno.serve(async (req) => {
     let sent = 0;
     let failed = 0;
 
+    let skippedDnc = 0;
     for (const member of members) {
       const profile = (member as any).profiles;
       if (!profile) continue;
+      // Defence-in-depth — phone match against pre-loaded DNC set.
+      if (profile.phone && dncDigits.has(digits(profile.phone))) {
+        skippedDnc++;
+        continue;
+      }
 
       const personalizedMsg = message
         .replace(/\{\{member_name\}\}/g, profile.full_name || "Member")
