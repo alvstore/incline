@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { useCreatePTPackage } from '@/hooks/usePTPackages';
+import { useGstRates } from '@/hooks/useGstRates';
 import { Package, Calendar } from 'lucide-react';
 
 const SESSION_TYPES = [
@@ -25,6 +26,7 @@ interface AddPTPackageDrawerProps {
 
 export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackageDrawerProps) {
   const createPackage = useCreatePTPackage();
+  const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -34,11 +36,14 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     validity_days: 90,
     session_type: 'per_session',
     auto_renew: false,
+    gst_enabled: false,           // PT is GST-exempt by default
     gst_inclusive: false,
     gst_percentage: 18,
     package_type: 'session_based' as 'session_based' | 'monthly',
     duration_months: 3,
   });
+
+  const effectiveGstPct = formData.gst_enabled ? formData.gst_percentage : 0;
 
   const isSubscription = formData.session_type === 'monthly' || formData.session_type === 'quarterly';
   const isDurationBased = formData.package_type === 'monthly';
@@ -63,8 +68,8 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
         description: formData.description,
         price: formData.price,
         session_type: formData.session_type,
-        gst_inclusive: formData.gst_inclusive,
-        gst_percentage: formData.gst_percentage,
+        gst_inclusive: formData.gst_enabled ? formData.gst_inclusive : false,
+        gst_percentage: effectiveGstPct,
         package_type: formData.package_type,
         branch_id: branchId,
       };
@@ -96,7 +101,7 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     setFormData({
       name: '', description: '', total_sessions: 10, sessions_per_month: 8,
       price: 0, validity_days: 90, session_type: 'per_session',
-      auto_renew: false, gst_inclusive: false, gst_percentage: 18,
+      auto_renew: false, gst_enabled: false, gst_inclusive: false, gst_percentage: 18,
       package_type: 'session_based' as 'session_based' | 'monthly', duration_months: 3,
     });
   };
@@ -229,28 +234,64 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>GST %</Label>
-              <Input type="number" value={formData.gst_percentage}
-                onChange={(e) => setFormData({ ...formData, gst_percentage: parseFloat(e.target.value) || 18 })} />
+          <div className="space-y-3 p-4 rounded-xl border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold">Charge GST</Label>
+                <p className="text-xs text-muted-foreground">PT is GST-exempt by default. Turn on only if you collect tax for this pack.</p>
+              </div>
+              <Switch
+                checked={formData.gst_enabled}
+                onCheckedChange={(v) => setFormData({ ...formData, gst_enabled: v })}
+              />
             </div>
-            <div className="flex items-center gap-3 pt-6">
-              <Switch checked={formData.gst_inclusive}
-                onCheckedChange={(v) => setFormData({ ...formData, gst_inclusive: v })} />
-              <Label>GST Inclusive</Label>
-            </div>
+
+            {formData.gst_enabled && (
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div className="space-y-2">
+                  <Label>GST Rate</Label>
+                  <Select
+                    value={String(formData.gst_percentage)}
+                    onValueChange={(v) => setFormData({ ...formData, gst_percentage: parseFloat(v) })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {gstRates.map((r) => (
+                        <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-3 pt-6">
+                  <Switch
+                    checked={formData.gst_inclusive}
+                    onCheckedChange={(v) => setFormData({ ...formData, gst_inclusive: v })}
+                  />
+                  <Label>Price includes GST</Label>
+                </div>
+              </div>
+            )}
           </div>
 
           {formData.price > 0 && (
             <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
-              <p><strong>Base Price:</strong> ₹{formData.gst_inclusive
-                ? (formData.price - calculateGSTAmount(formData.price, formData.gst_percentage, true)).toFixed(2)
-                : formData.price}</p>
-              <p><strong>GST ({formData.gst_percentage}%):</strong> ₹{calculateGSTAmount(formData.price, formData.gst_percentage, formData.gst_inclusive).toFixed(2)}</p>
-              <p className="font-bold"><strong>Total:</strong> ₹{formData.gst_inclusive
-                ? formData.price
-                : (formData.price + calculateGSTAmount(formData.price, formData.gst_percentage, false)).toFixed(2)}</p>
+              {!formData.gst_enabled ? (
+                <>
+                  <p><strong>Base Price:</strong> ₹{formData.price}</p>
+                  <p className="text-muted-foreground">GST not applied</p>
+                  <p className="font-bold"><strong>Total:</strong> ₹{formData.price}</p>
+                </>
+              ) : (
+                <>
+                  <p><strong>Base Price:</strong> ₹{formData.gst_inclusive
+                    ? (formData.price - calculateGSTAmount(formData.price, formData.gst_percentage, true)).toFixed(2)
+                    : formData.price}</p>
+                  <p><strong>GST ({formData.gst_percentage}%):</strong> ₹{calculateGSTAmount(formData.price, formData.gst_percentage, formData.gst_inclusive).toFixed(2)}</p>
+                  <p className="font-bold"><strong>Total:</strong> ₹{formData.gst_inclusive
+                    ? formData.price
+                    : (formData.price + calculateGSTAmount(formData.price, formData.gst_percentage, false)).toFixed(2)}</p>
+                </>
+              )}
             </div>
           )}
 
