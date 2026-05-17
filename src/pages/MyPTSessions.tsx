@@ -37,8 +37,8 @@ export default function MyPTSessions() {
       const trainersMap: Record<string, { profiles?: { full_name: string } }> = {};
       
       if (trainerIds.length > 0) {
-        const { data: trainers } = await supabase
-          .from('trainers')
+        const { data: trainers } = await (supabase as any)
+          .from('trainers_directory')
           .select('id, user_id')
           .in('id', trainerIds);
         
