@@ -1,114 +1,147 @@
-## Epic 1 — Single source of truth for chat audio
+# Dual-Mode Personal Training — Implementation Plan
 
-### Root cause
-Three independent hooks all play the WebAudio ping on the same inbound event:
-
-1. `useGlobalChatSound()` in `AppHeader` → realtime INSERT on `whatsapp_messages`.
-2. `useChatSound(inboundCount, phone)` in `WhatsAppChat` → fires on count delta.
-3. `useChatSound(unreadCount)` in `NotificationBell` → fires when notification row arrives ~real‑time.
-
-Result: 2–3 pings per inbound. Opening a chat can also ping when an invalidation refetch makes `inboundCount` rise without a `resetKey` change (e.g. realtime insert mid‑load), and there is no focus/active‑chat awareness.
-
-### Implementation
-
-**New file `src/lib/audio/chatAudio.ts` — global singleton**
-- `notifyInbound({ branchId, conversationKey, isInternalNote })` is the only entry point.
-- Internal state: `activeConversationKey`, last‑play timestamp, shared `AudioContext` (lazy, resumed on first user gesture captured at module init via one‑time `pointerdown`/`keydown` listener).
-- Decision matrix:
-  - `isInternalNote` → no sound.
-  - `!isChatSoundEnabled()` → no sound.
-  - `document.hidden` OR `!document.hasFocus()` → `playPing()` (current 880→1320 Hz tone, gain 0.18).
-  - Focused AND `conversationKey === activeConversationKey` → `playPop()` (single 520 Hz sine, 60 ms, gain 0.04) — barely audible ack.
-  - Focused AND different conversation → `playPing()` but at reduced gain (0.10).
-- Debounce: ignore calls within 250 ms of the previous to coalesce burst inserts.
-- Exposes `setActiveConversation(key | null)` and `playTest()` for the Settings "Test sound" button.
-
-**`src/hooks/useChatSound.ts`**
-- Keep `isChatSoundEnabled`, `setChatSoundEnabled`, `useChatSoundPreference`, `playPing` (re‑export from singleton for the test button).
-- Replace `useGlobalChatSound` body with a single Realtime subscription that calls `notifyInbound(...)` for `whatsapp_messages` inbound inserts (filter `direction=eq.inbound`). Skip backlog using the existing `mountedAt − 1s` guard.
-- **Delete** the `useChatSound(trigger, resetKey)` counter hook (the source of the click‑to‑open ping). Migrate callers below.
-
-**Callers**
-- `src/components/layout/AppHeader.tsx` — keep `useGlobalChatSound(!!user?.id)` (now routes through singleton).
-- `src/pages/WhatsAppChat.tsx`
-  - Remove the `useChatSound(inboundCount, phone)` line.
-  - Add `useEffect(() => { setActiveConversation(selectedContact?.phone_number ?? null); return () => setActiveConversation(null); }, [selectedContact?.phone_number])`.
-  - Ensure the contact‑list `onClick` only calls `setSelectedContact(...)` and `markAsRead(...)` — no sound, no message‑query side effect that could ping (singleton already gates on `activeConversationKey`).
-- `src/components/notifications/NotificationBell.tsx`
-  - Remove `useChatSound(unreadCount)` entirely. The bell already has its realtime channel for visual badge updates; sound is now owned by the global WhatsApp realtime subscription, so non‑chat notifications stay silent (correct behaviour — bell pings were a side effect, not a spec).
-
-### Verification
-- Open `/whatsapp` on the currently‑selected contact, send an inbound from another phone → one soft pop.
-- Same, but with a different contact open → one normal ping.
-- Switch tab away, send inbound → one full ping on return‑to‑focus is **not** played (we play at receive time, focus check happens then).
-- Click between 5 chats rapidly → zero sounds.
+Decisions captured from clarifications:
+1. **Purchase drawer** = toggle + catalog AND custom override (staff can either pick a catalog row or override sessions/duration/price inline).
+2. **GST** = honor each package's existing `pt_packages.gst_percentage` (default 18%) — no hardcoded 5%.
+3. **Attendance** = new atomic Postgres RPC `log_pt_session` (validates by package_type, decrements only for session-based, dispatches WhatsApp receipt via existing `dispatch-communication` queue).
 
 ---
 
-## Epic 2 — Meta profile enrichment & UI sync
+## Epic 1 — Schema & Atomic Logging RPC
 
-### Current state
-- `whatsapp-webhook` parses `value.contacts[0].profile.name` and writes it to `whatsapp_messages.contact_name` only — never upserts into `leads`/`whatsapp_chat_settings.contact_name`, and never to `members.full_name`. WhatsApp Cloud API does **not** expose a profile photo (Meta restricts it) — we will not fabricate a fetch for it.
-- `meta-webhook` already resolves IG `name + profile_pic_url` via Graph (`fetchIgProfile`) and writes `contact_avatar_url` on the message row, but does not propagate to `leads`.
-- UI (`WhatsAppChat.tsx`) renders `<Avatar>` with `contact_avatar_url` + initials fallback already, but contact list groups by `phone_number` and only keeps the **first** non‑null avatar seen — when the most recent inbound has `null`, the avatar can disappear.
+### 1a. Schema alignment (migration)
 
-### Implementation
+`pt_packages` already has `package_type text DEFAULT 'session_based'` and `duration_months int`. Normalize and harden:
 
-**DB — new helper RPC (migration)**
+- Convert `pt_packages.package_type` → enum `pt_package_type` with values `('session_based','monthly')`. Migrate any stray values to `'session_based'`.
+- Add `member_pt_packages.package_type pt_package_type NOT NULL DEFAULT 'session_based'` (snapshot at purchase so future catalog changes don't mutate live packages).
+- Add `member_pt_packages.expires_at` already exists as `expiry_date` — reuse. For monthly packs, `expiry_date = start_date + duration_months`; `sessions_total/remaining` set to NULL-safe sentinel 0.
+- Make `pt_packages.total_sessions` nullable (monthly packages have no session count). Add CHECK: `(package_type='session_based' AND total_sessions > 0) OR (package_type='monthly' AND duration_months > 0)`.
+- Same CHECK mirrored on `member_pt_packages`.
+
+### 1b. New atomic RPC `public.log_pt_session(p_member_pt_package_id uuid, p_trainer_id uuid, p_notes text)`
+
+SECURITY DEFINER, `SET search_path=public`. Logic:
+
+```text
+lock member_pt_packages row FOR UPDATE
+if status != 'active' → raise 'package_not_active'
+if package_type = 'session_based':
+    if sessions_remaining <= 0 → raise 'no_sessions_left'
+    insert pt_sessions(status='completed', scheduled_at=now())
+    update member_pt_packages set sessions_used+=1, sessions_remaining-=1
+    if sessions_remaining = 0 → status='completed'
+if package_type = 'monthly':
+    if current_date > expiry_date → raise 'package_expired'
+    insert pt_sessions(status='completed', scheduled_at=now())
+    (no counter change)
+insert into communication_queue (or call dispatch via pg_net) with event='pt_session_logged'
+return jsonb { session_id, package_type, remaining, expiry_date }
 ```
-create or replace function public.upsert_meta_contact_profile(
-  p_branch_id uuid,
-  p_phone text,
-  p_platform text,           -- 'whatsapp' | 'instagram' | 'messenger'
-  p_external_id text,        -- wa_id or ig-scoped id or psid
-  p_display_name text,
-  p_avatar_url text
-) returns void
-language plpgsql security definer set search_path = public as $$ ... $$;
+
+Receipt dispatch uses the existing **Communication Dispatcher** (see `mem://architecture/communication-dispatcher`): insert into the queue table the dispatcher already drains — we do NOT call `communication_logs` directly. WhatsApp template event key: `pt_session_logged` (added to `src/lib/templates/systemEvents.ts` catalog so the Templates Hub can generate it).
+
+### 1c. Frontend hook
+
+- New `src/services/ptService.ts` → `logPtSession({ memberPackageId, trainerId, notes })` calling the RPC.
+- Replace any direct `pt_sessions` insert in trainer flows with this service.
+
+---
+
+## Epic 2 — `PurchasePTPackageDrawer.tsx` redesign
+
+Drawer becomes a 3-region layout: **Mode Toggle → Catalog + Custom Builder → Sticky Checkout Bar**.
+
+### Region 1 — Segmented Control (top)
+shadcn `Tabs` styled as a pill segmented control:
+
 ```
-Behaviour:
-- `whatsapp_chat_settings`: upsert `(branch_id, phone_number)` with `contact_name = coalesce(p_display_name, contact_name)` and a new `contact_avatar_url text` column (add via this migration; nullable).
-- `leads`: if a lead row exists with the same phone in this branch, update `name = coalesce(name, p_display_name)` and new `avatar_url text` column (add); never overwrite a human‑edited name.
-- Idempotent, no error if no lead row.
+[ 🏋  Session Pack ]   [ 📅  Monthly Plan ]
+```
 
-**`supabase/functions/whatsapp-webhook/index.ts`**
-- After the message insert in `processIncomingMessages`, when `contactName` is non‑null call `supabase.rpc('upsert_meta_contact_profile', { p_branch_id: branchId, p_phone: message.from, p_platform: 'whatsapp', p_external_id: value.contacts?.[0]?.wa_id ?? message.from, p_display_name: contactName, p_avatar_url: null })`.
+Switching mode resets the selected catalog row and the custom-builder state. Catalog query gets an `.eq('package_type', mode === 'session' ? 'session_based' : 'monthly')` filter.
 
-**`supabase/functions/meta-webhook/index.ts`**
-- In the IG path that already calls `fetchIgProfile`, after `contact_avatar_url` is resolved, call the same RPC with `p_platform: 'instagram'` and `p_avatar_url: profile.avatar_url`.
-- Messenger path: same RPC with `p_platform: 'messenger'`, avatar nullable (FB Graph requires page‑scoped token + extra perms — out of scope, leave null and let initials render).
+### Region 2 — Catalog list + "Custom" card
+- Renders only packages whose `package_type` matches the toggle (each card already shows price + GST badge).
+- A final **"+ Build custom pack"** card opens an inline form:
+  - Session mode: `Name` · `Number of Sessions` (number) · `Validity (months)` (number) · `Price (₹)` · `GST %` (default 18).
+  - Monthly mode: `Name` · `Duration (months)` (number) · `Price (₹)` · `GST %` (default 18). Sessions input is physically hidden in this branch (Tailwind conditional render, not just hidden).
+- Custom path creates an ad-hoc `pt_packages` row (flag `is_active=false`, `created_by` audited) then routes through the existing `purchase_pt_package` RPC so accounting/commissions stay identical.
 
-**Frontend — `src/pages/WhatsAppChat.tsx`**
-- Contact‑list grouping reducer: change the "keep first avatar" logic to "prefer non‑null avatar across the thread" (`existing.contact_avatar_url ||= msg.contact_avatar_url`) — already half‑done at line 334; mirror the same for `contact_name` (`||= msg.contact_name`).
-- Pull `contact_avatar_url` and `contact_name` from `whatsapp_chat_settings` in the contacts query and merge as the authoritative source when present (covers chats with zero recent inbounds in the page window).
-- Extract a tiny `<ChatAvatar contact={…} size="sm|md|lg" />` component in `src/components/communications/ChatAvatar.tsx` that wraps `<Avatar>` + `<AvatarImage src={avatar_url}>` + `<AvatarFallback>{initialsOf(name ?? phone)}</AvatarFallback>` with fixed `h-w` classes so layout never shifts between image and fallback. Use it in:
-  - Contact list row (h‑11)
-  - Conversation header (h‑10)
-  - Empty‑state hero (h‑16)
-  - Message bubble inbound (h‑8)
-- Initials helper: first letters of up to two whitespace‑separated tokens; fall back to last 2 digits of phone for unnamed senders.
+### Region 3 — Sticky checkout bar (`absolute bottom-0 inset-x-0`)
+Lives inside the SheetContent, separated by `border-t bg-white/95 backdrop-blur`. Shows live math from the selected/custom package:
 
-### Out of scope (called out so we don't promise it)
-- WhatsApp profile picture: Meta Cloud API does **not** expose it. Initials fallback is the correct UX.
-- Messenger avatar via Page‑scoped Graph: requires `pages_messaging` + page token plumbing — separate ticket.
+```
+Subtotal             ₹ 10,000.00
+GST (18%)            ₹  1,800.00      <- pulled from package.gst_percentage, NOT hardcoded
+─────────────────────────────────
+Final Total          ₹ 11,800.00
+[ Charge & Assign ]   primary, full-width on mobile
+```
+
+Math helper `computePtCheckout({ price, gstPct, gstInclusive })` lives in `src/lib/payments/ptCheckout.ts` so it's unit-testable:
+- `gstInclusive=true` → subtotal = price / (1 + gstPct/100), tax = price − subtotal.
+- otherwise → subtotal = price, tax = price × gstPct/100, total = subtotal + tax.
+
+Charge flow:
+1. If custom → upsert pt_packages, capture id.
+2. Call existing 8-arg `purchase_pt_package` (`_member_id, _package_id, _trainer_id, _branch_id, _price_paid, _payment_method, _idempotency_key, _received_by`) — keeps `record_payment` as single source of truth.
+3. Toast + invalidate `['my-pt-sessions']`, `['member-pt-packages']`.
+
+### Visual spec
+Vuexy: `rounded-2xl`, `shadow-lg shadow-slate-200/50`, Tabs use `bg-slate-100 p-1 rounded-xl` with active pill `bg-white shadow-sm`. Mode icons from lucide (`Dumbbell`, `CalendarDays`).
+
+---
+
+## Epic 3 — Trainer & Member visual delineation
+
+### 3a. `TrainerDashboard.tsx` — Live Roster cards
+New shared component `src/components/pt/PtPackageBadge.tsx`:
+
+- **Session-based**: rounded badge `bg-indigo-50 text-indigo-700` showing `{remaining} Sessions Left` + 4-px `<Progress>` bar (used/total).
+- **Monthly**: rounded badge `bg-emerald-50 text-emerald-700` with `CalendarDays` icon + `Monthly · Expires {format(expiry, 'd MMM')}`. When ≤7 days left, badge flips to amber; expired → red.
+
+Wired into the existing roster row (no layout shift — badge slot already exists for the legacy "sessions" pill).
+
+### 3b. `MyPTSessions.tsx` — Member hero card
+New `src/components/member/PtStatusHero.tsx`:
+
+- **Monthly**: circular countdown ring (`<RadialBar>` via existing recharts or pure SVG `stroke-dasharray`). Center label: `Days Left = expiry - today`. Subtitle: `Plan ends {date}` + `Renew` CTA when ≤7 days.
+- **Session**: ring chart "Used vs Remaining" using same SVG primitive. Center: `{remaining}/{total} Sessions`. Subtitle: trainer name + `Book session` CTA.
+- Both share Vuexy hero treatment: gradient `from-violet-600 to-indigo-600`, white text, `rounded-2xl`, soft shadow.
+
+If member holds both types simultaneously, render two stacked hero cards (rare but legal).
 
 ---
 
 ## Files touched
 
-```
-NEW  src/lib/audio/chatAudio.ts
-NEW  src/components/communications/ChatAvatar.tsx
-EDIT src/hooks/useChatSound.ts
-EDIT src/components/layout/AppHeader.tsx
-EDIT src/components/notifications/NotificationBell.tsx
-EDIT src/pages/WhatsAppChat.tsx
-EDIT supabase/functions/whatsapp-webhook/index.ts
-EDIT supabase/functions/meta-webhook/index.ts
-NEW  supabase/migrations/<ts>_meta_contact_profile.sql
-```
+**New**
+- `supabase/migrations/<ts>_pt_dual_mode.sql` (enum + checks + sessions_total nullable + member snapshot column + log_pt_session RPC)
+- `src/components/pt/PtPackageBadge.tsx`
+- `src/components/member/PtStatusHero.tsx`
+- `src/lib/payments/ptCheckout.ts` (+ vitest)
+- `src/services/ptService.ts` (logPtSession)
 
-## Acceptance
-- No duplicate pings under any combination of (WhatsApp page open / closed, NotificationBell mounted, tab focused / hidden).
-- Clicking a chat list item never triggers a sound.
-- Inbound from a known WhatsApp number shows the saved name immediately on first contact; IG inbound shows fetched name + profile pic; absent avatar always renders aligned initials of the same dimensions as the image variant.
+**Edited**
+- `src/components/pt/PurchasePTPackageDrawer.tsx` (full redesign)
+- `src/components/pt/AddPTPackageDrawer.tsx` (add package_type toggle so the admin catalog can author both modes)
+- `src/pages/TrainerDashboard.tsx` (swap pill → `PtPackageBadge`, call `logPtSession`)
+- `src/pages/MyPTSessions.tsx` (render `PtStatusHero` above existing list)
+- `src/lib/templates/systemEvents.ts` (register `pt_session_logged` event)
+- `src/integrations/supabase/types.ts` (auto-regenerated)
+- `mem://index.md` + new `mem://features/pt-dual-mode`
+
+## Out of scope
+- Razorpay/Webhook changes — already handled by `purchase_pt_package` + existing payment webhook.
+- Auto-renewal of monthly packs — separate ticket.
+- Migrating historical `pt_packages` rows to monthly — none exist yet.
+
+## QA checklist before delivery
+- Drawer math: `price=10000, gstPct=18` → subtotal 10,000 · GST 1,800 · total 11,800 (vitest case).
+- Drawer math: `price=10000, gstPct=5` → 500 / 10,500.
+- Toggle to Monthly physically removes the sessions input from the DOM (assert via test).
+- `log_pt_session` rejects when session pack hits 0 (psql call).
+- `log_pt_session` rejects when monthly past expiry (psql call).
+- Trainer badge: progress bar reflects 8/12 = 66%.
+- Member hero: monthly with 30-day plan started today renders "30 Days Left".
