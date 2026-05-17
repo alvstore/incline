@@ -55,7 +55,7 @@ export default function PtAttendance() {
   });
 
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ['pt-attendance-roster', selectedBranch?.id ?? 'all', from.toISOString(), to.toISOString(), statusFilter],
+    queryKey: ['pt-attendance-roster', selectedBranch, from.toISOString(), to.toISOString(), statusFilter],
     queryFn: async (): Promise<Row[]> => {
       let q = supabase
         .from('pt_sessions')
@@ -64,7 +64,7 @@ export default function PtAttendance() {
         .lte('scheduled_at', to.toISOString())
         .order('scheduled_at', { ascending: false })
         .limit(1000);
-      if (selectedBranch?.id) q = q.eq('branch_id', selectedBranch !== 'all' ? selectedBranch : undefined);
+      if (selectedBranch && selectedBranch !== 'all') q = q.eq('branch_id', selectedBranch);
       if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
       const { data, error } = await q;
       if (error) throw error;
