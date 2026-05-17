@@ -40,9 +40,8 @@ const RANGE_OPTIONS = [
  */
 export function PtAttendanceTabContent() {
   const { selectedBranch } = useBranchContext();
-  const { roles, hasAnyRole } = useAuth();
+  const { roles } = useAuth();
   const isTrainerOnly = roles.length > 0 && roles.every((r: any) => r.role === 'trainer');
-  const canMarkOnBehalf = hasAnyRole(['owner', 'admin', 'manager', 'staff', 'trainer']);
 
   const [range, setRange] = useState('today');
   const [statusFilter, setStatusFilter] = useState<string>('all');
