@@ -1,147 +1,96 @@
-# Dual-Mode Personal Training — Implementation Plan
 
-Decisions captured from clarifications:
-1. **Purchase drawer** = toggle + catalog AND custom override (staff can either pick a catalog row or override sessions/duration/price inline).
-2. **GST** = honor each package's existing `pt_packages.gst_percentage` (default 18%) — no hardcoded 5%.
-3. **Attendance** = new atomic Postgres RPC `log_pt_session` (validates by package_type, decrements only for session-based, dispatches WhatsApp receipt via existing `dispatch-communication` queue).
+## Audit findings
 
----
+**GST today (PT):**
+- `pt_packages.gst_percentage` (default 18) + `pt_packages.gst_inclusive` are the source of truth.
+- `PurchasePTPackageDrawer` reads these and uses `computePtCheckout()` in `src/lib/payments/ptCheckout.ts`. There is no "no GST" path — `gstPct=0` is technically possible but not exposed as a clean toggle, and `AddPTPackageDrawer` forces a numeric input that snaps back to 18 on blur.
+- Org-level rates live in `organization_settings.gst_rates` (`TaxGstSettings.tsx`, `useGstRates`) — currently unused by PT drawers.
 
-## Epic 1 — Schema & Atomic Logging RPC
+**Commission today:**
+- `trainers.pt_share_percentage` (default 20–40 depending on migration) drives the cut.
+- `purchase_pt_package` RPC computes `_commission_amount = _price_paid * rate / 100`. `_price_paid` is whatever the client passes — currently the GST-inclusive total from the drawer. That over-pays the trainer when GST is on, and the commission base is inconsistent across catalog vs custom.
+- Monthly packs amortise across `duration_months`; session packs book one lump on sale. Both work, but both inherit the wrong base.
 
-### 1a. Schema alignment (migration)
+**Trainer-side attendance today:**
+- `log_pt_session` RPC exists and correctly handles both modes (decrements for session-based, validates expiry for monthly). It is **not wired into any UI** — `TrainerDashboard.tsx` and `MyClients.tsx` only show stats. Trainer has no button to mark a PT session attended.
+- Gym check-in attendance (table `attendances`) is separate from PT session attendance (`pt_sessions`). Today a PT session does not also write a gym check-in for the member.
 
-`pt_packages` already has `package_type text DEFAULT 'session_based'` and `duration_months int`. Normalize and harden:
+## Plan
 
-- Convert `pt_packages.package_type` → enum `pt_package_type` with values `('session_based','monthly')`. Migrate any stray values to `'session_based'`.
-- Add `member_pt_packages.package_type pt_package_type NOT NULL DEFAULT 'session_based'` (snapshot at purchase so future catalog changes don't mutate live packages).
-- Add `member_pt_packages.expires_at` already exists as `expiry_date` — reuse. For monthly packs, `expiry_date = start_date + duration_months`; `sessions_total/remaining` set to NULL-safe sentinel 0.
-- Make `pt_packages.total_sessions` nullable (monthly packages have no session count). Add CHECK: `(package_type='session_based' AND total_sessions > 0) OR (package_type='monthly' AND duration_months > 0)`.
-- Same CHECK mirrored on `member_pt_packages`.
+### Epic 1 — GST toggle for PT (catalog + checkout)
 
-### 1b. New atomic RPC `public.log_pt_session(p_member_pt_package_id uuid, p_trainer_id uuid, p_notes text)`
+1. **`AddPTPackageDrawer` / `EditPTPackageDrawer`**
+   - Add a `gst_enabled` Switch above the GST % input. When OFF: hide % + inclusive controls, persist `gst_percentage = 0`, `gst_inclusive = false`.
+   - Replace the free-text GST % input with a Select driven by `useGstRates()` (org-configured rates, default 5/12/18/28). Default to 18 when toggled on.
+   - Update the live breakdown to read "GST not applied" when disabled.
 
-SECURITY DEFINER, `SET search_path=public`. Logic:
+2. **`PurchasePTPackageDrawer`**
+   - Sticky checkout bar: add **"Charge GST"** Switch (Vuexy pill). Default = the package's stored value (`gstPct > 0`). When the staff flips it OFF for a single sale, force `gstPct=0` in the breakdown.
+   - In **Custom Builder**: same toggle + same `useGstRates` Select.
+   - Pass a new explicit `gstPct` and `gstInclusive` snapshot in `custom`/selected breakdown to `computePtCheckout` (already supports `gstPct=0`).
 
-```text
-lock member_pt_packages row FOR UPDATE
-if status != 'active' → raise 'package_not_active'
-if package_type = 'session_based':
-    if sessions_remaining <= 0 → raise 'no_sessions_left'
-    insert pt_sessions(status='completed', scheduled_at=now())
-    update member_pt_packages set sessions_used+=1, sessions_remaining-=1
-    if sessions_remaining = 0 → status='completed'
-if package_type = 'monthly':
-    if current_date > expiry_date → raise 'package_expired'
-    insert pt_sessions(status='completed', scheduled_at=now())
-    (no counter change)
-insert into communication_queue (or call dispatch via pg_net) with event='pt_session_logged'
-return jsonb { session_id, package_type, remaining, expiry_date }
-```
+3. **`computePtCheckout` (no change needed)** — already returns `tax=0` when `gstPct=0`. Keep math single-source.
 
-Receipt dispatch uses the existing **Communication Dispatcher** (see `mem://architecture/communication-dispatcher`): insert into the queue table the dispatcher already drains — we do NOT call `communication_logs` directly. WhatsApp template event key: `pt_session_logged` (added to `src/lib/templates/systemEvents.ts` catalog so the Templates Hub can generate it).
+### Epic 2 — Commission base = subtotal, GST-aware
 
-### 1c. Frontend hook
+1. **`purchase_pt_package` RPC** (new migration):
+   - Add two parameters: `_subtotal numeric` and `_tax_amount numeric` (both optional, default `NULL`).
+   - Compute commission base: `COALESCE(_subtotal, _price_paid)` — i.e. honour the GST-stripped subtotal when the client provides it; fall back to legacy behaviour for old callers.
+   - Persist `subtotal` and `tax_amount` onto `member_pt_packages` (add columns) so reports show the true sale base.
+   - Keep the amortised monthly schedule logic; just amortise the new base.
 
-- New `src/services/ptService.ts` → `logPtSession({ memberPackageId, trainerId, notes })` calling the RPC.
-- Replace any direct `pt_sessions` insert in trainer flows with this service.
+2. **`ptService.purchasePTPackage`** + drawer call site:
+   - After `computePtCheckout`, pass `subtotal` + `tax` into the RPC.
+   - `price_paid` continues to equal `total` (what staff actually collects).
 
----
+3. **`TrainerEarnings` + `TrainerDashboard`**:
+   - No formula change — they read `trainer_commissions.amount`, which is now correctly net-of-GST.
+   - Add a tiny "Commission base: net of GST" tooltip on the earnings KPI for transparency.
 
-## Epic 2 — `PurchasePTPackageDrawer.tsx` redesign
+### Epic 3 — Trainer-side attendance (both modes)
 
-Drawer becomes a 3-region layout: **Mode Toggle → Catalog + Custom Builder → Sticky Checkout Bar**.
+1. **New trainer UI: "Mark Today's Session" panel** on `TrainerDashboard.tsx`
+   - Card lists today's assigned PT clients (active `member_pt_packages` with `trainer_id = me`) using existing `fetchActiveMemberPackages(branchId)` filtered client-side.
+   - Each row: member name + package badge (`PtPackageBadge` already built) + **"Mark Attended"** primary button + notes popover.
+   - Clicking calls `logPtSession({ packageId, trainerId, notes })` via `ptService.logPtSession`. Toast on success showing "Sessions left: X" (session-based) or "Days left: X" (monthly).
 
-### Region 1 — Segmented Control (top)
-shadcn `Tabs` styled as a pill segmented control:
+2. **Gym attendance side-effect** (the "respect both attendance" requirement)
+   - Extend `log_pt_session` RPC: after inserting `pt_sessions`, also INSERT a row into `attendances` for that member + branch + `check_in_at = now()` **only if** the member doesn't already have an attendance row for today. Source = `'pt_session'` so reports can distinguish.
+   - This means trainer marking a PT session also satisfies daily gym check-in. No duplicates.
 
-```
-[ 🏋  Session Pack ]   [ 📅  Monthly Plan ]
-```
+3. **`MyClients.tsx`**: add the same "Mark Attended" inline action per client row.
 
-Switching mode resets the selected catalog row and the custom-builder state. Catalog query gets an `.eq('package_type', mode === 'session' ? 'session_based' : 'monthly')` filter.
+4. **Member side (`MyPTSessions.tsx`)**: no UI change — existing `PtStatusHero` reads `sessions_remaining` / `expiry_date` which the RPC already updates.
 
-### Region 2 — Catalog list + "Custom" card
-- Renders only packages whose `package_type` matches the toggle (each card already shows price + GST badge).
-- A final **"+ Build custom pack"** card opens an inline form:
-  - Session mode: `Name` · `Number of Sessions` (number) · `Validity (months)` (number) · `Price (₹)` · `GST %` (default 18).
-  - Monthly mode: `Name` · `Duration (months)` (number) · `Price (₹)` · `GST %` (default 18). Sessions input is physically hidden in this branch (Tailwind conditional render, not just hidden).
-- Custom path creates an ad-hoc `pt_packages` row (flag `is_active=false`, `created_by` audited) then routes through the existing `purchase_pt_package` RPC so accounting/commissions stay identical.
+### Epic 4 — QA
 
-### Region 3 — Sticky checkout bar (`absolute bottom-0 inset-x-0`)
-Lives inside the SheetContent, separated by `border-t bg-white/95 backdrop-blur`. Shows live math from the selected/custom package:
+- Vitest cases for `computePtCheckout`: `(10000, 0, false)` → subtotal 10000, tax 0, total 10000.
+- Manual test matrix:
+  - Catalog session pack, GST 18 ON → commission base = 10000, not 11800.
+  - Catalog monthly pack, GST OFF at checkout → invoice shows ₹10000, no tax line; trainer monthly amortisation totals 10000 × rate.
+  - Custom pack, GST OFF → no GST shown anywhere.
+  - Trainer clicks "Mark Attended" on session pack at 1 remaining → row flips to `completed`, package status = completed.
+  - Trainer clicks "Mark Attended" on monthly pack past expiry → toast error "Package expired".
+  - Attendance side-effect: marking PT session creates a single `attendances` row for the day; second click same day does not duplicate.
 
-```
-Subtotal             ₹ 10,000.00
-GST (18%)            ₹  1,800.00      <- pulled from package.gst_percentage, NOT hardcoded
-─────────────────────────────────
-Final Total          ₹ 11,800.00
-[ Charge & Assign ]   primary, full-width on mobile
-```
-
-Math helper `computePtCheckout({ price, gstPct, gstInclusive })` lives in `src/lib/payments/ptCheckout.ts` so it's unit-testable:
-- `gstInclusive=true` → subtotal = price / (1 + gstPct/100), tax = price − subtotal.
-- otherwise → subtotal = price, tax = price × gstPct/100, total = subtotal + tax.
-
-Charge flow:
-1. If custom → upsert pt_packages, capture id.
-2. Call existing 8-arg `purchase_pt_package` (`_member_id, _package_id, _trainer_id, _branch_id, _price_paid, _payment_method, _idempotency_key, _received_by`) — keeps `record_payment` as single source of truth.
-3. Toast + invalidate `['my-pt-sessions']`, `['member-pt-packages']`.
-
-### Visual spec
-Vuexy: `rounded-2xl`, `shadow-lg shadow-slate-200/50`, Tabs use `bg-slate-100 p-1 rounded-xl` with active pill `bg-white shadow-sm`. Mode icons from lucide (`Dumbbell`, `CalendarDays`).
-
----
-
-## Epic 3 — Trainer & Member visual delineation
-
-### 3a. `TrainerDashboard.tsx` — Live Roster cards
-New shared component `src/components/pt/PtPackageBadge.tsx`:
-
-- **Session-based**: rounded badge `bg-indigo-50 text-indigo-700` showing `{remaining} Sessions Left` + 4-px `<Progress>` bar (used/total).
-- **Monthly**: rounded badge `bg-emerald-50 text-emerald-700` with `CalendarDays` icon + `Monthly · Expires {format(expiry, 'd MMM')}`. When ≤7 days left, badge flips to amber; expired → red.
-
-Wired into the existing roster row (no layout shift — badge slot already exists for the legacy "sessions" pill).
-
-### 3b. `MyPTSessions.tsx` — Member hero card
-New `src/components/member/PtStatusHero.tsx`:
-
-- **Monthly**: circular countdown ring (`<RadialBar>` via existing recharts or pure SVG `stroke-dasharray`). Center label: `Days Left = expiry - today`. Subtitle: `Plan ends {date}` + `Renew` CTA when ≤7 days.
-- **Session**: ring chart "Used vs Remaining" using same SVG primitive. Center: `{remaining}/{total} Sessions`. Subtitle: trainer name + `Book session` CTA.
-- Both share Vuexy hero treatment: gradient `from-violet-600 to-indigo-600`, white text, `rounded-2xl`, soft shadow.
-
-If member holds both types simultaneously, render two stacked hero cards (rare but legal).
-
----
-
-## Files touched
+## Files
 
 **New**
-- `supabase/migrations/<ts>_pt_dual_mode.sql` (enum + checks + sessions_total nullable + member snapshot column + log_pt_session RPC)
-- `src/components/pt/PtPackageBadge.tsx`
-- `src/components/member/PtStatusHero.tsx`
-- `src/lib/payments/ptCheckout.ts` (+ vitest)
-- `src/services/ptService.ts` (logPtSession)
+- `supabase/migrations/<ts>_pt_gst_commission_attendance.sql` — adds `member_pt_packages.subtotal`, `tax_amount`; new `purchase_pt_package` overload with `_subtotal`, `_tax_amount`; extends `log_pt_session` to write `attendances`.
+- `src/components/pt/TrainerTodayPanel.tsx` — today's clients + Mark Attended.
 
 **Edited**
-- `src/components/pt/PurchasePTPackageDrawer.tsx` (full redesign)
-- `src/components/pt/AddPTPackageDrawer.tsx` (add package_type toggle so the admin catalog can author both modes)
-- `src/pages/TrainerDashboard.tsx` (swap pill → `PtPackageBadge`, call `logPtSession`)
-- `src/pages/MyPTSessions.tsx` (render `PtStatusHero` above existing list)
-- `src/lib/templates/systemEvents.ts` (register `pt_session_logged` event)
-- `src/integrations/supabase/types.ts` (auto-regenerated)
-- `mem://index.md` + new `mem://features/pt-dual-mode`
+- `src/components/pt/AddPTPackageDrawer.tsx`, `EditPTPackageDrawer.tsx`, `PurchasePTPackageDrawer.tsx` — GST toggle + org rate Select.
+- `src/services/ptService.ts` — pass `subtotal`/`tax` to RPC; thin wrapper for `logPtSession` (already exists, verify signature).
+- `src/pages/TrainerDashboard.tsx` — mount `TrainerTodayPanel`.
+- `src/pages/MyClients.tsx` — inline Mark Attended button.
+- `src/integrations/supabase/types.ts` — regen after migration.
+- `mem://features/pt-dual-mode` — append GST toggle + attendance side-effect rules.
 
-## Out of scope
-- Razorpay/Webhook changes — already handled by `purchase_pt_package` + existing payment webhook.
-- Auto-renewal of monthly packs — separate ticket.
-- Migrating historical `pt_packages` rows to monthly — none exist yet.
+## Technical notes (for reviewer)
 
-## QA checklist before delivery
-- Drawer math: `price=10000, gstPct=18` → subtotal 10,000 · GST 1,800 · total 11,800 (vitest case).
-- Drawer math: `price=10000, gstPct=5` → 500 / 10,500.
-- Toggle to Monthly physically removes the sessions input from the DOM (assert via test).
-- `log_pt_session` rejects when session pack hits 0 (psql call).
-- `log_pt_session` rejects when monthly past expiry (psql call).
-- Trainer badge: progress bar reflects 8/12 = 66%.
-- Member hero: monthly with 30-day plan started today renders "30 Days Left".
+- `purchase_pt_package` will get a new overload (`uuid,uuid,uuid,uuid,numeric,text,text,numeric,numeric`) to avoid breaking existing 7-arg callers. Old overload kept; new client always calls the new one.
+- The attendance side-effect uses an idempotency guard: `WHERE NOT EXISTS (SELECT 1 FROM attendances WHERE member_id=... AND check_in_at::date = CURRENT_DATE)`.
+- GST = 0 is treated as "GST not applicable", not "0% GST line" — invoice generators already skip the tax row when `tax_amount = 0`.
+- No change to `trainers.pt_share_percentage` semantics; commission is still % of the new (net) base, so 40% on a ₹10,000 sale = ₹4,000 whether GST is on or off.
+
