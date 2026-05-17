@@ -110,6 +110,8 @@ interface ChatSettingsRow {
   bot_active: boolean | null;
   is_unread: boolean | null;
   assigned_to: string | null;
+  contact_name: string | null;
+  contact_avatar_url: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -246,7 +248,7 @@ export default function WhatsAppChatPage() {
       if (!selectedBranch || selectedBranch === 'all') return [];
       const { data, error } = await supabase
         .from('whatsapp_chat_settings')
-        .select('phone_number, bot_active, is_unread, assigned_to')
+        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url')
         .eq('branch_id', selectedBranch);
       if (error) throw error;
       return (data ?? []) as ChatSettingsRow[];
@@ -331,9 +333,14 @@ export default function WhatsAppChatPage() {
             unread_count: 0,
             platform: msg.platform || 'whatsapp',
           });
-        } else if (!existing.contact_avatar_url && msg.contact_avatar_url) {
-          // Backfill avatar from older inbound msg if newest didn't have one
-          existing.contact_avatar_url = msg.contact_avatar_url;
+        } else {
+          // Backfill name/avatar from older messages if newest didn't have them
+          if (!existing.contact_avatar_url && msg.contact_avatar_url) {
+            existing.contact_avatar_url = msg.contact_avatar_url;
+          }
+          if (!existing.contact_name && msg.contact_name) {
+            existing.contact_name = msg.contact_name;
+          }
         }
       });
       return Array.from(contactMap.values());
