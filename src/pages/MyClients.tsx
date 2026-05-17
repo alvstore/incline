@@ -290,6 +290,14 @@ export default function MyClients() {
                             )}
 
                             <div className="flex flex-wrap gap-2 mt-4">
+                              <Button
+                                size="sm"
+                                disabled={markAttended.isPending}
+                                onClick={() => markAttended.mutate({ packageId: client.id, trainerId: trainer!.id })}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Mark Attended
+                              </Button>
                               <Button variant="outline" size="sm" asChild>
                                 <Link to={`/pt-sessions?member=${client.member_id}`}>
                                   <Calendar className="h-4 w-4 mr-1" />
