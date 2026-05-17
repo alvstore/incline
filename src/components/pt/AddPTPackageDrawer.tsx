@@ -68,8 +68,8 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
         description: formData.description,
         price: formData.price,
         session_type: formData.session_type,
-        gst_inclusive: formData.gst_inclusive,
-        gst_percentage: formData.gst_percentage,
+        gst_inclusive: formData.gst_enabled ? formData.gst_inclusive : false,
+        gst_percentage: effectiveGstPct,
         package_type: formData.package_type,
         branch_id: branchId,
       };
