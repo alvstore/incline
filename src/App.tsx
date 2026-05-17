@@ -83,6 +83,7 @@ const MyAttendance = lazy(() => import("./pages/MyAttendance"));
 const MyProgress = lazy(() => import("./pages/MyProgress"));
 const MemberClassBooking = lazy(() => import("./pages/MemberClassBooking"));
 const MyPTSessions = lazy(() => import("./pages/MyPTSessions"));
+const PtAttendance = lazy(() => import("./pages/PtAttendance"));
 const MyInvoices = lazy(() => import("./pages/MyInvoices"));
 const MemberRequests = lazy(() => import("./pages/MemberRequests"));
 const MemberStore = lazy(() => import("./pages/MemberStore"));
