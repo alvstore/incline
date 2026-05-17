@@ -137,10 +137,13 @@ export function AppSidebar({
   const isHybrid = resolvedMode === 'hybrid';
 
   const userRoleSet = new Set(roles.map(r => r.role));
+  const { hasPt } = useMemberHasPtPackage();
+  const passesRequires = (item: { requires?: string }) =>
+    !item.requires || (item.requires === 'has_pt_package' ? hasPt : true);
   const fullSections = getMenuForRole(roles)
     .map(section => ({
       ...section,
-      items: section.items.filter(item => item.roles.some(r => userRoleSet.has(r))),
+      items: section.items.filter(item => item.roles.some(r => userRoleSet.has(r)) && passesRequires(item)),
     }))
     .filter(section => section.items.length > 0);
 
@@ -311,10 +314,13 @@ export function MobileNav() {
   const { data: unreadCount = 0 } = useWhatsAppUnreadCount();
 
   const userRoleSet = new Set(roles.map(r => r.role));
+  const { hasPt } = useMemberHasPtPackage();
+  const passesRequires = (item: { requires?: string }) =>
+    !item.requires || (item.requires === 'has_pt_package' ? hasPt : true);
   const menuSections = getMenuForRole(roles)
     .map(section => ({
       ...section,
-      items: section.items.filter(item => item.roles.some(r => userRoleSet.has(r))),
+      items: section.items.filter(item => item.roles.some(r => userRoleSet.has(r)) && passesRequires(item)),
     }))
     .filter(section => section.items.length > 0);
 
