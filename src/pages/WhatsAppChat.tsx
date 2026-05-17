@@ -361,12 +361,16 @@ export default function WhatsAppChatPage() {
     const normalized = normalizePhone(c.phone_number);
     const s = settingsMap.get(c.phone_number) || settingsMap.get(normalized) || settingsMap.get('+' + normalized);
     const ident = identityMap?.get(normalizePhoneE164(c.phone_number));
+    // Display-name priority: resolved identity > chat-settings (Meta profile) > inline message > null
     const resolvedName = ident && ident.source !== 'unknown'
       ? ident.display_name
-      : c.contact_name;
+      : (s?.contact_name ?? c.contact_name);
+    // Avatar priority: inline message > chat-settings (covers chats with no recent inbound).
+    const resolvedAvatar = c.contact_avatar_url ?? s?.contact_avatar_url ?? null;
     return {
       ...c,
       contact_name: resolvedName,
+      contact_avatar_url: resolvedAvatar,
       member_id: ident?.member_id ?? c.member_id,
       is_unread: s?.is_unread ?? false,
       bot_active: s?.bot_active ?? true,
