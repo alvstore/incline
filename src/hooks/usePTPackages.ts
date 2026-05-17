@@ -82,13 +82,21 @@ export function usePurchasePTPackage() {
       trainerId,
       branchId,
       pricePaid,
+      subtotal,
+      taxAmount,
     }: {
       memberId: string;
       packageId: string;
       trainerId: string;
       branchId: string;
       pricePaid: number;
-    }) => purchasePTPackage(memberId, packageId, trainerId, branchId, pricePaid),
+      subtotal?: number;
+      taxAmount?: number;
+    }) =>
+      purchasePTPackage(
+        memberId, packageId, trainerId, branchId, pricePaid,
+        'cash', undefined, subtotal, taxAmount,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["member-pt-packages"] });
       queryClient.invalidateQueries({ queryKey: ["active-member-packages"] });
