@@ -64,7 +64,7 @@ export default function PtAttendance() {
         .lte('scheduled_at', to.toISOString())
         .order('scheduled_at', { ascending: false })
         .limit(1000);
-      if (selectedBranch?.id) q = q.eq('branch_id', selectedBranch.id);
+      if (selectedBranch?.id) q = q.eq('branch_id', selectedBranch !== 'all' ? selectedBranch : undefined);
       if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
       const { data, error } = await q;
       if (error) throw error;
