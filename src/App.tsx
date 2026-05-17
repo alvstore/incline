@@ -53,7 +53,8 @@ const LockersPage = lazy(() => import("./pages/Lockers"));
 const EmployeesPage = lazy(() => import("./pages/Employees"));
 const HRMPage = lazy(() => import("./pages/HRM"));
 const TrainersPage = lazy(() => import("./pages/Trainers"));
-const StaffAttendancePage = lazy(() => import("./pages/StaffAttendance"));
+// StaffAttendance + PtAttendance pages merged into AttendanceDashboard tabs
+// (routes below redirect for backward compatibility).
 const AttendanceDashboardPage = lazy(() => import("./pages/AttendanceDashboard"));
 const TasksPage = lazy(() => import("./pages/Tasks"));
 const AnalyticsPage = lazy(() => import("./pages/Analytics"));
@@ -83,7 +84,7 @@ const MyAttendance = lazy(() => import("./pages/MyAttendance"));
 const MyProgress = lazy(() => import("./pages/MyProgress"));
 const MemberClassBooking = lazy(() => import("./pages/MemberClassBooking"));
 const MyPTSessions = lazy(() => import("./pages/MyPTSessions"));
-const PtAttendance = lazy(() => import("./pages/PtAttendance"));
+
 const MyInvoices = lazy(() => import("./pages/MyInvoices"));
 const MemberRequests = lazy(() => import("./pages/MemberRequests"));
 const MemberStore = lazy(() => import("./pages/MemberStore"));
@@ -205,7 +206,7 @@ function RoutedContent() {
           <Route path="/my-progress" element={<ProtectedRoute requiredRoles={['member']}><MyProgress /></ProtectedRoute>} />
           <Route path="/my-classes" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
           <Route path="/my-pt-sessions" element={<ProtectedRoute requiredRoles={['member']}><MyPTSessions /></ProtectedRoute>} />
-          <Route path="/pt-attendance" element={<ProtectedRoute requiredRoles={['owner','admin','manager','staff','trainer']}><PtAttendance /></ProtectedRoute>} />
+          <Route path="/pt-attendance" element={<Navigate to="/attendance-dashboard?tab=pt" replace />} />
           <Route path="/my-referrals" element={<ProtectedRoute requiredRoles={['member']}><MemberReferrals /></ProtectedRoute>} />
           <Route path="/my-invoices" element={<ProtectedRoute requiredRoles={['member']}><MyInvoices /></ProtectedRoute>} />
           <Route path="/my-requests" element={<ProtectedRoute requiredRoles={['member']}><MemberRequests /></ProtectedRoute>} />

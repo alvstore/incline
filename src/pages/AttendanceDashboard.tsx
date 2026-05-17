@@ -27,6 +27,8 @@ import { LivePill } from '@/components/ui/live-pill';
 import { canRecordAttendanceFor } from '@/lib/auth/permissions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
+import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
+import { Dumbbell } from 'lucide-react';
 
 type FlashState = {
   type: 'success' | 'denied';
@@ -105,9 +107,15 @@ export default function AttendanceDashboard() {
     searchInputRef.current?.focus();
   }, []);
 
-  // Cmd+K deep-links
+  // Cmd+K deep-links + ?tab= deep-link from old /pt-attendance & /staff-attendance redirects
   useEffect(() => {
     const url = new URL(window.location.href);
+    const tabParam = url.searchParams.get('tab');
+    if (tabParam && ['members','staff-record','staff-log','pt','history'].includes(tabParam)) {
+      setActiveTab(tabParam);
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    }
     if (url.searchParams.get('force') === '1') {
       setForceEntryOpen(true);
       url.searchParams.delete('force');
@@ -809,8 +817,14 @@ export default function AttendanceDashboard() {
                 <TabsTrigger value="members" className="gap-2"><Users className="h-4 w-4" />Members ({filteredMemberAttendance.length})</TabsTrigger>
                 <TabsTrigger value="staff-record" className="gap-2"><UserCheck className="h-4 w-4" />Staff Check-in</TabsTrigger>
                 <TabsTrigger value="staff-log" className="gap-2"><Clock className="h-4 w-4" />Staff Log ({filteredStaffAttendance.length})</TabsTrigger>
+                <TabsTrigger value="pt" className="gap-2"><Dumbbell className="h-4 w-4" />PT Sessions</TabsTrigger>
                 <TabsTrigger value="history" className="gap-2"><History className="h-4 w-4" />History</TabsTrigger>
               </TabsList>
+
+              {/* PT Sessions Tab */}
+              <TabsContent value="pt">
+                <PtAttendanceTabContent />
+              </TabsContent>
 
               {/* Members Tab */}
               <TabsContent value="members">
