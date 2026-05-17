@@ -251,7 +251,6 @@ export function PtAttendanceTabContent() {
                   <TableHead>Package</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
-                  {canMarkOnBehalf && <TableHead className="text-right">Mark</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -269,11 +268,6 @@ export function PtAttendanceTabContent() {
                     <TableCell>{r.package_name}</TableCell>
                     <TableCell><PtStatusBadge status={r.status} /></TableCell>
                     <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{r.notes ?? '—'}</TableCell>
-                    {canMarkOnBehalf && (
-                      <TableCell className="text-right">
-                        <MarkPtStatusMenu sessionId={r.id} currentStatus={r.status} />
-                      </TableCell>
-                    )}
                   </TableRow>
                 ))}
               </TableBody>
