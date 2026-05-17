@@ -50,11 +50,12 @@ serve(async (req) => {
     const cooldownHours = config.cooldown_hours || delayHours;
     const cutoffTime = new Date(Date.now() - delayHours * 60 * 60 * 1000).toISOString();
 
-    // Find chats where bot is active
+    // Find chats where bot is active AND the contact hasn't asked us to stop.
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
-      .select("id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform")
-      .eq("bot_active", true);
+      .select("id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until")
+      .eq("bot_active", true)
+      .eq("do_not_contact", false);
 
     if (chatErr) {
       console.error("Failed to query stale chats:", chatErr);
@@ -68,6 +69,10 @@ serve(async (req) => {
     let resetCount = 0;
 
     for (const chat of staleChats || []) {
+      // Defence-in-depth: respect snooze-until window if the row has one.
+      if (chat.do_not_contact) continue;
+      if (chat.do_not_contact_until && new Date(chat.do_not_contact_until) > new Date()) continue;
+
       const { data: lastMsg } = await supabase
         .from("whatsapp_messages")
         .select("direction, created_at")
