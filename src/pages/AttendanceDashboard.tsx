@@ -107,9 +107,15 @@ export default function AttendanceDashboard() {
     searchInputRef.current?.focus();
   }, []);
 
-  // Cmd+K deep-links
+  // Cmd+K deep-links + ?tab= deep-link from old /pt-attendance & /staff-attendance redirects
   useEffect(() => {
     const url = new URL(window.location.href);
+    const tabParam = url.searchParams.get('tab');
+    if (tabParam && ['members','staff-record','staff-log','pt','history'].includes(tabParam)) {
+      setActiveTab(tabParam);
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    }
     if (url.searchParams.get('force') === '1') {
       setForceEntryOpen(true);
       url.searchParams.delete('force');
