@@ -23,6 +23,24 @@ export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
   const [measurementDrawer, setMeasurementDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
+  const queryClient = useQueryClient();
+
+  const markAttended = useMutation({
+    mutationFn: async (vars: { packageId: string; trainerId: string }) =>
+      logPtSession({ memberPackageId: vars.packageId, trainerId: vars.trainerId }),
+    onSuccess: (res: any) => {
+      const left = res?.sessions_remaining;
+      toast.success(
+        res?.package_type === 'session_based'
+          ? `Logged · ${left ?? 0} sessions left`
+          : 'Session logged for monthly plan',
+        { description: res?.gym_check_in_created ? 'Gym check-in created' : 'Already checked in today' }
+      );
+      queryClient.invalidateQueries({ queryKey: ['trainer-pt-clients'] });
+      queryClient.invalidateQueries({ queryKey: ['client-session-stats'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Could not log session'),
+  });
 
   // Get session history for PT clients
   const { data: sessionStats = {} } = useQuery({
