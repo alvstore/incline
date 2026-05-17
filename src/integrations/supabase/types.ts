@@ -6984,6 +6984,8 @@ export type Database = {
           sessions_used: number | null
           start_date: string
           status: Database["public"]["Enums"]["pt_package_status"]
+          subtotal: number | null
+          tax_amount: number | null
           trainer_id: string | null
           updated_at: string
         }
@@ -7001,6 +7003,8 @@ export type Database = {
           sessions_used?: number | null
           start_date: string
           status?: Database["public"]["Enums"]["pt_package_status"]
+          subtotal?: number | null
+          tax_amount?: number | null
           trainer_id?: string | null
           updated_at?: string
         }
@@ -7018,6 +7022,8 @@ export type Database = {
           sessions_used?: number | null
           start_date?: string
           status?: Database["public"]["Enums"]["pt_package_status"]
+          subtotal?: number | null
+          tax_amount?: number | null
           trainer_id?: string | null
           updated_at?: string
         }
@@ -12848,6 +12854,8 @@ export type Database = {
               _payment_method?: string
               _price_paid: number
               _received_by?: string
+              _subtotal?: number
+              _tax_amount?: number
               _trainer_id: string
             }
             Returns: Json
