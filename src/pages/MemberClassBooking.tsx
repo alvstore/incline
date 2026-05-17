@@ -179,7 +179,7 @@ export default function MemberClassBooking() {
       const trainerIds = [...new Set((data || []).map(s => s.trainer_id).filter(Boolean))] as string[];
       const trainersMap: Record<string, string> = {};
       if (trainerIds.length > 0) {
-        const { data: trainers } = await supabase.from('trainers').select('id, user_id').in('id', trainerIds);
+        const { data: trainers } = await (supabase as any).from('trainers_directory').select('id, user_id').in('id', trainerIds);
         if (trainers) {
           const userIds = trainers.map(t => t.user_id).filter(Boolean) as string[];
           const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', userIds);
