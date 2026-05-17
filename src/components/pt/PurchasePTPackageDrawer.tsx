@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Dumbbell, CalendarDays, Plus, Check } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { computePtCheckout, formatINR } from '@/lib/payments/ptCheckout';
 
@@ -53,6 +54,7 @@ export function PurchasePTPackageDrawer({
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>('session');
   const [selected, setSelected] = useState<string | 'custom' | null>(null);
+  const [chargeGst, setChargeGst] = useState(false); // PT is GST-exempt by default
   const [custom, setCustom] = useState<CustomForm>({
     name: '',
     sessions: 12,
@@ -94,17 +96,17 @@ export function PurchasePTPackageDrawer({
   // Live checkout math
   const checkoutInput = useMemo(() => {
     if (selected === 'custom') {
-      return { price: custom.price, gstPct: custom.gstPct, gstInclusive: false };
+      return { price: custom.price, gstPct: chargeGst ? custom.gstPct : 0, gstInclusive: false };
     }
     if (selectedPkg) {
       return {
         price: Number(selectedPkg.price) || 0,
-        gstPct: Number(selectedPkg.gst_percentage ?? 18),
-        gstInclusive: !!selectedPkg.gst_inclusive,
+        gstPct: chargeGst ? Number(selectedPkg.gst_percentage ?? 18) : 0,
+        gstInclusive: chargeGst ? !!selectedPkg.gst_inclusive : false,
       };
     }
-    return { price: 0, gstPct: 18, gstInclusive: false };
-  }, [selected, selectedPkg, custom]);
+    return { price: 0, gstPct: 0, gstInclusive: false };
+  }, [selected, selectedPkg, custom, chargeGst]);
 
   const breakdown = computePtCheckout(checkoutInput);
 
@@ -383,14 +385,23 @@ export function PurchasePTPackageDrawer({
 
         {/* Sticky checkout bar */}
         <div className="border-t bg-white/95 backdrop-blur px-6 py-4 space-y-2">
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Charge GST</p>
+              <p className="text-xs text-muted-foreground">PT is GST-exempt by default</p>
+            </div>
+            <Switch checked={chargeGst} onCheckedChange={setChargeGst} />
+          </div>
           <div className="flex justify-between text-sm text-slate-600">
             <span>Subtotal</span>
             <span>{formatINR(breakdown.subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm text-slate-600">
-            <span>GST ({breakdown.gstPct}%){breakdown.gstInclusive ? ' · incl.' : ''}</span>
-            <span>{formatINR(breakdown.tax)}</span>
-          </div>
+          {chargeGst && (
+            <div className="flex justify-between text-sm text-slate-600">
+              <span>GST ({breakdown.gstPct}%){breakdown.gstInclusive ? ' · incl.' : ''}</span>
+              <span>{formatINR(breakdown.tax)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-slate-200">
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
