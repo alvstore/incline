@@ -14,6 +14,10 @@ import { Link } from 'react-router-dom';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { logPtSession } from '@/services/ptService';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
