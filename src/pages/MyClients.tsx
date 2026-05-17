@@ -14,14 +14,12 @@ import { Link } from 'react-router-dom';
 import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { MeasurementProgressView } from '@/components/members/MeasurementProgressView';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useQueryClient } from '@tanstack/react-query';
 import { MarkPtStatusMenu } from '@/components/pt/MarkPtStatusMenu';
 
 export default function MyClients() {
   const { trainer, generalClients, ptClients, isLoading: trainerLoading } = useTrainerData();
   const [measurementDrawer, setMeasurementDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
   const [progressDrawer, setProgressDrawer] = useState<{ open: boolean; memberId: string; memberName: string }>({ open: false, memberId: '', memberName: '' });
-  const queryClient = useQueryClient();
 
   // Get session history for PT clients
   const { data: sessionStats = {} } = useQuery({
