@@ -27,6 +27,8 @@ import { LivePill } from '@/components/ui/live-pill';
 import { canRecordAttendanceFor } from '@/lib/auth/permissions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
+import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
+import { Dumbbell } from 'lucide-react';
 
 type FlashState = {
   type: 'success' | 'denied';
