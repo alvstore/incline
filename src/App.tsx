@@ -83,6 +83,7 @@ const MyAttendance = lazy(() => import("./pages/MyAttendance"));
 const MyProgress = lazy(() => import("./pages/MyProgress"));
 const MemberClassBooking = lazy(() => import("./pages/MemberClassBooking"));
 const MyPTSessions = lazy(() => import("./pages/MyPTSessions"));
+const PtAttendance = lazy(() => import("./pages/PtAttendance"));
 const MyInvoices = lazy(() => import("./pages/MyInvoices"));
 const MemberRequests = lazy(() => import("./pages/MemberRequests"));
 const MemberStore = lazy(() => import("./pages/MemberStore"));
@@ -203,7 +204,8 @@ function RoutedContent() {
           <Route path="/my-attendance" element={<ProtectedRoute requiredRoles={['member']}><MyAttendance /></ProtectedRoute>} />
           <Route path="/my-progress" element={<ProtectedRoute requiredRoles={['member']}><MyProgress /></ProtectedRoute>} />
           <Route path="/my-classes" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
-          <Route path="/my-pt-sessions" element={<ProtectedRoute requiredRoles={['member']}><Navigate to="/my-classes?tab=appointments" replace /></ProtectedRoute>} />
+          <Route path="/my-pt-sessions" element={<ProtectedRoute requiredRoles={['member']}><MyPTSessions /></ProtectedRoute>} />
+          <Route path="/pt-attendance" element={<ProtectedRoute requiredRoles={['owner','admin','manager','staff','trainer']}><PtAttendance /></ProtectedRoute>} />
           <Route path="/my-referrals" element={<ProtectedRoute requiredRoles={['member']}><MemberReferrals /></ProtectedRoute>} />
           <Route path="/my-invoices" element={<ProtectedRoute requiredRoles={['member']}><MyInvoices /></ProtectedRoute>} />
           <Route path="/my-requests" element={<ProtectedRoute requiredRoles={['member']}><MemberRequests /></ProtectedRoute>} />

@@ -12610,6 +12610,7 @@ export type Database = {
         Args: {
           p_member_pt_package_id: string
           p_notes?: string
+          p_status?: string
           p_trainer_id: string
         }
         Returns: Json
@@ -13330,6 +13331,9 @@ export type Database = {
         | "cancelled"
         | "no_show"
         | "rescheduled"
+        | "absent"
+        | "holiday"
+        | "late"
       referral_lifecycle_status:
         | "invited"
         | "joined"
@@ -13609,6 +13613,9 @@ export const Constants = {
         "cancelled",
         "no_show",
         "rescheduled",
+        "absent",
+        "holiday",
+        "late",
       ],
       referral_lifecycle_status: [
         "invited",
