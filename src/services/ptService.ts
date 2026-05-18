@@ -109,7 +109,7 @@ export async function purchasePTPackage(args: {
     _idempotency_key: args.idempotencyKey,
   } as any);
   if (error) throw error;
-  return data as PurchasePTPackageResult;
+  return data as unknown as PurchasePTPackageResult;
 }
 
 export async function cancelPendingPTPackage(
