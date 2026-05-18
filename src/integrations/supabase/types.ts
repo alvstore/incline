@@ -7001,11 +7001,16 @@ export type Database = {
         Row: {
           branch_id: string
           created_at: string
+          expires_pending_at: string | null
           expiry_date: string
+          gst_rate: number | null
           id: string
+          idempotency_key: string | null
+          invoice_id: string | null
           member_id: string
           package_id: string
           package_type: Database["public"]["Enums"]["pt_package_type"]
+          payment_status: string
           price_paid: number
           sessions_remaining: number
           sessions_total: number
@@ -7020,11 +7025,16 @@ export type Database = {
         Insert: {
           branch_id: string
           created_at?: string
+          expires_pending_at?: string | null
           expiry_date: string
+          gst_rate?: number | null
           id?: string
+          idempotency_key?: string | null
+          invoice_id?: string | null
           member_id: string
           package_id: string
           package_type?: Database["public"]["Enums"]["pt_package_type"]
+          payment_status?: string
           price_paid: number
           sessions_remaining: number
           sessions_total: number
@@ -7039,11 +7049,16 @@ export type Database = {
         Update: {
           branch_id?: string
           created_at?: string
+          expires_pending_at?: string | null
           expiry_date?: string
+          gst_rate?: number | null
           id?: string
+          idempotency_key?: string | null
+          invoice_id?: string | null
           member_id?: string
           package_id?: string
           package_type?: Database["public"]["Enums"]["pt_package_type"]
+          payment_status?: string
           price_paid?: number
           sessions_remaining?: number
           sessions_total?: number
@@ -7061,6 +7076,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_pt_packages_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
           {
@@ -12119,6 +12141,10 @@ export type Database = {
         Args: { p_row: Json; p_table: string }
         Returns: string
       }
+      activate_pt_package: {
+        Args: { _member_package_id: string; _payment_id?: string }
+        Returns: Json
+      }
       add_to_waitlist: {
         Args: { _class_id: string; _member_id: string }
         Returns: Json
@@ -12298,6 +12324,10 @@ export type Database = {
           p_refund_amount?: number
           p_refund_method?: string
         }
+        Returns: Json
+      }
+      cancel_pending_pt_package: {
+        Args: { _member_package_id: string; _reason?: string }
         Returns: Json
       }
       channel_active_for_branch: {
@@ -12986,33 +13016,21 @@ export type Database = {
         }
         Returns: Json
       }
-      purchase_pt_package:
-        | {
-            Args: {
-              _branch_id: string
-              _idempotency_key?: string
-              _member_id: string
-              _package_id: string
-              _payment_method?: string
-              _price_paid: number
-              _received_by?: string
-              _subtotal?: number
-              _tax_amount?: number
-              _trainer_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_branch_id: string
-              p_idempotency_key?: string
-              p_member_id: string
-              p_package_id: string
-              p_payment_source?: string
-              p_trainer_id?: string
-            }
-            Returns: Json
-          }
+      purchase_pt_package: {
+        Args: {
+          _branch_id: string
+          _gst_rate?: number
+          _idempotency_key?: string
+          _member_id: string
+          _package_id: string
+          _payment_method?: string
+          _payment_source?: string
+          _price_paid: number
+          _received_by?: string
+          _trainer_id: string
+        }
+        Returns: Json
+      }
       purge_expired_otp_verifications: { Args: never; Returns: undefined }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
@@ -13118,6 +13136,7 @@ export type Database = {
         Args: { p_actor_id?: string; p_payment_id: string; p_reason: string }
         Returns: Json
       }
+      reverse_stale_pt_purchases: { Args: never; Returns: Json }
       reverse_trainer_commission: {
         Args: { p_payment_id: string; p_reason?: string }
         Returns: number
@@ -13464,7 +13483,13 @@ export type Database = {
         | "settled"
         | "failed"
         | "voided"
-      pt_package_status: "active" | "expired" | "exhausted" | "cancelled"
+      pt_package_status:
+        | "pending_payment"
+        | "active"
+        | "expired"
+        | "exhausted"
+        | "cancelled"
+        | "reversed"
       pt_package_type: "session_based" | "monthly"
       pt_session_status:
         | "scheduled"
@@ -13746,7 +13771,14 @@ export const Constants = {
         "failed",
         "voided",
       ],
-      pt_package_status: ["active", "expired", "exhausted", "cancelled"],
+      pt_package_status: [
+        "pending_payment",
+        "active",
+        "expired",
+        "exhausted",
+        "cancelled",
+        "reversed",
+      ],
       pt_package_type: ["session_based", "monthly"],
       pt_session_status: [
         "scheduled",

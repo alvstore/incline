@@ -76,27 +76,17 @@ export function usePurchasePTPackage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      memberId,
-      packageId,
-      trainerId,
-      branchId,
-      pricePaid,
-      subtotal,
-      taxAmount,
-    }: {
+    mutationFn: (args: {
       memberId: string;
       packageId: string;
       trainerId: string;
       branchId: string;
       pricePaid: number;
-      subtotal?: number;
-      taxAmount?: number;
-    }) =>
-      purchasePTPackage(
-        memberId, packageId, trainerId, branchId, pricePaid,
-        'cash', undefined, subtotal, taxAmount,
-      ),
+      idempotencyKey: string;
+      gstRate?: 0 | 5;
+      paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer';
+      paymentSource?: 'in_person' | 'payment_link';
+    }) => purchasePTPackage(args),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["member-pt-packages"] });
       queryClient.invalidateQueries({ queryKey: ["active-member-packages"] });

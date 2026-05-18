@@ -53,6 +53,7 @@ export function PurchasePTDrawer({ open, onOpenChange, memberId, memberName, bra
         trainerId: selectedTrainer,
         branchId,
         pricePaid: selectedPkg.price,
+        idempotencyKey: `pt-${memberId}-${selectedPackage}-${selectedTrainer}-${selectedPkg.price}`,
       });
 
       // Auto-link trainer as general trainer if not already assigned

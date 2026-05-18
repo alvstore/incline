@@ -68,33 +68,60 @@ export async function updatePTPackage(
   return data;
 }
 
-// Purchase PT package — uses unified settlement (10-arg variant routes through record_payment)
-// Pass `subtotal`/`taxAmount` so the trainer commission is computed on the pre-GST base.
-export async function purchasePTPackage(
-  memberId: string,
-  packageId: string,
-  trainerId: string,
-  branchId: string,
-  pricePaid: number,
-  paymentMethod: string = 'cash',
-  idempotencyKey?: string,
-  subtotal?: number,
-  taxAmount?: number,
-): Promise<{ success: boolean; member_package_id?: string; invoice_id?: string; error?: string }> {
-  const idem = idempotencyKey ?? `pt-${memberId}-${packageId}-${Date.now()}`;
+// Purchase PT package — atomic pipeline.
+// Price is GST-inclusive; the RPC derives subtotal/tax from `gstRate` (5% mandatory).
+// Trainer commission is always computed off the pre-GST subtotal.
+export interface PurchasePTPackageResult {
+  success: boolean;
+  member_package_id?: string;
+  invoice_id?: string;
+  subtotal?: number;
+  tax_amount?: number;
+  gst_rate?: number;
+  commission_base?: number;
+  commission_amount?: number;
+  status?: string;
+  payment_source?: string;
+  idempotent?: boolean;
+  error?: string;
+}
+
+export async function purchasePTPackage(args: {
+  memberId: string;
+  packageId: string;
+  trainerId: string;
+  branchId: string;
+  pricePaid: number;
+  gstRate?: 0 | 5;
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer';
+  paymentSource?: 'in_person' | 'payment_link';
+  idempotencyKey: string;
+}): Promise<PurchasePTPackageResult> {
   const { data, error } = await supabase.rpc("purchase_pt_package", {
-    _member_id: memberId,
-    _package_id: packageId,
-    _trainer_id: trainerId,
-    _branch_id: branchId,
-    _price_paid: pricePaid,
-    _payment_method: paymentMethod,
-    _idempotency_key: idem,
-    ...(subtotal !== undefined ? { _subtotal: subtotal } : {}),
-    ...(taxAmount !== undefined ? { _tax_amount: taxAmount } : {}),
+    _member_id: args.memberId,
+    _package_id: args.packageId,
+    _trainer_id: args.trainerId,
+    _branch_id: args.branchId,
+    _price_paid: args.pricePaid,
+    _gst_rate: args.gstRate ?? 5,
+    _payment_method: args.paymentMethod ?? 'cash',
+    _payment_source: args.paymentSource ?? 'in_person',
+    _idempotency_key: args.idempotencyKey,
   } as any);
   if (error) throw error;
-  return data as { success: boolean; member_package_id?: string; invoice_id?: string; error?: string };
+  return data as unknown as PurchasePTPackageResult;
+}
+
+export async function cancelPendingPTPackage(
+  memberPackageId: string,
+  reason: string = 'manual_cancel',
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('cancel_pending_pt_package', {
+    _member_package_id: memberPackageId,
+    _reason: reason,
+  } as any);
+  if (error) throw error;
+  return data as unknown as { success: boolean; error?: string };
 }
 
 // Fetch member's PT packages
