@@ -121,7 +121,7 @@ export async function cancelPendingPTPackage(
     _reason: reason,
   } as any);
   if (error) throw error;
-  return data as { success: boolean; error?: string };
+  return data as unknown as { success: boolean; error?: string };
 }
 
 // Fetch member's PT packages
