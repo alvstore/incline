@@ -13464,7 +13464,13 @@ export type Database = {
         | "settled"
         | "failed"
         | "voided"
-      pt_package_status: "active" | "expired" | "exhausted" | "cancelled"
+      pt_package_status:
+        | "pending_payment"
+        | "active"
+        | "expired"
+        | "exhausted"
+        | "cancelled"
+        | "reversed"
       pt_package_type: "session_based" | "monthly"
       pt_session_status:
         | "scheduled"
@@ -13746,7 +13752,14 @@ export const Constants = {
         "failed",
         "voided",
       ],
-      pt_package_status: ["active", "expired", "exhausted", "cancelled"],
+      pt_package_status: [
+        "pending_payment",
+        "active",
+        "expired",
+        "exhausted",
+        "cancelled",
+        "reversed",
+      ],
       pt_package_type: ["session_based", "monthly"],
       pt_session_status: [
         "scheduled",
