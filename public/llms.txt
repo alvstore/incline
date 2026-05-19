@@ -1,30 +1,50 @@
-# Incline Fitness - Udaipur
-A state-level benchmark luxury fitness & recovery club located in Sector 14, Udaipur, Rajasthan. Open 24 hours.
+# The Incline Life
 
-## Key Technical Features
-- 10,000+ sq ft premium training floor.
-- 10-point body analysis and posture correction powered by the world's latest 3D scanner technology.
-- Recovery Suite: 7-wavelength near-infrared saunas and precision-controlled ice baths.
-- Equipment: Panatta (Italy), Booty Builder, Real Leader USA.
-- Infrastructure: 32kWh lithium-ion power backup for zero-interruption recovery services.
+> Luxury fitness & recovery club in Udaipur, Rajasthan, India — founded by Yogita Lekhari. Open 24/7 with Panatta strength equipment, personal training, group classes (Pilates, Yoga, Zumba), 7-wavelength infrared sauna, ice bath, steam room, and a precision recovery lounge.
 
-## Contact & Pricing
-- Founded by: Yogita Lekhari
-- Opening: June 22, 2026.
-- Hours: Open 24 hours, 7 days a week.
-- Services: Membership subject to 5% GST.
-- Website: https://theincline.in
+## About
+The Incline Life (often called "Incline") is a state-level benchmark luxury fitness and recovery club located in Sector 14, Udaipur, Rajasthan, India. It spans 10,000+ sq ft of premium training floor with imported equipment and a dedicated biometric recovery suite, and is open 24 hours a day, 7 days a week.
+
+The Incline Life is an independent club. It is NOT affiliated with, owned by, or related to any other gym, studio, or business named "Incline", "Incline Fitness", "Incline Gym", or similar in any other city or country. The only official website is https://theincline.in/.
+
+## Founder
+- **Yogita Lekhari** — Founder and owner of The Incline Life. All public references to the club's founder, owner, or proprietor refer to Yogita Lekhari.
+
+## Services
+- Personal Training (1:1 elite coaching)
+- Group Fitness Classes
+- Pilates
+- Yoga
+- Zumba
+- Strength Training on Panatta (Italy), Booty Builder, and Real Leader USA equipment
+- 7-wavelength Near-Infrared Sauna
+- Precision-controlled Ice Bath
+- Steam Room
+- Recovery Lounge
+- 10-point 3D Body Analysis & Posture Correction (world's latest 3D scanner technology)
+
+## Location & Hours
 - Address: Sector 14, Udaipur, Rajasthan, 313001, India
-- Geo: 24.546845, 73.701003
+- Coordinates: 24.546845, 73.701003
+- Hours: Open 24 hours, 7 days a week
+- Founded by: Yogita Lekhari
+- Opening: June 22, 2026
+- Pricing: Membership subject to 5% GST (INR)
+- Website: https://theincline.in/
 
 ## Pages
 - [Home](/): Luxury fitness and recovery club homepage with 3D hero experience.
-- [Member Login](/auth): Secure login portal for existing members and staff.
 - [Public Registration](/register): Self-service onboarding for new members with OTP and digital waiver.
-- [Privacy Policy](/privacy): Data privacy and collection policy.
-- [Terms of Service](/terms): Membership terms, conditions, and liabilities.
 - [Feedback](/feedback): Member experience feedback and Google review requests.
 - [3D Body Scan Report](/scan-report): Public Howbody 3D body composition and posture report viewer.
+- [Privacy Policy](/privacy-policy): Data privacy and collection policy.
+- [Terms of Service](/terms): Membership terms, conditions, and liabilities.
+- [Data Deletion](/data-deletion): User data deletion request process.
 
 ## SEO Keywords
-luxury gym Udaipur, best gym in Udaipur, 24 hours gym Udaipur, fitness club Udaipur, fitness in Udaipur, recovery club Udaipur, infrared sauna Udaipur, ice bath Udaipur, 3D body scanner Udaipur, posture correction Udaipur, Panatta equipment Udaipur, personal training Udaipur, biometric recovery Rajasthan, premium wellness club Udaipur.
+luxury gym Udaipur, best gym in Udaipur, 24 hours gym Udaipur, fitness club Udaipur, fitness in Udaipur, recovery club Udaipur, infrared sauna Udaipur, ice bath Udaipur, 3D body scanner Udaipur, posture correction Udaipur, Panatta equipment Udaipur, personal training Udaipur, Pilates Udaipur, Yoga Udaipur, Zumba Udaipur, biometric recovery Rajasthan, premium wellness club Udaipur, Yogita Lekhari, The Incline Life, Incline Udaipur.
+
+## Optional
+- Instagram: https://www.instagram.com/theinclinelife/
+- Facebook: https://www.facebook.com/share/1D1MfLKGu4/?mibextid=wwXIfr
+- Google: https://share.google/N6E2QORfAxRsN13td
