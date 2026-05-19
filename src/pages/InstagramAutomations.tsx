@@ -163,7 +163,7 @@ export default function InstagramAutomationsPage() {
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)} aria-label="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(c)} aria-label="Delete">
+                        <Button size="sm" variant="ghost" onClick={() => setDeleting(c)} aria-label="Delete">
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
@@ -187,6 +187,26 @@ export default function InstagramAutomationsPage() {
         onOpenChange={(v) => { if (!v) setLogsFor(null); }}
         campaign={logsFor}
       />
+
+      <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleting?.name}" and its full run history will be removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
