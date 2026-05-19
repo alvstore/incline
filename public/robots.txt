@@ -137,4 +137,5 @@ Disallow: /contract-sign/
 Disallow: /embed/
 
 Sitemap: https://theincline.in/sitemap.xml
+Sitemap: https://theincline.in/llms.txt
 Host: https://theincline.in
