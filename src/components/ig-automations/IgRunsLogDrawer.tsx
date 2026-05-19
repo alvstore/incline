@@ -76,11 +76,19 @@ export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {
               {r.comment_text && (
                 <div className="text-xs text-slate-600 mt-1 italic line-clamp-2">"{r.comment_text}"</div>
               )}
-              <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+              <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
                 {r.matched_keyword && <span>kw: <code>{r.matched_keyword}</code></span>}
                 {r.attempts > 0 && <span>attempts: {r.attempts}</span>}
                 {r.skip_reason && <span className="text-amber-600">skip: {r.skip_reason}</span>}
                 {r.error_message && <span className="text-red-600">error: {r.error_message}</span>}
+                {r.lead_id && (
+                  <Link
+                    to={`/leads/${r.lead_id}`}
+                    className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
+                  >
+                    <UserPlus className="h-3 w-3" /> View lead
+                  </Link>
+                )}
               </div>
             </div>
           ))}
