@@ -387,8 +387,31 @@ async function handleBackfillIgProfiles(body: any) {
     .maybeSingle();
   if (error || !integ) return json({ error: "Integration not found" }, 404);
 
-  // Lazy-import the resolver from the webhook (kept in one place).
-  const { resolveInstagramSenderProfile } = await import("../meta-webhook/index.ts");
+  // Inline a slim version of the IG profile resolver to avoid importing the
+  // webhook module (its top-level Deno.serve() would conflict with this one).
+  async function resolveIgProfile(igUserId: string): Promise<{ name: string | null; avatar_url: string | null }> {
+    const empty = { name: null, avatar_url: null };
+    const creds: any = integ.credentials || {};
+    const token = creds.page_access_token || creds.access_token;
+    if (!token) return empty;
+    const { isInstagramLogin } = detectMetaHost(token);
+    const primary = isInstagramLogin ? IG_API_BASE : META_API_BASE;
+    const fallback = isInstagramLogin ? META_API_BASE : IG_API_BASE;
+    const fields = "name,username,profile_pic_url";
+    const tryFetch = async (base: string) => {
+      const url = `${base}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+      try {
+        const r = await metaFetchWithFallback(url);
+        const d = await r.json().catch(() => ({}));
+        const meaningful = d && (d.id || d.name || d.username || d.profile_pic_url);
+        if (!r.ok || d?.error || !meaningful) return null;
+        const username = d.username ? `@${d.username}` : null;
+        return { name: d.name || username || null, avatar_url: d.profile_pic_url || null };
+      } catch { return null; }
+    };
+    return (await tryFetch(primary)) || (await tryFetch(fallback)) || empty;
+  }
+
 
   // Pull IG/messenger settings rows with no name yet.
   let q = supabase
