@@ -363,6 +363,8 @@ function initial(c: IgCommentCampaign | null): Partial<IgCommentCampaign> {
     delay_seconds: 0,
     notify_staff: true,
     allow_repeat: false,
+    per_user_cooldown_minutes: 0,
+    daily_cap: 0,
     human_review: false,
     is_active: true,
     ai_tone: "friendly",
