@@ -70,6 +70,7 @@ const ReferralsPage = lazy(() => import("./pages/Referrals"));
 const FeedbackPage = lazy(() => import("./pages/Feedback"));
 const WhatsAppChatPage = lazy(() => import("./pages/WhatsAppChat"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const InstagramAutomationsPage = lazy(() => import("./pages/InstagramAutomations"));
 const ContactBookPage = lazy(() => import("./pages/ContactBook"));
 const FinancePage = lazy(() => import("./pages/Finance"));
 const MemberPlansPage = lazy(() => import("./pages/MemberPlans"));
@@ -283,6 +284,7 @@ function RoutedContent() {
           <Route path="/all-bookings" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><AllBookingsPage /></ProtectedRoute>} />
           <Route path="/whatsapp-chat" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><WhatsAppChatPage /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><Campaigns /></ProtectedRoute>} />
+          <Route path="/instagram-automations" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><InstagramAutomationsPage /></ProtectedRoute>} />
           <Route path="/contact-book" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><ContactBookPage /></ProtectedRoute>} />
           <Route path="/devices" element={<ProtectedRoute requiredRoles={['owner', 'admin']}><DeviceManagement /></ProtectedRoute>} />
           <Route path="/approvals" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><ApprovalQueue /></ProtectedRoute>} />
