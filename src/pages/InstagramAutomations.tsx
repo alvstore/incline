@@ -14,7 +14,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp, Reply } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
 import { toast } from "sonner";
