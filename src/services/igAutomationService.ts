@@ -164,3 +164,52 @@ export function useTestIgCommentMatch() {
     },
   });
 }
+
+// ──────────────── Retry failed run + 14d trend ────────────────
+
+export function useRetryIgRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; campaign_id: string }) => {
+      const { error } = await (supabase as any)
+        .from(RUNS)
+        .update({ status: "pending", scheduled_at: new Date().toISOString(), error_message: null })
+        .eq("id", id)
+        .in("status", ["failed", "skipped"]);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["ig-runs", vars.campaign_id] }),
+  });
+}
+
+export interface IgTrendPoint { day: string; sent: number; failed: number; matched: number }
+
+export function useIgRunsTrend(branchId: string | null, days = 14) {
+  return useQuery({
+    queryKey: ["ig-runs-trend", branchId, days],
+    enabled: !!branchId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<IgTrendPoint[]> => {
+      const since = new Date(Date.now() - days * 86400_000).toISOString();
+      const { data, error } = await (supabase as any)
+        .from(RUNS)
+        .select("created_at,status")
+        .eq("branch_id", branchId!)
+        .gte("created_at", since);
+      if (error) throw error;
+      const map = new Map<string, IgTrendPoint>();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10);
+        map.set(d, { day: d, sent: 0, failed: 0, matched: 0 });
+      }
+      for (const r of data ?? []) {
+        const d = String(r.created_at).slice(0, 10);
+        const slot = map.get(d); if (!slot) continue;
+        slot.matched += 1;
+        if (r.status === "sent") slot.sent += 1;
+        if (r.status === "failed") slot.failed += 1;
+      }
+      return Array.from(map.values());
+    },
+  });
+}
