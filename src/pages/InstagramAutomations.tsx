@@ -4,6 +4,7 @@ import {
   useIgCampaigns,
   useToggleIgCampaign,
   useDeleteIgCampaign,
+  useIgRunsTrend,
 } from "@/services/igAutomationService";
 import type { IgCommentCampaign } from "@/types/igAutomations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,11 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks } from "lucide-react";
+import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function InstagramAutomationsPage() {
   const { selectedBranch, branches } = useBranchContext();
