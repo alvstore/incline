@@ -432,7 +432,7 @@ function IgPostPicker({
     >
       <div className="flex items-center justify-between mb-2">
         <button type="button"
-          onClick={() => onChange(null)}
+          onClick={() => onChange(null, null)}
           className={`text-xs px-3 py-1.5 rounded-full border transition ${
             !value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
           }`}
