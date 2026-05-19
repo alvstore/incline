@@ -1,15 +1,19 @@
-// v1.0.0 — Instagram Comment-to-DM executor (cron, every 1 min).
+// v2.0.0 — Instagram Comment-to-DM executor (cron, every 1 min).
 // Picks up due `ig_comment_runs` rows and dispatches them.
 // - send_dm    → Graph API Private Reply (recipient.comment_id) → falls back to
-//                the existing `send-message` edge fn so we reuse its provider
-//                routing + logging.
+//                recipient.id within the 24h DM window.
 // - public_reply → POST /{comment-id}/replies
-// Failures retry up to 3x with exponential backoff. Honors DNC at execution time.
+// On successful DM: ensures a CRM lead exists (linked to chat_settings) and
+// bumps leads_created. AI replies use an ephemeral one-shot (no chat memory).
+// Failures retry up to 3x with exponential backoff.
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { renderTemplate } from "../_shared/ig-comment-automation.ts";
-import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
+import {
+  renderTemplate,
+  ensureLeadFromIgComment,
+  generateAiReplyEphemeral,
+} from "../_shared/ig-comment-automation.ts";
 import { META_GRAPH_VERSION } from "../_shared/meta-config.ts";
 
 const corsHeaders = {
