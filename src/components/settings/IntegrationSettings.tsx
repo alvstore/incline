@@ -117,8 +117,8 @@ export function IntegrationSettings() {
     setDiagnosing(true);
     setDiagnostics(null);
     try {
-      const { data, error } = await supabase.functions.invoke('meta-diagnose', {
-        body: { integration_id: igInteg.id },
+      const { data, error } = await supabase.functions.invoke('meta-admin', {
+        body: { action: 'diagnose', integration_id: igInteg.id },
       });
       if (error) throw error;
       setDiagnostics(data);
@@ -659,8 +659,8 @@ export function IntegrationSettings() {
                     onClick={async () => {
                       const t = toast.loading('Subscribing Page & IG account to Meta webhooks…');
                       try {
-                        const { data, error } = await supabase.functions.invoke('meta-subscribe', {
-                          body: { integration_type: 'instagram' },
+                        const { data, error } = await supabase.functions.invoke('meta-admin', {
+                          body: { action: 'subscribe', integration_type: 'instagram' },
                         });
                         if (error) throw error;
                         toast.dismiss(t);
@@ -668,7 +668,7 @@ export function IntegrationSettings() {
                           toast.success(`Subscribed! ${data.results?.length || 0} target(s) hooked. Send a fresh DM to test.`, { duration: 6000 });
                         } else {
                           toast.error(data?.hint || 'Subscription failed — check token scopes.', { duration: 8000 });
-                          console.warn('[meta-subscribe] result:', data);
+                          console.warn('[meta-admin subscribe] result:', data);
                         }
                       } catch (e: any) {
                         toast.dismiss(t);
