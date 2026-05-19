@@ -5070,6 +5070,203 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_comment_campaigns: {
+        Row: {
+          ai_instruction: string | null
+          ai_tone: string | null
+          allow_repeat: boolean
+          branch_id: string
+          case_sensitive: boolean
+          comment_public_reply: string | null
+          comments_matched: number
+          created_at: string
+          created_by: string | null
+          delay_seconds: number
+          dm_template: string | null
+          dms_failed: number
+          dms_sent: number
+          ends_at: string | null
+          fallback_message: string | null
+          human_review: boolean
+          id: string
+          ig_account_id: string | null
+          ig_media_id: string | null
+          integration_id: string | null
+          is_active: boolean
+          keywords: string[]
+          last_triggered_at: string | null
+          lead_tag: string | null
+          leads_created: number
+          match_type: string
+          name: string
+          notify_staff: boolean
+          pipeline_stage: string | null
+          reply_mode: string
+          starts_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_instruction?: string | null
+          ai_tone?: string | null
+          allow_repeat?: boolean
+          branch_id: string
+          case_sensitive?: boolean
+          comment_public_reply?: string | null
+          comments_matched?: number
+          created_at?: string
+          created_by?: string | null
+          delay_seconds?: number
+          dm_template?: string | null
+          dms_failed?: number
+          dms_sent?: number
+          ends_at?: string | null
+          fallback_message?: string | null
+          human_review?: boolean
+          id?: string
+          ig_account_id?: string | null
+          ig_media_id?: string | null
+          integration_id?: string | null
+          is_active?: boolean
+          keywords?: string[]
+          last_triggered_at?: string | null
+          lead_tag?: string | null
+          leads_created?: number
+          match_type?: string
+          name: string
+          notify_staff?: boolean
+          pipeline_stage?: string | null
+          reply_mode?: string
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_instruction?: string | null
+          ai_tone?: string | null
+          allow_repeat?: boolean
+          branch_id?: string
+          case_sensitive?: boolean
+          comment_public_reply?: string | null
+          comments_matched?: number
+          created_at?: string
+          created_by?: string | null
+          delay_seconds?: number
+          dm_template?: string | null
+          dms_failed?: number
+          dms_sent?: number
+          ends_at?: string | null
+          fallback_message?: string | null
+          human_review?: boolean
+          id?: string
+          ig_account_id?: string | null
+          ig_media_id?: string | null
+          integration_id?: string | null
+          is_active?: boolean
+          keywords?: string[]
+          last_triggered_at?: string | null
+          lead_tag?: string | null
+          leads_created?: number
+          match_type?: string
+          name?: string
+          notify_staff?: boolean
+          pipeline_stage?: string | null
+          reply_mode?: string
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_comment_campaigns_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ig_comment_campaigns_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integration_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_comment_runs: {
+        Row: {
+          action: string
+          attempts: number
+          branch_id: string
+          campaign_id: string
+          comment_id: string
+          comment_text: string | null
+          created_at: string
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          ig_media_id: string | null
+          ig_user_id: string
+          ig_username: string | null
+          lead_id: string | null
+          matched_keyword: string | null
+          outbound_message_id: string | null
+          raw_payload: Json | null
+          scheduled_at: string | null
+          skip_reason: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          branch_id: string
+          campaign_id: string
+          comment_id: string
+          comment_text?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          ig_media_id?: string | null
+          ig_user_id: string
+          ig_username?: string | null
+          lead_id?: string | null
+          matched_keyword?: string | null
+          outbound_message_id?: string | null
+          raw_payload?: Json | null
+          scheduled_at?: string | null
+          skip_reason?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          branch_id?: string
+          campaign_id?: string
+          comment_id?: string
+          comment_text?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          ig_media_id?: string | null
+          ig_user_id?: string
+          ig_username?: string | null
+          lead_id?: string | null
+          matched_keyword?: string | null
+          outbound_message_id?: string | null
+          raw_payload?: Json | null
+          scheduled_at?: string | null
+          skip_reason?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_comment_runs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ig_comment_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       income_categories: {
         Row: {
           created_at: string
@@ -12247,6 +12444,16 @@ export type Database = {
           p_staff_id?: string
         }
         Returns: Json
+      }
+      bump_ig_campaign_counters: {
+        Args: {
+          p_campaign_id: string
+          p_comments_matched?: number
+          p_dms_failed?: number
+          p_dms_sent?: number
+          p_leads_created?: number
+        }
+        Returns: undefined
       }
       calc_gst: {
         Args: {
