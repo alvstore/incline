@@ -13339,6 +13339,7 @@ export type Database = {
         Args: { p_document_id: string; p_expires_in?: number }
         Returns: string
       }
+      retry_ig_comment_run: { Args: { p_id: string }; Returns: undefined }
       reverse_payment: {
         Args: { p_actor_id?: string; p_payment_id: string; p_reason: string }
         Returns: Json
