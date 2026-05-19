@@ -182,6 +182,12 @@ export default function AnnouncementsPage() {
             <CampaignsPanel />
           </TabsContent>
 
+          <TabsContent value="instagram" className="mt-0 animate-fade-in">
+            <IgAutomationsPanel />
+          </TabsContent>
+
+
+
           <TabsContent value="retry" className="mt-0 animate-fade-in">
             <RetryQueuePanel />
           </TabsContent>
