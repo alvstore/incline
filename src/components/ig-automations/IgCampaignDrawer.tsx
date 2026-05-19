@@ -417,7 +417,7 @@ function IgAccountPicker({
 
 function IgPostPicker({
   branchId, igAccountId, value, onChange,
-}: { branchId: string | null; igAccountId: string | null; value: string | null; onChange: (v: string | null) => void }) {
+}: { branchId: string | null; igAccountId: string | null; value: string | null; onChange: (v: string | null, permalink: string | null) => void }) {
   const { data: accounts = [] } = useIgAccounts(branchId);
   const integrationId = useMemo(
     () => accounts.find((a) => a.ig_account_id === igAccountId)?.integration_id || null,
