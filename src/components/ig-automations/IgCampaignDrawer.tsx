@@ -423,7 +423,7 @@ function IgPostPicker({
     () => accounts.find((a) => a.ig_account_id === igAccountId)?.integration_id || null,
     [accounts, igAccountId],
   );
-  const { data: media = [], isLoading, isError, refetch, isFetching } = useIgMedia(integrationId);
+  const { data: media = [], isLoading, isError, error, refetch, isFetching } = useIgMedia(integrationId);
 
   return (
     <Field
@@ -451,8 +451,12 @@ function IgPostPicker({
         <div className="py-6 text-center text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Loading recent posts…</div>
       )}
       {integrationId && isError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          Could not load posts. Token may be missing IG Graph scopes.
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 space-y-1">
+          <div className="font-medium">Could not load posts.</div>
+          <div className="opacity-90">{(error as any)?.message || "Unknown error from Instagram Graph."}</div>
+          <a href="/settings?tab=integrations" className="underline text-red-800 inline-block mt-1">
+            Open Settings → Integrations → Instagram to reconnect
+          </a>
         </div>
       )}
       {integrationId && !isLoading && media.length > 0 && (
