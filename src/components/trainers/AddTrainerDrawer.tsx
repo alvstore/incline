@@ -323,7 +323,7 @@ export function AddTrainerDrawer({ open, onOpenChange, branchId }: AddTrainerDra
         </div>
         <div className="space-y-2">
           <Label>Emergency Contact Phone</Label>
-          <Input value={f.emergency_contact_phone} onChange={(e) => setF({ ...f, emergency_contact_phone: e.target.value })} />
+          <PhoneInput value={f.emergency_contact_phone} onChange={(value) => setF({ ...f, emergency_contact_phone: value })} />
         </div>
       </div>
     </div>
