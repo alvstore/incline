@@ -88,10 +88,7 @@ verify_jwt = false
 [functions.fetch-image-url]
 verify_jwt = true
 
-[functions.backup-export]
-verify_jwt = true
-
-[functions.backup-import]
+[functions.backup]
 verify_jwt = true
 
 

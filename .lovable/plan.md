@@ -1,107 +1,69 @@
-## Audit findings
+## Audit — Meta functions
 
-### 1. `check-expired-access` vs `revoke-mips-access` — MERGE ✅
+Note: `meta-diagnose` and `meta-subscribe` no longer exist — they were merged into `meta-admin` in the previous round. The remaining Meta-related functions are:
 
-Both operate on the same MIPS hardware-access pipeline.
-
-| | `check-expired-access` (134 LoC) | `revoke-mips-access` (265 LoC) |
-|---|---|---|
-| Trigger | cron sweeper, no args | per-member action |
-| Operation | finds members whose membership lapsed and force-revokes | `action: 'revoke' \| 'restore'` for one member |
-| Callers | `MIPSDashboard.tsx` (1) | `membershipService.ts` (2) |
-| Auth | none (service-role) | none (service-role) |
-| Shared code | MIPS login, person lookup, device dispatch, members.hardware_access_status update | same |
-
-Both touch the same MIPS REST endpoints and write the same DB columns — the sweeper is essentially a batch wrapper around the per-member revoke. Merging is low risk.
-
-**Proposal:** new function `mips-access` dispatched by `action`:
-- `action: "revoke"` → existing per-member revoke logic
-- `action: "restore"` → existing per-member restore logic
-- `action: "sweep_expired"` → existing cron logic (internally calls the revoke branch per row)
-
-### 2. Send-channel functions — KEEP (with one deletion)
-
-These look duplicated but they're actually a strategy pattern under `dispatch-communication`:
-
-| Function | LoC | Callers | Verdict |
+| Function | LoC | URL bound to | Can merge? |
 |---|---|---|---|
-| `dispatch-communication` | (core) | 8 (canonical entrypoint per memory) | keep |
-| `send-whatsapp` | 359 | `dispatch-communication` + `WhatsAppChat` (2 direct sends) | keep — channel driver |
-| `send-sms` | 266 | `dispatch-communication` + `leadService` (4) | keep — channel driver |
-| `send-email` | 532 | `dispatch-communication` | keep — channel driver |
-| `send-message` | 268 | **0 callers anywhere** | **DELETE — dead code** |
-| `send-reminders` | 761 | cron + `communicationService` | keep — reminder orchestrator, not a channel driver |
+| `meta-webhook` | 909 | Registered with Meta as the Instagram/Messenger webhook URL (verify token + signed payload receiver) | **No** — Meta calls this URL directly |
+| `meta-oauth-callback` | 202 | Registered as the Instagram Business Login OAuth redirect URI; returns HTML / 302 to the app | **No** — Meta redirects browsers here; URL is hard-wired in the Meta App Dashboard |
+| `meta-data-deletion` | 173 | Registered as the Meta GDPR "Data Deletion Request URL" (legal requirement) | **No** — Meta calls this when a user requests deletion |
+| `whatsapp-webhook` | 1048 | Registered as the WhatsApp Cloud API webhook URL (separate from `meta-webhook`) | **No** — Meta calls this URL directly |
+| `meta-admin` | (already merged) | Internal only (subscribe + diagnose) | already done |
 
-Merging the three channel drivers into one would balloon a single function with Meta/Cloud + WATI + AiSensy + MSG91 + RoundSMS + Twilio + SendGrid + Mailgun + SMTP + SES code paths. That trades 3 focused files for one ~1200-line megafile and increases cold-start surface. Not recommended.
+**Verdict:** No further Meta merges are safe. Every remaining `meta-*` function is an externally-registered URL in the Meta App Dashboard. Renaming or folding them under a single dispatcher would require updating each registration in Meta (and re-verifying webhooks, OAuth, and GDPR endpoints) — high blast radius, zero internal benefit. They already share helpers via `_shared/meta-config.ts`, which is the right pattern.
 
-**Proposal:** delete `send-message` only.
-
-### 3. Meta functions — MOSTLY KEEP, merge two internals
-
-| Function | Why it must stay separate |
-|---|---|
-| `meta-webhook` | Registered with Meta as the WhatsApp/IG/FB webhook URL — renaming breaks production. |
-| `meta-oauth-callback` | Registered as Meta app OAuth redirect URI. |
-| `meta-data-deletion` | Registered as Meta GDPR data-deletion URL (legal requirement). |
-| `whatsapp-webhook` | Separate webhook URL registered with Meta. |
-
-These four URLs are externally bound. Renaming or folding them requires also updating the Meta App Dashboard — not safe to do without the user confirming each URL change in Meta.
-
-| Function | Callers | Verdict |
-|---|---|---|
-| `meta-subscribe` (130 LoC) | 1 internal | merge candidate |
-| `meta-diagnose` (234 LoC) | 1 internal | merge candidate |
-
-**Proposal:** merge `meta-subscribe` + `meta-diagnose` into one internal admin function `meta-admin` dispatched by `action: "subscribe" | "diagnose"`. No external Meta-registered URLs are touched.
-
-### 4. Recommendations not implemented unless you ask
-
-- `leadService.ts` directly invokes `send-sms` 4× — the project's canonical rule is that all outbound comms go through `dispatch-communication`. Routing those through the dispatcher would be a behavior change, not a merge — flag only.
-- `WhatsAppChat.tsx` direct `send-whatsapp` invocations are intentional (free-text agent replies, not templates) — leave them.
+What *can* improve in the Meta surface (separate from merging — flag only, not in this plan):
+- `meta-webhook` is at 909 LoC and `whatsapp-webhook` at 1048 LoC. The two could share more ingestion/log helpers via `_shared/` — but that's a refactor, not a merge, and out of scope for this task.
 
 ---
 
-## Implementation plan
+## Merge plan — `backup-export` + `backup-import` → `backup`
 
-### A. Create `mips-access` (merges `check-expired-access` + `revoke-mips-access`)
-- Single file `supabase/functions/mips-access/index.ts`.
-- Shared helpers (MIPS auth, person lookup, device dispatch, formatDate) defined once.
-- Body schema: `{ action: "revoke" | "restore" | "sweep_expired", member_id?, reason?, branch_id? }`.
-- `sweep_expired` reuses the per-member revoke branch in a loop, preserving the original report shape `{ revoked: [...], errors: [...], count }`.
-- Update callers:
-  - `src/services/membershipService.ts` (2 sites) → `invoke('mips-access', { body: { action, member_id, ... } })` (already passing `action`).
-  - `src/components/devices/MIPSDashboard.tsx` (1 site) → `invoke('mips-access', { body: { action: 'sweep_expired' } })`.
-- `supabase/config.toml`: add `[functions.mips-access]` with `verify_jwt = true` for revoke/restore. Sweep is service-role-gated by being called only from the dashboard with a logged-in user.
-- pg_cron / scheduler: check if `check-expired-access` is scheduled. If yes, repoint the cron entry to `mips-access` with `body: { action: 'sweep_expired' }`. (I will inspect `cron.job` during build and migrate if needed.)
-- Delete `supabase/functions/check-expired-access/` and `supabase/functions/revoke-mips-access/`.
-- `supabase--delete_edge_functions(["check-expired-access","revoke-mips-access"])`.
+Both functions:
+- Run the same owner/admin gate (anon client `getUser` → `user_roles` lookup for `owner`/`admin`).
+- Operate on the same table catalog (`TABLES` for export, `RESTORE_ORDER` for import — different ordering but the same domain).
+- Have one caller each in `src/components/settings/BackupRestore.tsx`.
 
-### B. Delete dead `send-message`
-- Remove dir + `[functions.send-message]` config block + `supabase--delete_edge_functions(["send-message"])`.
+### New function
 
-### C. Create `meta-admin` (merges `meta-subscribe` + `meta-diagnose`)
-- New `supabase/functions/meta-admin/index.ts` dispatched by `action: "subscribe" | "diagnose"`.
-- Update the 2 callers to invoke `meta-admin` with the action.
-- Remove old dirs + config + deploy/delete tools.
-- Leave `meta-webhook`, `meta-oauth-callback`, `meta-data-deletion`, `whatsapp-webhook` untouched.
+`supabase/functions/backup/index.ts` — single endpoint dispatched by body `action`:
+
+- `action: "export"` → returns the JSON file with `Content-Disposition: attachment` (preserves current browser-download behavior).
+- `action: "import"` → accepts `{ data, dry_run?, conflict_strategy? }`, returns `{ success, dry_run, summary }`.
+
+Shared helpers defined once at the top of the file:
+- `corsHeaders`, `jsonResponse`, `service-role client`, `anon-with-bearer client`
+- `requireOwnerOrAdmin(authHeader): { user, supabase } | Response` — single auth gate used by both branches.
+- Keep `TABLES` and `RESTORE_ORDER` as separate constants (they intentionally differ — export grabs all, import sequences by FK dependency).
+
+### Caller updates
+
+`src/components/settings/BackupRestore.tsx`:
+- Export (line 39): change `…/functions/v1/backup-export` → `…/functions/v1/backup` and add `body: JSON.stringify({ action: 'export' })` with `Content-Type: application/json`. Keep the `fetch` flow (we still need the raw `Response` to download the file as a blob).
+- Import (line 85): `supabase.functions.invoke('backup', { body: { action: 'import', ...payload } })`.
+
+### Config
+
+`supabase/config.toml`:
+- Remove `[functions.backup-export]` and `[functions.backup-import]` blocks.
+- Add `[functions.backup]` with `verify_jwt = true` (both originals were `verify_jwt = true`, and the function still validates roles in-code).
+
+### Cleanup
+
+- Delete `supabase/functions/backup-export/` and `supabase/functions/backup-import/`.
+- `supabase--delete_edge_functions(["backup-export", "backup-import"])`.
+- `supabase--deploy_edge_functions(["backup"])`.
 
 ### Validation
-- Build passes typecheck.
-- `MIPSDashboard` "Check expired access" button still returns the same `{ revoked, errors }` shape.
-- Manual revoke/restore from member actions in `membershipService.ts` still mutates `hardware_access_status` and writes the audit log row.
-- Curl `mips-access` with each action and verify responses.
-- Check `cron.job` for any `check-expired-access` schedule and update it.
 
-### Files touched
-- new: `supabase/functions/mips-access/index.ts`, `supabase/functions/meta-admin/index.ts`
-- edit: `supabase/config.toml`, `src/services/membershipService.ts`, `src/components/devices/MIPSDashboard.tsx`, the 2 meta-admin callers
-- delete: `supabase/functions/{check-expired-access,revoke-mips-access,send-message,meta-subscribe,meta-diagnose}/`
-- migration (only if cron job exists): repoint pg_cron entry
+- BackupRestore UI export still triggers a JSON file download named `incline-backup-YYYY-MM-DD.json`.
+- Dry-run import still returns per-table `summary` with `inserted/updated/skipped/errors`.
+- Both branches still 401/403 for non-admins.
 
-### Net result
-- Edge functions removed: 5 (`check-expired-access`, `revoke-mips-access`, `send-message`, `meta-subscribe`, `meta-diagnose`)
-- Edge functions added: 2 (`mips-access`, `meta-admin`)
-- No external Meta-registered URLs changed
-- No behavior changes for the send-channel pipeline
+### Net change
+
+- Removed: `backup-export`, `backup-import` (2 functions, 254 LoC)
+- Added: `backup` (~280 LoC after deduping auth gate)
+- No external URL changes; only one frontend file touched.
 
 Proceed?
