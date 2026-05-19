@@ -432,7 +432,7 @@ async function handleBackfillIgProfiles(body: any) {
       results.skipped_test_ids++;
       continue;
     }
-    const profile = await resolveInstagramSenderProfile(row.phone_number, integ);
+    const profile = await resolveIgProfile(row.phone_number);
     if (!profile.name && !profile.avatar_url) {
       results.failed++;
       continue;
