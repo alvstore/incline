@@ -283,11 +283,19 @@ async function processRun(run: any): Promise<void> {
 
   if (res.ok && campaign.notify_staff) {
     try {
+      // Only notify owners/managers scoped to this branch (or all-branch admins).
       const { data: staff } = await supabase
-        .from("user_roles").select("user_id").in("role", ["owner", "admin", "manager"]).limit(50);
+        .from("user_roles")
+        .select("user_id, branch_id, role")
+        .in("role", ["owner", "manager"]);
       const seen = new Set<string>();
       const rows = (staff || [])
-        .filter((r: any) => r.user_id && !seen.has(r.user_id) && seen.add(r.user_id))
+        .filter((r: any) =>
+          r.user_id &&
+          (r.branch_id === run.branch_id || r.branch_id == null) &&
+          !seen.has(r.user_id) && seen.add(r.user_id)
+        )
+        .slice(0, 20)
         .map((r: any) => ({
           user_id: r.user_id,
           branch_id: run.branch_id,
