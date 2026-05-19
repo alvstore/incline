@@ -459,10 +459,16 @@ async function handleBackfillIgProfiles(body: any) {
 // Used by the IG Comment-to-DM admin UI to populate dropdowns and simulate matches.
 
 async function loadIgIntegrations(branchId: string | null) {
+  // Accept every provider/integration_type the IG settings UI saves IG creds under.
   let q = supabase
     .from("integration_settings")
-    .select("id, integration_type, config, credentials, branch_id")
-    .in("integration_type", ["instagram", "instagram_login"])
+    .select("id, integration_type, provider, config, credentials, branch_id")
+    .or(
+      [
+        "integration_type.in.(instagram,instagram_login,instagram_meta)",
+        "provider.in.(instagram,instagram_login,instagram_meta,meta,facebook_page)",
+      ].join(","),
+    )
     .eq("is_active", true);
   if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
   const { data, error } = await q;
@@ -470,14 +476,54 @@ async function loadIgIntegrations(branchId: string | null) {
   return data || [];
 }
 
-function pickIgToken(integ: any): { token: string | null; igId: string | null } {
+function pickIgToken(integ: any): { token: string | null; igId: string | null; pageId: string | null } {
   const creds = (integ?.credentials || {}) as any;
   const cfg = (integ?.config || {}) as any;
   const token =
     creds.page_access_token || creds.ig_access_token || creds.access_token || null;
+  // Include `instagram_account_id` — that's the key the Integrations UI persists.
   const igId =
-    cfg.ig_user_id || cfg.instagram_business_account_id || cfg.ig_account_id || null;
-  return { token, igId };
+    cfg.ig_user_id ||
+    cfg.instagram_business_account_id ||
+    cfg.instagram_account_id ||
+    cfg.ig_account_id ||
+    null;
+  const pageId = cfg.page_id || null;
+  return { token, igId, pageId };
+}
+
+// Resolve a page access token on-demand if creds only have the user token.
+// Persists it back to integration_settings so we only pay this round-trip once.
+async function ensurePageToken(
+  integ: any,
+): Promise<{ token: string | null; integration: any; error?: string }> {
+  const creds = (integ?.credentials || {}) as any;
+  if (creds.page_access_token) return { token: creds.page_access_token, integration: integ };
+  const userToken = creds.access_token;
+  const pageId = (integ?.config || {}).page_id;
+  if (!userToken || !pageId) return { token: creds.access_token || null, integration: integ };
+
+  const url = `${META_API_BASE}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`;
+  const r = await fetch(url);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j?.error) {
+    return { token: userToken, integration: integ, error: j?.error?.message || `Graph ${r.status}` };
+  }
+  const match = (j?.data || []).find((p: any) => String(p.id) === String(pageId));
+  if (!match?.access_token) {
+    return {
+      token: userToken,
+      integration: integ,
+      error: `No page token returned for page_id=${pageId}. Token likely missing 'pages_show_list' / 'pages_manage_metadata'.`,
+    };
+  }
+  // Persist & return enriched integration so callers can reuse without re-querying.
+  const newCreds = { ...creds, page_access_token: match.access_token };
+  await supabase
+    .from("integration_settings")
+    .update({ credentials: newCreds, updated_at: new Date().toISOString() })
+    .eq("id", integ.id);
+  return { token: match.access_token, integration: { ...integ, credentials: newCreds } };
 }
 
 async function handleListIgAccounts(body: any) {
@@ -511,21 +557,40 @@ async function handleListIgMedia(body: any) {
   const limit = Math.min(Number(body?.limit) || 24, 50);
   if (!integrationId) return json({ error: "integration_id required" }, 400);
 
-  const { data: integ, error } = await supabase
+  const { data: integ0, error } = await supabase
     .from("integration_settings")
     .select("id, config, credentials")
     .eq("id", integrationId)
     .maybeSingle();
-  if (error || !integ) return json({ error: "Integration not found" }, 404);
+  if (error || !integ0) return json({ error: "Integration not found" }, 404);
 
+  // Try to get a page access token (no-op if already present or not applicable).
+  const { integration: integ, error: pageTokErr } = await ensurePageToken(integ0);
   const { token, igId } = pickIgToken(integ);
-  if (!token || !igId) return json({ error: "Missing IG token or account id" }, 400);
+  if (!igId) {
+    return json({
+      error: "Instagram account id missing on this integration. Open Settings → Integrations → Instagram and save `instagram_account_id` (your IG Business Account id).",
+    }, 400);
+  }
+  if (!token) {
+    return json({ error: pageTokErr || "Missing IG access token on this integration." }, 400);
+  }
 
   const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count";
   const url = `${IG_API_BASE}/${igId}/media?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url);
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.error) return json({ error: j?.error?.message || `Graph ${r.status}`, raw: j }, 400);
+  if (!r.ok || j?.error) {
+    const msg = j?.error?.message || `Graph ${r.status}`;
+    const code = j?.error?.code;
+    const sub = j?.error?.error_subcode;
+    const type = j?.error?.type;
+    return json({
+      error: `${msg}${code ? ` (code ${code}${sub ? `/${sub}` : ""}${type ? `, ${type}` : ""})` : ""}`,
+      raw: j,
+      hint: pageTokErr || undefined,
+    }, 400);
+  }
   return json({ media: j?.data || [] });
 }
 

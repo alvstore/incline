@@ -4,7 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Megaphone, Trash2, Radio, Activity, AlertCircle, Sparkles, Rocket } from 'lucide-react';
+import { Plus, Megaphone, Trash2, Radio, Activity, AlertCircle, Sparkles, Rocket, Instagram } from 'lucide-react';
+import { IgAutomationsPanel } from '@/components/ig-automations/IgAutomationsPanel';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { communicationService } from '@/services/communicationService';
 import { toast } from 'sonner';
@@ -91,6 +92,9 @@ export default function AnnouncementsPage() {
             </TabsTrigger>
             <TabsTrigger value="campaigns" className="rounded-lg gap-2 data-[state=active]:shadow-md">
               <Rocket className="h-3.5 w-3.5" />Campaigns
+            </TabsTrigger>
+            <TabsTrigger value="instagram" className="rounded-lg gap-2 data-[state=active]:shadow-md">
+              <Instagram className="h-3.5 w-3.5 text-pink-500" />IG Comment-to-DM
             </TabsTrigger>
             <TabsTrigger value="retry" className="rounded-lg gap-2 data-[state=active]:shadow-md">
               <AlertCircle className="h-3.5 w-3.5" />Retry Queue
