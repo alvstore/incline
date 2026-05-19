@@ -1,64 +1,60 @@
-## What I found (audit)
+# Plan: Sidebar cleanup + Install UI/UX Pro Max + Redesign IG Automations panel
 
-**Where the data actually lives**
-- The only IG integration row in the DB is `provider='instagram_meta'`, `integration_type='instagram'` (id `27f094d6…`).
-- Its `credentials` has `access_token` + `app_secret` (no `page_access_token`).
-- Its `config` has `page_id`, `instagram_account_id`, `webhook_verify_token`.
+## 1. Sidebar cleanup
 
-**Root cause of "Could not load posts. Token may be missing IG Graph scopes."**
-In `supabase/functions/meta-admin/index.ts`:
+The "IG Comment-to-DM" entry in the sidebar is redundant — it just deep-links to the Communication Hub's Instagram tab, which is already reachable from "Communication Hub" → Instagram tab.
 
-```ts
-function pickIgToken(integ) {
-  const igId = cfg.ig_user_id || cfg.instagram_business_account_id || cfg.ig_account_id || null;
-  // …missing cfg.instagram_account_id (the field the IG settings UI actually saves)
-}
-```
+- Edit `src/config/menu.ts` (line 222): remove the `IG Comment-to-DM` item from the **Operations & Comm** group.
+- Drop the now-unused `Instagram` icon import (line 7) if not referenced elsewhere in the file.
+- Keep `/instagram-automations` route + the `navModules.ts` href registration so old bookmarks still redirect into the tab (no breakage).
 
-The query returns `igId = null`, so `handleListIgMedia` short-circuits with `"Missing IG token or account id"`, which the drawer surfaces as the generic "Token may be missing IG Graph scopes." — even though the token IS valid and Graph was never called.
+## 2. Install the UI/UX Pro Max skill
 
-Secondary issue: for `/{ig-user-id}/media` Graph endpoint via a Facebook Page (EAA token), Meta requires a **page access token**, not the user token. `credentials.page_access_token` is missing on this row, so even after fixing the id resolution, the call will likely 400 with "missing permissions". A `refresh_page_token` action already exists — we should call it automatically on miss.
+Install the skill as a project-scoped Lovable skill (drafts go to `.agents/skills/`, then we activate with `skills--apply_draft`).
 
-**Where the IG Automations page lives today**
-- Standalone page `src/pages/InstagramAutomations.tsx` at route `/instagram-automations`, linked from the sidebar.
-- Communication Hub is `src/pages/Announcements.tsx` with tabs: `live | announcements | campaigns | retry`, driven by `?tab=` query string.
+Steps:
+- `mkdir -p .agents/skills/ui-ux-pro-max/{scripts,references,assets}`
+- Copy bundled assets from the cloned repo:
+  - `src/ui-ux-pro-max/scripts/{search.py, core.py, design_system.py}` → `.agents/skills/ui-ux-pro-max/scripts/`
+  - `src/ui-ux-pro-max/data/*.csv` → `.agents/skills/ui-ux-pro-max/assets/data/`
+  - `src/ui-ux-pro-max/templates/base/{skill-content.md, quick-reference.md}` → `references/`
+- Write `.agents/skills/ui-ux-pro-max/SKILL.md` with frontmatter:
+  ```yaml
+  ---
+  name: ui-ux-pro-max
+  description: AI-powered design intelligence — 67 UI styles, 161 palettes, 57 font pairings, 99 UX guidelines. Use when redesigning or polishing UI, picking a color/typography system, or auditing a screen for UX issues.
+  ---
+  ```
+  Body: short usage doc pointing at `scripts/search.py` with the `--design-system`, `--domain`, and `--stack react` flags, plus instructions to copy the script to `/tmp` before exec (per sandbox skill rules).
+- Verify with `python3 .agents/skills/ui-ux-pro-max/scripts/search.py "saas admin dashboard" --design-system -p "Incline IG Automations"` to confirm the engine runs.
+- Call `skills--apply_draft` with path `.agents/skills/ui-ux-pro-max` to activate it.
 
-## Plan
+## 3. Redesign the IG Comment-to-DM panel using the skill
 
-### 1. Fix "Could not load posts" (executor + diagnostics)
-File: `supabase/functions/meta-admin/index.ts`
+Scope is **visual only** — no business logic, query, or edge-function changes. Files in play:
+- `src/components/ig-automations/IgAutomationsPanel.tsx` (main panel)
+- Optional: `IgCampaignDrawer.tsx`, `IgRunsLogDrawer.tsx` for visual consistency only
 
-- Extend `pickIgToken` id resolution to also read `cfg.instagram_account_id` and (last resort) `cfg.page_id`-based lookup.
-- In `handleListIgMedia`:
-  - If `credentials.page_access_token` is missing AND we have `cfg.page_id` + a user `access_token`, call the existing `/me/accounts` flow once to fetch+persist the page token (re-use logic from `handleRefreshPageToken`), then retry.
-  - Return the **real** Graph error message (`j?.error?.message`) plus `error_subcode` / `type` so the UI can show "Permission `instagram_basic` missing" instead of a generic message.
-- Same id-resolution fix applied to `handleListIgAccounts` and the executor's `loadIntegration` so end-to-end pipeline (test → media list → cron → send DM) all use the same resolver.
+Process:
+1. Run the skill's design-system generator scoped to "SaaS automation control room / Instagram comment-to-DM" on stack `react` + `shadcn` to get a palette, typography, and pattern recommendation. Reconcile against the project's locked Vuexy tokens (indigo/violet, `rounded-2xl`, `shadow-lg shadow-slate-200/50`, Inter) — skill output informs **composition, density, hierarchy, motion**, not raw color tokens, since Vuexy is the locked design system per project memory.
+2. Capture a screenshot of the current `/announcements?tab=instagram` panel as the redesign anchor.
+3. Apply visual improvements in `IgAutomationsPanel.tsx`:
+   - Hero strip: gradient KPI band (campaigns active · DMs sent · public replies · success-rate) using the Vuexy gradient card pattern, replacing the current plain stat tiles.
+   - Campaign cards: convert to `rounded-2xl bg-white shadow-lg shadow-slate-200/50` cards with status pill, post thumbnail, keyword chips, and a compact metric row.
+   - Add empty state, loading skeleton, and error state matching project standards.
+   - Sticky filter/toolbar with clear visual grouping.
+   - Trend chart: wrap in matching card, tighten spacing, use semantic chart colors.
+   - Inline `Run history` peek with hover/expand affordance.
+   - All buttons: 44px touch targets, focus rings, `cursor-pointer`, transition 150–300ms.
+4. Preserve all existing data hooks, props, drawer triggers, and the `useIgMedia` error UI in `IgCampaignDrawer.tsx`.
+5. QA: open `/announcements?tab=instagram`, verify drawer opens, refresh posts works, log drawer opens, no console errors, responsive at 375/768/1113 px.
 
-UI: `src/components/ig-automations/IgCampaignDrawer.tsx`
-- Replace hard-coded toast text with the actual error message returned from the edge function. Add a "Reconnect Instagram" link when the error mentions missing token/scopes.
+## Out of scope
 
-### 2. Move Instagram Automations into Communication Hub as a tab
-- Extract the body of `src/pages/InstagramAutomations.tsx` (everything inside `<AppLayout>`) into a new presentational component `src/components/ig-automations/IgAutomationsPanel.tsx` that takes no props and uses `useBranchContext` internally — same as `CampaignsPanel`.
-- `src/pages/Announcements.tsx`:
-  - Add a 5th tab `instagram` between `campaigns` and `retry` with icon `Instagram` from lucide.
-  - Render `<IgAutomationsPanel />` inside `<TabsContent value="instagram">`.
-- `src/pages/InstagramAutomations.tsx`: convert to a `<Navigate to="/announcements?tab=instagram" replace />` shim (mirrors the existing `Campaigns.tsx` pattern) so existing bookmarks/sidebar links keep working.
-- `src/config/menu.ts` + `src/config/navModules.ts`: update the Instagram Automations entry to point at `/announcements?tab=instagram` (keeps the same icon + label, just routes into the hub).
-
-### 3. End-to-end verification
-After the migration-free code changes deploy:
-
-1. `supabase--deploy_edge_functions` for `meta-admin`.
-2. `supabase--curl_edge_functions` POST `meta-admin` with `{action:"list_ig_accounts", branch_id:"<active>"}` → expect 1 account with `username` populated (no `error`).
-3. Same with `{action:"list_ig_media", integration_id:"27f09…"}` → expect `media:[…]` array. If Graph rejects, the response body now contains the real error which we'll act on (likely needs `pages_show_list` / `instagram_basic` scope on the existing token — that's a Meta-side reconnect, not a code bug).
-4. UI smoke: open `/announcements?tab=instagram` → drawer → "Refresh" on Target post → posts render or specific error displays.
-5. Confirm legacy `/instagram-automations` still loads (redirects to the tab).
-6. Run the existing test panel (`test_ig_comment_match`) to verify the matcher pipeline is untouched.
-
-## Out of scope (won't change)
-- No DB migrations.
-- Do not touch IG DM ingestion (`meta-webhook`, `triggerAiReply`) — only the admin/list helpers.
-- Do not change sidebar layout or any other Communication Hub tab.
+- No DB migrations, no edge-function changes, no changes to matcher/executor pipeline.
+- No route changes for `/instagram-automations` (legacy redirect stays).
+- No global theme/token changes — Vuexy palette stays the source of truth.
 
 ## Risk
-- If the existing IG token genuinely lacks the `instagram_basic` / `pages_show_list` scope, posts still won't load — but the UI will now say exactly that and link to reconnect, which is the correct outcome. Sending DMs via webhook continues to work because that path uses different scopes already granted.
+
+Low. Sidebar removal is a one-line edit; skill install is sandboxed under `.agents/skills/`; redesign is presentation-only inside the IG panel. Existing IG DM ingestion, webhooks, AI brain, and cron remain untouched.
