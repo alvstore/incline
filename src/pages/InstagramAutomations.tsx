@@ -35,28 +35,32 @@ export default function InstagramAutomationsPage() {
   const [editing, setEditing] = useState<IgCommentCampaign | null>(null);
   const [creating, setCreating] = useState(false);
   const [logsFor, setLogsFor] = useState<IgCommentCampaign | null>(null);
+  const [deleting, setDeleting] = useState<IgCommentCampaign | null>(null);
 
   const stats = useMemo(() => {
     const totals = campaigns.reduce(
       (a, c) => ({
         active: a.active + (c.is_active ? 1 : 0),
-        comments: a.comments + c.comments_matched,
-        dms: a.dms + c.dms_sent,
-        failed: a.failed + c.dms_failed,
-        leads: a.leads + c.leads_created,
+        comments: a.comments + (c.comments_matched ?? 0),
+        dms: a.dms + (c.dms_sent ?? 0),
+        failed: a.failed + (c.dms_failed ?? 0),
+        leads: a.leads + (c.leads_created ?? 0),
+        public: a.public + (c.public_replies_sent ?? 0),
       }),
-      { active: 0, comments: 0, dms: 0, failed: 0, leads: 0 },
+      { active: 0, comments: 0, dms: 0, failed: 0, leads: 0, public: 0 },
     );
     return totals;
   }, [campaigns]);
 
-  const handleDelete = async (c: IgCommentCampaign) => {
-    if (!confirm(`Delete "${c.name}"? Its run history will also be removed.`)) return;
+  const handleDelete = async () => {
+    if (!deleting) return;
     try {
-      await del.mutateAsync({ id: c.id, branch_id: c.branch_id });
+      await del.mutateAsync({ id: deleting.id, branch_id: deleting.branch_id });
       toast.success("Campaign deleted");
     } catch (e: any) {
       toast.error(e.message ?? "Delete failed");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -81,10 +85,11 @@ export default function InstagramAutomationsPage() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <KpiCard label="Active" value={stats.active} icon={<Instagram className="h-4 w-4" />} tone="indigo" />
         <KpiCard label="Comments matched" value={stats.comments} icon={<MessageSquare className="h-4 w-4" />} tone="emerald" />
         <KpiCard label="DMs sent" value={stats.dms} icon={<MessageSquare className="h-4 w-4" />} tone="violet" />
+        <KpiCard label="Public replies" value={stats.public} icon={<Reply className="h-4 w-4" />} tone="indigo" />
         <KpiCard label="Failed" value={stats.failed} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
         <KpiCard label="Leads created" value={stats.leads} icon={<Users className="h-4 w-4" />} tone="amber" />
       </div>
