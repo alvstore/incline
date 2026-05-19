@@ -58,9 +58,19 @@ export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {
                     {r.ig_username || r.ig_user_id}
                   </span>
                 </div>
-                <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {format(new Date(r.created_at), "dd MMM HH:mm:ss")}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {(r.status === "failed" || r.status === "skipped") && (
+                    <Button
+                      size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                      onClick={() => onRetry(r.id)} disabled={retry.isPending}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                    </Button>
+                  )}
+                  <span className="text-xs text-slate-400 whitespace-nowrap">
+                    {format(new Date(r.created_at), "dd MMM HH:mm:ss")}
+                  </span>
+                </div>
               </div>
               {r.comment_text && (
                 <div className="text-xs text-slate-600 mt-1 italic line-clamp-2">"{r.comment_text}"</div>
