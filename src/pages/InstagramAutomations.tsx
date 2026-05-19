@@ -85,6 +85,8 @@ export default function InstagramAutomationsPage() {
         <KpiCard label="Leads created" value={stats.leads} icon={<Users className="h-4 w-4" />} tone="amber" />
       </div>
 
+      <IgTrendCard branchId={branchId} />
+
       <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
         <CardHeader>
           <CardTitle className="text-base">Campaigns</CardTitle>
