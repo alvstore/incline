@@ -14,7 +14,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp, Reply } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
 import { toast } from "sonner";
@@ -31,28 +35,32 @@ export default function InstagramAutomationsPage() {
   const [editing, setEditing] = useState<IgCommentCampaign | null>(null);
   const [creating, setCreating] = useState(false);
   const [logsFor, setLogsFor] = useState<IgCommentCampaign | null>(null);
+  const [deleting, setDeleting] = useState<IgCommentCampaign | null>(null);
 
   const stats = useMemo(() => {
     const totals = campaigns.reduce(
       (a, c) => ({
         active: a.active + (c.is_active ? 1 : 0),
-        comments: a.comments + c.comments_matched,
-        dms: a.dms + c.dms_sent,
-        failed: a.failed + c.dms_failed,
-        leads: a.leads + c.leads_created,
+        comments: a.comments + (c.comments_matched ?? 0),
+        dms: a.dms + (c.dms_sent ?? 0),
+        failed: a.failed + (c.dms_failed ?? 0),
+        leads: a.leads + (c.leads_created ?? 0),
+        public: a.public + (c.public_replies_sent ?? 0),
       }),
-      { active: 0, comments: 0, dms: 0, failed: 0, leads: 0 },
+      { active: 0, comments: 0, dms: 0, failed: 0, leads: 0, public: 0 },
     );
     return totals;
   }, [campaigns]);
 
-  const handleDelete = async (c: IgCommentCampaign) => {
-    if (!confirm(`Delete "${c.name}"? Its run history will also be removed.`)) return;
+  const handleDelete = async () => {
+    if (!deleting) return;
     try {
-      await del.mutateAsync({ id: c.id, branch_id: c.branch_id });
+      await del.mutateAsync({ id: deleting.id, branch_id: deleting.branch_id });
       toast.success("Campaign deleted");
     } catch (e: any) {
       toast.error(e.message ?? "Delete failed");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -77,10 +85,11 @@ export default function InstagramAutomationsPage() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <KpiCard label="Active" value={stats.active} icon={<Instagram className="h-4 w-4" />} tone="indigo" />
         <KpiCard label="Comments matched" value={stats.comments} icon={<MessageSquare className="h-4 w-4" />} tone="emerald" />
         <KpiCard label="DMs sent" value={stats.dms} icon={<MessageSquare className="h-4 w-4" />} tone="violet" />
+        <KpiCard label="Public replies" value={stats.public} icon={<Reply className="h-4 w-4" />} tone="indigo" />
         <KpiCard label="Failed" value={stats.failed} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
         <KpiCard label="Leads created" value={stats.leads} icon={<Users className="h-4 w-4" />} tone="amber" />
       </div>
@@ -154,7 +163,7 @@ export default function InstagramAutomationsPage() {
                         <Button size="sm" variant="ghost" onClick={() => setEditing(c)} aria-label="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(c)} aria-label="Delete">
+                        <Button size="sm" variant="ghost" onClick={() => setDeleting(c)} aria-label="Delete">
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
@@ -178,6 +187,26 @@ export default function InstagramAutomationsPage() {
         onOpenChange={(v) => { if (!v) setLogsFor(null); }}
         campaign={logsFor}
       />
+
+      <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleting?.name}" and its full run history will be removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

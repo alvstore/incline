@@ -538,21 +538,40 @@ async function handleTestIgCommentMatch(body: any) {
 
   let q = supabase
     .from("ig_comment_campaigns")
-    .select("id, name, keywords, match_type, case_sensitive, ig_media_id, ig_account_id, is_active, reply_mode, dm_template, fallback_message, delay_seconds")
+    .select("id, name, keywords, match_type, case_sensitive, ig_media_id, ig_account_id, is_active, reply_mode, dm_template, fallback_message, delay_seconds, ai_instruction, ai_tone")
     .eq("branch_id", branchId)
     .eq("is_active", true);
   const { data: campaigns, error } = await q;
   if (error) return json({ error: error.message }, 500);
 
-  const { matchKeyword, renderTemplate } = await import("../_shared/ig-comment-automation.ts");
-  const results = (campaigns || []).map((c: any) => {
+  const { matchKeyword, renderTemplate, generateAiReplyEphemeral } =
+    await import("../_shared/ig-comment-automation.ts");
+
+  const results = await Promise.all((campaigns || []).map(async (c: any) => {
     let skip: string | null = null;
     if (c.ig_media_id && mediaId && c.ig_media_id !== mediaId) skip = "media_id mismatch";
     if (!skip && c.ig_account_id && accountId && c.ig_account_id !== accountId) skip = "account_id mismatch";
     const matched = skip ? null : matchKeyword(text, c);
-    const preview = matched && c.dm_template
-      ? renderTemplate(c.dm_template, { first_name: "Alex", username: "@alex", keyword: matched, campaign_name: c.name, post_link: "" })
-      : null;
+
+    let preview: string | null = null;
+    if (matched) {
+      if (c.reply_mode === "template" && c.dm_template) {
+        preview = renderTemplate(c.dm_template, {
+          first_name: "Alex", username: "@alex", keyword: matched, campaign_name: c.name, post_link: "",
+        });
+      } else if (c.reply_mode === "ai" || c.reply_mode === "hybrid") {
+        preview = await generateAiReplyEphemeral({
+          comment: text, username: "@alex",
+          campaignName: c.name, instruction: c.ai_instruction, tone: c.ai_tone,
+        });
+        if (!preview && c.reply_mode === "hybrid" && c.dm_template) {
+          preview = renderTemplate(c.dm_template, {
+            first_name: "Alex", username: "@alex", keyword: matched, campaign_name: c.name, post_link: "",
+          });
+        }
+        if (!preview && c.fallback_message) preview = c.fallback_message;
+      }
+    }
     return {
       campaign_id: c.id,
       name: c.name,
@@ -563,7 +582,7 @@ async function handleTestIgCommentMatch(body: any) {
       delay_seconds: c.delay_seconds,
       preview,
     };
-  });
+  }));
   return json({ tested_at: new Date().toISOString(), results });
 }
 

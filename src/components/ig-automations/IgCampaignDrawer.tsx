@@ -118,7 +118,10 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                 branchId={branchId}
                 igAccountId={form.ig_account_id || null}
                 value={form.ig_media_id || null}
-                onChange={(v) => update({ ig_media_id: v })}
+                onChange={(id, permalink) => update({
+                  ig_media_id: id,
+                  ig_media_permalink: permalink ?? null,
+                })}
               />
             </TabsContent>
 
@@ -242,9 +245,23 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
               <ToggleRow label="Notify staff on trigger" checked={form.notify_staff ?? true}
                 onChange={(v) => update({ notify_staff: v })} />
               <ToggleRow label="Allow repeat DMs to same user"
-                hint="Off = each user is DM'd only once per campaign."
+                hint="Off = each user is DM'd only once per campaign. On = honors the cooldown below."
                 checked={!!form.allow_repeat}
                 onChange={(v) => update({ allow_repeat: v })} />
+              {form.allow_repeat && (
+                <Field label="Per-user cooldown (minutes)"
+                  hint="Smallest gap before the same user can be DM'd again. 0 = no cooldown.">
+                  <Input type="number" min={0} max={43200}
+                    value={form.per_user_cooldown_minutes ?? 0}
+                    onChange={(e) => update({ per_user_cooldown_minutes: Math.max(0, Number(e.target.value || 0)) })} />
+                </Field>
+              )}
+              <Field label="Daily DM cap"
+                hint="Max successful DMs in a rolling 24h window. 0 = unlimited. Stops viral storms.">
+                <Input type="number" min={0} max={100000}
+                  value={form.daily_cap ?? 0}
+                  onChange={(e) => update({ daily_cap: Math.max(0, Number(e.target.value || 0)) })} />
+              </Field>
               <ToggleRow label="Require human review before sending"
                 hint="When on, DMs stay in 'pending' for staff to approve."
                 checked={!!form.human_review}
@@ -349,6 +366,8 @@ function initial(c: IgCommentCampaign | null): Partial<IgCommentCampaign> {
     delay_seconds: 0,
     notify_staff: true,
     allow_repeat: false,
+    per_user_cooldown_minutes: 0,
+    daily_cap: 0,
     human_review: false,
     is_active: true,
     ai_tone: "friendly",
@@ -398,7 +417,7 @@ function IgAccountPicker({
 
 function IgPostPicker({
   branchId, igAccountId, value, onChange,
-}: { branchId: string | null; igAccountId: string | null; value: string | null; onChange: (v: string | null) => void }) {
+}: { branchId: string | null; igAccountId: string | null; value: string | null; onChange: (v: string | null, permalink: string | null) => void }) {
   const { data: accounts = [] } = useIgAccounts(branchId);
   const integrationId = useMemo(
     () => accounts.find((a) => a.ig_account_id === igAccountId)?.integration_id || null,
@@ -413,7 +432,7 @@ function IgPostPicker({
     >
       <div className="flex items-center justify-between mb-2">
         <button type="button"
-          onClick={() => onChange(null)}
+          onClick={() => onChange(null, null)}
           className={`text-xs px-3 py-1.5 rounded-full border transition ${
             !value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
           }`}
@@ -442,7 +461,7 @@ function IgPostPicker({
             const thumb = m.thumbnail_url || m.media_url;
             const selected = value === m.id;
             return (
-              <button key={m.id} type="button" onClick={() => onChange(m.id)}
+              <button key={m.id} type="button" onClick={() => onChange(m.id, m.permalink ?? null)}
                 className={`relative aspect-square rounded-lg overflow-hidden border-2 transition group ${
                   selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-transparent hover:border-slate-300"
                 }`}

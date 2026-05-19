@@ -21,6 +21,9 @@ export interface IgCommentCampaign {
   comment_public_reply: string | null;
   delay_seconds: number;
   allow_repeat: boolean;
+  per_user_cooldown_minutes: number;
+  daily_cap: number;
+  ig_media_permalink: string | null;
   lead_tag: string | null;
   pipeline_stage: string | null;
   notify_staff: boolean;
@@ -32,6 +35,7 @@ export interface IgCommentCampaign {
   dms_sent: number;
   dms_failed: number;
   leads_created: number;
+  public_replies_sent: number;
   last_triggered_at: string | null;
   created_at: string;
   updated_at: string;
