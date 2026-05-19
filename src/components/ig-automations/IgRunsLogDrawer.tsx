@@ -2,9 +2,12 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { useIgCampaignRuns } from "@/services/igAutomationService";
+import { Button } from "@/components/ui/button";
+import { useIgCampaignRuns, useRetryIgRun } from "@/services/igAutomationService";
 import type { IgCommentCampaign, IgRunStatus } from "@/types/igAutomations";
 import { format } from "date-fns";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -22,6 +25,13 @@ const STATUS_STYLE: Record<IgRunStatus, string> = {
 
 export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {
   const { data: runs = [], isLoading } = useIgCampaignRuns(campaign?.id ?? null);
+  const retry = useRetryIgRun();
+  const onRetry = async (id: string) => {
+    try {
+      await retry.mutateAsync({ id, campaign_id: campaign!.id });
+      toast.success("Re-queued — executor will pick it up within a minute");
+    } catch (e: any) { toast.error(e.message ?? "Retry failed"); }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
