@@ -36,13 +36,15 @@ export function BackupRestore() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/backup-export`;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/backup`;
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ action: 'export' }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Export failed' }));
@@ -82,8 +84,8 @@ export function BackupRestore() {
       payload.dry_run = dryRun;
       payload.conflict_strategy = conflict;
 
-      const { data, error } = await supabase.functions.invoke('backup-import', {
-        body: payload,
+      const { data, error } = await supabase.functions.invoke('backup', {
+        body: { action: 'import', ...payload },
       });
       if (error) throw error;
       setLastSummary(data?.summary);
