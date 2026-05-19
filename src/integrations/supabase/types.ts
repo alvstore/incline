@@ -5081,6 +5081,7 @@ export type Database = {
           comments_matched: number
           created_at: string
           created_by: string | null
+          daily_cap: number
           delay_seconds: number
           dm_template: string | null
           dms_failed: number
@@ -5091,6 +5092,7 @@ export type Database = {
           id: string
           ig_account_id: string | null
           ig_media_id: string | null
+          ig_media_permalink: string | null
           integration_id: string | null
           is_active: boolean
           keywords: string[]
@@ -5100,7 +5102,9 @@ export type Database = {
           match_type: string
           name: string
           notify_staff: boolean
+          per_user_cooldown_minutes: number
           pipeline_stage: string | null
+          public_replies_sent: number
           reply_mode: string
           starts_at: string | null
           updated_at: string
@@ -5115,6 +5119,7 @@ export type Database = {
           comments_matched?: number
           created_at?: string
           created_by?: string | null
+          daily_cap?: number
           delay_seconds?: number
           dm_template?: string | null
           dms_failed?: number
@@ -5125,6 +5130,7 @@ export type Database = {
           id?: string
           ig_account_id?: string | null
           ig_media_id?: string | null
+          ig_media_permalink?: string | null
           integration_id?: string | null
           is_active?: boolean
           keywords?: string[]
@@ -5134,7 +5140,9 @@ export type Database = {
           match_type?: string
           name: string
           notify_staff?: boolean
+          per_user_cooldown_minutes?: number
           pipeline_stage?: string | null
+          public_replies_sent?: number
           reply_mode?: string
           starts_at?: string | null
           updated_at?: string
@@ -5149,6 +5157,7 @@ export type Database = {
           comments_matched?: number
           created_at?: string
           created_by?: string | null
+          daily_cap?: number
           delay_seconds?: number
           dm_template?: string | null
           dms_failed?: number
@@ -5159,6 +5168,7 @@ export type Database = {
           id?: string
           ig_account_id?: string | null
           ig_media_id?: string | null
+          ig_media_permalink?: string | null
           integration_id?: string | null
           is_active?: boolean
           keywords?: string[]
@@ -5168,7 +5178,9 @@ export type Database = {
           match_type?: string
           name?: string
           notify_staff?: boolean
+          per_user_cooldown_minutes?: number
           pipeline_stage?: string | null
+          public_replies_sent?: number
           reply_mode?: string
           starts_at?: string | null
           updated_at?: string
@@ -12445,16 +12457,28 @@ export type Database = {
         }
         Returns: Json
       }
-      bump_ig_campaign_counters: {
-        Args: {
-          p_campaign_id: string
-          p_comments_matched?: number
-          p_dms_failed?: number
-          p_dms_sent?: number
-          p_leads_created?: number
-        }
-        Returns: undefined
-      }
+      bump_ig_campaign_counters:
+        | {
+            Args: {
+              p_campaign_id: string
+              p_comments_matched?: number
+              p_dms_failed?: number
+              p_dms_sent?: number
+              p_leads_created?: number
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_campaign_id: string
+              p_comments_matched?: number
+              p_dms_failed?: number
+              p_dms_sent?: number
+              p_leads_created?: number
+              p_public_replies?: number
+            }
+            Returns: undefined
+          }
       calc_gst: {
         Args: {
           p_amount: number
