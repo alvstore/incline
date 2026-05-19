@@ -4,6 +4,7 @@ import {
   useIgCampaigns,
   useToggleIgCampaign,
   useDeleteIgCampaign,
+  useIgRunsTrend,
 } from "@/services/igAutomationService";
 import type { IgCommentCampaign } from "@/types/igAutomations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,11 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks } from "lucide-react";
+import { Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2, ListChecks, TrendingUp } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function InstagramAutomationsPage() {
   const { selectedBranch, branches } = useBranchContext();
@@ -82,6 +84,8 @@ export default function InstagramAutomationsPage() {
         <KpiCard label="Failed" value={stats.failed} icon={<AlertTriangle className="h-4 w-4" />} tone="red" />
         <KpiCard label="Leads created" value={stats.leads} icon={<Users className="h-4 w-4" />} tone="amber" />
       </div>
+
+      <IgTrendCard branchId={branchId} />
 
       <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
         <CardHeader>
@@ -196,6 +200,58 @@ function KpiCard({
           <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">{label}</div>
           <div className="text-2xl font-bold text-slate-900">{value.toLocaleString()}</div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function IgTrendCard({ branchId }: { branchId: string | null }) {
+  const { data = [], isLoading } = useIgRunsTrend(branchId, 14);
+  const totals = data.reduce(
+    (a, d) => ({ sent: a.sent + d.sent, failed: a.failed + d.failed, matched: a.matched + d.matched }),
+    { sent: 0, failed: 0, matched: 0 },
+  );
+  return (
+    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-indigo-600" /> Activity (last 14 days)
+        </CardTitle>
+        <div className="flex gap-4 text-xs">
+          <span className="text-slate-500">Matched <b className="text-slate-900">{totals.matched}</b></span>
+          <span className="text-emerald-600">Sent <b>{totals.sent}</b></span>
+          <span className="text-red-500">Failed <b>{totals.failed}</b></span>
+        </div>
+      </CardHeader>
+      <CardContent className="h-48 pt-0">
+        {isLoading ? (
+          <div className="h-full flex items-center justify-center text-xs text-slate-400">Loading…</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="igSent" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="igMatched" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="day" tickFormatter={(d) => format(new Date(d), "dd MMM")} fontSize={11} stroke="#94a3b8" />
+              <YAxis allowDecimals={false} fontSize={11} stroke="#94a3b8" />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                labelFormatter={(d) => format(new Date(d as string), "dd MMM yyyy")}
+              />
+              <Area type="monotone" dataKey="matched" stroke="#6366f1" fill="url(#igMatched)" name="Matched" />
+              <Area type="monotone" dataKey="sent" stroke="#10b981" fill="url(#igSent)" name="DMs sent" />
+              <Area type="monotone" dataKey="failed" stroke="#ef4444" fillOpacity={0} name="Failed" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );

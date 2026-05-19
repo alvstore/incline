@@ -2,9 +2,12 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { useIgCampaignRuns } from "@/services/igAutomationService";
+import { Button } from "@/components/ui/button";
+import { useIgCampaignRuns, useRetryIgRun } from "@/services/igAutomationService";
 import type { IgCommentCampaign, IgRunStatus } from "@/types/igAutomations";
 import { format } from "date-fns";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -22,6 +25,13 @@ const STATUS_STYLE: Record<IgRunStatus, string> = {
 
 export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {
   const { data: runs = [], isLoading } = useIgCampaignRuns(campaign?.id ?? null);
+  const retry = useRetryIgRun();
+  const onRetry = async (id: string) => {
+    try {
+      await retry.mutateAsync({ id, campaign_id: campaign!.id });
+      toast.success("Re-queued — executor will pick it up within a minute");
+    } catch (e: any) { toast.error(e.message ?? "Retry failed"); }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -48,9 +58,19 @@ export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {
                     {r.ig_username || r.ig_user_id}
                   </span>
                 </div>
-                <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {format(new Date(r.created_at), "dd MMM HH:mm:ss")}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {(r.status === "failed" || r.status === "skipped") && (
+                    <Button
+                      size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                      onClick={() => onRetry(r.id)} disabled={retry.isPending}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                    </Button>
+                  )}
+                  <span className="text-xs text-slate-400 whitespace-nowrap">
+                    {format(new Date(r.created_at), "dd MMM HH:mm:ss")}
+                  </span>
+                </div>
               </div>
               {r.comment_text && (
                 <div className="text-xs text-slate-600 mt-1 italic line-clamp-2">"{r.comment_text}"</div>
