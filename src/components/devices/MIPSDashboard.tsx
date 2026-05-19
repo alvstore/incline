@@ -92,7 +92,9 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
   const handleCheckExpiredAccess = async () => {
     setCheckingExpired(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-expired-access");
+      const { data, error } = await supabase.functions.invoke("mips-access", {
+        body: { action: "sweep_expired" },
+      });
       if (error) throw error;
       const result = data as { revoked_count?: number; errors?: string[] };
       if (result.revoked_count && result.revoked_count > 0) {

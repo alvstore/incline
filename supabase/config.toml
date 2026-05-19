@@ -60,10 +60,7 @@ verify_jwt = false
 [functions.run-retention-nudges]
 verify_jwt = false
 
-[functions.revoke-mips-access]
-verify_jwt = false
-
-[functions.check-expired-access]
+[functions.mips-access]
 verify_jwt = false
 
 [functions.whatsapp-webhook]
@@ -78,14 +75,14 @@ verify_jwt = false
 [functions.diagnostics]
 verify_jwt = false
 
+[functions.meta-admin]
+verify_jwt = false
+
 
 [functions.create-razorpay-link]
 verify_jwt = true
 
 [functions.meta-webhook]
-verify_jwt = false
-
-[functions.send-message]
 verify_jwt = false
 
 [functions.fetch-image-url]
