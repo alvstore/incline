@@ -1,8 +1,13 @@
-// v1.0.0 — Unified Meta admin function.
+// v1.1.0 — Unified Meta admin function.
 // Replaces: meta-subscribe + meta-diagnose.
-// Body: { action: "subscribe" | "diagnose", ...action-specific fields }
-//   subscribe:  { branch_id?, integration_type: "instagram"|"instagram_login"|"messenger" }
-//   diagnose:   { integration_id }
+// Body: { action, ...action-specific fields }
+//   subscribe:             { branch_id?, integration_type: "instagram"|"instagram_login"|"messenger" }
+//   diagnose:              { integration_id }
+//   refresh_page_token:    { integration_id } — calls /me/accounts and persists
+//                          credentials.page_access_token for the configured page_id.
+//                          Required for IG-via-FB-Page profile resolution.
+//   backfill_ig_profiles:  { integration_id, limit? } — re-resolves name/avatar
+//                          for IG contacts where contact_name/contact_avatar_url is NULL.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   META_API_BASE,
@@ -315,6 +320,119 @@ async function handleDiagnose(body: any) {
   return json({ ok: allOk, checks });
 }
 
+// ──────────────── REFRESH PAGE TOKEN ────────────────
+// IG-via-FB-Page profile lookup (/{IGSID}?fields=name,username,profile_pic_url)
+// requires a PAGE access token, not the User access token that the OAuth
+// flow initially persists. This action calls /me/accounts and stores the
+// matching page's access_token so the webhook can resolve names + avatars.
+async function handleRefreshPageToken(body: any) {
+  const integrationId: string | undefined = body?.integration_id;
+  if (!integrationId) return json({ error: "integration_id required" }, 400);
+
+  const { data: integ, error } = await supabase
+    .from("integration_settings")
+    .select("id, integration_type, config, credentials")
+    .eq("id", integrationId)
+    .maybeSingle();
+  if (error || !integ) return json({ error: "Integration not found" }, 404);
+
+  const userToken = (integ.credentials as any)?.access_token;
+  const pageId = (integ.config as any)?.page_id;
+  if (!userToken) return json({ error: "Missing credentials.access_token" }, 400);
+  if (!pageId) return json({ error: "Missing config.page_id — this action is for IG-via-FB-Page setups only." }, 400);
+
+  const url = `${META_API_BASE}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`;
+  const resp = await fetch(url);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data?.error) {
+    return json({ error: data?.error?.message || `Graph returned ${resp.status}`, raw: data }, 400);
+  }
+  const pages = Array.isArray(data?.data) ? data.data : [];
+  const match = pages.find((p: any) => String(p.id) === String(pageId));
+  if (!match?.access_token) {
+    return json({
+      error: `No page access_token returned for page_id=${pageId}. Either the user token lacks 'pages_show_list'/'pages_manage_metadata' scope or the user isn't an admin of that page.`,
+      pages_seen: pages.map((p: any) => ({ id: p.id, name: p.name })),
+    }, 400);
+  }
+
+  await supabase
+    .from("integration_settings")
+    .update({
+      credentials: { ...(integ.credentials as any), page_access_token: match.access_token },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", integ.id);
+
+  return json({
+    success: true,
+    page_id: pageId,
+    page_name: match.name,
+    hint: "Page access token saved. New inbound IG DMs will now resolve username + avatar. Run 'backfill_ig_profiles' to fill in existing contacts.",
+  });
+}
+
+// ──────────────── BACKFILL IG PROFILES ────────────────
+// Re-resolves contact_name / contact_avatar_url for IG (and messenger) contacts
+// where they are currently NULL. Uses the same resolver as the webhook.
+async function handleBackfillIgProfiles(body: any) {
+  const integrationId: string | undefined = body?.integration_id;
+  const limit: number = Math.min(Number(body?.limit) || 100, 500);
+  if (!integrationId) return json({ error: "integration_id required" }, 400);
+
+  const { data: integ, error } = await supabase
+    .from("integration_settings")
+    .select("id, integration_type, branch_id, config, credentials")
+    .eq("id", integrationId)
+    .maybeSingle();
+  if (error || !integ) return json({ error: "Integration not found" }, 404);
+
+  // Lazy-import the resolver from the webhook (kept in one place).
+  const { resolveInstagramSenderProfile } = await import("../meta-webhook/index.ts");
+
+  // Pull IG/messenger settings rows with no name yet.
+  let q = supabase
+    .from("whatsapp_chat_settings")
+    .select("phone_number, platform, branch_id")
+    .in("platform", ["instagram", "messenger"])
+    .is("contact_name", null)
+    .limit(limit);
+  if (integ.branch_id) q = q.eq("branch_id", integ.branch_id);
+
+  const { data: rows, error: rowsErr } = await q;
+  if (rowsErr) return json({ error: rowsErr.message }, 500);
+
+  const results = { scanned: rows?.length || 0, resolved: 0, failed: 0, skipped_test_ids: 0 };
+  for (const row of rows || []) {
+    // Skip seeded/test IDs (won't resolve against Graph).
+    if (/^IG_(USER_)?(PHASE_E_)?TEST/i.test(row.phone_number) || /^999000111222/.test(row.phone_number)) {
+      results.skipped_test_ids++;
+      continue;
+    }
+    const profile = await resolveInstagramSenderProfile(row.phone_number, integ);
+    if (!profile.name && !profile.avatar_url) {
+      results.failed++;
+      continue;
+    }
+    try {
+      await supabase.rpc("upsert_meta_contact_profile", {
+        p_branch_id: row.branch_id,
+        p_phone: row.phone_number,
+        p_platform: row.platform,
+        p_external_id: row.phone_number,
+        p_display_name: profile.name,
+        p_avatar_url: profile.avatar_url,
+      });
+      results.resolved++;
+    } catch (e) {
+      console.warn(`[backfill] upsert failed for ${row.phone_number}:`, e instanceof Error ? e.message : e);
+      results.failed++;
+    }
+  }
+
+  return json({ success: true, ...results });
+}
+
 // ──────────────── DISPATCHER ────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -322,10 +440,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
     switch (action) {
-      case "subscribe": return await handleSubscribe(body);
-      case "diagnose":  return await handleDiagnose(body);
+      case "subscribe":            return await handleSubscribe(body);
+      case "diagnose":             return await handleDiagnose(body);
+      case "refresh_page_token":   return await handleRefreshPageToken(body);
+      case "backfill_ig_profiles": return await handleBackfillIgProfiles(body);
       default:
-        return json({ error: `Unknown action: ${action}. Expected 'subscribe' or 'diagnose'.` }, 400);
+        return json({ error: `Unknown action: ${action}. Expected 'subscribe', 'diagnose', 'refresh_page_token', or 'backfill_ig_profiles'.` }, 400);
     }
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
