@@ -83,3 +83,84 @@ export function useDeleteIgCampaign() {
     onSuccess: ({ branch_id }) => qc.invalidateQueries({ queryKey: ["ig-campaigns", branch_id] }),
   });
 }
+
+// ──────────────── IG Account / Media picker + Test ────────────────
+
+export interface IgAccountInfo {
+  integration_id: string;
+  branch_id: string | null;
+  ig_account_id: string | null;
+  username: string | null;
+  name: string | null;
+  profile_picture_url: string | null;
+  error: string | null;
+}
+
+export interface IgMediaItem {
+  id: string;
+  caption?: string;
+  media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM" | string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+  like_count?: number;
+  comments_count?: number;
+}
+
+export interface IgTestMatchResult {
+  campaign_id: string;
+  name: string;
+  would_fire: boolean;
+  matched_keyword: string | null;
+  skip_reason: string | null;
+  reply_mode: string;
+  delay_seconds: number;
+  preview: string | null;
+}
+
+async function invokeMetaAdmin<T = any>(body: Record<string, any>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("meta-admin", { body });
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as T;
+}
+
+export function useIgAccounts(branchId: string | null) {
+  return useQuery({
+    queryKey: ["ig-accounts", branchId],
+    enabled: !!branchId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const d = await invokeMetaAdmin<{ accounts: IgAccountInfo[] }>({
+        action: "list_ig_accounts", branch_id: branchId,
+      });
+      return d.accounts ?? [];
+    },
+  });
+}
+
+export function useIgMedia(integrationId: string | null) {
+  return useQuery({
+    queryKey: ["ig-media", integrationId],
+    enabled: !!integrationId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const d = await invokeMetaAdmin<{ media: IgMediaItem[] }>({
+        action: "list_ig_media", integration_id: integrationId, limit: 36,
+      });
+      return d.media ?? [];
+    },
+  });
+}
+
+export function useTestIgCommentMatch() {
+  return useMutation({
+    mutationFn: async (input: { branch_id: string; text: string; ig_media_id?: string | null; ig_account_id?: string | null }) => {
+      const d = await invokeMetaAdmin<{ results: IgTestMatchResult[] }>({
+        action: "test_ig_comment_match", ...input,
+      });
+      return d.results ?? [];
+    },
+  });
+}
