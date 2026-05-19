@@ -455,6 +455,118 @@ async function handleBackfillIgProfiles(body: any) {
 
   return json({ success: true, ...results });
 }
+// ──────────────── LIST IG ACCOUNTS / MEDIA / TEST MATCH ────────────────
+// Used by the IG Comment-to-DM admin UI to populate dropdowns and simulate matches.
+
+async function loadIgIntegrations(branchId: string | null) {
+  let q = supabase
+    .from("integration_settings")
+    .select("id, integration_type, config, credentials, branch_id")
+    .in("integration_type", ["instagram", "instagram_login"])
+    .eq("is_active", true);
+  if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+function pickIgToken(integ: any): { token: string | null; igId: string | null } {
+  const creds = (integ?.credentials || {}) as any;
+  const cfg = (integ?.config || {}) as any;
+  const token =
+    creds.page_access_token || creds.ig_access_token || creds.access_token || null;
+  const igId =
+    cfg.ig_user_id || cfg.instagram_business_account_id || cfg.ig_account_id || null;
+  return { token, igId };
+}
+
+async function handleListIgAccounts(body: any) {
+  const branchId: string | null = body?.branch_id ?? null;
+  const integrations = await loadIgIntegrations(branchId);
+  const out: any[] = [];
+  for (const integ of integrations) {
+    const { token, igId } = pickIgToken(integ);
+    if (!token || !igId) {
+      out.push({ integration_id: integ.id, ig_account_id: igId, error: "missing token or ig id" });
+      continue;
+    }
+    const url = `${IG_API_BASE}/${igId}?fields=id,username,name,profile_picture_url&access_token=${encodeURIComponent(token)}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(() => ({}));
+    out.push({
+      integration_id: integ.id,
+      branch_id: integ.branch_id,
+      ig_account_id: igId,
+      username: j?.username || null,
+      name: j?.name || null,
+      profile_picture_url: j?.profile_picture_url || null,
+      error: j?.error?.message || null,
+    });
+  }
+  return json({ accounts: out });
+}
+
+async function handleListIgMedia(body: any) {
+  const integrationId: string | undefined = body?.integration_id;
+  const limit = Math.min(Number(body?.limit) || 24, 50);
+  if (!integrationId) return json({ error: "integration_id required" }, 400);
+
+  const { data: integ, error } = await supabase
+    .from("integration_settings")
+    .select("id, config, credentials")
+    .eq("id", integrationId)
+    .maybeSingle();
+  if (error || !integ) return json({ error: "Integration not found" }, 404);
+
+  const { token, igId } = pickIgToken(integ);
+  if (!token || !igId) return json({ error: "Missing IG token or account id" }, 400);
+
+  const fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count";
+  const url = `${IG_API_BASE}/${igId}/media?fields=${fields}&limit=${limit}&access_token=${encodeURIComponent(token)}`;
+  const r = await fetch(url);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j?.error) return json({ error: j?.error?.message || `Graph ${r.status}`, raw: j }, 400);
+  return json({ media: j?.data || [] });
+}
+
+async function handleTestIgCommentMatch(body: any) {
+  const branchId: string | null = body?.branch_id ?? null;
+  const text: string = String(body?.text || "");
+  const mediaId: string | null = body?.ig_media_id || null;
+  const accountId: string | null = body?.ig_account_id || null;
+  if (!branchId || !text) return json({ error: "branch_id and text required" }, 400);
+
+  let q = supabase
+    .from("ig_comment_campaigns")
+    .select("id, name, keywords, match_type, case_sensitive, ig_media_id, ig_account_id, is_active, reply_mode, dm_template, fallback_message, delay_seconds")
+    .eq("branch_id", branchId)
+    .eq("is_active", true);
+  const { data: campaigns, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+
+  const { matchKeyword, renderTemplate } = await import("../_shared/ig-comment-automation.ts");
+  const results = (campaigns || []).map((c: any) => {
+    let skip: string | null = null;
+    if (c.ig_media_id && mediaId && c.ig_media_id !== mediaId) skip = "media_id mismatch";
+    if (!skip && c.ig_account_id && accountId && c.ig_account_id !== accountId) skip = "account_id mismatch";
+    const matched = skip ? null : matchKeyword(text, c);
+    const preview = matched && c.dm_template
+      ? renderTemplate(c.dm_template, { first_name: "Alex", username: "@alex", keyword: matched, campaign_name: c.name, post_link: "" })
+      : null;
+    return {
+      campaign_id: c.id,
+      name: c.name,
+      would_fire: !!matched,
+      matched_keyword: matched,
+      skip_reason: skip,
+      reply_mode: c.reply_mode,
+      delay_seconds: c.delay_seconds,
+      preview,
+    };
+  });
+  return json({ tested_at: new Date().toISOString(), results });
+}
+
 
 // ──────────────── DISPATCHER ────────────────
 Deno.serve(async (req) => {
@@ -467,8 +579,11 @@ Deno.serve(async (req) => {
       case "diagnose":             return await handleDiagnose(body);
       case "refresh_page_token":   return await handleRefreshPageToken(body);
       case "backfill_ig_profiles": return await handleBackfillIgProfiles(body);
+      case "list_ig_accounts":     return await handleListIgAccounts(body);
+      case "list_ig_media":        return await handleListIgMedia(body);
+      case "test_ig_comment_match":return await handleTestIgCommentMatch(body);
       default:
-        return json({ error: `Unknown action: ${action}. Expected 'subscribe', 'diagnose', 'refresh_page_token', or 'backfill_ig_profiles'.` }, 400);
+        return json({ error: `Unknown action: ${action}.` }, 400);
     }
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
