@@ -114,35 +114,14 @@ async function publicCommentReply(opts: { commentId: string; accessToken: string
   return { ok: r.ok, error: r.ok ? undefined : data?.error?.message || `HTTP ${r.status}` };
 }
 
-async function generateAiMessage(opts: {
-  campaign: any;
-  ev: any;
-}): Promise<string | null> {
-  try {
-    const userMsg = [
-      `Inbound Instagram comment from ${opts.ev.ig_username || opts.ev.ig_user_id}:`,
-      `"${opts.ev.comment_text}"`,
-      "",
-      `Campaign context: ${opts.campaign.ai_instruction || opts.campaign.name}`,
-      `Tone: ${opts.campaign.ai_tone || "friendly"}`,
-      "",
-      "Write a single Instagram DM reply (max 3 short sentences). Output the message only.",
-    ].join("\n");
-
-    const r = await runUnifiedAgent(supabase, SUPABASE_URL, SERVICE_KEY, {
-      senderId: opts.ev.ig_user_id,
-      branchId: opts.ev.branch_id,
-      platform: "instagram",
-      messageId: opts.ev.comment_id,
-      messageContent: opts.ev.comment_text,
-      contactName: opts.ev.ig_username || null,
-      messageType: "comment",
-    } as any);
-    return r?.replyText?.trim() || null;
-  } catch (e) {
-    console.error("[ig-exec] AI generation failed:", e instanceof Error ? e.message : e);
-    return null;
-  }
+async function generateAiMessage(opts: { campaign: any; run: any }): Promise<string | null> {
+  return await generateAiReplyEphemeral({
+    comment: opts.run.comment_text || "",
+    username: opts.run.ig_username || null,
+    campaignName: opts.campaign.name || "Instagram",
+    instruction: opts.campaign.ai_instruction || null,
+    tone: opts.campaign.ai_tone || null,
+  });
 }
 
 async function processRun(run: any): Promise<void> {
