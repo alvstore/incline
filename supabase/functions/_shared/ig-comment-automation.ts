@@ -263,7 +263,7 @@ export async function matchAndQueueCampaigns(
           action: "public_reply",
           status: "pending",
           raw_payload: event.raw,
-        }).then(() => {}).catch(() => {});
+        }).then(() => {}, () => {});
       }
     }
   } catch (e) {
