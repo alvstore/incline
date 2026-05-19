@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useIgCampaignRuns, useRetryIgRun } from "@/services/igAutomationService";
 import type { IgCommentCampaign, IgRunStatus } from "@/types/igAutomations";
 import { format } from "date-fns";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 interface Props {
