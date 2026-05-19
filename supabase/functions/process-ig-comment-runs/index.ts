@@ -28,12 +28,13 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 const MAX_ATTEMPTS = 3;
 const BATCH = 50;
 
-async function loadIntegration(branchId: string, integrationId: string | null) {
+async function loadIntegration(branchId: string, integrationId: string | null, igAccountId: string | null) {
   if (integrationId) {
     const { data } = await supabase.from("integration_settings").select("*").eq("id", integrationId).maybeSingle();
     if (data) return data;
   }
-  const { data } = await supabase
+  // Try IG-native providers first
+  const { data: igRow } = await supabase
     .from("integration_settings")
     .select("*")
     .in("provider", ["instagram", "instagram_login"])
@@ -42,7 +43,24 @@ async function loadIntegration(branchId: string, integrationId: string | null) {
     .order("branch_id", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  return data;
+  if (igRow) return igRow;
+
+  // Fallback: FB Page-connected IG where token lives under meta / facebook_page
+  const { data: metaRows } = await supabase
+    .from("integration_settings")
+    .select("*")
+    .in("provider", ["meta", "facebook_page"])
+    .eq("is_active", true)
+    .or(`branch_id.eq.${branchId},branch_id.is.null`)
+    .order("branch_id", { ascending: false, nullsFirst: false });
+  if (!igAccountId) return metaRows?.[0] ?? null;
+  for (const row of metaRows || []) {
+    const c: any = row?.credentials || {};
+    const ids = [c.instagram_business_account_id, c.instagram_account_id, c.ig_account_id]
+      .filter(Boolean).map(String);
+    if (ids.includes(String(igAccountId))) return row;
+  }
+  return metaRows?.[0] ?? null;
 }
 
 async function sendIgPrivateReply(opts: {
