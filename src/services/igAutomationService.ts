@@ -189,23 +189,28 @@ export function useIgRunsTrend(branchId: string | null, days = 14) {
       const since = new Date(Date.now() - days * 86400_000).toISOString();
       const { data, error } = await (supabase as any)
         .from(RUNS)
-        .select("created_at,status")
+        .select("created_at,status,action,comment_id")
         .eq("branch_id", branchId!)
+        .eq("action", "send_dm")
         .gte("created_at", since);
       if (error) throw error;
-      const map = new Map<string, IgTrendPoint>();
+      const map = new Map<string, IgTrendPoint & { _seen: Set<string> }>();
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10);
-        map.set(d, { day: d, sent: 0, failed: 0, matched: 0 });
+        map.set(d, { day: d, sent: 0, failed: 0, matched: 0, _seen: new Set() });
       }
       for (const r of data ?? []) {
         const d = String(r.created_at).slice(0, 10);
         const slot = map.get(d); if (!slot) continue;
-        slot.matched += 1;
+        // Count distinct comment_ids as "matched" (excludes retries + dupes)
+        if (r.comment_id && !slot._seen.has(r.comment_id)) {
+          slot._seen.add(r.comment_id);
+          slot.matched += 1;
+        }
         if (r.status === "sent") slot.sent += 1;
         if (r.status === "failed") slot.failed += 1;
       }
-      return Array.from(map.values());
+      return Array.from(map.values()).map(({ _seen, ...rest }) => rest);
     },
   });
 }
