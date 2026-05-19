@@ -116,7 +116,7 @@ export async function upsertMemory(
 /** Render an ai_memory row as a system-prompt block (or empty string). */
 export function renderMemoryBlock(mem: AiMemoryRow | null): string {
   if (!mem) return "";
-  const lines: string[] = ["[CONTACT MEMORY — known from past conversations]"];
+  const lines: string[] = ["[CONTACT MEMORY — known from past conversations, treat as ground truth]"];
   if (mem.summary) lines.push(`Summary: ${mem.summary}`);
   if (mem.current_intent) lines.push(`Current intent: ${mem.current_intent}`);
   const profileEntries = Object.entries(mem.profile || {})
@@ -131,6 +131,14 @@ export function renderMemoryBlock(mem: AiMemoryRow | null): string {
       const s = typeof v === "string" ? v : JSON.stringify(v);
       return `${k}=${s}`;
     }).join("; ")}`);
+  }
+  // Surface consent state explicitly so the model can't miss it
+  const consent = (mem.facts as any)?.consent || {};
+  if (consent.push_contact_ask === "declined") {
+    lines.push(`CONSENT: user declined push for contact details — DO NOT ask for phone/email/callback in this reply.`);
+  }
+  if (consent.wants_human === true) {
+    lines.push(`CONSENT: user wants a human — keep it short and acknowledge a teammate will follow up.`);
   }
   if (mem.do_not_ask?.length) {
     lines.push(`DO NOT re-ask for: ${mem.do_not_ask.join(", ")}`);
