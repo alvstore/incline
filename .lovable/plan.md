@@ -1,228 +1,125 @@
 
-# Instagram Comment-to-DM Automation — Phase 1 (Audit + Architecture)
+# IG Comment-to-DM Automation — Deep Audit & Phase 2 Plan
 
-## 1. Codebase findings
+## ✅ What is already shipped
 
-**Stack** (already standardized — do not change):
-- Frontend: React 18 + Vite + TS, Tailwind, shadcn, TanStack Query, React Hook Form + Zod.
-- Backend: Supabase (Postgres + RLS + Edge Functions on Deno). Cron via `pg_cron`.
-- Comms dispatcher: `dispatch-communication` (canonical), per-channel workers (`send-whatsapp`, `send-message`, `send-sms`, `send-email`).
-- AI: Lovable AI Gateway via `_shared/ai-runtime.ts` + `_shared/ai-agent-brain.ts` (`runUnifiedAgent`, multi-platform: whatsapp / instagram / messenger).
+**Backend**
+- Tables `ig_comment_campaigns`, `ig_comment_runs` with proper dedupe (`ig_runs_dedupe` partial unique on `campaign_id+ig_user_id+action` while status ∈ pending/scheduled/sent) and a due-row index.
+- RPCs `bump_ig_campaign_counters`, `retry_ig_comment_run`.
+- `_shared/ig-comment-automation.ts` — keyword matcher (exact/contains/starts_with), template renderer, `matchAndQueueCampaigns` queueing with DNC + opt-out gates.
+- `meta-webhook` calls `matchAndQueueCampaigns` **after** the existing DM dedup + comment insert + auto-reply paths — fail-open, never blocks IG DM flow ✅.
+- `process-ig-comment-runs` cron executor — Private Replies via `recipient.comment_id` (7-day window) with fallback to `recipient.id`, retry w/ exponential backoff, public comment reply path, AI mode via `runUnifiedAgent`, mirrors outbound into `whatsapp_messages` so the unified inbox shows it.
 
-**Existing Instagram pipeline (working — must not break):**
-- `supabase/functions/meta-webhook/index.ts` is the single IG/FB intake:
-  - Verifies `X-Hub-Signature-256` against `integration_settings.app_secret`.
-  - Handles `entry.messaging[]` (DMs, story replies, postbacks, referrals) and `entry.changes[]` (comments + mentions).
-  - `ingestInstagramComment()` lines 599–659: dedupes by `platform_message_id = comment_id`, inserts into `whatsapp_messages` with `message_type='comment'`, upserts `whatsapp_chat_settings`. Auto-reply only fires if org flag `whatsapp_ai_config.instagram_auto_reply_comments === true`.
-  - `triggerAiReply()` lines 841–931: calls `runUnifiedAgent` then posts to `send-message` edge fn for actual delivery.
-- `meta-admin/index.ts`: refresh page token, backfill IG profiles, subscribe fields.
-- `meta-oauth-callback/index.ts`: stores credentials in `integration_settings`.
+**Frontend**
+- `/instagram-automations` page (KPIs + 14-day Recharts trend + table).
+- `IgCampaignDrawer` (multi-step wizard, IG account/post pickers, Test panel).
+- `IgRunsLogDrawer` with Retry → `retry_ig_comment_run` RPC.
+- Sidebar entry under Operations & Comm.
 
-**Existing automation primitives:**
-- `campaigns` table — broadcast-oriented (channel ∈ whatsapp/email/sms, trigger_type ∈ send_now/scheduled/automated). **Not a good fit** — it's segment broadcasting, not event-triggered per-user.
-- `whatsapp_triggers` table — event_name → template_id, fired by other workers. No keyword, no media binding. **Not a good fit.**
-- `automation_rules` + `automation-brain` cron worker — time-based, not webhook event-based. **Not a good fit.**
-- `leads` table — already used by `runUnifiedAgent` to capture IG leads (sourceMap.instagram = "instagram_ai"). **Reuse as-is.**
+**Existing IG DM functionality is intact** — comment automation lives in a try/catch after DM ingestion; no shared mutation.
 
-**Send path for IG:** `send-message` edge fn already accepts `{platform: 'instagram', recipient_id, content}` and uses page access token from `integration_settings` to POST to Graph API. **Reuse as-is.**
+---
 
-**Conclusion:** existing tables don't model "post-bound keyword → per-commenter DM". Need ONE new domain (campaigns + runs/logs). All other layers (webhook intake, AI brain, send-message, leads, notifications, dispatcher) are reused unchanged.
+## 🔴 Gaps & Risks Found
 
-## 2. Reuse map (zero rewrites)
+| # | Area | Issue | Severity |
+|---|---|---|---|
+| 1 | **Lead creation** | `lead_tag`, `pipeline_stage`, `leads_created` exist in DB and in the UI but the executor **never creates a lead, tags it, or increments `leads_created`**. Promise without delivery. | HIGH |
+| 2 | **DNC lookup** | Queries `whatsapp_chat_settings(branch_id, phone_number=ig_user_id)` without filtering `platform='instagram'`. Risk of collision with WhatsApp numbers and missed IG-specific opt-outs. | HIGH |
+| 3 | **Self-comment guard** | Compares `ig_user_id === ig_account_id`; these are different namespaces (IGSID vs Business IG ID). Guard never triggers. Should skip when commenter equals the page's own IG user (`from.id`-style match) or when `from.id` is the configured business account. | MED |
+| 4 | **`allow_repeat` ignored** | Schema + UI expose it; matcher relies only on the partial unique index. Toggling it does nothing. Need a real cooldown / `allow_repeat=true` path that bypasses dedupe. | HIGH |
+| 5 | **Delete confirmation** | Uses native `confirm()` — violates project "AlertDialog only" rule. | LOW |
+| 6 | **`outbound_message_id` UPDATE** | When inbox insert fails, code runs `.eq("id", "")`. Harmless but unsafe; should branch. | LOW |
+| 7 | **AI brain contamination** | `runUnifiedAgent` is called with `messageType: "comment"` reusing the DM conversation memory; can pollute the user's chat thread context. Needs an ephemeral/no-persist mode. | MED |
+| 8 | **Public-reply counter** | `bump_ig_campaign_counters` only tracks DMs; public replies are invisible in stats. | LOW |
+| 9 | **Trend chart label** | Counts every run row as "matched", including skipped/duplicates — overstates the funnel. Should count distinct matches and exclude skipped. | LOW |
+| 10 | **Rate limiting** | A viral post can flood Meta Graph (per-account 200 calls/hr). No per-account/min queue throttle. | MED |
+| 11 | **Notification spam** | Notifies up to 50 users globally per DM; ignores branch scope and dedupe — should route via the existing notification engine + role filter. | MED |
+| 12 | **Page-token fallback** | `loadIntegration` accepts only `instagram` / `instagram_login` provider rows. FB Page–connected IG accounts (where token lives under `meta` / `facebook_page`) won't resolve. | MED |
+| 13 | **`verify_jwt` for cron exec** | `process-ig-comment-runs` should be invokable by cron only; today any anon caller can trigger a tick. Add `verify_jwt=true` + service-role header from cron, or in-code shared secret. | MED |
+| 14 | **Test panel preview** | For AI mode the preview is `null`; user sees blank. Should return a short dry-run completion (clearly marked "preview"). | LOW |
+| 15 | **No webhook re-entry test fixture** | No Deno tests for `matchKeyword`, dedupe insert, or DNC gating. | MED |
+| 16 | **`media_id` mismatch** | Campaign stores Graph `media.id` but `post_link` template renders `instagram.com/p/{media_id}` which is the shortcode URL, not the numeric ID — link is broken. Use `media.permalink` (resolve once on campaign save). | MED |
+| 17 | **Storm safety** | No "max DMs per hour per campaign" cap — required by Meta policy and brand safety. | MED |
+| 18 | **Audit trail** | `ig_comment_runs` doesn't FK to created lead, so the Logs drawer can't link to the lead created. (Once #1 lands.) | LOW |
 
-| Layer | Reuse |
-|---|---|
-| Webhook intake + signature verify | `meta-webhook/index.ts` (insert one call into `ingestInstagramComment`) |
-| Outbound DM delivery | `send-message` edge fn |
-| AI reply generation | `runUnifiedAgent` with new `purpose='ig_comment_dm'` injection |
-| Lead capture | existing `leads` + `runUnifiedAgent` lead-capture branch |
-| Staff notifications | existing `notifications` table |
-| Opt-out / DNC | existing `optOutDetector` + `mark_do_not_contact` |
-| Identity resolution | existing `resolveInstagramSenderProfile` |
-| Audit/error logging | existing `log_error_event` RPC |
-| UI shell / drawers / tables | existing `Sheet` drawer pattern, `Campaigns.tsx` style |
+---
 
-## 3. Proposed data model (new — minimal, additive)
+## 🛠 Phase 2 — Implementation Plan
 
-```sql
--- A campaign = one media (or "any media") + keyword set + DM template + actions
-create table public.ig_comment_campaigns (
-  id uuid primary key default gen_random_uuid(),
-  branch_id uuid not null references branches(id) on delete cascade,
-  integration_id uuid references integration_settings(id) on delete set null,
-  name text not null,
-  ig_media_id text,                       -- null = applies to ALL media on this IG account
-  ig_account_id text,                     -- denormalized for fast match
-  keywords text[] not null default '{}',  -- normalized lowercase
-  match_type text not null default 'contains' check (match_type in ('exact','contains','starts_with')),
-  case_sensitive boolean not null default false,
-  reply_mode text not null default 'template' check (reply_mode in ('template','ai','hybrid')),
-  dm_template text,                       -- supports {{first_name}} {{username}} {{keyword}} {{campaign_name}} {{post_link}}
-  ai_instruction text,                    -- system prompt for AI mode
-  ai_tone text default 'friendly',
-  fallback_message text,
-  comment_public_reply text,              -- optional public reply on the comment itself
-  delay_seconds int not null default 0,
-  allow_repeat boolean not null default false,
-  lead_tag text,
-  pipeline_stage text,
-  notify_staff boolean not null default true,
-  human_review boolean not null default false,
-  is_active boolean not null default true,
-  starts_at timestamptz,
-  ends_at timestamptz,
-  -- counters (denormalized for dashboard)
-  comments_matched int not null default 0,
-  dms_sent int not null default 0,
-  dms_failed int not null default 0,
-  leads_created int not null default 0,
-  last_triggered_at timestamptz,
-  created_by uuid,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index on ig_comment_campaigns (branch_id, is_active);
-create index on ig_comment_campaigns (ig_account_id, ig_media_id) where is_active;
+### 1. Lead creation pipeline (fixes #1, #18)
+- New helper in `_shared/ig-comment-automation.ts`: `ensureLeadFromIgComment({ branch_id, ig_user_id, ig_username, campaign })`.
+  - Find-or-create a row in `leads` keyed on `(branch_id, source='instagram', external_id=ig_user_id)`.
+  - Set `full_name`, `source_detail = 'ig_comment:'+campaign.name`, and append `campaign.lead_tag` to `tags[]`.
+  - If `campaign.pipeline_stage` set → set/upgrade `pipeline_stage` only when current stage is "new" (don't downgrade).
+  - Bump `leads_created` via `bump_ig_campaign_counters(p_leads_created:=1)` (extend RPC param).
+- Executor calls it **after** successful DM send (success-only attribution).
+- Store `lead_id` on `ig_comment_runs`; Logs drawer renders a link.
 
--- Per-(campaign,user) dedupe + audit
-create table public.ig_comment_runs (
-  id uuid primary key default gen_random_uuid(),
-  campaign_id uuid not null references ig_comment_campaigns(id) on delete cascade,
-  branch_id uuid not null,
-  ig_user_id text not null,
-  ig_username text,
-  ig_media_id text,
-  comment_id text not null,
-  comment_text text,
-  matched_keyword text,
-  action text not null,                    -- 'send_dm' | 'public_reply' | 'tag_lead' | 'notify_staff' | 'capture_lead'
-  status text not null default 'pending',  -- pending | sent | failed | skipped | scheduled
-  skip_reason text,
-  scheduled_at timestamptz,
-  executed_at timestamptz,
-  error_message text,
-  lead_id uuid,
-  outbound_message_id uuid,                -- whatsapp_messages.id
-  raw_payload jsonb,
-  created_at timestamptz not null default now()
-);
-create unique index ig_runs_dedupe on ig_comment_runs (campaign_id, ig_user_id, action)
-  where status in ('sent','scheduled','pending');
-create index on ig_comment_runs (campaign_id, created_at desc);
-create index on ig_comment_runs (comment_id);
-```
+### 2. DNC + identity correctness (#2, #3)
+- DNC query becomes `.eq('phone_number', ig_user_id).eq('platform','instagram')`.
+- Self-comment guard: compare against the integration's stored `instagram_business_id` and `page_id`, not `igAccountId` blindly.
 
-**RLS:** branch-scoped via existing `get_user_branch()` + `has_capability('manage_automations')`. Member role gets no access.
+### 3. `allow_repeat` honored (#4)
+- When `allow_repeat=false` (default): keep current dedupe.
+- When `allow_repeat=true`: insert with a synthetic per-comment `dedupe_key = comment_id` so the partial unique still prevents duplicate processing of the **same comment**, but new comments from the same user create new runs.
+- Add optional `cooldown_hours` column (default 0); enforce in matcher by checking last `sent` run.
 
-**No existing tables modified.** `whatsapp_messages` row for the inbound comment continues to be the canonical event store; `ig_comment_runs.comment_id` joins back to it.
+### 4. Storm & rate safety (#10, #17)
+- Add `daily_cap` (int) and `per_user_cooldown_minutes` (int) on `ig_comment_campaigns`.
+- Executor reads counters for the rolling window; if cap hit → mark run `skipped/cap_reached`, surfaced in logs.
+- Per-account Graph throttle: in cron tick, group `due[]` by `ig_account_id` and respect a soft cap (e.g. 60/min) by deferring excess to next tick.
 
-## 4. Webhook flow (extension to `meta-webhook`)
+### 5. AI brain isolation (#7)
+- Add an optional `ephemeral: true` flag to `runUnifiedAgent` that disables thread-memory write-back; pass it from comment-automation calls.
+- Or: synthesize a one-shot prompt locally (no `runUnifiedAgent`) using Lovable AI Gateway `google/gemini-2.5-flash`; cheaper and side-effect-free.
 
+### 6. Integration & token resolution (#12, #13)
+- Extend `loadIntegration` to also pick `meta`/`facebook_page` rows whose credentials carry `instagram_business_account_id == campaign.ig_account_id`.
+- Set `verify_jwt = true` for `process-ig-comment-runs` in `supabase/config.toml`; cron job already passes service-role header.
+
+### 7. UX polish (#5, #8, #9, #14, #16)
+- Replace `confirm()` with `AlertDialog` for delete.
+- Extend RPC `bump_ig_campaign_counters` with `p_public_replies` and surface it as a 6th KPI.
+- Trend chart: split "matched" (distinct `comment_id`) from "queued"; exclude `skipped`.
+- Test panel: for AI mode, call the same one-shot AI helper to produce a preview string.
+- On campaign save (UpsertIgCampaign), resolve `ig_media_id` → `permalink` via `meta-admin` and store it in a new column `ig_media_permalink`; template renderer uses that for `{{post_link}}`.
+
+### 8. Notification correctness (#11)
+- Route via existing notification engine helper, scope to `branch_id`, dedupe per `(campaign_id, ig_user_id)`, deliver to `owner`/`manager` only.
+
+### 9. Tests (#15)
+- `supabase/functions/_shared/ig-comment-automation.test.ts` covering: matcher truth-table, render escaping, DNC gating, dedupe insert behavior.
+- One integration-style test for `process-ig-comment-runs` with mocked Graph fetch.
+
+### 10. Migration summary
 ```text
-IG comment webhook
-  → existing ingestInstagramComment() inserts whatsapp_messages row
-  → NEW: matchAndRunCampaigns(commentEvent, integration)
-        1. SELECT active campaigns WHERE ig_account_id = recipient
-              AND (ig_media_id = mediaId OR ig_media_id IS NULL)
-              AND (starts_at IS NULL OR now() ≥ starts_at)
-              AND (ends_at  IS NULL OR now() ≤ ends_at)
-        2. Filter by keyword match (normalize + match_type)
-        3. Self-comment guard (skip if comment from own IG account)
-        4. DNC + opt-out gate (reuse optOutDetector + mark_do_not_contact)
-        5. Dedupe via ig_comment_runs unique index (unless allow_repeat)
-        6. Insert run rows (one per action) with status='scheduled' if delay>0 else 'pending'
-        7. If delay = 0 → immediately call executeRun() inline (fire-and-forget)
-           Else        → cron worker process-ig-comment-runs picks up due rows
+ALTER TABLE ig_comment_campaigns
+  ADD COLUMN daily_cap                int     NOT NULL DEFAULT 0,
+  ADD COLUMN per_user_cooldown_minutes int    NOT NULL DEFAULT 0,
+  ADD COLUMN ig_media_permalink       text;
+
+ALTER TABLE ig_comment_runs
+  ADD COLUMN dedupe_key text;
+
+CREATE OR REPLACE FUNCTION bump_ig_campaign_counters(
+  p_campaign_id uuid,
+  p_comments_matched int DEFAULT 0,
+  p_dms_sent         int DEFAULT 0,
+  p_dms_failed       int DEFAULT 0,
+  p_leads_created    int DEFAULT 0,
+  p_public_replies   int DEFAULT 0
+) ...
 ```
 
-Fail-open: webhook always returns 200; campaign matching errors logged via `log_error_event` and never block the DM-reply pipeline that already exists.
+---
 
-## 5. Scheduler / executor
+## Order of execution (suggested)
 
-New edge fn **`process-ig-comment-runs`** (cron every 1 min):
-- `SELECT … WHERE status='scheduled' AND scheduled_at ≤ now() LIMIT 100 FOR UPDATE SKIP LOCKED`.
-- For each: build context, call AI brain if `reply_mode != 'template'`, render `{{vars}}`, insert outbound `whatsapp_messages` row, POST `send-message` with `platform=instagram` and `recipient_id=ig_user_id` (uses Instagram Private Replies — within 7-day comment window, `recipient: { comment_id }` is also supported and we'll pass it to widen the window).
-- On success: update run status='sent', increment campaign counters atomically via RPC `bump_ig_campaign_counters(campaign_id, kind)`.
-- On failure: status='failed', `error_message`, exponential retry (max 3, reuses existing pattern from `process-comm-retry-queue`).
-- Optional public comment reply via Graph `POST /{comment-id}/replies` when `comment_public_reply` is set.
+1. **Migrations** (cols + RPC signature) + DB-side guardrails.
+2. **Executor fixes**: lead pipeline, DNC, self-guard, AI isolation, rate throttle, token resolution.
+3. **UI**: AlertDialog, lead link in logs, KPI for public replies, trend split, AI preview.
+4. **Tests** for matcher + executor.
+5. **Verify**: deploy `process-ig-comment-runs` + `meta-webhook` + `meta-admin`; run a synthetic comment through `test_ig_comment_match` and validate end-to-end.
 
-## 6. AI brain integration
-
-Reuse `runUnifiedAgent` but with a per-campaign override block prepended to its system prompt:
-- `purpose: 'ig_comment_dm'`
-- inject `campaign.ai_instruction`, `ai_tone`, allowed/forbidden facts, fallback.
-- Reuses lead capture, memory, do-not-ask, runtime rules, identity resolution. No fork of the brain.
-
-## 7. Admin UI (new route `/instagram-automations`)
-
-Follows Vuexy + side-Sheet rules from project memory. New files:
-
-```
-src/pages/InstagramAutomations.tsx                ← dashboard + table
-src/components/ig-automations/
-  IgAutomationsDashboard.tsx                       ← KPI cards
-  IgCampaignsTable.tsx                             ← list w/ toggle, actions
-  IgCampaignDrawer.tsx                             ← create/edit Sheet (5-step wizard)
-    steps/Step1Details.tsx
-    steps/Step2Triggers.tsx                        ← keywords + media picker
-    steps/Step3Reply.tsx                           ← template/AI/hybrid + AI brain panel
-    steps/Step4Actions.tsx                         ← delay, tag, stage, notify, dedupe toggle
-    steps/Step5Review.tsx                          ← preview DM with sample vars
-  IgRunsLogDrawer.tsx                              ← per-campaign logs
-  IgMessagePreview.tsx                             ← live variable interpolation
-  IgKeywordChips.tsx
-src/services/igAutomationService.ts                ← TanStack hooks
-src/types/igAutomations.ts
-```
-
-Navigation: add entry under existing **Settings → Communication / Automations** group (next to "WhatsApp Automations"), capability `manage_automations`.
-
-Wizard mirrors existing `CampaignWizard.tsx` structure (Type pre-step → step nav). All forms in right-side `Sheet sm:max-w-xl` per project memory. Toggles use shadcn `Switch`. Status uses colored badges per design system.
-
-Logs page = drawer from table row "View Logs", lists `ig_comment_runs` with status badge, raw payload viewer, retry button (manager+).
-
-## 8. Error handling
-
-- Every webhook-side mismatch logged with `log_error_event('ig_comment_match', fingerprint)`.
-- Every executor failure stored on `ig_comment_runs.error_message` + raised via `log_error_event`.
-- Retry queue reuses existing pattern (3 attempts, exponential backoff).
-- AI failure → fall back to `dm_template` then `fallback_message`.
-
-## 9. Duplicate prevention
-
-- Partial unique index on `ig_comment_runs (campaign_id, ig_user_id, action) WHERE status IN ('sent','scheduled','pending')`.
-- `allow_repeat=true` skips this guard.
-- `comment_id`-level dedupe already exists on `whatsapp_messages.platform_message_id`.
-
-## 10. Security & validation
-
-- Zod schemas on campaign create/update API; keyword normalization server-side.
-- RLS: branch-scoped writes, `has_capability('manage_automations')`.
-- IG Private Reply window enforced server-side (≤7 days from comment timestamp).
-- Honor DNC + opt-out before any outbound.
-- Never expose page access token to client (already enforced in `integration_settings` RLS).
-- Self-comment guard (skip when comment author = business IG ID).
-- Rate-limit per IG user per campaign per 24h (configurable).
-
-## 11. Rollback plan
-
-- All new objects live in two new tables + one new edge fn + one new cron + new UI route. No alterations to `whatsapp_messages`, `campaigns`, `whatsapp_triggers`, `automation_rules`, `leads`, `integration_settings`, `meta-webhook` send path.
-- One-line insertion in `meta-webhook` (`await matchAndRunCampaigns(...)` after `ingestInstagramComment`) wrapped in try/catch — removing it instantly restores prior behavior.
-- Disable feature entirely: `UPDATE ig_comment_campaigns SET is_active=false` or unschedule the `process-ig-comment-runs` cron.
-
-## 12. Implementation phases (after this plan approval)
-
-- **Phase 2 — DB:** migration with two tables + RLS + `bump_ig_campaign_counters` RPC.
-- **Phase 3 — Webhook hook:** add `matchAndRunCampaigns` to `meta-webhook` (try/catch wrapped, fire-and-forget).
-- **Phase 4 — Executor:** new edge fn `process-ig-comment-runs` + pg_cron schedule.
-- **Phase 5 — AI brain extension:** add `purpose='ig_comment_dm'` injection path inside `runUnifiedAgent`.
-- **Phase 6 — UI:** route + dashboard + wizard + logs drawer.
-- **Phase 7 — Analytics:** dashboard KPIs from `ig_comment_runs` aggregates.
-- **Phase 8 — Tests:** integration test for keyword match + dedupe; smoke test the IG DM path against existing test integration.
-- **Phase 9 — Docs:** `docs/instagram-comment-automation.md` + update `meta-webhook/SUBSCRIPTION_FIELDS.md` (already includes `comments` field — no new subscription needed).
-
-## Open questions before Phase 2
-
-1. **Media picker source** — Pull recent IG media via Graph `/me/media` inside the drawer (preferred), or just let admin paste media ID? I'll default to "fetch list + free-text fallback" unless you say otherwise.
-2. **Public comment reply** — Include `comment_public_reply` field now (Graph `POST /{comment-id}/replies`)? Default: yes, optional.
-3. **Follow-up sequences** — Treat as a Phase-10 add-on (reuse `automation_rules`) or scope in now? Default: Phase 10.
+No changes are needed in DM ingestion, `findIntegrationByPageId`, or `triggerAiReply` — IG DM functionality stays untouched.
