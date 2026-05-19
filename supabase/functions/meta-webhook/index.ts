@@ -650,6 +650,22 @@ async function ingestInstagramComment(value: any, igAccountId: string) {
     { onConflict: "branch_id,phone_number" }
   );
 
+  // Comment-to-DM keyword automation (fail-open, never blocks DM auto-reply)
+  try {
+    const { matchAndQueueCampaigns } = await import("../_shared/ig-comment-automation.ts");
+    await matchAndQueueCampaigns(supabase, {
+      comment_id: commentId,
+      ig_user_id: fromId,
+      ig_username: value.from?.username || null,
+      ig_account_id: igAccountId,
+      media_id: mediaId,
+      text,
+      raw: value,
+    }, branchId);
+  } catch (e) {
+    console.error("[IG] comment automation queue failed:", e instanceof Error ? e.message : e);
+  }
+
   // Auto-reply on comments only when explicitly enabled
   const orgConfig = await getOrgAiConfig();
   const aiConfig = orgConfig?.whatsapp_ai_config as any;
