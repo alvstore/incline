@@ -12,8 +12,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { X, Sparkles, Eye } from "lucide-react";
-import { useUpsertIgCampaign } from "@/services/igAutomationService";
+import { X, Sparkles, Eye, Loader2, Image as ImageIcon, PlayCircle, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import {
+  useUpsertIgCampaign, useIgAccounts, useIgMedia, useTestIgCommentMatch,
+  type IgMediaItem,
+} from "@/services/igAutomationService";
 import type { IgCommentCampaign, IgMatchType, IgReplyMode } from "@/types/igAutomations";
 import { toast } from "sonner";
 
