@@ -1517,8 +1517,8 @@ function IntegrationConfigSheet({
               variant="outline"
               onClick={async () => {
                 try {
-                  const { data, error } = await supabase.functions.invoke('test-integration', {
-                    body: { type, provider, config, credentials, branch_id: isBranchSpecific ? branchId : null },
+                  const { data, error } = await supabase.functions.invoke('diagnostics', {
+                    body: { kind: 'integration', type, provider, config, credentials, branch_id: isBranchSpecific ? branchId : null },
                   });
                   if (error) throw error;
                   if (data?.success) {
