@@ -134,8 +134,41 @@ export async function runUnifiedAgent(
   const summaryBlock = chatSettings?.conversation_summary ? `\n\n[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}\n` : "";
 
   // 5b. Hydrate persistent contact memory (ai_memory)
-  const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+  let memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+  // 5c. AUTO-LEARN: extract structured facts from the user's last message and
+  // merge into ai_memory BEFORE building the prompt. This is what stops the
+  // bot from re-asking phone / fitness goal / name on every turn and makes it
+  // respect "first listen my query" style pushback.
+  try {
+    // We need recent messages for the extractor — fetch the last 6 inline.
+    const { data: recentForExtract } = await supabase
+      .from("whatsapp_messages")
+      .select("content, direction")
+      .eq("phone_number", ctx.senderId)
+      .eq("branch_id", ctx.branchId)
+      .order("created_at", { ascending: false })
+      .limit(6);
+    const extractHistory = (recentForExtract || []).reverse().map((m: any) => ({
+      role: m.direction === "inbound" ? "user" : "assistant",
+      content: String(m.content || ""),
+    }));
+    const delta = await extractContextDelta(supabase, ctx, extractHistory, memory);
+    if (delta && (Object.keys(delta.profile || {}).length || Object.keys(delta.facts || {}).length || delta.do_not_ask_add?.length || delta.current_intent || delta.summary)) {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: delta.profile,
+        facts: delta.facts,
+        current_intent: delta.current_intent ?? undefined,
+        do_not_ask_add: delta.do_not_ask_add,
+        summary: delta.summary ?? undefined,
+      });
+      memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+    }
+  } catch (e) {
+    console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
+  }
   const memoryBlock = renderMemoryBlock(memory);
+  const runtimeRules = renderRuntimeRules(memory, ctx.platform);
 
   // 6. Build conversation history (cross-platform, no channel tags)
   const { data: recentMessages } = await supabase
