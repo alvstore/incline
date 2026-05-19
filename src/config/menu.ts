@@ -4,7 +4,7 @@ import {
   Settings, ClipboardList, Megaphone, BarChart3, Wallet, Clock,
   Lock, Sparkles, ShoppingBag, ShoppingCart, Gift, FileText, Wrench, CheckSquare, 
   Briefcase, MessageSquare, Tags, Activity, UtensilsCrossed, Target, 
-  Bell, Snowflake, UserCog, TrendingUp, Heart, Router, BookUser
+  Bell, Snowflake, UserCog, TrendingUp, Heart, Router, BookUser, Instagram
 } from 'lucide-react';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -219,6 +219,7 @@ export const adminMenuConfig: MenuSection[] = [
       { label: 'Chats', href: '/whatsapp-chat', icon: MessageSquare, roles: ['owner', 'admin', 'manager'] },
       { label: 'Contact Book', href: '/contact-book', icon: BookUser, roles: ['owner', 'admin', 'manager'] },
       { label: 'Communication Hub', href: '/announcements', icon: Megaphone, roles: ['owner', 'admin', 'manager'] },
+      { label: 'IG Comment-to-DM', href: '/instagram-automations', icon: Instagram, roles: ['owner', 'admin', 'manager'] },
       { label: 'Equipment', href: '/equipment-maintenance', icon: Wrench, roles: ['owner', 'admin', 'manager'] },
       { label: 'Lockers', href: '/lockers', icon: Lock, roles: ['owner', 'admin', 'manager'] },
       { label: 'Devices', href: '/devices', icon: Router, roles: ['owner', 'admin'] },
