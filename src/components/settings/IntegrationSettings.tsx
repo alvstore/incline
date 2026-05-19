@@ -689,8 +689,66 @@ export function IntegrationSettings() {
                     <RefreshCw className={`h-3.5 w-3.5 ${diagnosing ? 'animate-spin' : ''}`} />
                     {diagnosing ? 'Running…' : 'Run Diagnostics'}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={async () => {
+                      const igInteg = (integrations as any[]).find(
+                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                      );
+                      if (!igInteg) { toast.error('Save your Instagram integration first.'); return; }
+                      const t = toast.loading('Fetching Page Access Token from Meta…');
+                      try {
+                        const { data, error } = await supabase.functions.invoke('meta-admin', {
+                          body: { action: 'refresh_page_token', integration_id: igInteg.id },
+                        });
+                        toast.dismiss(t);
+                        if (error || !data?.success) {
+                          toast.error(data?.error || error?.message || 'Failed to fetch page token', { duration: 8000 });
+                        } else {
+                          toast.success(`Page token saved for "${data.page_name}". You can now backfill profiles.`, { duration: 6000 });
+                        }
+                      } catch (e: any) {
+                        toast.dismiss(t);
+                        toast.error(e?.message || 'Request failed');
+                      }
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Refresh Page Token
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={async () => {
+                      const igInteg = (integrations as any[]).find(
+                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                      );
+                      if (!igInteg) { toast.error('Save your Instagram integration first.'); return; }
+                      const t = toast.loading('Backfilling Instagram usernames & avatars…');
+                      try {
+                        const { data, error } = await supabase.functions.invoke('meta-admin', {
+                          body: { action: 'backfill_ig_profiles', integration_id: igInteg.id, limit: 200 },
+                        });
+                        toast.dismiss(t);
+                        if (error) throw error;
+                        toast.success(
+                          `Backfill done — scanned ${data.scanned}, resolved ${data.resolved}, failed ${data.failed}, skipped ${data.skipped_test_ids} test IDs.`,
+                          { duration: 8000 }
+                        );
+                      } catch (e: any) {
+                        toast.dismiss(t);
+                        toast.error(e?.message || 'Backfill failed');
+                      }
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Backfill IG Profiles
+                  </Button>
                   <p className="text-[11px] text-muted-foreground">
-                    Required after first connection. Without this, Meta won't deliver DMs to our endpoint even if the URL is configured.
+                    Required after first connection. Without this, Meta won't deliver DMs to our endpoint even if the URL is configured. If IG chats show no username/avatar, click <b>Refresh Page Token</b> then <b>Backfill IG Profiles</b>.
                   </p>
                 </div>
 
