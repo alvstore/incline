@@ -19,6 +19,7 @@ export interface ResolvedIdentity {
   contact_id?: string | null;
   email?: string | null;
   member_code?: string | null;
+  avatar_url?: string | null;
 }
 
 const cache = new Map<string, ResolvedIdentity>();
@@ -41,7 +42,7 @@ export async function resolveIdentity(rawPhone: string): Promise<ResolvedIdentit
   try {
     const { data: prof } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone')
+      .select('id, full_name, email, phone, avatar_url')
       .in('phone', variants)
       .limit(1)
       .maybeSingle();
@@ -60,6 +61,7 @@ export async function resolveIdentity(rawPhone: string): Promise<ResolvedIdentit
           member_id: m.id,
           email: prof.email,
           member_code: m.member_code,
+          avatar_url: (prof as any).avatar_url ?? null,
         };
         cache.set(phone, out);
         return out;
@@ -71,7 +73,7 @@ export async function resolveIdentity(rawPhone: string): Promise<ResolvedIdentit
   try {
     const { data: lead } = await supabase
       .from('leads')
-      .select('id, full_name, email')
+      .select('id, full_name, email, avatar_url')
       .in('phone', variants)
       .limit(1)
       .maybeSingle();
@@ -82,6 +84,7 @@ export async function resolveIdentity(rawPhone: string): Promise<ResolvedIdentit
         phone,
         lead_id: lead.id,
         email: lead.email,
+        avatar_url: (lead as any).avatar_url ?? null,
       };
       cache.set(phone, out);
       return out;
