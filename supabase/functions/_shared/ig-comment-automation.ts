@@ -333,7 +333,6 @@ export async function ensureLeadFromIgComment(
         leadId = ins?.id || null;
       } else if (campaign.lead_tag) {
         // Append tag to existing lead (idempotent)
-        await supabase.rpc("array_append_distinct", {}).then(() => {}).catch(() => {});
         const { data: cur } = await supabase
           .from("leads").select("tags").eq("id", leadId).maybeSingle();
         const tags = Array.from(new Set([...(cur?.tags || []), campaign.lead_tag]));
