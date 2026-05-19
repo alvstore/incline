@@ -3,6 +3,7 @@ import { getTrainer } from '@/services/trainerService';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -241,11 +242,11 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
               </div>
               <div className="space-y-2">
                 <Label>Phone</Label>
-                <Input
+                <PhoneInput
                   value={profileData.phone}
-                  onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                  placeholder="+91…"
+                  onChange={(value) => setProfileData({ ...profileData, phone: value })}
                 />
+
               </div>
               <div className="space-y-2">
                 <Label>Gender</Label>
@@ -308,10 +309,11 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
               </div>
               <div className="space-y-2">
                 <Label>Emergency Contact Phone</Label>
-                <Input
+                <PhoneInput
                   value={profileData.emergency_contact_phone}
-                  onChange={(e) => setProfileData({ ...profileData, emergency_contact_phone: e.target.value })}
+                  onChange={(value) => setProfileData({ ...profileData, emergency_contact_phone: value })}
                 />
+
               </div>
             </div>
           </div>
