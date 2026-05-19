@@ -354,3 +354,179 @@ function initial(c: IgCommentCampaign | null): Partial<IgCommentCampaign> {
     ai_tone: "friendly",
   };
 }
+
+// ──────────────── Pickers + Test panel ────────────────
+
+function IgAccountPicker({
+  branchId, value, onChange,
+}: { branchId: string | null; value: string | null; onChange: (v: string | null) => void }) {
+  const { data: accounts = [], isLoading, isError, refetch, isFetching } = useIgAccounts(branchId);
+  return (
+    <Field label="Instagram account" required hint="Pulled live from your connected Instagram integrations.">
+      <div className="flex gap-2">
+        <Select value={value || ""} onValueChange={(v) => onChange(v || null)}>
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder={isLoading ? "Loading accounts…" : "Select an Instagram account"} />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.length === 0 && !isLoading && (
+              <div className="px-3 py-6 text-xs text-slate-500 text-center">
+                No connected IG accounts found for this branch.
+              </div>
+            )}
+            {accounts.filter(a => a.ig_account_id).map((a) => (
+              <SelectItem key={a.ig_account_id!} value={a.ig_account_id!}>
+                <div className="flex items-center gap-2">
+                  {a.profile_picture_url
+                    ? <img src={a.profile_picture_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+                    : <div className="h-5 w-5 rounded-full bg-slate-200" />}
+                  <span className="font-medium">@{a.username || "unknown"}</span>
+                  {a.name && <span className="text-slate-500 text-xs">— {a.name}</span>}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh accounts">
+          {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        </Button>
+      </div>
+      {isError && <p className="text-xs text-red-500">Could not load accounts. Check Settings → Integrations → Instagram.</p>}
+    </Field>
+  );
+}
+
+function IgPostPicker({
+  branchId, igAccountId, value, onChange,
+}: { branchId: string | null; igAccountId: string | null; value: string | null; onChange: (v: string | null) => void }) {
+  const { data: accounts = [] } = useIgAccounts(branchId);
+  const integrationId = useMemo(
+    () => accounts.find((a) => a.ig_account_id === igAccountId)?.integration_id || null,
+    [accounts, igAccountId],
+  );
+  const { data: media = [], isLoading, isError, refetch, isFetching } = useIgMedia(integrationId);
+
+  return (
+    <Field
+      label="Target post"
+      hint='Click a post to target only its comments. Leave on "All posts" to fire on any comment on this account.'
+    >
+      <div className="flex items-center justify-between mb-2">
+        <button type="button"
+          onClick={() => onChange(null)}
+          className={`text-xs px-3 py-1.5 rounded-full border transition ${
+            !value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+          }`}
+        >All posts</button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching || !integrationId}>
+          {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+          Refresh
+        </Button>
+      </div>
+      {!integrationId && (
+        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 text-center">
+          Pick an Instagram account first.
+        </div>
+      )}
+      {integrationId && isLoading && (
+        <div className="py-6 text-center text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Loading recent posts…</div>
+      )}
+      {integrationId && isError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          Could not load posts. Token may be missing IG Graph scopes.
+        </div>
+      )}
+      {integrationId && !isLoading && media.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1">
+          {media.map((m: IgMediaItem) => {
+            const thumb = m.thumbnail_url || m.media_url;
+            const selected = value === m.id;
+            return (
+              <button key={m.id} type="button" onClick={() => onChange(m.id)}
+                className={`relative aspect-square rounded-lg overflow-hidden border-2 transition group ${
+                  selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-transparent hover:border-slate-300"
+                }`}
+                title={m.caption?.slice(0, 80) || m.id}
+              >
+                {thumb
+                  ? <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
+                {m.media_type === "VIDEO" && (
+                  <span className="absolute top-1 right-1 bg-black/60 text-white text-[10px] rounded px-1">VIDEO</span>
+                )}
+                <span className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] p-1 text-left">
+                  💬 {m.comments_count ?? 0}
+                </span>
+                {selected && (
+                  <span className="absolute top-1 left-1 bg-indigo-600 text-white rounded-full p-0.5">
+                    <CheckCircle2 className="h-3 w-3" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Field>
+  );
+}
+
+function IgTestPanel({
+  branchId, igAccountId, igMediaId, activeCampaignName,
+}: { branchId: string | null; igAccountId: string | null; igMediaId: string | null; activeCampaignName: string | null }) {
+  const [text, setText] = useState("INCLINE");
+  const test = useTestIgCommentMatch();
+  const run = () => {
+    if (!branchId) return;
+    test.mutate({ branch_id: branchId, text, ig_account_id: igAccountId, ig_media_id: igMediaId });
+  };
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl bg-indigo-50/60 border border-indigo-100 p-3 text-xs text-indigo-900">
+        Simulate an Instagram comment against ALL active campaigns on this branch (including unsaved changes are not yet included — save first).
+      </div>
+      <Field label="Sample comment text">
+        <Textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
+          placeholder="Type a comment as a user would write it…" />
+      </Field>
+      <Button onClick={run} disabled={!branchId || !text.trim() || test.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+        {test.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-1" />}
+        Run test
+      </Button>
+
+      {test.data && (
+        <div className="space-y-2">
+          <div className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Results</div>
+          {test.data.length === 0 && (
+            <div className="text-sm text-slate-500">No active campaigns on this branch.</div>
+          )}
+          {test.data.map((r) => (
+            <div key={r.campaign_id}
+              className={`rounded-xl border p-3 ${r.would_fire ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-center gap-2">
+                {r.would_fire
+                  ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  : <XCircle className="h-4 w-4 text-slate-400" />}
+                <span className="font-medium text-slate-900">{r.name}</span>
+                {activeCampaignName && r.name === activeCampaignName && (
+                  <Badge variant="outline" className="rounded-full text-[10px]">this one</Badge>
+                )}
+                <span className="ml-auto text-xs text-slate-500">
+                  {r.would_fire ? `keyword: ${r.matched_keyword}` : r.skip_reason ?? "no keyword match"}
+                </span>
+              </div>
+              {r.preview && (
+                <div className="mt-2 text-xs text-slate-700 italic bg-white rounded-lg p-2 border border-slate-100">
+                  "{r.preview}"
+                </div>
+              )}
+              <div className="mt-1 text-[11px] text-slate-400">
+                mode: {r.reply_mode} · delay: {r.delay_seconds}s
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
