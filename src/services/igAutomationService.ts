@@ -171,11 +171,7 @@ export function useRetryIgRun() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id }: { id: string; campaign_id: string }) => {
-      const { error } = await (supabase as any)
-        .from(RUNS)
-        .update({ status: "pending", scheduled_at: new Date().toISOString(), error_message: null })
-        .eq("id", id)
-        .in("status", ["failed", "skipped"]);
+      const { error } = await (supabase as any).rpc("retry_ig_comment_run", { p_id: id });
       if (error) throw error;
     },
     onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["ig-runs", vars.campaign_id] }),
