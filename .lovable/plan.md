@@ -1,51 +1,61 @@
-
 ## Goal
-Make https://theincline.in/ rank and answer better across Google (SEO), AI answer engines (AEO), local/geo search (GEO), and LLM crawlers — using the canonical facts you supplied (Udaipur location, founder Yogita Lekhari, luxury fitness & recovery club, Panatta, PT, Pilates/Yoga/Zumba, sauna, ice bath, recovery).
+Consolidate three diagnostics edge functions — `test-integration`, `test-ai-provider`, `test-ai-tool` — into a single `diagnostics` edge function, without changing any caller behavior or breaking functionality.
 
-## Changes
+## Why
+- All three are staff-only "test/diagnose" endpoints with overlapping auth + CORS boilerplate.
+- Only 3 call sites in the app (one each), so cutover is trivial.
+- Reduces the function inventory and config.toml entries.
 
-### 1. `public/robots.txt`
-- Add a second `Sitemap:` line for `https://theincline.in/llms.txt` so AI crawlers discover it the same way search engines discover the sitemap.
-- Keep existing per-bot allow blocks and private-route disallows intact.
+## New function: `supabase/functions/diagnostics/index.ts`
+Single endpoint that dispatches on a `kind` field in the request body:
 
-### 2. `public/llms.txt`
-Expand the existing file so AI answer engines have a clean, authoritative knowledge surface:
-- Stronger H1 + one-line blockquote summary ("Luxury fitness & recovery club in Udaipur, Rajasthan, India — founded by Yogita Lekhari").
-- New **About** section with disambiguation line ("Not affiliated with any other gym named 'Incline' in other cities or countries").
-- New **Founder** section (Yogita Lekhari).
-- New **Services** section listing: Personal Training, Group Classes, Pilates, Yoga, Zumba, Strength Training (Panatta), Infrared Sauna, Ice Bath, Steam Room, 3D Body Analysis & Posture Correction, Recovery Lounge.
-- Keep Contact, Pages, SEO Keywords; add address + geo + opening hours in the prose.
-- Add `## Optional` tail with deep-link references (Instagram, Facebook, Google profile).
+```
+POST /functions/v1/diagnostics
+{ "kind": "integration" | "ai_provider" | "ai_tool", ...originalPayload }
+```
 
-### 3. `index.html` — structured data additions
-Append three new JSON-LD blocks (the existing Organization / FitnessCenter / WebSite stay):
-- **LocalBusiness / HealthClub** with `@id: https://theincline.in/#gym`, `areaServed: Udaipur`, `paymentAccepted`, `currenciesAccepted: INR`, `hasMap`, repeated address/geo (Google ingests LocalBusiness more reliably than the generic FitnessCenter for local pack).
-- **Person** node for Yogita Lekhari (founder), `worksFor` → `@id` of the gym, so AEO answers to "who founded The Incline Life" resolve cleanly.
-- **FAQPage** with 6 Q&As seeded from your canonical statements:
-  1. Where is The Incline Life located?
-  2. Who founded The Incline Life?
-  3. What services does The Incline Life offer?
-  4. What equipment does The Incline Life use?
-  5. Does The Incline Life have recovery facilities?
-  6. Is The Incline Life the same as other "Incline" gyms?
-- Add `<meta name="geo.region" content="IN-RJ">`, `<meta name="geo.placename" content="Udaipur">`, `<meta name="geo.position" content="24.546845;73.701003">`, `<meta name="ICBM" content="24.546845, 73.701003">` for GEO crawlers that still read these.
+Behavior per kind = byte-for-byte the same logic as the existing function it replaces:
+- `kind: "integration"` → current `test-integration/index.ts` body (511 lines)
+- `kind: "ai_provider"` → current `test-ai-provider/index.ts` body (156 lines)
+- `kind: "ai_tool"` → current `test-ai-tool/index.ts` body (131 lines)
 
-### 4. `scripts/generate-sitemap.ts` (new) + wire `predev`/`prebuild`
-Replace the hand-edited `public/sitemap.xml` (already only 7 static entries; no dynamic content here) with a tiny generator so future route additions don't drift. Keep current public entries (`/`, `/register`, `/feedback`, `/privacy-policy`, `/terms`, `/terms-of-service`, `/data-deletion`) and add `/scan-report` which is public per `llms.txt`. Leaves `/auth`, `/setup`, etc. excluded (correctly — they're noindexed and disallowed in robots).
+Shared once at the top:
+- CORS headers + OPTIONS preflight
+- Service-role Supabase client
+- Auth: `getUser(token)` → 401 if missing
+- Staff role check against `user_roles` (`owner|admin|manager|staff`) → 403 if missing
+- Top-level try/catch with consistent error JSON
 
-### 5. Memory
-Add a short core memory line: "SEO/AEO facts: Luxury fitness & recovery club, Udaipur Rajasthan, founder Yogita Lekhari, Panatta + PT + Pilates/Yoga/Zumba + sauna/ice bath/recovery. Canonical site https://theincline.in/. Never conflate with other 'Incline' gyms."
+Each handler keeps its own response shape so callers see identical payloads.
+
+## Caller updates (3 files, 1 line each)
+- `src/components/settings/IntegrationSettings.tsx:1520` → `invoke('diagnostics', { body: { kind: 'integration', ...existing } })`
+- `src/components/settings/AIProvidersSettings.tsx:264` → `invoke('diagnostics', { body: { kind: 'ai_provider', ...existing } })`
+- `src/components/settings/AIAgentControlCenter.tsx:500` → `invoke('diagnostics', { body: { kind: 'ai_tool', ...existing } })`
+
+## Config
+- `supabase/config.toml`: add `[functions.diagnostics]` with `verify_jwt = false` (we validate the JWT in code, matching the existing pattern of the three functions).
+- Remove the three old `[functions.test-*]` blocks.
+
+## Cleanup
+- Delete `supabase/functions/test-integration/`, `test-ai-provider/`, `test-ai-tool/` directories.
+- Call `supabase--delete_edge_functions` for those three names so the deployed copies are removed.
 
 ## Out of scope
-- Per-route `<Helmet>` rewrites (already handled by existing `SEO.tsx`).
-- Backlink/off-page SEO.
-- og:image redesign.
+- No behavior changes, no payload schema changes, no new auth model.
+- No consolidation of unrelated functions (webhooks, workers, etc.) — only the three the user named.
+- No deep audit of other edge functions (can be a separate follow-up if you want).
+
+## Risks / Validation
+- Risk: divergent response shapes between branches — mitigated by copying each handler verbatim into its own `case` block.
+- Validation after build:
+  1. From Settings UI, run "Test integration", "Test AI provider", and an AI tool test → expect identical UX.
+  2. `curl` `diagnostics` with each `kind` (unauth → 401, non-staff → 403, valid staff → 200).
 
 ## Files touched
-- `public/robots.txt` (edit)
-- `public/llms.txt` (rewrite)
-- `index.html` (append JSON-LD + geo metas)
-- `scripts/generate-sitemap.ts` (new)
-- `package.json` (add predev/prebuild)
-- `public/sitemap.xml` (regenerated)
-- `mem://index.md` (+ new memory file)
+- new: `supabase/functions/diagnostics/index.ts`
+- edit: `supabase/config.toml`
+- edit: 3 caller components above
+- delete: 3 old function dirs
+
+Want me to proceed with this consolidation, or also expand to a broader audit (the "deep audit for all edge functions" part) before touching code?
