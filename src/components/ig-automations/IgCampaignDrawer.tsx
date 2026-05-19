@@ -242,9 +242,23 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
               <ToggleRow label="Notify staff on trigger" checked={form.notify_staff ?? true}
                 onChange={(v) => update({ notify_staff: v })} />
               <ToggleRow label="Allow repeat DMs to same user"
-                hint="Off = each user is DM'd only once per campaign."
+                hint="Off = each user is DM'd only once per campaign. On = honors the cooldown below."
                 checked={!!form.allow_repeat}
                 onChange={(v) => update({ allow_repeat: v })} />
+              {form.allow_repeat && (
+                <Field label="Per-user cooldown (minutes)"
+                  hint="Smallest gap before the same user can be DM'd again. 0 = no cooldown.">
+                  <Input type="number" min={0} max={43200}
+                    value={form.per_user_cooldown_minutes ?? 0}
+                    onChange={(e) => update({ per_user_cooldown_minutes: Math.max(0, Number(e.target.value || 0)) })} />
+                </Field>
+              )}
+              <Field label="Daily DM cap"
+                hint="Max successful DMs in a rolling 24h window. 0 = unlimited. Stops viral storms.">
+                <Input type="number" min={0} max={100000}
+                  value={form.daily_cap ?? 0}
+                  onChange={(e) => update({ daily_cap: Math.max(0, Number(e.target.value || 0)) })} />
+              </Field>
               <ToggleRow label="Require human review before sending"
                 hint="When on, DMs stay in 'pending' for staff to approve."
                 checked={!!form.human_review}
