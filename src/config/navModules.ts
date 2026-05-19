@@ -81,7 +81,7 @@ export const NAV_MODULES: NavModule[] = [
     label: 'Marketing',
     icon: Megaphone,
     sections: ['Operations & Comm', 'Communication'],
-    hrefs: ['/whatsapp-chat', '/contact-book', '/announcements', '/campaigns', '/member-announcements', '/member-feedback', '/my-requests', '/my-referrals'],
+    hrefs: ['/whatsapp-chat', '/contact-book', '/announcements', '/campaigns', '/instagram-automations', '/member-announcements', '/member-feedback', '/my-requests', '/my-referrals'],
   },
   {
     id: 'reports',
