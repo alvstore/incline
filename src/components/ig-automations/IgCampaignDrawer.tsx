@@ -95,11 +95,12 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
 
         <div className="flex-1 overflow-y-auto">
           <Tabs value={tab} onValueChange={setTab} className="w-full">
-            <TabsList className="grid grid-cols-5 mx-6 mt-4">
+            <TabsList className="grid grid-cols-6 mx-6 mt-4">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
               <TabsTrigger value="reply">Reply</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
+              <TabsTrigger value="test">Test</TabsTrigger>
               <TabsTrigger value="review">Review</TabsTrigger>
             </TabsList>
 
@@ -108,15 +109,19 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                 <Input value={form.name || ""} onChange={(e) => update({ name: e.target.value })}
                   placeholder="e.g. INCLINE membership info" />
               </Field>
-              <Field label="Instagram post / reel ID" hint="Leave blank to apply to ALL posts on this account.">
-                <Input value={form.ig_media_id || ""} onChange={(e) => update({ ig_media_id: e.target.value || null })}
-                  placeholder="17912345678901234" />
-              </Field>
-              <Field label="Instagram account ID" hint="Your business IG account that owns the post.">
-                <Input value={form.ig_account_id || ""} onChange={(e) => update({ ig_account_id: e.target.value || null })}
-                  placeholder="17841400000000000" />
-              </Field>
+              <IgAccountPicker
+                branchId={branchId}
+                value={form.ig_account_id || null}
+                onChange={(v) => update({ ig_account_id: v })}
+              />
+              <IgPostPicker
+                branchId={branchId}
+                igAccountId={form.ig_account_id || null}
+                value={form.ig_media_id || null}
+                onChange={(v) => update({ ig_media_id: v })}
+              />
             </TabsContent>
+
 
             <TabsContent value="triggers" className="px-6 py-4 space-y-4">
               <Field label="Trigger keywords" required hint="Press Enter to add. Anyone whose comment matches will be DM'd.">
