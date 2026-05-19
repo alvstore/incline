@@ -461,7 +461,7 @@ function IgPostPicker({
             const thumb = m.thumbnail_url || m.media_url;
             const selected = value === m.id;
             return (
-              <button key={m.id} type="button" onClick={() => onChange(m.id)}
+              <button key={m.id} type="button" onClick={() => onChange(m.id, m.permalink ?? null)}
                 className={`relative aspect-square rounded-lg overflow-hidden border-2 transition group ${
                   selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-transparent hover:border-slate-300"
                 }`}
