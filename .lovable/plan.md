@@ -1,42 +1,48 @@
-# Plan: Fix phone field prefix on Trainer/Staff edit drawers
+# Install 4 bundles from alirezarezvani/claude-skills
 
-## Audit findings
+## Source
 
-Project standard (per memory): all phone inputs use `<PhoneInput>` from `@/components/ui/PhoneInput`, which locks the `+91` country prefix and strips invalid leading zeros. Several drawers still use a plain `<Input>` for phone fields, so the saved value is whatever the user types (e.g. `9876543210` with no prefix, or `09876…` with a stray leading zero). That breaks WhatsApp dispatch, SMS, and identity lookups.
+Cloned `https://github.com/alirezarezvani/claude-skills` (depth 1). Skill inventory in the four requested bundles:
 
-| File | Field | Component used | Status |
-|---|---|---|---|
-| `src/components/trainers/AddTrainerDrawer.tsx:277` | `phone` | `PhoneInput` | OK |
-| `src/components/trainers/AddTrainerDrawer.tsx:326` | `emergency_contact_phone` | plain `Input` | **Bug** |
-| `src/components/trainers/EditTrainerDrawer.tsx:244` | `phone` | plain `Input` | **Bug** |
-| `src/components/trainers/EditTrainerDrawer.tsx:311` | `emergency_contact_phone` | plain `Input` | **Bug** |
-| `src/components/employees/AddEmployeeDrawer.tsx:402` | `phone` | `PhoneInput` | OK |
-| `src/components/employees/EditEmployeeDrawer.tsx:213` | `phone` | plain `Input` | **Bug** |
-| `src/components/employees/EditEmployeeDrawer.tsx:313` | `emergency_contact_phone` | plain `Input` | **Bug** |
-| `src/components/members/AddMemberDrawer.tsx:254, 380` | `phone`, `emergency_phone` | `PhoneInput` | OK |
+| Bundle | Folder | SKILL.md count |
+|---|---|---|
+| Engineering — Core | `engineering-team/` | 50 |
+| Product | `product-team/` | 17 |
+| Marketing | `marketing-skill/` + top-level `marketing/landing` | 47 |
+| Productivity ✨v2.7.0 | `productivity/` | 4 |
+| **Total** | | **118** |
 
-Net effect for the user's report: when a manager edits a trainer (or a staff member), the phone field is a raw text box — so saved numbers like `9876543210` lose the `+91`. Add-trainer's emergency contact has the same issue.
+(Note: some engineering skills ship as `.zip` archives alongside identical unzipped versions under `engineering-team/skills/`. The unzipped copies are what get installed — no archive extraction needed; total active skill folders is **118**.)
 
-## Fix
+## Steps
 
-Swap the offending plain `<Input>` controls for `<PhoneInput>` — same value/onChange contract — in:
+1. **Stage every skill into `.agents/skills/<name>/`**
+   - Walk each bundle, locate every directory containing a `SKILL.md`.
+   - Copy the entire skill directory (including `references/`, `scripts/`, `assets/`) to `.agents/skills/<skill-name>/`.
+   - On name collisions with already-installed skills (e.g. `email-sequence`, `onboarding-cro`, `social-content`, `landing-page-generator`, `landing`), prefix the incoming skill with `cs-` (claude-skills) to keep both copies and let retrieval pick.
+   - Skip any folder that is purely a bundle README without a `SKILL.md`.
 
-1. `AddTrainerDrawer.tsx` → emergency contact phone (line 326).
-2. `EditTrainerDrawer.tsx` → primary phone (line 244) and emergency contact phone (line 311).
-3. `EditEmployeeDrawer.tsx` → primary phone (line 213) and emergency contact phone (line 313).
+2. **Validate each SKILL.md frontmatter**
+   - Confirm `name:` and `description:` are present.
+   - Patch missing `name:` to match the directory name; flag any skill with no description in a short report (not blocking install).
 
-`PhoneInput` already returns a normalized `+91XXXXXXXXXX` string via its `onChange`, so the existing `setProfileData({...phone: value})` / `setF({...emergency_contact_phone: value})` wiring works unchanged. On load, `PhoneInput` displays the local 10-digit portion regardless of stored format (with/without prefix, leading zero), so existing rows continue to render correctly and re-save in the canonical `+91` form.
+3. **Apply each draft via `skills--apply_draft`**
+   - Call `skills--apply_draft` once per `.agents/skills/<name>` directory (118 calls, batched).
+   - Each apply updates `skills-lock.json` automatically — no manual lockfile edit.
 
-No DB migration, no backfill in this pass. Optional follow-up (not in scope here): a one-time SQL backfill that prefixes existing `profiles.phone` / `profiles.emergency_contact_phone` rows that don't start with `+`. Flag this to the user but do not run automatically.
+4. **Post-install report**
+   - Print a table grouped by bundle: skill name → status (applied / skipped / renamed).
+   - Note total count, collisions renamed, and any frontmatter fixes.
 
-## Verification
+## Technical details
 
-- Open Trainers → Edit a trainer → phone field shows existing number without prefix, prefix `+91` chip visible, save → `profiles.phone` stored as `+91XXXXXXXXXX`.
-- Same for Add Trainer (emergency contact), Edit Employee (both phones).
-- No regression on Add Trainer / Add Employee / Add Member primary phone (already `PhoneInput`).
+- All writes confined to `.agents/skills/`. No source-code changes, no migrations, no edge functions touched.
+- Copy via `cp -R` (preserves nested `references/scripts/assets`).
+- Renamed collisions: each `cs-<name>` skill keeps original `SKILL.md` body; only the directory and the `name:` frontmatter field are renamed.
+- Bulk apply is sequential by tool contract (one apply per call) — expect ~118 tool calls in the implementation step.
 
-## Out of scope
+## Caveat (please acknowledge)
 
-- Member edit drawer (no separate file — Members use AddMemberDrawer in both modes, already `PhoneInput`).
-- Backfill of historical rows.
-- Any change to `PhoneInput` itself.
+Activating 118 skills means retrieval has a much larger pool to match against on every turn. Most of these (e.g. `senior-computer-vision`, `snowflake-development`, `apple-hig-expert`, `aws-solution-architect`, `kubernetes-operator` adjacents) are unrelated to a gym SaaS and will mostly sit idle. If retrieval ever surfaces an off-topic skill, you can prune individual ones from `Settings → Skills` later.
+
+Approve to proceed with the full 118-skill install.
