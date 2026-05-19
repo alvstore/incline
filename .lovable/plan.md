@@ -1,87 +1,82 @@
-## Audit — chat profile pictures & names
+## Audit — what's wrong in the chat you shared
 
-### Findings
+Looking at `supabase/functions/_shared/ai-agent-brain.ts` and `ai-memory.ts`, three concrete bugs explain that "Could you share your phone number?" loop:
 
-**1. Instagram contacts show no username and no avatar — root cause confirmed**
+1. **AI asks for phone even though phone is already known.** WhatsApp inbound traffic already carries `ctx.senderId = phone`. The prompt mentions this on line 299, but the lead-capture target field list still includes `phone` (line 245), and `do_not_ask` is **never seeded** with `phone` for the WhatsApp platform. So Gemini happily re-asks.
+2. **No real "auto-learning" pass.** `ai_memory.profile/facts` only get written when (a) lead capture completes, or (b) reply ends with "?" (lines 380–428). Free-text signals like "weight loss programme", "first listen my query", "I'm Laveena" never land in memory. Next turn the model has no idea who it's talking to.
+3. **No consent / pushback detection.** When the user says "First listen my query", the bot still appends "May I have your phone number?" at the end of the very next reply. There is no rule that suppresses CTAs when the user explicitly asks to be heard, and no `do_not_ask` entry gets added when they decline.
 
-DB inspection of `integration_settings` for the active IG row:
-- `provider='instagram_meta'`, `integration_type='instagram'`, `is_active=true`
-- `config.page_id=934192826441479`, `config.instagram_account_id=17841478914282824`
-- `credentials.access_token` ✅ present (User token, `EAA…`)
-- `credentials.page_access_token` ❌ **missing**
-- `credentials.app_secret` ✅ present
-
-`resolveInstagramSenderProfile()` in `supabase/functions/meta-webhook/index.ts:709` calls:
-```
-GET graph.facebook.com/v25.0/{IGSID}?fields=name,username,profile_pic_url&access_token=<token>
-```
-with whatever `credentials.access_token || credentials.page_access_token` is set. For the IG-via-FB-Page flow used here, Meta requires a **Page Access Token** (not a User token) for this lookup. With the current User token Meta returns either a permissions error or an empty body — and the code treats `resp.ok=true` with empty fields as success, so a `null` name/avatar is silently cached and written.
-
-Database confirms: all `whatsapp_chat_settings` rows where `platform='instagram'` have `contact_name=NULL`, `contact_avatar_url=NULL`. The UI's `displayLabel()` then falls back to the raw IGSID number ("1323869973018720"), which matches what the screenshot shows (the IG chats only display gradient initials and have no displayed username).
-
-**2. WhatsApp contact has name but no profile picture — Meta API limitation, not a bug**
-
-The WhatsApp Cloud API does not expose contact profile photos under any endpoint. Only `contacts[0].profile.name` is delivered in inbound payloads, which the webhook already persists (and the screenshot shows "Rajat Lekhari" correctly). The codebase and project memory already document this constraint. Avatar can only come from a matched internal record (member/lead with `avatar_url`). Today, `resolveIdentity()` does not return `avatar_url`, so the chat list cannot fall back to a member/lead avatar even when one exists.
+`ai_memory` already supports everything we need (`profile`, `facts`, `asked_questions`, `do_not_ask`, `current_intent`, `summary`). We just aren't writing to it intelligently.
 
 ---
 
-### Fix plan
+## Plan
 
-**A. Instagram — get name + avatar to populate**
+### 1. Silent context extractor (`extractContextDelta`) — `ai-agent-brain.ts`
+A second, cheap LLM call (`google/gemini-3-flash-preview`, `Output.object` schema) that runs once per inbound turn, **after** we load history and **before** the main reply call. It receives the last 6 messages and the current memory snapshot, and returns a structured delta:
 
-1. `meta-webhook/index.ts` › `resolveInstagramSenderProfile()`:
-   - Prefer `credentials.page_access_token` for IG-via-Page (when `config.page_id` is set), fall back to `access_token`.
-   - Treat an "ok" response with no `id`/`name`/`username` as a failure; log the upstream error message and HTTP status so we have something actionable in edge logs.
-   - On every successful resolve, write the result to `whatsapp_chat_settings` via the existing `upsert_meta_contact_profile` RPC (already done).
+```ts
+{
+  profile:        { first_name?, language?, city?, age_band? },
+  facts:          { fitness_goal?, plan_interest?, experience?, preferred_time?, budget_band? },
+  current_intent: 'info_seeking' | 'pricing' | 'booking' | 'complaint' | 'careers' | ...,
+  consent: {
+    push_contact_ask: 'allowed' | 'declined' | 'unknown',  // detects "first listen", "don't ask", "stop asking"
+    wants_human:      boolean,
+  },
+  do_not_ask_add: string[],   // e.g. ['phone'] for WhatsApp, plus anything user pushed back on
+  summary:        string      // ≤200 chars rolling summary
+}
+```
 
-2. `meta-oauth-callback/index.ts`:
-   - After exchanging the user/long-lived token, call `GET /me/accounts?access_token=<USER_TOKEN>` once, find the entry matching the configured `page_id`, and persist `access_token` from that entry as `credentials.page_access_token` on the row. This is the missing piece that makes step 1 work in production.
-   - Backwards-compat: existing rows without `page_access_token` keep working via the `access_token` fallback.
+Result is merged into `ai_memory` via the existing `upsertMemory()` — no schema change.
 
-3. New helper edge function (or extend `meta-admin`) — `action: "backfill_ig_profiles"`:
-   - Scans `whatsapp_chat_settings` where `platform IN ('instagram','messenger')` AND `contact_name IS NULL`.
-   - For each, call `resolveInstagramSenderProfile()` and upsert via `upsert_meta_contact_profile`.
-   - Owner/admin only, run-on-demand from a button in `IntegrationSettings.tsx` (Meta section).
+### 2. Seed `do_not_ask = ['phone']` for every WhatsApp contact at first turn
+Tiny, deterministic, no LLM needed. Fixes the headline bug immediately even before the extractor warms up.
 
-4. `WhatsAppChat.tsx` › `displayLabel()`:
-   - When `contact_name` is null AND `platform='instagram'`, show `IG · <last 6 of id>` instead of the raw 16-digit IGSID so it reads better while backfill runs.
+### 3. Tighten the system prompt (lead-capture branch, ~lines 253–302)
+Add three non-negotiable rules driven by the memory we now have:
+- **"Listening mode"**: if `memory.facts.push_contact_ask === 'declined'` OR last user turn matches `/^(first|please|wait|hold on|listen|sun(o|iye)|ruk)/i`, the next reply MUST answer the question with zero CTAs, zero contact asks, and zero interactive blocks. Plain text only.
+- **Max one question per reply.** Already implicit, now explicit.
+- **Phone gate**: never request phone/email on WhatsApp unless `memory.facts.member_requested_callback === true`. Phone is auto-resolved from `ctx.senderId`.
 
-**B. WhatsApp — avatar via matched member/lead**
+### 4. Render memory more usefully
+`renderMemoryBlock()` is already wired in. Add the new fields (consent state, intent, fitness_goal) so the main model can see them. Also prefer `memory.profile.first_name` over `contact_name` when greeting.
 
-1. `src/lib/contacts/resolveIdentity.ts`:
-   - Add `avatar_url?: string | null` to `ResolvedIdentity`.
-   - Select `avatar_url` from `profiles` (members path) and `leads` (lead path); contact book stays as-is unless we add that column too.
+### 5. Honor extracted intent
+- `current_intent === 'careers' | 'vendor' | 'media'` → already handled by the non-fitness branch; now also persist `do_not_ask_add: ['goal','plan_interest']` so we never re-ask onboarding for that contact.
+- `current_intent === 'info_seeking'` AND `facts.fitness_goal` already known → skip the goal interactive_list, go straight to answering.
 
-2. `src/pages/WhatsAppChat.tsx` enrichment (line ~369):
-   - Avatar priority becomes: `c.contact_avatar_url` → `s?.contact_avatar_url` → `ident?.avatar_url` → null.
-   - No schema change needed.
+### 6. Observability
+Log every extractor call into `ai_call_logs` with `purpose='context_extract'` so we can see token spend.
 
-3. `AvatarFallback` (line ~921) keeps the gradient initials when nothing resolves. Add a `title="WhatsApp does not share profile photos — showing initials"` on WA fallback for clarity.
+### 7. UI (read-only, optional in this pass)
+Add a "Learned context" expandable section in the WhatsApp chat right-side drawer showing `profile`, `facts`, `do_not_ask`, `current_intent` from `ai_memory`. Helpful for staff to verify the bot understood correctly.
 
-**C. Optional — UX badge**
+---
 
-Add a small "Profile not shared" hint chip next to the WA avatar when no identity match exists, so staff know it's expected behaviour and not a broken integration.
+## Files touched
 
-### Files touched
+| File | Change |
+|---|---|
+| `supabase/functions/_shared/ai-agent-brain.ts` | Add `extractContextDelta()`; call before main reply; merge into `upsertMemory`; seed `do_not_ask=['phone']` for WhatsApp; new prompt rules (listening mode, max-1-question, phone gate); use learned `first_name` and `fitness_goal` to skip redundant asks |
+| `supabase/functions/_shared/ai-memory.ts` | Add `consent` block helpers; extend `renderMemoryBlock` to include intent + consent + fitness_goal |
+| `src/pages/WhatsAppChat.tsx` *(optional UI bit)* | New "Learned context" panel reading `ai_memory` for the active contact |
 
-- `supabase/functions/meta-webhook/index.ts` — improve profile resolver + logging.
-- `supabase/functions/meta-oauth-callback/index.ts` — persist `page_access_token` at OAuth time.
-- `supabase/functions/meta-admin/index.ts` — add `action: "backfill_ig_profiles"`.
-- `src/lib/contacts/resolveIdentity.ts` — return `avatar_url`.
-- `src/pages/WhatsAppChat.tsx` — use `ident.avatar_url`; improve IG fallback label.
-- `src/components/settings/IntegrationSettings.tsx` — "Backfill IG profiles" button in Meta card.
+No database migration needed — `profile`/`facts` are JSONB.
 
-### Validation
+---
 
-- Re-OAuth IG once → DB row gets `page_access_token`.
-- Send a fresh IG DM → `whatsapp_chat_settings.contact_name` + `contact_avatar_url` populate.
-- Run backfill → existing IG conversations show username + avatar.
-- A WA contact whose phone matches an existing member with `avatar_url` → chat list shows that avatar.
-- A WA contact with no internal record → still shows gradient initials with hint tooltip (unchanged behaviour, expected).
+## Acceptance test (replay the failing chat)
 
-### Out of scope
+1. Inbound: "Give me information for weightloss programme" → memory writes `facts.fitness_goal='weight_loss'`, `current_intent='info_seeking'`. Reply describes weight-loss offerings and asks **zero** contact questions.
+2. Inbound: "First listen my query" → memory writes `consent.push_contact_ask='declined'`, `do_not_ask_add=['phone','email']`. Next reply contains no CTA, no phone ask.
+3. Inbound on a fresh number: bot never asks "Could you share your phone number?" — phone is in `do_not_ask` from turn 1.
+4. Staff opens the chat drawer → sees "Learned: name=Laveena, goal=weight_loss, intent=info_seeking, do-not-ask=[phone,email]".
 
-- WhatsApp profile pictures from any third-party enricher (e.g., Truecaller). Meta does not expose them and we shouldn't scrape.
-- Bulk IG profile refresh on a cron — backfill is on-demand only to avoid burning Graph rate limits.
+---
 
-Approve to implement?
+## Out of scope
+- Changing lead-capture target fields globally (Settings UI). The extractor populates them silently instead.
+- Adding new tables. We reuse `ai_memory`.
+- Rewriting the Instagram/Messenger path beyond the same shared brain (it inherits the fix automatically).

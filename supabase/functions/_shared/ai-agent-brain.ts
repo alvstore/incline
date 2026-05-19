@@ -134,8 +134,41 @@ export async function runUnifiedAgent(
   const summaryBlock = chatSettings?.conversation_summary ? `\n\n[PRIOR CONVERSATION SUMMARY]\n${chatSettings.conversation_summary}\n` : "";
 
   // 5b. Hydrate persistent contact memory (ai_memory)
-  const memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+  let memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+  // 5c. AUTO-LEARN: extract structured facts from the user's last message and
+  // merge into ai_memory BEFORE building the prompt. This is what stops the
+  // bot from re-asking phone / fitness goal / name on every turn and makes it
+  // respect "first listen my query" style pushback.
+  try {
+    // We need recent messages for the extractor — fetch the last 6 inline.
+    const { data: recentForExtract } = await supabase
+      .from("whatsapp_messages")
+      .select("content, direction")
+      .eq("phone_number", ctx.senderId)
+      .eq("branch_id", ctx.branchId)
+      .order("created_at", { ascending: false })
+      .limit(6);
+    const extractHistory = (recentForExtract || []).reverse().map((m: any) => ({
+      role: m.direction === "inbound" ? "user" : "assistant",
+      content: String(m.content || ""),
+    }));
+    const delta = await extractContextDelta(supabase, ctx, extractHistory, memory);
+    if (delta && (Object.keys(delta.profile || {}).length || Object.keys(delta.facts || {}).length || delta.do_not_ask_add?.length || delta.current_intent || delta.summary)) {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        profile: delta.profile,
+        facts: delta.facts,
+        current_intent: delta.current_intent ?? undefined,
+        do_not_ask_add: delta.do_not_ask_add,
+        summary: delta.summary ?? undefined,
+      });
+      memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+    }
+  } catch (e) {
+    console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
+  }
   const memoryBlock = renderMemoryBlock(memory);
+  const runtimeRules = renderRuntimeRules(memory, ctx.platform);
 
   // 6. Build conversation history (cross-platform, no channel tags)
   const { data: recentMessages } = await supabase
@@ -162,7 +195,7 @@ export async function runUnifiedAgent(
   const customPrompt = aiConfig.system_prompt || `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`;
 
   const memoryPrefix = memoryBlock ? `\n\n${memoryBlock}` : "";
-  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}${memoryPrefix}\n\n${customPrompt}`;
+  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}${memoryPrefix}${runtimeRules}\n\n${customPrompt}`;
 
   // ── HARD RULE #1 — member-first identity ────────────────────────────────────
   if (memberCtx.isMember) {
@@ -923,4 +956,130 @@ async function tryParseAndCaptureLead(
 
   console.log(`[AI:${ctx.platform}] lead captured: ${newLead.id}`);
   return { captured: true, leadId: newLead.id, partialData };
+}
+// ─── Context auto-learning extractor ───────────────────────────────────────────
+// v1.0.0 — silent per-turn LLM pass that pulls structured facts from the user's
+// own words and feeds them into ai_memory. Lets the bot stop re-asking known
+// info and respect explicit pushback ("first listen", "stop asking", etc.).
+//
+// Deterministic pre-checks fire BEFORE the LLM so we never push contact asks
+// after the user told us to listen — even if the extractor stalls/fails.
+
+const LISTENING_RE = /^\s*(first|please|wait|hold on|listen|sun(?:o|iye)|ruk|abhi nahi|pehle|let me|just|don'?t (?:ask|push))/i;
+const DECLINE_PHONE_RE = /\b(no|not|don'?t|nahi|mat|won'?t)\b[^.?!]{0,40}\b(phone|number|call|callback|share|whatsapp)\b/i;
+const GOAL_HINTS: Record<string, RegExp> = {
+  weight_loss: /\b(weight\s*loss|fat\s*loss|lose\s*weight|slim|weight\s*reduce|leaner)\b/i,
+  muscle_gain: /\b(muscle|bulk|mass\s*gain|build\s*strength|hypertrophy)\b/i,
+  endurance:   /\b(stamina|endurance|cardio|running|marathon)\b/i,
+  flexibility: /\b(flexibility|mobility|yoga\s*for|stretch)\b/i,
+  general:     /\b(general\s*fitness|stay\s*fit|overall\s*health|toning)\b/i,
+};
+
+interface ContextDelta {
+  profile?: Record<string, any>;
+  facts?: Record<string, any>;
+  current_intent?: string | null;
+  do_not_ask_add?: string[];
+  summary?: string | null;
+}
+
+async function extractContextDelta(
+  supabase: any,
+  ctx: AgentContext,
+  history: Array<{ role: string; content: string }>,
+  memory: any,
+): Promise<ContextDelta> {
+  const delta: ContextDelta = { profile: {}, facts: {}, do_not_ask_add: [] };
+  const lastUser = (ctx.messageContent || "").trim();
+
+  // ── Deterministic signals (always run; cheap and reliable) ─────────────────
+  // Phone is auto-known on WhatsApp — never re-ask.
+  if (ctx.platform === "whatsapp") delta.do_not_ask_add!.push("phone");
+
+  if (LISTENING_RE.test(lastUser) || DECLINE_PHONE_RE.test(lastUser)) {
+    delta.facts!.consent = { ...(memory?.facts?.consent || {}), push_contact_ask: "declined" };
+    delta.do_not_ask_add!.push("phone", "email", "callback");
+  }
+
+  for (const [goal, re] of Object.entries(GOAL_HINTS)) {
+    if (re.test(lastUser) && !memory?.facts?.fitness_goal) {
+      delta.facts!.fitness_goal = goal;
+      delta.current_intent = "info_seeking";
+      delta.do_not_ask_add!.push("goal");
+      break;
+    }
+  }
+
+  // ── LLM enrichment (best-effort; failure is silent) ────────────────────────
+  try {
+    const transcript = history.slice(-6).map((m) =>
+      `${m.role === "user" ? "User" : "Bot"}: ${String(m.content || "").slice(0, 400)}`
+    ).join("\n");
+    const sys = `You extract structured CRM facts from a gym chat. Return ONLY compact JSON, no prose.
+Schema:
+{"profile":{"first_name"?:string,"language"?:string,"city"?:string},
+ "facts":{"fitness_goal"?:"weight_loss"|"muscle_gain"|"endurance"|"flexibility"|"general","plan_interest"?:string,"experience"?:string,"preferred_time"?:string,"budget_band"?:string},
+ "current_intent":"info_seeking"|"pricing"|"booking"|"complaint"|"careers"|"smalltalk"|null,
+ "consent":{"push_contact_ask":"allowed"|"declined"|"unknown","wants_human":boolean},
+ "do_not_ask_add":string[],
+ "summary":string}
+Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
+    const usr = `Last user message: """${lastUser}"""\n\nRecent transcript:\n${transcript}\n\nCurrent memory facts: ${JSON.stringify(memory?.facts || {})}\nCurrent memory profile: ${JSON.stringify(memory?.profile || {})}`;
+
+    const r = await callAI({
+      scope: "whatsapp_ai",
+      supabase,
+      messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
+      response_format: { type: "json_object" },
+      max_tokens: 400,
+      timeoutMs: 15_000,
+    });
+    const raw = r.content?.trim() || "";
+    const jsonStr = raw.startsWith("{") ? raw : raw.match(/\{[\s\S]*\}/)?.[0];
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.profile && typeof parsed.profile === "object") Object.assign(delta.profile!, parsed.profile);
+      if (parsed.facts && typeof parsed.facts === "object") Object.assign(delta.facts!, parsed.facts);
+      if (parsed.consent && typeof parsed.consent === "object") {
+        delta.facts!.consent = { ...(memory?.facts?.consent || {}), ...(delta.facts!.consent || {}), ...parsed.consent };
+        if (parsed.consent.push_contact_ask === "declined") delta.do_not_ask_add!.push("phone", "email", "callback");
+      }
+      if (parsed.current_intent) delta.current_intent = String(parsed.current_intent);
+      if (Array.isArray(parsed.do_not_ask_add)) delta.do_not_ask_add!.push(...parsed.do_not_ask_add.map((s: any) => String(s)));
+      if (typeof parsed.summary === "string" && parsed.summary.length > 0) delta.summary = parsed.summary.slice(0, 220);
+    }
+    try {
+      await supabase.from("ai_call_logs").insert({
+        purpose: "context_extract", scope: "whatsapp_ai",
+        branch_id: ctx.branchId, provider: r.provider, model: r.model,
+        status: "success", duration_ms: 0, fallback_used: r.fallback_used,
+      });
+    } catch { /* noop */ }
+  } catch (e) {
+    console.warn(`[AI:${ctx.platform}] context extract failed:`, (e as Error).message);
+  }
+
+  // Dedup do_not_ask
+  delta.do_not_ask_add = Array.from(new Set(delta.do_not_ask_add || []));
+  return delta;
+}
+
+/** Render extra runtime rules into the system prompt based on learned memory. */
+function renderRuntimeRules(memory: any, platform: Platform): string {
+  const rules: string[] = [];
+  const consent = memory?.facts?.consent || {};
+  if (consent.push_contact_ask === "declined") {
+    rules.push("LISTENING MODE: The user explicitly asked you to listen / declined a contact ask. Your next reply MUST answer their question with zero CTAs, zero interactive lists, zero contact requests. Plain prose only, end without a question mark unless absolutely required for clarification.");
+  }
+  if (platform === "whatsapp") {
+    rules.push("PHONE GATE: Phone number is already known from WhatsApp. NEVER ask 'Could you share your phone number?', 'May I have your number?', or any variant. Only ask if the user explicitly requests a callback.");
+  }
+  rules.push("ONE-QUESTION RULE: Ask at most ONE question per reply. If you already answered, do not append a follow-up CTA.");
+  if (memory?.facts?.fitness_goal) {
+    rules.push(`KNOWN GOAL: User's fitness goal is "${memory.facts.fitness_goal}". Do NOT re-ask for goal. Tailor the answer to this goal.`);
+  }
+  if (memory?.profile?.first_name) {
+    rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
+  }
+  return rules.length ? `\n\n[RUNTIME RULES — non-negotiable, override softer instructions below]\n- ${rules.join("\n- ")}` : "";
 }
