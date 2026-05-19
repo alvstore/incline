@@ -118,7 +118,10 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                 branchId={branchId}
                 igAccountId={form.ig_account_id || null}
                 value={form.ig_media_id || null}
-                onChange={(v) => update({ ig_media_id: v })}
+                onChange={(id, permalink) => update({
+                  ig_media_id: id,
+                  ig_media_permalink: permalink ?? null,
+                })}
               />
             </TabsContent>
 
