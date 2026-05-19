@@ -261,8 +261,8 @@ function ProviderDrawer({
     setTesting(true);
     setTestResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke('test-ai-provider', {
-        body: { provider, base_url: baseUrl, api_key_secret_name: secretName, default_model: model },
+      const { data, error } = await supabase.functions.invoke('diagnostics', {
+        body: { kind: 'ai_provider', provider, base_url: baseUrl, api_key_secret_name: secretName, default_model: model },
       });
       if (error) throw error;
       setTestResult(data);

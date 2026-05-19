@@ -75,8 +75,9 @@ verify_jwt = false
 [functions.send-email]
 verify_jwt = false
 
-[functions.test-integration]
+[functions.diagnostics]
 verify_jwt = false
+
 
 [functions.create-razorpay-link]
 verify_jwt = true
@@ -96,8 +97,6 @@ verify_jwt = true
 [functions.backup-import]
 verify_jwt = true
 
-[functions.test-ai-provider]
-verify_jwt = false
 
 [functions.notify-lead-created]
 verify_jwt = false

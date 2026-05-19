@@ -497,8 +497,8 @@ function ToolsTab() {
     setTestRunning(true);
     setTestResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke('test-ai-tool', {
-        body: { tool_name: testTool, arguments: JSON.parse(testArgs) },
+      const { data, error } = await supabase.functions.invoke('diagnostics', {
+        body: { kind: 'ai_tool', tool_name: testTool, arguments: JSON.parse(testArgs) },
       });
       if (error) throw error;
       setTestResult(data);
