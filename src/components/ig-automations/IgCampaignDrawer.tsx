@@ -251,6 +251,15 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                 onChange={(v) => update({ human_review: v })} />
             </TabsContent>
 
+            <TabsContent value="test" className="px-6 py-4">
+              <IgTestPanel
+                branchId={branchId}
+                igAccountId={form.ig_account_id || null}
+                igMediaId={form.ig_media_id || null}
+                activeCampaignName={form.name || null}
+              />
+            </TabsContent>
+
             <TabsContent value="review" className="px-6 py-4 space-y-3">
               <div className="rounded-xl border bg-white p-4 space-y-2">
                 <Row k="Name" v={form.name || "—"} />
