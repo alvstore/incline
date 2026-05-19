@@ -706,36 +706,58 @@ async function ingestInstagramMention(value: any, igAccountId: string) {
 type IgProfile = { name: string | null; avatar_url: string | null };
 const _igProfileCache = new Map<string, { profile: IgProfile; ts: number }>();
 
-async function resolveInstagramSenderProfile(igUserId: string, integration: any): Promise<IgProfile> {
+// v2.0.0 — Prefer page_access_token for IG-via-FB-Page lookups (required by
+// Meta for /{IGSID}?fields=name,username,profile_pic_url). Treat empty
+// responses as failures and log the upstream error for actionable debugging.
+// Exported so meta-admin can reuse it for the backfill action.
+export async function resolveInstagramSenderProfile(igUserId: string, integration: any): Promise<IgProfile> {
   const cached = _igProfileCache.get(igUserId);
   if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) return cached.profile;
 
   const empty: IgProfile = { name: null, avatar_url: null };
-  const accessToken = integration?.credentials?.access_token || integration?.credentials?.page_access_token;
-  if (!accessToken) return empty;
+  // For IG-via-FB-Page flow, profile-field lookup requires the PAGE access
+  // token. The user/long-lived token returns empty body or permission errors.
+  const pageToken = integration?.credentials?.page_access_token;
+  const userToken = integration?.credentials?.access_token;
+  const accessToken = pageToken || userToken;
+  if (!accessToken) {
+    console.warn(`[IG profile] no access token on integration for ${igUserId}`);
+    return empty;
+  }
 
   const { isInstagramLogin } = detectMetaHost(accessToken);
   const primaryBase = isInstagramLogin ? IG_API_BASE : META_API_BASE;
   const fallbackBase = isInstagramLogin ? META_API_BASE : IG_API_BASE;
   const fields = "name,username,profile_pic_url";
 
-  async function attempt(base: string): Promise<{ ok: boolean; data: any; status: number }> {
-    const url = `${base}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(accessToken)}`;
+  async function attempt(base: string, token: string, label: string): Promise<{ ok: boolean; data: any; status: number }> {
+    const url = `${base}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
     try {
       const resp = await metaFetchWithFallback(url);
       const data = await resp.json().catch(() => ({}));
-      return { ok: resp.ok, data, status: resp.status };
+      // Treat empty objects / responses without identifying fields as failures
+      // so we surface the upstream error instead of caching null.
+      const meaningful = data && (data.id || data.name || data.username || data.profile_pic_url);
+      if (!resp.ok || data?.error || !meaningful) {
+        console.warn(`[IG profile] ${label} (${base}) returned no profile for ${igUserId} — status=${resp.status} error="${data?.error?.message || 'empty body'}"`);
+        return { ok: false, data, status: resp.status };
+      }
+      return { ok: true, data, status: resp.status };
     } catch (e) {
-      console.warn(`[IG profile] fetch threw on ${base}:`, e instanceof Error ? e.message : e);
+      console.warn(`[IG profile] ${label} fetch threw on ${base}:`, e instanceof Error ? e.message : e);
       return { ok: false, data: {}, status: 0 };
     }
   }
 
   try {
-    let result = await attempt(primaryBase);
+    // Try page token first (correct path for IG-via-Page), then user token as
+    // last-ditch fallback so previously-working setups don't regress.
+    let result = await attempt(primaryBase, accessToken, pageToken ? "page-token" : "user-token");
+    if (!result.ok && pageToken && userToken && userToken !== pageToken) {
+      result = await attempt(primaryBase, userToken, "user-token-fallback");
+    }
     if (!result.ok) {
-      console.warn(`[IG profile] primary (${primaryBase}) failed for ${igUserId}: ${result.data?.error?.message || result.status} — trying fallback`);
-      result = await attempt(fallbackBase);
+      result = await attempt(fallbackBase, accessToken, "alt-host");
     }
     if (!result.ok) {
       _igProfileCache.set(igUserId, { profile: empty, ts: Date.now() });
