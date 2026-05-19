@@ -156,7 +156,11 @@ function isIgsid(value: string): boolean {
 function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string }): string {
   if (c.contact_name && c.contact_name.trim()) return c.contact_name;
   if ((c.platform === 'instagram' || c.platform === 'messenger') && isIgsid(c.phone_number)) {
-    return c.platform === 'instagram' ? 'Instagram User' : 'Messenger User';
+    // Until backfill resolves the username, show a stable short identifier so
+    // staff can distinguish multiple IG users in the list (vs all reading
+    // "Instagram User").
+    const short = c.phone_number.slice(-6);
+    return c.platform === 'instagram' ? `IG · ${short}` : `MSG · ${short}`;
   }
   return formatPhoneDisplay(c.phone_number);
 }
@@ -365,8 +369,11 @@ export default function WhatsAppChatPage() {
     const resolvedName = ident && ident.source !== 'unknown'
       ? ident.display_name
       : (s?.contact_name ?? c.contact_name);
-    // Avatar priority: inline message > chat-settings (covers chats with no recent inbound).
-    const resolvedAvatar = c.contact_avatar_url ?? s?.contact_avatar_url ?? null;
+    // Avatar priority: inline message > chat-settings > matched member/lead avatar.
+    // WhatsApp Cloud API never exposes profile pics, so we fall back to any
+    // avatar attached to the resolved member/lead record so the chat list is
+    // not all gradient initials when the contact is already in our CRM.
+    const resolvedAvatar = c.contact_avatar_url ?? s?.contact_avatar_url ?? ident?.avatar_url ?? null;
     return {
       ...c,
       contact_name: resolvedName,
