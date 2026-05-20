@@ -152,21 +152,19 @@ export default function AnalyticsPage() {
   });
 
   const { data: weeklyEarnings = [] } = useQuery({
-    queryKey: ['analytics-weekly-earnings', branchFilter],
+    queryKey: ['analytics-weekly-earnings-v2', branchFilter],
     queryFn: async () => {
       const now = new Date();
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString();
-      const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString();
-      let q = supabase.from('payments').select('amount, payment_date').gte('payment_date', weekStart).lte('payment_date', weekEnd).eq('status', 'completed');
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      const dayTotals: number[] = [0, 0, 0, 0, 0, 0, 0];
-      data?.forEach((p) => {
-        const d = getDay(new Date(p.payment_date));
-        const idx = d === 0 ? 6 : d - 1;
-        dayTotals[idx] += p.amount;
+      const from = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const to = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueSeries({ branchId: branchFilter, from, to, grain: 'day' });
+      const byDate = new Map(rows.map((r) => [r.period.slice(0, 10), r]));
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      return DAY_NAMES.map((name, i) => {
+        const d = addDays(weekStart, i);
+        const key = format(d, 'yyyy-MM-dd');
+        return { name, earnings: Number(byDate.get(key)?.net || 0) };
       });
-      return DAY_NAMES.map((name, i) => ({ name, earnings: dayTotals[i] }));
     },
   });
 
