@@ -22,10 +22,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2,
-  ListChecks, TrendingUp, Reply, Sparkles, Activity, Zap,
+  ListChecks, TrendingUp, Reply, Sparkles, Activity, Zap, ShieldAlert,
 } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
+import { IgApprovalQueueDrawer } from "@/components/ig-automations/IgApprovalQueueDrawer";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
