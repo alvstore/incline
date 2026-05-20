@@ -1,8 +1,13 @@
-// v2.0.0 — Instagram Comment-to-DM Automation: matching + execution helpers.
+// v2.1.0 — Instagram Comment-to-DM Automation: matching + execution helpers.
 //
 // Used by:
 //   - meta-webhook (matchAndQueueCampaigns on inbound comment)
 //   - process-ig-comment-runs (cron executor)
+//
+// v2.1 changes:
+//   - human_review campaigns now queue runs with status='awaiting_review'
+//     and a pre-rendered dm_draft so a reviewer sees & edits the exact DM.
+//     Executor never picks these up until review_ig_run RPC releases them.
 //
 // v2.0 changes:
 //   - DNC lookup is platform-scoped (no WhatsApp/Instagram collision)
