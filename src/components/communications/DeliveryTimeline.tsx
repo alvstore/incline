@@ -47,7 +47,65 @@ function explainError(raw: string | null | undefined): { code?: string; title: s
   return { title: raw };
 }
 
-export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdAt?: string }) {
+function resolveLogStage(
+  logStatus?: string | null,
+  logDeliveryStatus?: string | null,
+): Stage | 'pending' {
+  const s = (logStatus || '').toLowerCase();
+  const d = (logDeliveryStatus || '').toLowerCase();
+  if (s === 'failed' || s === 'bounced') return s as Stage;
+  if (d === 'failed' || d === 'bounced') return d as Stage;
+  if (d === 'replied' || d === 'read' || d === 'delivered') return d as Stage;
+  if (s === 'sent') return 'sent';
+  if (d && (stageOrder as readonly string[]).includes(d) && d !== 'queued') return d as Stage;
+  return 'pending';
+}
+
+function synthesizeFromLog(
+  logStatus?: string | null,
+  logDeliveryStatus?: string | null,
+  logSentAt?: string | null,
+  logCreatedAt?: string | null,
+  logErrorMessage?: string | null,
+): Event[] {
+  if (!logCreatedAt) return [];
+  const stage = resolveLogStage(logStatus, logDeliveryStatus);
+  const out: Event[] = [
+    { id: 'syn-queued', new_status: 'queued', previous_status: null, provider: null, error_message: null, created_at: logCreatedAt },
+  ];
+  if (stage === 'pending') return out;
+  const sentTs = logSentAt || logCreatedAt;
+  if (stage === 'failed' || stage === 'bounced') {
+    out.push({ id: `syn-${stage}`, new_status: stage, previous_status: 'queued', provider: null, error_message: logErrorMessage || null, created_at: sentTs });
+    return out;
+  }
+  out.push({ id: 'syn-sent', new_status: 'sent', previous_status: 'queued', provider: null, error_message: null, created_at: sentTs });
+  if (stage === 'sent') return out;
+  const idx = stageOrder.indexOf(stage as any);
+  for (let i = 2; i <= idx; i++) {
+    const s = stageOrder[i];
+    out.push({ id: `syn-${s}`, new_status: s, previous_status: stageOrder[i - 1], provider: null, error_message: null, created_at: sentTs });
+  }
+  return out;
+}
+
+interface DeliveryTimelineProps {
+  logId: string;
+  createdAt?: string;
+  logStatus?: string | null;
+  logDeliveryStatus?: string | null;
+  logSentAt?: string | null;
+  logErrorMessage?: string | null;
+}
+
+export function DeliveryTimeline({
+  logId,
+  createdAt,
+  logStatus,
+  logDeliveryStatus,
+  logSentAt,
+  logErrorMessage,
+}: DeliveryTimelineProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -92,21 +150,35 @@ export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdA
     );
   }
 
-  // No delivery events yet (very common for in-app / freshly queued items).
-  // Show a compact awaiting state instead of 5 ghostly dashed circles.
-  if (events.length === 0) {
+  // If we have no real delivery events, derive a synthetic chain from the parent
+  // log so already-sent/delivered messages don't get stuck on the amber card.
+  const effectiveEvents: Event[] =
+    events.length > 0
+      ? events
+      : synthesizeFromLog(logStatus, logDeliveryStatus, logSentAt, createdAt, logErrorMessage);
+
+  const resolvedStage = resolveLogStage(logStatus, logDeliveryStatus);
+  const isPendingOnly =
+    events.length === 0 && (effectiveEvents.length === 0 || resolvedStage === 'pending');
+
+  if (isPendingOnly) {
+    const isQueued =
+      (logDeliveryStatus || '').toLowerCase() === 'queued' ||
+      (logStatus || '').toLowerCase() === 'queued';
     return (
-      <div className="mx-4 my-3 rounded-2xl border border-border/40 bg-gradient-to-br from-muted/40 via-card to-muted/20 px-5 py-4 shadow-sm">
+      <div className="mx-4 my-3 rounded-2xl border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-br from-amber-50/60 via-card to-amber-50/30 dark:from-amber-500/5 dark:via-card dark:to-amber-500/5 px-5 py-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="relative h-9 w-9 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center ring-4 ring-background">
+          <div className="relative h-9 w-9 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center ring-4 ring-background">
             <Hourglass className="h-4 w-4" />
-            <span className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping opacity-60" />
+            <span className="absolute inset-0 rounded-full bg-amber-500/15 animate-ping opacity-50" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-foreground">Awaiting delivery events</div>
+            <div className="text-sm font-semibold text-foreground">
+              {isQueued ? 'Queued for delivery' : 'Waiting for provider acknowledgement'}
+            </div>
             <div className="text-xs text-muted-foreground">
               {createdAt
-                ? `Queued ${formatDistanceToNow(new Date(createdAt), { addSuffix: true })} · provider hasn't reported a status yet`
+                ? `${isQueued ? 'Queued' : 'Created'} ${formatDistanceToNow(new Date(createdAt), { addSuffix: true })} · no status reported yet`
                 : "Provider hasn't reported a status yet"}
             </div>
           </div>
@@ -115,10 +187,8 @@ export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdA
     );
   }
 
-
-
-  const reachedStages = new Set(events.map((e) => e.new_status));
-  const failureEvent = events.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
+  const reachedStages = new Set(effectiveEvents.map((e) => e.new_status));
+  const failureEvent = effectiveEvents.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
   const hasFailure = !!failureEvent;
 
   // Visible stage list:
@@ -129,7 +199,7 @@ export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdA
     : ([...stageOrder] as Stage[]);
 
   // Latest reached stage = drives the "active" pulse
-  const lastEvent = events[events.length - 1];
+  const lastEvent = effectiveEvents[effectiveEvents.length - 1];
   const activeStage = lastEvent?.new_status as Stage | undefined;
 
   // Compute progress fill width as a % across the visible track
@@ -170,7 +240,7 @@ export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdA
           {visibleStages.map((stage) => {
             const meta = stageMeta[stage];
             const reached = reachedStages.has(stage);
-            const event = events.find((e) => e.new_status === stage);
+            const event = effectiveEvents.find((e) => e.new_status === stage);
             const Icon = meta.icon;
             const isActive = stage === activeStage;
             const isFailureStage = stage === 'failed' || stage === 'bounced';
