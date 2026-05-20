@@ -290,6 +290,17 @@ export function IgAutomationsPanel() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-0.5">
+                          {c.human_review && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 rounded-lg px-2 text-xs text-amber-700 hover:bg-amber-50"
+                              onClick={() => setApprovalsFor({ open: true, campaign: c })}
+                              aria-label={`Review pending DMs for ${c.name}`}
+                            >
+                              <ShieldAlert className="h-4 w-4 mr-1" /> Review
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
