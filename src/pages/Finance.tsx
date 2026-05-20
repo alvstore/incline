@@ -12,13 +12,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { 
-  TrendingUp, TrendingDown, Wallet, 
+  TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Clock, CheckCircle, XCircle, Download,
-  CreditCard, Banknote, Smartphone, Receipt, FileText
+  CreditCard, Banknote, Smartphone, Receipt, FileText, BarChart3
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { GstReportTab } from '@/components/finance/GstReportTab';
+import { SalesReportTab } from '@/components/finance/SalesReportTab';
 import { toast } from 'sonner';
 
 export default function FinancePage() {
