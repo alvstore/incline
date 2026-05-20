@@ -1,6 +1,6 @@
 export type IgMatchType = "exact" | "contains" | "starts_with";
 export type IgReplyMode = "template" | "ai" | "hybrid";
-export type IgRunStatus = "pending" | "scheduled" | "sent" | "failed" | "skipped";
+export type IgRunStatus = "pending" | "scheduled" | "sent" | "failed" | "skipped" | "awaiting_review";
 export type IgRunAction = "send_dm" | "public_reply" | "tag_lead" | "notify_staff" | "capture_lead";
 
 export interface IgCommentCampaign {
