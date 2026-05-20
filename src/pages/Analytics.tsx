@@ -934,13 +934,33 @@ export default function AnalyticsPage() {
           <div className="mt-6">
             <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
               <CardHeader>
-                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Avg Session Duration
-                </CardTitle>
-                <CardDescription>Average time members spend per day (last 14 days, minutes)</CardDescription>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-primary" />
+                      Avg Session Duration
+                    </CardTitle>
+                    <CardDescription>
+                      Per member, per visit day · last 14 days · IST · manual check-outs only
+                    </CardDescription>
+                  </div>
+                  {sessionDurationResult && sessionDurationResult.sessionsTotal > 0 && (
+                    <Badge
+                      variant="outline"
+                      className={`text-[11px] ${sessionDurationResult.manualRatio < 0.3 ? 'text-warning border-warning/40' : 'text-muted-foreground'}`}
+                      title={`${sessionDurationResult.sessionsAuto} of ${sessionDurationResult.sessionsTotal} sessions were auto-closed (no manual checkout) and excluded.`}
+                    >
+                      {Math.round((1 - sessionDurationResult.manualRatio) * 100)}% auto-closed
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
+                {sessionDurationResult && sessionDurationResult.sessionsTotal > 0 && sessionDurationResult.manualRatio < 0.3 && (
+                  <div className="mb-3 rounded-xl bg-warning/10 text-warning-foreground text-xs px-3 py-2 border border-warning/20">
+                    Most sessions had no manual check-out, so this average uses a small sample. Ask staff to tap <strong>Check-out</strong> when members leave for a reliable trend.
+                  </div>
+                )}
                 {sessionLoading ? (
                   <div className="h-48 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -953,7 +973,7 @@ export default function AnalyticsPage() {
                         <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}m`} />
                         <Tooltip
-                          formatter={(value: number) => [`${value} min`, 'Avg Duration']}
+                          formatter={(value: number) => [`${value} min`, 'Avg / member-day']}
                           contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         />
                         <Bar dataKey="avgMinutes" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
@@ -965,7 +985,7 @@ export default function AnalyticsPage() {
                     <div className="text-center">
                       <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No session data yet</p>
-                      <p className="text-xs mt-1">Data appears when check-out times are recorded</p>
+                      <p className="text-xs mt-1">Data appears when staff record manual check-outs.</p>
                     </div>
                   </div>
                 )}
