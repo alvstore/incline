@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { format, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, getDay, subDays, addDays } from 'date-fns';
+import { analyticsService } from '@/services/analyticsService';
 import { useState } from 'react';
 import { ResponsiveSheet, ResponsiveSheetHeader, ResponsiveSheetTitle, ResponsiveSheetDescription } from '@/components/ui/ResponsiveSheet';
 import {
