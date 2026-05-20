@@ -63,6 +63,10 @@ const normalizeStatus = (log: any): string => {
   return 'pending';
 };
 
+const PAGE_SIZE_KEY = 'comm-live-feed-page-size';
+const PAGE_SIZES = [50, 100, 200] as const;
+type PageSize = typeof PAGE_SIZES[number];
+
 export function LiveFeed({ branchId }: { branchId?: string }) {
   const qc = useQueryClient();
   const [channel, setChannel] = useState<ChannelKey>('all');
@@ -70,20 +74,66 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['comm-live-feed', branchId],
+  const [pageSize, setPageSize] = useState<PageSize>(() => {
+    if (typeof window === 'undefined') return 100;
+    const stored = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    return (PAGE_SIZES as readonly number[]).includes(stored) ? (stored as PageSize) : 100;
+  });
+  useEffect(() => {
+    try { localStorage.setItem(PAGE_SIZE_KEY, String(pageSize)); } catch {}
+  }, [pageSize]);
+
+  // Older pages, appended after the realtime page-1 query.
+  const [olderPages, setOlderPages] = useState<any[][]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [reachedEnd, setReachedEnd] = useState(false);
+
+  const { data: page1 = [], isLoading } = useQuery({
+    queryKey: ['comm-live-feed', branchId, pageSize],
     queryFn: async () => {
       let q = supabase
         .from('communication_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(pageSize);
       if (branchId) q = q.eq('branch_id', branchId);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
+
+  // Reset pagination whenever the base page1 query key changes.
+  useEffect(() => {
+    setOlderPages([]);
+    setReachedEnd(false);
+  }, [branchId, pageSize]);
+
+  const logs = useMemo(() => [...page1, ...olderPages.flat()], [page1, olderPages]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || reachedEnd) return;
+    const last = logs[logs.length - 1];
+    if (!last?.created_at) return;
+    setLoadingOlder(true);
+    try {
+      let q = supabase
+        .from('communication_logs')
+        .select('*')
+        .lt('created_at', last.created_at)
+        .order('created_at', { ascending: false })
+        .limit(pageSize);
+      if (branchId) q = q.eq('branch_id', branchId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = data || [];
+      if (rows.length > 0) setOlderPages((p) => [...p, rows]);
+      if (rows.length < pageSize) setReachedEnd(true);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [branchId, pageSize, logs, loadingOlder, reachedEnd]);
+
 
   const [livePulse, setLivePulse] = useState(0);
 
