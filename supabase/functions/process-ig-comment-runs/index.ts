@@ -1,4 +1,4 @@
-// v2.0.0 — Instagram Comment-to-DM executor (cron, every 1 min).
+// v2.1.0 — Instagram Comment-to-DM executor (cron, every 1 min).
 // Picks up due `ig_comment_runs` rows and dispatches them.
 // - send_dm    → Graph API Private Reply (recipient.comment_id) → falls back to
 //                recipient.id within the 24h DM window.
@@ -197,7 +197,10 @@ async function processRun(run: any): Promise<void> {
 
   // send_dm
   let message = "";
-  if (campaign.reply_mode === "template") {
+  // If a reviewer pre-approved a draft, that is the source of truth — send it verbatim.
+  if (run.review_decision === "approved" && (run.dm_draft || "").trim()) {
+    message = String(run.dm_draft);
+  } else if (campaign.reply_mode === "template") {
     message = renderTemplate(campaign.dm_template || "", vars);
   } else {
     const ai = await generateAiMessage({ campaign, run });

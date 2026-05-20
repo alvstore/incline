@@ -5,6 +5,7 @@ import {
   useToggleIgCampaign,
   useDeleteIgCampaign,
   useIgRunsTrend,
+  useIgApprovalsCount,
 } from "@/services/igAutomationService";
 import type { IgCommentCampaign } from "@/types/igAutomations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,10 +22,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Instagram, MessageSquare, Users, AlertTriangle, Pencil, Trash2,
-  ListChecks, TrendingUp, Reply, Sparkles, Activity, Zap,
+  ListChecks, TrendingUp, Reply, Sparkles, Activity, Zap, ShieldAlert,
 } from "lucide-react";
 import { IgCampaignDrawer } from "@/components/ig-automations/IgCampaignDrawer";
 import { IgRunsLogDrawer } from "@/components/ig-automations/IgRunsLogDrawer";
+import { IgApprovalQueueDrawer } from "@/components/ig-automations/IgApprovalQueueDrawer";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -33,6 +35,7 @@ export function IgAutomationsPanel() {
   const { selectedBranch, branches } = useBranchContext();
   const branchId = selectedBranch && selectedBranch !== "all" ? selectedBranch : branches[0]?.id ?? null;
   const { data: campaigns = [], isLoading } = useIgCampaigns(branchId);
+  const { data: approvalsCount = 0 } = useIgApprovalsCount(branchId);
   const toggle = useToggleIgCampaign();
   const del = useDeleteIgCampaign();
 
@@ -40,6 +43,7 @@ export function IgAutomationsPanel() {
   const [creating, setCreating] = useState(false);
   const [logsFor, setLogsFor] = useState<IgCommentCampaign | null>(null);
   const [deleting, setDeleting] = useState<IgCommentCampaign | null>(null);
+  const [approvalsFor, setApprovalsFor] = useState<{ open: boolean; campaign: IgCommentCampaign | null }>({ open: false, campaign: null });
 
   const stats = useMemo(() => {
     return campaigns.reduce(
@@ -115,6 +119,33 @@ export function IgAutomationsPanel() {
           <HeroStat label="Success rate" value={`${successRate}%`} icon={<Sparkles className="h-3.5 w-3.5" />} />
         </div>
       </div>
+
+      {approvalsCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setApprovalsFor({ open: true, campaign: null })}
+          className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50 via-amber-50 to-orange-50 p-4 text-left shadow-sm shadow-amber-200/40 transition-all duration-200 hover:shadow-md hover:shadow-amber-300/30 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Open approval queue"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md shadow-amber-500/30">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-amber-900">
+                {approvalsCount} DM{approvalsCount === 1 ? "" : "s"} awaiting your review
+              </span>
+              <Badge className="rounded-full border-0 bg-amber-200 text-amber-800">Action required</Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-amber-700/80">
+              Human-review campaigns are holding these messages. Approve, edit, or reject to release.
+            </p>
+          </div>
+          <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition-colors group-hover:bg-amber-100">
+            Open queue →
+          </span>
+        </button>
+      )}
 
       {/* Secondary metric row */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -259,6 +290,17 @@ export function IgAutomationsPanel() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-0.5">
+                          {c.human_review && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 rounded-lg px-2 text-xs text-amber-700 hover:bg-amber-50"
+                              onClick={() => setApprovalsFor({ open: true, campaign: c })}
+                              aria-label={`Review pending DMs for ${c.name}`}
+                            >
+                              <ShieldAlert className="h-4 w-4 mr-1" /> Review
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -307,6 +349,13 @@ export function IgAutomationsPanel() {
         open={!!logsFor}
         onOpenChange={(v) => { if (!v) setLogsFor(null); }}
         campaign={logsFor}
+      />
+      <IgApprovalQueueDrawer
+        open={approvalsFor.open}
+        onOpenChange={(v) => { if (!v) setApprovalsFor({ open: false, campaign: null }); }}
+        branchId={branchId}
+        campaignId={approvalsFor.campaign?.id ?? null}
+        campaignName={approvalsFor.campaign?.name ?? null}
       />
 
       <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>

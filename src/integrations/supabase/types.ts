@@ -5211,6 +5211,7 @@ export type Database = {
           comment_id: string
           comment_text: string | null
           created_at: string
+          dm_draft: string | null
           error_message: string | null
           executed_at: string | null
           id: string
@@ -5221,6 +5222,10 @@ export type Database = {
           matched_keyword: string | null
           outbound_message_id: string | null
           raw_payload: Json | null
+          review_decision: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           scheduled_at: string | null
           skip_reason: string | null
           status: string
@@ -5233,6 +5238,7 @@ export type Database = {
           comment_id: string
           comment_text?: string | null
           created_at?: string
+          dm_draft?: string | null
           error_message?: string | null
           executed_at?: string | null
           id?: string
@@ -5243,6 +5249,10 @@ export type Database = {
           matched_keyword?: string | null
           outbound_message_id?: string | null
           raw_payload?: Json | null
+          review_decision?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scheduled_at?: string | null
           skip_reason?: string | null
           status?: string
@@ -5255,6 +5265,7 @@ export type Database = {
           comment_id?: string
           comment_text?: string | null
           created_at?: string
+          dm_draft?: string | null
           error_message?: string | null
           executed_at?: string | null
           id?: string
@@ -5265,6 +5276,10 @@ export type Database = {
           matched_keyword?: string | null
           outbound_message_id?: string | null
           raw_payload?: Json | null
+          review_decision?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scheduled_at?: string | null
           skip_reason?: string | null
           status?: string
@@ -13372,6 +13387,47 @@ export type Database = {
       reverse_trainer_commission: {
         Args: { p_payment_id: string; p_reason?: string }
         Returns: number
+      }
+      review_ig_run: {
+        Args: {
+          p_decision: string
+          p_edited_body?: string
+          p_notes?: string
+          p_run_id: string
+        }
+        Returns: {
+          action: string
+          attempts: number
+          branch_id: string
+          campaign_id: string
+          comment_id: string
+          comment_text: string | null
+          created_at: string
+          dm_draft: string | null
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          ig_media_id: string | null
+          ig_user_id: string
+          ig_username: string | null
+          lead_id: string | null
+          matched_keyword: string | null
+          outbound_message_id: string | null
+          raw_payload: Json | null
+          review_decision: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          scheduled_at: string | null
+          skip_reason: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ig_comment_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       search_command_bookings: {
         Args: { p_branch_id?: string; p_limit?: number; search_term: string }

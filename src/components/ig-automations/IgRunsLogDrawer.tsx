@@ -22,6 +22,7 @@ const STATUS_STYLE: Record<IgRunStatus, string> = {
   scheduled: "bg-blue-100 text-blue-700",
   failed: "bg-red-100 text-red-700",
   skipped: "bg-amber-100 text-amber-700",
+  awaiting_review: "bg-amber-100 text-amber-800",
 };
 
 export function IgRunsLogDrawer({ open, onOpenChange, campaign }: Props) {

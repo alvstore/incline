@@ -214,3 +214,71 @@ export function useIgRunsTrend(branchId: string | null, days = 14) {
     },
   });
 }
+
+// ──────────────── Human-review approval queue ────────────────
+
+export function useIgPendingApprovals(branchId: string | null, campaignId?: string | null) {
+  return useQuery({
+    queryKey: ["ig-approvals", branchId, campaignId ?? "all"],
+    enabled: !!branchId,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      let q = (supabase as any)
+        .from(RUNS)
+        .select("*, ig_comment_campaigns!inner(id,name,ig_media_permalink)")
+        .eq("branch_id", branchId!)
+        .eq("status", "awaiting_review")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (campaignId) q = q.eq("campaign_id", campaignId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Array<IgCommentRun & {
+        ig_comment_campaigns?: { id: string; name: string; ig_media_permalink: string | null } | null;
+      }>;
+    },
+  });
+}
+
+export function useIgApprovalsCount(branchId: string | null) {
+  return useQuery({
+    queryKey: ["ig-approvals-count", branchId],
+    enabled: !!branchId,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { count, error } = await (supabase as any)
+        .from(RUNS)
+        .select("id", { count: "exact", head: true })
+        .eq("branch_id", branchId!)
+        .eq("status", "awaiting_review");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+export function useReviewIgRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      decision: "approved" | "rejected";
+      edited_body?: string | null;
+      notes?: string | null;
+    }) => {
+      const { data, error } = await (supabase as any).rpc("review_ig_run", {
+        p_run_id: input.id,
+        p_decision: input.decision,
+        p_edited_body: input.edited_body ?? null,
+        p_notes: input.notes ?? null,
+      });
+      if (error) throw error;
+      return data as IgCommentRun;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ig-approvals"] });
+      qc.invalidateQueries({ queryKey: ["ig-approvals-count"] });
+      qc.invalidateQueries({ queryKey: ["ig-runs"] });
+    },
+  });
+}
