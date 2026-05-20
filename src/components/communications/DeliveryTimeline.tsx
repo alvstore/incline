@@ -240,7 +240,7 @@ export function DeliveryTimeline({
           {visibleStages.map((stage) => {
             const meta = stageMeta[stage];
             const reached = reachedStages.has(stage);
-            const event = events.find((e) => e.new_status === stage);
+            const event = effectiveEvents.find((e) => e.new_status === stage);
             const Icon = meta.icon;
             const isActive = stage === activeStage;
             const isFailureStage = stage === 'failed' || stage === 'bounced';
