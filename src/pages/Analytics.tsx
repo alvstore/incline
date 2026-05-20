@@ -137,20 +137,17 @@ export default function AnalyticsPage() {
   });
 
   const { data: revenueByPlan = [], isLoading: planLoading } = useQuery({
-    queryKey: ['analytics-revenue-by-plan', branchFilter],
+    queryKey: ['analytics-revenue-by-plan-v2', branchFilter],
     queryFn: async () => {
-      let q = supabase.from('memberships').select('price_paid, membership_plans(name), branch_id');
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      if (!data || data.length === 0) return [];
-      const grouped = data.reduce((acc: Record<string, number>, m: any) => {
-        const planName = m.membership_plans?.name || 'Other';
-        acc[planName] = (acc[planName] || 0) + (m.price_paid || 0);
-        return acc;
-      }, {});
-      return Object.entries(grouped)
-        .map(([name, value], index) => ({ name, value, fill: CHART_COLORS[index % CHART_COLORS.length] }))
-        .sort((a, b) => b.value - a.value).slice(0, 5);
+      const today = new Date();
+      const from = format(startOfMonth(subMonths(today, 11)), 'yyyy-MM-dd');
+      const to = format(endOfMonth(today), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueByPlan({ branchId: branchFilter, from, to, limit: 5 });
+      return rows.map((r, index) => ({
+        name: r.plan_name,
+        value: Number(r.revenue || 0),
+        fill: CHART_COLORS[index % CHART_COLORS.length],
+      }));
     },
   });
 
