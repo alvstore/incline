@@ -188,7 +188,7 @@ export function DeliveryTimeline({
   }
 
   const reachedStages = new Set(effectiveEvents.map((e) => e.new_status));
-  const failureEvent = events.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
+  const failureEvent = effectiveEvents.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
   const hasFailure = !!failureEvent;
 
   // Visible stage list:
@@ -199,7 +199,7 @@ export function DeliveryTimeline({
     : ([...stageOrder] as Stage[]);
 
   // Latest reached stage = drives the "active" pulse
-  const lastEvent = events[events.length - 1];
+  const lastEvent = effectiveEvents[effectiveEvents.length - 1];
   const activeStage = lastEvent?.new_status as Stage | undefined;
 
   // Compute progress fill width as a % across the visible track
