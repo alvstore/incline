@@ -1,86 +1,113 @@
+# Finance Page Audit + GST Fix + Sales Report Tab
 
-## Audit — current `/tasks`
+## Audit findings (`/finance` → GST Report tab)
 
-Source: `src/pages/Tasks.tsx` (318 lines, single file, table-only view).
+Current implementation reads from a single source (`invoices` table, filtered by `is_gst_invoice = true`). That's why the screenshot shows **"GST Invoices (0)"** even though POS sales exist.
 
-**What's weak**
-1. Plain `h1 "Task Management"` + single "New Task" button. No context, no breadcrumb, no SLA/overdue framing, no view toggle.
-2. Five identical stat cards (`Total / Pending / In Progress / Completed / Overdue`). All the same size, all numeric — no hero, no trend, no proportion.
-3. Stat colors use raw Tailwind (`text-yellow-500`, `text-blue-500`) instead of the project's Vuexy semantic palette (`emerald-500 / amber-500 / blue-400 / red-500`). Same problem on the status/priority badges (`bg-yellow-500/10` etc.) — violates the project rule "Status always uses colored pill badges with `rounded-full px-2.5 py-0.5`".
-4. Only one view: a flat table. No Kanban board, no calendar, no grouping by Today/Overdue/Upcoming. For a task manager in 2026 this is the biggest gap.
-5. Filtering is a single Status dropdown. No search, no Priority filter, no "Mine" / "Unassigned" toggle, no saved views, no bulk select.
-6. Loading state is a centered spinner — project standard is skeleton rows that match the table layout.
-7. Empty state is a faint icon + "No tasks found" — no CTA, no illustration.
-8. Assignee cell is a bare `<Select>` of names — no avatars, no initials, no role chip.
-9. Due date is `new Date().toLocaleDateString()` — no relative time ("in 2d", "3d overdue"), no calendar pill, no SLA bar.
-10. Mobile: 6-column table will horizontally scroll/clip; nothing collapses to cards. Violates project mobile standards.
-11. Cmd+K deep-links (`?new=1`, `?task=…`) exist in code but there's no visible hint anywhere in the UI.
-12. No realtime visual signal — rows just refetch silently.
+**Gaps identified**
 
-## Redesign direction — 2026 Vuexy "Mission Control"
+1. **POS sales are invisible to GST report.** `pos_sales` rows without a linked `invoice_id` (currently 100% of them) never appear. By Indian law, retail/supplement sales are taxable supplies @ 18% GST and must be in GSTR-1.
+2. **HSN codes are not aggregated.** `invoice_items.hsn_code` and `products.tax_rate` exist but the report doesn't group by HSN — required for GSTR-1 HSN summary.
+3. **Membership / PT / Add-on classification is implicit.** `invoices.source` and `invoice_type` fields exist (`manual`, `pos`, `membership`, `pt_package`, `addon`, etc.) but the report doesn't break revenue down by stream.
+4. **Tax split is naive.** CGST/SGST hard-split 50/50 with no IGST handling (inter-state GSTIN); fine for single-state but should be explicit.
+5. **No month-wise pivot / GSTR-ready export.** Only one flat CSV. Accountants need a month picker + GSTR-1 B2B + B2C + HSN summary CSVs.
+6. **No Sales Report view at all** — Today / Week / Month / Date-range, by stream, by branch, by staff.
+7. Minor UX: GST tab cards aren't using the Vuexy gradient hero; tables aren't scroll-locked; download button missing for HSN summary and non-GST.
 
-Goal: shift from a spreadsheet into a focused operations console, while keeping all current functionality (assign, change status, open detail drawer, realtime, Cmd+K).
+## Plan
 
-**1. Header band**
-- Breadcrumb `Operations › Tasks`.
-- Page title `Tasks` + small subtitle "X open · Y overdue · Z due today" computed from `stats`.
-- Right side: search input (`⌘K` hint) · view switcher segment `Board · List · Calendar` · `New Task` button (gradient `from-violet-600 to-indigo-600`).
+### 1. Rewrite GST Report tab (`GstReportTab`)
 
-**2. Bento KPI strip** (replaces the 5 equal cards)
+Unify revenue sources into one in-memory ledger before bucketing:
+
 ```text
-┌──────────────────────────────┬──────────┬──────────┐
-│  TODAY'S FOCUS (gradient)    │ Overdue  │ Done 7d  │
-│  N tasks · M overdue         │  count   │ sparkline│
-│  [Open my queue →]           │          │          │
-├──────────┬──────────┬────────┴──────────┴──────────┤
-│ Pending  │ In prog. │ Completion rate ring (week)  │
-└──────────┴──────────┴──────────────────────────────┘
+sources:
+  - invoices (is_gst_invoice=true)          → taxable supplies w/ explicit rate
+  - invoices (is_gst_invoice=false)         → non-GST income (membership refunds, etc.)
+  - pos_sales (no invoice_id)               → treat as B2C @ 18% HSN-derived
+                                              (back-calc taxable = total / 1.18)
+  - invoice_items                            → for HSN summary on GST invoices
 ```
-- Hero card uses the project's gradient + white text rule.
-- Smaller tiles use `rounded-2xl bg-white shadow-lg shadow-slate-200/50` (project standard).
-- Each tile is clickable → applies the matching filter.
 
-**3. Quick-filter pill row**
-Chips: `All · Mine · Today · Overdue · High priority · Unassigned`. Active chip = filled indigo, others = slate outline. Chips persist to URL `?view=mine`.
+New sub-sections inside the tab:
+- **Month picker** (defaults to current FY month) + branch filter (already global)
+- **Hero KPI strip** (Vuexy gradient): Taxable Value · CGST · SGST · IGST · Total Tax · Gross Sales · Non-GST income
+- **Revenue by Stream** card: Memberships · PT Packages · Add-ons · POS Retail · Other — counts + taxable + tax
+- **GST Rate Breakdown** (existing, extended with IGST column when customer_gstin state ≠ branch state)
+- **HSN Summary** (NEW): groups `invoice_items.hsn_code` (+ inferred `9972` for membership, `999723` for PT, `2106`/`3004` for supplements from product.hsn or default 18%). Columns: HSN · Description · UQC · Qty · Taxable · CGST · SGST · IGST · Total. This is the GSTR-1 Table-12 layout.
+- **B2B Invoices** (with customer_gstin) and **B2C Invoices** (no GSTIN) split tables
+- **POS Sales (taxable)** table — currently missing entirely
+- **Non-GST Income** (existing) kept
 
-**4. View switcher**
+Exports (all month-scoped CSVs ready for CA):
+- `GSTR1_B2B_<month>.csv`
+- `GSTR1_B2C_<month>.csv`
+- `GSTR1_HSN_Summary_<month>.csv`
+- `Sales_Register_<month>.csv` (consolidated income)
+- `Non_GST_Income_<month>.csv`
 
-- **Board (default):** 4 swim-lanes (Pending / In Progress / Completed / Cancelled). Each card = title, priority dot, assignee avatar stack, relative due-date pill, comments count. Drag-and-drop changes status (calls existing `updateTaskStatus`). No new libraries — `@dnd-kit/core` is already a Vuexy-style fit; if not present, fall back to status-button menu on each card.
-- **List:** the current table, but redesigned — assignee shows Avatar + name, due date becomes a relative pill (`amber` if <24h, `red` if overdue), status & priority use the project's pill standard, rows are `rounded-xl` with subtle hover lift, skeleton loading.
-- **Calendar:** month grid by `due_date` (uses `date-fns`, already in project). Read-only initially; click a day to filter list.
+### 2. Default HSN map (no schema change required)
 
-**5. Detail drawer (already exists)** — keep, but ensure it animates from the right per the project's Sheet standard. No structural change required for this redesign pass.
+Use existing `organization_settings.hsn_defaults` JSONB; seed defaults if empty:
 
-**6. Mobile (<768px)**
-Hero collapses to a single horizontally-scrollable KPI strip. Board switches to a single column that's the active swim-lane (lane picker on top). List view rows become stacked cards.
+```text
+membership  → 999723 (Health & fitness services, 18%)
+pt_package  → 999723 (18%)
+class       → 999723 (18%)
+addon       → 999723 (18%)
+pos:supplement → 2106  (18%)   ← Indian "food preparations not elsewhere specified"
+pos:apparel    → 6109  (12%)
+pos:equipment  → 9506  (18%)
+pos:default    → 2106  (18%)
+```
 
-**7. Micro-interactions**
-- Realtime: when a new task arrives, briefly pulse its card / row with `ring-2 ring-indigo-400` then fade out.
-- Optimistic update on status change.
-- Skeleton rows on first load.
+Resolution order at report time: `invoice_items.hsn_code` → `products.hsn_code/tax_rate` → category map → org default (18%).
 
-## Technical notes (for implementation phase)
+### 3. NEW "Sales Report" tab
 
-- New folder `src/components/tasks/`:
-  - `TasksHeader.tsx` — breadcrumb, title, subtitle, search, view switcher, New Task CTA.
-  - `TaskStatsBento.tsx` — gradient hero + 4 tiles + completion ring (`recharts` RadialBar, already in project).
-  - `TaskFilterPills.tsx` — chip row, URL-synced.
-  - `TaskBoard.tsx` — kanban swim-lanes (`@dnd-kit` if available, else menu fallback).
-  - `TaskListView.tsx` — extract current table, restyle with semantic tokens + skeleton.
-  - `TaskCalendarView.tsx` — month grid.
-  - `TaskCard.tsx` — shared card used in Board + mobile List.
-  - `AssigneeAvatar.tsx` — avatar w/ initials fallback, presence dot.
-  - `DueDatePill.tsx` — relative time + color.
-- `Tasks.tsx` becomes a thin orchestrator (`<200 lines`): state (view, filters, search), data hooks, renders header + bento + pills + active view + drawers.
-- No business-logic changes: keep `fetchTasks`, `updateTaskStatus`, `assignTask`, `getTaskStats`, realtime channel, Cmd+K deep links, RBAC (visible to staff+).
-- Colors: replace all `text-yellow-500 / bg-yellow-500/10` etc. with the project's semantic Vuexy pill tokens documented in project knowledge.
-- Accessibility: every icon-only button gets `aria-label`; status pills use sufficient contrast (project rule ≥4.5:1); board cards are keyboard-reorderable (Space to pick up, arrows to move) when @dnd-kit is used.
+Added as 4th tab in the Income/Expenses/GST tablist.
 
-## Scope boundary
+Layout (uses `/skill:ui-ux-pro-max` Vuexy guardrails):
+- **Range chips**: Today · Yesterday · This Week · This Month · Last Month · Custom date range (uses existing `DateRangePicker`)
+- **Hero gradient strip**: Gross Sales · Net Sales (ex-GST) · Transactions · Avg Order Value · Refunds · Net Profit
+- **Trend chart**: daily sales bar + 7-day moving avg line (recharts, already in project)
+- **By Stream donut**: Memberships / PT / POS / Add-ons / Classes
+- **By Payment Method** mini-card row: Cash · Card · UPI · Bank · Wallet
+- **By Branch** table (visible only when "All Branches" selected)
+- **By Staff** leaderboard (top 10 by collections, from `payments.collected_by` / `pos_sales.sold_by`)
+- **Date-wise sales table**: Date · Txn count · Gross · Tax · Net · Refunds · Net Sales (sortable, exportable)
+- **Top Products / Plans** card (from POS items + invoice line items)
+- **Export**: per-day CSV + per-stream CSV + "Accountant pack" zip-style multi-CSV trigger (one click, downloads all 5 GST CSVs + sales register for the selected range)
 
-- **In scope:** visual redesign + view switcher + filter pills + token cleanup + skeletons + mobile layout. All purely presentational + URL state.
-- **Out of scope (unless you say otherwise):** schema changes, new RPCs, subtasks/checklists, attachments, time-tracking, automation rules, recurring tasks.
+### 4. Architecture / code structure
 
-## After plan approval
+```text
+src/pages/Finance.tsx          (orchestrator, add 4th tab)
+src/components/finance/
+  GstReportTab.tsx            (extract from inline, rewrite)
+  SalesReportTab.tsx          (NEW)
+  hooks/
+    useGstReport.ts           (unifies invoices + pos_sales + items)
+    useSalesReport.ts         (range-aware aggregation)
+    useHsnResolver.ts         (HSN/rate lookup w/ org_settings cache)
+  exports/
+    gstr1Exports.ts           (B2B / B2C / HSN CSV builders)
+    salesExports.ts           (daily / stream / accountant pack)
+```
 
-Once you confirm, I'll also call `design--create_directions` to generate 3 visual prototypes of the **bento KPI strip + board lane** so you can pick the exact 2026 aesthetic (e.g. glass-card vs flat-card vs gradient-heavy) before I implement.
+All queries: TanStack Query, branch-scoped, RBAC-gated (owner/manager only — staff cannot see GST/Sales).
+
+### 5. Out of scope (call out)
+
+- No DB migration. (`invoice_items.hsn_code`, `products.tax_rate`, `organization_settings.hsn_defaults` already exist.)
+- No e-invoicing / IRN generation.
+- No backfill of historical POS sales into `invoices` table — handled at report time only.
+- GSTR-3B summary (different return) — can add later if requested.
+
+## Open question
+
+POS sales currently bypass `invoices`. Two options for the GST report:
+- **A (recommended, no migration):** treat unlinked `pos_sales` as B2C taxable supplies at report time using HSN map — instant fix, no data change.
+- **B (heavier):** backfill an invoice row for every POS sale (trigger + script). Cleaner long-term, but a separate task.
+
+I'll proceed with **A** unless you prefer B.

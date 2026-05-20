@@ -12,13 +12,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { 
-  TrendingUp, TrendingDown, Wallet, 
+  TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Clock, CheckCircle, XCircle, Download,
-  CreditCard, Banknote, Smartphone, Receipt, FileText
+  CreditCard, Banknote, Smartphone, Receipt, FileText, BarChart3
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { GstReportTab } from '@/components/finance/GstReportTab';
+import { SalesReportTab } from '@/components/finance/SalesReportTab';
 import { toast } from 'sonner';
 
 export default function FinancePage() {
@@ -521,6 +523,10 @@ export default function FinancePage() {
                   <FileText className="h-4 w-4 text-primary" />
                   GST Report
                 </TabsTrigger>
+                <TabsTrigger value="sales" className="gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Sales Report
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="income">
@@ -697,7 +703,12 @@ export default function FinancePage() {
 
               {/* GST Report Tab */}
               <TabsContent value="gst">
-                <GstReportTab invoices={gstInvoices} formatCurrency={formatCurrency} />
+                <GstReportTab branchId={selectedBranch} range={dateRange} formatCurrency={formatCurrency} />
+              </TabsContent>
+
+              {/* Sales Report Tab */}
+              <TabsContent value="sales">
+                <SalesReportTab branchId={selectedBranch} formatCurrency={formatCurrency} />
               </TabsContent>
             </Tabs>
           </div>
@@ -713,220 +724,3 @@ export default function FinancePage() {
   );
 }
 
-// GST Report sub-component
-type GstBucket = { taxable: number; tax: number; total: number; count: number };
-
-function GstReportTab({ invoices, formatCurrency }: { invoices: any[]; formatCurrency: (v: number) => string }) {
-  const gstInvoices = invoices.filter((inv: any) => inv.is_gst_invoice === true);
-  const nonGstInvoices = invoices.filter((inv: any) => !inv.is_gst_invoice);
-
-  const gstByRate: Record<number, GstBucket> = gstInvoices.reduce((acc: Record<number, GstBucket>, inv: any) => {
-    const rate = inv.gst_rate || 18;
-    if (!acc[rate]) acc[rate] = { taxable: 0, tax: 0, total: 0, count: 0 };
-    const subtotal = inv.subtotal || (inv.total_amount / (1 + rate / 100));
-    const tax = inv.total_amount - subtotal;
-    acc[rate].taxable += subtotal;
-    acc[rate].tax += tax;
-    acc[rate].total += inv.total_amount;
-    acc[rate].count += 1;
-    return acc;
-  }, {} as Record<number, GstBucket>);
-
-  const totalGstIncome = gstInvoices.reduce((s: number, inv: any) => s + (inv.total_amount || 0), 0);
-  const totalNonGstIncome = nonGstInvoices.reduce((s: number, inv: any) => s + (inv.total_amount || 0), 0);
-  const totalTax = (Object.values(gstByRate) as GstBucket[]).reduce((s, r) => s + r.tax, 0);
-  const totalTaxable = (Object.values(gstByRate) as GstBucket[]).reduce((s, r) => s + r.taxable, 0);
-
-  const exportGstReport = () => {
-    const headers = ['Invoice Number', 'Date', 'Customer GSTIN', 'Taxable Value', 'GST Rate %', 'CGST', 'SGST', 'Total'];
-    const rows = gstInvoices.map((inv: any) => {
-      const rate = inv.gst_rate || 18;
-      const subtotal = inv.subtotal || (inv.total_amount / (1 + rate / 100));
-      const tax = inv.total_amount - subtotal;
-      return [
-        inv.invoice_number || '-',
-        format(new Date(inv.created_at), 'yyyy-MM-dd'),
-        inv.customer_gstin || inv.member?.gstin || '-',
-        subtotal.toFixed(2),
-        rate,
-        (tax / 2).toFixed(2),
-        (tax / 2).toFixed(2),
-        inv.total_amount.toFixed(2),
-      ].map(v => `"${v}"`).join(',');
-    });
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gst-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    a.click();
-    toast.success('GST report exported');
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-          <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalTaxable)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Taxable Value (ex-GST)</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-          <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-primary">{formatCurrency(totalTax)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Total Tax Collected</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-          <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalGstIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-1">GST Income (Gross)</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-          <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-muted-foreground">{formatCurrency(totalNonGstIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Non-GST Income</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* GST by Rate Breakdown */}
-      {Object.keys(gstByRate).length > 0 && (
-        <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-          <CardHeader>
-            <CardTitle className="text-base font-bold text-foreground">GST Breakdown by Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>GST Rate</TableHead>
-                  <TableHead>Invoices</TableHead>
-                  <TableHead className="text-right">Taxable Value</TableHead>
-                  <TableHead className="text-right">CGST</TableHead>
-                  <TableHead className="text-right">SGST</TableHead>
-                  <TableHead className="text-right">Total Tax</TableHead>
-                  <TableHead className="text-right">Gross Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(Object.entries(gstByRate) as [string, GstBucket][]).sort(([a], [b]) => Number(a) - Number(b)).map(([rate, data]) => (
-                  <TableRow key={rate}>
-                    <TableCell><Badge variant="outline">{rate}%</Badge></TableCell>
-                    <TableCell>{data.count}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(data.taxable)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(data.tax / 2)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(data.tax / 2)}</TableCell>
-                    <TableCell className="text-right font-medium text-primary">{formatCurrency(data.tax)}</TableCell>
-                    <TableCell className="text-right font-bold">{formatCurrency(data.total)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* GST Invoice Details */}
-      <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base font-bold text-foreground">GST Invoices ({gstInvoices.length})</CardTitle>
-            <CardDescription>Tax invoices with GSTIN and tax breakdown</CardDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={exportGstReport} disabled={gstInvoices.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
-            Download CSV
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>GSTIN</TableHead>
-                <TableHead>GST %</TableHead>
-                <TableHead className="text-right">Taxable</TableHead>
-                <TableHead className="text-right">Tax</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {gstInvoices.slice(0, 50).map((inv: any) => {
-                const rate = inv.gst_rate || 18;
-                const subtotal = inv.subtotal || (inv.total_amount / (1 + rate / 100));
-                const tax = inv.total_amount - subtotal;
-                return (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium">{inv.invoice_number || '-'}</TableCell>
-                    <TableCell>{format(new Date(inv.created_at), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>{inv.member?.profiles?.full_name || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{inv.customer_gstin || inv.member?.gstin || '-'}</TableCell>
-                    <TableCell><Badge variant="secondary">{rate}%</Badge></TableCell>
-                    <TableCell className="text-right">{formatCurrency(subtotal)}</TableCell>
-                    <TableCell className="text-right text-primary">{formatCurrency(tax)}</TableCell>
-                    <TableCell className="text-right font-bold">{formatCurrency(inv.total_amount)}</TableCell>
-                  </TableRow>
-                );
-              })}
-              {gstInvoices.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    No GST invoices found for selected period
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Non-GST Summary */}
-      <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
-        <CardHeader>
-          <CardTitle className="text-base font-bold text-foreground">Non-GST Income ({nonGstInvoices.length})</CardTitle>
-          <CardDescription>Income from invoices without GST — not included in GST returns</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {nonGstInvoices.slice(0, 30).map((inv: any) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-medium">{inv.invoice_number || '-'}</TableCell>
-                  <TableCell>{format(new Date(inv.created_at), 'MMM d, yyyy')}</TableCell>
-                  <TableCell>{inv.member?.profiles?.full_name || '-'}</TableCell>
-                  <TableCell>
-                    <Badge variant={inv.status === 'paid' ? 'default' : 'secondary'}>{inv.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">{formatCurrency(inv.total_amount)}</TableCell>
-                </TableRow>
-              ))}
-              {nonGstInvoices.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    No non-GST invoices found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
