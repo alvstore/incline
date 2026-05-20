@@ -400,10 +400,9 @@ export default function AnalyticsPage() {
                 <CreditCard className="h-5 w-5 text-primary" />
                 Earning Reports
               </CardTitle>
-              <CardDescription>Revenue trends over the last 12 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[220px]">
+              <CardDescription>
+                Net revenue per month · last 12 months · IST · net of refunds &amp; reversals
+              </CardDescription>
                 {revenueLoading ? (
                   <div className="h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
                 ) : revenueByMonth.length > 0 ? (
