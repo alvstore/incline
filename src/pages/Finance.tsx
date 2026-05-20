@@ -523,6 +523,10 @@ export default function FinancePage() {
                   <FileText className="h-4 w-4 text-primary" />
                   GST Report
                 </TabsTrigger>
+                <TabsTrigger value="sales" className="gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Sales Report
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="income">
@@ -699,7 +703,12 @@ export default function FinancePage() {
 
               {/* GST Report Tab */}
               <TabsContent value="gst">
-                <GstReportTab invoices={gstInvoices} formatCurrency={formatCurrency} />
+                <GstReportTab branchId={selectedBranch} range={dateRange} formatCurrency={formatCurrency} />
+              </TabsContent>
+
+              {/* Sales Report Tab */}
+              <TabsContent value="sales">
+                <SalesReportTab branchId={selectedBranch} formatCurrency={formatCurrency} />
               </TabsContent>
             </Tabs>
           </div>
