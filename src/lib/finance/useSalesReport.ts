@@ -54,7 +54,7 @@ export function useSalesReport(branchId: string | undefined, range: Range) {
         const rate = Number(inv?.gst_rate) || 0;
         txns.push({
           id: p.id, date: p.payment_date, amount: Number(p.amount || 0),
-          method: p.payment_method || 'other', stream, collected_by: p.collected_by, rate,
+          method: p.payment_method || 'other', stream, collected_by: p.received_by, rate,
         });
       });
       posSales.forEach((p: any) => {
