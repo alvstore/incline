@@ -403,6 +403,9 @@ export default function AnalyticsPage() {
               <CardDescription>
                 Net revenue per month · last 12 months · IST · net of refunds &amp; reversals
               </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[220px]">
                 {revenueLoading ? (
                   <div className="h-full flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
                 ) : revenueByMonth.length > 0 ? (
@@ -411,7 +414,17 @@ export default function AnalyticsPage() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
                       <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip formatter={(value: number) => [formatCurrency(value), 'Revenue']} labelFormatter={(label, payload) => payload[0]?.payload?.fullMonth || label} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      <Tooltip
+                        formatter={(value: number, _name, item: any) => {
+                          const p = item?.payload || {};
+                          return [
+                            `${formatCurrency(value)}  (Gross ${formatCurrency(p.gross || 0)} − Refunds ${formatCurrency(p.refunds || 0)} − Reversals ${formatCurrency(p.reversals || 0)})`,
+                            'Net Revenue',
+                          ];
+                        }}
+                        labelFormatter={(label, payload) => payload[0]?.payload?.fullMonth || label}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
                       <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
