@@ -311,38 +311,24 @@ export default function AnalyticsPage() {
     },
   });
 
-  // Avg session duration per day for last 14 days
-  const { data: sessionDurationData = [], isLoading: sessionLoading } = useQuery({
-    queryKey: ['analytics-session-duration', branchFilter],
+  // Avg session duration per member per day (IST, last 14 days), excludes auto-closed sessions
+  const { data: sessionDurationResult, isLoading: sessionLoading } = useQuery({
+    queryKey: ['analytics-session-duration-v2', branchFilter],
     queryFn: async () => {
-      const since = subDays(new Date(), 14).toISOString();
-      let q = supabase
-        .from('member_attendance')
-        .select('check_in, check_out')
-        .gte('check_in', since)
-        .not('check_out', 'is', null);
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      if (!data || data.length === 0) return [];
-      // Group by date, compute average duration in minutes
-      const byDay: Record<string, { total: number; count: number }> = {};
-      data.forEach((row) => {
-        const dateKey = row.check_in.split('T')[0];
-        const durationMs = new Date(row.check_out!).getTime() - new Date(row.check_in).getTime();
-        const durationMin = durationMs / 60000;
-        if (durationMin <= 0 || durationMin > 480) return; // skip bad data
-        if (!byDay[dateKey]) byDay[dateKey] = { total: 0, count: 0 };
-        byDay[dateKey].total += durationMin;
-        byDay[dateKey].count++;
-      });
-      return Object.entries(byDay)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, { total, count }]) => ({
-          date: format(new Date(date), 'dd MMM'),
-          avgMinutes: Math.round(total / count),
+      const rows = await analyticsService.sessionDurationDaily({ branchId: branchFilter, days: 14 });
+      const chart = rows
+        .filter((r) => r.avg_minutes !== null)
+        .map((r) => ({
+          date: format(new Date(r.day), 'dd MMM'),
+          avgMinutes: Math.round(Number(r.avg_minutes) || 0),
         }));
+      const sessionsTotal = rows.reduce((s, r) => s + (r.sessions_total || 0), 0);
+      const sessionsAuto = rows.reduce((s, r) => s + (r.sessions_auto || 0), 0);
+      const manualRatio = sessionsTotal > 0 ? (sessionsTotal - sessionsAuto) / sessionsTotal : 0;
+      return { chart, sessionsTotal, sessionsAuto, manualRatio };
     },
   });
+  const sessionDurationData = sessionDurationResult?.chart ?? [];
 
   const [renewalDialog, setRenewalDialog] = useState<{ open: boolean; bucket: string; members: { id: string; name: string; endDate: string }[] }>({
     open: false, bucket: '', members: [],
