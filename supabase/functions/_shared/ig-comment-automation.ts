@@ -224,7 +224,24 @@ export async function matchAndQueueCampaigns(
       const scheduledAt = !skipReason && c.delay_seconds > 0
         ? new Date(Date.now() + c.delay_seconds * 1000).toISOString()
         : null;
-      const status = skipReason ? "skipped" : (scheduledAt ? "scheduled" : "pending");
+
+      // Human-review gate: hold the run as 'awaiting_review' with a pre-rendered
+      // draft so the reviewer sees & can edit the exact DM before release.
+      const needsReview = !skipReason && c.human_review === true;
+      const status = skipReason
+        ? "skipped"
+        : (needsReview ? "awaiting_review" : (scheduledAt ? "scheduled" : "pending"));
+
+      let dmDraft: string | null = null;
+      if (needsReview) {
+        const baseTpl = c.dm_template ?? c.fallback_message ?? "";
+        dmDraft = renderTemplate(baseTpl, {
+          username: event.ig_username ?? "",
+          keyword: matched ?? "",
+          comment: event.text ?? "",
+          campaign: c.name ?? "",
+        });
+      }
 
       const { error: insErr } = await supabase.from("ig_comment_runs").insert({
         campaign_id: c.id,
@@ -238,7 +255,8 @@ export async function matchAndQueueCampaigns(
         action: "send_dm",
         status,
         skip_reason: skipReason,
-        scheduled_at: scheduledAt,
+        scheduled_at: needsReview ? null : scheduledAt,
+        dm_draft: dmDraft,
         raw_payload: event.raw,
       });
 
@@ -253,6 +271,33 @@ export async function matchAndQueueCampaigns(
         p_campaign_id: c.id,
         p_comments_matched: 1,
       });
+
+      // Notify staff when a DM lands in the review queue
+      if (needsReview) {
+        try {
+          const { data: staff } = await supabase
+            .from("user_roles")
+            .select("user_id")
+            .in("role", ["owner", "admin", "manager"]);
+          const seen = new Set<string>();
+          const rows = (staff || [])
+            .map((r: any) => r.user_id)
+            .filter((u: string) => u && !seen.has(u) && (seen.add(u) as unknown as boolean) !== undefined)
+            .map((user_id: string) => ({
+              user_id,
+              branch_id: branchId,
+              title: "IG DM awaiting review",
+              message: `"${(event.text || "").slice(0, 60)}" from @${event.ig_username || event.ig_user_id}`,
+              type: "warning",
+              category: "lead",
+              action_url: "/announcements?tab=instagram&approvals=1",
+              is_read: false,
+            }));
+          if (rows.length) await supabase.from("notifications").insert(rows);
+        } catch (e) {
+          console.error("[ig-auto] review notify failed:", e instanceof Error ? e.message : e);
+        }
+      }
 
       // Queue public comment reply too (best-effort, separate action)
       if (c.comment_public_reply && !skipReason) {
