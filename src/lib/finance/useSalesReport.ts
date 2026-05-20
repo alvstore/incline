@@ -13,7 +13,7 @@ export function useSalesReport(branchId: string | undefined, range: Range) {
 
       let payQ = supabase
         .from('payments')
-        .select('id, amount, payment_date, payment_method, status, collected_by, invoice:invoices(invoice_number, source, invoice_type, pos_sale_id, is_gst_invoice, gst_rate, refund_amount)')
+        .select('id, amount, payment_date, payment_method, status, received_by, invoice:invoices(invoice_number, source, invoice_type, pos_sale_id, is_gst_invoice, gst_rate, refund_amount)')
         .eq('status', 'completed');
       if (branchId && branchId !== 'all') payQ = payQ.eq('branch_id', branchId);
       if (from && to) payQ = payQ.gte('payment_date', from).lte('payment_date', to);
@@ -54,7 +54,7 @@ export function useSalesReport(branchId: string | undefined, range: Range) {
         const rate = Number(inv?.gst_rate) || 0;
         txns.push({
           id: p.id, date: p.payment_date, amount: Number(p.amount || 0),
-          method: p.payment_method || 'other', stream, collected_by: p.collected_by, rate,
+          method: p.payment_method || 'other', stream, collected_by: p.received_by, rate,
         });
       });
       posSales.forEach((p: any) => {
