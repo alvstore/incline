@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle2, Clock, Send, Eye, MessageSquareReply, XCircle, AlertTriangle, Info } from 'lucide-react';
-import { format } from 'date-fns';
+import { CheckCircle2, Clock, Send, Eye, MessageSquareReply, XCircle, AlertTriangle, Info, Hourglass } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface Event {
@@ -47,7 +47,7 @@ function explainError(raw: string | null | undefined): { code?: string; title: s
   return { title: raw };
 }
 
-export function DeliveryTimeline({ logId }: { logId: string }) {
+export function DeliveryTimeline({ logId, createdAt }: { logId: string; createdAt?: string }) {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,8 +73,49 @@ export function DeliveryTimeline({ logId }: { logId: string }) {
   }, [logId]);
 
   if (loading) {
-    return <div className="py-3 text-xs text-muted-foreground text-center">Loading timeline…</div>;
+    return (
+      <div className="mx-4 my-3 rounded-2xl border border-border/40 bg-gradient-to-br from-muted/40 via-card to-muted/20 px-5 py-4 shadow-sm">
+        <div className="relative w-full px-2">
+          <div className="absolute left-5 right-5 top-4 h-1 rounded-full bg-border/60 overflow-hidden">
+            <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-primary/40 to-transparent animate-[shimmer_1.4s_ease-in-out_infinite]" />
+          </div>
+          <div className="relative flex items-start justify-between">
+            {stageOrder.map((s) => (
+              <div key={s} className="flex flex-col items-center min-w-0 flex-1">
+                <div className="relative z-10 h-9 w-9 rounded-full bg-muted/60 ring-4 ring-background animate-pulse" />
+                <div className="mt-2 h-2.5 w-12 rounded-full bg-muted/60 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
+
+  // No delivery events yet (very common for in-app / freshly queued items).
+  // Show a compact awaiting state instead of 5 ghostly dashed circles.
+  if (events.length === 0) {
+    return (
+      <div className="mx-4 my-3 rounded-2xl border border-border/40 bg-gradient-to-br from-muted/40 via-card to-muted/20 px-5 py-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative h-9 w-9 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center ring-4 ring-background">
+            <Hourglass className="h-4 w-4" />
+            <span className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping opacity-60" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-foreground">Awaiting delivery events</div>
+            <div className="text-xs text-muted-foreground">
+              {createdAt
+                ? `Queued ${formatDistanceToNow(new Date(createdAt), { addSuffix: true })} · provider hasn't reported a status yet`
+                : "Provider hasn't reported a status yet"}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
 
   const reachedStages = new Set(events.map((e) => e.new_status));
   const failureEvent = events.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');

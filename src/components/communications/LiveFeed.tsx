@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ChevronDown, ChevronRight, Search, MessageSquare, Mail, Phone, Bell,
-  CheckCircle2, XCircle, Clock, Send, Eye, MessageSquareReply,
+  CheckCircle2, XCircle, Clock, Send, Eye, MessageSquareReply, Loader2, ArrowDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,10 @@ const normalizeStatus = (log: any): string => {
   return 'pending';
 };
 
+const PAGE_SIZE_KEY = 'comm-live-feed-page-size';
+const PAGE_SIZES = [50, 100, 200] as const;
+type PageSize = typeof PAGE_SIZES[number];
+
 export function LiveFeed({ branchId }: { branchId?: string }) {
   const qc = useQueryClient();
   const [channel, setChannel] = useState<ChannelKey>('all');
@@ -69,20 +74,66 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['comm-live-feed', branchId],
+  const [pageSize, setPageSize] = useState<PageSize>(() => {
+    if (typeof window === 'undefined') return 100;
+    const stored = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    return (PAGE_SIZES as readonly number[]).includes(stored) ? (stored as PageSize) : 100;
+  });
+  useEffect(() => {
+    try { localStorage.setItem(PAGE_SIZE_KEY, String(pageSize)); } catch {}
+  }, [pageSize]);
+
+  // Older pages, appended after the realtime page-1 query.
+  const [olderPages, setOlderPages] = useState<any[][]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [reachedEnd, setReachedEnd] = useState(false);
+
+  const { data: page1 = [], isLoading } = useQuery({
+    queryKey: ['comm-live-feed', branchId, pageSize],
     queryFn: async () => {
       let q = supabase
         .from('communication_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(pageSize);
       if (branchId) q = q.eq('branch_id', branchId);
       const { data, error } = await q;
       if (error) throw error;
       return data || [];
     },
   });
+
+  // Reset pagination whenever the base page1 query key changes.
+  useEffect(() => {
+    setOlderPages([]);
+    setReachedEnd(false);
+  }, [branchId, pageSize]);
+
+  const logs = useMemo(() => [...page1, ...olderPages.flat()], [page1, olderPages]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || reachedEnd) return;
+    const last = logs[logs.length - 1];
+    if (!last?.created_at) return;
+    setLoadingOlder(true);
+    try {
+      let q = supabase
+        .from('communication_logs')
+        .select('*')
+        .lt('created_at', last.created_at)
+        .order('created_at', { ascending: false })
+        .limit(pageSize);
+      if (branchId) q = q.eq('branch_id', branchId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = data || [];
+      if (rows.length > 0) setOlderPages((p) => [...p, rows]);
+      if (rows.length < pageSize) setReachedEnd(true);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [branchId, pageSize, logs, loadingOlder, reachedEnd]);
+
 
   const [livePulse, setLivePulse] = useState(0);
 
@@ -308,7 +359,25 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+            <div className="divide-y divide-border/50">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <Skeleton className="h-9 w-9 rounded-xl flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-3.5 w-32 rounded-full" />
+                      <Skeleton className="h-3 w-24 rounded-full" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-3/4 rounded-full" />
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-3 w-12 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
               <div className="mx-auto w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-3">
@@ -362,7 +431,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                       </button>
                       {isOpen && (
                         <div className="bg-muted/20 border-t border-border/50 animate-accordion-down">
-                          <DeliveryTimeline logId={log.id} />
+                          <DeliveryTimeline logId={log.id} createdAt={log.created_at} />
                           {log.error_message && (
                             <div className="px-4 pb-3 text-xs text-rose-600 dark:text-rose-400">
                               <strong>Error:</strong> {log.error_message}
@@ -376,8 +445,54 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               </div>
             </ScrollArea>
           )}
+
+          {!isLoading && logs.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between border-t border-border/50 bg-muted/20 px-4 py-2.5">
+              <div className="text-xs text-muted-foreground tabular-nums">
+                Showing <span className="font-semibold text-foreground">{filtered.length}</span> of {logs.length} loaded
+                {logs.length > 0 && (
+                  <> · oldest: {format(new Date(logs[logs.length - 1].created_at), 'd MMM, HH:mm')}</>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg bg-background border border-border/60 p-0.5">
+                  {PAGE_SIZES.map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => setPageSize(sz)}
+                      className={cn(
+                        'text-[11px] font-medium px-2 py-1 rounded-md transition-colors tabular-nums',
+                        pageSize === sz
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      aria-label={`Page size ${sz}`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadOlder}
+                  disabled={loadingOlder || reachedEnd}
+                  className="h-8 rounded-xl gap-1.5 text-xs"
+                >
+                  {loadingOlder ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</>
+                  ) : reachedEnd ? (
+                    'No older messages'
+                  ) : (
+                    <><ArrowDown className="h-3.5 w-3.5" /> Load older</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
+
   );
 }
