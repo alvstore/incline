@@ -120,6 +120,33 @@ export function IgAutomationsPanel() {
         </div>
       </div>
 
+      {approvalsCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setApprovalsFor({ open: true, campaign: null })}
+          className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50 via-amber-50 to-orange-50 p-4 text-left shadow-sm shadow-amber-200/40 transition-all duration-200 hover:shadow-md hover:shadow-amber-300/30 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Open approval queue"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md shadow-amber-500/30">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-amber-900">
+                {approvalsCount} DM{approvalsCount === 1 ? "" : "s"} awaiting your review
+              </span>
+              <Badge className="rounded-full border-0 bg-amber-200 text-amber-800">Action required</Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-amber-700/80">
+              Human-review campaigns are holding these messages. Approve, edit, or reject to release.
+            </p>
+          </div>
+          <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition-colors group-hover:bg-amber-100">
+            Open queue →
+          </span>
+        </button>
+      )}
+
       {/* Secondary metric row */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <MetricTile
