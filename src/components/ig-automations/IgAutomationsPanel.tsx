@@ -350,6 +350,13 @@ export function IgAutomationsPanel() {
         onOpenChange={(v) => { if (!v) setLogsFor(null); }}
         campaign={logsFor}
       />
+      <IgApprovalQueueDrawer
+        open={approvalsFor.open}
+        onOpenChange={(v) => { if (!v) setApprovalsFor({ open: false, campaign: null }); }}
+        branchId={branchId}
+        campaignId={approvalsFor.campaign?.id ?? null}
+        campaignName={approvalsFor.campaign?.name ?? null}
+      />
 
       <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
         <AlertDialogContent>
