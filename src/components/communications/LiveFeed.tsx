@@ -359,7 +359,25 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+            <div className="divide-y divide-border/50">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <Skeleton className="h-9 w-9 rounded-xl flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-3.5 w-32 rounded-full" />
+                      <Skeleton className="h-3 w-24 rounded-full" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-3/4 rounded-full" />
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-3 w-12 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
               <div className="mx-auto w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-3">
@@ -413,7 +431,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                       </button>
                       {isOpen && (
                         <div className="bg-muted/20 border-t border-border/50 animate-accordion-down">
-                          <DeliveryTimeline logId={log.id} />
+                          <DeliveryTimeline logId={log.id} createdAt={log.created_at} />
                           {log.error_message && (
                             <div className="px-4 pb-3 text-xs text-rose-600 dark:text-rose-400">
                               <strong>Error:</strong> {log.error_message}
@@ -427,8 +445,54 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               </div>
             </ScrollArea>
           )}
+
+          {!isLoading && logs.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between border-t border-border/50 bg-muted/20 px-4 py-2.5">
+              <div className="text-xs text-muted-foreground tabular-nums">
+                Showing <span className="font-semibold text-foreground">{filtered.length}</span> of {logs.length} loaded
+                {logs.length > 0 && (
+                  <> · oldest: {format(new Date(logs[logs.length - 1].created_at), 'd MMM, HH:mm')}</>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg bg-background border border-border/60 p-0.5">
+                  {PAGE_SIZES.map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => setPageSize(sz)}
+                      className={cn(
+                        'text-[11px] font-medium px-2 py-1 rounded-md transition-colors tabular-nums',
+                        pageSize === sz
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      aria-label={`Page size ${sz}`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadOlder}
+                  disabled={loadingOlder || reachedEnd}
+                  className="h-8 rounded-xl gap-1.5 text-xs"
+                >
+                  {loadingOlder ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</>
+                  ) : reachedEnd ? (
+                    'No older messages'
+                  ) : (
+                    <><ArrowDown className="h-3.5 w-3.5" /> Load older</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
+
   );
 }
