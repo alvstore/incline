@@ -65,23 +65,34 @@ export default function AnalyticsPage() {
   });
 
   const { data: revenueByMonth = [], isLoading: revenueLoading } = useQuery({
-    queryKey: ['analytics-revenue-by-month', branchFilter],
+    queryKey: ['analytics-revenue-by-month-v2', branchFilter],
     queryFn: async () => {
-      const months = [];
+      const today = new Date();
+      const from = format(startOfMonth(subMonths(today, 11)), 'yyyy-MM-dd');
+      const to = format(endOfMonth(today), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueSeries({
+        branchId: branchFilter,
+        from,
+        to,
+        grain: 'month',
+      });
+      // Build a continuous 12-month series so empty months render as zero bars
+      const byPeriod = new Map(rows.map((r) => [r.period.slice(0, 7), r]));
+      const out: Array<{ name: string; fullMonth: string; revenue: number; gross: number; refunds: number; reversals: number }> = [];
       for (let i = 11; i >= 0; i--) {
-        const date = subMonths(new Date(), i);
-        const monthStart = startOfMonth(date).toISOString();
-        const monthEnd = endOfMonth(date).toISOString();
-        let q = supabase.from('payments').select('amount').gte('payment_date', monthStart).lte('payment_date', monthEnd).eq('status', 'completed');
-        if (branchFilter) q = q.eq('branch_id', branchFilter);
-        const { data } = await q;
-        months.push({
-          name: format(date, 'MMM'),
-          fullMonth: format(date, 'MMM yyyy'),
-          revenue: data?.reduce((sum, p) => sum + p.amount, 0) || 0,
+        const d = subMonths(today, i);
+        const key = format(d, 'yyyy-MM');
+        const row = byPeriod.get(key);
+        out.push({
+          name: format(d, 'MMM'),
+          fullMonth: format(d, 'MMM yyyy'),
+          revenue: Number(row?.net || 0),
+          gross: Number(row?.gross || 0),
+          refunds: Number(row?.refunds || 0),
+          reversals: Number(row?.reversals || 0),
         });
       }
-      return months;
+      return out;
     },
   });
 
