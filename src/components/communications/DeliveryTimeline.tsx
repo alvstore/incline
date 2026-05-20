@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle2, Clock, Send, Eye, MessageSquareReply, XCircle, AlertTriangle, Info } from 'lucide-react';
-import { format } from 'date-fns';
+import { CheckCircle2, Clock, Send, Eye, MessageSquareReply, XCircle, AlertTriangle, Info, Hourglass } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface Event {
