@@ -61,6 +61,11 @@ export interface IgCommentRun {
   lead_id: string | null;
   outbound_message_id: string | null;
   raw_payload: unknown;
+  dm_draft?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_decision?: "approved" | "rejected" | null;
+  review_notes?: string | null;
   created_at: string;
 }
 
