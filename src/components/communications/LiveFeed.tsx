@@ -401,37 +401,44 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                     <div key={log.id} style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }} className="animate-fade-in">
                       <button
                         onClick={() => setExpanded(isOpen ? null : log.id)}
-                        className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
+                        className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors overflow-hidden"
                       >
                         <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', ch.color)}>
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-foreground truncate">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold text-foreground truncate min-w-0">
                               {name || <span className="text-muted-foreground italic">Unknown</span>}
                             </span>
-                            <span className="text-xs text-muted-foreground tabular-nums">{recipientDisplay}</span>
-                            <Badge variant="outline" className="rounded-full text-[10px] capitalize">{ch.label}</Badge>
+                            <span className="text-xs text-muted-foreground tabular-nums truncate hidden sm:inline-block max-w-[160px]">{recipientDisplay}</span>
+                            <Badge variant="outline" className="rounded-full text-[10px] capitalize flex-shrink-0">{ch.label}</Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className="text-xs text-muted-foreground truncate mt-0.5 pr-2">
                             {log.subject ? <span className="font-medium text-foreground/80">{log.subject} · </span> : null}
                             {log.content}
                           </p>
                         </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-auto">
                           {statusBadge(status)}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {format(new Date(log.created_at), 'HH:mm:ss')}
                           </span>
                         </div>
-                        <div className="text-muted-foreground/60">
+                        <div className="text-muted-foreground/60 flex-shrink-0">
                           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </div>
                       </button>
                       {isOpen && (
                         <div className="bg-muted/20 border-t border-border/50 animate-accordion-down">
-                          <DeliveryTimeline logId={log.id} createdAt={log.created_at} />
+                          <DeliveryTimeline
+                            logId={log.id}
+                            createdAt={log.created_at}
+                            logStatus={log.status}
+                            logDeliveryStatus={log.delivery_status}
+                            logSentAt={log.sent_at}
+                            logErrorMessage={log.error_message}
+                          />
                           {log.error_message && (
                             <div className="px-4 pb-3 text-xs text-rose-600 dark:text-rose-400">
                               <strong>Error:</strong> {log.error_message}
