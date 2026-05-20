@@ -1,113 +1,82 @@
-# Finance Page Audit + GST Fix + Sales Report Tab
+## Scope
 
-## Audit findings (`/finance` → GST Report tab)
+Redesign **only** the Communication Hub → **Live Feed** tab. Two pain points:
 
-Current implementation reads from a single source (`invoices` table, filtered by `is_gst_invoice = true`). That's why the screenshot shows **"GST Invoices (0)"** even though POS sales exist.
+1. **Timeline loading/empty state looks broken** — the expanded row shows plain "Loading timeline…" text, then a row of dashed empty circles when no delivery events exist yet. Reads as a bug.
+2. **Old triggers are unreachable** — `LiveFeed` hard-caps at the last 200 rows with no "Load more" / pagination, so anything older is invisible.
 
-**Gaps identified**
+Out of scope: KPI strip, channel tabs, search, other Comm Hub tabs (Templates, Campaigns, etc.), backend tables, RLS.
 
-1. **POS sales are invisible to GST report.** `pos_sales` rows without a linked `invoice_id` (currently 100% of them) never appear. By Indian law, retail/supplement sales are taxable supplies @ 18% GST and must be in GSTR-1.
-2. **HSN codes are not aggregated.** `invoice_items.hsn_code` and `products.tax_rate` exist but the report doesn't group by HSN — required for GSTR-1 HSN summary.
-3. **Membership / PT / Add-on classification is implicit.** `invoices.source` and `invoice_type` fields exist (`manual`, `pos`, `membership`, `pt_package`, `addon`, etc.) but the report doesn't break revenue down by stream.
-4. **Tax split is naive.** CGST/SGST hard-split 50/50 with no IGST handling (inter-state GSTIN); fine for single-state but should be explicit.
-5. **No month-wise pivot / GSTR-ready export.** Only one flat CSV. Accountants need a month picker + GSTR-1 B2B + B2C + HSN summary CSVs.
-6. **No Sales Report view at all** — Today / Week / Month / Date-range, by stream, by branch, by staff.
-7. Minor UX: GST tab cards aren't using the Vuexy gradient hero; tables aren't scroll-locked; download button missing for HSN summary and non-GST.
+---
 
-## Plan
+## Files touched
 
-### 1. Rewrite GST Report tab (`GstReportTab`)
+- `src/components/communications/DeliveryTimeline.tsx` — redesign loading + empty states, polish track.
+- `src/components/communications/LiveFeed.tsx` — add cursor pagination (Load older / page size selector), add row-level skeletons, refine empty state.
 
-Unify revenue sources into one in-memory ledger before bucketing:
+No new dependencies. No DB/RPC changes.
 
-```text
-sources:
-  - invoices (is_gst_invoice=true)          → taxable supplies w/ explicit rate
-  - invoices (is_gst_invoice=false)         → non-GST income (membership refunds, etc.)
-  - pos_sales (no invoice_id)               → treat as B2C @ 18% HSN-derived
-                                              (back-calc taxable = total / 1.18)
-  - invoice_items                            → for HSN summary on GST invoices
-```
+---
 
-New sub-sections inside the tab:
-- **Month picker** (defaults to current FY month) + branch filter (already global)
-- **Hero KPI strip** (Vuexy gradient): Taxable Value · CGST · SGST · IGST · Total Tax · Gross Sales · Non-GST income
-- **Revenue by Stream** card: Memberships · PT Packages · Add-ons · POS Retail · Other — counts + taxable + tax
-- **GST Rate Breakdown** (existing, extended with IGST column when customer_gstin state ≠ branch state)
-- **HSN Summary** (NEW): groups `invoice_items.hsn_code` (+ inferred `9972` for membership, `999723` for PT, `2106`/`3004` for supplements from product.hsn or default 18%). Columns: HSN · Description · UQC · Qty · Taxable · CGST · SGST · IGST · Total. This is the GSTR-1 Table-12 layout.
-- **B2B Invoices** (with customer_gstin) and **B2C Invoices** (no GSTIN) split tables
-- **POS Sales (taxable)** table — currently missing entirely
-- **Non-GST Income** (existing) kept
+## Design direction (Vuexy + 2026 polish)
 
-Exports (all month-scoped CSVs ready for CA):
-- `GSTR1_B2B_<month>.csv`
-- `GSTR1_B2C_<month>.csv`
-- `GSTR1_HSN_Summary_<month>.csv`
-- `Sales_Register_<month>.csv` (consolidated income)
-- `Non_GST_Income_<month>.csv`
+**Live Feed list**
+- Replace plain "Loading…" with 6 shimmering skeleton rows (avatar pill + 2 text lines + status pill placeholder + timestamp) using existing `Skeleton` primitive — matches actual row geometry so layout doesn't jump.
+- Footer bar (sticky inside the card, `border-t border-border/50 bg-muted/20`):
+  - Left: "Showing N of M loaded · oldest: 14 Mar, 09:22"
+  - Center: `Page size` segmented control — 50 / 100 / 200 (default 100).
+  - Right: **Load older** button (`variant="outline"`, indigo ring on hover) — fetches next page by `created_at < oldestLoaded.created_at` and appends. Disables + shows "No older messages" when the returned page is short.
+- Keep realtime: new INSERTs prepend to page 1; pagination state is independent of realtime cursor.
 
-### 2. Default HSN map (no schema change required)
+**DeliveryTimeline — loading state**
+- Render the actual 5-stage skeleton scaffold (dashed rings + skeleton labels) inside the same `rounded-2xl` gradient card, with a subtle pulsing bar across the track. Feels like the real component is filling in, not "loading text appeared".
 
-Use existing `organization_settings.hsn_defaults` JSONB; seed defaults if empty:
+**DeliveryTimeline — empty/no-events state**
+- When fetch completes with 0 events (very common for in-app / queued items), show a single compact stage row: small clock icon + "Awaiting delivery events" + relative time since `created_at`. No dashed-circle row of ghosts.
+
+**DeliveryTimeline — happy path polish**
+- Tighter spacing on mobile (`gap-1` instead of full justify-between when ≤ 380px).
+- Subtle `motion-safe:animate-[pulse_2s_ease-in-out_infinite]` on the active stage dot's halo (kept lightweight, no Motion lib).
+- Track gradient already good — leave as-is.
+
+All colors via existing tokens (`bg-muted`, `bg-emerald-500`, `text-rose-600`, etc.) — no new design tokens.
+
+---
+
+## Pagination — technical detail
 
 ```text
-membership  → 999723 (Health & fitness services, 18%)
-pt_package  → 999723 (18%)
-class       → 999723 (18%)
-addon       → 999723 (18%)
-pos:supplement → 2106  (18%)   ← Indian "food preparations not elsewhere specified"
-pos:apparel    → 6109  (12%)
-pos:equipment  → 9506  (18%)
-pos:default    → 2106  (18%)
+state:
+  pageSize: 50 | 100 | 200     (default 100, persisted to localStorage)
+  pages: Log[][]                (array of page arrays, page[0] = newest)
+  oldestCursor: string | null   (created_at of last row in last page)
+  hasMore: boolean
+
+query key:
+  ['comm-live-feed', branchId, pageSize]   // page 1 only, realtime-subscribed
+
+loadOlder():
+  fetch from('communication_logs')
+    .lt('created_at', oldestCursor)
+    .order('created_at', desc)
+    .limit(pageSize)
+  append → pages; update oldestCursor; hasMore = rows.length === pageSize
 ```
 
-Resolution order at report time: `invoice_items.hsn_code` → `products.hsn_code/tax_rate` → category map → org default (18%).
+The existing `nameMap` lookup is keyed off `logs` already; it will re-run when `pages` flatten changes — acceptable since it's batched and `staleTime: 60s`.
 
-### 3. NEW "Sales Report" tab
+KPI counts (`KpiStrip`) continue to reflect **only loaded rows** (today's signal), matching current behavior — documented in a tiny info tooltip next to the count.
 
-Added as 4th tab in the Income/Expenses/GST tablist.
+---
 
-Layout (uses `/skill:ui-ux-pro-max` Vuexy guardrails):
-- **Range chips**: Today · Yesterday · This Week · This Month · Last Month · Custom date range (uses existing `DateRangePicker`)
-- **Hero gradient strip**: Gross Sales · Net Sales (ex-GST) · Transactions · Avg Order Value · Refunds · Net Profit
-- **Trend chart**: daily sales bar + 7-day moving avg line (recharts, already in project)
-- **By Stream donut**: Memberships / PT / POS / Add-ons / Classes
-- **By Payment Method** mini-card row: Cash · Card · UPI · Bank · Wallet
-- **By Branch** table (visible only when "All Branches" selected)
-- **By Staff** leaderboard (top 10 by collections, from `payments.collected_by` / `pos_sales.sold_by`)
-- **Date-wise sales table**: Date · Txn count · Gross · Tax · Net · Refunds · Net Sales (sortable, exportable)
-- **Top Products / Plans** card (from POS items + invoice line items)
-- **Export**: per-day CSV + per-stream CSV + "Accountant pack" zip-style multi-CSV trigger (one click, downloads all 5 GST CSVs + sales register for the selected range)
+## Acceptance
 
-### 4. Architecture / code structure
+- [ ] Expanding a row with no events shows a single compact "Awaiting delivery events" row, not a ghost timeline.
+- [ ] Expanding a row mid-fetch shows a skeleton timeline, not plain text.
+- [ ] "Load older" appends prior 100 rows; works across multiple clicks; disables at end.
+- [ ] Page size selector persists across reloads.
+- [ ] Realtime INSERTs still prepend within ~1s.
+- [ ] No layout shift when loading completes (skeleton heights match real rows).
+- [ ] Vuexy tokens only — no raw hex colors added.
 
-```text
-src/pages/Finance.tsx          (orchestrator, add 4th tab)
-src/components/finance/
-  GstReportTab.tsx            (extract from inline, rewrite)
-  SalesReportTab.tsx          (NEW)
-  hooks/
-    useGstReport.ts           (unifies invoices + pos_sales + items)
-    useSalesReport.ts         (range-aware aggregation)
-    useHsnResolver.ts         (HSN/rate lookup w/ org_settings cache)
-  exports/
-    gstr1Exports.ts           (B2B / B2C / HSN CSV builders)
-    salesExports.ts           (daily / stream / accountant pack)
-```
-
-All queries: TanStack Query, branch-scoped, RBAC-gated (owner/manager only — staff cannot see GST/Sales).
-
-### 5. Out of scope (call out)
-
-- No DB migration. (`invoice_items.hsn_code`, `products.tax_rate`, `organization_settings.hsn_defaults` already exist.)
-- No e-invoicing / IRN generation.
-- No backfill of historical POS sales into `invoices` table — handled at report time only.
-- GSTR-3B summary (different return) — can add later if requested.
-
-## Open question
-
-POS sales currently bypass `invoices`. Two options for the GST report:
-- **A (recommended, no migration):** treat unlinked `pos_sales` as B2C taxable supplies at report time using HSN map — instant fix, no data change.
-- **B (heavier):** backfill an invoice row for every POS sale (trigger + script). Cleaner long-term, but a separate task.
-
-I'll proceed with **A** unless you prefer B.
+Skill used: **ui-ux-pro-max** (Vuexy-locked composition guidance).
