@@ -1,82 +1,56 @@
-## Scope
+## Audit findings
 
-Redesign **only** the Communication Hub → **Live Feed** tab. Two pain points:
+**Bug 1 — False "Awaiting delivery events"**
+`DeliveryTimeline` reads ONLY from `communication_delivery_events`. For many channels (in-app, and any provider that doesn't write per-stage rows), the dispatcher updates `communication_logs.status` / `delivery_status` / `sent_at` directly but never inserts timeline events. Result: even messages that are `sent`/`delivered`/`read` show the amber "Awaiting…" card. The parent log already proves delivery — we just aren't using it.
 
-1. **Timeline loading/empty state looks broken** — the expanded row shows plain "Loading timeline…" text, then a row of dashed empty circles when no delivery events exist yet. Reads as a bug.
-2. **Old triggers are unreachable** — `LiveFeed` hard-caps at the last 200 rows with no "Load more" / pagination, so anything older is invisible.
+**Bug 2 — Row overlap in Live Feed**
+In `LiveFeed.tsx` the row button is `flex items-center gap-3` with the right-side status column + chevron rendered as siblings of `flex-1 min-w-0`. The right column has no `flex-shrink-0` on the chevron wrapper and the inner header uses `flex-wrap` which lets the WhatsApp pill wrap up next to the timestamp on narrow widths, visually colliding with the message line shown in the screenshot. Long single-line messages also push the right column because the row itself lacks `overflow-hidden`.
 
-Out of scope: KPI strip, channel tabs, search, other Comm Hub tabs (Templates, Campaigns, etc.), backend tables, RLS.
+**Bug 3 — Visual polish**
+- Timeline shows `HH:mm:ss` per stage but `queued` is rarely emitted as an event, so its timestamp is blank. We have `created_at` — use it.
+- Awaiting card kept for the rare truly-pending case but needs to be a true *pending* state, not the default for already-delivered messages.
 
----
+## Fix plan
+
+### 1. `DeliveryTimeline.tsx` — synthesize stages from the log row
+Accept new props: `logStatus`, `logDeliveryStatus`, `logSentAt`, `logCreatedAt`, `logErrorMessage`.
+
+After fetching `communication_delivery_events`, build a merged event list:
+- If events table has rows → use them as today.
+- If empty → derive a synthetic chain from the log row:
+  - Always add `queued` at `created_at`.
+  - If resolved status ∈ {`sent`,`delivered`,`read`,`replied`} → add `sent` at `sent_at ?? created_at`.
+  - Add the highest reached stage (`delivered`/`read`/`replied`) at `sent_at ?? created_at`.
+  - If `failed`/`bounced` → add failed stage with `error_message`.
+- Only render the amber "Awaiting" card when synthetic chain has just `queued` (i.e. log status is still pending/queued AND no events).
+
+Reuse existing `normalizeStatus` logic (lift a small helper into a shared file or duplicate locally — small enough to duplicate).
+
+Also: for the `queued` dot show `created_at` so the first pill no longer reads blank.
+
+### 2. `LiveFeed.tsx` — row layout hardening
+- Pass the extra props to `<DeliveryTimeline />`: `logStatus={log.status}`, `logDeliveryStatus={log.delivery_status}`, `logSentAt={log.sent_at}`, `logCreatedAt={log.created_at}`, `logErrorMessage={log.error_message}`.
+- Row button: add `overflow-hidden` to the outer button, wrap right-side status+timestamp column in `flex-shrink-0 ml-auto`, and add `flex-shrink-0` to the chevron container.
+- Header line inside the row: remove `flex-wrap`; keep name truncating, render recipient + channel pill as `flex-shrink-0` so they never wrap onto the message line.
+- Message paragraph: keep `truncate`; add `pr-2` so it doesn't kiss the status column.
+- Ensure parent row container has `min-w-0` chain intact (`flex-1 min-w-0` → inner `min-w-0`).
+
+### 3. Polish (no behaviour change)
+- Awaiting card copy: when log status is `pending` show "Waiting for provider acknowledgement"; when `queued` keep current copy. Subtle but more accurate.
+- Replace ping animation tint on Awaiting with a softer amber/20 to match Vuexy palette.
+
+## Out of scope
+- KPI strip, channel tabs, search bar, pagination footer (already redesigned).
+- Backend / `communication_delivery_events` writes.
+- Other Communication Hub tabs.
 
 ## Files touched
+- `src/components/communications/DeliveryTimeline.tsx`
+- `src/components/communications/LiveFeed.tsx`
 
-- `src/components/communications/DeliveryTimeline.tsx` — redesign loading + empty states, polish track.
-- `src/components/communications/LiveFeed.tsx` — add cursor pagination (Load older / page size selector), add row-level skeletons, refine empty state.
+## Verification
+- Open Live Feed → an in-app or already-delivered WhatsApp row should now show the full 5-stage timeline (queued → sent → delivered, with `created_at` and `sent_at` timestamps) instead of the amber "Awaiting…" card.
+- Long messages and the WhatsApp pill should stay on one line each; status column stays right-anchored with no overlap at 1113px and at 375px mobile.
+- A genuinely brand-new pending row (no `sent_at`, status `pending`, no events) still shows the Awaiting card.
 
-No new dependencies. No DB/RPC changes.
-
----
-
-## Design direction (Vuexy + 2026 polish)
-
-**Live Feed list**
-- Replace plain "Loading…" with 6 shimmering skeleton rows (avatar pill + 2 text lines + status pill placeholder + timestamp) using existing `Skeleton` primitive — matches actual row geometry so layout doesn't jump.
-- Footer bar (sticky inside the card, `border-t border-border/50 bg-muted/20`):
-  - Left: "Showing N of M loaded · oldest: 14 Mar, 09:22"
-  - Center: `Page size` segmented control — 50 / 100 / 200 (default 100).
-  - Right: **Load older** button (`variant="outline"`, indigo ring on hover) — fetches next page by `created_at < oldestLoaded.created_at` and appends. Disables + shows "No older messages" when the returned page is short.
-- Keep realtime: new INSERTs prepend to page 1; pagination state is independent of realtime cursor.
-
-**DeliveryTimeline — loading state**
-- Render the actual 5-stage skeleton scaffold (dashed rings + skeleton labels) inside the same `rounded-2xl` gradient card, with a subtle pulsing bar across the track. Feels like the real component is filling in, not "loading text appeared".
-
-**DeliveryTimeline — empty/no-events state**
-- When fetch completes with 0 events (very common for in-app / queued items), show a single compact stage row: small clock icon + "Awaiting delivery events" + relative time since `created_at`. No dashed-circle row of ghosts.
-
-**DeliveryTimeline — happy path polish**
-- Tighter spacing on mobile (`gap-1` instead of full justify-between when ≤ 380px).
-- Subtle `motion-safe:animate-[pulse_2s_ease-in-out_infinite]` on the active stage dot's halo (kept lightweight, no Motion lib).
-- Track gradient already good — leave as-is.
-
-All colors via existing tokens (`bg-muted`, `bg-emerald-500`, `text-rose-600`, etc.) — no new design tokens.
-
----
-
-## Pagination — technical detail
-
-```text
-state:
-  pageSize: 50 | 100 | 200     (default 100, persisted to localStorage)
-  pages: Log[][]                (array of page arrays, page[0] = newest)
-  oldestCursor: string | null   (created_at of last row in last page)
-  hasMore: boolean
-
-query key:
-  ['comm-live-feed', branchId, pageSize]   // page 1 only, realtime-subscribed
-
-loadOlder():
-  fetch from('communication_logs')
-    .lt('created_at', oldestCursor)
-    .order('created_at', desc)
-    .limit(pageSize)
-  append → pages; update oldestCursor; hasMore = rows.length === pageSize
-```
-
-The existing `nameMap` lookup is keyed off `logs` already; it will re-run when `pages` flatten changes — acceptable since it's batched and `staleTime: 60s`.
-
-KPI counts (`KpiStrip`) continue to reflect **only loaded rows** (today's signal), matching current behavior — documented in a tiny info tooltip next to the count.
-
----
-
-## Acceptance
-
-- [ ] Expanding a row with no events shows a single compact "Awaiting delivery events" row, not a ghost timeline.
-- [ ] Expanding a row mid-fetch shows a skeleton timeline, not plain text.
-- [ ] "Load older" appends prior 100 rows; works across multiple clicks; disables at end.
-- [ ] Page size selector persists across reloads.
-- [ ] Realtime INSERTs still prepend within ~1s.
-- [ ] No layout shift when loading completes (skeleton heights match real rows).
-- [ ] Vuexy tokens only — no raw hex colors added.
-
-Skill used: **ui-ux-pro-max** (Vuexy-locked composition guidance).
+Used the ui-ux-pro-max skill for layout audit.
