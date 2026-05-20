@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { format, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, getDay, subDays, addDays } from 'date-fns';
+import { analyticsService } from '@/services/analyticsService';
 import { useState } from 'react';
 import { ResponsiveSheet, ResponsiveSheetHeader, ResponsiveSheetTitle, ResponsiveSheetDescription } from '@/components/ui/ResponsiveSheet';
 import {
@@ -64,23 +65,34 @@ export default function AnalyticsPage() {
   });
 
   const { data: revenueByMonth = [], isLoading: revenueLoading } = useQuery({
-    queryKey: ['analytics-revenue-by-month', branchFilter],
+    queryKey: ['analytics-revenue-by-month-v2', branchFilter],
     queryFn: async () => {
-      const months = [];
+      const today = new Date();
+      const from = format(startOfMonth(subMonths(today, 11)), 'yyyy-MM-dd');
+      const to = format(endOfMonth(today), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueSeries({
+        branchId: branchFilter,
+        from,
+        to,
+        grain: 'month',
+      });
+      // Build a continuous 12-month series so empty months render as zero bars
+      const byPeriod = new Map(rows.map((r) => [r.period.slice(0, 7), r]));
+      const out: Array<{ name: string; fullMonth: string; revenue: number; gross: number; refunds: number; reversals: number }> = [];
       for (let i = 11; i >= 0; i--) {
-        const date = subMonths(new Date(), i);
-        const monthStart = startOfMonth(date).toISOString();
-        const monthEnd = endOfMonth(date).toISOString();
-        let q = supabase.from('payments').select('amount').gte('payment_date', monthStart).lte('payment_date', monthEnd).eq('status', 'completed');
-        if (branchFilter) q = q.eq('branch_id', branchFilter);
-        const { data } = await q;
-        months.push({
-          name: format(date, 'MMM'),
-          fullMonth: format(date, 'MMM yyyy'),
-          revenue: data?.reduce((sum, p) => sum + p.amount, 0) || 0,
+        const d = subMonths(today, i);
+        const key = format(d, 'yyyy-MM');
+        const row = byPeriod.get(key);
+        out.push({
+          name: format(d, 'MMM'),
+          fullMonth: format(d, 'MMM yyyy'),
+          revenue: Number(row?.net || 0),
+          gross: Number(row?.gross || 0),
+          refunds: Number(row?.refunds || 0),
+          reversals: Number(row?.reversals || 0),
         });
       }
-      return months;
+      return out;
     },
   });
 
@@ -125,39 +137,34 @@ export default function AnalyticsPage() {
   });
 
   const { data: revenueByPlan = [], isLoading: planLoading } = useQuery({
-    queryKey: ['analytics-revenue-by-plan', branchFilter],
+    queryKey: ['analytics-revenue-by-plan-v2', branchFilter],
     queryFn: async () => {
-      let q = supabase.from('memberships').select('price_paid, membership_plans(name), branch_id');
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      if (!data || data.length === 0) return [];
-      const grouped = data.reduce((acc: Record<string, number>, m: any) => {
-        const planName = m.membership_plans?.name || 'Other';
-        acc[planName] = (acc[planName] || 0) + (m.price_paid || 0);
-        return acc;
-      }, {});
-      return Object.entries(grouped)
-        .map(([name, value], index) => ({ name, value, fill: CHART_COLORS[index % CHART_COLORS.length] }))
-        .sort((a, b) => b.value - a.value).slice(0, 5);
+      const today = new Date();
+      const from = format(startOfMonth(subMonths(today, 11)), 'yyyy-MM-dd');
+      const to = format(endOfMonth(today), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueByPlan({ branchId: branchFilter, from, to, limit: 5 });
+      return rows.map((r, index) => ({
+        name: r.plan_name,
+        value: Number(r.revenue || 0),
+        fill: CHART_COLORS[index % CHART_COLORS.length],
+      }));
     },
   });
 
   const { data: weeklyEarnings = [] } = useQuery({
-    queryKey: ['analytics-weekly-earnings', branchFilter],
+    queryKey: ['analytics-weekly-earnings-v2', branchFilter],
     queryFn: async () => {
       const now = new Date();
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString();
-      const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString();
-      let q = supabase.from('payments').select('amount, payment_date').gte('payment_date', weekStart).lte('payment_date', weekEnd).eq('status', 'completed');
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      const dayTotals: number[] = [0, 0, 0, 0, 0, 0, 0];
-      data?.forEach((p) => {
-        const d = getDay(new Date(p.payment_date));
-        const idx = d === 0 ? 6 : d - 1;
-        dayTotals[idx] += p.amount;
+      const from = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const to = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const rows = await analyticsService.revenueSeries({ branchId: branchFilter, from, to, grain: 'day' });
+      const byDate = new Map(rows.map((r) => [r.period.slice(0, 10), r]));
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      return DAY_NAMES.map((name, i) => {
+        const d = addDays(weekStart, i);
+        const key = format(d, 'yyyy-MM-dd');
+        return { name, earnings: Number(byDate.get(key)?.net || 0) };
       });
-      return DAY_NAMES.map((name, i) => ({ name, earnings: dayTotals[i] }));
     },
   });
 
@@ -304,38 +311,24 @@ export default function AnalyticsPage() {
     },
   });
 
-  // Avg session duration per day for last 14 days
-  const { data: sessionDurationData = [], isLoading: sessionLoading } = useQuery({
-    queryKey: ['analytics-session-duration', branchFilter],
+  // Avg session duration per member per day (IST, last 14 days), excludes auto-closed sessions
+  const { data: sessionDurationResult, isLoading: sessionLoading } = useQuery({
+    queryKey: ['analytics-session-duration-v2', branchFilter],
     queryFn: async () => {
-      const since = subDays(new Date(), 14).toISOString();
-      let q = supabase
-        .from('member_attendance')
-        .select('check_in, check_out')
-        .gte('check_in', since)
-        .not('check_out', 'is', null);
-      if (branchFilter) q = q.eq('branch_id', branchFilter);
-      const { data } = await q;
-      if (!data || data.length === 0) return [];
-      // Group by date, compute average duration in minutes
-      const byDay: Record<string, { total: number; count: number }> = {};
-      data.forEach((row) => {
-        const dateKey = row.check_in.split('T')[0];
-        const durationMs = new Date(row.check_out!).getTime() - new Date(row.check_in).getTime();
-        const durationMin = durationMs / 60000;
-        if (durationMin <= 0 || durationMin > 480) return; // skip bad data
-        if (!byDay[dateKey]) byDay[dateKey] = { total: 0, count: 0 };
-        byDay[dateKey].total += durationMin;
-        byDay[dateKey].count++;
-      });
-      return Object.entries(byDay)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, { total, count }]) => ({
-          date: format(new Date(date), 'dd MMM'),
-          avgMinutes: Math.round(total / count),
+      const rows = await analyticsService.sessionDurationDaily({ branchId: branchFilter, days: 14 });
+      const chart = rows
+        .filter((r) => r.avg_minutes !== null)
+        .map((r) => ({
+          date: format(new Date(r.day), 'dd MMM'),
+          avgMinutes: Math.round(Number(r.avg_minutes) || 0),
         }));
+      const sessionsTotal = rows.reduce((s, r) => s + (r.sessions_total || 0), 0);
+      const sessionsAuto = rows.reduce((s, r) => s + (r.sessions_auto || 0), 0);
+      const manualRatio = sessionsTotal > 0 ? (sessionsTotal - sessionsAuto) / sessionsTotal : 0;
+      return { chart, sessionsTotal, sessionsAuto, manualRatio };
     },
   });
+  const sessionDurationData = sessionDurationResult?.chart ?? [];
 
   const [renewalDialog, setRenewalDialog] = useState<{ open: boolean; bucket: string; members: { id: string; name: string; endDate: string }[] }>({
     open: false, bucket: '', members: [],
@@ -407,7 +400,9 @@ export default function AnalyticsPage() {
                 <CreditCard className="h-5 w-5 text-primary" />
                 Earning Reports
               </CardTitle>
-              <CardDescription>Revenue trends over the last 12 months</CardDescription>
+              <CardDescription>
+                Net revenue per month · last 12 months · IST · net of refunds &amp; reversals
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[220px]">
@@ -419,7 +414,17 @@ export default function AnalyticsPage() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
                       <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip formatter={(value: number) => [formatCurrency(value), 'Revenue']} labelFormatter={(label, payload) => payload[0]?.payload?.fullMonth || label} contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      <Tooltip
+                        formatter={(value: number, _name, item: any) => {
+                          const p = item?.payload || {};
+                          return [
+                            `${formatCurrency(value)}  (Gross ${formatCurrency(p.gross || 0)} − Refunds ${formatCurrency(p.refunds || 0)} − Reversals ${formatCurrency(p.reversals || 0)})`,
+                            'Net Revenue',
+                          ];
+                        }}
+                        labelFormatter={(label, payload) => payload[0]?.payload?.fullMonth || label}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
                       <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -929,13 +934,33 @@ export default function AnalyticsPage() {
           <div className="mt-6">
             <Card className="rounded-2xl border-none shadow-lg shadow-primary/5">
               <CardHeader>
-                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Avg Session Duration
-                </CardTitle>
-                <CardDescription>Average time members spend per day (last 14 days, minutes)</CardDescription>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-primary" />
+                      Avg Session Duration
+                    </CardTitle>
+                    <CardDescription>
+                      Per member, per visit day · last 14 days · IST · manual check-outs only
+                    </CardDescription>
+                  </div>
+                  {sessionDurationResult && sessionDurationResult.sessionsTotal > 0 && (
+                    <Badge
+                      variant="outline"
+                      className={`text-[11px] ${sessionDurationResult.manualRatio < 0.3 ? 'text-warning border-warning/40' : 'text-muted-foreground'}`}
+                      title={`${sessionDurationResult.sessionsAuto} of ${sessionDurationResult.sessionsTotal} sessions were auto-closed (no manual checkout) and excluded.`}
+                    >
+                      {Math.round((1 - sessionDurationResult.manualRatio) * 100)}% auto-closed
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
+                {sessionDurationResult && sessionDurationResult.sessionsTotal > 0 && sessionDurationResult.manualRatio < 0.3 && (
+                  <div className="mb-3 rounded-xl bg-warning/10 text-warning-foreground text-xs px-3 py-2 border border-warning/20">
+                    Most sessions had no manual check-out, so this average uses a small sample. Ask staff to tap <strong>Check-out</strong> when members leave for a reliable trend.
+                  </div>
+                )}
                 {sessionLoading ? (
                   <div className="h-48 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -948,7 +973,7 @@ export default function AnalyticsPage() {
                         <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}m`} />
                         <Tooltip
-                          formatter={(value: number) => [`${value} min`, 'Avg Duration']}
+                          formatter={(value: number) => [`${value} min`, 'Avg / member-day']}
                           contentStyle={{ backgroundColor: 'hsl(var(--card))', border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         />
                         <Bar dataKey="avgMinutes" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
@@ -960,7 +985,7 @@ export default function AnalyticsPage() {
                     <div className="text-center">
                       <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No session data yet</p>
-                      <p className="text-xs mt-1">Data appears when check-out times are recorded</p>
+                      <p className="text-xs mt-1">Data appears when staff record manual check-outs.</p>
                     </div>
                   </div>
                 )}

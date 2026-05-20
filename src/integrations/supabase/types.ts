@@ -6244,6 +6244,7 @@ export type Database = {
           check_in: string
           check_in_method: string | null
           check_out: string | null
+          check_out_method: string
           created_at: string
           force_entry: boolean | null
           force_entry_by: string | null
@@ -6258,6 +6259,7 @@ export type Database = {
           check_in?: string
           check_in_method?: string | null
           check_out?: string | null
+          check_out_method?: string
           created_at?: string
           force_entry?: boolean | null
           force_entry_by?: string | null
@@ -6272,6 +6274,7 @@ export type Database = {
           check_in?: string
           check_in_method?: string | null
           check_out?: string | null
+          check_out_method?: string
           created_at?: string
           force_entry?: boolean | null
           force_entry_by?: string | null
@@ -12406,6 +12409,45 @@ export type Database = {
         }
         Returns: Json
       }
+      analytics_revenue_by_plan: {
+        Args: {
+          p_branch?: string
+          p_from?: string
+          p_limit?: number
+          p_to?: string
+        }
+        Returns: {
+          plan_name: string
+          revenue: number
+          txn_count: number
+        }[]
+      }
+      analytics_revenue_series: {
+        Args: {
+          p_branch?: string
+          p_from?: string
+          p_grain?: string
+          p_to?: string
+        }
+        Returns: {
+          gross: number
+          net: number
+          period: string
+          refunds: number
+          reversals: number
+          txn_count: number
+        }[]
+      }
+      analytics_session_duration_daily: {
+        Args: { p_branch?: string; p_days?: number }
+        Returns: {
+          avg_minutes: number
+          day: string
+          member_days: number
+          sessions_auto: number
+          sessions_total: number
+        }[]
+      }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
@@ -12450,6 +12492,7 @@ export type Database = {
         }
         Returns: Json
       }
+      auto_close_stale_attendance: { Args: never; Returns: number }
       auto_expire_memberships: { Args: never; Returns: undefined }
       award_group_bonus: { Args: { p_group_id: string }; Returns: Json }
       bill_locker_period: {
