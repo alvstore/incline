@@ -35,6 +35,7 @@ export function IgAutomationsPanel() {
   const { selectedBranch, branches } = useBranchContext();
   const branchId = selectedBranch && selectedBranch !== "all" ? selectedBranch : branches[0]?.id ?? null;
   const { data: campaigns = [], isLoading } = useIgCampaigns(branchId);
+  const { data: approvalsCount = 0 } = useIgApprovalsCount(branchId);
   const toggle = useToggleIgCampaign();
   const del = useDeleteIgCampaign();
 
@@ -42,6 +43,7 @@ export function IgAutomationsPanel() {
   const [creating, setCreating] = useState(false);
   const [logsFor, setLogsFor] = useState<IgCommentCampaign | null>(null);
   const [deleting, setDeleting] = useState<IgCommentCampaign | null>(null);
+  const [approvalsFor, setApprovalsFor] = useState<{ open: boolean; campaign: IgCommentCampaign | null }>({ open: false, campaign: null });
 
   const stats = useMemo(() => {
     return campaigns.reduce(
