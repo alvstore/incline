@@ -5,6 +5,7 @@ import {
   useToggleIgCampaign,
   useDeleteIgCampaign,
   useIgRunsTrend,
+  useIgApprovalsCount,
 } from "@/services/igAutomationService";
 import type { IgCommentCampaign } from "@/types/igAutomations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
