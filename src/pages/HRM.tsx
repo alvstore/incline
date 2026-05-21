@@ -303,10 +303,13 @@ export default function HRMPage() {
     downloadBlob(blob, `Contract-${employeeCode}.pdf`);
   };
 
-  const createContractSignLink = async (contract: any) => {
+  const createContractSignLink = async (
+    contract: any,
+    role: 'employee' | 'witness_1' | 'witness_2' | 'hr' = 'employee',
+  ) => {
     try {
       const { data, error } = await supabase.functions.invoke('contract-signing', {
-        body: { action: 'create_link', contract_id: contract.id },
+        body: { action: 'create_link', contract_id: contract.id, role },
       });
 
       if (error) throw error;
@@ -316,11 +319,16 @@ export default function HRMPage() {
       if (!link) throw new Error('No sign URL returned');
 
       await navigator.clipboard.writeText(link);
-      toast.success('Signing link copied to clipboard');
+      const label =
+        role === 'employee' ? 'Employee signing link'
+        : role === 'hr' ? 'HR override link'
+        : role === 'witness_1' ? 'Witness 1 link'
+        : 'Witness 2 link';
+      toast.success(`${label} copied to clipboard`);
 
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to generate signing link');
+      toast.error(err?.message || 'Failed to generate link');
     }
   };
 
