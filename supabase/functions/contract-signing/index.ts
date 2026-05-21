@@ -601,7 +601,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
       signature_status, signed_at, witness_1, witness_2, contract_variables,
       governing_jurisdiction, arbitration_seat, notice_period_days,
       branch_id,
-      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
+      employees(user_id, employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
       trainers(user_id)
     `)
     .eq("id", contractId).single();
