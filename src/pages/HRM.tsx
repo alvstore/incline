@@ -1268,14 +1268,24 @@ export default function HRMPage() {
                       onChange={(e) => setPayrollMonth(e.target.value)}
                       className="w-[180px]"
                     />
-                    <Button 
-                      onClick={() => processAllPayroll.mutate()}
-                      disabled={processAllPayroll.isPending}
-                      className="bg-accent hover:bg-accent/90"
-                    >
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Process All
-                    </Button>
+                    {(() => {
+                      const anyBlocked = payrollStaff.some((s: PayrollStaffItem) => {
+                        const r = (payrollData as Record<string, any>)[s.id];
+                        return r && r.attendanceRecorded === false && !r.manualOverride;
+                      });
+                      const disabled = processAllPayroll.isPending || isLoadingPayroll || anyBlocked;
+                      return (
+                        <Button
+                          onClick={() => processAllPayroll.mutate()}
+                          disabled={disabled}
+                          className="bg-accent hover:bg-accent/90"
+                          title={anyBlocked ? 'Some staff have no attendance recorded. Sync MIPS or mark them present before processing.' : undefined}
+                        >
+                          <DollarSign className="mr-2 h-4 w-4" />
+                          Process All
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </div>
               </CardHeader>
