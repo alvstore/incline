@@ -684,8 +684,8 @@ export default function HRMPage() {
                                   onClick={async () => {
                                     const t = toast.loading('Generating stamped PDF...');
                                     try {
-                                      const { data, error } = await supabase.functions.invoke('generate-stamped-pdf', {
-                                        body: { contract_id: contract.id, copy: 'employee_copy' },
+                                      const { data, error } = await supabase.functions.invoke('contract-signing', {
+                                        body: { action: 'get_pdf', contract_id: contract.id, copy: 'employee_copy' },
                                       });
                                       if (error) throw error;
                                       if (data?.error) throw new Error(data.error);
