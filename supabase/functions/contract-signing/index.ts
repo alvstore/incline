@@ -92,6 +92,69 @@ function missingRequired(vars: Record<string, unknown> | null | undefined): stri
   });
 }
 
+// ── Server-side prefill (mirrors src/lib/hrm/contractPrefill.ts) ──────────
+function _nonEmpty(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+function _flattenAddress(addr: unknown): string | null {
+  if (!addr || typeof addr !== "object") return null;
+  const a = addr as Record<string, unknown>;
+  const parts = [a.line1, a.line2, a.street, a.area, a.city, a.state, a.country, a.pin || a.postal_code || a.pincode]
+    .map(_nonEmpty).filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+function _last4(v: unknown): string | null {
+  const s = _nonEmpty(v); if (!s) return null;
+  const d = s.replace(/\D/g, "");
+  return d.length >= 4 ? d.slice(-4) : null;
+}
+async function loadPrefillForContract(contract: any): Promise<Record<string, string>> {
+  // contract may carry employees(*)/trainers(*) via the joined select, but we
+  // need the *full* rows including jsonb columns — fetch by user_id explicitly.
+  const employeeUserId = (contract as any)?.employees?.user_id || null;
+  const trainerUserId = (contract as any)?.trainers?.user_id || null;
+  const userId = employeeUserId || trainerUserId || null;
+  if (!userId) return {};
+
+  const [{ data: emp }, { data: trn }, { data: prof }] = await Promise.all([
+    supabase.from("employees")
+      .select("father_or_spouse_name, current_address, permanent_address, emergency_contact, pan_number, aadhaar_last4")
+      .eq("user_id", userId).maybeSingle(),
+    supabase.from("trainers")
+      .select("government_id_type, government_id_number")
+      .eq("user_id", userId).maybeSingle(),
+    supabase.from("profiles")
+      .select("address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number")
+      .eq("id", userId).maybeSingle(),
+  ]);
+
+  const out: Record<string, string> = {};
+  const father = _nonEmpty(emp?.father_or_spouse_name);
+  if (father) out.father_or_husband_name = father;
+
+  const addr = _flattenAddress(emp?.current_address) || _flattenAddress(emp?.permanent_address)
+    || [prof?.address, prof?.city, prof?.state, prof?.country, prof?.postal_code].map(_nonEmpty).filter(Boolean).join(", ");
+  if (addr) out.residential_address = addr;
+
+  const ec = (emp?.emergency_contact ?? {}) as Record<string, unknown>;
+  const ecName = _nonEmpty(ec.name) || _nonEmpty(prof?.emergency_contact_name);
+  const ecPhone = _nonEmpty(ec.phone) || _nonEmpty(prof?.emergency_contact_phone);
+  if (ecName) out.emergency_contact_name = ecName;
+  if (ecPhone) out.emergency_contact_phone = ecPhone;
+
+  const idLast4 = _last4(emp?.pan_number) || _nonEmpty(emp?.aadhaar_last4)
+    || _last4(prof?.government_id_number) || _last4(trn?.government_id_number);
+  if (idLast4) out.pan_or_aadhaar_last4 = idLast4;
+
+  return out;
+}
+function mergeVarsWithPrefill(cvars: Record<string, unknown> | null | undefined, prefill: Record<string, string>): Record<string, unknown> {
+  // contract_variables (HR-entered / employee-corrected) win over prefill defaults.
+  return { ...prefill, ...((cvars ?? {}) as Record<string, unknown>) };
+}
+
 // ── 1. Create signing link ────────────────────────────────────────────────
 async function createSignLink(req: Request, body: any) {
   const contractId = body?.contract_id;
