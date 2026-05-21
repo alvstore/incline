@@ -636,8 +636,32 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     if (isHeading) spacer(2);
   }
 
-  spacer(20);
-  newPageIfNeeded(120);
+  spacer(14);
+  newPageIfNeeded(160);
+
+  // ── Filled details (captured via /contract-fill) ──────────────────────
+  const cvars = ((contract as any).contract_variables ?? {}) as Record<string, any>;
+  const detailRows: [string, any][] = [
+    ["S/o · D/o · W/o",        cvars.father_or_husband_name],
+    ["Residential address",    cvars.residential_address],
+    ["Emergency contact",      cvars.emergency_contact_name && cvars.emergency_contact_phone
+                                  ? `${cvars.emergency_contact_name} — ${cvars.emergency_contact_phone}`
+                                  : (cvars.emergency_contact_name || cvars.emergency_contact_phone)],
+    ["PAN / Aadhaar (last 4)", cvars.pan_or_aadhaar_last4],
+    ["Witness 1",              cvars.witness_1_name && cvars.witness_1_phone
+                                  ? `${cvars.witness_1_name} — ${cvars.witness_1_phone}` : cvars.witness_1_name],
+    ["Witness 2",              cvars.witness_2_name && cvars.witness_2_phone
+                                  ? `${cvars.witness_2_name} — ${cvars.witness_2_phone}` : cvars.witness_2_name],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
+
+  if (detailRows.length > 0) {
+    writeLine("Filled details", { bold: true, size: 12 });
+    spacer(4);
+    for (const [label, value] of detailRows) writeLine(`${label}: ${value}`);
+    spacer(14);
+    newPageIfNeeded(120);
+  }
+
   writeLine("Signatures", { bold: true, size: 12 });
   spacer(4);
 
