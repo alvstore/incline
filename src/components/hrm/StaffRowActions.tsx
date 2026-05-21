@@ -167,6 +167,13 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <OffboardStaffSheet
+        open={offboardOpen}
+        onOpenChange={setOffboardOpen}
+        person={person}
+        mode={offboardMode}
+      />
     </div>
   );
 }
