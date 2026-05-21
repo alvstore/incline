@@ -385,11 +385,23 @@ async function signContract(req: Request, body: any) {
 
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
-    .select("id, contract_id, branch_id, status, expires_at")
+    .select("id, contract_id, branch_id, status, expires_at, role")
     .eq("token_hash", tokenHash).is("revoked_at", null).single();
   if (requestError || !requestRow) return json({ error: "Invalid signing link" }, 404);
   if (requestRow.status === "signed") return json({ error: "This contract is already signed" }, 410);
   if (requestRow.expires_at < now) return json({ error: "This signing link has expired" }, 410);
+  if (((requestRow as any).role || "employee") !== "employee") {
+    return json({ error: "This link can only fill details, not sign. Ask HR for a signing link." }, 403);
+  }
+
+  // Gate signing on required fields being collected.
+  const { data: cv } = await supabase.from("contracts").select("contract_variables")
+    .eq("id", requestRow.contract_id).single();
+  const missing = missingRequired((cv as any)?.contract_variables);
+  if (missing.length > 0) {
+    return json({ error: "fields_incomplete", missing_required: missing }, 409);
+  }
+
 
   // Verify OTP from shared table (purpose+context_id scope)
   const { data: otpRow } = await supabase
