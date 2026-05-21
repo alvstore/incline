@@ -166,6 +166,63 @@ export default function HrSettingsTab() {
 
       <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-indigo-600" /> Statutory payroll deductions</CardTitle>
+          <CardDescription>All deductions are <strong>OFF by default</strong>. Enable individually when your establishment is registered. Changes apply to the next payroll run.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* PF */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Provident Fund (PF)</div>
+                <div className="text-xs text-slate-500">EPFO employee contribution. Capped at statutory wage ceiling unless cleared.</div>
+              </div>
+              <Switch checked={form.pf_enabled} onCheckedChange={(v) => patch('pf_enabled', v)} />
+            </div>
+            {form.pf_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Employee %"><Input type="number" step={0.01} value={form.pf_employee_pct} onChange={(e) => patch('pf_employee_pct', Number(e.target.value))} /></Field>
+                <Field label="Wage ceiling (₹/mo, blank = none)"><Input type="number" value={form.pf_wage_ceiling ?? ''} onChange={(e) => patch('pf_wage_ceiling', e.target.value === '' ? null : Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+
+          {/* ESI */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Employee State Insurance (ESI)</div>
+                <div className="text-xs text-slate-500">Applies to staff earning ≤ ₹21,000 / month when establishment is ESIC registered.</div>
+              </div>
+              <Switch checked={form.esi_enabled} onCheckedChange={(v) => patch('esi_enabled', v)} />
+            </div>
+            {form.esi_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Employee %"><Input type="number" step={0.01} value={form.esi_employee_pct} onChange={(e) => patch('esi_employee_pct', Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+
+          {/* Professional Tax */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Professional Tax</div>
+                <div className="text-xs text-slate-500">State levy — Rajasthan currently has no PT. Enable only if state requires it.</div>
+              </div>
+              <Switch checked={form.pt_enabled} onCheckedChange={(v) => patch('pt_enabled', v)} />
+            </div>
+            {form.pt_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Flat amount per month (₹)"><Input type="number" value={form.pt_amount ?? ''} onChange={(e) => patch('pt_amount', e.target.value === '' ? null : Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <CardHeader>
           <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-indigo-600" /> POSH Internal Committee</CardTitle>
           <CardDescription>Mandatory under the Sexual Harassment of Women at Workplace Act, 2013. Minimum 4 members; presiding officer must be a senior woman; one external member required.</CardDescription>
         </CardHeader>
