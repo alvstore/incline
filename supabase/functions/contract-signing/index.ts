@@ -34,6 +34,7 @@ serve(async (req: Request) => {
       case "create_link":     return await createSignLink(req, body);
       case "get_contract":    return await getContractByToken(body);
       case "request_otp":     return await requestOtp(body);
+      case "fill_fields":     return await fillFields(body);
       case "sign_contract":   return await signContract(req, body);
       case "get_pdf":         return await getOrBuildPdf(req, body, false);
       case "regenerate_pdf":  return await getOrBuildPdf(req, body, true);
