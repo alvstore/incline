@@ -245,7 +245,7 @@ async function getContractByToken(body: any) {
     .select(`
       id, contract_type, start_date, end_date, salary, base_salary, commission_percentage,
       terms, status, signature_status, branch_id, contract_variables,
-      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
+      employees(user_id, employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
       trainers(user_id)
     `)
     .eq("id", requestRow.contract_id).single();
@@ -263,7 +263,9 @@ async function getContractByToken(body: any) {
   const { name, phone, email, code } = await resolveRecipient(contract);
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
 
+  const prefill = await loadPrefillForContract(contract);
   const cvars = (contract as any).contract_variables ?? {};
+  const merged = mergeVarsWithPrefill(cvars, prefill);
   return json({
     contract: {
       id: contract.id,
@@ -280,7 +282,8 @@ async function getContractByToken(body: any) {
       terms: contract.terms,
       signature_status: contract.signature_status,
       contract_variables: cvars,
-      missing_required: missingRequired(cvars),
+      prefill,
+      missing_required: missingRequired(merged),
       employer,
     },
   });
