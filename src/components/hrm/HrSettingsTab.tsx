@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Save, Scale, Users, ShieldCheck, IdCard } from 'lucide-react';
+import { Save, Scale, Users, ShieldCheck, IdCard, Receipt } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import EmployerSummaryCard from '@/lib/hrm/EmployerSummaryCard';
 
 // NOTE: Employer name/address/GSTIN/logo live on `branches` and
