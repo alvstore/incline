@@ -6,18 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Save, Building2, Scale, Users, ShieldCheck } from 'lucide-react';
+import { Save, Scale, Users, ShieldCheck, IdCard } from 'lucide-react';
+import EmployerSummaryCard from '@/lib/hrm/EmployerSummaryCard';
 
+// NOTE: Employer name/address/GSTIN/logo live on `branches` and
+// `organization_settings`. This tab only stores HR-specific fields.
 type HrSettings = {
   id?: string;
   branch_id: string | null;
-  employer_legal_name: string;
-  employer_registered_address: string | null;
-  employer_gstin: string | null;
   employer_pan: string | null;
   employer_firm_registration_no: string | null;
   employer_proprietor_name: string | null;
@@ -37,9 +36,6 @@ type HrSettings = {
 
 const blank = (branch_id: string | null): HrSettings => ({
   branch_id,
-  employer_legal_name: 'Incline (Proprietorship Firm)',
-  employer_registered_address: '',
-  employer_gstin: '',
   employer_pan: '',
   employer_firm_registration_no: '',
   employer_proprietor_name: 'Yogita Lekhari',
@@ -91,6 +87,7 @@ export default function HrSettingsTab() {
     onSuccess: () => {
       toast.success('HR settings saved');
       qc.invalidateQueries({ queryKey: ['hr-settings'] });
+      qc.invalidateQueries({ queryKey: ['employer-profile'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to save'),
   });
@@ -117,20 +114,17 @@ export default function HrSettingsTab() {
 
   return (
     <div className="space-y-6">
+      <EmployerSummaryCard branchId={branchId} />
+
       <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Building2 className="h-4 w-4 text-indigo-600" /> Employer details</CardTitle>
-          <CardDescription>Used on contracts, payslips, GST invoices and policy headers.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><IdCard className="h-4 w-4 text-indigo-600" /> Statutory identity (HR-only)</CardTitle>
+          <CardDescription>Used on signed contracts and payslip footers. PAN and proprietor identity are statutory employer fields and live with HR — branch GSTIN is the per-location billing identity.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Legal name *"><Input value={form.employer_legal_name} onChange={(e) => patch('employer_legal_name', e.target.value)} /></Field>
           <Field label="Proprietor name"><Input value={form.employer_proprietor_name ?? ''} onChange={(e) => patch('employer_proprietor_name', e.target.value)} /></Field>
-          <Field label="GSTIN"><Input value={form.employer_gstin ?? ''} onChange={(e) => patch('employer_gstin', e.target.value.toUpperCase())} placeholder="08XXXXX1234X1Z5" /></Field>
-          <Field label="PAN"><Input value={form.employer_pan ?? ''} onChange={(e) => patch('employer_pan', e.target.value.toUpperCase())} /></Field>
-          <Field label="Firm registration no."><Input value={form.employer_firm_registration_no ?? ''} onChange={(e) => patch('employer_firm_registration_no', e.target.value)} /></Field>
-          <Field label="Registered address" className="md:col-span-2">
-            <Textarea rows={2} value={form.employer_registered_address ?? ''} onChange={(e) => patch('employer_registered_address', e.target.value)} />
-          </Field>
+          <Field label="PAN"><Input value={form.employer_pan ?? ''} onChange={(e) => patch('employer_pan', e.target.value.toUpperCase())} placeholder="ABCDE1234F" /></Field>
+          <Field label="Firm registration no." className="md:col-span-2"><Input value={form.employer_firm_registration_no ?? ''} onChange={(e) => patch('employer_firm_registration_no', e.target.value)} /></Field>
         </CardContent>
       </Card>
 

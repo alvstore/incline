@@ -2551,6 +2551,53 @@ export type Database = {
           },
         ]
       }
+      contract_sign_otps: {
+        Row: {
+          attempts: number
+          channel: string
+          code_hash: string
+          contract_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          recipient: string
+          request_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          channel: string
+          code_hash: string
+          contract_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          recipient: string
+          request_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          code_hash?: string
+          contract_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          recipient?: string
+          request_id?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_sign_otps_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "contract_signature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_signature_requests: {
         Row: {
           branch_id: string | null
@@ -5180,16 +5227,12 @@ export type Database = {
           created_at: string
           daily_hour_cap: number
           employer_firm_registration_no: string | null
-          employer_gstin: string | null
-          employer_legal_name: string
           employer_pan: string | null
           employer_proprietor_name: string | null
-          employer_registered_address: string | null
           governing_jurisdiction: string
           id: string
           lawyer_reviewed_at: string | null
           lawyer_reviewed_by: string | null
-          logo_storage_path: string | null
           notice_period_manager_days: number
           notice_period_staff_days: number
           notice_period_trainer_days: number
@@ -5206,16 +5249,12 @@ export type Database = {
           created_at?: string
           daily_hour_cap?: number
           employer_firm_registration_no?: string | null
-          employer_gstin?: string | null
-          employer_legal_name?: string
           employer_pan?: string | null
           employer_proprietor_name?: string | null
-          employer_registered_address?: string | null
           governing_jurisdiction?: string
           id?: string
           lawyer_reviewed_at?: string | null
           lawyer_reviewed_by?: string | null
-          logo_storage_path?: string | null
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
@@ -5232,16 +5271,12 @@ export type Database = {
           created_at?: string
           daily_hour_cap?: number
           employer_firm_registration_no?: string | null
-          employer_gstin?: string | null
-          employer_legal_name?: string
           employer_pan?: string | null
           employer_proprietor_name?: string | null
-          employer_registered_address?: string | null
           governing_jurisdiction?: string
           id?: string
           lawyer_reviewed_at?: string | null
           lawyer_reviewed_by?: string | null
-          logo_storage_path?: string | null
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
@@ -13242,6 +13277,7 @@ export type Database = {
           table_name: string
         }[]
       }
+      get_employer_profile: { Args: { _branch_id: string }; Returns: Json }
       get_error_audit_breakdown: {
         Args: { _days?: number }
         Returns: {
