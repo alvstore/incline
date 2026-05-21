@@ -51,7 +51,7 @@ const FitnessMemberPlansPage = lazy(() => import("./pages/fitness/MemberPlans"))
 
 const EquipmentMaintenancePage = lazy(() => import("./pages/EquipmentMaintenance"));
 const LockersPage = lazy(() => import("./pages/Lockers"));
-const EmployeesPage = lazy(() => import("./pages/Employees"));
+
 const HRMPage = lazy(() => import("./pages/HRM"));
 const TrainersPage = lazy(() => import("./pages/Trainers"));
 // StaffAttendance + PtAttendance pages merged into AttendanceDashboard tabs
