@@ -1,112 +1,59 @@
-# HRM Cleanup: Single Source of Truth + Contract OTP + Hardened PDF
+# Consolidate Contract Signing + PDF, Reuse OTP
 
-## Audit findings (why "Employer details" felt redundant)
+You're right on both counts. We over-built. Here's the cleanup.
 
-The same data is being entered in **three places** today:
+## Why we have duplicates today
 
-| Field | `branches` | `organization_settings` | `hr_settings` |
-|---|---|---|---|
-| Legal/brand name | ✓ `name` | ✓ `name` | ✗ duplicated as `employer_legal_name` |
-| Address | ✓ `address`,`city`,`state`,`postal_code` | — | ✗ duplicated as `employer_registered_address` |
-| GSTIN | ✓ `gstin` | — | ✗ duplicated as `employer_gstin` |
-| Phone / Email | ✓ `phone`,`email` | — | — (missing on PDF today) |
-| Logo | — | ✓ `logo_url` | ✗ unused `logo_storage_path` |
-| PAN, Proprietor, Firm reg no, POSH IC, notice tiers, hours caps | — | — | ✓ (HR-only — correct home) |
-
-Result: PDF currently prints a hardcoded "Sector 14, Udaipur" because nobody filled the duplicate fields in `hr_settings`, even though the same address is already saved on the branch.
-
-And the Contracts tab `CreateContractDrawer` also re-asks for employer/role facts that the `employees` row + `hr_settings` already hold.
-
-Contract Sign page (`/contract/sign/:token`) has **no OTP** today — anyone with the link can sign. The user asked us to add WhatsApp OTP and to drive it through the canonical Templates Hub (event catalog + `dispatchCommunication`), not as a one-off.
-
----
+1. **Two edge functions** (`contract-signing` + `generate-stamped-pdf`) — they were authored in separate turns. They share the same domain (one contract → one signed PDF) and the same employer-profile + storage code. No reason to keep them split.
+2. **Two OTP systems** — last turn I added a new `contract_sign_otps` table and a new `contract_sign_otp` template event. But `register-member` already uses a generic `otp_verifications` table + the Meta-approved `otp_verification` template (`{{code}}` variable). One more Meta template = one more approval cycle for no functional gain.
 
 ## Plan
 
-### 1. One source of truth for employer details
+### A. Merge edge functions → single `contract-signing` fn with action router
 
-**Drop the duplicated columns from `hr_settings`** and read from canonical tables:
-
-- `employer_legal_name` → use `branches.name` (fallback `organization_settings.name` for global/HQ)
-- `employer_registered_address` → composed from `branches.address, city, state, postal_code, country`
-- `employer_gstin` → `branches.gstin`
-- `employer_phone`, `employer_email` → `branches.phone`, `branches.email`
-- `logo_url` → `organization_settings.logo_url`
-- `logo_storage_path` → drop (unused)
-
-**Keep in `hr_settings` (HR-only, no other home):**
-PAN, proprietor name, firm registration no, POSH IC, lawyer review, tiered notice periods, hours caps, OT multiplier, Basic % of CTC, arbitration seat, governing jurisdiction, PT commission clawback flag.
-
-**New helper** `src/lib/hrm/getEmployerProfile.ts` + RPC `get_employer_profile(branch_id)` → returns the merged object used by:
-- `HrSettingsTab` (read-only "Pulled from branch" block + edit-pen that deep-links to Branch settings)
-- `CreateContractDrawer` (preview block, no duplicated inputs)
-- `generate-stamped-pdf` edge fn (header + signatory block)
-- Payslip and GST invoice headers (already consume branches today — verify and unify)
-
-Migration:
-```sql
-ALTER TABLE hr_settings
-  DROP COLUMN employer_legal_name,
-  DROP COLUMN employer_registered_address,
-  DROP COLUMN employer_gstin,
-  DROP COLUMN logo_storage_path;
--- keep employer_pan, employer_firm_registration_no, employer_proprietor_name
 ```
-(Existing 2 rows have empty GSTIN/address so no data loss — verified.)
+POST /contract-signing
+  { action: 'request_otp',   token, channel }
+  { action: 'verify_and_sign', token, otp, signature_png, witness, consent }
+  { action: 'get_pdf',        contract_id, copy: 'employee'|'employer' }
+  { action: 'regenerate_pdf', contract_id }   // owner/HR only, JWT required
+```
 
-### 2. HR Settings tab — slimmer, no duplication
+- Move the entire pdf-lib stamping logic from `generate-stamped-pdf/index.ts` into a local `buildStampedPdf()` helper inside `contract-signing/index.ts`.
+- Keep `verify_jwt = false` for `request_otp` and `verify_and_sign` (token-gated public flow); enforce JWT inside the handler for `get_pdf`/`regenerate_pdf`.
+- Delete `supabase/functions/generate-stamped-pdf/` and call `supabase--delete_edge_functions(['generate-stamped-pdf'])`.
+- Update the one caller (`HRM.tsx` "Stamped PDF" button) to invoke `contract-signing` with `action: 'get_pdf'`.
 
-`HrSettingsTab.tsx` becomes 3 cards:
-1. **Employer (from branch)** — read-only summary card pulled via `getEmployerProfile`, with a "Edit in Branch settings" link to `/branches`.
-2. **Statutory & contractual defaults** (unchanged).
-3. **POSH Internal Committee** (unchanged).
+### B. Reuse existing OTP — drop the new table + template
 
-Delete the 6 employer input fields and the "Logo storage" column.
+- **Drop** `contract_sign_otps` table (migration) — it has zero rows.
+- **Drop** the `contract_sign_otp` event from `src/lib/templates/systemEvents.ts`.
+- In `contract-signing` use the existing `otp_verifications` table exactly the way `register-member` does (same row shape: phone, code, expires_at, attempts, consumed_at), with a `purpose='contract_sign'` discriminator column if it doesn't already exist (1-line ALTER if needed) — otherwise scope by `phone + recent + unconsumed`.
+- Dispatch OTP via canonical hub with `event: 'otp_verification'`, variables `{ code }` — **same Meta template** already approved and live in production. No new Meta submission.
+- Keep the new `contract_signed_confirmation` event (it's a different message: "your contract is signed, here's the PDF") — that one is genuinely new and worth its own template.
 
-### 3. Contract Sign flow — WhatsApp OTP via canonical hub
+### C. Net file changes
 
-Add a 2-step sign flow:
-1. **Request OTP** — `POST contract-signing { action: 'request_otp' }` generates a 6-digit code, stores SHA-256 hash in new `contract_sign_otps` table (token + hash + expires_at + attempts), and dispatches through the **canonical pipeline**:
-   - Adds two events to `src/lib/templates/systemEvents.ts`:
-     - `contract_sign_otp` (WhatsApp + SMS + Email — channels chosen by member preferences)
-     - `contract_signed_confirmation` (already-style confirmation with stamped PDF link)
-   - Sends via `dispatchCommunication({ event: 'contract_sign_otp', vars: { name, otp, expires_in: '10 minutes', employer_name } })`. Quiet-hours/dedupe handled by dispatcher.
-2. **Verify + Sign** — existing `contract-signing` POST gains `otp` field; validates hash, attempt cap (5), 10-minute window. On success runs the existing signature/geo/terms_hash insert.
+Deleted:
+- `supabase/functions/generate-stamped-pdf/index.ts`
+- `contract_sign_otps` table (migration drop)
+- `contract_sign_otp` from `systemEvents.ts`
 
-`ContractSign.tsx`: insert an OTP step before the signature canvas (resend with 30s cooldown, mask phone, paste-friendly input).
+Edited:
+- `supabase/functions/contract-signing/index.ts` — add `get_pdf`/`regenerate_pdf` actions, swap OTP table to `otp_verifications`, swap template event to `otp_verification`
+- `supabase/config.toml` — remove `[functions.generate-stamped-pdf]`
+- `src/pages/HRM.tsx` — change invoke target + body
+- `src/pages/ContractSign.tsx` — no UI change, just the underlying action name stays the same
+- `mem://features/hrm-contracts-v2-evidentiary-signing` — note single-fn + shared OTP
 
-Templates: re-run AI Drawer for the two new events so WhatsApp/SMS/Email templates auto-seed (existing `ai-generate-whatsapp-templates` flow — no new code path).
+### Benefits
 
-### 4. Contracts tab cleanup
+- One fewer edge function to deploy, monitor, and CORS-configure.
+- One fewer Meta WhatsApp template to maintain (and approve).
+- One OTP table = one purge cron, one rate-limit surface, one place to audit OTP fraud.
+- PDF generation can share the employer-profile fetch and storage signing helpers with the sign flow (no duplication).
 
-`CreateContractDrawer`: remove any employer name/address/GSTIN inputs (currently asks via hr_settings indirectly). Show a compact "Issuing from: {branch name} • GSTIN {…}" header instead. All other fields (role, salary, dates) untouched.
+## Questions before I execute
 
-`PoliciesTab` + Contracts list: no schema change, just confirm both call `getEmployerProfile` for any header rendering.
-
-### 5. Hardened PDF (`generate-stamped-pdf`)
-
-- Pull employer block from `getEmployerProfile(contract.branch_id)` instead of hr_settings columns.
-- Header: logo (from `organization_settings.logo_url`), legal name, full address line, GSTIN, phone, email.
-- Add missing fields visible in the reference PDF: contract reference no., place of execution, witness signature blocks rendered from the stored `witness_1/2` rows, footer "For {employer_legal_name} — Proprietor: {employer_proprietor_name}" with signature image, page numbers, QR verify code, "Original / Employee Copy / Employer Copy" watermark (already present — keep).
-- Tamper-evident footer line: `terms_hash` short + `signed_at IST`.
-
-### 6. Delete-list (one source of truth enforcement)
-
-- `hr_settings.employer_legal_name` / `employer_registered_address` / `employer_gstin` / `logo_storage_path` columns
-- Employer input fields in `HrSettingsTab`
-- Any employer name/GST inputs in `CreateContractDrawer`
-- Hardcoded "Sector 14, Udaipur…" fallback in `generate-stamped-pdf`
-
-### Technical detail
-
-Files touched:
-- **Migration**: drop 4 columns; create `contract_sign_otps` table with RLS (member can insert via edge fn only, no SELECT); create RPC `get_employer_profile(branch_id uuid)` returning JSON merge of `branches` + `organization_settings` + `hr_settings`.
-- **New**: `src/lib/hrm/getEmployerProfile.ts`, `src/lib/hrm/EmployerSummaryCard.tsx`.
-- **Edit**: `src/components/hrm/HrSettingsTab.tsx`, `src/components/hrm/CreateContractDrawer.tsx`, `src/pages/ContractSign.tsx`, `supabase/functions/contract-signing/index.ts`, `supabase/functions/generate-stamped-pdf/index.ts`, `src/lib/templates/systemEvents.ts`.
-- **Memory**: update `mem://features/hrm-contracts-v2-evidentiary-signing` with the new source-of-truth + OTP rule.
-
-### Open questions before I build
-
-1. **OTP channel priority** — WhatsApp first, SMS fallback, Email last (mirroring existing dispatcher behavior). OK?
-2. **PAN / proprietor name** are currently in `hr_settings` (HR-only). Should I instead surface them on the Branch page so all "employer identity" lives in one place? My recommendation: keep PAN/proprietor in `hr_settings` because they're HR-specific (statutory employer identity) while branch-level GSTIN is per-location billing identity.
-3. Confirm I should hard-drop the 4 duplicated columns (data check shows the existing 2 rows are empty so no loss).
+1. **OTP purpose discriminator** — `otp_verifications` today is keyed by phone only. For contract sign we also need to bind the OTP to a specific `contract_id` so an OTP issued for onboarding can't be used to sign a contract (and vice-versa). OK to add a nullable `purpose text` + `context_id uuid` column to `otp_verifications`? (Backward compatible — register-member keeps working with NULLs.)
+2. **Email OTP** — `otp_verification` event today is `channels: ['whatsapp','sms']`. Contract sign also needs email fallback. OK to extend the existing event to include `email` (uses the same `{{code}}` variable, no Meta involvement for email)?
