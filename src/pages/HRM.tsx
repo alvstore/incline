@@ -1332,8 +1332,9 @@ export default function HRMPage() {
       {/* Contract Drawer */}
       <CreateContractDrawer
         open={contractDrawerOpen}
-        onOpenChange={setContractDrawerOpen}
+        onOpenChange={(o) => { setContractDrawerOpen(o); if (!o) setContractDefaultRole(undefined); }}
         employee={selectedEmployee}
+        defaultRole={contractDefaultRole}
       />
 
       {/* Add Employee Drawer */}
