@@ -1346,14 +1346,27 @@ export default function HRMPage() {
       {/* Edit Employee Drawer */}
       <EditEmployeeDrawer
         open={editEmployeeOpen}
-        onOpenChange={setEditEmployeeOpen}
+        onOpenChange={(o) => {
+          setEditEmployeeOpen(o);
+          if (!o) {
+            queryClient.invalidateQueries({ queryKey: ['unified-staff-people'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-payroll-staff'] });
+          }
+        }}
         employee={editingEmployee}
       />
 
       {/* Edit Trainer Drawer */}
       <EditTrainerDrawer
         open={editTrainerOpen}
-        onOpenChange={setEditTrainerOpen}
+        onOpenChange={(o) => {
+          setEditTrainerOpen(o);
+          if (!o) {
+            queryClient.invalidateQueries({ queryKey: ['unified-staff-people'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-payroll-staff'] });
+          }
+        }}
         trainer={editingTrainer}
       />
 
