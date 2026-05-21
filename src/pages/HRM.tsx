@@ -266,8 +266,9 @@ export default function HRMPage() {
         || (p.phone || '').includes(dirSearch);
       const matchesDept = dirDept === 'all' || p.department === dirDept;
       const matchesStatus = dirStatus === 'all'
-        || (dirStatus === 'active' && p.is_active)
-        || (dirStatus === 'inactive' && !p.is_active);
+        || (dirStatus === 'active' && p.is_active && !p.exit_date)
+        || (dirStatus === 'inactive' && !p.is_active && !p.exit_date)
+        || (dirStatus === 'offboarded' && !!p.exit_date);
       const matchesRole = dirRole === 'all' || p.roles.includes(dirRole);
       return matchesSearch && matchesDept && matchesStatus && matchesRole;
     });
