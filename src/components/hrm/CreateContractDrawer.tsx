@@ -364,28 +364,47 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
   const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
-  // Detect dual-role + auto-fetch trainer commission from pt_share_percentage.
+  // Detect dual-role + auto-fetch trainer commission + load prefill sources.
   useEffect(() => {
-    if (!open || !employee?.user_id) { setLinkedRecord(null); return; }
+    if (!open || !employee?.user_id) { setLinkedRecord(null); setPrefill({}); return; }
     const isTrainer = employee.staff_type === 'trainer';
     (async () => {
+      // Fetch profile (always exists, keyed by user_id == profiles.id)
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+        .eq('id', employee.user_id).maybeSingle();
+
+      // Always try to load both sides to maximize prefill coverage.
+      const { data: empRow } = await supabase
+        .from('employees')
+        .select('id, employee_code, salary, father_or_spouse_name, current_address, permanent_address, emergency_contact, pan_number, aadhaar_last4')
+        .eq('user_id', employee.user_id).maybeSingle();
+
+      const { data: trnRow } = await supabase
+        .from('trainers')
+        .select('id, fixed_salary, pt_share_percentage, government_id_type, government_id_number')
+        .eq('user_id', employee.user_id).maybeSingle();
+
       if (isTrainer) {
-        // Current record IS the trainer — seed commission from its pt_share_percentage.
-        const { data: trainerSelf } = await supabase
-          .from('trainers').select('pt_share_percentage').eq('id', employee.id).maybeSingle();
-        const pct = Number((trainerSelf as any)?.pt_share_percentage ?? 40);
+        const pct = Number((trnRow as any)?.pt_share_percentage ?? 40);
         setFormData((f) => ({ ...f, commissionPercentage: pct }));
-        const { data } = await supabase
-          .from('employees').select('employee_code, salary').eq('user_id', employee.user_id).maybeSingle();
-        if (data) setLinkedRecord({ kind: 'employee', code: data.employee_code, salary: data.salary });
+        if (empRow) setLinkedRecord({ kind: 'employee', code: (empRow as any).employee_code, salary: (empRow as any).salary });
         else setLinkedRecord(null);
       } else {
-        const { data } = await supabase
-          .from('trainers').select('id, fixed_salary, pt_share_percentage').eq('user_id', employee.user_id).maybeSingle();
-        if (data) {
-          setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary, pt_share: (data as any).pt_share_percentage });
-        } else setLinkedRecord(null);
+        if (trnRow) setLinkedRecord({ kind: 'trainer', salary: (trnRow as any).fixed_salary, pt_share: (trnRow as any).pt_share_percentage });
+        else setLinkedRecord(null);
       }
+
+      const map = resolveContractPrefill({
+        employee: empRow as any,
+        trainer: trnRow as any,
+        profile: profileRow as any,
+      });
+      setPrefill(map);
+      // Seed variables state with auto-filled values (HR can override before submit).
+      const seed = prefillToVariables(map);
+      setVariables((prev) => ({ ...seed, ...prev } as any));
     })();
   }, [open, employee?.user_id, employee?.staff_type, employee?.id]);
 
