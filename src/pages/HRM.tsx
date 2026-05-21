@@ -710,14 +710,41 @@ export default function HRMPage() {
                                 </Button>
                               </>
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => createContractSignLink(contract)}
-                                title="Generate signing link"
-                              >
-                                <Link className="h-3.5 w-3.5" />
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => createContractSignLink(contract, 'employee')}
+                                  title="Copy employee fill + signing link"
+                                >
+                                  <Link className="h-3.5 w-3.5 mr-1" />
+                                  Sign link
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => createContractSignLink(contract, 'witness_1')}
+                                  title="Copy Witness 1 fill link"
+                                >
+                                  W1
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => createContractSignLink(contract, 'witness_2')}
+                                  title="Copy Witness 2 fill link"
+                                >
+                                  W2
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => createContractSignLink(contract, 'hr')}
+                                  title="Copy HR override fill link"
+                                >
+                                  HR
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
