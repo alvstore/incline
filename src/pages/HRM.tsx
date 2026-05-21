@@ -18,10 +18,10 @@ import HrSettingsTab from '@/components/hrm/HrSettingsTab';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
 import { FileBadge, BookOpen, Settings as SettingsIcon } from 'lucide-react';
 import {
-  Plus, 
-  Users, 
-  FileText, 
-  DollarSign, 
+  Plus,
+  Users,
+  FileText,
+  DollarSign,
   TrendingUp,
   Calendar,
   CheckCircle,
@@ -35,9 +35,19 @@ import {
   Eye,
   ExternalLink,
   Link,
+  MoreHorizontal,
+  Share2,
+  XCircle,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, type PayrollStaffItem } from '@/services/hrmService';
+import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, type PayrollStaffItem } from '@/services/hrmService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
