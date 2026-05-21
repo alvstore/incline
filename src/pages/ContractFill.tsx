@@ -53,16 +53,19 @@ export default function ContractFillPage() {
   const role: FillRole = (contract?.request_role as FillRole) || 'employee';
   const employer = contract?.employer;
   const existingVars = (contract?.contract_variables ?? {}) as Record<string, string>;
+  const prefill = (contract?.prefill ?? {}) as Record<string, string>;
+  // Prefill (auto from staff/profile) → existing (saved on contract) → user edits
+  const seeded = useMemo(() => ({ ...prefill, ...existingVars }), [prefill, existingVars]);
 
   useEffect(() => {
-    if (existingVars && Object.keys(existingVars).length > 0) {
-      setValues((prev) => ({ ...existingVars, ...prev }));
+    if (Object.keys(seeded).length > 0) {
+      setValues((prev) => ({ ...seeded, ...prev }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contract?.id]);
 
   const fields = useMemo<VariableSpec[]>(() => variablesFor(role), [role]);
-  const mergedVars = useMemo(() => ({ ...existingVars, ...values }), [existingVars, values]);
+  const mergedVars = useMemo(() => ({ ...seeded, ...values }), [seeded, values]);
   const remainingRequired = missingRequiredKeys(mergedVars);
 
   const fillMutation = useMutation({
