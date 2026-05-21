@@ -22,6 +22,8 @@ export interface UnifiedStaffPerson {
   branch_id: string | null;
   branch_name: string | null;
   is_active: boolean;
+  exit_date: string | null;
+  exit_type: string | null;
   hire_date: string;
 }
 
