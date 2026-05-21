@@ -1,104 +1,90 @@
-## Audit findings
+## Audit findings (employee / staff / trainer offboarding)
 
-**Duplication is real.** Two routes render the same data with different polish:
+### What exists today
+- **`StaffRowActions` "Deactivate"** only flips `employees.is_active` / `trainers.is_active`. It does NOT:
+  - Revoke MIPS turnstile access (door still opens with their face/card)
+  - Remove `user_roles` rows (they can still sign into the app with manager/staff/trainer privileges)
+  - Record why/when they left
+  - Sign them out of active sessions
+- **`mips-access` edge function** handles `revoke / restore / sweep_expired` but is **member-only** — it reads from `members`, updates `members.hardware_access_status`, and never touches employees/trainers.
+- **`sync-to-mips` edge function** already knows how to push `employee` and `trainer` to MIPS (`person_type === "employee" | "trainer"`, deptId 101). It sets `validTimeEnd = PERMANENT_END` on add. There is **no path** that updates an existing MIPS person with a past `validTimeEnd` (which is how MIPS RuoYi revokes access without deleting biometrics).
+- **DB schema gap:** `employees` and `trainers` have no `exit_date`, `exit_reason`, `exit_type`, or `terminated_by` columns — so we can't audit who left, why, or when.
+- **Auth gap:** no flow removes `user_roles` for the departing person, and no flow disables/locks their `auth.users` account.
+- **No UI** for "Mark exit / Offboard" — only the soft Deactivate toggle.
 
-| Surface | `/employees` (`EmployeesPage`, 569 LOC) | `/hrm` › Employees tab (`HRMPage`, 1178 LOC) |
-|---|---|---|
-| Data source | `employees` + `trainers` + `profiles`, aggregated by `user_id` into a single `StaffPerson` (dual-role aware) | `fetchAllPayrollStaff()` — same dedupe by `user_id`, but tuned for payroll |
-| KPI cards | People / Managers / Trainers / Other / Active (5 cards, gradient tints) | Total Staff / Active / Active Contracts / Monthly Payroll (4 gradient cards) |
-| Filters | Search + Role + Department + Status | Search only |
-| Columns | Member · Roles · Code · Department · Position · Branch · Status · Hire Date | Member · Code · Type · Department · Position · Salary |
-| Actions | Contract + Edit (icon) | Contract + Edit (icon) |
-| Add Employee | ✅ header CTA | ✅ header CTA |
-| Sub-nav | None | Employees · Contracts · Attendance · Payroll · Policies · HR Settings |
+### Plan
 
-Both pages already query the **same tables**, both already **dedupe dual-role people** (manager who is also a trainer is one row), and both share `AddEmployeeDrawer` / `EditEmployeeDrawer` / `EditTrainerDrawer` / `CreateContractDrawer`. The split exists only because `/employees` is a newer, prettier reskin that never got merged back.
+#### 1. DB migration
+- Add to `employees` and `trainers`:
+  - `exit_date date`, `exit_reason text`, `exit_type text` (resigned | terminated | end_of_contract | absconded | other), `exit_notes text`, `exited_by uuid` (FK profiles.id)
+- Index `(branch_id, is_active, exit_date)` for roster queries.
+- Validation trigger (not CHECK): `exit_date IS NULL` ⇔ `is_active = true`.
 
-**Nav also duplicates:** `src/config/menu.ts` lists both HRM and Employees in the sidebar for owner/admin/manager AND manager. `navModules.ts` already groups `/hrm` and `/employees` under one module.
+#### 2. Extend `mips-access` edge function (single source of truth)
+- Accept new body shapes:
+  - `{ action: "revoke_staff" | "restore_staff", person_type: "employee" | "trainer", person_id, reason? }`
+- For staff: load row → resolve `mips_person_sn` → call MIPS `updatePerson` with `validTimeEnd = "2000-01-01 00:00:00"` (past date) to revoke, or `PERMANENT_END` to restore. Dispatch to all branch devices via existing helper.
+- Update `employees/trainers.mips_sync_status` to `revoked` / `active`.
+- Log to `audit_logs` with action `staff_access_revoked` / `staff_access_restored`.
+- Version bump (e.g., v2.0.0) + CORS preserved.
 
-**Action-column gaps (both pages):**
-- No "View profile" / drawer
-- No "Deactivate / Reactivate"
-- No "Reset password / Resend invite"
-- No "Mark exit / offboard"
-- No "Assign role" (promote staff → manager, attach trainer record)
-- No bulk select
-- Trainer + Employee edit live behind two different buttons (we can route by role automatically)
+#### 3. New `offboard-staff` edge function (orchestrator)
+Single atomic call that runs the full offboarding pipeline server-side (so it can't half-fail from the client):
+1. RBAC: only `owner` / `admin` / `hr_manager` via `has_capability`.
+2. `mips-access` invoke → revoke turnstile (best-effort, log failure but continue).
+3. Update `employees`/`trainers`: `is_active=false`, `exit_date`, `exit_reason`, `exit_type`, `exit_notes`, `exited_by`.
+4. Delete matching `user_roles` rows for the person's `user_id` for the role(s) being offboarded (preserve `member` role if they're also a member).
+5. If no remaining roles AND not a member → call `auth.admin.updateUserById(user_id, { ban_duration: 'none', user_metadata: { offboarded_at } })` and revoke refresh tokens (`auth.admin.signOut(user_id, 'global')`).
+6. Cancel future shifts/classes (best-effort: mark `class_schedules.trainer_id = null` for future dates if trainer).
+7. Insert `audit_logs` row `staff_offboarded` with full payload.
+8. Return per-step status so UI shows what succeeded.
 
-## Decision
+#### 4. New `restore-staff` edge function (mirror)
+Reactivates `is_active=true`, clears `exit_*`, reinstates `user_roles` (from a snapshot stored in audit log), calls `mips-access` restore, optionally unbans auth user.
 
-**Keep `/hrm` as the single source of truth. Retire `/employees`.** HRM already owns Contracts, Attendance, Payroll, Policies, HR Settings — the people directory belongs in the same hub. The `/employees` page contributes the better directory UX (multi-role filters, role chips, branch column, KPI breakdown), which we'll port into HRM › Employees tab.
+#### 5. Frontend — `StaffRowActions` overhaul
+Replace single "Deactivate" with two distinct overflow items:
 
-## Plan
+- **Soft Deactivate** (existing behavior) — keep for "temporary pause, still on payroll".
+- **Offboard / Mark exit…** — opens new `OffboardStaffSheet` (right-side Sheet per project rule):
+  - Role pickers (if multi-role): which roles to offboard
+  - Exit type (select), Exit date (default today), Reason, Notes
+  - Checklist preview (auto-checked, read-only): Revoke turnstile · Remove app access · Cancel future shifts · Keep payroll history
+  - Sticky footer: Cancel · "Offboard <Name>" (destructive)
+  - Confirm via `AlertDialog` ("Type the employee's name to confirm")
+  - On submit → `supabase.functions.invoke('offboard-staff', …)` → toast with per-step result chips → invalidate `UNIFIED_STAFF_KEY`, `hrm-employees`, `hrm-payroll-staff`, `trainers`.
 
-### 1. Port the richer directory into HRM › Employees tab
-Replace the current Employees tab body with the `/employees` layout:
-- **5 KPI tiles** (People · Managers · Trainers · Other Staff · Active) using existing Vuexy gradient cards. Drop HRM's "Active Contracts" / "Monthly Payroll" tiles from this tab — they already exist on Contracts / Payroll tabs.
-- **Filter bar:** Search · Role (All/Manager/Trainer/Staff) · Department · Status.
-- **Table columns:** Staff Member · Roles (chips) · Code · Department · Position · Branch · Status · Hire Date · Actions.
-- Use the unified `StaffPerson` aggregator from `EmployeesPage` (handles dual-role correctly).
+For already-offboarded rows: show **"Reinstate…"** which calls `restore-staff`.
 
-### 2. Robust Actions column (single source of truth)
-Collapse to one primary button + overflow menu per row to avoid visual duplication:
+#### 6. HRM page additions
+- New filter chip: **Status = Active | Deactivated | Offboarded** (today there's only Active/Inactive).
+- In the row: when `exit_date` set, show a small `Offboarded · DD MMM` badge next to the name and dim avatar opacity-60.
+- KPI tile "Active" already exists; add small subtitle "X offboarded this month" computed from `exit_date`.
 
-```
-[ View ▾ ]   ⋯
-            ├─ Edit profile        (auto-routes to EditTrainerDrawer if role=trainer, else EditEmployeeDrawer)
-            ├─ Manage contract     (opens CreateContractDrawer with role pre-selected; shows count + status if active contract exists)
-            ├─ Open profile page   (deep-link to /staff/:id when that route lands; hidden today)
-            ├─ ─────────
-            ├─ Assign role…        (add/remove Manager/Trainer/Staff record for the same user_id)
-            ├─ Reset password      (admin-only; calls auth admin reset)
-            ├─ Resend invite       (if user never signed in)
-            ├─ ─────────
-            ├─ Deactivate          (sets is_active=false on employees + trainers row; confirm AlertDialog)
-            └─ Mark exit / offboard (opens lightweight Sheet — exit date, reason, last working day; flips status)
-```
-Destructive items use `AlertDialog` with the existing Vuexy modal styling. "Edit" and "Contract" stop being two separate row buttons.
+#### 7. Vuexy polish on the new Sheet
+- Rounded-2xl, soft shadow, no border (project rule)
+- Indigo primary + red destructive button
+- lucide icons: `UserX`, `ShieldOff`, `KeyRound`, `CalendarX`
+- Skeleton + error states; submit disables button + spinner
+- All field labels associated, destructive action requires typed name (a11y)
 
-### 3. Retire `/employees`
-- Delete `src/pages/Employees.tsx`.
-- Remove the `/employees` route from `src/App.tsx`.
-- Remove `Employees` entries from `src/config/menu.ts` (both blocks).
-- In `src/config/navModules.ts`, drop `/employees` from the `hrefs` array.
-- In `src/lib/audit/auditMeta.ts`, repoint `employees` and `contracts` deep links to `/hrm?tab=employees&focus=...` and `/hrm?tab=contracts&contract=...`.
-- Add a redirect `/employees → /hrm?tab=employees` so old audit links, bookmarks, and the published `theincline.in/employees` URL don't 404.
+#### 8. Acceptance criteria
+- Clicking "Offboard" on a manager:
+  - MIPS device denies their card/face within 1 sync cycle
+  - They can no longer sign into `/auth` (session revoked)
+  - Row shows `Offboarded · 21 May` and falls out of "Active" KPI
+  - `audit_logs` has one `staff_offboarded` row with the full snapshot
+- Trainer-only person: same, plus future class slots show "Trainer removed"
+- Dual-role (Manager + Trainer): UI lets HR pick whether to offboard one role or all
+- Reinstate restores roles from the audit snapshot, calls MIPS restore, sets `is_active=true`
 
-### 4. Deep-link support
-Read `?tab=` and `?focus=` from the URL on HRM mount so audit links land on the right tab and scroll to the right row.
+### Files touched
+- **New:** `supabase/functions/offboard-staff/index.ts`, `supabase/functions/restore-staff/index.ts`, `supabase/migrations/<ts>_staff_offboarding.sql`, `src/components/hrm/OffboardStaffSheet.tsx`
+- **Edited:** `supabase/functions/mips-access/index.ts` (+ staff branches), `src/components/hrm/StaffRowActions.tsx`, `src/hooks/useUnifiedStaff.ts` (surface `exit_date`/`exit_type`), `src/pages/HRM.tsx` (filter + KPI subtitle)
 
-### 5. Keep everything else identical
-Contracts tab, Attendance tab, Payroll tab, Policies tab, HR Settings tab — no changes. No DB migration. No edge-function change. No business-logic change.
+### Out of scope (call out, don't build now)
+- Bulk offboarding (multi-select)
+- Exit interview form / document upload
+- Final-settlement payroll calculation (separate ticket — touches payroll engine)
 
-## Technical details
-
-**Files touched**
-- `src/pages/HRM.tsx` — swap Employees tab body, add URL param wiring, add row action menu.
-- `src/pages/Employees.tsx` — delete.
-- `src/App.tsx` — remove `/employees` route, add `<Navigate to="/hrm?tab=employees" />` for `/employees/*`.
-- `src/config/menu.ts` — remove two `Employees` entries.
-- `src/config/navModules.ts` — drop `/employees` from hrefs.
-- `src/lib/audit/auditMeta.ts` — update two deep-link builders.
-
-**New helpers (small, local to HRM)**
-- `useUnifiedStaff()` — extracted from `EmployeesPage`'s query so HRM stops maintaining two parallel staff fetchers (`payrollStaff` becomes a derived view for the Payroll tab only).
-- `StaffRowActions` component — owns the dropdown + AlertDialogs.
-
-**Action handlers wire to existing service layer**
-- `deactivate` → `supabase.from('employees'/'trainers').update({ is_active: false })` scoped by `user_id`.
-- `resetPassword` / `resendInvite` → existing auth admin edge function if available, otherwise hidden behind `can.manageStaff` capability.
-- `assignRole` → opens existing `AddEmployeeDrawer` / trainer creation drawer pre-bound to the user_id (no new RPC).
-
-**RBAC**
-- Destructive actions gated by `can.manageStaff(roles)` from `src/lib/auth/permissions.ts`.
-- Manager sees the same directory but scoped to their branch (already enforced by `BranchContext` + RLS).
-
-## Acceptance criteria
-
-1. `/employees` 301-redirects to `/hrm?tab=employees`; no broken links from audit log or published site.
-2. Sidebar shows **HRM only** for owner/admin/manager.
-3. HRM › Employees tab matches the richness of the old `/employees` page (5 KPIs, full filter bar, role chips, branch column).
-4. Each row has one primary "View" button + one overflow menu; no separate "Contract" + "Edit" duplication.
-5. Deactivate, Mark exit, Assign role, Reset password, Resend invite all work and respect RBAC.
-6. Dual-role person (e.g. Bhagirath = Manager + Trainer) still appears as a single row with both chips and a single salary.
-7. No regression in Contracts, Attendance, Payroll, Policies, HR Settings tabs.
+Used the senior-architect / senior-backend / senior-frontend skills.
