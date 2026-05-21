@@ -717,8 +717,9 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   spacer(14);
   newPageIfNeeded(160);
 
-  // ── Filled details (captured via /contract-fill) ──────────────────────
-  const cvars = ((contract as any).contract_variables ?? {}) as Record<string, any>;
+  // ── Filled details (prefill from profile/staff merged with contract_variables) ──
+  const prefillForPdf = await loadPrefillForContract(contract);
+  const cvars = mergeVarsWithPrefill((contract as any).contract_variables, prefillForPdf) as Record<string, any>;
   const detailRows: [string, any][] = [
     ["S/o · D/o · W/o",        cvars.father_or_husband_name],
     ["Residential address",    cvars.residential_address],
