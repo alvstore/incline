@@ -410,7 +410,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     const role = defaultRoleProp || detectAgreementRole(employee);
     const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
     const startDate = new Date().toISOString().split('T')[0];
-    const salary = Number(employee?.salary || 0);
+    const salary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
 
     setFormData({
       agreementRole: role,
@@ -418,7 +418,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       startDate,
       endDate: '',
       salary,
-      commissionPercentage: role === 'trainer' ? 10 : 0,
+      commissionPercentage: 0, // overwritten by useEffect above for trainers
       terms: getEmploymentAgreementTemplate(role, employeeName, salary, startDate, {
         employeeCode: employee?.employee_code,
         email: employee?.profile?.email,
@@ -428,6 +428,9 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       }),
       documentUrl: '',
     });
+    setVariables({} as any);
+    setAdvancedOpen(false);
+    setCommissionLocked(true);
     setLegalTermsUnlocked(false);
     setLegalTermsUnlockedAt(null);
   }, [open, employee, defaultRoleProp]);
