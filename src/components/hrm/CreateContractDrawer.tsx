@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { FileText, Lock, ChevronDown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { CONTRACT_VARIABLES, type ContractVariableKey } from '@/lib/hrm/contractVariables';
+import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/lib/hrm/contractVariables';
+import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
