@@ -313,6 +313,45 @@ export default function HRMPage() {
     downloadBlob(blob, `Contract-${employeeCode}.pdf`);
   };
 
+  // Server-side branded PDF (draft for unsigned, employee_copy for signed).
+  const openServerPdf = async (contract: any, mode: 'preview' | 'download' | 'print' = 'preview') => {
+    const t = toast.loading(mode === 'download' ? 'Preparing download…' : 'Building PDF…');
+    try {
+      const isSigned = contract.signature_status === 'signed';
+      const copy = isSigned ? 'employee_copy' : 'draft';
+      const { data, error } = await supabase.functions.invoke('contract-signing', {
+        body: { action: 'get_pdf', contract_id: contract.id, copy },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const url = data?.signed_url as string | undefined;
+      if (!url) throw new Error('No PDF URL returned');
+      toast.success(isSigned ? 'PDF ready' : 'Draft PDF ready', { id: t });
+      if (mode === 'download') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Contract-${contract._resolvedCode || contract.id}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: any) {
+      // Fallback to client-side draft so the user is never stuck.
+      toast.error(e?.message || 'Server PDF failed — using local fallback', { id: t });
+      openContractPdf(contract);
+    }
+  };
+
+  const voidContract = async (contract: any) => {
+    try {
+      await cancelContract(contract.id);
+      toast.success('Contract voided');
+      queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to void contract');
+    }
+  };
+
   const createContractSignLink = async (
     contract: any,
     role: 'employee' | 'witness_1' | 'witness_2' | 'hr' = 'employee',
