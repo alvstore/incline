@@ -1,7 +1,13 @@
-// v3.0.0 — Adds WhatsApp/SMS OTP gating before sign, employer profile via
-// canonical get_employer_profile RPC, and a stamped-PDF confirmation event.
+// v4.0.0 — Single edge function for the entire contract signing lifecycle:
+//   create_link · get_contract · request_otp · sign_contract · get_pdf · regenerate_pdf
+// OTPs now live in the shared `otp_verifications` table (purpose='contract_sign')
+// and are delivered via the canonical `otp_verification` template — no separate
+// Meta WhatsApp template to maintain. Employer profile resolved through the
+// canonical `get_employer_profile` RPC. The stamped PDF generator is inlined
+// here so we only deploy one function for the whole flow.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +20,8 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+type CopyKind = "original" | "employee_copy" | "employer_copy";
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -22,40 +30,44 @@ serve(async (req: Request) => {
     const action = body?.action;
     if (!action) return json({ error: "Missing action" }, 400);
 
-    if (action === "create_link") return await createSignLink(req, body);
-    if (action === "get_contract") return await getContractByToken(body);
-    if (action === "request_otp") return await requestOtp(body);
-    if (action === "sign_contract") return await signContract(req, body);
-
-    return json({ error: "Invalid action" }, 400);
+    switch (action) {
+      case "create_link":     return await createSignLink(req, body);
+      case "get_contract":    return await getContractByToken(body);
+      case "request_otp":     return await requestOtp(body);
+      case "sign_contract":   return await signContract(req, body);
+      case "get_pdf":         return await getOrBuildPdf(req, body, false);
+      case "regenerate_pdf":  return await getOrBuildPdf(req, body, true);
+      default:                return json({ error: "Invalid action" }, 400);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return json({ error: message }, 500);
   }
 });
 
+// ── Auth helper ───────────────────────────────────────────────────────────
+async function assertStaff(req: Request) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return { error: json({ error: "Unauthorized" }, 401) };
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: u } = await userClient.auth.getUser();
+  if (!u?.user) return { error: json({ error: "Unauthorized" }, 401) };
+  const { data: roleRows } = await supabase
+    .from("user_roles").select("role").eq("user_id", u.user.id)
+    .in("role", ["owner", "admin", "manager"]).limit(1);
+  if (!roleRows || roleRows.length === 0) return { error: json({ error: "Forbidden" }, 403) };
+  return { userId: u.user.id };
+}
+
+// ── 1. Create signing link ────────────────────────────────────────────────
 async function createSignLink(req: Request, body: any) {
   const contractId = body?.contract_id;
   if (!contractId) return json({ error: "Missing contract_id" }, 400);
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return json({ error: "Unauthorized" }, 401);
-
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: authData, error: authError } = await userClient.auth.getUser();
-  if (authError || !authData?.user) return json({ error: "Unauthorized" }, 401);
-
-  const userId = authData.user.id;
-  const { data: roleRows, error: roleError } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .in("role", ["owner", "admin", "manager"])
-    .limit(1);
-
-  if (roleError || !roleRows || roleRows.length === 0) return json({ error: "Forbidden" }, 403);
+  const auth = await assertStaff(req);
+  if ("error" in auth) return auth.error;
 
   const { data: contract, error: contractError } = await supabase
     .from("contracts").select("id, branch_id").eq("id", contractId).single();
@@ -72,7 +84,7 @@ async function createSignLink(req: Request, body: any) {
       branch_id: contract.branch_id,
       token_hash: tokenHash,
       expires_at: expiresAt,
-      created_by: userId,
+      created_by: auth.userId,
       status: "pending",
     })
     .select("id").single();
@@ -87,7 +99,7 @@ async function createSignLink(req: Request, body: any) {
     action: "CONTRACT_SIGN_LINK_CREATED",
     table_name: "contracts",
     record_id: contract.id,
-    user_id: userId,
+    user_id: auth.userId,
     branch_id: contract.branch_id,
     action_description: "Created public contract signing link",
     new_data: { request_id: requestRow.id, expires_at: expiresAt },
@@ -98,6 +110,7 @@ async function createSignLink(req: Request, body: any) {
   return json({ sign_url: signUrl, expires_at: expiresAt });
 }
 
+// ── 2. Get contract by signing token ─────────────────────────────────────
 async function getContractByToken(body: any) {
   const token = body?.token;
   if (!token) return json({ error: "Missing token" }, 400);
@@ -135,33 +148,16 @@ async function getContractByToken(body: any) {
       .eq("id", contract.id).in("signature_status", ["sent", "not_sent"]);
   }
 
-  const emp = Array.isArray(contract.employees) ? contract.employees[0] : contract.employees;
-  const trn = Array.isArray(contract.trainers) ? contract.trainers[0] : contract.trainers;
-  const empProfile: any = Array.isArray(emp?.profiles) ? emp?.profiles[0] : emp?.profiles;
-  let resolvedName = empProfile?.full_name ?? null;
-  let resolvedCode = emp?.employee_code ?? null;
-  let resolvedPhone = empProfile?.phone ?? null;
-  let resolvedEmail = empProfile?.email ?? null;
-
-  if (!resolvedName && trn?.user_id) {
-    const { data: profile } = await supabase
-      .from("profiles").select("full_name, phone, email").eq("id", trn.user_id).maybeSingle();
-    resolvedName = profile?.full_name ?? "Trainer";
-    resolvedCode = "Trainer";
-    resolvedPhone = profile?.phone ?? null;
-    resolvedEmail = profile?.email ?? null;
-  }
-
-  // Employer profile from canonical source
+  const { name, phone, email, code } = await resolveRecipient(contract);
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
 
   return json({
     contract: {
       id: contract.id,
-      employee_name: resolvedName || "Employee",
-      employee_code: resolvedCode || "-",
-      employee_phone_masked: maskPhone(resolvedPhone),
-      employee_email_masked: maskEmail(resolvedEmail),
+      employee_name: name || "Employee",
+      employee_code: code || "-",
+      employee_phone_masked: maskPhone(phone),
+      employee_email_masked: maskEmail(email),
       contract_type: contract.contract_type,
       start_date: contract.start_date,
       end_date: contract.end_date,
@@ -174,7 +170,7 @@ async function getContractByToken(body: any) {
   });
 }
 
-// ── OTP request ───────────────────────────────────────────────────────────
+// ── 3. Request OTP (reuses shared otp_verifications + otp_verification template) ──
 async function requestOtp(body: any) {
   const token = body?.token;
   const channel = (body?.channel || "whatsapp") as "whatsapp" | "sms" | "email";
@@ -189,71 +185,61 @@ async function requestOtp(body: any) {
   if (!requestRow) return json({ error: "Invalid signing link" }, 404);
   if (requestRow.status === "signed") return json({ error: "Already signed" }, 410);
 
-  // Resolve recipient
   const { data: contract } = await supabase
     .from("contracts")
-    .select(`employees(profiles:employees_user_id_profiles_fkey(full_name, phone, email)), trainers(user_id)`)
+    .select(`branch_id,
+      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
+      trainers(user_id)`)
     .eq("id", requestRow.contract_id).single();
-  const emp = Array.isArray(contract?.employees) ? contract!.employees[0] : (contract as any)?.employees;
-  const trn = Array.isArray(contract?.trainers) ? contract!.trainers[0] : (contract as any)?.trainers;
-  let profile: any = Array.isArray(emp?.profiles) ? emp?.profiles[0] : emp?.profiles;
-  if (!profile?.phone && !profile?.email && trn?.user_id) {
-    const { data: p } = await supabase.from("profiles").select("full_name, phone, email").eq("id", trn.user_id).maybeSingle();
-    profile = p;
-  }
-  const recipient = channel === "email" ? profile?.email : profile?.phone;
+
+  const { name, phone, email } = await resolveRecipient(contract);
+  const recipient = channel === "email" ? email : phone;
   if (!recipient) return json({ error: `No ${channel} address on file for this employee` }, 422);
 
-  // Throttle: max 3 OTPs per 10 minutes per request
+  // Throttle: max 3 OTPs per 10 minutes per request — scoped via purpose+context_id.
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { count: recent } = await supabase
-    .from("contract_sign_otps")
+    .from("otp_verifications")
     .select("id", { count: "exact", head: true })
-    .eq("request_id", requestRow.id).gte("created_at", tenMinAgo);
+    .eq("purpose", "contract_sign")
+    .eq("context_id", requestRow.id)
+    .gte("created_at", tenMinAgo);
   if ((recent || 0) >= 3) return json({ error: "Too many OTP requests. Please try again in a few minutes." }, 429);
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const codeHash = await sha256(code);
+  const codeStr = String(Math.floor(100000 + Math.random() * 900000));
+  const codeHash = await sha256(codeStr);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-  await supabase.from("contract_sign_otps").insert({
-    request_id: requestRow.id,
-    contract_id: requestRow.contract_id,
-    channel,
-    recipient,
+  await supabase.from("otp_verifications").insert({
+    phone: recipient,            // existing column — works for sms/wa/email recipient
     code_hash: codeHash,
     expires_at: expiresAt,
+    purpose: "contract_sign",
+    context_id: requestRow.id,
   });
 
-  // Employer name for the message
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: requestRow.branch_id });
   const employerName = (employer as any)?.legal_name || "Incline";
-  const employeeName = profile?.full_name || "there";
 
-  const messageBody =
-    `Hi ${employeeName}, your one-time code to sign your employment contract with ${employerName} is *${code}*. It expires in 10 minutes. Do not share this code with anyone.`;
-  const subject = `${employerName} — Contract signing code`;
-
-  // Dispatch through canonical pipeline (transactional, force-bypass prefs)
+  // Reuse the existing, Meta-approved `otp_verification` template — variables {{code}}, {{name}}.
   const dispatchRes = await supabase.functions.invoke("dispatch-communication", {
     body: {
       branch_id: requestRow.branch_id,
       channel,
       category: "transactional",
       recipient,
+      event: "otp_verification",
       payload: {
-        subject,
-        body: messageBody,
-        variables: { name: employeeName, otp: code, expires_in: "10 minutes", employer_name: employerName },
+        subject: `${employerName} — Verification code`,
+        body: `Your one-time code is ${codeStr}. It expires in 10 minutes. Do not share this code with anyone.`,
+        variables: { code: codeStr, name: name || "there", otp: codeStr, expires_in: "10 minutes", employer_name: employerName },
         use_branded_template: channel === "email",
       },
       dedupe_key: `contract_sign_otp:${requestRow.id}:${Date.now()}:${channel}`,
       force: true,
     },
   });
-  if (dispatchRes.error) {
-    return json({ error: "Could not send OTP: " + dispatchRes.error.message }, 500);
-  }
+  if (dispatchRes.error) return json({ error: "Could not send OTP: " + dispatchRes.error.message }, 500);
 
   return json({
     success: true,
@@ -263,7 +249,7 @@ async function requestOtp(body: any) {
   });
 }
 
-// ── Sign (now OTP-gated) ──────────────────────────────────────────────────
+// ── 4. Sign contract (OTP gated) ──────────────────────────────────────────
 async function signContract(req: Request, body: any) {
   const token = body?.token;
   const otp = String(body?.otp || "").trim();
@@ -291,11 +277,11 @@ async function signContract(req: Request, body: any) {
   if (requestRow.status === "signed") return json({ error: "This contract is already signed" }, 410);
   if (requestRow.expires_at < now) return json({ error: "This signing link has expired" }, 410);
 
-  // Verify OTP — latest unverified, not expired, attempts < 5
+  // Verify OTP from shared table (purpose+context_id scope)
   const { data: otpRow } = await supabase
-    .from("contract_sign_otps")
-    .select("id, code_hash, expires_at, attempts, verified_at")
-    .eq("request_id", requestRow.id).is("verified_at", null)
+    .from("otp_verifications")
+    .select("id, code_hash, expires_at, attempts, consumed_at")
+    .eq("purpose", "contract_sign").eq("context_id", requestRow.id).is("consumed_at", null)
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
   if (!otpRow) return json({ error: "Please request an OTP first" }, 400);
@@ -304,11 +290,11 @@ async function signContract(req: Request, body: any) {
 
   const submittedHash = await sha256(otp);
   if (submittedHash !== otpRow.code_hash) {
-    await supabase.from("contract_sign_otps")
+    await supabase.from("otp_verifications")
       .update({ attempts: (otpRow.attempts ?? 0) + 1 }).eq("id", otpRow.id);
     return json({ error: "Incorrect OTP. Please try again." }, 401);
   }
-  await supabase.from("contract_sign_otps").update({ verified_at: now }).eq("id", otpRow.id);
+  await supabase.from("otp_verifications").update({ consumed_at: now }).eq("id", otpRow.id);
 
   const ipAddress = req.headers.get("x-forwarded-for") ?? null;
   const userAgent = req.headers.get("user-agent") ?? null;
@@ -375,6 +361,234 @@ async function signContract(req: Request, body: any) {
   });
 
   return json({ success: true, signed_at: now });
+}
+
+// ── 5. Get/regenerate stamped PDF ─────────────────────────────────────────
+async function getOrBuildPdf(req: Request, body: any, forceRebuild: boolean) {
+  const auth = await assertStaff(req);
+  if ("error" in auth) return auth.error;
+
+  const contractId = body?.contract_id;
+  const copy: CopyKind = (body?.copy as CopyKind) ?? "employee_copy";
+  if (!contractId) return json({ error: "Missing contract_id" }, 400);
+
+  // If a stamped PDF already exists and we're not forced to rebuild, just sign it.
+  if (!forceRebuild) {
+    const { data: existing } = await supabase
+      .from("contracts").select("stamped_pdf_path, signed_pdf_hash")
+      .eq("id", contractId).maybeSingle();
+    if (existing?.stamped_pdf_path) {
+      const { data: signedUrl } = await supabase.storage
+        .from("contract-pdfs").createSignedUrl(existing.stamped_pdf_path, 60);
+      if (signedUrl?.signedUrl) {
+        return json({ success: true, path: existing.stamped_pdf_path, signed_url: signedUrl.signedUrl, hash: existing.signed_pdf_hash, copy, cached: true });
+      }
+    }
+  }
+
+  return await buildStampedPdf(contractId, copy);
+}
+
+async function buildStampedPdf(contractId: string, copy: CopyKind) {
+  const { data: contract, error: cErr } = await supabase
+    .from("contracts")
+    .select(`
+      id, contract_type, start_date, end_date,
+      salary, base_salary, commission_percentage, terms,
+      signature_status, signed_at, witness_1, witness_2,
+      governing_jurisdiction, arbitration_seat, notice_period_days,
+      branch_id,
+      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
+      trainers(user_id)
+    `)
+    .eq("id", contractId).single();
+  if (cErr || !contract) return json({ error: "Contract not found" }, 404);
+
+  const { data: signature } = await supabase
+    .from("contract_signatures").select("*")
+    .eq("contract_id", contractId).order("signed_at", { ascending: false }).limit(1).maybeSingle();
+
+  const { data: employerData } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
+  const employer: any = employerData || {};
+
+  const { name: employeeName, code: employeeCode } = await resolveRecipient(contract);
+
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : "EMPLOYEE COPY";
+  const pageWidth = PageSizes.A4[0];
+  const pageHeight = PageSizes.A4[1];
+  const marginX = 50;
+  const marginY = 60;
+
+  let page = pdfDoc.addPage(PageSizes.A4);
+  let y = pageHeight - marginY;
+  const lineHeight = 13;
+
+  const headerLegal = `${employer.legal_name || "Incline"} — The Incline Life by Incline`;
+  const headerAddr = employer.full_address || [employer.city, employer.state].filter(Boolean).join(", ");
+  const headerContact = [employer.phone, employer.email].filter(Boolean).join("  ·  ");
+
+  function drawHeader(p: any) {
+    p.drawText(headerLegal, { x: marginX, y: pageHeight - 38, size: 11, font: fontBold, color: rgb(0.18, 0.16, 0.42) });
+    if (headerAddr) p.drawText(headerAddr, { x: marginX, y: pageHeight - 52, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+    if (headerContact) p.drawText(headerContact, { x: marginX, y: pageHeight - 63, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+    const idRight: string[] = [];
+    if (employer.gstin) idRight.push(`GSTIN: ${employer.gstin}`);
+    if (employer.pan) idRight.push(`PAN: ${employer.pan}`);
+    if (employer.firm_registration_no) idRight.push(`Reg: ${employer.firm_registration_no}`);
+    idRight.forEach((t, i) => {
+      const w = font.widthOfTextAtSize(t, 7.5);
+      p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+    });
+    p.drawText(copyLabel, {
+      x: pageWidth / 2 - 100, y: pageHeight / 2,
+      size: 60, font: fontBold, color: rgb(0.93, 0.93, 0.97),
+      opacity: 0.6, rotate: { type: "degrees", angle: 35 } as any,
+    });
+  }
+
+  function drawFooter(p: any, pageNum: number, totalPages: number) {
+    const refLine = `Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`;
+    p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+    const verify = `Verify: /verify/contract/${contractId.slice(0, 8)}`;
+    const vw = font.widthOfTextAtSize(verify, 7);
+    p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+  }
+
+  drawHeader(page);
+
+  function newPageIfNeeded(needed = lineHeight) {
+    if (y - needed < marginY + 40) {
+      page = pdfDoc.addPage(PageSizes.A4);
+      drawHeader(page);
+      y = pageHeight - marginY - 30;
+    }
+  }
+
+  function writeLine(text: string, opts: { bold?: boolean; size?: number; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    const color = opts.color ?? rgb(0.1, 0.1, 0.15);
+    const maxWidth = pageWidth - marginX * 2;
+    const words = text.split(/\s+/);
+    let line = "";
+    for (const w of words) {
+      const candidate = line ? line + " " + w : w;
+      if (f.widthOfTextAtSize(candidate, size) > maxWidth) {
+        newPageIfNeeded(lineHeight);
+        page.drawText(line, { x: marginX, y, size, font: f, color });
+        y -= lineHeight;
+        line = w;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line) {
+      newPageIfNeeded(lineHeight);
+      page.drawText(line, { x: marginX, y, size, font: f, color });
+      y -= lineHeight;
+    }
+  }
+
+  function spacer(n = 6) { y -= n; }
+
+  y -= 20;
+  writeLine("EMPLOYMENT AGREEMENT", { bold: true, size: 16, color: rgb(0.18, 0.16, 0.42) });
+  spacer(8);
+
+  const termsRaw = typeof contract.terms === "string"
+    ? contract.terms
+    : (contract.terms as any)?.conditions ?? JSON.stringify(contract.terms ?? {}, null, 2);
+
+  for (const ln of termsRaw.split("\n")) {
+    const trimmed = ln.replace(/^#+\s*/, "");
+    const isHeading = /^#{1,3}\s/.test(ln);
+    writeLine(trimmed || " ", { bold: isHeading });
+    if (isHeading) spacer(2);
+  }
+
+  spacer(20);
+  newPageIfNeeded(120);
+  writeLine("Signatures", { bold: true, size: 12 });
+  spacer(4);
+
+  if (signature?.signature_image_path) {
+    const { data: imgBlob } = await supabase.storage
+      .from("signature-assets").download(signature.signature_image_path);
+    if (imgBlob) {
+      try {
+        const bytes = new Uint8Array(await imgBlob.arrayBuffer());
+        const img = await pdfDoc.embedPng(bytes);
+        const scale = Math.min(150 / img.width, 60 / img.height);
+        page.drawImage(img, { x: marginX, y: y - 60, width: img.width * scale, height: img.height * scale });
+        y -= 70;
+      } catch (_) { /* fall back to typed text */ }
+    }
+  }
+  writeLine(`Employee: ${signature?.signed_name || employeeName} (${employeeCode})`);
+  writeLine(`Signed at: ${signature?.signed_at || contract.signed_at || "—"}  ·  IP: ${signature?.ip_address || "—"}`);
+  if (signature?.geolocation) writeLine(`Geo: ${JSON.stringify(signature.geolocation)}`);
+
+  spacer(10);
+  writeLine(`For ${employer.legal_name || "Incline"}`);
+  if (employer.proprietor_name) writeLine(`Proprietor: ${employer.proprietor_name}`);
+  if (employer.governing_jurisdiction) writeLine(`Governing jurisdiction: ${employer.governing_jurisdiction}`);
+  if (employer.arbitration_seat) writeLine(`Arbitration seat: ${employer.arbitration_seat}`);
+
+  if (contract.witness_1 || contract.witness_2) {
+    spacer(14);
+    writeLine("Witnesses", { bold: true, size: 11 });
+    if (contract.witness_1) writeLine(`1. ${(contract.witness_1 as any).name || "-"}  ·  ${(contract.witness_1 as any).phone || "-"}`);
+    if (contract.witness_2) writeLine(`2. ${(contract.witness_2 as any).name || "-"}  ·  ${(contract.witness_2 as any).phone || "-"}`);
+  }
+
+  spacer(14);
+  writeLine("Audit trail", { bold: true, size: 11 });
+  writeLine(`Electronic signature recorded under Section 10A of the Information Technology Act, 2000.`);
+  writeLine(`Terms hash at sign: ${signature?.terms_hash_at_sign || "—"}`);
+
+  const pages = pdfDoc.getPages();
+  pages.forEach((p, i) => drawFooter(p, i + 1, pages.length));
+
+  const pdfBytes = await pdfDoc.save();
+  const path = `${contractId}/${copy}.pdf`;
+  const { error: upErr } = await supabase.storage
+    .from("contract-pdfs").upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
+  if (upErr) return json({ error: "Failed to store PDF: " + upErr.message }, 500);
+
+  const hashBuf = await crypto.subtle.digest("SHA-256", pdfBytes);
+  const signedPdfHash = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  await supabase.from("contracts")
+    .update({ stamped_pdf_path: path, signed_pdf_hash: signedPdfHash }).eq("id", contractId);
+
+  const { data: signedUrl, error: urlErr } = await supabase.storage
+    .from("contract-pdfs").createSignedUrl(path, 60);
+  if (urlErr) return json({ error: "Failed to create signed URL: " + urlErr.message }, 500);
+
+  return json({ success: true, path, signed_url: signedUrl?.signedUrl, hash: signedPdfHash, copy });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+async function resolveRecipient(contract: any): Promise<{ name: string | null; phone: string | null; email: string | null; code: string | null }> {
+  const emp = Array.isArray(contract?.employees) ? contract.employees[0] : contract?.employees;
+  const trn = Array.isArray(contract?.trainers) ? contract.trainers[0] : contract?.trainers;
+  let profile: any = Array.isArray(emp?.profiles) ? emp?.profiles[0] : emp?.profiles;
+  let code = emp?.employee_code ?? null;
+  if (!profile?.phone && !profile?.email && trn?.user_id) {
+    const { data: p } = await supabase
+      .from("profiles").select("full_name, phone, email").eq("id", trn.user_id).maybeSingle();
+    profile = p;
+    if (!code) code = "Trainer";
+  }
+  return {
+    name: profile?.full_name ?? null,
+    phone: profile?.phone ?? null,
+    email: profile?.email ?? null,
+    code,
+  };
 }
 
 function json(payload: unknown, status = 200) {

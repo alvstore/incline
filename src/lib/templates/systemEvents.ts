@@ -29,7 +29,7 @@ const ALL: EventChannel[] = ['whatsapp', 'sms', 'email'];
 export const SYSTEM_EVENTS: SystemEvent[] = [
   // ── Lifecycle ────────────────────────────────────────────────
   { event: 'member_created', label: 'New Member Welcome', category: 'lifecycle', description: 'When a new member is registered', channels: ALL },
-  { event: 'otp_verification', label: 'OTP Verification Code', category: 'lifecycle', description: 'One-time code for self-onboarding (uses {{code}} variable)', channels: ['whatsapp', 'sms'] },
+  { event: 'otp_verification', label: 'OTP Verification Code', category: 'lifecycle', description: 'One-time code for self-onboarding, contract signing, and other secure flows. Vars: {{code}} {{name}}.', channels: ALL },
   { event: 'membership_expiring_7d', label: 'Membership Expiring (7 days)', category: 'lifecycle', description: '7 days before membership ends', channels: ALL },
   { event: 'membership_expiring_1d', label: 'Membership Expiring (Tomorrow)', category: 'lifecycle', description: '1 day before membership ends', channels: ALL },
   { event: 'membership_expired', label: 'Membership Expired', category: 'lifecycle', description: 'Membership has just expired', channels: ALL },
@@ -37,7 +37,6 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'freeze_confirmed', label: 'Membership Frozen', category: 'lifecycle', description: 'Membership freeze confirmation', channels: ALL },
   { event: 'unfreeze_confirmed', label: 'Membership Unfrozen', category: 'lifecycle', description: 'Membership unfreeze confirmation', channels: ALL },
   { event: 'staff_attendance_recorded', label: 'Staff Attendance Recorded (Manual)', category: 'lifecycle', description: 'Notify a staff member that someone with higher authority recorded their attendance manually (biometric-failure fallback). Vars: {{actor_name}} {{action}} {{time}} {{reason}}. Currently feature-flagged off.', channels: ['whatsapp', 'sms', 'email'] },
-  { event: 'contract_sign_otp', label: 'Contract Signing — OTP', category: 'lifecycle', description: 'One-time code sent to the employee before they sign their employment contract. Vars: {{name}} {{otp}} {{expires_in}} {{employer_name}}.', channels: ['whatsapp', 'sms', 'email'] },
   { event: 'contract_signed_confirmation', label: 'Contract Signed — Confirmation', category: 'document', description: 'Sent right after a contract is electronically signed. Includes the stamped PDF link. Vars: {{name}} {{employer_name}} {{document_link}}.', channels: ['whatsapp', 'sms', 'email'], headerHint: 'document' },
 
   // ── Billing & Documents ──────────────────────────────────────

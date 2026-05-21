@@ -2551,53 +2551,6 @@ export type Database = {
           },
         ]
       }
-      contract_sign_otps: {
-        Row: {
-          attempts: number
-          channel: string
-          code_hash: string
-          contract_id: string
-          created_at: string
-          expires_at: string
-          id: string
-          recipient: string
-          request_id: string
-          verified_at: string | null
-        }
-        Insert: {
-          attempts?: number
-          channel: string
-          code_hash: string
-          contract_id: string
-          created_at?: string
-          expires_at: string
-          id?: string
-          recipient: string
-          request_id: string
-          verified_at?: string | null
-        }
-        Update: {
-          attempts?: number
-          channel?: string
-          code_hash?: string
-          contract_id?: string
-          created_at?: string
-          expires_at?: string
-          id?: string
-          recipient?: string
-          request_id?: string
-          verified_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "contract_sign_otps_request_id_fkey"
-            columns: ["request_id"]
-            isOneToOne: false
-            referencedRelation: "contract_signature_requests"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       contract_signature_requests: {
         Row: {
           branch_id: string | null
@@ -8527,28 +8480,34 @@ export type Database = {
           attempts: number
           code_hash: string
           consumed_at: string | null
+          context_id: string | null
           created_at: string
           expires_at: string
           id: string
           phone: string
+          purpose: string | null
         }
         Insert: {
           attempts?: number
           code_hash: string
           consumed_at?: string | null
+          context_id?: string | null
           created_at?: string
           expires_at: string
           id?: string
           phone: string
+          purpose?: string | null
         }
         Update: {
           attempts?: number
           code_hash?: string
           consumed_at?: string | null
+          context_id?: string | null
           created_at?: string
           expires_at?: string
           id?: string
           phone?: string
+          purpose?: string | null
         }
         Relationships: []
       }
