@@ -362,30 +362,30 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
   const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
-  // Detect dual-role: when creating a trainer contract, check if same user has an employee record (and vice-versa)
+  // Detect dual-role + auto-fetch trainer commission from pt_share_percentage.
   useEffect(() => {
     if (!open || !employee?.user_id) { setLinkedRecord(null); return; }
     const isTrainer = employee.staff_type === 'trainer';
     (async () => {
       if (isTrainer) {
+        // Current record IS the trainer — seed commission from its pt_share_percentage.
+        const { data: trainerSelf } = await supabase
+          .from('trainers').select('pt_share_percentage').eq('id', employee.id).maybeSingle();
+        const pct = Number((trainerSelf as any)?.pt_share_percentage ?? 40);
+        setFormData((f) => ({ ...f, commissionPercentage: pct }));
         const { data } = await supabase
-          .from('employees')
-          .select('employee_code, salary')
-          .eq('user_id', employee.user_id)
-          .maybeSingle();
+          .from('employees').select('employee_code, salary').eq('user_id', employee.user_id).maybeSingle();
         if (data) setLinkedRecord({ kind: 'employee', code: data.employee_code, salary: data.salary });
         else setLinkedRecord(null);
       } else {
         const { data } = await supabase
-          .from('trainers')
-          .select('id, fixed_salary')
-          .eq('user_id', employee.user_id)
-          .maybeSingle();
-        if (data) setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary });
-        else setLinkedRecord(null);
+          .from('trainers').select('id, fixed_salary, pt_share_percentage').eq('user_id', employee.user_id).maybeSingle();
+        if (data) {
+          setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary, pt_share: (data as any).pt_share_percentage });
+        } else setLinkedRecord(null);
       }
     })();
-  }, [open, employee?.user_id, employee?.staff_type]);
+  }, [open, employee?.user_id, employee?.staff_type, employee?.id]);
 
   const logContractAudit = async (action: string, actionDescription: string, newData?: any) => {
     try {
