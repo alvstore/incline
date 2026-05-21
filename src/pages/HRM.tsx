@@ -1363,16 +1363,15 @@ export default function HRMPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">₹{(staff.salary || 0).toLocaleString()}</TableCell>
-                          <TableCell>₹{(p.proRatedPay || 0).toLocaleString()}</TableCell>
+                          <TableCell>{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.proRatedPay || 0).toLocaleString()}</>}</TableCell>
                           <TableCell>
-                            {(p.ptCommission || 0) > 0 
+                            {rowLoading ? <Skeleton className="h-4 w-10" /> : (p.ptCommission || 0) > 0
                               ? <span className="text-success font-medium">+₹{p.ptCommission.toLocaleString()}</span>
-                              : <span className="text-muted-foreground">-</span>
-                            }
+                              : <span className="text-muted-foreground">-</span>}
                           </TableCell>
-                          <TableCell className="font-semibold">₹{(p.grossPay || 0).toLocaleString()}</TableCell>
+                          <TableCell className="font-semibold">{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.grossPay || 0).toLocaleString()}</>}</TableCell>
                           <TableCell className="text-destructive">
-                            {(() => {
+                            {rowLoading ? <Skeleton className="h-4 w-16" /> : (() => {
                               const ded = p.totalDeductions ?? (p.pfDeduction || 0);
                               if (!ded) return <span className="text-muted-foreground">-</span>;
                               const parts: string[] = [];
@@ -1387,12 +1386,14 @@ export default function HRMPage() {
                               );
                             })()}
                           </TableCell>
-                          <TableCell className="font-semibold text-success">₹{(p.netPay || 0).toLocaleString()}</TableCell>
+                          <TableCell className="font-semibold text-success">{rowLoading ? <Skeleton className="h-4 w-16" /> : <>₹{(p.netPay || 0).toLocaleString()}</>}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="outline"
+                                disabled={rowLoading || blockProcess}
+                                title={blockProcess ? 'Attendance not recorded — sync MIPS or mark full month present first.' : undefined}
                                 onClick={() => {
                                   toast.success(`Payroll processed for ${staff.name}`);
                                 }}
