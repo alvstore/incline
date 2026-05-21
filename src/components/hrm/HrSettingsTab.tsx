@@ -58,8 +58,8 @@ const blank = (branch_id: string | null): HrSettings => ({
 });
 
 export default function HrSettingsTab() {
-  const { selectedBranch } = useBranch();
-  const branchId = selectedBranch?.id ?? null;
+  const { selectedBranch } = useBranchContext();
+  const branchId = selectedBranch && selectedBranch !== 'all' ? selectedBranch : null;
   const qc = useQueryClient();
   const [form, setForm] = useState<HrSettings>(blank(branchId));
 
