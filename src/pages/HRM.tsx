@@ -1298,7 +1298,9 @@ export default function HRMPage() {
                   <TableBody>
                     {payrollStaff.map((staff: PayrollStaffItem) => {
                       const p = (payrollData as Record<string, any>)[staff.id] || {};
-                      
+                      const rowLoading = isLoadingPayroll || (isFetchingPayroll && !(payrollData as Record<string, any>)[staff.id]);
+                      const blockProcess = p.attendanceRecorded === false && !p.manualOverride;
+
                       return (
                         <TableRow key={staff.id}>
                           <TableCell>
@@ -1316,43 +1318,49 @@ export default function HRMPage() {
                           </TableCell>
                           <TableCell>{getStaffTypeBadge(staff)}</TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-mono text-sm">
-                                {(p.payableDays ?? p.daysPresent ?? 0)}/{p.workingDays || 26}
-                              </span>
-                              {p.attendanceRecorded === false && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
-                                  ⚠ Attendance not recorded
-                                </Badge>
-                              )}
-                              <div className="flex flex-wrap gap-1">
-                                {(p.halfDays || 0) > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
-                                    {p.halfDays} half
-                                  </Badge>
-                                )}
-                                {(p.lateDays || 0) > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-500/10 text-orange-700 border-orange-500/30">
-                                    {p.lateDays} late
-                                  </Badge>
-                                )}
-                                {(p.missingCheckoutDays || 0) > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 bg-red-500/10 text-red-700 border-red-500/30">
-                                    {p.missingCheckoutDays} no-out
-                                  </Badge>
-                                )}
-                                {(p.otHours || 0) > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 bg-blue-500/10 text-blue-700 border-blue-500/30">
-                                    +{Math.round(p.otHours)}h OT
-                                  </Badge>
-                                )}
-                                {(p.leaveDays || 0) > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 bg-violet-500/10 text-violet-700 border-violet-500/30">
-                                    {p.leaveDays} leave
-                                  </Badge>
-                                )}
+                            {rowLoading ? (
+                              <div className="flex flex-col gap-1.5">
+                                <Skeleton className="h-4 w-10" />
+                                <Skeleton className="h-4 w-24 rounded-full" />
                               </div>
-                            </div>
+                            ) : (
+                              <div className="flex flex-col items-start gap-1.5">
+                                <span className="font-mono text-sm">
+                                  {(p.payableDays ?? p.daysPresent ?? 0)}/{p.workingDays || getDaysInMonth(payrollMonth)}
+                                </span>
+                                <AttendanceStateBadge
+                                  attendanceRecorded={p.attendanceRecorded !== false}
+                                  manualOverride={!!p.manualOverride}
+                                />
+                                <div className="flex flex-wrap gap-1">
+                                  {(p.halfDays || 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
+                                      {p.halfDays} half
+                                    </Badge>
+                                  )}
+                                  {(p.lateDays || 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-500/10 text-orange-700 border-orange-500/30">
+                                      {p.lateDays} late
+                                    </Badge>
+                                  )}
+                                  {(p.missingCheckoutDays || 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-red-500/10 text-red-700 border-red-500/30">
+                                      {p.missingCheckoutDays} no-out
+                                    </Badge>
+                                  )}
+                                  {(p.otHours || 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-blue-500/10 text-blue-700 border-blue-500/30">
+                                      +{Math.round(p.otHours)}h OT
+                                    </Badge>
+                                  )}
+                                  {(p.leaveDays || 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-violet-500/10 text-violet-700 border-violet-500/30">
+                                      {p.leaveDays} leave
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">₹{(staff.salary || 0).toLocaleString()}</TableCell>
                           <TableCell>₹{(p.proRatedPay || 0).toLocaleString()}</TableCell>
