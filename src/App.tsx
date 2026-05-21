@@ -186,6 +186,7 @@ function RoutedContent() {
           {/* Embeddable lead form - no auth required */}
           <Route path="/embed/lead-form" element={<EmbedLeadForm />} />
           <Route path="/contract-sign/:token" element={<ContractSignPage />} />
+          <Route path="/contract-fill/:token" element={<ContractFillPage />} />
           <Route path="/member/pay" element={<MemberCheckout />} />
           <Route path="/register" element={<PublicRegistrationPage />} />
 
