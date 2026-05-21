@@ -33,7 +33,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, type PayrollStaffItem } from '@/services/hrmService';
+import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, fetchPayrollSettings, type PayrollStaffItem, type HrPayrollSettings } from '@/services/hrmService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
