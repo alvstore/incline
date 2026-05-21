@@ -719,77 +719,99 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             )}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Terms & Conditions</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
-                    setFormData({
-                      ...formData,
-                      terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, {
-                        employeeCode: employee?.employee_code,
-                        email: employee?.profile?.email,
-                        phone: employee?.profile?.phone,
-                        position: employee?.position,
-                        department: employee?.department,
-                      }),
-                    });
-                    setLegalTermsUnlocked(false);
-                    setLegalTermsUnlockedAt(null);
-                    await logContractAudit(
-                      'CONTRACT_TERMS_TEMPLATE_RESET',
-                      `Reset agreement template for ${employeeName}`,
-                      { agreement_role: formData.agreementRole },
-                    );
-                    toast.success('Agreement reset to template');
-                  }}
-                >
-                  Reset Template
-                </Button>
-                {canEditLegalClauses ? (
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <Label className="text-xs text-muted-foreground">Unlock Legal Clauses</Label>
-                    <Switch
-                      checked={legalTermsUnlocked}
-                      onCheckedChange={async (checked) => {
-                        if (!checked) {
-                          setLegalTermsUnlocked(false);
-                          return;
-                        }
-
-                        const unlockedAt = new Date().toISOString();
-                        setLegalTermsUnlocked(true);
-                        setLegalTermsUnlockedAt(unlockedAt);
-                        await logContractAudit(
-                          'CONTRACT_LEGAL_TERMS_UNLOCKED',
-                          `Unlocked legal clauses for ${employee?.profile?.full_name || employee?.full_name || 'employee'}`,
-                          { agreement_role: formData.agreementRole, unlocked_at: unlockedAt },
-                        );
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <Badge variant="outline" className="text-xs">Locked: Admin/Owner/Manager only</Badge>
-                )}
-              </div>
+          {/* Contract Variables — HR-fillable fields. Employee/witness fields
+              are collected later on the public /contract/:token/fill page. */}
+          <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <Label className="text-sm font-semibold">Contract Variables</Label>
+              <Badge variant="outline" className="text-[10px] ml-auto">HR section</Badge>
             </div>
-            <Textarea
-              value={formData.terms}
-              onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
-              placeholder="Employment agreement terms..."
-              rows={16}
-              readOnly={!legalTermsUnlocked}
-            />
-            <p className="text-xs text-muted-foreground">
-              Agreement is prefilled and legally locked by default. Only admin-level users can unlock and edit legal clauses.
+            <p className="text-xs text-muted-foreground -mt-1">
+              Only fill the HR-side fields here. Employee personal details (S/o, address, emergency contact)
+              and witness signatures are collected on the secure signing link.
             </p>
+            <div className="grid grid-cols-1 gap-3">
+              {CONTRACT_VARIABLES.filter((v) => v.role === 'hr').map((v) => (
+                <div key={v.key} className="space-y-1">
+                  <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
+                  <Input
+                    type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
+                    placeholder={v.placeholder}
+                    value={(variables as any)[v.key] ?? ''}
+                    onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                  />
+                  {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Advanced: legal clauses unlock (admin/owner/manager only) */}
+          {canEditLegalClauses && (
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-between px-2">
+                  <span className="flex items-center gap-2 text-xs">
+                    <Lock className="h-3.5 w-3.5" />
+                    Advanced — Edit legal clauses
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-2">
+                <div className="flex items-center justify-between rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5">
+                  <div className="text-xs text-amber-900">
+                    Unlock legal clauses to edit the boilerplate template. Action is audit-logged.
+                  </div>
+                  <Switch
+                    checked={legalTermsUnlocked}
+                    onCheckedChange={async (checked) => {
+                      if (!checked) { setLegalTermsUnlocked(false); return; }
+                      const unlockedAt = new Date().toISOString();
+                      setLegalTermsUnlocked(true);
+                      setLegalTermsUnlockedAt(unlockedAt);
+                      await logContractAudit(
+                        'CONTRACT_LEGAL_TERMS_UNLOCKED',
+                        `Unlocked legal clauses for ${employee?.profile?.full_name || employee?.full_name || 'employee'}`,
+                        { agreement_role: formData.agreementRole, unlocked_at: unlockedAt },
+                      );
+                    }}
+                  />
+                </div>
+                {legalTermsUnlocked && (
+                  <>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button" size="sm" variant="outline"
+                        onClick={async () => {
+                          const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
+                          setFormData((f) => ({
+                            ...f,
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill),
+                          }));
+                          await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
+                          toast.success('Template reset');
+                        }}
+                      >
+                        Reset Template
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={formData.terms}
+                      onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
+                      placeholder="Employment agreement terms..."
+                      rows={14}
+                    />
+                  </>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Final PDF (header, footer, employer details, signatures, witnesses) is rendered server-side from the
+                  employer profile — no need to type any of that here.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           <div className="space-y-2">
             <Label>Contract Document (Upload)</Label>
