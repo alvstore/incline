@@ -62,10 +62,42 @@ async function assertStaff(req: Request) {
   return { userId: u.user.id };
 }
 
+// ── Allowlists per fill role ──────────────────────────────────────────────
+const FILL_ALLOWLIST: Record<string, string[]> = {
+  employee: [
+    "father_or_husband_name", "residential_address",
+    "emergency_contact_name", "emergency_contact_phone",
+    "pan_or_aadhaar_last4",
+  ],
+  witness_1: ["witness_1_name", "witness_1_phone"],
+  witness_2: ["witness_2_name", "witness_2_phone"],
+  hr: [
+    "probation_months", "notice_period_days",
+    "witness_1_name", "witness_1_phone",
+    "witness_2_name", "witness_2_phone",
+  ],
+};
+
+const REQUIRED_BEFORE_SIGN = [
+  "father_or_husband_name", "residential_address",
+  "emergency_contact_name", "emergency_contact_phone",
+  "witness_1_name", "witness_2_name",
+];
+
+function missingRequired(vars: Record<string, unknown> | null | undefined): string[] {
+  const v = (vars ?? {}) as Record<string, unknown>;
+  return REQUIRED_BEFORE_SIGN.filter((k) => {
+    const val = v[k];
+    return val === undefined || val === null || String(val).trim() === "";
+  });
+}
+
 // ── 1. Create signing link ────────────────────────────────────────────────
 async function createSignLink(req: Request, body: any) {
   const contractId = body?.contract_id;
+  const role = (body?.role || "employee") as string;
   if (!contractId) return json({ error: "Missing contract_id" }, 400);
+  if (!FILL_ALLOWLIST[role]) return json({ error: "Invalid role" }, 400);
 
   const auth = await assertStaff(req);
   if ("error" in auth) return auth.error;
@@ -78,6 +110,13 @@ async function createSignLink(req: Request, body: any) {
   const tokenHash = await sha256(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Revoke any existing open request for this (contract, role) so the unique
+  // index doesn't reject us. Audit a separate row for transparency.
+  await supabase.from("contract_signature_requests")
+    .update({ revoked_at: new Date().toISOString(), status: "expired" })
+    .eq("contract_id", contract.id).eq("role", role).is("revoked_at", null)
+    .in("status", ["pending", "viewed"]);
+
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
     .insert({
@@ -87,14 +126,17 @@ async function createSignLink(req: Request, body: any) {
       expires_at: expiresAt,
       created_by: auth.userId,
       status: "pending",
+      role,
     })
     .select("id").single();
 
   if (requestError || !requestRow) return json({ error: "Failed to create signature request" }, 500);
 
-  await supabase.from("contracts")
-    .update({ signature_status: "sent", signature_requested_at: new Date().toISOString() })
-    .eq("id", contract.id);
+  if (role === "employee") {
+    await supabase.from("contracts")
+      .update({ signature_status: "sent", signature_requested_at: new Date().toISOString() })
+      .eq("id", contract.id);
+  }
 
   await supabase.from("audit_logs").insert({
     action: "CONTRACT_SIGN_LINK_CREATED",
@@ -102,13 +144,17 @@ async function createSignLink(req: Request, body: any) {
     record_id: contract.id,
     user_id: auth.userId,
     branch_id: contract.branch_id,
-    action_description: "Created public contract signing link",
-    new_data: { request_id: requestRow.id, expires_at: expiresAt },
+    action_description: `Created public ${role} signing/fill link`,
+    new_data: { request_id: requestRow.id, role, expires_at: expiresAt },
   });
 
   const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? req.headers.get("origin") ?? "http://localhost:5173";
-  const signUrl = `${appUrl.replace(/\/$/, "")}/contract-sign/${rawToken}`;
-  return json({ sign_url: signUrl, expires_at: expiresAt });
+  const base = appUrl.replace(/\/$/, "");
+  // Employee link defaults to the fill page (which forwards to sign once complete);
+  // witness/HR links only need the fill page.
+  const path = role === "employee" ? "contract-fill" : "contract-fill";
+  const signUrl = `${base}/${path}/${rawToken}`;
+  return json({ sign_url: signUrl, role, expires_at: expiresAt });
 }
 
 // ── 2. Get contract by signing token ─────────────────────────────────────
