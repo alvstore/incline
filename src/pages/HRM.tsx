@@ -33,7 +33,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, type PayrollStaffItem } from '@/services/hrmService';
+import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, fetchPayrollSettings, type PayrollStaffItem, type HrPayrollSettings } from '@/services/hrmService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -106,6 +106,12 @@ export default function HRMPage() {
   const [editTrainerOpen, setEditTrainerOpen] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<any>(null);
   const [payrollMonth, setPayrollMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [markPresentTarget, setMarkPresentTarget] = useState<{ id: string; name: string; userId: string | null } | null>(null);
+  const [markPresentReason, setMarkPresentReason] = useState('');
+  const [adjustTarget, setAdjustTarget] = useState<{ id: string; name: string; userId: string | null; currentNet: number } | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState<string>('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustType, setAdjustType] = useState<'bonus' | 'deduction'>('bonus');
   const [searchTerm, setSearchTerm] = useState('');
   const [signedViewerOpen, setSignedViewerOpen] = useState(false);
   const [viewingSignedContract, setViewingSignedContract] = useState<any>(null);
@@ -225,22 +231,28 @@ export default function HRMPage() {
     },
   });
 
+  // HR settings (PF / ESI / PT toggles)
+  const { data: payrollSettings } = useQuery<HrPayrollSettings>({
+    queryKey: ['hrm-payroll-settings'],
+    queryFn: () => fetchPayrollSettings(),
+  });
+
   // Payroll calculations per unified staff
   const { data: payrollData = {} } = useQuery({
-    queryKey: ['hrm-payroll', payrollMonth, payrollStaff.length],
+    queryKey: ['hrm-payroll', payrollMonth, payrollStaff.length, payrollSettings?.pf_enabled, payrollSettings?.esi_enabled, payrollSettings?.pt_enabled],
     queryFn: async () => {
       const results: Record<string, any> = {};
       for (const staff of payrollStaff) {
         try {
-          const calc = await calculatePayrollForStaff(staff, payrollMonth);
+          const calc = await calculatePayrollForStaff(staff, payrollMonth, false, payrollSettings);
           results[staff.id] = calc;
         } catch {
-          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: staff.salary || 0, ptCommission: 0, grossPay: staff.salary || 0, pfDeduction: 0, netPay: staff.salary || 0, daysPresent: 0, workingDays: 26 };
+          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: 0, ptCommission: 0, grossPay: 0, pfDeduction: 0, esiDeduction: 0, ptDeduction: 0, totalDeductions: 0, netPay: 0, daysPresent: 0, workingDays: 26, attendanceRecorded: false };
         }
       }
       return results;
     },
-    enabled: payrollStaff.length > 0,
+    enabled: payrollStaff.length > 0 && !!payrollSettings,
   });
 
   // Filter unified staff by search
@@ -484,8 +496,130 @@ export default function HRMPage() {
 
   const processAllPayroll = useMutation({
     mutationFn: async () => {
-      toast.success(`Payroll processed for ${payrollStaff.length} staff members`);
+      const [y, m] = payrollMonth.split('-').map(Number);
+      const periodStart = `${payrollMonth}-01`;
+      const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+
+      // Find or create the draft run for this period
+      const { data: existingRun } = await supabase
+        .from('payroll_runs')
+        .select('id,status')
+        .eq('period_start', periodStart)
+        .eq('period_end', periodEnd)
+        .not('status', 'in', '(processed,paid)')
+        .maybeSingle();
+
+      let runId = existingRun?.id as string | undefined;
+      if (!runId) {
+        const { data: newId, error } = await supabase.rpc('payroll_create_run', {
+          p_branch_id: null,
+          p_period_start: periodStart,
+          p_period_end: periodEnd,
+        });
+        if (error) throw error;
+        runId = newId as unknown as string;
+      }
+
+      const { data, error: procErr } = await supabase.rpc('payroll_process_all_for_run', { p_run_id: runId });
+      if (procErr) throw procErr;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row;
     },
+    onSuccess: (row: any) => {
+      const processed = row?.processed_count ?? 0;
+      const skipped = row?.skipped_count ?? 0;
+      toast.success(`Payroll processed: ${processed} item(s)${skipped ? ` · ${skipped} skipped` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to process payroll'),
+  });
+
+  // Ensure draft run + item exists for a given user, return item id
+  const ensurePayrollItem = async (userId: string): Promise<string> => {
+    const [y, m] = payrollMonth.split('-').map(Number);
+    const periodStart = `${payrollMonth}-01`;
+    const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+
+    let runId: string | undefined;
+    const { data: existingRun } = await supabase
+      .from('payroll_runs')
+      .select('id')
+      .eq('period_start', periodStart)
+      .eq('period_end', periodEnd)
+      .not('status', 'in', '(processed,paid)')
+      .maybeSingle();
+    runId = existingRun?.id as string | undefined;
+    if (!runId) {
+      const { data: newId, error } = await supabase.rpc('payroll_create_run', {
+        p_branch_id: null,
+        p_period_start: periodStart,
+        p_period_end: periodEnd,
+      });
+      if (error) throw error;
+      runId = newId as unknown as string;
+    }
+
+    const { data: item, error: itemErr } = await supabase
+      .from('payroll_items')
+      .select('id')
+      .eq('run_id', runId!)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (itemErr) throw itemErr;
+    if (!item?.id) throw new Error('No payroll item found for this staff in current run. Open the Payroll Run panel to generate items first.');
+    return item.id as string;
+  };
+
+  const markFullPresent = useMutation({
+    mutationFn: async () => {
+      if (!markPresentTarget?.userId) throw new Error('User not linked to auth');
+      if (!markPresentReason.trim()) throw new Error('Reason required');
+      const itemId = await ensurePayrollItem(markPresentTarget.userId);
+      const { error } = await supabase.rpc('payroll_mark_full_present', {
+        p_item_id: itemId,
+        p_reason: markPresentReason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`${markPresentTarget?.name} marked present for ${payrollMonth}`);
+      setMarkPresentTarget(null);
+      setMarkPresentReason('');
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to mark present'),
+  });
+
+  const manualAdjust = useMutation({
+    mutationFn: async () => {
+      if (!adjustTarget?.userId) throw new Error('User not linked to auth');
+      const amt = Number(adjustAmount);
+      if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount');
+      if (!adjustReason.trim()) throw new Error('Reason required');
+      const itemId = await ensurePayrollItem(adjustTarget.userId);
+      const patch = adjustType === 'bonus'
+        ? { final_bonus: amt }
+        : { final_deductions: amt };
+      const { error } = await supabase.rpc('payroll_adjust_item', {
+        p_item_id: itemId,
+        p_patch: patch as any,
+        p_reason: adjustReason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Adjustment recorded');
+      setAdjustTarget(null);
+      setAdjustAmount('');
+      setAdjustReason('');
+      setAdjustType('bonus');
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to adjust'),
   });
 
   // Get attendance summary per staff member
@@ -1153,7 +1287,7 @@ export default function HRMPage() {
                       <TableHead>Pro-rated</TableHead>
                       <TableHead>PT Commission</TableHead>
                       <TableHead>Gross</TableHead>
-                      <TableHead>PF (12%)</TableHead>
+                      <TableHead>Deductions</TableHead>
                       <TableHead>Net Pay</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -1183,6 +1317,11 @@ export default function HRMPage() {
                               <span className="font-mono text-sm">
                                 {(p.payableDays ?? p.daysPresent ?? 0)}/{p.workingDays || 26}
                               </span>
+                              {p.attendanceRecorded === false && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
+                                  ⚠ Attendance not recorded
+                                </Badge>
+                              )}
                               <div className="flex flex-wrap gap-1">
                                 {(p.halfDays || 0) > 0 && (
                                   <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
@@ -1221,7 +1360,22 @@ export default function HRMPage() {
                             }
                           </TableCell>
                           <TableCell className="font-semibold">₹{(p.grossPay || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-destructive">-₹{(p.pfDeduction || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-destructive">
+                            {(() => {
+                              const ded = p.totalDeductions ?? (p.pfDeduction || 0);
+                              if (!ded) return <span className="text-muted-foreground">-</span>;
+                              const parts: string[] = [];
+                              if (p.pfDeduction) parts.push(`PF ₹${Math.round(p.pfDeduction).toLocaleString()}`);
+                              if (p.esiDeduction) parts.push(`ESI ₹${Math.round(p.esiDeduction).toLocaleString()}`);
+                              if (p.ptDeduction) parts.push(`PT ₹${Math.round(p.ptDeduction).toLocaleString()}`);
+                              return (
+                                <div title={parts.join(' · ')}>
+                                  -₹{Math.round(ded).toLocaleString()}
+                                  {parts.length > 0 && <div className="text-[10px] text-muted-foreground">{parts.join(' · ')}</div>}
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="font-semibold text-success">₹{(p.netPay || 0).toLocaleString()}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -1279,6 +1433,26 @@ export default function HRMPage() {
                               >
                                 <Mail className="h-3 w-3" />
                               </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="ghost" title="More">
+                                    <MoreHorizontal className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuItem
+                                    onClick={() => setMarkPresentTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null })}
+                                    disabled={p.attendanceRecorded !== false}
+                                  >
+                                    <UserCheck className="mr-2 h-3.5 w-3.5" /> Mark full month present
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setAdjustTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null, currentNet: p.netPay || 0 })}
+                                  >
+                                    <Edit className="mr-2 h-3.5 w-3.5" /> Manual adjust…
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1390,6 +1564,78 @@ export default function HRMPage() {
         onOpenChange={setSignedViewerOpen}
         contract={viewingSignedContract}
       />
+
+      {/* Mark full month present override */}
+      <AlertDialog open={!!markPresentTarget} onOpenChange={(o) => { if (!o) { setMarkPresentTarget(null); setMarkPresentReason(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Override attendance — {markPresentTarget?.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              No attendance was recorded for {getPayrollMonthLabel(payrollMonth)}. This override marks the staff as fully present for payroll calculation. The reason will be logged on the payroll item.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-medium text-muted-foreground">Reason (required)</label>
+            <Input
+              value={markPresentReason}
+              onChange={(e) => setMarkPresentReason(e.target.value)}
+              placeholder="e.g. Turnstile downtime in week 2, verified via manager signoff"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); markFullPresent.mutate(); }}
+              disabled={markFullPresent.isPending || !markPresentReason.trim()}
+            >
+              Apply override
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Manual payroll adjustment */}
+      <AlertDialog open={!!adjustTarget} onOpenChange={(o) => { if (!o) { setAdjustTarget(null); setAdjustAmount(''); setAdjustReason(''); setAdjustType('bonus'); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Manual adjustment — {adjustTarget?.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Current net: ₹{Math.round(adjustTarget?.currentNet || 0).toLocaleString()} · {getPayrollMonthLabel(payrollMonth)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bonus">Bonus / Addition</SelectItem>
+                    <SelectItem value="deduction">Deduction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Amount (₹)</label>
+                <Input type="number" min={1} value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Reason (required)</label>
+              <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="e.g. Diwali bonus / Uniform cost recovery" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); manualAdjust.mutate(); }}
+              disabled={manualAdjust.isPending || !adjustAmount || !adjustReason.trim()}
+            >
+              Apply adjustment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

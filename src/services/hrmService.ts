@@ -330,15 +330,59 @@ export async function fetchAllPayrollStaff(branchId?: string): Promise<PayrollSt
   return staffList;
 }
 
-export async function calculatePayrollForStaff(staff: PayrollStaffItem, month: string, _includeSundays: boolean = false) {
+export interface HrPayrollSettings {
+  pf_enabled: boolean;
+  pf_employee_pct: number;
+  pf_wage_ceiling: number | null;
+  esi_enabled: boolean;
+  esi_employee_pct: number;
+  pt_enabled: boolean;
+  pt_amount: number | null;
+}
+
+const DEFAULT_PAYROLL_SETTINGS: HrPayrollSettings = {
+  pf_enabled: false,
+  pf_employee_pct: 12,
+  pf_wage_ceiling: 15000,
+  esi_enabled: false,
+  esi_employee_pct: 0.75,
+  pt_enabled: false,
+  pt_amount: 200,
+};
+
+export async function fetchPayrollSettings(branchId?: string | null): Promise<HrPayrollSettings> {
+  // branch row first, then global fallback
+  let row: any = null;
+  if (branchId) {
+    const { data } = await supabase.from('hr_settings').select('*').eq('branch_id', branchId).maybeSingle();
+    row = data;
+  }
+  if (!row) {
+    const { data } = await supabase.from('hr_settings').select('*').is('branch_id', null).maybeSingle();
+    row = data;
+  }
+  if (!row) return DEFAULT_PAYROLL_SETTINGS;
+  return {
+    pf_enabled: !!row.pf_enabled,
+    pf_employee_pct: Number(row.pf_employee_pct ?? 12),
+    pf_wage_ceiling: row.pf_wage_ceiling != null ? Number(row.pf_wage_ceiling) : null,
+    esi_enabled: !!row.esi_enabled,
+    esi_employee_pct: Number(row.esi_employee_pct ?? 0.75),
+    pt_enabled: !!row.pt_enabled,
+    pt_amount: row.pt_amount != null ? Number(row.pt_amount) : null,
+  };
+}
+
+export async function calculatePayrollForStaff(
+  staff: PayrollStaffItem,
+  month: string,
+  _includeSundays: boolean = false,
+  settings?: HrPayrollSettings
+) {
   const startDate = `${month}-01`;
   const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0];
+  const cfg = settings ?? (await fetchPayrollSettings());
 
-  // --- Authoritative per-day breakdown via the new compute_payroll RPC.
-  // It accounts for shifts, late/early-out, half-day, missing checkout,
-  // weekly off, holidays, approved leave and OT — collapsing duplicate
-  // attendance rows. We still gracefully fall back to a simple count if
-  // the RPC fails for any reason (e.g. brand-new env).
   let payableDays = 0;
   let halfDays = 0;
   let lateDays = 0;
@@ -349,6 +393,7 @@ export async function calculatePayrollForStaff(staff: PayrollStaffItem, month: s
   let holidayDays = 0;
   let weeklyOffDays = 0;
   let dailyBreakdown: Array<Record<string, unknown>> = [];
+  let attendanceRowsTotal = 0;
 
   try {
     const { data: payrollRows, error: rpcError } = await supabase.rpc('compute_payroll', {
@@ -369,9 +414,9 @@ export async function calculatePayrollForStaff(staff: PayrollStaffItem, month: s
       if (r.leave_type) leaveDays += 1;
       if (r.is_holiday) holidayDays += 1;
       if (r.is_weekly_off) weeklyOffDays += 1;
+      if (r.hours_worked && Number(r.hours_worked) > 0) attendanceRowsTotal += 1;
     }
   } catch (e) {
-    // Fallback: legacy attendance count
     const { data: attendance } = await supabase
       .from('staff_attendance')
       .select('id')
@@ -379,14 +424,23 @@ export async function calculatePayrollForStaff(staff: PayrollStaffItem, month: s
       .gte('check_in', `${startDate}T00:00:00`)
       .lte('check_in', `${endDate}T23:59:59`);
     payableDays = attendance?.length || 0;
+    attendanceRowsTotal = payableDays;
   }
+
+  // Independent raw attendance count — used to detect "no attendance recorded at all"
+  const { count: rawCount } = await supabase
+    .from('staff_attendance')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', staff.user_id)
+    .gte('check_in', `${startDate}T00:00:00`)
+    .lte('check_in', `${endDate}T23:59:59`);
+  const attendanceRecorded = (rawCount ?? attendanceRowsTotal) > 0;
 
   const workingDays = getDaysInMonth(month);
   const baseSalary = staff.salary || 0;
-  // Pro-rate by payable days (compute_payroll already handles half-days as 0.5)
   const proRatedPay = Math.round((baseSalary / workingDays) * payableDays);
 
-  // Fetch PT commissions (unchanged)
+  // PT commissions
   let ptCommission = 0;
   if (staff.staff_type === 'trainer') {
     const { data: commissions } = await supabase
@@ -414,22 +468,31 @@ export async function calculatePayrollForStaff(staff: PayrollStaffItem, month: s
   }
 
   const grossPay = proRatedPay + ptCommission;
-  const pfDeduction = Math.round(proRatedPay * 0.12);
-  const netPay = grossPay - pfDeduction;
+
+  // Statutory deductions — all gated by HR settings
+  const pfBase = cfg.pf_wage_ceiling ? Math.min(proRatedPay, cfg.pf_wage_ceiling) : proRatedPay;
+  const pfDeduction = cfg.pf_enabled ? Math.round(pfBase * (cfg.pf_employee_pct / 100)) : 0;
+  const esiDeduction = cfg.esi_enabled ? Math.round(grossPay * (cfg.esi_employee_pct / 100)) : 0;
+  const ptDeduction = cfg.pt_enabled && proRatedPay > 0 ? Math.round(cfg.pt_amount ?? 0) : 0;
+  const totalDeductions = pfDeduction + esiDeduction + ptDeduction;
+  const netPay = grossPay - totalDeductions;
 
   return {
     staffId: staff.id,
     month,
     baseSalary,
-    // Existing keys preserved for back-compat with current UI
     daysPresent: Math.floor(payableDays),
     workingDays,
     proRatedPay,
     ptCommission,
     grossPay,
     pfDeduction,
+    esiDeduction,
+    ptDeduction,
+    totalDeductions,
     netPay,
-    // New, richer fields from compute_payroll
+    attendanceRecorded,
+    settings: cfg,
     payableDays,
     halfDays,
     lateDays,

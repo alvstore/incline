@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Save, Scale, Users, ShieldCheck, IdCard } from 'lucide-react';
+import { Save, Scale, Users, ShieldCheck, IdCard, Receipt } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import EmployerSummaryCard from '@/lib/hrm/EmployerSummaryCard';
 
 // NOTE: Employer name/address/GSTIN/logo live on `branches` and
@@ -32,6 +33,14 @@ type HrSettings = {
   daily_hour_cap: number;
   ot_multiplier: number;
   basic_pct_of_ctc: number;
+  // Statutory deductions
+  pf_enabled: boolean;
+  pf_employee_pct: number;
+  pf_wage_ceiling: number | null;
+  esi_enabled: boolean;
+  esi_employee_pct: number;
+  pt_enabled: boolean;
+  pt_amount: number | null;
 };
 
 const blank = (branch_id: string | null): HrSettings => ({
@@ -51,6 +60,13 @@ const blank = (branch_id: string | null): HrSettings => ({
   daily_hour_cap: 9,
   ot_multiplier: 2.0,
   basic_pct_of_ctc: 50.0,
+  pf_enabled: false,
+  pf_employee_pct: 12,
+  pf_wage_ceiling: 15000,
+  esi_enabled: false,
+  esi_employee_pct: 0.75,
+  pt_enabled: false,
+  pt_amount: 200,
 });
 
 export default function HrSettingsTab() {
@@ -145,6 +161,63 @@ export default function HrSettingsTab() {
           <Field label="Governing jurisdiction" className="md:col-span-2"><Input value={form.governing_jurisdiction} onChange={(e) => patch('governing_jurisdiction', e.target.value)} /></Field>
           <Field label="Reviewed by (lawyer)"><Input value={form.lawyer_reviewed_by ?? ''} onChange={(e) => patch('lawyer_reviewed_by', e.target.value)} /></Field>
           <Field label="Reviewed at"><Input type="date" value={form.lawyer_reviewed_at ?? ''} onChange={(e) => patch('lawyer_reviewed_at', e.target.value || null)} /></Field>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-indigo-600" /> Statutory payroll deductions</CardTitle>
+          <CardDescription>All deductions are <strong>OFF by default</strong>. Enable individually when your establishment is registered. Changes apply to the next payroll run.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* PF */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Provident Fund (PF)</div>
+                <div className="text-xs text-slate-500">EPFO employee contribution. Capped at statutory wage ceiling unless cleared.</div>
+              </div>
+              <Switch checked={form.pf_enabled} onCheckedChange={(v) => patch('pf_enabled', v)} />
+            </div>
+            {form.pf_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Employee %"><Input type="number" step={0.01} value={form.pf_employee_pct} onChange={(e) => patch('pf_employee_pct', Number(e.target.value))} /></Field>
+                <Field label="Wage ceiling (₹/mo, blank = none)"><Input type="number" value={form.pf_wage_ceiling ?? ''} onChange={(e) => patch('pf_wage_ceiling', e.target.value === '' ? null : Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+
+          {/* ESI */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Employee State Insurance (ESI)</div>
+                <div className="text-xs text-slate-500">Applies to staff earning ≤ ₹21,000 / month when establishment is ESIC registered.</div>
+              </div>
+              <Switch checked={form.esi_enabled} onCheckedChange={(v) => patch('esi_enabled', v)} />
+            </div>
+            {form.esi_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Employee %"><Input type="number" step={0.01} value={form.esi_employee_pct} onChange={(e) => patch('esi_employee_pct', Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
+
+          {/* Professional Tax */}
+          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">Professional Tax</div>
+                <div className="text-xs text-slate-500">State levy — Rajasthan currently has no PT. Enable only if state requires it.</div>
+              </div>
+              <Switch checked={form.pt_enabled} onCheckedChange={(v) => patch('pt_enabled', v)} />
+            </div>
+            {form.pt_enabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Flat amount per month (₹)"><Input type="number" value={form.pt_amount ?? ''} onChange={(e) => patch('pt_amount', e.target.value === '' ? null : Number(e.target.value))} /></Field>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
