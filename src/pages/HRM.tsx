@@ -106,6 +106,12 @@ export default function HRMPage() {
   const [editTrainerOpen, setEditTrainerOpen] = useState(false);
   const [editingTrainer, setEditingTrainer] = useState<any>(null);
   const [payrollMonth, setPayrollMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [markPresentTarget, setMarkPresentTarget] = useState<{ id: string; name: string; userId: string | null } | null>(null);
+  const [markPresentReason, setMarkPresentReason] = useState('');
+  const [adjustTarget, setAdjustTarget] = useState<{ id: string; name: string; userId: string | null; currentNet: number } | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState<string>('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustType, setAdjustType] = useState<'bonus' | 'deduction'>('bonus');
   const [searchTerm, setSearchTerm] = useState('');
   const [signedViewerOpen, setSignedViewerOpen] = useState(false);
   const [viewingSignedContract, setViewingSignedContract] = useState<any>(null);
