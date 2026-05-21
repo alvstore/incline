@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { FileSignature, ShieldCheck, Eraser, ScrollText, CheckCircle2 } from 'lucide-react';
+import { FileSignature, ShieldCheck, Eraser, ScrollText, CheckCircle2, MessageSquare, Mail, Smartphone, KeyRound } from 'lucide-react';
 import { useNoindex } from '@/lib/seo/useNoindex';
 
 function extractTerms(terms: any): string {
@@ -20,6 +20,8 @@ function extractTerms(terms: any): string {
   if (typeof terms === 'object' && typeof terms.conditions === 'string') return terms.conditions;
   return JSON.stringify(terms, null, 2);
 }
+
+type Channel = 'whatsapp' | 'sms' | 'email';
 
 export default function ContractSignPage() {
   useNoindex('Sign Contract | The Incline Life');
@@ -36,6 +38,9 @@ export default function ContractSignPage() {
   const [reachedBottom, setReachedBottom] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [signed, setSigned] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState<{ channel: Channel; recipient_masked: string; expires_at: string } | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['public-contract-sign', token],
@@ -51,9 +56,9 @@ export default function ContractSignPage() {
   });
 
   const contract = data?.contract;
+  const employer = contract?.employer;
   const termsText = useMemo(() => extractTerms(contract?.terms), [contract?.terms]);
 
-  // Capture geolocation (best-effort, browser permission gated)
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -63,7 +68,12 @@ export default function ContractSignPage() {
     );
   }, []);
 
-  // Scroll-to-bottom gate
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
   function onTermsScroll() {
     const el = termsScrollRef.current;
     if (!el) return;
@@ -71,18 +81,37 @@ export default function ContractSignPage() {
     if (atBottom && !reachedBottom) setReachedBottom(true);
   }
 
+  const otpMutation = useMutation({
+    mutationFn: async (channel: Channel) => {
+      const { data, error } = await supabase.functions.invoke('contract-signing', {
+        body: { action: 'request_otp', token, channel },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      setOtpSent({ channel: data.channel, recipient_masked: data.recipient_masked, expires_at: data.expires_at });
+      setResendCooldown(30);
+      toast.success(`Code sent to ${data.recipient_masked}`);
+    },
+    onError: (err: any) => toast.error(err?.message || 'Failed to send code'),
+  });
+
   const signMutation = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error('Missing signing token');
       if (!sigRef.current || sigRef.current.isEmpty()) {
         throw new Error('Please draw your signature in the box.');
       }
+      if (!/^\d{6}$/.test(otp)) throw new Error('Enter the 6-digit code sent to you.');
       const signature_image_base64 = sigRef.current.getCanvas().toDataURL('image/png');
 
       const { data, error } = await supabase.functions.invoke('contract-signing', {
         body: {
           action: 'sign_contract',
           token,
+          otp,
           signed_name: signedName.trim(),
           signer_contact: signerContact.trim() || null,
           signature_text: signatureText.trim() || signedName.trim(),
@@ -101,14 +130,10 @@ export default function ContractSignPage() {
       toast.success('Contract signed successfully');
       setSigned(true);
     },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Failed to sign contract');
-    },
+    onError: (err: any) => toast.error(err?.message || 'Failed to sign contract'),
   });
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading contract...</div>;
-  }
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading contract...</div>;
 
   if (error || !contract) {
     return (
@@ -133,7 +158,7 @@ export default function ContractSignPage() {
             </div>
             <CardTitle>Contract signed</CardTitle>
             <CardDescription>
-              A stamped PDF copy has been emailed to you and saved to your employee record.
+              A stamped PDF copy has been sent to you and saved to your employee record.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -145,7 +170,11 @@ export default function ContractSignPage() {
     reachedBottom &&
     !!signedName.trim() &&
     consent &&
+    /^\d{6}$/.test(otp) &&
     !signMutation.isPending;
+
+  const hasPhone = !!contract.employee_phone_masked;
+  const hasEmail = !!contract.employee_email_masked;
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4">
@@ -157,8 +186,9 @@ export default function ContractSignPage() {
               Employment Agreement — Signature
             </CardTitle>
             <CardDescription>
-              Please read every clause, draw your signature and confirm consent. Your acceptance is
-              recorded as a valid electronic signature under Section 10A of the IT Act, 2000.
+              {employer?.legal_name ? `Issued by ${employer.legal_name}` : 'Please read every clause'},
+              draw your signature and verify the one-time code we send you. Your acceptance is recorded
+              as a valid electronic signature under Section 10A of the IT Act, 2000.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -195,6 +225,78 @@ export default function ContractSignPage() {
 
             <Separator />
 
+            {/* OTP block */}
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-indigo-600" />
+                <h3 className="font-semibold text-sm">Verify with one-time code</h3>
+              </div>
+              {!otpSent ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-600">Send a 6-digit code to your registered contact to confirm it's really you.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {hasPhone && (
+                      <Button size="sm" variant="outline" disabled={otpMutation.isPending}
+                        onClick={() => otpMutation.mutate('whatsapp')}>
+                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> WhatsApp to {contract.employee_phone_masked}
+                      </Button>
+                    )}
+                    {hasPhone && (
+                      <Button size="sm" variant="outline" disabled={otpMutation.isPending}
+                        onClick={() => otpMutation.mutate('sms')}>
+                        <Smartphone className="h-3.5 w-3.5 mr-1" /> SMS to {contract.employee_phone_masked}
+                      </Button>
+                    )}
+                    {hasEmail && (
+                      <Button size="sm" variant="outline" disabled={otpMutation.isPending}
+                        onClick={() => otpMutation.mutate('email')}>
+                        <Mail className="h-3.5 w-3.5 mr-1" /> Email to {contract.employee_email_masked}
+                      </Button>
+                    )}
+                    {!hasPhone && !hasEmail && (
+                      <p className="text-xs text-red-600">No phone or email on record. Please contact HR.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-600">
+                    Code sent via <strong className="capitalize">{otpSent.channel}</strong> to <strong>{otpSent.recipient_masked}</strong>. It expires in 10 minutes.
+                  </p>
+                  <div className="flex gap-2 items-end">
+                    <div className="space-y-1 flex-1 max-w-[200px]">
+                      <Label htmlFor="otp" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">6-digit code</Label>
+                      <Input
+                        id="otp"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="• • • • • •"
+                        className="tracking-widest text-center font-mono text-lg"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={resendCooldown > 0 || otpMutation.isPending}
+                      onClick={() => otpMutation.mutate(otpSent.channel)}
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setOtpSent(null); setOtp(''); }}
+                    >
+                      Change method
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -210,12 +312,7 @@ export default function ContractSignPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Draw your signature *</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => sigRef.current?.clear()}
-                  >
+                  <Button type="button" variant="ghost" size="sm" onClick={() => sigRef.current?.clear()}>
                     <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 </div>

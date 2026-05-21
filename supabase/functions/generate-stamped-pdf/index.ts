@@ -1,6 +1,6 @@
-// v1.0.0 — Generate a branded, print-ready stamped PDF copy of a signed
-// employment contract using pdf-lib (no Chromium needed). Stores the file in
-// the private `contract-pdfs` bucket and returns a short-lived signed URL.
+// v2.0.0 — Branded, print-ready stamped PDF for signed employment contracts.
+// Employer details are pulled from the canonical `get_employer_profile` RPC
+// (branches + organization_settings + hr_settings) — no hardcoded fallbacks.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
@@ -67,20 +67,9 @@ serve(async (req: Request) => {
       .limit(1)
       .maybeSingle();
 
-    // Fetch employer/HR settings (branch first, then global)
-    let { data: hrSettings } = await supabase
-      .from("hr_settings")
-      .select("*")
-      .eq("branch_id", contract.branch_id)
-      .maybeSingle();
-    if (!hrSettings) {
-      const { data: g } = await supabase
-        .from("hr_settings")
-        .select("*")
-        .is("branch_id", null)
-        .maybeSingle();
-      hrSettings = g ?? null;
-    }
+    // Canonical employer profile (branches + organization_settings + hr_settings)
+    const { data: employerData } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
+    const employer: any = employerData || {};
 
     const emp: any = Array.isArray(contract.employees) ? contract.employees[0] : contract.employees;
     const empProfile: any = Array.isArray(emp?.profiles) ? emp?.profiles[0] : emp?.profiles;
@@ -103,13 +92,23 @@ serve(async (req: Request) => {
     let y = pageHeight - marginY;
     const lineHeight = 13;
 
+    const headerLegal = `${employer.legal_name || "Incline"} — The Incline Life by Incline`;
+    const headerAddr = employer.full_address || [employer.city, employer.state].filter(Boolean).join(", ");
+    const headerContact = [employer.phone, employer.email].filter(Boolean).join("  ·  ");
+
     function drawHeader(p: any) {
-      p.drawText("The Incline Life by Incline", { x: marginX, y: pageHeight - 40, size: 12, font: fontBold, color: rgb(0.18, 0.16, 0.42) });
-      p.drawText(hrSettings?.employer_registered_address || "Sector 14, Udaipur, Rajasthan, India", { x: marginX, y: pageHeight - 55, size: 8, font, color: rgb(0.4, 0.4, 0.5) });
-      if (hrSettings?.employer_gstin) {
-        p.drawText(`GSTIN: ${hrSettings.employer_gstin}`, { x: pageWidth - marginX - 150, y: pageHeight - 55, size: 8, font, color: rgb(0.4, 0.4, 0.5) });
-      }
-      // Watermark (rotated text)
+      p.drawText(headerLegal, { x: marginX, y: pageHeight - 38, size: 11, font: fontBold, color: rgb(0.18, 0.16, 0.42) });
+      if (headerAddr) p.drawText(headerAddr, { x: marginX, y: pageHeight - 52, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+      if (headerContact) p.drawText(headerContact, { x: marginX, y: pageHeight - 63, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+      const idRight: string[] = [];
+      if (employer.gstin) idRight.push(`GSTIN: ${employer.gstin}`);
+      if (employer.pan) idRight.push(`PAN: ${employer.pan}`);
+      if (employer.firm_registration_no) idRight.push(`Reg: ${employer.firm_registration_no}`);
+      idRight.forEach((t, i) => {
+        const w = font.widthOfTextAtSize(t, 7.5);
+        p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+      });
+      // Watermark
       p.drawText(copyLabel, {
         x: pageWidth / 2 - 100, y: pageHeight / 2,
         size: 60, font: fontBold, color: rgb(0.93, 0.93, 0.97),
@@ -118,8 +117,11 @@ serve(async (req: Request) => {
     }
 
     function drawFooter(p: any, pageNum: number, totalPages: number) {
-      p.drawText(`Contract ${contractId.slice(0, 8)} · Page ${pageNum} of ${totalPages}`, { x: marginX, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
-      p.drawText(`Verify: /verify/contract/${contractId.slice(0, 8)}`, { x: pageWidth - marginX - 140, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+      const refLine = `Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`;
+      p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+      const verify = `Verify: /verify/contract/${contractId.slice(0, 8)}`;
+      const vw = font.widthOfTextAtSize(verify, 7);
+      p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
     }
 
     drawHeader(page);
@@ -208,8 +210,10 @@ serve(async (req: Request) => {
     if (signature?.geolocation) writeLine(`Geo: ${JSON.stringify(signature.geolocation)}`);
 
     spacer(10);
-    writeLine(`For ${hrSettings?.employer_legal_name || "Incline"}`);
-    writeLine(`Proprietor: ${hrSettings?.employer_proprietor_name || "Yogita Lekhari"}`);
+    writeLine(`For ${employer.legal_name || "Incline"}`);
+    if (employer.proprietor_name) writeLine(`Proprietor: ${employer.proprietor_name}`);
+    if (employer.governing_jurisdiction) writeLine(`Governing jurisdiction: ${employer.governing_jurisdiction}`);
+    if (employer.arbitration_seat) writeLine(`Arbitration seat: ${employer.arbitration_seat}`);
 
     // Witnesses
     if (contract.witness_1 || contract.witness_2) {
