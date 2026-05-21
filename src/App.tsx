@@ -28,6 +28,7 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import TermsPage from "./pages/Terms";
 const DataDeletionPage = lazy(() => import("./pages/DataDeletion"));
 import ContractSignPage from "./pages/ContractSign";
+const ContractFillPage = lazy(() => import("./pages/ContractFill"));
 const MemberCheckout = lazy(() => import("./pages/MemberCheckout"));
 const PublicRegistrationPage = lazy(() => import("./pages/PublicRegistration"));
 
