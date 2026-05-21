@@ -82,8 +82,24 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 }
 
 export default function HRMPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'employees';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && t !== activeTab) setActiveTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+  const handleTabChange = (v: string) => {
+    setActiveTab(v);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', v);
+    setSearchParams(next, { replace: true });
+  };
+
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [contractDrawerOpen, setContractDrawerOpen] = useState(false);
+  const [contractDefaultRole, setContractDefaultRole] = useState<'trainer' | 'manager' | 'staff' | undefined>(undefined);
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
   const [editEmployeeOpen, setEditEmployeeOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
@@ -93,9 +109,19 @@ export default function HRMPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [signedViewerOpen, setSignedViewerOpen] = useState(false);
   const [viewingSignedContract, setViewingSignedContract] = useState<any>(null);
+
+  // Directory filters (Employees tab)
+  const [dirSearch, setDirSearch] = useState('');
+  const [dirRole, setDirRole] = useState<'all' | StaffRole>('all');
+  const [dirDept, setDirDept] = useState<string>('all');
+  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
   const queryClient = useQueryClient();
   const { data: brandData } = useBrandContext(null);
   const brand = brandData || { companyName: 'Incline', tagline: 'Rise. Reflect. Repeat.', legalName: 'The Incline Life by Incline', website: 'theincline.in', supportEmail: 'hello@theincline.in', branch: { name: 'Incline' } };
+
+  // Unified staff directory (primary source for Employees tab)
+  const { data: unifiedPeople = [], isLoading: isLoadingDirectory } = useUnifiedStaff();
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['hrm-employees'],
