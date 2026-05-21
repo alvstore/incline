@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,28 +17,13 @@ import { SignedContractViewer } from '@/components/hrm/SignedContractViewer';
 import { PayrollRunPanel } from '@/components/hrm/PayrollRunPanel';
 import HrSettingsTab from '@/components/hrm/HrSettingsTab';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
-import { FileBadge, BookOpen, Settings as SettingsIcon } from 'lucide-react';
+import { StaffRowActions } from '@/components/hrm/StaffRowActions';
+import { useUnifiedStaff, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
 import {
-  Plus,
-  Users,
-  FileText,
-  DollarSign,
-  TrendingUp,
-  Calendar,
-  CheckCircle,
-  Clock,
-  Search,
-  Download,
-  Edit,
-  Mail,
-  Dumbbell,
-  Printer,
-  Eye,
-  ExternalLink,
-  Link,
-  MoreHorizontal,
-  Share2,
-  XCircle,
+  FileBadge, BookOpen, Settings as SettingsIcon,
+  Plus, Users, FileText, DollarSign, TrendingUp, Calendar, CheckCircle, Clock,
+  Search, Download, Edit, Mail, Dumbbell, Printer, Eye, ExternalLink, Link,
+  MoreHorizontal, Share2, XCircle, Briefcase, Filter, UserCheck,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
