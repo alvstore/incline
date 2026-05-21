@@ -741,33 +741,70 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             )}
           </div>
 
-          {/* Contract Variables — HR-fillable fields. Employee/witness fields
-              are collected later on the public /contract/:token/fill page. */}
-          <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <Label className="text-sm font-semibold">Contract Variables</Label>
-              <Badge variant="outline" className="text-[10px] ml-auto">HR section</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground -mt-1">
-              Only fill the HR-side fields here. Employee personal details (S/o, address, emergency contact)
-              and witness signatures are collected on the secure signing link.
-            </p>
-            <div className="grid grid-cols-1 gap-3">
-              {CONTRACT_VARIABLES.filter((v) => v.role === 'hr').map((v) => (
-                <div key={v.key} className="space-y-1">
-                  <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
-                  <Input
-                    type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
-                    placeholder={v.placeholder}
-                    value={(variables as any)[v.key] ?? ''}
-                    onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
-                  />
-                  {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+          {/* Contract Variables — Employee + HR + Witnesses, grouped.
+              Employee personal details are pre-filled from the staff/profile
+              tables when available; HR can override inline or leave them for
+              the recipient to confirm/correct via the secure /fill link. */}
+          {(['employee', 'hr', 'witness_1', 'witness_2'] as FillRole[]).map((groupRole) => {
+            const groupVars = CONTRACT_VARIABLES.filter((v) => v.role === groupRole);
+            if (groupVars.length === 0) return null;
+            const missingCount = groupVars.filter((v) => v.required && !String((variables as any)[v.key] ?? '').trim()).length;
+            const groupTitle =
+              groupRole === 'employee' ? 'Employee details (legal)'
+              : groupRole === 'hr' ? 'HR terms'
+              : groupRole === 'witness_1' ? 'Witness 1'
+              : 'Witness 2';
+            const groupHelp =
+              groupRole === 'employee' ? 'Auto-filled from the staff record / profile. Override if HR has corrected info on hand.'
+              : groupRole === 'hr' ? 'Probation and notice period for this contract. Defaults to HR Settings.'
+              : 'Optional here — can be filled on the witness signing link.';
+            return (
+              <div key={groupRole} className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-accent" />
+                  <Label className="text-sm font-semibold">{groupTitle}</Label>
+                  {missingCount > 0 && (
+                    <Badge variant="destructive" className="text-[10px] ml-auto">{missingCount} required missing</Badge>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+                <p className="text-xs text-muted-foreground -mt-1">{groupHelp}</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {groupVars.map((v) => {
+                    const auto = (prefill as any)[v.key];
+                    const current = (variables as any)[v.key] ?? '';
+                    return (
+                      <div key={v.key} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
+                          {auto && (
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                              Auto · {auto.source}
+                            </span>
+                          )}
+                        </div>
+                        {v.input === 'textarea' ? (
+                          <Textarea
+                            rows={2}
+                            placeholder={v.placeholder}
+                            value={current}
+                            onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          />
+                        ) : (
+                          <Input
+                            type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
+                            placeholder={v.placeholder}
+                            value={current}
+                            onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          />
+                        )}
+                        {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Advanced: legal clauses unlock (admin/owner/manager only) */}
           {canEditLegalClauses && (
