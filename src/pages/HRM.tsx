@@ -1268,7 +1268,22 @@ export default function HRMPage() {
                             }
                           </TableCell>
                           <TableCell className="font-semibold">₹{(p.grossPay || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-destructive">-₹{(p.pfDeduction || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-destructive">
+                            {(() => {
+                              const ded = p.totalDeductions ?? (p.pfDeduction || 0);
+                              if (!ded) return <span className="text-muted-foreground">-</span>;
+                              const parts: string[] = [];
+                              if (p.pfDeduction) parts.push(`PF ₹${Math.round(p.pfDeduction).toLocaleString()}`);
+                              if (p.esiDeduction) parts.push(`ESI ₹${Math.round(p.esiDeduction).toLocaleString()}`);
+                              if (p.ptDeduction) parts.push(`PT ₹${Math.round(p.ptDeduction).toLocaleString()}`);
+                              return (
+                                <div title={parts.join(' · ')}>
+                                  -₹{Math.round(ded).toLocaleString()}
+                                  {parts.length > 0 && <div className="text-[10px] text-muted-foreground">{parts.join(' · ')}</div>}
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="font-semibold text-success">₹{(p.netPay || 0).toLocaleString()}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
