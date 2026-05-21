@@ -3638,6 +3638,11 @@ export type Database = {
           emergency_contact: Json | null
           employee_code: string
           esic_ip_number: string | null
+          exit_date: string | null
+          exit_notes: string | null
+          exit_reason: string | null
+          exit_type: string | null
+          exited_by: string | null
           father_or_spouse_name: string | null
           gender: string | null
           hire_date: string
@@ -3682,6 +3687,11 @@ export type Database = {
           emergency_contact?: Json | null
           employee_code: string
           esic_ip_number?: string | null
+          exit_date?: string | null
+          exit_notes?: string | null
+          exit_reason?: string | null
+          exit_type?: string | null
+          exited_by?: string | null
           father_or_spouse_name?: string | null
           gender?: string | null
           hire_date: string
@@ -3726,6 +3736,11 @@ export type Database = {
           emergency_contact?: Json | null
           employee_code?: string
           esic_ip_number?: string | null
+          exit_date?: string | null
+          exit_notes?: string | null
+          exit_reason?: string | null
+          exit_type?: string | null
+          exited_by?: string | null
           father_or_spouse_name?: string | null
           gender?: string | null
           hire_date?: string
@@ -11562,6 +11577,11 @@ export type Database = {
           branch_id: string
           certifications: string[] | null
           created_at: string
+          exit_date: string | null
+          exit_notes: string | null
+          exit_reason: string | null
+          exit_type: string | null
+          exited_by: string | null
           fixed_salary: number | null
           government_id_number: string | null
           government_id_type: string | null
@@ -11589,6 +11609,11 @@ export type Database = {
           branch_id: string
           certifications?: string[] | null
           created_at?: string
+          exit_date?: string | null
+          exit_notes?: string | null
+          exit_reason?: string | null
+          exit_type?: string | null
+          exited_by?: string | null
           fixed_salary?: number | null
           government_id_number?: string | null
           government_id_type?: string | null
@@ -11616,6 +11641,11 @@ export type Database = {
           branch_id?: string
           certifications?: string[] | null
           created_at?: string
+          exit_date?: string | null
+          exit_notes?: string | null
+          exit_reason?: string | null
+          exit_type?: string | null
+          exited_by?: string | null
           fixed_salary?: number | null
           government_id_number?: string | null
           government_id_type?: string | null
