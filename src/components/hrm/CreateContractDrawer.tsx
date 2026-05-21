@@ -490,9 +490,20 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     e.preventDefault();
     if (!employee?.id) return;
 
+    if (!Number(formData.salary) || Number(formData.salary) <= 0) {
+      toast.error('Base Salary is required. Set it on the staff record first or enter a value here.');
+      return;
+    }
+
     // Trainer contract goes to trainers table; manager/staff to employees table.
     // When dual-role, the caller passes defaultRole + the matching role record id as employee.id.
     const isTrainer = formData.agreementRole === 'trainer';
+
+    // Persist contract_variables alongside terms.
+    const cleanedVariables: Record<string, string> = {};
+    for (const [k, v] of Object.entries(variables)) {
+      if (v && String(v).trim() !== '') cleanedVariables[k] = String(v).trim();
+    }
 
     createContractMutation.mutate({
       employeeId: isTrainer ? undefined : employee.id,
@@ -506,6 +517,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       commissionPercentage: Number(formData.commissionPercentage),
       terms: formData.terms ? {
         conditions: formData.terms,
+        contract_variables: cleanedVariables,
         compliance_meta: {
           template_version: 'incline-employment-v1',
           agreement_role: formData.agreementRole,
