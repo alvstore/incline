@@ -1033,6 +1033,16 @@ export default function HRMPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Policies Tab */}
+          <TabsContent value="policies" className="mt-4">
+            <PoliciesTab />
+          </TabsContent>
+
+          {/* HR Settings Tab */}
+          <TabsContent value="settings" className="mt-4">
+            <HrSettingsTab />
+          </TabsContent>
         </Tabs>
       </div>
 
