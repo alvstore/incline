@@ -1225,6 +1225,11 @@ export default function HRMPage() {
                               <span className="font-mono text-sm">
                                 {(p.payableDays ?? p.daysPresent ?? 0)}/{p.workingDays || 26}
                               </span>
+                              {p.attendanceRecorded === false && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
+                                  ⚠ Attendance not recorded
+                                </Badge>
+                              )}
                               <div className="flex flex-wrap gap-1">
                                 {(p.halfDays || 0) > 0 && (
                                   <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
