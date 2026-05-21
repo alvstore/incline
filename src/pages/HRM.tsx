@@ -774,15 +774,27 @@ export default function HRMPage() {
                             {person.salary > 0 ? `₹${person.salary.toLocaleString()}` : '-'}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              className={
-                                person.is_active
-                                  ? 'bg-success/10 text-success border-success/30 border'
-                                  : 'bg-muted text-muted-foreground border-border border'
-                              }
-                            >
-                              {person.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
+                            {person.exit_date ? (
+                              <div className="space-y-0.5">
+                                <Badge className="bg-red-50 text-red-700 border-red-200 border">
+                                  Offboarded
+                                </Badge>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {person.exit_type ? `${person.exit_type} · ` : ''}
+                                  {new Date(person.exit_date).toLocaleDateString()}
+                                </div>
+                              </div>
+                            ) : (
+                              <Badge
+                                className={
+                                  person.is_active
+                                    ? 'bg-success/10 text-success border-success/30 border'
+                                    : 'bg-muted text-muted-foreground border-border border'
+                                }
+                              >
+                                {person.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {person.hire_date ? new Date(person.hire_date).toLocaleDateString() : '-'}
