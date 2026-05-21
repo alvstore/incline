@@ -1,6 +1,7 @@
-// v1.0.0 — Unified MIPS hardware-access function.
+// v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
-// Body: { action: "revoke" | "restore" | "sweep_expired", member_id?, reason?, branch_id? }
+// Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
+//         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -297,6 +298,130 @@ async function sweepExpired(supabase: any) {
   return { revoked, errors };
 }
 
+const PERMANENT_END = "2099-12-31 23:59:59";
+
+// Staff (employee/trainer) revoke/restore. Same MIPS API as members; only
+// differences are (a) source table and (b) restore goes back to PERMANENT_END
+// since staff don't have membership end_dates.
+async function applyStaffAction(
+  supabase: any,
+  person_type: "employee" | "trainer",
+  person_id: string,
+  action: "revoke_staff" | "restore_staff",
+  reason: string | undefined,
+  branch_id_override: string | undefined,
+): Promise<ActionResult & { person_type?: string }> {
+  const tableName = person_type === "employee" ? "employees" : "trainers";
+  const { data: row, error } = await supabase
+    .from(tableName)
+    .select("id, branch_id, mips_person_sn, mips_person_id, user_id")
+    .eq("id", person_id)
+    .maybeSingle();
+
+  if (error || !row) {
+    return { success: false, action: action === "revoke_staff" ? "revoke" : "restore", error: `${person_type} not found` };
+  }
+
+  const personSn = row.mips_person_sn;
+  if (!personSn) {
+    // Nothing to revoke at hardware level — mark locally and succeed.
+    await supabase
+      .from(tableName)
+      .update({ mips_sync_status: action === "revoke_staff" ? "revoked" : "pending" })
+      .eq("id", person_id);
+    return {
+      success: true,
+      action: action === "revoke_staff" ? "revoke" : "restore",
+      message: "No MIPS identifier; marked locally only",
+    };
+  }
+
+  const effectiveBranchId = branch_id_override || row.branch_id;
+
+  let mipsBaseUrl: string | undefined;
+  let mipsUsername: string | undefined;
+  let mipsPassword: string | undefined;
+  if (effectiveBranchId) {
+    const { data: conn } = await supabase
+      .from("mips_connections")
+      .select("server_url, username, password")
+      .eq("branch_id", effectiveBranchId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (conn) {
+      mipsBaseUrl = conn.server_url;
+      mipsUsername = conn.username;
+      mipsPassword = conn.password;
+    }
+  }
+
+  const baseUrl = getBaseUrl(mipsBaseUrl);
+  const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+
+  const existing = await lookupPerson(baseUrl, token, personSn);
+  if (!existing) {
+    await supabase
+      .from(tableName)
+      .update({ mips_sync_status: action === "revoke_staff" ? "revoked" : "pending" })
+      .eq("id", person_id);
+    return {
+      success: true,
+      action: action === "revoke_staff" ? "revoke" : "restore",
+      message: "Person not found in MIPS, status updated locally",
+    };
+  }
+
+  const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
+  const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
+
+  const putRes = await fetch(`${baseUrl}/personInfo/person`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(updatedPerson),
+  });
+  const putJson = await putRes.json();
+  const putSuccess = putJson.code === 200 || putJson.code === 0;
+  if (!putSuccess) {
+    return {
+      success: false,
+      action: action === "revoke_staff" ? "revoke" : "restore",
+      error: putJson.msg || "MIPS update failed",
+    };
+  }
+
+  try {
+    await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId);
+  } catch (e) {
+    console.warn("Device dispatch failed (non-fatal):", e);
+  }
+
+  await supabase
+    .from(tableName)
+    .update({ mips_sync_status: action === "revoke_staff" ? "revoked" : "active" })
+    .eq("id", person_id);
+
+  try {
+    await supabase.from("access_logs").insert({
+      device_sn: "CRM-SYSTEM",
+      event_type: `hardware_${action}`,
+      result: action === "revoke_staff" ? "staff_denied" : "staff",
+      message: `Staff (${person_type}) ${action === "revoke_staff" ? "revoked" : "restored"}: ${reason || action}. validTimeEnd=${newValidTimeEnd}`,
+      branch_id: effectiveBranchId,
+    });
+  } catch (e) {
+    console.warn("access_logs insert failed (non-fatal):", e);
+  }
+
+  return {
+    success: true,
+    action: action === "revoke_staff" ? "revoke" : "restore",
+    new_valid_time_end: newValidTimeEnd,
+    mips_person_id: existing.personId,
+    person_type,
+    message: `Staff access ${action === "revoke_staff" ? "revoked" : "restored"} successfully`,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -330,6 +455,27 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    if (action === "revoke_staff" || action === "restore_staff") {
+      const { person_type, person_id, reason, branch_id } = body as {
+        person_type?: "employee" | "trainer";
+        person_id?: string;
+        reason?: string;
+        branch_id?: string;
+      };
+      if (!person_type || !person_id) {
+        return new Response(JSON.stringify({ error: "Missing person_type or person_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const result = await applyStaffAction(supabase, person_type, person_id, action, reason, branch_id);
+      const status = result.success ? 200 : 400;
+      return new Response(JSON.stringify(result), {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (action !== "revoke" && action !== "restore") {

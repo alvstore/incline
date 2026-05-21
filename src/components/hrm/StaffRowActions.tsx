@@ -10,12 +10,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Pencil, FileText, MoreHorizontal, UserMinus, UserCheck, ChevronDown,
-  Briefcase, Dumbbell, User,
+  Briefcase, Dumbbell, User, UserX, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { UNIFIED_STAFF_KEY, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
+import { OffboardStaffSheet } from '@/components/hrm/OffboardStaffSheet';
 
 interface Props {
   person: UnifiedStaffPerson;
@@ -33,6 +34,9 @@ const roleLabel = (r: StaffRole) => r.charAt(0).toUpperCase() + r.slice(1);
 export function StaffRowActions({ person, onEdit, onContract }: Props) {
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [offboardOpen, setOffboardOpen] = useState(false);
+  const [offboardMode, setOffboardMode] = useState<'offboard' | 'reinstate'>('offboard');
+  const isOffboarded = !!person.exit_date;
 
   const toggleActive = async () => {
     try {
@@ -114,12 +118,29 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className={person.is_active ? 'text-destructive focus:text-destructive' : ''}
+            className={person.is_active && !isOffboarded ? 'text-amber-700 focus:text-amber-700' : ''}
           >
             {person.is_active
-              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Deactivate</>
-              : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Reactivate</>}
+              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Soft deactivate</>
+              : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Quick reactivate</>}
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-xs">Lifecycle</DropdownMenuLabel>
+          {isOffboarded ? (
+            <DropdownMenuItem
+              onClick={() => { setOffboardMode('reinstate'); setOffboardOpen(true); }}
+              className="text-emerald-700 focus:text-emerald-700"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reinstate…
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              onClick={() => { setOffboardMode('offboard'); setOffboardOpen(true); }}
+              className="text-destructive focus:text-destructive"
+            >
+              <UserX className="h-3.5 w-3.5 mr-2" /> Offboard / Mark exit…
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -146,6 +167,13 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <OffboardStaffSheet
+        open={offboardOpen}
+        onOpenChange={setOffboardOpen}
+        person={person}
+        mode={offboardMode}
+      />
     </div>
   );
 }

@@ -114,7 +114,7 @@ export default function HRMPage() {
   const [dirSearch, setDirSearch] = useState('');
   const [dirRole, setDirRole] = useState<'all' | StaffRole>('all');
   const [dirDept, setDirDept] = useState<string>('all');
-  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive' | 'offboarded'>('all');
 
   const queryClient = useQueryClient();
   const { data: brandData } = useBrandContext(null);
@@ -266,8 +266,9 @@ export default function HRMPage() {
         || (p.phone || '').includes(dirSearch);
       const matchesDept = dirDept === 'all' || p.department === dirDept;
       const matchesStatus = dirStatus === 'all'
-        || (dirStatus === 'active' && p.is_active)
-        || (dirStatus === 'inactive' && !p.is_active);
+        || (dirStatus === 'active' && p.is_active && !p.exit_date)
+        || (dirStatus === 'inactive' && !p.is_active && !p.exit_date)
+        || (dirStatus === 'offboarded' && !!p.exit_date);
       const matchesRole = dirRole === 'all' || p.roles.includes(dirRole);
       return matchesSearch && matchesDept && matchesStatus && matchesRole;
     });
@@ -694,11 +695,12 @@ export default function HRMPage() {
                     </SelectContent>
                   </Select>
                   <Select value={dirStatus} onValueChange={(v) => setDirStatus(v as any)}>
-                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="offboarded">Offboarded</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -772,15 +774,27 @@ export default function HRMPage() {
                             {person.salary > 0 ? `₹${person.salary.toLocaleString()}` : '-'}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              className={
-                                person.is_active
-                                  ? 'bg-success/10 text-success border-success/30 border'
-                                  : 'bg-muted text-muted-foreground border-border border'
-                              }
-                            >
-                              {person.is_active ? 'Active' : 'Inactive'}
-                            </Badge>
+                            {person.exit_date ? (
+                              <div className="space-y-0.5">
+                                <Badge className="bg-red-50 text-red-700 border-red-200 border">
+                                  Offboarded
+                                </Badge>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {person.exit_type ? `${person.exit_type} · ` : ''}
+                                  {new Date(person.exit_date).toLocaleDateString()}
+                                </div>
+                              </div>
+                            ) : (
+                              <Badge
+                                className={
+                                  person.is_active
+                                    ? 'bg-success/10 text-success border-success/30 border'
+                                    : 'bg-muted text-muted-foreground border-border border'
+                                }
+                              >
+                                {person.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {person.hire_date ? new Date(person.hire_date).toLocaleDateString() : '-'}
