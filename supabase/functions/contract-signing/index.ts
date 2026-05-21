@@ -167,7 +167,7 @@ async function getContractByToken(body: any) {
 
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
-    .select("id, contract_id, branch_id, status, expires_at")
+    .select("id, contract_id, branch_id, status, expires_at, role")
     .eq("token_hash", tokenHash).is("revoked_at", null).single();
   if (requestError || !requestRow) return json({ error: "Invalid signing link" }, 404);
   if (requestRow.status === "signed") return json({ error: "This contract is already signed" }, 410);
@@ -181,7 +181,7 @@ async function getContractByToken(body: any) {
     .from("contracts")
     .select(`
       id, contract_type, start_date, end_date, salary, base_salary, commission_percentage,
-      terms, status, signature_status, branch_id,
+      terms, status, signature_status, branch_id, contract_variables,
       employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
       trainers(user_id)
     `)
@@ -191,16 +191,20 @@ async function getContractByToken(body: any) {
   if (requestRow.status === "pending") {
     await supabase.from("contract_signature_requests").update({ status: "viewed" })
       .eq("id", requestRow.id).eq("status", "pending");
-    await supabase.from("contracts").update({ signature_status: "viewed" })
-      .eq("id", contract.id).in("signature_status", ["sent", "not_sent"]);
+    if ((requestRow as any).role === "employee") {
+      await supabase.from("contracts").update({ signature_status: "viewed" })
+        .eq("id", contract.id).in("signature_status", ["sent", "not_sent"]);
+    }
   }
 
   const { name, phone, email, code } = await resolveRecipient(contract);
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
 
+  const cvars = (contract as any).contract_variables ?? {};
   return json({
     contract: {
       id: contract.id,
+      request_role: (requestRow as any).role || "employee",
       employee_name: name || "Employee",
       employee_code: code || "-",
       employee_phone_masked: maskPhone(phone),
@@ -212,8 +216,71 @@ async function getContractByToken(body: any) {
       commission_percentage: contract.commission_percentage,
       terms: contract.terms,
       signature_status: contract.signature_status,
+      contract_variables: cvars,
+      missing_required: missingRequired(cvars),
       employer,
     },
+  });
+}
+
+// ── 2b. Fill role-scoped contract variables ───────────────────────────────
+async function fillFields(body: any) {
+  const token = body?.token;
+  const submitted = (body?.variables ?? {}) as Record<string, unknown>;
+  if (!token) return json({ error: "Missing token" }, 400);
+  if (!submitted || typeof submitted !== "object") return json({ error: "Missing variables" }, 400);
+
+  const tokenHash = await sha256(token);
+  const now = new Date().toISOString();
+
+  const { data: requestRow } = await supabase
+    .from("contract_signature_requests")
+    .select("id, contract_id, branch_id, status, expires_at, role")
+    .eq("token_hash", tokenHash).is("revoked_at", null).single();
+  if (!requestRow) return json({ error: "Invalid link" }, 404);
+  if (requestRow.status === "signed") return json({ error: "Already signed" }, 410);
+  if (requestRow.expires_at < now) return json({ error: "This link has expired" }, 410);
+
+  const role = ((requestRow as any).role || "employee") as string;
+  const allow = FILL_ALLOWLIST[role] || [];
+
+  const clean: Record<string, unknown> = {};
+  for (const k of allow) {
+    if (Object.prototype.hasOwnProperty.call(submitted, k)) {
+      const v = submitted[k];
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        clean[k] = typeof v === "string" ? v.trim() : v;
+      }
+    }
+  }
+  const rejected = Object.keys(submitted).filter((k) => !allow.includes(k));
+
+  const { data: existing } = await supabase
+    .from("contracts").select("contract_variables")
+    .eq("id", requestRow.contract_id).single();
+  const merged = { ...((existing as any)?.contract_variables ?? {}), ...clean };
+
+  const { error: upErr } = await supabase
+    .from("contracts")
+    .update({ contract_variables: merged })
+    .eq("id", requestRow.contract_id);
+  if (upErr) return json({ error: "Failed to save details: " + upErr.message }, 500);
+
+  await supabase.from("audit_logs").insert({
+    action: "CONTRACT_FIELDS_FILLED",
+    table_name: "contracts",
+    record_id: requestRow.contract_id,
+    branch_id: requestRow.branch_id,
+    action_description: `Contract details filled by ${role}`,
+    new_data: { role, keys: Object.keys(clean), rejected_keys: rejected },
+  });
+
+  return json({
+    success: true,
+    role,
+    saved_keys: Object.keys(clean),
+    rejected_keys: rejected,
+    missing_required: missingRequired(merged),
   });
 }
 
