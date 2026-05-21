@@ -507,6 +507,7 @@ export async function calculatePayrollForStaff(
     totalDeductions,
     netPay,
     attendanceRecorded,
+    manualOverride: hasManualOverride,
     settings: cfg,
     payableDays,
     halfDays,
