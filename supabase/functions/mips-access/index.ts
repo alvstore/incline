@@ -1,6 +1,7 @@
-// v1.0.0 — Unified MIPS hardware-access function.
+// v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
-// Body: { action: "revoke" | "restore" | "sweep_expired", member_id?, reason?, branch_id? }
+// Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
+//         member_id?, person_type?: "employee"|"trainer", person_id?, reason?, branch_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
