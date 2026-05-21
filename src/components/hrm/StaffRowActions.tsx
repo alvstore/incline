@@ -118,12 +118,29 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className={person.is_active ? 'text-destructive focus:text-destructive' : ''}
+            className={person.is_active && !isOffboarded ? 'text-amber-700 focus:text-amber-700' : ''}
           >
             {person.is_active
-              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Deactivate</>
-              : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Reactivate</>}
+              ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Soft deactivate</>
+              : <><UserCheck className="h-3.5 w-3.5 mr-2" /> Quick reactivate</>}
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-xs">Lifecycle</DropdownMenuLabel>
+          {isOffboarded ? (
+            <DropdownMenuItem
+              onClick={() => { setOffboardMode('reinstate'); setOffboardOpen(true); }}
+              className="text-emerald-700 focus:text-emerald-700"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reinstate…
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              onClick={() => { setOffboardMode('offboard'); setOffboardOpen(true); }}
+              className="text-destructive focus:text-destructive"
+            >
+              <UserX className="h-3.5 w-3.5 mr-2" /> Offboard / Mark exit…
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
