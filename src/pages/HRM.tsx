@@ -240,16 +240,17 @@ export default function HRMPage() {
   });
 
   // Payroll calculations per unified staff
-  const { data: payrollData = {} } = useQuery({
+  const { data: payrollData = {}, isLoading: isLoadingPayroll, isFetching: isFetchingPayroll } = useQuery({
     queryKey: ['hrm-payroll', payrollMonth, payrollStaff.length, payrollSettings?.pf_enabled, payrollSettings?.esi_enabled, payrollSettings?.pt_enabled],
     queryFn: async () => {
       const results: Record<string, any> = {};
+      const fallbackWorkingDays = getDaysInMonth(payrollMonth);
       for (const staff of payrollStaff) {
         try {
           const calc = await calculatePayrollForStaff(staff, payrollMonth, false, payrollSettings);
           results[staff.id] = calc;
         } catch {
-          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: 0, ptCommission: 0, grossPay: 0, pfDeduction: 0, esiDeduction: 0, ptDeduction: 0, totalDeductions: 0, netPay: 0, daysPresent: 0, workingDays: 26, attendanceRecorded: false };
+          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: 0, ptCommission: 0, grossPay: 0, pfDeduction: 0, esiDeduction: 0, ptDeduction: 0, totalDeductions: 0, netPay: 0, daysPresent: 0, workingDays: fallbackWorkingDays, attendanceRecorded: false, manualOverride: false };
         }
       }
       return results;
