@@ -228,7 +228,6 @@ export const adminMenuConfig: MenuSection[] = [
     title: 'Admin & HR',
     items: [
       { label: 'HRM', href: '/hrm', icon: Briefcase, roles: ['owner', 'admin', 'manager'] },
-      { label: 'Employees', href: '/employees', icon: Users, roles: ['owner', 'admin', 'manager'] },
       { label: 'Roles and Permission', href: '/admin-roles', icon: UserCog, roles: ['owner', 'admin'] },
       
       { label: 'Tasks', href: '/tasks', icon: CheckSquare, roles: ['owner', 'admin', 'manager'] },
@@ -303,7 +302,7 @@ export const managerMenuConfig: MenuSection[] = [
     title: 'Admin & HR',
     items: [
       { label: 'HRM', href: '/hrm', icon: Briefcase, roles: ['manager'] },
-      { label: 'Employees', href: '/employees', icon: Users, roles: ['manager'] },
+      
       
       { label: 'Tasks', href: '/tasks', icon: CheckSquare, roles: ['manager'] },
       { label: 'Approvals', href: '/approvals', icon: CheckSquare, roles: ['manager'] },

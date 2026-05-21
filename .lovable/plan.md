@@ -1,78 +1,104 @@
+## Audit findings
 
-## Problem recap
+**Duplication is real.** Two routes render the same data with different polish:
 
-1. **Crash:** `null value in column "employee_id" of relation "contracts"` — `contracts.employee_id` is `NOT NULL` in DB, but the drawer (correctly) sends `employee_id: null` and only `trainer_id` for trainer-only staff. The schema never caught up with the dual-target design.
-2. **Address not auto-filling:** `employees.current_address / permanent_address / father_or_spouse_name / pan_number / aadhaar_last4 / emergency_contact` and `profiles.address / city / state / postal_code / emergency_contact_* / government_id_*` already exist. The drawer and PDF builder ignore them and treat every variable as "must be collected at /fill".
-3. **No way to enter father's name etc. in the drawer:** `CreateContractDrawer` only shows HR-scope fields (probation, notice). Employee personal fields are deferred to the public `/fill` page, with no inline override even when HR has the info on hand.
+| Surface | `/employees` (`EmployeesPage`, 569 LOC) | `/hrm` › Employees tab (`HRMPage`, 1178 LOC) |
+|---|---|---|
+| Data source | `employees` + `trainers` + `profiles`, aggregated by `user_id` into a single `StaffPerson` (dual-role aware) | `fetchAllPayrollStaff()` — same dedupe by `user_id`, but tuned for payroll |
+| KPI cards | People / Managers / Trainers / Other / Active (5 cards, gradient tints) | Total Staff / Active / Active Contracts / Monthly Payroll (4 gradient cards) |
+| Filters | Search + Role + Department + Status | Search only |
+| Columns | Member · Roles · Code · Department · Position · Branch · Status · Hire Date | Member · Code · Type · Department · Position · Salary |
+| Actions | Contract + Edit (icon) | Contract + Edit (icon) |
+| Add Employee | ✅ header CTA | ✅ header CTA |
+| Sub-nav | None | Employees · Contracts · Attendance · Payroll · Policies · HR Settings |
+
+Both pages already query the **same tables**, both already **dedupe dual-role people** (manager who is also a trainer is one row), and both share `AddEmployeeDrawer` / `EditEmployeeDrawer` / `EditTrainerDrawer` / `CreateContractDrawer`. The split exists only because `/employees` is a newer, prettier reskin that never got merged back.
+
+**Nav also duplicates:** `src/config/menu.ts` lists both HRM and Employees in the sidebar for owner/admin/manager AND manager. `navModules.ts` already groups `/hrm` and `/employees` under one module.
+
+**Action-column gaps (both pages):**
+- No "View profile" / drawer
+- No "Deactivate / Reactivate"
+- No "Reset password / Resend invite"
+- No "Mark exit / offboard"
+- No "Assign role" (promote staff → manager, attach trainer record)
+- No bulk select
+- Trainer + Employee edit live behind two different buttons (we can route by role automatically)
+
+## Decision
+
+**Keep `/hrm` as the single source of truth. Retire `/employees`.** HRM already owns Contracts, Attendance, Payroll, Policies, HR Settings — the people directory belongs in the same hub. The `/employees` page contributes the better directory UX (multi-role filters, role chips, branch column, KPI breakdown), which we'll port into HRM › Employees tab.
 
 ## Plan
 
-### A. Migration — allow trainer-only contracts
+### 1. Port the richer directory into HRM › Employees tab
+Replace the current Employees tab body with the `/employees` layout:
+- **5 KPI tiles** (People · Managers · Trainers · Other Staff · Active) using existing Vuexy gradient cards. Drop HRM's "Active Contracts" / "Monthly Payroll" tiles from this tab — they already exist on Contracts / Payroll tabs.
+- **Filter bar:** Search · Role (All/Manager/Trainer/Staff) · Department · Status.
+- **Table columns:** Staff Member · Roles (chips) · Code · Department · Position · Branch · Status · Hire Date · Actions.
+- Use the unified `StaffPerson` aggregator from `EmployeesPage` (handles dual-role correctly).
 
-```sql
-ALTER TABLE public.contracts ALTER COLUMN employee_id DROP NOT NULL;
+### 2. Robust Actions column (single source of truth)
+Collapse to one primary button + overflow menu per row to avoid visual duplication:
 
-ALTER TABLE public.contracts
-  ADD CONSTRAINT contracts_party_present_chk
-  CHECK (employee_id IS NOT NULL OR trainer_id IS NOT NULL);
-
-CREATE INDEX IF NOT EXISTS idx_contracts_trainer_id ON public.contracts(trainer_id);
 ```
-
-No data backfill needed (every existing row already has an employee_id).
-
-### B. Prefill resolver — `src/lib/hrm/contractPrefill.ts` (new)
-
-Single helper used by drawer + edge function:
-
-```text
-resolveContractPrefill(employeeOrTrainerRow, profileRow) → {
-  father_or_husband_name        ← employees.father_or_spouse_name
-  residential_address           ← employees.current_address (jsonb → 1-line) || profiles.address+city+state+postal_code
-  emergency_contact_name        ← employees.emergency_contact.name        || profiles.emergency_contact_name
-  emergency_contact_phone       ← employees.emergency_contact.phone       || profiles.emergency_contact_phone
-  pan_or_aadhaar_last4          ← employees.pan_number (last 4) || employees.aadhaar_last4 || profiles.government_id_number (last 4)
-  government_id_type            ← profiles.government_id_type || trainers.government_id_type
-  government_id_last4           ← derived
-}
+[ View ▾ ]   ⋯
+            ├─ Edit profile        (auto-routes to EditTrainerDrawer if role=trainer, else EditEmployeeDrawer)
+            ├─ Manage contract     (opens CreateContractDrawer with role pre-selected; shows count + status if active contract exists)
+            ├─ Open profile page   (deep-link to /staff/:id when that route lands; hidden today)
+            ├─ ─────────
+            ├─ Assign role…        (add/remove Manager/Trainer/Staff record for the same user_id)
+            ├─ Reset password      (admin-only; calls auth admin reset)
+            ├─ Resend invite       (if user never signed in)
+            ├─ ─────────
+            ├─ Deactivate          (sets is_active=false on employees + trainers row; confirm AlertDialog)
+            └─ Mark exit / offboard (opens lightweight Sheet — exit date, reason, last working day; flips status)
 ```
+Destructive items use `AlertDialog` with the existing Vuexy modal styling. "Edit" and "Contract" stop being two separate row buttons.
 
-Drawer loads this when opening, pre-populates the `variables` state, and shows each field with a small "Auto-filled from profile" hint (greyed) — HR can still type to override.
+### 3. Retire `/employees`
+- Delete `src/pages/Employees.tsx`.
+- Remove the `/employees` route from `src/App.tsx`.
+- Remove `Employees` entries from `src/config/menu.ts` (both blocks).
+- In `src/config/navModules.ts`, drop `/employees` from the `hrefs` array.
+- In `src/lib/audit/auditMeta.ts`, repoint `employees` and `contracts` deep links to `/hrm?tab=employees&focus=...` and `/hrm?tab=contracts&contract=...`.
+- Add a redirect `/employees → /hrm?tab=employees` so old audit links, bookmarks, and the published `theincline.in/employees` URL don't 404.
 
-### C. `CreateContractDrawer` — show all variables, not just HR-scope
+### 4. Deep-link support
+Read `?tab=` and `?focus=` from the URL on HRM mount so audit links land on the right tab and scroll to the right row.
 
-- Replace the current "HR-only" filter with the full `CONTRACT_VARIABLES` list, grouped:
-  - **Employee details** (father name, residential address, emergency contact, govt ID last 4) — pre-filled, marked "auto" when sourced
-  - **HR terms** (probation, notice)
-  - **Witnesses** (optional here; collected on signing link if left blank)
-- Missing-required indicator: red dot + count next to the section header.
-- Keep the public `/fill` flow untouched — it remains the path for the employee to *correct* their own details before signing.
+### 5. Keep everything else identical
+Contracts tab, Attendance tab, Payroll tab, Policies tab, HR Settings tab — no changes. No DB migration. No edge-function change. No business-logic change.
 
-### D. PDF builder — read from prefill first, contract_variables as override
+## Technical details
 
-In `supabase/functions/contract-signing/index.ts` (PDF block):
-- Build the same prefill object server-side from `employees` + `profiles` (+ `trainers`).
-- Merge: `final = { ...prefill, ...contract_variables }`.
-- "Filled details" block in PDF uses the merged map.
-- "Missing required" gate on `sign_contract` checks the merged map (not just `contract_variables`), so contracts with profile-sourced data don't get falsely blocked.
+**Files touched**
+- `src/pages/HRM.tsx` — swap Employees tab body, add URL param wiring, add row action menu.
+- `src/pages/Employees.tsx` — delete.
+- `src/App.tsx` — remove `/employees` route, add `<Navigate to="/hrm?tab=employees" />` for `/employees/*`.
+- `src/config/menu.ts` — remove two `Employees` entries.
+- `src/config/navModules.ts` — drop `/employees` from hrefs.
+- `src/lib/audit/auditMeta.ts` — update two deep-link builders.
 
-### E. Service / type touch-up
+**New helpers (small, local to HRM)**
+- `useUnifiedStaff()` — extracted from `EmployeesPage`'s query so HRM stops maintaining two parallel staff fetchers (`payrollStaff` becomes a derived view for the Payroll tab only).
+- `StaffRowActions` component — owns the dropdown + AlertDialogs.
 
-- `hrmService.createContract` already passes `null` correctly — no change after migration.
-- `src/integrations/supabase/types.ts` will be regenerated by Supabase after the migration; no manual edit.
+**Action handlers wire to existing service layer**
+- `deactivate` → `supabase.from('employees'/'trainers').update({ is_active: false })` scoped by `user_id`.
+- `resetPassword` / `resendInvite` → existing auth admin edge function if available, otherwise hidden behind `can.manageStaff` capability.
+- `assignRole` → opens existing `AddEmployeeDrawer` / trainer creation drawer pre-bound to the user_id (no new RPC).
 
-## Out of scope
+**RBAC**
+- Destructive actions gated by `can.manageStaff(roles)` from `src/lib/auth/permissions.ts`.
+- Manager sees the same directory but scoped to their branch (already enforced by `BranchContext` + RLS).
 
-- Storing the full Aadhaar / PAN (we keep last-4 + hash as today).
-- Reworking the `/fill` public page (still used for employee-side corrections & witness names/phones).
-- HR Settings notice-period defaulting (already wired).
+## Acceptance criteria
 
-## Acceptance
-
-1. Creating a contract for a trainer-only staff (e.g. Akshay Jaiswal) no longer errors.
-2. Opening the drawer for an employee with `current_address` / `father_or_spouse_name` set shows those fields pre-populated and greyed-"auto".
-3. HR can override any auto-filled value inline; the override persists in `contract_variables`.
-4. Signing a contract whose employee details come entirely from `employees`/`profiles` succeeds without the `/fill` step.
-5. Generated PDF "Filled details" block shows merged values.
-
-Used the senior-architect skill.
+1. `/employees` 301-redirects to `/hrm?tab=employees`; no broken links from audit log or published site.
+2. Sidebar shows **HRM only** for owner/admin/manager.
+3. HRM › Employees tab matches the richness of the old `/employees` page (5 KPIs, full filter bar, role chips, branch column).
+4. Each row has one primary "View" button + one overflow menu; no separate "Contract" + "Edit" duplication.
+5. Deactivate, Mark exit, Assign role, Reset password, Resend invite all work and respect RBAC.
+6. Dual-role person (e.g. Bhagirath = Manager + Trainer) still appears as a single row with both chips and a single salary.
+7. No regression in Contracts, Attendance, Payroll, Policies, HR Settings tabs.

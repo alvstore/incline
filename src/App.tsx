@@ -51,7 +51,7 @@ const FitnessMemberPlansPage = lazy(() => import("./pages/fitness/MemberPlans"))
 
 const EquipmentMaintenancePage = lazy(() => import("./pages/EquipmentMaintenance"));
 const LockersPage = lazy(() => import("./pages/Lockers"));
-const EmployeesPage = lazy(() => import("./pages/Employees"));
+
 const HRMPage = lazy(() => import("./pages/HRM"));
 const TrainersPage = lazy(() => import("./pages/Trainers"));
 // StaffAttendance + PtAttendance pages merged into AttendanceDashboard tabs
@@ -266,7 +266,7 @@ function RoutedContent() {
           <Route path="/lockers" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><LockersPage /></ProtectedRoute>} />
           <Route path="/hrm" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><HRMPage /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><TasksPage /></ProtectedRoute>} />
-          <Route path="/employees" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><EmployeesPage /></ProtectedRoute>} />
+          <Route path="/employees" element={<Navigate to="/hrm?tab=employees" replace />} />
           <Route path="/trainers" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><TrainersPage /></ProtectedRoute>} />
           <Route path="/staff-attendance" element={<Navigate to="/attendance-dashboard" replace />} />
           <Route path="/attendance-dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AttendanceDashboardPage /></ProtectedRoute>} />

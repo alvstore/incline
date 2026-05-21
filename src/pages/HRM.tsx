@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,28 +17,13 @@ import { SignedContractViewer } from '@/components/hrm/SignedContractViewer';
 import { PayrollRunPanel } from '@/components/hrm/PayrollRunPanel';
 import HrSettingsTab from '@/components/hrm/HrSettingsTab';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
-import { FileBadge, BookOpen, Settings as SettingsIcon } from 'lucide-react';
+import { StaffRowActions } from '@/components/hrm/StaffRowActions';
+import { useUnifiedStaff, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
 import {
-  Plus,
-  Users,
-  FileText,
-  DollarSign,
-  TrendingUp,
-  Calendar,
-  CheckCircle,
-  Clock,
-  Search,
-  Download,
-  Edit,
-  Mail,
-  Dumbbell,
-  Printer,
-  Eye,
-  ExternalLink,
-  Link,
-  MoreHorizontal,
-  Share2,
-  XCircle,
+  FileBadge, BookOpen, Settings as SettingsIcon,
+  Plus, Users, FileText, DollarSign, TrendingUp, Calendar, CheckCircle, Clock,
+  Search, Download, Edit, Mail, Dumbbell, Printer, Eye, ExternalLink, Link,
+  MoreHorizontal, Share2, XCircle, Briefcase, Filter, UserCheck,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -96,8 +82,24 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 }
 
 export default function HRMPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'employees';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && t !== activeTab) setActiveTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+  const handleTabChange = (v: string) => {
+    setActiveTab(v);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', v);
+    setSearchParams(next, { replace: true });
+  };
+
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [contractDrawerOpen, setContractDrawerOpen] = useState(false);
+  const [contractDefaultRole, setContractDefaultRole] = useState<'trainer' | 'manager' | 'staff' | undefined>(undefined);
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
   const [editEmployeeOpen, setEditEmployeeOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
@@ -107,9 +109,19 @@ export default function HRMPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [signedViewerOpen, setSignedViewerOpen] = useState(false);
   const [viewingSignedContract, setViewingSignedContract] = useState<any>(null);
+
+  // Directory filters (Employees tab)
+  const [dirSearch, setDirSearch] = useState('');
+  const [dirRole, setDirRole] = useState<'all' | StaffRole>('all');
+  const [dirDept, setDirDept] = useState<string>('all');
+  const [dirStatus, setDirStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
   const queryClient = useQueryClient();
   const { data: brandData } = useBrandContext(null);
   const brand = brandData || { companyName: 'Incline', tagline: 'Rise. Reflect. Repeat.', legalName: 'The Incline Life by Incline', website: 'theincline.in', supportEmail: 'hello@theincline.in', branch: { name: 'Incline' } };
+
+  // Unified staff directory (primary source for Employees tab)
+  const { data: unifiedPeople = [], isLoading: isLoadingDirectory } = useUnifiedStaff();
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['hrm-employees'],
@@ -238,6 +250,85 @@ export default function HRMPage() {
       (s.code || '').toLowerCase().includes(term) ||
       (s.department || '').toLowerCase().includes(term);
   });
+
+  // ============ Directory (Employees tab) ============
+  const departments = useMemo(
+    () => Array.from(new Set(unifiedPeople.map((p) => p.department).filter(Boolean))) as string[],
+    [unifiedPeople],
+  );
+  const filteredDirectory = useMemo(() => {
+    const term = dirSearch.toLowerCase();
+    return unifiedPeople.filter((p) => {
+      const matchesSearch = !term
+        || p.name?.toLowerCase().includes(term)
+        || p.code?.toLowerCase().includes(term)
+        || p.email?.toLowerCase().includes(term)
+        || (p.phone || '').includes(dirSearch);
+      const matchesDept = dirDept === 'all' || p.department === dirDept;
+      const matchesStatus = dirStatus === 'all'
+        || (dirStatus === 'active' && p.is_active)
+        || (dirStatus === 'inactive' && !p.is_active);
+      const matchesRole = dirRole === 'all' || p.roles.includes(dirRole);
+      return matchesSearch && matchesDept && matchesStatus && matchesRole;
+    });
+  }, [unifiedPeople, dirSearch, dirRole, dirDept, dirStatus]);
+  const dirStats = useMemo(() => ({
+    people: unifiedPeople.length,
+    managers: unifiedPeople.filter((p) => p.roles.includes('manager')).length,
+    trainers: unifiedPeople.filter((p) => p.roles.includes('trainer')).length,
+    otherStaff: unifiedPeople.filter((p) => p.roles.includes('staff')).length,
+    active: unifiedPeople.filter((p) => p.is_active).length,
+    dualRole: unifiedPeople.filter((p) => p.roles.length > 1).length,
+  }), [unifiedPeople]);
+
+  const roleChipClass: Record<StaffRole, string> = {
+    manager: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30',
+    trainer: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
+    staff: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  };
+
+  const openEditFor = (person: UnifiedStaffPerson, role: StaffRole) => {
+    if (role === 'trainer' && person.trainer) {
+      setEditingTrainer({ ...person.trainer, profile: person.profile, profile_name: person.name });
+      setEditTrainerOpen(true);
+    } else if (person.employee) {
+      setEditingEmployee({
+        ...person.employee,
+        profile: person.profile,
+        branch: { name: person.branch_name },
+      });
+      setEditEmployeeOpen(true);
+    }
+  };
+
+  const openContractFor = (person: UnifiedStaffPerson, role: StaffRole) => {
+    if (role === 'trainer' && person.trainer) {
+      setSelectedEmployee({
+        id: person.trainer.id,
+        user_id: person.user_id,
+        staff_type: 'trainer',
+        branch_id: person.trainer.branch_id,
+        employee_code: null,
+        department: 'Training',
+        position: 'Trainer',
+        salary: person.trainer.fixed_salary || 0,
+        profile: person.profile || { full_name: person.name, email: person.email, phone: person.phone },
+        full_name: person.name,
+      });
+      setContractDefaultRole('trainer');
+    } else if (person.employee) {
+      setSelectedEmployee({
+        ...person.employee,
+        user_id: person.user_id,
+        staff_type: 'employee',
+        profile: person.profile || { full_name: person.name, email: person.email, phone: person.phone },
+        full_name: person.name,
+      });
+      setContractDefaultRole(role === 'manager' ? 'manager' : 'staff');
+    }
+    setContractDrawerOpen(true);
+  };
+
 
   // Stats from unified staff list (already deduped by user_id in fetchAllPayrollStaff:
   // a person who is both employee + trainer counts as 1 person; their PT commissions
@@ -502,7 +593,7 @@ export default function HRMPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="employees">
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="bg-muted/50">
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="contracts">Contracts</TabsTrigger>
@@ -512,109 +603,206 @@ export default function HRMPage() {
             <TabsTrigger value="settings"><SettingsIcon className="h-3.5 w-3.5 mr-1" />HR Settings</TabsTrigger>
           </TabsList>
 
-          {/* Employees Tab - NOW UNIFIED */}
-          <TabsContent value="employees" className="mt-4">
+          {/* Employees Tab — Unified Directory (single source of truth) */}
+          <TabsContent value="employees" className="mt-4 space-y-4">
+            {/* 5 KPI tiles */}
+            <div className="grid gap-4 md:grid-cols-5">
+              <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Users className="h-4 w-4" /> People
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{dirStats.people}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {dirStats.dualRole > 0 ? `${dirStats.dualRole} hold multiple roles` : 'unique humans'}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-indigo-600" /> Managers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-indigo-600">{dirStats.managers}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Dumbbell className="h-4 w-4 text-purple-600" /> Trainers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-purple-600">{dirStats.trainers}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Other Staff</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-blue-600">{dirStats.otherStaff}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-success" /> Active
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-success">{dirStats.active}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Filter bar */}
             <Card>
-              <CardHeader className="pb-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle>All Staff ({filteredStaff.length})</CardTitle>
-                  <div className="relative w-full sm:w-64">
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-3">
+                  <div className="relative flex-1 min-w-[220px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search staff..."
+                      placeholder="Search by name, code, email, or phone..."
+                      value={dirSearch}
+                      onChange={(e) => setDirSearch(e.target.value)}
                       className="pl-10"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
+                  <Select value={dirRole} onValueChange={(v) => setDirRole(v as any)}>
+                    <SelectTrigger className="w-[160px]"><SelectValue placeholder="Role" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      <SelectItem value="manager">Managers</SelectItem>
+                      <SelectItem value="trainer">Trainers</SelectItem>
+                      <SelectItem value="staff">Other Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={dirDept} onValueChange={setDirDept}>
+                    <SelectTrigger className="w-[200px]">
+                      <Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={dirStatus} onValueChange={(v) => setDirStatus(v as any)}>
+                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Directory table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>All Staff ({filteredDirectory.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoadingStaff ? (
+                {isLoadingDirectory ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Staff Member</TableHead>
+                        <TableHead>Roles</TableHead>
                         <TableHead>Code</TableHead>
-                        <TableHead>Type</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Position</TableHead>
+                        <TableHead>Branch</TableHead>
                         <TableHead>Salary</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Hire Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredStaff.map((staff: PayrollStaffItem) => (
-                        <TableRow key={staff.id} className="group">
+                      {filteredDirectory.map((person) => (
+                        <TableRow key={person.key}>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10">
-                                <AvatarFallback className="bg-accent/10 text-accent font-semibold">
-                                  {getInitials(staff.name)}
+                                <AvatarImage src={person.avatar_url || undefined} />
+                                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                                  {getInitials(person.name)}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium">{staff.name || 'N/A'}</p>
-                                <p className="text-sm text-muted-foreground">{staff.email}</p>
+                                <div className="font-medium">{person.name || 'N/A'}</div>
+                                <div className="text-sm text-muted-foreground">{person.email || '—'}</div>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span className="font-mono text-sm">{staff.code}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {person.roles.map((r) => (
+                                <Badge key={r} className={`border ${roleChipClass[r]}`}>
+                                  {r === 'trainer' && <Dumbbell className="h-3 w-3 mr-1" />}
+                                  {r === 'manager' && <Briefcase className="h-3 w-3 mr-1" />}
+                                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                                </Badge>
+                              ))}
+                            </div>
                           </TableCell>
-                          <TableCell>{getStaffTypeBadge(staff)}</TableCell>
-                          <TableCell>{staff.department || '-'}</TableCell>
-                          <TableCell>{staff.position || '-'}</TableCell>
+                          <TableCell className="font-mono text-sm">{person.code || '-'}</TableCell>
+                          <TableCell>{person.department || '-'}</TableCell>
+                          <TableCell>
+                            {person.position || '-'}
+                            {person.specialization && (
+                              <span className="block text-xs text-muted-foreground">{person.specialization}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{person.branch_name || '-'}</TableCell>
                           <TableCell className="font-semibold">
-                            ₹{(staff.salary || 0).toLocaleString()}
+                            {person.salary > 0 ? `₹${person.salary.toLocaleString()}` : '-'}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              {/* Contract button for all staff types */}
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => {
-                                  if (staff.staff_type === 'trainer' && staff.trainerRecord) {
-                                    setSelectedEmployee({ ...staff.trainerRecord, id: staff.source_id, staff_type: 'trainer', salary: staff.salary });
-                                  } else if (staff.employeeRecord) {
-                                    setSelectedEmployee(staff.employeeRecord);
-                                  }
-                                  setContractDrawerOpen(true);
-                                }}
-                              >
-                                <FileText className="mr-1 h-3 w-3" />
-                                Contract
-                              </Button>
-                              {/* Edit button */}
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                onClick={() => {
-                                  if (staff.staff_type === 'trainer' && staff.trainerRecord) {
-                                    setEditingTrainer(staff.trainerRecord);
-                                    setEditTrainerOpen(true);
-                                  } else if (staff.employeeRecord) {
-                                    setEditingEmployee(staff.employeeRecord);
-                                    setEditEmployeeOpen(true);
-                                  }
-                                }}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            <Badge
+                              className={
+                                person.is_active
+                                  ? 'bg-success/10 text-success border-success/30 border'
+                                  : 'bg-muted text-muted-foreground border-border border'
+                              }
+                            >
+                              {person.is_active ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {person.hire_date ? new Date(person.hire_date).toLocaleDateString() : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <StaffRowActions
+                              person={person}
+                              onEdit={openEditFor}
+                              onContract={openContractFor}
+                            />
                           </TableCell>
                         </TableRow>
                       ))}
-                      {filteredStaff.length === 0 && (
+                      {filteredDirectory.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                          <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                             <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p>No staff found</p>
+                            <p>
+                              {dirSearch || dirRole !== 'all' || dirDept !== 'all' || dirStatus !== 'all'
+                                ? 'No staff match your filters'
+                                : 'No staff found'}
+                            </p>
                           </TableCell>
                         </TableRow>
                       )}
@@ -624,6 +812,7 @@ export default function HRMPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
 
           {/* Contracts Tab */}
           <TabsContent value="contracts" className="mt-4">
@@ -1143,8 +1332,9 @@ export default function HRMPage() {
       {/* Contract Drawer */}
       <CreateContractDrawer
         open={contractDrawerOpen}
-        onOpenChange={setContractDrawerOpen}
+        onOpenChange={(o) => { setContractDrawerOpen(o); if (!o) setContractDefaultRole(undefined); }}
         employee={selectedEmployee}
+        defaultRole={contractDefaultRole}
       />
 
       {/* Add Employee Drawer */}
@@ -1156,14 +1346,27 @@ export default function HRMPage() {
       {/* Edit Employee Drawer */}
       <EditEmployeeDrawer
         open={editEmployeeOpen}
-        onOpenChange={setEditEmployeeOpen}
+        onOpenChange={(o) => {
+          setEditEmployeeOpen(o);
+          if (!o) {
+            queryClient.invalidateQueries({ queryKey: ['unified-staff-people'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-payroll-staff'] });
+          }
+        }}
         employee={editingEmployee}
       />
 
       {/* Edit Trainer Drawer */}
       <EditTrainerDrawer
         open={editTrainerOpen}
-        onOpenChange={setEditTrainerOpen}
+        onOpenChange={(o) => {
+          setEditTrainerOpen(o);
+          if (!o) {
+            queryClient.invalidateQueries({ queryKey: ['unified-staff-people'] });
+            queryClient.invalidateQueries({ queryKey: ['hrm-payroll-staff'] });
+          }
+        }}
         trainer={editingTrainer}
       />
 
