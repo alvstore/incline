@@ -74,7 +74,7 @@ export const NAV_MODULES: NavModule[] = [
     label: 'HRM',
     icon: Briefcase,
     sections: ['Admin & HR', 'Work'],
-    hrefs: ['/hrm', '/employees', '/staff-attendance', '/approvals'],
+    hrefs: ['/hrm', '/staff-attendance', '/approvals'],
   },
   {
     id: 'marketing',
