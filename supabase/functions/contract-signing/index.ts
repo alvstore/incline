@@ -322,7 +322,10 @@ async function fillFields(body: any) {
   const rejected = Object.keys(submitted).filter((k) => !allow.includes(k));
 
   const { data: existing } = await supabase
-    .from("contracts").select("contract_variables")
+    .from("contracts").select(`
+      contract_variables,
+      employees(user_id), trainers(user_id)
+    `)
     .eq("id", requestRow.contract_id).single();
   const merged = { ...((existing as any)?.contract_variables ?? {}), ...clean };
 
@@ -341,12 +344,13 @@ async function fillFields(body: any) {
     new_data: { role, keys: Object.keys(clean), rejected_keys: rejected },
   });
 
+  const prefill = await loadPrefillForContract(existing);
   return json({
     success: true,
     role,
     saved_keys: Object.keys(clean),
     rejected_keys: rejected,
-    missing_required: missingRequired(merged),
+    missing_required: missingRequired(mergeVarsWithPrefill(merged, prefill)),
   });
 }
 
