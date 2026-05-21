@@ -1564,6 +1564,78 @@ export default function HRMPage() {
         onOpenChange={setSignedViewerOpen}
         contract={viewingSignedContract}
       />
+
+      {/* Mark full month present override */}
+      <AlertDialog open={!!markPresentTarget} onOpenChange={(o) => { if (!o) { setMarkPresentTarget(null); setMarkPresentReason(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Override attendance — {markPresentTarget?.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              No attendance was recorded for {getPayrollMonthLabel(payrollMonth)}. This override marks the staff as fully present for payroll calculation. The reason will be logged on the payroll item.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-medium text-muted-foreground">Reason (required)</label>
+            <Input
+              value={markPresentReason}
+              onChange={(e) => setMarkPresentReason(e.target.value)}
+              placeholder="e.g. Turnstile downtime in week 2, verified via manager signoff"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); markFullPresent.mutate(); }}
+              disabled={markFullPresent.isPending || !markPresentReason.trim()}
+            >
+              Apply override
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Manual payroll adjustment */}
+      <AlertDialog open={!!adjustTarget} onOpenChange={(o) => { if (!o) { setAdjustTarget(null); setAdjustAmount(''); setAdjustReason(''); setAdjustType('bonus'); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Manual adjustment — {adjustTarget?.name}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Current net: ₹{Math.round(adjustTarget?.currentNet || 0).toLocaleString()} · {getPayrollMonthLabel(payrollMonth)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bonus">Bonus / Addition</SelectItem>
+                    <SelectItem value="deduction">Deduction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Amount (₹)</label>
+                <Input type="number" min={1} value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Reason (required)</label>
+              <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="e.g. Diwali bonus / Uniform cost recovery" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); manualAdjust.mutate(); }}
+              disabled={manualAdjust.isPending || !adjustAmount || !adjustReason.trim()}
+            >
+              Apply adjustment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
