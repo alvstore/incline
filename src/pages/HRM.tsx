@@ -490,8 +490,44 @@ export default function HRMPage() {
 
   const processAllPayroll = useMutation({
     mutationFn: async () => {
-      toast.success(`Payroll processed for ${payrollStaff.length} staff members`);
+      const [y, m] = payrollMonth.split('-').map(Number);
+      const periodStart = `${payrollMonth}-01`;
+      const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+
+      // Find or create the draft run for this period
+      const { data: existingRun } = await supabase
+        .from('payroll_runs')
+        .select('id,status')
+        .eq('period_start', periodStart)
+        .eq('period_end', periodEnd)
+        .not('status', 'in', '(processed,paid)')
+        .maybeSingle();
+
+      let runId = existingRun?.id as string | undefined;
+      if (!runId) {
+        const { data: newId, error } = await supabase.rpc('payroll_create_run', {
+          p_branch_id: null,
+          p_period_start: periodStart,
+          p_period_end: periodEnd,
+        });
+        if (error) throw error;
+        runId = newId as unknown as string;
+      }
+
+      const { data, error: procErr } = await supabase.rpc('payroll_process_all_for_run', { p_run_id: runId });
+      if (procErr) throw procErr;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row;
     },
+    onSuccess: (row: any) => {
+      const processed = row?.processed_count ?? 0;
+      const skipped = row?.skipped_count ?? 0;
+      toast.success(`Payroll processed: ${processed} item(s)${skipped ? ` · ${skipped} skipped` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to process payroll'),
   });
 
   // Get attendance summary per staff member
