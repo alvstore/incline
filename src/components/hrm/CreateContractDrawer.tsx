@@ -357,6 +357,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
+  const [prefill, setPrefill] = useState<ContractPrefillMap>({});
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
