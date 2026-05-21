@@ -1,10 +1,10 @@
-// v4.0.0 — Single edge function for the entire contract signing lifecycle:
-//   create_link · get_contract · request_otp · sign_contract · get_pdf · regenerate_pdf
-// OTPs now live in the shared `otp_verifications` table (purpose='contract_sign')
-// and are delivered via the canonical `otp_verification` template — no separate
-// Meta WhatsApp template to maintain. Employer profile resolved through the
-// canonical `get_employer_profile` RPC. The stamped PDF generator is inlined
-// here so we only deploy one function for the whole flow.
+// v5.0.0 — Single edge function for the entire contract signing lifecycle:
+//   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
+// Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
+// are collected through the public /contract-fill page via `fill_fields` and
+// persisted on `contracts.contract_variables`. The PDF builder interpolates
+// them so the manager never has to retype legal boilerplate.
+// OTPs are reused from the shared `otp_verifications` table.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
