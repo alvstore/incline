@@ -536,13 +536,49 @@ export default function HRMPage() {
     onError: (e: any) => toast.error(e?.message || 'Failed to process payroll'),
   });
 
+  // Ensure draft run + item exists for a given user, return item id
+  const ensurePayrollItem = async (userId: string): Promise<string> => {
+    const [y, m] = payrollMonth.split('-').map(Number);
+    const periodStart = `${payrollMonth}-01`;
+    const periodEnd = new Date(y, m, 0).toISOString().split('T')[0];
+
+    let runId: string | undefined;
+    const { data: existingRun } = await supabase
+      .from('payroll_runs')
+      .select('id')
+      .eq('period_start', periodStart)
+      .eq('period_end', periodEnd)
+      .not('status', 'in', '(processed,paid)')
+      .maybeSingle();
+    runId = existingRun?.id as string | undefined;
+    if (!runId) {
+      const { data: newId, error } = await supabase.rpc('payroll_create_run', {
+        p_branch_id: null,
+        p_period_start: periodStart,
+        p_period_end: periodEnd,
+      });
+      if (error) throw error;
+      runId = newId as unknown as string;
+    }
+
+    const { data: item, error: itemErr } = await supabase
+      .from('payroll_items')
+      .select('id')
+      .eq('run_id', runId!)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (itemErr) throw itemErr;
+    if (!item?.id) throw new Error('No payroll item found for this staff in current run. Open the Payroll Run panel to generate items first.');
+    return item.id as string;
+  };
+
   const markFullPresent = useMutation({
     mutationFn: async () => {
       if (!markPresentTarget?.userId) throw new Error('User not linked to auth');
       if (!markPresentReason.trim()) throw new Error('Reason required');
+      const itemId = await ensurePayrollItem(markPresentTarget.userId);
       const { error } = await supabase.rpc('payroll_mark_full_present', {
-        p_user_id: markPresentTarget.userId,
-        p_month: `${payrollMonth}-01`,
+        p_item_id: itemId,
         p_reason: markPresentReason.trim(),
       });
       if (error) throw error;
@@ -552,7 +588,7 @@ export default function HRMPage() {
       setMarkPresentTarget(null);
       setMarkPresentReason('');
       queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
-      queryClient.invalidateQueries({ queryKey: ['staff-attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to mark present'),
   });
@@ -563,13 +599,14 @@ export default function HRMPage() {
       const amt = Number(adjustAmount);
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount');
       if (!adjustReason.trim()) throw new Error('Reason required');
-      const signed = adjustType === 'bonus' ? amt : -amt;
-      const { error } = await supabase.rpc('payroll_manual_adjust', {
-        p_user_id: adjustTarget.userId,
-        p_month: `${payrollMonth}-01`,
-        p_amount: signed,
+      const itemId = await ensurePayrollItem(adjustTarget.userId);
+      const patch = adjustType === 'bonus'
+        ? { final_bonus: amt }
+        : { final_deductions: amt };
+      const { error } = await supabase.rpc('payroll_adjust_item', {
+        p_item_id: itemId,
+        p_patch: patch as any,
         p_reason: adjustReason.trim(),
-        p_kind: adjustType,
       });
       if (error) throw error;
     },
@@ -580,6 +617,7 @@ export default function HRMPage() {
       setAdjustReason('');
       setAdjustType('bonus');
       queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-items'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to adjust'),
   });
