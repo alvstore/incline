@@ -71,7 +71,7 @@ export default function HrSettingsTab() {
         ? await q.eq('branch_id', branchId).maybeSingle()
         : await q.is('branch_id', null).maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
-      return data as HrSettings | null;
+      return data as unknown as HrSettings | null;
     },
   });
 
