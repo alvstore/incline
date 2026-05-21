@@ -225,22 +225,28 @@ export default function HRMPage() {
     },
   });
 
+  // HR settings (PF / ESI / PT toggles)
+  const { data: payrollSettings } = useQuery<HrPayrollSettings>({
+    queryKey: ['hrm-payroll-settings'],
+    queryFn: () => fetchPayrollSettings(),
+  });
+
   // Payroll calculations per unified staff
   const { data: payrollData = {} } = useQuery({
-    queryKey: ['hrm-payroll', payrollMonth, payrollStaff.length],
+    queryKey: ['hrm-payroll', payrollMonth, payrollStaff.length, payrollSettings?.pf_enabled, payrollSettings?.esi_enabled, payrollSettings?.pt_enabled],
     queryFn: async () => {
       const results: Record<string, any> = {};
       for (const staff of payrollStaff) {
         try {
-          const calc = await calculatePayrollForStaff(staff, payrollMonth);
+          const calc = await calculatePayrollForStaff(staff, payrollMonth, false, payrollSettings);
           results[staff.id] = calc;
         } catch {
-          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: staff.salary || 0, ptCommission: 0, grossPay: staff.salary || 0, pfDeduction: 0, netPay: staff.salary || 0, daysPresent: 0, workingDays: 26 };
+          results[staff.id] = { baseSalary: staff.salary || 0, proRatedPay: 0, ptCommission: 0, grossPay: 0, pfDeduction: 0, esiDeduction: 0, ptDeduction: 0, totalDeductions: 0, netPay: 0, daysPresent: 0, workingDays: 26, attendanceRecorded: false };
         }
       }
       return results;
     },
-    enabled: payrollStaff.length > 0,
+    enabled: payrollStaff.length > 0 && !!payrollSettings,
   });
 
   // Filter unified staff by search
