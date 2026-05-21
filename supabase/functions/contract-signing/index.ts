@@ -20,7 +20,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-type CopyKind = "original" | "employee_copy" | "employer_copy";
+type CopyKind = "original" | "employee_copy" | "employer_copy" | "draft";
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -498,8 +498,8 @@ async function getOrBuildPdf(req: Request, body: any, forceRebuild: boolean) {
   const copy: CopyKind = (body?.copy as CopyKind) ?? "employee_copy";
   if (!contractId) return json({ error: "Missing contract_id" }, 400);
 
-  // If a stamped PDF already exists and we're not forced to rebuild, just sign it.
-  if (!forceRebuild) {
+  // Draft previews are always built fresh (not cached) and skip the signature block.
+  if (copy !== "draft" && !forceRebuild) {
     const { data: existing } = await supabase
       .from("contracts").select("stamped_pdf_path, signed_pdf_hash")
       .eq("id", contractId).maybeSingle();
@@ -543,7 +543,8 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : "EMPLOYEE COPY";
+  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT — NOT YET SIGNED" : "EMPLOYEE COPY";
+  const isDraft = copy === "draft";
   const pageWidth = PageSizes.A4[0];
   const pageHeight = PageSizes.A4[1];
   const marginX = 50;
@@ -662,10 +663,10 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     newPageIfNeeded(120);
   }
 
-  writeLine("Signatures", { bold: true, size: 12 });
+  writeLine(isDraft ? "Signatures (pending)" : "Signatures", { bold: true, size: 12 });
   spacer(4);
 
-  if (signature?.signature_image_path) {
+  if (!isDraft && signature?.signature_image_path) {
     const { data: imgBlob } = await supabase.storage
       .from("signature-assets").download(signature.signature_image_path);
     if (imgBlob) {
@@ -678,9 +679,13 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
       } catch (_) { /* fall back to typed text */ }
     }
   }
-  writeLine(`Employee: ${signature?.signed_name || employeeName} (${employeeCode})`);
-  writeLine(`Signed at: ${signature?.signed_at || contract.signed_at || "—"}  ·  IP: ${signature?.ip_address || "—"}`);
-  if (signature?.geolocation) writeLine(`Geo: ${JSON.stringify(signature.geolocation)}`);
+  if (isDraft) {
+    writeLine(`Employee: ${employeeName} (${employeeCode})  —  signature pending`);
+  } else {
+    writeLine(`Employee: ${signature?.signed_name || employeeName} (${employeeCode})`);
+    writeLine(`Signed at: ${signature?.signed_at || contract.signed_at || "—"}  ·  IP: ${signature?.ip_address || "—"}`);
+    if (signature?.geolocation) writeLine(`Geo: ${JSON.stringify(signature.geolocation)}`);
+  }
 
   spacer(10);
   writeLine(`For ${employer.legal_name || "Incline"}`);
@@ -695,10 +700,12 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     if (contract.witness_2) writeLine(`2. ${(contract.witness_2 as any).name || "-"}  ·  ${(contract.witness_2 as any).phone || "-"}`);
   }
 
-  spacer(14);
-  writeLine("Audit trail", { bold: true, size: 11 });
-  writeLine(`Electronic signature recorded under Section 10A of the Information Technology Act, 2000.`);
-  writeLine(`Terms hash at sign: ${signature?.terms_hash_at_sign || "—"}`);
+  if (!isDraft) {
+    spacer(14);
+    writeLine("Audit trail", { bold: true, size: 11 });
+    writeLine(`Electronic signature recorded under Section 10A of the Information Technology Act, 2000.`);
+    writeLine(`Terms hash at sign: ${signature?.terms_hash_at_sign || "—"}`);
+  }
 
   const pages = pdfDoc.getPages();
   pages.forEach((p, i) => drawFooter(p, i + 1, pages.length));
@@ -711,14 +718,17 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
 
   const hashBuf = await crypto.subtle.digest("SHA-256", pdfBytes);
   const signedPdfHash = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  await supabase.from("contracts")
-    .update({ stamped_pdf_path: path, signed_pdf_hash: signedPdfHash }).eq("id", contractId);
+  // Don't persist draft path as the canonical stamped PDF.
+  if (!isDraft) {
+    await supabase.from("contracts")
+      .update({ stamped_pdf_path: path, signed_pdf_hash: signedPdfHash }).eq("id", contractId);
+  }
 
   const { data: signedUrl, error: urlErr } = await supabase.storage
     .from("contract-pdfs").createSignedUrl(path, 60);
   if (urlErr) return json({ error: "Failed to create signed URL: " + urlErr.message }, 500);
 
-  return json({ success: true, path, signed_url: signedUrl?.signedUrl, hash: signedPdfHash, copy });
+  return json({ success: true, path, signed_url: signedUrl?.signedUrl, hash: signedPdfHash, copy, draft: isDraft });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
