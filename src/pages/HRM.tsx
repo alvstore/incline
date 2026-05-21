@@ -1341,6 +1341,26 @@ export default function HRMPage() {
                               >
                                 <Mail className="h-3 w-3" />
                               </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="ghost" title="More">
+                                    <MoreHorizontal className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuItem
+                                    onClick={() => setMarkPresentTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null })}
+                                    disabled={p.attendanceRecorded !== false}
+                                  >
+                                    <UserCheck className="mr-2 h-3.5 w-3.5" /> Mark full month present
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setAdjustTarget({ id: staff.id, name: staff.name, userId: staff.user_id || null, currentNet: p.netPay || 0 })}
+                                  >
+                                    <Edit className="mr-2 h-3.5 w-3.5" /> Manual adjust…
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </TableCell>
                         </TableRow>
