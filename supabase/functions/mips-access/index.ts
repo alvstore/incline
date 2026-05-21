@@ -457,6 +457,27 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (action === "revoke_staff" || action === "restore_staff") {
+      const { person_type, person_id, reason, branch_id } = body as {
+        person_type?: "employee" | "trainer";
+        person_id?: string;
+        reason?: string;
+        branch_id?: string;
+      };
+      if (!person_type || !person_id) {
+        return new Response(JSON.stringify({ error: "Missing person_type or person_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const result = await applyStaffAction(supabase, person_type, person_id, action, reason, branch_id);
+      const status = result.success ? 200 : 400;
+      return new Response(JSON.stringify(result), {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action !== "revoke" && action !== "restore") {
       return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
         status: 400,
