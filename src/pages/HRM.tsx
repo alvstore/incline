@@ -18,6 +18,8 @@ import { PayrollRunPanel } from '@/components/hrm/PayrollRunPanel';
 import HrSettingsTab from '@/components/hrm/HrSettingsTab';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
 import { StaffRowActions } from '@/components/hrm/StaffRowActions';
+import { AttendanceStateBadge } from '@/components/hrm/AttendanceStateBadge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUnifiedStaff, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
 import {
   FileBadge, BookOpen, Settings as SettingsIcon,
