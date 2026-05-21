@@ -536,6 +536,54 @@ export default function HRMPage() {
     onError: (e: any) => toast.error(e?.message || 'Failed to process payroll'),
   });
 
+  const markFullPresent = useMutation({
+    mutationFn: async () => {
+      if (!markPresentTarget?.userId) throw new Error('User not linked to auth');
+      if (!markPresentReason.trim()) throw new Error('Reason required');
+      const { error } = await supabase.rpc('payroll_mark_full_present', {
+        p_user_id: markPresentTarget.userId,
+        p_month: `${payrollMonth}-01`,
+        p_reason: markPresentReason.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`${markPresentTarget?.name} marked present for ${payrollMonth}`);
+      setMarkPresentTarget(null);
+      setMarkPresentReason('');
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['staff-attendance'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to mark present'),
+  });
+
+  const manualAdjust = useMutation({
+    mutationFn: async () => {
+      if (!adjustTarget?.userId) throw new Error('User not linked to auth');
+      const amt = Number(adjustAmount);
+      if (!Number.isFinite(amt) || amt <= 0) throw new Error('Enter a valid amount');
+      if (!adjustReason.trim()) throw new Error('Reason required');
+      const signed = adjustType === 'bonus' ? amt : -amt;
+      const { error } = await supabase.rpc('payroll_manual_adjust', {
+        p_user_id: adjustTarget.userId,
+        p_month: `${payrollMonth}-01`,
+        p_amount: signed,
+        p_reason: adjustReason.trim(),
+        p_kind: adjustType,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Adjustment recorded');
+      setAdjustTarget(null);
+      setAdjustAmount('');
+      setAdjustReason('');
+      setAdjustType('bonus');
+      queryClient.invalidateQueries({ queryKey: ['hrm-payroll'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to adjust'),
+  });
+
   // Get attendance summary per staff member
   const getStaffAttendanceSummary = (userId: string) => {
     const records = staffAttendance.filter((a: any) => a.user_id === userId);
