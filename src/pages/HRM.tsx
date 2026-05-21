@@ -1195,7 +1195,7 @@ export default function HRMPage() {
                       <TableHead>Pro-rated</TableHead>
                       <TableHead>PT Commission</TableHead>
                       <TableHead>Gross</TableHead>
-                      <TableHead>PF (12%)</TableHead>
+                      <TableHead>Deductions</TableHead>
                       <TableHead>Net Pay</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
