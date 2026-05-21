@@ -139,6 +139,8 @@ export function useUnifiedStaff() {
           branch_id: t.branch_id,
           branch_name: (t.branches as any)?.name || null,
           is_active: !!t.is_active,
+          exit_date: t.exit_date || null,
+          exit_type: t.exit_type || null,
           hire_date: t.created_at,
         });
       });
