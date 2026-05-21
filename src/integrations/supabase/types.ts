@@ -5203,6 +5203,8 @@ export type Database = {
           employer_firm_registration_no: string | null
           employer_pan: string | null
           employer_proprietor_name: string | null
+          esi_employee_pct: number
+          esi_enabled: boolean
           governing_jurisdiction: string
           id: string
           lawyer_reviewed_at: string | null
@@ -5211,8 +5213,14 @@ export type Database = {
           notice_period_staff_days: number
           notice_period_trainer_days: number
           ot_multiplier: number
+          pf_employee_pct: number
+          pf_enabled: boolean
+          pf_wage_ceiling: number | null
           posh_ic: Json | null
+          pt_amount: number | null
           pt_commission_clawback_on_refund: boolean
+          pt_enabled: boolean
+          tds_enabled: boolean
           updated_at: string
           weekly_hour_cap: number
         }
@@ -5225,6 +5233,8 @@ export type Database = {
           employer_firm_registration_no?: string | null
           employer_pan?: string | null
           employer_proprietor_name?: string | null
+          esi_employee_pct?: number
+          esi_enabled?: boolean
           governing_jurisdiction?: string
           id?: string
           lawyer_reviewed_at?: string | null
@@ -5233,8 +5243,14 @@ export type Database = {
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
           ot_multiplier?: number
+          pf_employee_pct?: number
+          pf_enabled?: boolean
+          pf_wage_ceiling?: number | null
           posh_ic?: Json | null
+          pt_amount?: number | null
           pt_commission_clawback_on_refund?: boolean
+          pt_enabled?: boolean
+          tds_enabled?: boolean
           updated_at?: string
           weekly_hour_cap?: number
         }
@@ -5247,6 +5263,8 @@ export type Database = {
           employer_firm_registration_no?: string | null
           employer_pan?: string | null
           employer_proprietor_name?: string | null
+          esi_employee_pct?: number
+          esi_enabled?: boolean
           governing_jurisdiction?: string
           id?: string
           lawyer_reviewed_at?: string | null
@@ -5255,8 +5273,14 @@ export type Database = {
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
           ot_multiplier?: number
+          pf_employee_pct?: number
+          pf_enabled?: boolean
+          pf_wage_ceiling?: number | null
           posh_ic?: Json | null
+          pt_amount?: number | null
           pt_commission_clawback_on_refund?: boolean
+          pt_enabled?: boolean
+          tds_enabled?: boolean
           updated_at?: string
           weekly_hour_cap?: number
         }
@@ -13561,9 +13585,20 @@ export type Database = {
         }
         Returns: string
       }
+      payroll_mark_full_present: {
+        Args: { p_item_id: string; p_reason: string }
+        Returns: undefined
+      }
       payroll_mark_paid: {
         Args: { p_item_ids: string[]; p_method: string; p_reference: string }
         Returns: undefined
+      }
+      payroll_process_all_for_run: {
+        Args: { p_run_id: string }
+        Returns: {
+          processed_count: number
+          skipped_count: number
+        }[]
       }
       payroll_process_items: {
         Args: { p_item_ids: string[] }
