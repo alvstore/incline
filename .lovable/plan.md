@@ -1,59 +1,82 @@
-# Consolidate Contract Signing + PDF, Reuse OTP
+# Contract Drawer + Sign Flow Cleanup
 
-You're right on both counts. We over-built. Here's the cleanup.
+## Problems (from audit)
 
-## Why we have duplicates today
+1. **Commission % is hardcoded to `10`** in `CreateContractDrawer`. Trainers already store `pt_share_percentage` (default 40) on `trainers` table — that's the source of truth. Manager has to retype it every time and can silently drift from the trainer's actual rate.
 
-1. **Two edge functions** (`contract-signing` + `generate-stamped-pdf`) — they were authored in separate turns. They share the same domain (one contract → one signed PDF) and the same employer-profile + storage code. No reason to keep them split.
-2. **Two OTP systems** — last turn I added a new `contract_sign_otps` table and a new `contract_sign_otp` template event. But `register-member` already uses a generic `otp_verifications` table + the Meta-approved `otp_verification` template (`{{code}}` variable). One more Meta template = one more approval cycle for no functional gain.
+2. **T&C section shows a giant read-only "preview"** of the rendered template instead of *collecting the variables that are still missing* (S/o-D/o, residential address, witness names, employee photo/PAN, emergency contact, etc.). The full document should be assembled on the backend at PDF time — the drawer should only collect *unknowns*.
+
+3. **No public role-scoped fill route.** When a manager creates a contract, the employee currently can only sign — there's no clean path for them to fill *their* missing fields (address, S/o-D/o, witnesses) before signing, and no path for an Owner to fill Owner-only fields without re-opening the drawer.
+
+4. **Contracts table action column is duplicated:**
+   - `Eye` (preview), `Printer` (print), `Download` (download) — **all three call the exact same `openContractPdf(contract)`**. One button is enough.
+   - For signed contracts: "View Signed" (opens viewer modal) + "Stamped PDF" (downloads stamped copy) both do the same conceptual job. Collapse into one primary + overflow.
+   - No "Edit", "Resend link", "Cancel/Void" actions — but a back-link / breadcrumb is missing on `ContractSign`.
 
 ## Plan
 
-### A. Merge edge functions → single `contract-signing` fn with action router
+### A. Auto-fetch trainer commission (single source of truth)
 
-```
-POST /contract-signing
-  { action: 'request_otp',   token, channel }
-  { action: 'verify_and_sign', token, otp, signature_png, witness, consent }
-  { action: 'get_pdf',        contract_id, copy: 'employee'|'employer' }
-  { action: 'regenerate_pdf', contract_id }   // owner/HR only, JWT required
-```
+- In `CreateContractDrawer` when `agreementRole === 'trainer'` and `employee.staff_type === 'trainer'`: seed `commissionPercentage` from `trainers.pt_share_percentage` (fetch in the existing `useEffect` that already queries the linked record). Fallback to 40 (the column default), not 10.
+- Make the input **read-only by default** with an "Override for this contract" toggle (audit-logged). Show helper text: *"Synced from trainer profile (40%). Update in Trainers → Profile to change globally."*
+- When `defaultRole === 'trainer'` but the record is from `employees` table (dual-role), look up the matching trainer row by `user_id` and pull `pt_share_percentage` from there.
 
-- Move the entire pdf-lib stamping logic from `generate-stamped-pdf/index.ts` into a local `buildStampedPdf()` helper inside `contract-signing/index.ts`.
-- Keep `verify_jwt = false` for `request_otp` and `verify_and_sign` (token-gated public flow); enforce JWT inside the handler for `get_pdf`/`regenerate_pdf`.
-- Delete `supabase/functions/generate-stamped-pdf/` and call `supabase--delete_edge_functions(['generate-stamped-pdf'])`.
-- Update the one caller (`HRM.tsx` "Stamped PDF" button) to invoke `contract-signing` with `action: 'get_pdf'`.
+### B. Replace T&C "preview" with a Missing Fields collector
 
-### B. Reuse existing OTP — drop the new table + template
+- Remove the 16-row `<Textarea>` preview entirely from the drawer.
+- Replace with a compact **"Contract Variables"** card listing only fields the template needs that aren't already known from employer profile / employee profile / trainer profile:
+  - **Always-missing today:** `father_or_husband_name` (S/o, D/o), `residential_address`, `emergency_contact_name`, `emergency_contact_phone`, `pan_or_aadhaar_last4`, `witness_1_name`, `witness_2_name`, `probation_months`, `notice_period_days` (prefilled from `hr_settings.notice_period_*`).
+  - Show each with a green ✓ if already known (from profile/branch/hr_settings), red • if missing.
+- Store all variables in a new JSONB column on `contracts.contract_variables` (migration). The full document is rendered server-side at PDF time by `contract-signing` using `contractTemplateV2.ts` + variables + employer profile.
+- Keep the "Unlock Legal Clauses" switch but move it to an **Advanced** disclosure that, when toggled, lets owner/admin override specific clause blocks (stored as `contract_variables.legal_overrides`). No more free-text Markdown editing for managers.
 
-- **Drop** `contract_sign_otps` table (migration) — it has zero rows.
-- **Drop** the `contract_sign_otp` event from `src/lib/templates/systemEvents.ts`.
-- In `contract-signing` use the existing `otp_verifications` table exactly the way `register-member` does (same row shape: phone, code, expires_at, attempts, consumed_at), with a `purpose='contract_sign'` discriminator column if it doesn't already exist (1-line ALTER if needed) — otherwise scope by `phone + recent + unconsumed`.
-- Dispatch OTP via canonical hub with `event: 'otp_verification'`, variables `{ code }` — **same Meta template** already approved and live in production. No new Meta submission.
-- Keep the new `contract_signed_confirmation` event (it's a different message: "your contract is signed, here's the PDF") — that one is genuinely new and worth its own template.
+### C. Public role-scoped fill route
 
-### C. Net file changes
+- New page `src/pages/ContractFill.tsx` at public route `/contract/:token/fill` (no auth, token-gated like `/contract/:token/sign`).
+- The same `contract_sign_otps` / `otp_verifications` token flow gates access. After OTP verify, the page shows **only the fields assigned to that role**:
+  - **Employee fields:** father/husband name, residential address, emergency contact, PAN/Aadhaar last 4, photo upload.
+  - **Witness fields:** witness name + signature canvas (separate token + role=`witness` on the request, so a witness can be invited via a separate link).
+  - **Owner/HR fields:** any clause overrides, witness pre-fill.
+- Backend: extend `contract-signing` edge fn with `action: 'fill_fields'` that:
+  - validates token + OTP
+  - validates submitted keys against an allowlist per role (`EMPLOYEE_FILLABLE`, `WITNESS_FILLABLE`, `HR_FILLABLE`)
+  - merges into `contracts.contract_variables`
+  - logs audit row per field
+- After all required fields are present, the existing `sign_contract` action becomes available — otherwise it returns `{ error: 'fields_incomplete', missing: [...] }` and the UI redirects to `/contract/:token/fill` first.
+- DB: add `contract_signature_requests.role text` (one of `employee` | `witness_1` | `witness_2` | `hr`) and allow multiple rows per contract (for witnesses).
 
-Deleted:
-- `supabase/functions/generate-stamped-pdf/index.ts`
-- `contract_sign_otps` table (migration drop)
-- `contract_sign_otp` from `systemEvents.ts`
+### D. Action button audit & dedupe
 
-Edited:
-- `supabase/functions/contract-signing/index.ts` — add `get_pdf`/`regenerate_pdf` actions, swap OTP table to `otp_verifications`, swap template event to `otp_verification`
-- `supabase/config.toml` — remove `[functions.generate-stamped-pdf]`
-- `src/pages/HRM.tsx` — change invoke target + body
-- `src/pages/ContractSign.tsx` — no UI change, just the underlying action name stays the same
-- `mem://features/hrm-contracts-v2-evidentiary-signing` — note single-fn + shared OTP
+In `src/pages/HRM.tsx` Contracts table action column:
+- **Collapse** Eye + Printer + Download into a single `Preview / Download` button (Eye icon, opens PDF in new tab — the browser already exposes print/save).
+- **Unsigned contracts:** keep only `Preview` + `Copy Sign Link` (new — copies to clipboard) + overflow `…` menu with `Resend OTP (WhatsApp/SMS/Email)`, `Void contract`.
+- **Signed contracts:** primary `View Signed` button + overflow `…` menu with `Download Stamped PDF`, `Download Witness Copy`, `Re-issue (clone)`.
+- **Uploaded document** badge (paperclip) only shows if `document_url` is set — no separate button.
 
-### Benefits
+On `src/pages/ContractSign.tsx`:
+- Add a top-bar with employer logo (left) and a single `← Back to portal` link only when the visitor is an authenticated member/staff; on public OTP flow show nothing on left to avoid leaking nav.
+- Remove any duplicate "Cancel" links inside steps (keep one in footer).
 
-- One fewer edge function to deploy, monitor, and CORS-configure.
-- One fewer Meta WhatsApp template to maintain (and approve).
-- One OTP table = one purge cron, one rate-limit surface, one place to audit OTP fraud.
-- PDF generation can share the employer-profile fetch and storage signing helpers with the sign flow (no duplication).
+### E. Files
 
-## Questions before I execute
+**Edit**
+- `src/components/hrm/CreateContractDrawer.tsx` — auto-fetch commission, remove T&C preview, add Missing Fields collector, Advanced legal overrides.
+- `src/pages/HRM.tsx` — dedupe action buttons into Preview + overflow menu.
+- `src/pages/ContractSign.tsx` — header cleanup, redirect to `/fill` when fields incomplete.
+- `supabase/functions/contract-signing/index.ts` — add `action: 'fill_fields'`, per-role allowlist, fields-incomplete gating on `sign_contract`, server-side template rendering using `contract_variables`.
 
-1. **OTP purpose discriminator** — `otp_verifications` today is keyed by phone only. For contract sign we also need to bind the OTP to a specific `contract_id` so an OTP issued for onboarding can't be used to sign a contract (and vice-versa). OK to add a nullable `purpose text` + `context_id uuid` column to `otp_verifications`? (Backward compatible — register-member keeps working with NULLs.)
-2. **Email OTP** — `otp_verification` event today is `channels: ['whatsapp','sms']`. Contract sign also needs email fallback. OK to extend the existing event to include `email` (uses the same `{{code}}` variable, no Meta involvement for email)?
+**Create**
+- `src/pages/ContractFill.tsx` — public role-scoped fill page.
+- `src/lib/hrm/contractVariables.ts` — canonical variable registry + per-role allowlists + `computeMissingVariables(contract, employee, employer)` helper, shared by drawer and edge fn.
+- Route entry in `src/App.tsx` for `/contract/:token/fill`.
+
+**Migration**
+- `contracts` add `contract_variables jsonb default '{}'::jsonb`.
+- `contract_signature_requests` add `role text default 'employee'`, drop unique-per-contract constraint if present.
+
+## Technical Notes
+
+- `pt_share_percentage` is `numeric` with default 40 (verified). The drawer's current default of 10 is wrong.
+- The 3 buttons at lines 632–655 of `HRM.tsx` literally all invoke `openContractPdf(contract)` — pure dead duplication.
+- Server-side template rendering means the legal text never has to travel through the client form — eliminates the "lock/unlock" UX wart for the 99% case.
+- All new client → edge invocations stay within the existing `contract-signing` router; no new edge fn.

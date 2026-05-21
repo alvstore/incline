@@ -28,6 +28,7 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicy";
 import TermsPage from "./pages/Terms";
 const DataDeletionPage = lazy(() => import("./pages/DataDeletion"));
 import ContractSignPage from "./pages/ContractSign";
+const ContractFillPage = lazy(() => import("./pages/ContractFill"));
 const MemberCheckout = lazy(() => import("./pages/MemberCheckout"));
 const PublicRegistrationPage = lazy(() => import("./pages/PublicRegistration"));
 
@@ -185,6 +186,7 @@ function RoutedContent() {
           {/* Embeddable lead form - no auth required */}
           <Route path="/embed/lead-form" element={<EmbedLeadForm />} />
           <Route path="/contract-sign/:token" element={<ContractSignPage />} />
+          <Route path="/contract-fill/:token" element={<ContractFillPage />} />
           <Route path="/member/pay" element={<MemberCheckout />} />
           <Route path="/register" element={<PublicRegistrationPage />} />
 

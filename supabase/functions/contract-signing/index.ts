@@ -1,10 +1,10 @@
-// v4.0.0 — Single edge function for the entire contract signing lifecycle:
-//   create_link · get_contract · request_otp · sign_contract · get_pdf · regenerate_pdf
-// OTPs now live in the shared `otp_verifications` table (purpose='contract_sign')
-// and are delivered via the canonical `otp_verification` template — no separate
-// Meta WhatsApp template to maintain. Employer profile resolved through the
-// canonical `get_employer_profile` RPC. The stamped PDF generator is inlined
-// here so we only deploy one function for the whole flow.
+// v5.0.0 — Single edge function for the entire contract signing lifecycle:
+//   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
+// Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
+// are collected through the public /contract-fill page via `fill_fields` and
+// persisted on `contracts.contract_variables`. The PDF builder interpolates
+// them so the manager never has to retype legal boilerplate.
+// OTPs are reused from the shared `otp_verifications` table.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "https://esm.sh/pdf-lib@1.17.1";
@@ -34,6 +34,7 @@ serve(async (req: Request) => {
       case "create_link":     return await createSignLink(req, body);
       case "get_contract":    return await getContractByToken(body);
       case "request_otp":     return await requestOtp(body);
+      case "fill_fields":     return await fillFields(body);
       case "sign_contract":   return await signContract(req, body);
       case "get_pdf":         return await getOrBuildPdf(req, body, false);
       case "regenerate_pdf":  return await getOrBuildPdf(req, body, true);
@@ -61,10 +62,42 @@ async function assertStaff(req: Request) {
   return { userId: u.user.id };
 }
 
+// ── Allowlists per fill role ──────────────────────────────────────────────
+const FILL_ALLOWLIST: Record<string, string[]> = {
+  employee: [
+    "father_or_husband_name", "residential_address",
+    "emergency_contact_name", "emergency_contact_phone",
+    "pan_or_aadhaar_last4",
+  ],
+  witness_1: ["witness_1_name", "witness_1_phone"],
+  witness_2: ["witness_2_name", "witness_2_phone"],
+  hr: [
+    "probation_months", "notice_period_days",
+    "witness_1_name", "witness_1_phone",
+    "witness_2_name", "witness_2_phone",
+  ],
+};
+
+const REQUIRED_BEFORE_SIGN = [
+  "father_or_husband_name", "residential_address",
+  "emergency_contact_name", "emergency_contact_phone",
+  "witness_1_name", "witness_2_name",
+];
+
+function missingRequired(vars: Record<string, unknown> | null | undefined): string[] {
+  const v = (vars ?? {}) as Record<string, unknown>;
+  return REQUIRED_BEFORE_SIGN.filter((k) => {
+    const val = v[k];
+    return val === undefined || val === null || String(val).trim() === "";
+  });
+}
+
 // ── 1. Create signing link ────────────────────────────────────────────────
 async function createSignLink(req: Request, body: any) {
   const contractId = body?.contract_id;
+  const role = (body?.role || "employee") as string;
   if (!contractId) return json({ error: "Missing contract_id" }, 400);
+  if (!FILL_ALLOWLIST[role]) return json({ error: "Invalid role" }, 400);
 
   const auth = await assertStaff(req);
   if ("error" in auth) return auth.error;
@@ -77,6 +110,13 @@ async function createSignLink(req: Request, body: any) {
   const tokenHash = await sha256(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Revoke any existing open request for this (contract, role) so the unique
+  // index doesn't reject us. Audit a separate row for transparency.
+  await supabase.from("contract_signature_requests")
+    .update({ revoked_at: new Date().toISOString(), status: "expired" })
+    .eq("contract_id", contract.id).eq("role", role).is("revoked_at", null)
+    .in("status", ["pending", "viewed"]);
+
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
     .insert({
@@ -86,14 +126,17 @@ async function createSignLink(req: Request, body: any) {
       expires_at: expiresAt,
       created_by: auth.userId,
       status: "pending",
+      role,
     })
     .select("id").single();
 
   if (requestError || !requestRow) return json({ error: "Failed to create signature request" }, 500);
 
-  await supabase.from("contracts")
-    .update({ signature_status: "sent", signature_requested_at: new Date().toISOString() })
-    .eq("id", contract.id);
+  if (role === "employee") {
+    await supabase.from("contracts")
+      .update({ signature_status: "sent", signature_requested_at: new Date().toISOString() })
+      .eq("id", contract.id);
+  }
 
   await supabase.from("audit_logs").insert({
     action: "CONTRACT_SIGN_LINK_CREATED",
@@ -101,13 +144,17 @@ async function createSignLink(req: Request, body: any) {
     record_id: contract.id,
     user_id: auth.userId,
     branch_id: contract.branch_id,
-    action_description: "Created public contract signing link",
-    new_data: { request_id: requestRow.id, expires_at: expiresAt },
+    action_description: `Created public ${role} signing/fill link`,
+    new_data: { request_id: requestRow.id, role, expires_at: expiresAt },
   });
 
   const appUrl = Deno.env.get("PUBLIC_APP_URL") ?? req.headers.get("origin") ?? "http://localhost:5173";
-  const signUrl = `${appUrl.replace(/\/$/, "")}/contract-sign/${rawToken}`;
-  return json({ sign_url: signUrl, expires_at: expiresAt });
+  const base = appUrl.replace(/\/$/, "");
+  // Employee link defaults to the fill page (which forwards to sign once complete);
+  // witness/HR links only need the fill page.
+  const path = role === "employee" ? "contract-fill" : "contract-fill";
+  const signUrl = `${base}/${path}/${rawToken}`;
+  return json({ sign_url: signUrl, role, expires_at: expiresAt });
 }
 
 // ── 2. Get contract by signing token ─────────────────────────────────────
@@ -120,7 +167,7 @@ async function getContractByToken(body: any) {
 
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
-    .select("id, contract_id, branch_id, status, expires_at")
+    .select("id, contract_id, branch_id, status, expires_at, role")
     .eq("token_hash", tokenHash).is("revoked_at", null).single();
   if (requestError || !requestRow) return json({ error: "Invalid signing link" }, 404);
   if (requestRow.status === "signed") return json({ error: "This contract is already signed" }, 410);
@@ -134,7 +181,7 @@ async function getContractByToken(body: any) {
     .from("contracts")
     .select(`
       id, contract_type, start_date, end_date, salary, base_salary, commission_percentage,
-      terms, status, signature_status, branch_id,
+      terms, status, signature_status, branch_id, contract_variables,
       employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
       trainers(user_id)
     `)
@@ -144,16 +191,20 @@ async function getContractByToken(body: any) {
   if (requestRow.status === "pending") {
     await supabase.from("contract_signature_requests").update({ status: "viewed" })
       .eq("id", requestRow.id).eq("status", "pending");
-    await supabase.from("contracts").update({ signature_status: "viewed" })
-      .eq("id", contract.id).in("signature_status", ["sent", "not_sent"]);
+    if ((requestRow as any).role === "employee") {
+      await supabase.from("contracts").update({ signature_status: "viewed" })
+        .eq("id", contract.id).in("signature_status", ["sent", "not_sent"]);
+    }
   }
 
   const { name, phone, email, code } = await resolveRecipient(contract);
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
 
+  const cvars = (contract as any).contract_variables ?? {};
   return json({
     contract: {
       id: contract.id,
+      request_role: (requestRow as any).role || "employee",
       employee_name: name || "Employee",
       employee_code: code || "-",
       employee_phone_masked: maskPhone(phone),
@@ -165,8 +216,71 @@ async function getContractByToken(body: any) {
       commission_percentage: contract.commission_percentage,
       terms: contract.terms,
       signature_status: contract.signature_status,
+      contract_variables: cvars,
+      missing_required: missingRequired(cvars),
       employer,
     },
+  });
+}
+
+// ── 2b. Fill role-scoped contract variables ───────────────────────────────
+async function fillFields(body: any) {
+  const token = body?.token;
+  const submitted = (body?.variables ?? {}) as Record<string, unknown>;
+  if (!token) return json({ error: "Missing token" }, 400);
+  if (!submitted || typeof submitted !== "object") return json({ error: "Missing variables" }, 400);
+
+  const tokenHash = await sha256(token);
+  const now = new Date().toISOString();
+
+  const { data: requestRow } = await supabase
+    .from("contract_signature_requests")
+    .select("id, contract_id, branch_id, status, expires_at, role")
+    .eq("token_hash", tokenHash).is("revoked_at", null).single();
+  if (!requestRow) return json({ error: "Invalid link" }, 404);
+  if (requestRow.status === "signed") return json({ error: "Already signed" }, 410);
+  if (requestRow.expires_at < now) return json({ error: "This link has expired" }, 410);
+
+  const role = ((requestRow as any).role || "employee") as string;
+  const allow = FILL_ALLOWLIST[role] || [];
+
+  const clean: Record<string, unknown> = {};
+  for (const k of allow) {
+    if (Object.prototype.hasOwnProperty.call(submitted, k)) {
+      const v = submitted[k];
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        clean[k] = typeof v === "string" ? v.trim() : v;
+      }
+    }
+  }
+  const rejected = Object.keys(submitted).filter((k) => !allow.includes(k));
+
+  const { data: existing } = await supabase
+    .from("contracts").select("contract_variables")
+    .eq("id", requestRow.contract_id).single();
+  const merged = { ...((existing as any)?.contract_variables ?? {}), ...clean };
+
+  const { error: upErr } = await supabase
+    .from("contracts")
+    .update({ contract_variables: merged })
+    .eq("id", requestRow.contract_id);
+  if (upErr) return json({ error: "Failed to save details: " + upErr.message }, 500);
+
+  await supabase.from("audit_logs").insert({
+    action: "CONTRACT_FIELDS_FILLED",
+    table_name: "contracts",
+    record_id: requestRow.contract_id,
+    branch_id: requestRow.branch_id,
+    action_description: `Contract details filled by ${role}`,
+    new_data: { role, keys: Object.keys(clean), rejected_keys: rejected },
+  });
+
+  return json({
+    success: true,
+    role,
+    saved_keys: Object.keys(clean),
+    rejected_keys: rejected,
+    missing_required: missingRequired(merged),
   });
 }
 
@@ -271,11 +385,23 @@ async function signContract(req: Request, body: any) {
 
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
-    .select("id, contract_id, branch_id, status, expires_at")
+    .select("id, contract_id, branch_id, status, expires_at, role")
     .eq("token_hash", tokenHash).is("revoked_at", null).single();
   if (requestError || !requestRow) return json({ error: "Invalid signing link" }, 404);
   if (requestRow.status === "signed") return json({ error: "This contract is already signed" }, 410);
   if (requestRow.expires_at < now) return json({ error: "This signing link has expired" }, 410);
+  if (((requestRow as any).role || "employee") !== "employee") {
+    return json({ error: "This link can only fill details, not sign. Ask HR for a signing link." }, 403);
+  }
+
+  // Gate signing on required fields being collected.
+  const { data: cv } = await supabase.from("contracts").select("contract_variables")
+    .eq("id", requestRow.contract_id).single();
+  const missing = missingRequired((cv as any)?.contract_variables);
+  if (missing.length > 0) {
+    return json({ error: "fields_incomplete", missing_required: missing }, 409);
+  }
+
 
   // Verify OTP from shared table (purpose+context_id scope)
   const { data: otpRow } = await supabase
@@ -395,7 +521,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     .select(`
       id, contract_type, start_date, end_date,
       salary, base_salary, commission_percentage, terms,
-      signature_status, signed_at, witness_1, witness_2,
+      signature_status, signed_at, witness_1, witness_2, contract_variables,
       governing_jurisdiction, arbitration_seat, notice_period_days,
       branch_id,
       employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
@@ -510,8 +636,32 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     if (isHeading) spacer(2);
   }
 
-  spacer(20);
-  newPageIfNeeded(120);
+  spacer(14);
+  newPageIfNeeded(160);
+
+  // ── Filled details (captured via /contract-fill) ──────────────────────
+  const cvars = ((contract as any).contract_variables ?? {}) as Record<string, any>;
+  const detailRows: [string, any][] = [
+    ["S/o · D/o · W/o",        cvars.father_or_husband_name],
+    ["Residential address",    cvars.residential_address],
+    ["Emergency contact",      cvars.emergency_contact_name && cvars.emergency_contact_phone
+                                  ? `${cvars.emergency_contact_name} — ${cvars.emergency_contact_phone}`
+                                  : (cvars.emergency_contact_name || cvars.emergency_contact_phone)],
+    ["PAN / Aadhaar (last 4)", cvars.pan_or_aadhaar_last4],
+    ["Witness 1",              cvars.witness_1_name && cvars.witness_1_phone
+                                  ? `${cvars.witness_1_name} — ${cvars.witness_1_phone}` : cvars.witness_1_name],
+    ["Witness 2",              cvars.witness_2_name && cvars.witness_2_phone
+                                  ? `${cvars.witness_2_name} — ${cvars.witness_2_phone}` : cvars.witness_2_name],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
+
+  if (detailRows.length > 0) {
+    writeLine("Filled details", { bold: true, size: 12 });
+    spacer(4);
+    for (const [label, value] of detailRows) writeLine(`${label}: ${value}`);
+    spacer(14);
+    newPageIfNeeded(120);
+  }
+
   writeLine("Signatures", { bold: true, size: 12 });
   spacer(4);
 
