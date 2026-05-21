@@ -14,6 +14,9 @@ import { EditEmployeeDrawer } from '@/components/employees/EditEmployeeDrawer';
 import { EditTrainerDrawer } from '@/components/trainers/EditTrainerDrawer';
 import { SignedContractViewer } from '@/components/hrm/SignedContractViewer';
 import { PayrollRunPanel } from '@/components/hrm/PayrollRunPanel';
+import HrSettingsTab from '@/components/hrm/HrSettingsTab';
+import PoliciesTab from '@/components/hrm/PoliciesTab';
+import { FileBadge, BookOpen, Settings as SettingsIcon } from 'lucide-react';
 import {
   Plus, 
   Users, 
