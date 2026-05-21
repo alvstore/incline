@@ -81,6 +81,8 @@ export function useUnifiedStaff() {
             branch_id: existing.branch_id || base.branch_id || null,
             branch_name: existing.branch_name || base.branch_name || null,
             is_active: existing.is_active || !!base.is_active,
+            exit_date: existing.exit_date ?? base.exit_date ?? null,
+            exit_type: existing.exit_type ?? base.exit_type ?? null,
             hire_date: existing.hire_date || base.hire_date || new Date().toISOString(),
             profile: existing.profile || base.profile,
             name: existing.name || base.name || 'Unknown',
