@@ -251,6 +251,85 @@ export default function HRMPage() {
       (s.department || '').toLowerCase().includes(term);
   });
 
+  // ============ Directory (Employees tab) ============
+  const departments = useMemo(
+    () => Array.from(new Set(unifiedPeople.map((p) => p.department).filter(Boolean))) as string[],
+    [unifiedPeople],
+  );
+  const filteredDirectory = useMemo(() => {
+    const term = dirSearch.toLowerCase();
+    return unifiedPeople.filter((p) => {
+      const matchesSearch = !term
+        || p.name?.toLowerCase().includes(term)
+        || p.code?.toLowerCase().includes(term)
+        || p.email?.toLowerCase().includes(term)
+        || (p.phone || '').includes(dirSearch);
+      const matchesDept = dirDept === 'all' || p.department === dirDept;
+      const matchesStatus = dirStatus === 'all'
+        || (dirStatus === 'active' && p.is_active)
+        || (dirStatus === 'inactive' && !p.is_active);
+      const matchesRole = dirRole === 'all' || p.roles.includes(dirRole);
+      return matchesSearch && matchesDept && matchesStatus && matchesRole;
+    });
+  }, [unifiedPeople, dirSearch, dirRole, dirDept, dirStatus]);
+  const dirStats = useMemo(() => ({
+    people: unifiedPeople.length,
+    managers: unifiedPeople.filter((p) => p.roles.includes('manager')).length,
+    trainers: unifiedPeople.filter((p) => p.roles.includes('trainer')).length,
+    otherStaff: unifiedPeople.filter((p) => p.roles.includes('staff')).length,
+    active: unifiedPeople.filter((p) => p.is_active).length,
+    dualRole: unifiedPeople.filter((p) => p.roles.length > 1).length,
+  }), [unifiedPeople]);
+
+  const roleChipClass: Record<StaffRole, string> = {
+    manager: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30',
+    trainer: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
+    staff: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+  };
+
+  const openEditFor = (person: UnifiedStaffPerson, role: StaffRole) => {
+    if (role === 'trainer' && person.trainer) {
+      setEditingTrainer({ ...person.trainer, profile: person.profile, profile_name: person.name });
+      setEditTrainerOpen(true);
+    } else if (person.employee) {
+      setEditingEmployee({
+        ...person.employee,
+        profile: person.profile,
+        branch: { name: person.branch_name },
+      });
+      setEditEmployeeOpen(true);
+    }
+  };
+
+  const openContractFor = (person: UnifiedStaffPerson, role: StaffRole) => {
+    if (role === 'trainer' && person.trainer) {
+      setSelectedEmployee({
+        id: person.trainer.id,
+        user_id: person.user_id,
+        staff_type: 'trainer',
+        branch_id: person.trainer.branch_id,
+        employee_code: null,
+        department: 'Training',
+        position: 'Trainer',
+        salary: person.trainer.fixed_salary || 0,
+        profile: person.profile || { full_name: person.name, email: person.email, phone: person.phone },
+        full_name: person.name,
+      });
+      setContractDefaultRole('trainer');
+    } else if (person.employee) {
+      setSelectedEmployee({
+        ...person.employee,
+        user_id: person.user_id,
+        staff_type: 'employee',
+        profile: person.profile || { full_name: person.name, email: person.email, phone: person.phone },
+        full_name: person.name,
+      });
+      setContractDefaultRole(role === 'manager' ? 'manager' : 'staff');
+    }
+    setContractDrawerOpen(true);
+  };
+
+
   // Stats from unified staff list (already deduped by user_id in fetchAllPayrollStaff:
   // a person who is both employee + trainer counts as 1 person; their PT commissions
   // are added on top of their single base salary, never doubled).
