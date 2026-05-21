@@ -34,6 +34,9 @@ const roleLabel = (r: StaffRole) => r.charAt(0).toUpperCase() + r.slice(1);
 export function StaffRowActions({ person, onEdit, onContract }: Props) {
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [offboardOpen, setOffboardOpen] = useState(false);
+  const [offboardMode, setOffboardMode] = useState<'offboard' | 'reinstate'>('offboard');
+  const isOffboarded = !!person.exit_date;
 
   const toggleActive = async () => {
     try {
