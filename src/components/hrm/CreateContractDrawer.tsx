@@ -450,6 +450,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       documentUrl: '',
     });
     setVariables({} as any);
+    setPrefill({});
     setAdvancedOpen(false);
     setCommissionLocked(true);
     setLegalTermsUnlocked(false);
