@@ -2560,6 +2560,7 @@ export type Database = {
           expires_at: string
           id: string
           revoked_at: string | null
+          role: string
           signer_contact: string | null
           signer_name: string | null
           status: string
@@ -2574,6 +2575,7 @@ export type Database = {
           expires_at: string
           id?: string
           revoked_at?: string | null
+          role?: string
           signer_contact?: string | null
           signer_name?: string | null
           status?: string
@@ -2588,6 +2590,7 @@ export type Database = {
           expires_at?: string
           id?: string
           revoked_at?: string | null
+          role?: string
           signer_contact?: string | null
           signer_name?: string | null
           status?: string
@@ -2716,6 +2719,7 @@ export type Database = {
           branch_id: string | null
           commission_percentage: number | null
           contract_type: string
+          contract_variables: Json
           created_at: string
           document_url: string | null
           employee_id: string
@@ -2748,6 +2752,7 @@ export type Database = {
           branch_id?: string | null
           commission_percentage?: number | null
           contract_type: string
+          contract_variables?: Json
           created_at?: string
           document_url?: string | null
           employee_id: string
@@ -2780,6 +2785,7 @@ export type Database = {
           branch_id?: string | null
           commission_percentage?: number | null
           contract_type?: string
+          contract_variables?: Json
           created_at?: string
           document_url?: string | null
           employee_id?: string
