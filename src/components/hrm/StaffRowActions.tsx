@@ -10,12 +10,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Pencil, FileText, MoreHorizontal, UserMinus, UserCheck, ChevronDown,
-  Briefcase, Dumbbell, User,
+  Briefcase, Dumbbell, User, UserX, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { UNIFIED_STAFF_KEY, type UnifiedStaffPerson, type StaffRole } from '@/hooks/useUnifiedStaff';
+import { OffboardStaffSheet } from '@/components/hrm/OffboardStaffSheet';
 
 interface Props {
   person: UnifiedStaffPerson;
