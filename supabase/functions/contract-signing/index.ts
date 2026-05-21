@@ -464,10 +464,17 @@ async function signContract(req: Request, body: any) {
     return json({ error: "This link can only fill details, not sign. Ask HR for a signing link." }, 403);
   }
 
-  // Gate signing on required fields being collected.
-  const { data: cv } = await supabase.from("contracts").select("contract_variables")
+  // Gate signing on required fields being collected — but merge with prefill
+  // sourced from employees/profiles so contracts whose details already live
+  // on the staff record don't need a redundant /fill round-trip.
+  const { data: cv } = await supabase.from("contracts").select(`
+      contract_variables,
+      employees(user_id), trainers(user_id)
+    `)
     .eq("id", requestRow.contract_id).single();
-  const missing = missingRequired((cv as any)?.contract_variables);
+  const prefill = await loadPrefillForContract(cv);
+  const merged = mergeVarsWithPrefill((cv as any)?.contract_variables, prefill);
+  const missing = missingRequired(merged);
   if (missing.length > 0) {
     return json({ error: "fields_incomplete", missing_required: missing }, 409);
   }
