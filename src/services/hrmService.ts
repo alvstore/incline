@@ -436,6 +436,21 @@ export async function calculatePayrollForStaff(
     .lte('check_in', `${endDate}T23:59:59`);
   const attendanceRecorded = (rawCount ?? attendanceRowsTotal) > 0;
 
+  // Detect manual override (payroll_mark_full_present writes synthetic rows tagged manual_override)
+  const hasManualOverride = dailyBreakdown.some((r: any) => r?.source === 'manual_override');
+
+  // CONFLICT GUARD: if no attendance was recorded and HR has not manually marked the month,
+  // do NOT auto-credit payable days from shift templates. Net pay must be ₹0 until attendance
+  // is synced or "Mark full month present" is invoked. Single source of truth.
+  if (!attendanceRecorded && !hasManualOverride) {
+    payableDays = 0;
+    halfDays = 0;
+    lateDays = 0;
+    earlyOutDays = 0;
+    missingCheckoutDays = 0;
+    otHours = 0;
+  }
+
   const workingDays = getDaysInMonth(month);
   const baseSalary = staff.salary || 0;
   const proRatedPay = Math.round((baseSalary / workingDays) * payableDays);
@@ -492,6 +507,7 @@ export async function calculatePayrollForStaff(
     totalDeductions,
     netPay,
     attendanceRecorded,
+    manualOverride: hasManualOverride,
     settings: cfg,
     payableDays,
     halfDays,
