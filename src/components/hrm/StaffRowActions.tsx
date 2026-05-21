@@ -40,12 +40,16 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
       const tasks: Promise<any>[] = [];
       if (person.employee) {
         tasks.push(
-          supabase.from('employees').update({ is_active: next }).eq('id', person.employee.id),
+          Promise.resolve(
+            supabase.from('employees').update({ is_active: next }).eq('id', person.employee.id),
+          ),
         );
       }
       if (person.trainer) {
         tasks.push(
-          supabase.from('trainers').update({ is_active: next }).eq('id', person.trainer.id),
+          Promise.resolve(
+            supabase.from('trainers').update({ is_active: next }).eq('id', person.trainer.id),
+          ),
         );
       }
       const results = await Promise.all(tasks);
