@@ -39,5 +39,5 @@ export async function getEmployerProfile(branchId: string | null): Promise<Emplo
     _branch_id: branchId as any,
   });
   if (error) throw error;
-  return (data ?? null) as EmployerProfile | null;
+  return (data as unknown as EmployerProfile | null) ?? null;
 }
