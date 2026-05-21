@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createContract } from '@/services/hrmService';
 import { toast } from 'sonner';
-import { FileText, Lock } from 'lucide-react';
+import { FileText, Lock, ChevronDown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { CONTRACT_VARIABLES, type ContractVariableKey } from '@/lib/hrm/contractVariables';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
