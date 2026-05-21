@@ -2722,7 +2722,7 @@ export type Database = {
           contract_variables: Json
           created_at: string
           document_url: string | null
-          employee_id: string
+          employee_id: string | null
           end_date: string | null
           governing_jurisdiction: string | null
           id: string
@@ -2755,7 +2755,7 @@ export type Database = {
           contract_variables?: Json
           created_at?: string
           document_url?: string | null
-          employee_id: string
+          employee_id?: string | null
           end_date?: string | null
           governing_jurisdiction?: string | null
           id?: string
@@ -2788,7 +2788,7 @@ export type Database = {
           contract_variables?: Json
           created_at?: string
           document_url?: string | null
-          employee_id?: string
+          employee_id?: string | null
           end_date?: string | null
           governing_jurisdiction?: string | null
           id?: string

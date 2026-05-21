@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { FileText, Lock, ChevronDown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { CONTRACT_VARIABLES, type ContractVariableKey } from '@/lib/hrm/contractVariables';
+import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/lib/hrm/contractVariables';
+import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
@@ -356,34 +357,54 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
+  const [prefill, setPrefill] = useState<ContractPrefillMap>({});
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
   const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
-  // Detect dual-role + auto-fetch trainer commission from pt_share_percentage.
+  // Detect dual-role + auto-fetch trainer commission + load prefill sources.
   useEffect(() => {
-    if (!open || !employee?.user_id) { setLinkedRecord(null); return; }
+    if (!open || !employee?.user_id) { setLinkedRecord(null); setPrefill({}); return; }
     const isTrainer = employee.staff_type === 'trainer';
     (async () => {
+      // Fetch profile (always exists, keyed by user_id == profiles.id)
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+        .eq('id', employee.user_id).maybeSingle();
+
+      // Always try to load both sides to maximize prefill coverage.
+      const { data: empRow } = await supabase
+        .from('employees')
+        .select('id, employee_code, salary, father_or_spouse_name, current_address, permanent_address, emergency_contact, pan_number, aadhaar_last4')
+        .eq('user_id', employee.user_id).maybeSingle();
+
+      const { data: trnRow } = await supabase
+        .from('trainers')
+        .select('id, fixed_salary, pt_share_percentage, government_id_type, government_id_number')
+        .eq('user_id', employee.user_id).maybeSingle();
+
       if (isTrainer) {
-        // Current record IS the trainer — seed commission from its pt_share_percentage.
-        const { data: trainerSelf } = await supabase
-          .from('trainers').select('pt_share_percentage').eq('id', employee.id).maybeSingle();
-        const pct = Number((trainerSelf as any)?.pt_share_percentage ?? 40);
+        const pct = Number((trnRow as any)?.pt_share_percentage ?? 40);
         setFormData((f) => ({ ...f, commissionPercentage: pct }));
-        const { data } = await supabase
-          .from('employees').select('employee_code, salary').eq('user_id', employee.user_id).maybeSingle();
-        if (data) setLinkedRecord({ kind: 'employee', code: data.employee_code, salary: data.salary });
+        if (empRow) setLinkedRecord({ kind: 'employee', code: (empRow as any).employee_code, salary: (empRow as any).salary });
         else setLinkedRecord(null);
       } else {
-        const { data } = await supabase
-          .from('trainers').select('id, fixed_salary, pt_share_percentage').eq('user_id', employee.user_id).maybeSingle();
-        if (data) {
-          setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary, pt_share: (data as any).pt_share_percentage });
-        } else setLinkedRecord(null);
+        if (trnRow) setLinkedRecord({ kind: 'trainer', salary: (trnRow as any).fixed_salary, pt_share: (trnRow as any).pt_share_percentage });
+        else setLinkedRecord(null);
       }
+
+      const map = resolveContractPrefill({
+        employee: empRow as any,
+        trainer: trnRow as any,
+        profile: profileRow as any,
+      });
+      setPrefill(map);
+      // Seed variables state with auto-filled values (HR can override before submit).
+      const seed = prefillToVariables(map);
+      setVariables((prev) => ({ ...seed, ...prev } as any));
     })();
   }, [open, employee?.user_id, employee?.staff_type, employee?.id]);
 
@@ -429,6 +450,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       documentUrl: '',
     });
     setVariables({} as any);
+    setPrefill({});
     setAdvancedOpen(false);
     setCommissionLocked(true);
     setLegalTermsUnlocked(false);
@@ -719,33 +741,70 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             )}
           </div>
 
-          {/* Contract Variables — HR-fillable fields. Employee/witness fields
-              are collected later on the public /contract/:token/fill page. */}
-          <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <Label className="text-sm font-semibold">Contract Variables</Label>
-              <Badge variant="outline" className="text-[10px] ml-auto">HR section</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground -mt-1">
-              Only fill the HR-side fields here. Employee personal details (S/o, address, emergency contact)
-              and witness signatures are collected on the secure signing link.
-            </p>
-            <div className="grid grid-cols-1 gap-3">
-              {CONTRACT_VARIABLES.filter((v) => v.role === 'hr').map((v) => (
-                <div key={v.key} className="space-y-1">
-                  <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
-                  <Input
-                    type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
-                    placeholder={v.placeholder}
-                    value={(variables as any)[v.key] ?? ''}
-                    onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
-                  />
-                  {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+          {/* Contract Variables — Employee + HR + Witnesses, grouped.
+              Employee personal details are pre-filled from the staff/profile
+              tables when available; HR can override inline or leave them for
+              the recipient to confirm/correct via the secure /fill link. */}
+          {(['employee', 'hr', 'witness_1', 'witness_2'] as FillRole[]).map((groupRole) => {
+            const groupVars = CONTRACT_VARIABLES.filter((v) => v.role === groupRole);
+            if (groupVars.length === 0) return null;
+            const missingCount = groupVars.filter((v) => v.required && !String((variables as any)[v.key] ?? '').trim()).length;
+            const groupTitle =
+              groupRole === 'employee' ? 'Employee details (legal)'
+              : groupRole === 'hr' ? 'HR terms'
+              : groupRole === 'witness_1' ? 'Witness 1'
+              : 'Witness 2';
+            const groupHelp =
+              groupRole === 'employee' ? 'Auto-filled from the staff record / profile. Override if HR has corrected info on hand.'
+              : groupRole === 'hr' ? 'Probation and notice period for this contract. Defaults to HR Settings.'
+              : 'Optional here — can be filled on the witness signing link.';
+            return (
+              <div key={groupRole} className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-accent" />
+                  <Label className="text-sm font-semibold">{groupTitle}</Label>
+                  {missingCount > 0 && (
+                    <Badge variant="destructive" className="text-[10px] ml-auto">{missingCount} required missing</Badge>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+                <p className="text-xs text-muted-foreground -mt-1">{groupHelp}</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {groupVars.map((v) => {
+                    const auto = (prefill as any)[v.key];
+                    const current = (variables as any)[v.key] ?? '';
+                    return (
+                      <div key={v.key} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
+                          {auto && (
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                              Auto · {auto.source}
+                            </span>
+                          )}
+                        </div>
+                        {v.input === 'textarea' ? (
+                          <Textarea
+                            rows={2}
+                            placeholder={v.placeholder}
+                            value={current}
+                            onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          />
+                        ) : (
+                          <Input
+                            type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
+                            placeholder={v.placeholder}
+                            value={current}
+                            onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          />
+                        )}
+                        {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Advanced: legal clauses unlock (admin/owner/manager only) */}
           {canEditLegalClauses && (

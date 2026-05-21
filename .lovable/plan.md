@@ -1,66 +1,78 @@
-## Audit findings — HRM › Contracts + Create Contract drawer
 
-Working from the screenshots, current code (`src/pages/HRM.tsx`, `src/components/hrm/CreateContractDrawer.tsx`, `supabase/functions/contract-signing`) and live DB (`contracts.base_salary = 0` even though `employees.salary = 25000`).
+## Problem recap
 
-### 1. Create Contract drawer — bugs & cleanup
+1. **Crash:** `null value in column "employee_id" of relation "contracts"` — `contracts.employee_id` is `NOT NULL` in DB, but the drawer (correctly) sends `employee_id: null` and only `trainer_id` for trainer-only staff. The schema never caught up with the dual-target design.
+2. **Address not auto-filling:** `employees.current_address / permanent_address / father_or_spouse_name / pan_number / aadhaar_last4 / emergency_contact` and `profiles.address / city / state / postal_code / emergency_contact_* / government_id_*` already exist. The drawer and PDF builder ignore them and treat every variable as "must be collected at /fill".
+3. **No way to enter father's name etc. in the drawer:** `CreateContractDrawer` only shows HR-scope fields (probation, notice). Employee personal fields are deferred to the public `/fill` page, with no inline override even when HR has the info on hand.
 
-| Issue | Today | Fix |
-|---|---|---|
-| **Commission % not auto‑fetched** | Defaults to `10` for trainers. `trainers.pt_share_percentage` is ignored. | When role = trainer, fetch `pt_share_percentage` from the trainer row (for the same `user_id` if dual‑role) and seed the field. Read‑only by default with an "Override for this contract" toggle (owner/admin only). |
-| **Base Salary shows ₹0 in table** | `defaultSalary = Number(employee?.salary || 0)`. For trainer‑only rows `salary` doesn't exist (only `fixed_salary`), so the field starts at 0 and a save keeps it 0. | Normalise: `defaultSalary = employee.salary ?? employee.fixed_salary ?? linkedRecord.salary ?? 0`. Block save if `0` unless explicitly confirmed. |
-| **T&C giant preview** | 16‑row read‑only `<Textarea>` of the rendered template. Sheet width is `sm:max-w-md` so it overflows. | Replace with a compact "Contract Variables" collector (the canonical `CONTRACT_VARIABLES` from `src/lib/hrm/contractVariables.ts` we already built but never wired here). HR‑role fields: probation, notice period, witness names. Employee‑role fields stay on `/contract/:token/fill`. Full document is rendered server‑side at PDF time. |
-| **"Unlock Legal Clauses" switch sitting at top** | Always visible. | Move inside an `Advanced` disclosure (owner/admin only) — audit log already wired, keep that. |
-| **Sheet width** | `sm:max-w-md` causes the form in screenshots to wrap awkwardly. | Bump to `sm:max-w-xl` to match the project's drawer standard. |
-| **Hardcoded company copy** | `'Udaipur, Rajasthan'`, proprietor name, principal place are hardcoded in `getEmploymentAgreementTemplate`. | Drop the hardcoded strings; pull from `get_employer_profile` RPC at render time (already used by `EmployerSummaryCard` + the PDF builder). The drawer should not embed employer copy at all — only collect variables. |
+## Plan
 
-### 2. Contracts table — action button audit
+### A. Migration — allow trainer-only contracts
 
-Today every row renders **8 buttons**: Eye, Printer, Download, ExternalLink (if doc), Sign link, W1, W2, HR — plus View Signed / Stamped PDF when signed. Eye + Printer + Download all call the **same** `openContractPdf(contract)`.
+```sql
+ALTER TABLE public.contracts ALTER COLUMN employee_id DROP NOT NULL;
 
-```text
-Before: [👁] [🖨] [⬇] [🔗] [Sign link] [W1] [W2] [HR]    ← 8 buttons, 3 do the same thing
-After:  [Preview ▾] [Share ▾] [Status pill]
-         │             │
-         │             ├── Sign link (employee)     ← only when unsigned
-         │             ├── Witness 1
-         │             ├── Witness 2
-         │             └── HR override
-         │
-         ├── Open in new tab
-         ├── Download PDF
-         ├── Print
-         └── Open uploaded file  (only if document_url)
+ALTER TABLE public.contracts
+  ADD CONSTRAINT contracts_party_present_chk
+  CHECK (employee_id IS NOT NULL OR trainer_id IS NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_contracts_trainer_id ON public.contracts(trainer_id);
 ```
 
-- Collapse Eye / Printer / Download into a single **Preview** primary button with a dropdown for Print / Download / Open uploaded.
-- Collapse Sign link / W1 / W2 / HR into a single **Share** dropdown — signed contracts show **View Signed** primary + **Stamped PDF** in the overflow instead.
-- Add a **Void / Cancel** action in the overflow (status `cancelled`) — currently impossible from UI.
-- Remove the `Trainer` mini‑badge from the code column and keep it only on the avatar row (it appears twice for dual‑role today).
+No data backfill needed (every existing row already has an employee_id).
 
-### 3. Edge function error toast in screenshot
+### B. Prefill resolver — `src/lib/hrm/contractPrefill.ts` (new)
 
-The "Edge Function returned a non‑2xx status code" toast triggers on **Stamped PDF**. Two known causes already in code:
+Single helper used by drawer + edge function:
 
-- `get_pdf` is only valid for contracts where `signature_status = 'signed'`. The button is shown only for signed rows already, but the latest row in DB is `signature_status = 'sent'` — the toast in the screenshot was reproduced by clicking another action. We will:
-  - Re-check `getOrBuildPdf` returns JSON `{ error }` (never throws) and that the front-end surfaces `data.error` (it does).
-  - For the Eye/Print/Download buttons on **unsigned** rows, switch from `openContractPdf` (which renders a client‑side print window from `terms`) to `contract-signing` `action: 'get_pdf'` with `copy: 'draft'` so the preview matches the eventual signed PDF (single source of truth — same template, same employer header/footer, same variable injection).
-  - Add `case 'get_pdf'` branch for unsigned drafts in `supabase/functions/contract-signing/index.ts` that renders the draft PDF without the signature block.
+```text
+resolveContractPrefill(employeeOrTrainerRow, profileRow) → {
+  father_or_husband_name        ← employees.father_or_spouse_name
+  residential_address           ← employees.current_address (jsonb → 1-line) || profiles.address+city+state+postal_code
+  emergency_contact_name        ← employees.emergency_contact.name        || profiles.emergency_contact_name
+  emergency_contact_phone       ← employees.emergency_contact.phone       || profiles.emergency_contact_phone
+  pan_or_aadhaar_last4          ← employees.pan_number (last 4) || employees.aadhaar_last4 || profiles.government_id_number (last 4)
+  government_id_type            ← profiles.government_id_type || trainers.government_id_type
+  government_id_last4           ← derived
+}
+```
 
-### 4. "All Staff (5)" tab — separate quick audit
+Drawer loads this when opening, pre-populates the `variables` state, and shows each field with a small "Auto-filled from profile" hint (greyed) — HR can still type to override.
 
-- Employees query returns both employees and trainers via `payrollStaff`; dual‑role badge logic in `hrmService` is correct.
-- The "All Staff" list itself is fine; no duplicate actions found. **No changes** needed here other than ensuring `salary` always falls back to `fixed_salary` for trainer‑only rows (already done in `fetchAllPayrollStaff`).
+### C. `CreateContractDrawer` — show all variables, not just HR-scope
 
-### Files to touch
+- Replace the current "HR-only" filter with the full `CONTRACT_VARIABLES` list, grouped:
+  - **Employee details** (father name, residential address, emergency contact, govt ID last 4) — pre-filled, marked "auto" when sourced
+  - **HR terms** (probation, notice)
+  - **Witnesses** (optional here; collected on signing link if left blank)
+- Missing-required indicator: red dot + count next to the section header.
+- Keep the public `/fill` flow untouched — it remains the path for the employee to *correct* their own details before signing.
 
-- `src/components/hrm/CreateContractDrawer.tsx` — commission auto-fetch, salary fallback, replace T&C preview with variables collector (wire existing `CONTRACT_VARIABLES`), move legal unlock into Advanced, widen sheet, drop hardcoded employer copy.
-- `src/pages/HRM.tsx` — Contracts table actions consolidated into Preview/Share dropdowns, remove duplicate trainer badge, add Void action.
-- `src/services/hrmService.ts` — `cancelContract(id)` helper.
-- `supabase/functions/contract-signing/index.ts` — extend `get_pdf` to render `draft` copy for unsigned contracts so previews & downloads use the **same** server‑side renderer (no more client print fallback).
-- No schema changes (we already have `contract_variables` JSONB + per‑role signature requests from the previous migration).
+### D. PDF builder — read from prefill first, contract_variables as override
 
-### Out of scope
+In `supabase/functions/contract-signing/index.ts` (PDF block):
+- Build the same prefill object server-side from `employees` + `profiles` (+ `trainers`).
+- Merge: `final = { ...prefill, ...contract_variables }`.
+- "Filled details" block in PDF uses the merged map.
+- "Missing required" gate on `sign_contract` checks the merged map (not just `contract_variables`), so contracts with profile-sourced data don't get falsely blocked.
 
-- Policies / HR Settings tabs (already consolidated in earlier work).
-- WhatsApp/OTP templates (already unified to `otp_verification` system event).
-- Employer profile single‑source‑of‑truth (already done via `get_employer_profile`).
+### E. Service / type touch-up
+
+- `hrmService.createContract` already passes `null` correctly — no change after migration.
+- `src/integrations/supabase/types.ts` will be regenerated by Supabase after the migration; no manual edit.
+
+## Out of scope
+
+- Storing the full Aadhaar / PAN (we keep last-4 + hash as today).
+- Reworking the `/fill` public page (still used for employee-side corrections & witness names/phones).
+- HR Settings notice-period defaulting (already wired).
+
+## Acceptance
+
+1. Creating a contract for a trainer-only staff (e.g. Akshay Jaiswal) no longer errors.
+2. Opening the drawer for an employee with `current_address` / `father_or_spouse_name` set shows those fields pre-populated and greyed-"auto".
+3. HR can override any auto-filled value inline; the override persists in `contract_variables`.
+4. Signing a contract whose employee details come entirely from `employees`/`profiles` succeeds without the `/fill` step.
+5. Generated PDF "Filled details" block shows merged values.
+
+Used the senior-architect skill.

@@ -1,4 +1,4 @@
-// v5.0.0 — Single edge function for the entire contract signing lifecycle:
+// v5.1.0 — Single edge function for the entire contract signing lifecycle.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -92,6 +92,69 @@ function missingRequired(vars: Record<string, unknown> | null | undefined): stri
   });
 }
 
+// ── Server-side prefill (mirrors src/lib/hrm/contractPrefill.ts) ──────────
+function _nonEmpty(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+function _flattenAddress(addr: unknown): string | null {
+  if (!addr || typeof addr !== "object") return null;
+  const a = addr as Record<string, unknown>;
+  const parts = [a.line1, a.line2, a.street, a.area, a.city, a.state, a.country, a.pin || a.postal_code || a.pincode]
+    .map(_nonEmpty).filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+function _last4(v: unknown): string | null {
+  const s = _nonEmpty(v); if (!s) return null;
+  const d = s.replace(/\D/g, "");
+  return d.length >= 4 ? d.slice(-4) : null;
+}
+async function loadPrefillForContract(contract: any): Promise<Record<string, string>> {
+  // contract may carry employees(*)/trainers(*) via the joined select, but we
+  // need the *full* rows including jsonb columns — fetch by user_id explicitly.
+  const employeeUserId = (contract as any)?.employees?.user_id || null;
+  const trainerUserId = (contract as any)?.trainers?.user_id || null;
+  const userId = employeeUserId || trainerUserId || null;
+  if (!userId) return {};
+
+  const [{ data: emp }, { data: trn }, { data: prof }] = await Promise.all([
+    supabase.from("employees")
+      .select("father_or_spouse_name, current_address, permanent_address, emergency_contact, pan_number, aadhaar_last4")
+      .eq("user_id", userId).maybeSingle(),
+    supabase.from("trainers")
+      .select("government_id_type, government_id_number")
+      .eq("user_id", userId).maybeSingle(),
+    supabase.from("profiles")
+      .select("address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number")
+      .eq("id", userId).maybeSingle(),
+  ]);
+
+  const out: Record<string, string> = {};
+  const father = _nonEmpty(emp?.father_or_spouse_name);
+  if (father) out.father_or_husband_name = father;
+
+  const addr = _flattenAddress(emp?.current_address) || _flattenAddress(emp?.permanent_address)
+    || [prof?.address, prof?.city, prof?.state, prof?.country, prof?.postal_code].map(_nonEmpty).filter(Boolean).join(", ");
+  if (addr) out.residential_address = addr;
+
+  const ec = (emp?.emergency_contact ?? {}) as Record<string, unknown>;
+  const ecName = _nonEmpty(ec.name) || _nonEmpty(prof?.emergency_contact_name);
+  const ecPhone = _nonEmpty(ec.phone) || _nonEmpty(prof?.emergency_contact_phone);
+  if (ecName) out.emergency_contact_name = ecName;
+  if (ecPhone) out.emergency_contact_phone = ecPhone;
+
+  const idLast4 = _last4(emp?.pan_number) || _nonEmpty(emp?.aadhaar_last4)
+    || _last4(prof?.government_id_number) || _last4(trn?.government_id_number);
+  if (idLast4) out.pan_or_aadhaar_last4 = idLast4;
+
+  return out;
+}
+function mergeVarsWithPrefill(cvars: Record<string, unknown> | null | undefined, prefill: Record<string, string>): Record<string, unknown> {
+  // contract_variables (HR-entered / employee-corrected) win over prefill defaults.
+  return { ...prefill, ...((cvars ?? {}) as Record<string, unknown>) };
+}
+
 // ── 1. Create signing link ────────────────────────────────────────────────
 async function createSignLink(req: Request, body: any) {
   const contractId = body?.contract_id;
@@ -182,7 +245,7 @@ async function getContractByToken(body: any) {
     .select(`
       id, contract_type, start_date, end_date, salary, base_salary, commission_percentage,
       terms, status, signature_status, branch_id, contract_variables,
-      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
+      employees(user_id, employee_code, profiles:employees_user_id_profiles_fkey(full_name, phone, email)),
       trainers(user_id)
     `)
     .eq("id", requestRow.contract_id).single();
@@ -200,7 +263,9 @@ async function getContractByToken(body: any) {
   const { name, phone, email, code } = await resolveRecipient(contract);
   const { data: employer } = await supabase.rpc("get_employer_profile", { _branch_id: contract.branch_id });
 
+  const prefill = await loadPrefillForContract(contract);
   const cvars = (contract as any).contract_variables ?? {};
+  const merged = mergeVarsWithPrefill(cvars, prefill);
   return json({
     contract: {
       id: contract.id,
@@ -217,7 +282,8 @@ async function getContractByToken(body: any) {
       terms: contract.terms,
       signature_status: contract.signature_status,
       contract_variables: cvars,
-      missing_required: missingRequired(cvars),
+      prefill,
+      missing_required: missingRequired(merged),
       employer,
     },
   });
@@ -256,7 +322,10 @@ async function fillFields(body: any) {
   const rejected = Object.keys(submitted).filter((k) => !allow.includes(k));
 
   const { data: existing } = await supabase
-    .from("contracts").select("contract_variables")
+    .from("contracts").select(`
+      contract_variables,
+      employees(user_id), trainers(user_id)
+    `)
     .eq("id", requestRow.contract_id).single();
   const merged = { ...((existing as any)?.contract_variables ?? {}), ...clean };
 
@@ -275,12 +344,13 @@ async function fillFields(body: any) {
     new_data: { role, keys: Object.keys(clean), rejected_keys: rejected },
   });
 
+  const prefill = await loadPrefillForContract(existing);
   return json({
     success: true,
     role,
     saved_keys: Object.keys(clean),
     rejected_keys: rejected,
-    missing_required: missingRequired(merged),
+    missing_required: missingRequired(mergeVarsWithPrefill(merged, prefill)),
   });
 }
 
@@ -394,10 +464,17 @@ async function signContract(req: Request, body: any) {
     return json({ error: "This link can only fill details, not sign. Ask HR for a signing link." }, 403);
   }
 
-  // Gate signing on required fields being collected.
-  const { data: cv } = await supabase.from("contracts").select("contract_variables")
+  // Gate signing on required fields being collected — but merge with prefill
+  // sourced from employees/profiles so contracts whose details already live
+  // on the staff record don't need a redundant /fill round-trip.
+  const { data: cv } = await supabase.from("contracts").select(`
+      contract_variables,
+      employees(user_id), trainers(user_id)
+    `)
     .eq("id", requestRow.contract_id).single();
-  const missing = missingRequired((cv as any)?.contract_variables);
+  const prefill = await loadPrefillForContract(cv);
+  const merged = mergeVarsWithPrefill((cv as any)?.contract_variables, prefill);
+  const missing = missingRequired(merged);
   if (missing.length > 0) {
     return json({ error: "fields_incomplete", missing_required: missing }, 409);
   }
@@ -524,7 +601,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
       signature_status, signed_at, witness_1, witness_2, contract_variables,
       governing_jurisdiction, arbitration_seat, notice_period_days,
       branch_id,
-      employees(employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
+      employees(user_id, employee_code, profiles:employees_user_id_profiles_fkey(full_name, email, phone)),
       trainers(user_id)
     `)
     .eq("id", contractId).single();
@@ -640,8 +717,9 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   spacer(14);
   newPageIfNeeded(160);
 
-  // ── Filled details (captured via /contract-fill) ──────────────────────
-  const cvars = ((contract as any).contract_variables ?? {}) as Record<string, any>;
+  // ── Filled details (prefill from profile/staff merged with contract_variables) ──
+  const prefillForPdf = await loadPrefillForContract(contract);
+  const cvars = mergeVarsWithPrefill((contract as any).contract_variables, prefillForPdf) as Record<string, any>;
   const detailRows: [string, any][] = [
     ["S/o · D/o · W/o",        cvars.father_or_husband_name],
     ["Residential address",    cvars.residential_address],
