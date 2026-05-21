@@ -1,4 +1,4 @@
-// v5.0.0 — Single edge function for the entire contract signing lifecycle:
+// v5.1.0 — Single edge function for the entire contract signing lifecycle.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
