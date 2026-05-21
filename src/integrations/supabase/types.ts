@@ -2614,35 +2614,53 @@ export type Database = {
       contract_signatures: {
         Row: {
           contract_id: string
+          geolocation: Json | null
           id: string
           ip_address: string | null
+          otp_channel: string | null
+          otp_verified: boolean | null
           request_id: string | null
+          selfie_path: string | null
+          signature_image_path: string | null
           signature_text: string
           signed_at: string
           signed_name: string
           signer_contact: string | null
+          terms_hash_at_sign: string | null
           user_agent: string | null
         }
         Insert: {
           contract_id: string
+          geolocation?: Json | null
           id?: string
           ip_address?: string | null
+          otp_channel?: string | null
+          otp_verified?: boolean | null
           request_id?: string | null
+          selfie_path?: string | null
+          signature_image_path?: string | null
           signature_text: string
           signed_at?: string
           signed_name: string
           signer_contact?: string | null
+          terms_hash_at_sign?: string | null
           user_agent?: string | null
         }
         Update: {
           contract_id?: string
+          geolocation?: Json | null
           id?: string
           ip_address?: string | null
+          otp_channel?: string | null
+          otp_verified?: boolean | null
           request_id?: string | null
+          selfie_path?: string | null
+          signature_image_path?: string | null
           signature_text?: string
           signed_at?: string
           signed_name?: string
           signer_contact?: string | null
+          terms_hash_at_sign?: string | null
           user_agent?: string | null
         }
         Relationships: [
@@ -2693,6 +2711,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          arbitration_seat: string | null
           base_salary: number | null
           branch_id: string | null
           commission_percentage: number | null
@@ -2701,21 +2720,30 @@ export type Database = {
           document_url: string | null
           employee_id: string
           end_date: string | null
+          governing_jurisdiction: string | null
           id: string
+          notice_period_days: number | null
           salary: number
           signature_requested_at: string | null
           signature_status: string
           signed_at: string | null
+          signed_pdf_hash: string | null
           signed_pdf_url: string | null
+          stamped_pdf_path: string | null
           start_date: string
           status: Database["public"]["Enums"]["contract_status"]
           terms: Json | null
+          terms_hash: string | null
+          terms_version: number
           trainer_id: string | null
           updated_at: string
+          witness_1: Json | null
+          witness_2: Json | null
         }
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          arbitration_seat?: string | null
           base_salary?: number | null
           branch_id?: string | null
           commission_percentage?: number | null
@@ -2724,21 +2752,30 @@ export type Database = {
           document_url?: string | null
           employee_id: string
           end_date?: string | null
+          governing_jurisdiction?: string | null
           id?: string
+          notice_period_days?: number | null
           salary: number
           signature_requested_at?: string | null
           signature_status?: string
           signed_at?: string | null
+          signed_pdf_hash?: string | null
           signed_pdf_url?: string | null
+          stamped_pdf_path?: string | null
           start_date: string
           status?: Database["public"]["Enums"]["contract_status"]
           terms?: Json | null
+          terms_hash?: string | null
+          terms_version?: number
           trainer_id?: string | null
           updated_at?: string
+          witness_1?: Json | null
+          witness_2?: Json | null
         }
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          arbitration_seat?: string | null
           base_salary?: number | null
           branch_id?: string | null
           commission_percentage?: number | null
@@ -2747,17 +2784,25 @@ export type Database = {
           document_url?: string | null
           employee_id?: string
           end_date?: string | null
+          governing_jurisdiction?: string | null
           id?: string
+          notice_period_days?: number | null
           salary?: number
           signature_requested_at?: string | null
           signature_status?: string
           signed_at?: string | null
+          signed_pdf_hash?: string | null
           signed_pdf_url?: string | null
+          stamped_pdf_path?: string | null
           start_date?: string
           status?: Database["public"]["Enums"]["contract_status"]
           terms?: Json | null
+          terms_hash?: string | null
+          terms_version?: number
           trainer_id?: string | null
           updated_at?: string
+          witness_1?: Json | null
+          witness_2?: Json | null
         }
         Relationships: [
           {
@@ -3568,76 +3613,133 @@ export type Database = {
       }
       employees: {
         Row: {
+          aadhaar_hash: string | null
+          aadhaar_last4: string | null
           avatar_storage_path: string | null
           bank_account: string | null
+          bank_ifsc: string | null
           bank_name: string | null
           biometric_enrolled: boolean | null
           biometric_photo_path: string | null
           biometric_photo_url: string | null
+          blood_group: string | null
           branch_id: string
+          certifications: Json | null
           created_at: string
+          current_address: Json | null
+          date_of_birth: string | null
           department: string | null
+          emergency_contact: Json | null
           employee_code: string
+          esic_ip_number: string | null
+          father_or_spouse_name: string | null
+          gender: string | null
           hire_date: string
           id: string
           is_active: boolean | null
+          marital_status: string | null
+          medical_fitness_declared_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
           mips_sync_status: string | null
+          nationality: string | null
+          nominee: Json | null
+          pan_number: string | null
+          permanent_address: Json | null
+          pf_opt_in: boolean | null
           position: string | null
           salary: number | null
           salary_type: string | null
           tax_id: string | null
+          uan_number: string | null
           updated_at: string
           user_id: string
           weekly_off: string | null
         }
         Insert: {
+          aadhaar_hash?: string | null
+          aadhaar_last4?: string | null
           avatar_storage_path?: string | null
           bank_account?: string | null
+          bank_ifsc?: string | null
           bank_name?: string | null
           biometric_enrolled?: boolean | null
           biometric_photo_path?: string | null
           biometric_photo_url?: string | null
+          blood_group?: string | null
           branch_id: string
+          certifications?: Json | null
           created_at?: string
+          current_address?: Json | null
+          date_of_birth?: string | null
           department?: string | null
+          emergency_contact?: Json | null
           employee_code: string
+          esic_ip_number?: string | null
+          father_or_spouse_name?: string | null
+          gender?: string | null
           hire_date: string
           id?: string
           is_active?: boolean | null
+          marital_status?: string | null
+          medical_fitness_declared_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
+          nationality?: string | null
+          nominee?: Json | null
+          pan_number?: string | null
+          permanent_address?: Json | null
+          pf_opt_in?: boolean | null
           position?: string | null
           salary?: number | null
           salary_type?: string | null
           tax_id?: string | null
+          uan_number?: string | null
           updated_at?: string
           user_id: string
           weekly_off?: string | null
         }
         Update: {
+          aadhaar_hash?: string | null
+          aadhaar_last4?: string | null
           avatar_storage_path?: string | null
           bank_account?: string | null
+          bank_ifsc?: string | null
           bank_name?: string | null
           biometric_enrolled?: boolean | null
           biometric_photo_path?: string | null
           biometric_photo_url?: string | null
+          blood_group?: string | null
           branch_id?: string
+          certifications?: Json | null
           created_at?: string
+          current_address?: Json | null
+          date_of_birth?: string | null
           department?: string | null
+          emergency_contact?: Json | null
           employee_code?: string
+          esic_ip_number?: string | null
+          father_or_spouse_name?: string | null
+          gender?: string | null
           hire_date?: string
           id?: string
           is_active?: boolean | null
+          marital_status?: string | null
+          medical_fitness_declared_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
+          nationality?: string | null
+          nominee?: Json | null
+          pan_number?: string | null
+          permanent_address?: Json | null
+          pf_opt_in?: boolean | null
           position?: string | null
           salary?: number | null
           salary_type?: string | null
           tax_id?: string | null
+          uan_number?: string | null
           updated_at?: string
           user_id?: string
           weekly_off?: string | null
@@ -5069,6 +5171,95 @@ export type Database = {
           third_uid?: string | null
         }
         Relationships: []
+      }
+      hr_settings: {
+        Row: {
+          arbitration_seat: string
+          basic_pct_of_ctc: number
+          branch_id: string | null
+          created_at: string
+          daily_hour_cap: number
+          employer_firm_registration_no: string | null
+          employer_gstin: string | null
+          employer_legal_name: string
+          employer_pan: string | null
+          employer_proprietor_name: string | null
+          employer_registered_address: string | null
+          governing_jurisdiction: string
+          id: string
+          lawyer_reviewed_at: string | null
+          lawyer_reviewed_by: string | null
+          logo_storage_path: string | null
+          notice_period_manager_days: number
+          notice_period_staff_days: number
+          notice_period_trainer_days: number
+          ot_multiplier: number
+          posh_ic: Json | null
+          pt_commission_clawback_on_refund: boolean
+          updated_at: string
+          weekly_hour_cap: number
+        }
+        Insert: {
+          arbitration_seat?: string
+          basic_pct_of_ctc?: number
+          branch_id?: string | null
+          created_at?: string
+          daily_hour_cap?: number
+          employer_firm_registration_no?: string | null
+          employer_gstin?: string | null
+          employer_legal_name?: string
+          employer_pan?: string | null
+          employer_proprietor_name?: string | null
+          employer_registered_address?: string | null
+          governing_jurisdiction?: string
+          id?: string
+          lawyer_reviewed_at?: string | null
+          lawyer_reviewed_by?: string | null
+          logo_storage_path?: string | null
+          notice_period_manager_days?: number
+          notice_period_staff_days?: number
+          notice_period_trainer_days?: number
+          ot_multiplier?: number
+          posh_ic?: Json | null
+          pt_commission_clawback_on_refund?: boolean
+          updated_at?: string
+          weekly_hour_cap?: number
+        }
+        Update: {
+          arbitration_seat?: string
+          basic_pct_of_ctc?: number
+          branch_id?: string | null
+          created_at?: string
+          daily_hour_cap?: number
+          employer_firm_registration_no?: string | null
+          employer_gstin?: string | null
+          employer_legal_name?: string
+          employer_pan?: string | null
+          employer_proprietor_name?: string | null
+          employer_registered_address?: string | null
+          governing_jurisdiction?: string
+          id?: string
+          lawyer_reviewed_at?: string | null
+          lawyer_reviewed_by?: string | null
+          logo_storage_path?: string | null
+          notice_period_manager_days?: number
+          notice_period_staff_days?: number
+          notice_period_trainer_days?: number
+          ot_multiplier?: number
+          posh_ic?: Json | null
+          pt_commission_clawback_on_refund?: boolean
+          updated_at?: string
+          weekly_hour_cap?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ig_comment_campaigns: {
         Row: {
@@ -9057,6 +9248,159 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "membership_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      policies: {
+        Row: {
+          applicable_roles: string[]
+          body_markdown: string
+          branch_id: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          id: string
+          is_active: boolean
+          pdf_path: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          applicable_roles?: string[]
+          body_markdown: string
+          branch_id?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          id?: string
+          is_active?: boolean
+          pdf_path?: string | null
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          applicable_roles?: string[]
+          body_markdown?: string
+          branch_id?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          id?: string
+          is_active?: boolean
+          pdf_path?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policies_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      policy_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          body_hash: string
+          branch_id: string | null
+          employee_id: string | null
+          geolocation: Json | null
+          id: string
+          ip_address: string | null
+          policy_code: string
+          policy_id: string
+          policy_version: number
+          signature_image_path: string | null
+          signed_name: string
+          trainer_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          body_hash: string
+          branch_id?: string | null
+          employee_id?: string | null
+          geolocation?: Json | null
+          id?: string
+          ip_address?: string | null
+          policy_code: string
+          policy_id: string
+          policy_version: number
+          signature_image_path?: string | null
+          signed_name: string
+          trainer_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          body_hash?: string
+          branch_id?: string | null
+          employee_id?: string | null
+          geolocation?: Json | null
+          id?: string
+          ip_address?: string | null
+          policy_code?: string
+          policy_id?: string
+          policy_version?: number
+          signature_image_path?: string | null
+          signed_name?: string
+          trainer_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_acknowledgements_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acknowledgements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acknowledgements_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acknowledgements_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acknowledgements_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_acknowledgements_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_public"
             referencedColumns: ["id"]
           },
         ]

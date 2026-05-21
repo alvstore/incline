@@ -239,14 +239,21 @@ async function getContractByToken(body: any) {
   });
 }
 
+// v2.0.0 — adds drawn signature image, geo-location, witness blocks and
+// terms-hash verification for evidentiary-grade signing under IT Act 2000.
 async function signContract(req: Request, body: any) {
   const token = body?.token;
   const signedName = String(body?.signed_name || "").trim();
   const signerContact = String(body?.signer_contact || "").trim();
-  const signatureText = String(body?.signature_text || "").trim();
+  const signatureText = String(body?.signature_text || signedName || "").trim();
   const consent = Boolean(body?.consent);
+  const signatureImageBase64: string | null = body?.signature_image_base64 ?? null;
+  const geolocation = body?.geolocation ?? null;
+  const witness1 = body?.witness_1 ?? null;
+  const witness2 = body?.witness_2 ?? null;
+  const termsHashAtSign: string | null = body?.terms_hash ?? null;
 
-  if (!token || !signedName || !signatureText || !consent) {
+  if (!token || !signedName || !consent) {
     return json({ error: "Missing required fields for signing" }, 400);
   }
 
@@ -275,6 +282,34 @@ async function signContract(req: Request, body: any) {
   const ipAddress = req.headers.get("x-forwarded-for") ?? null;
   const userAgent = req.headers.get("user-agent") ?? null;
 
+  // Optional: verify terms-hash tamper-evidence (only if both sides have it)
+  if (termsHashAtSign) {
+    const { data: c } = await supabase
+      .from("contracts")
+      .select("terms_hash")
+      .eq("id", requestRow.contract_id)
+      .single();
+    if (c?.terms_hash && c.terms_hash !== termsHashAtSign) {
+      return json({ error: "Terms have changed since this link was issued. Please request a new link." }, 409);
+    }
+  }
+
+  // Upload drawn signature image to private storage (if provided)
+  let signatureImagePath: string | null = null;
+  if (signatureImageBase64 && signatureImageBase64.startsWith("data:image/")) {
+    try {
+      const base64Body = signatureImageBase64.split(",")[1];
+      const bytes = Uint8Array.from(atob(base64Body), (c) => c.charCodeAt(0));
+      const path = `${requestRow.contract_id}/${requestRow.id}.png`;
+      const { error: upErr } = await supabase.storage
+        .from("signature-assets")
+        .upload(path, bytes, { contentType: "image/png", upsert: true });
+      if (!upErr) signatureImagePath = path;
+    } catch (_) {
+      // Best-effort; don't fail signing because storage rejected the image
+    }
+  }
+
   const { error: insertSignatureError } = await supabase
     .from("contract_signatures")
     .insert({
@@ -285,10 +320,13 @@ async function signContract(req: Request, body: any) {
       signature_text: signatureText,
       ip_address: ipAddress,
       user_agent: userAgent,
+      signature_image_path: signatureImagePath,
+      geolocation,
+      terms_hash_at_sign: termsHashAtSign,
     });
 
   if (insertSignatureError) {
-    return json({ error: "Failed to store signature" }, 500);
+    return json({ error: "Failed to store signature: " + insertSignatureError.message }, 500);
   }
 
   await supabase
@@ -307,6 +345,8 @@ async function signContract(req: Request, body: any) {
       signature_status: "signed",
       signed_at: now,
       status: "active",
+      witness_1: witness1,
+      witness_2: witness2,
     })
     .eq("id", requestRow.contract_id);
 
@@ -320,6 +360,10 @@ async function signContract(req: Request, body: any) {
       signer_name: signedName,
       signer_contact: signerContact || null,
       signed_at: now,
+      signature_image_path: signatureImagePath,
+      geolocation,
+      witness_1: witness1,
+      witness_2: witness2,
     },
   });
 
