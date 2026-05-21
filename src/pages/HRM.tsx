@@ -695,11 +695,12 @@ export default function HRMPage() {
                     </SelectContent>
                   </Select>
                   <Select value={dirStatus} onValueChange={(v) => setDirStatus(v as any)}>
-                    <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="offboarded">Offboarded</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
