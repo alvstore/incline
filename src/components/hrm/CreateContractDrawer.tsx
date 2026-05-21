@@ -535,7 +535,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-accent" />
@@ -689,17 +689,32 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             </div>
             {formData.agreementRole === 'trainer' && (
             <div className="space-y-2">
-              <Label>Commission % *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Commission % *</Label>
+                {canEditLegalClauses && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setCommissionLocked((v) => !v)}
+                  >
+                    {commissionLocked ? 'Override for this contract' : 'Lock to trainer default'}
+                  </button>
+                )}
+              </div>
               <Input
                 type="number"
                 value={formData.commissionPercentage}
                 onChange={(e) => setFormData({ ...formData, commissionPercentage: Number(e.target.value) })}
                 min={1}
                 max={100}
-                placeholder="10"
+                placeholder="40"
+                readOnly={commissionLocked}
                 required
               />
-              <p className="text-xs text-muted-foreground">PT session commission rate — required for trainers</p>
+              <p className="text-xs text-muted-foreground">
+                Auto-filled from trainer profile (<span className="font-medium">pt_share_percentage</span>).{' '}
+                {commissionLocked ? 'Click "Override" to change for this contract only.' : 'Override active — trainer default unchanged.'}
+              </p>
             </div>
             )}
           </div>
