@@ -336,7 +336,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const defaultRole = defaultRoleProp || detectAgreementRole(employee);
   const defaultEmployeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
   const defaultStartDate = new Date().toISOString().split('T')[0];
-  const defaultSalary = Number(employee?.salary || 0);
+  const defaultSalary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
   const employeePrefill: EmployeePrefill = {
     employeeCode: employee?.employee_code,
     email: employee?.profile?.email,
@@ -355,9 +355,12 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill),
     documentUrl: '',
   });
+  const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
-  const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null } | null>(null);
+  const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
   // Detect dual-role: when creating a trainer contract, check if same user has an employee record (and vice-versa)
   useEffect(() => {
