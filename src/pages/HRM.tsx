@@ -664,19 +664,43 @@ export default function HRMPage() {
                               </Button>
                             )}
                             {contract.signature_status === 'signed' ? (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                onClick={() => {
-                                  setViewingSignedContract(contract);
-                                  setSignedViewerOpen(true);
-                                }}
-                                title="View signed contract"
-                              >
-                                <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                View Signed
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={() => {
+                                    setViewingSignedContract(contract);
+                                    setSignedViewerOpen(true);
+                                  }}
+                                  title="View signed contract"
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  View Signed
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    const t = toast.loading('Generating stamped PDF...');
+                                    try {
+                                      const { data, error } = await supabase.functions.invoke('generate-stamped-pdf', {
+                                        body: { contract_id: contract.id, copy: 'employee_copy' },
+                                      });
+                                      if (error) throw error;
+                                      if (data?.error) throw new Error(data.error);
+                                      if (data?.signed_url) window.open(data.signed_url, '_blank', 'noopener,noreferrer');
+                                      toast.success('Stamped PDF ready', { id: t });
+                                    } catch (e: any) {
+                                      toast.error(e?.message || 'Failed to generate stamped PDF', { id: t });
+                                    }
+                                  }}
+                                  title="Download stamped, branded PDF copy"
+                                >
+                                  <FileBadge className="h-3.5 w-3.5 mr-1" />
+                                  Stamped PDF
+                                </Button>
+                              </>
                             ) : (
                               <Button
                                 size="sm"
