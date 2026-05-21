@@ -33,6 +33,14 @@ type HrSettings = {
   daily_hour_cap: number;
   ot_multiplier: number;
   basic_pct_of_ctc: number;
+  // Statutory deductions
+  pf_enabled: boolean;
+  pf_employee_pct: number;
+  pf_wage_ceiling: number | null;
+  esi_enabled: boolean;
+  esi_employee_pct: number;
+  pt_enabled: boolean;
+  pt_amount: number | null;
 };
 
 const blank = (branch_id: string | null): HrSettings => ({
@@ -52,6 +60,13 @@ const blank = (branch_id: string | null): HrSettings => ({
   daily_hour_cap: 9,
   ot_multiplier: 2.0,
   basic_pct_of_ctc: 50.0,
+  pf_enabled: false,
+  pf_employee_pct: 12,
+  pf_wage_ceiling: 15000,
+  esi_enabled: false,
+  esi_employee_pct: 0.75,
+  pt_enabled: false,
+  pt_amount: 200,
 });
 
 export default function HrSettingsTab() {
