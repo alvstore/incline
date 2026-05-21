@@ -198,6 +198,17 @@ export async function approveContract(contractId: string, approvedBy: string) {
   return data;
 }
 
+export async function cancelContract(contractId: string) {
+  const { data, error } = await supabase
+    .from('contracts')
+    .update({ status: 'terminated' })
+    .eq('id', contractId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function fetchEmployeeAttendance(employeeId: string, startDate?: string, endDate?: string) {
   const { data: employee } = await supabase
     .from('employees')

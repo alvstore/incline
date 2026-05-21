@@ -18,10 +18,10 @@ import HrSettingsTab from '@/components/hrm/HrSettingsTab';
 import PoliciesTab from '@/components/hrm/PoliciesTab';
 import { FileBadge, BookOpen, Settings as SettingsIcon } from 'lucide-react';
 import {
-  Plus, 
-  Users, 
-  FileText, 
-  DollarSign, 
+  Plus,
+  Users,
+  FileText,
+  DollarSign,
   TrendingUp,
   Calendar,
   CheckCircle,
@@ -35,9 +35,19 @@ import {
   Eye,
   ExternalLink,
   Link,
+  MoreHorizontal,
+  Share2,
+  XCircle,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, type PayrollStaffItem } from '@/services/hrmService';
+import { fetchEmployees, fetchEmployeeContracts, calculatePayroll, fetchAllPayrollStaff, calculatePayrollForStaff, cancelContract, type PayrollStaffItem } from '@/services/hrmService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -301,6 +311,45 @@ export default function HRMPage() {
       terms: termsString,
     }, brand);
     downloadBlob(blob, `Contract-${employeeCode}.pdf`);
+  };
+
+  // Server-side branded PDF (draft for unsigned, employee_copy for signed).
+  const openServerPdf = async (contract: any, mode: 'preview' | 'download' | 'print' = 'preview') => {
+    const t = toast.loading(mode === 'download' ? 'Preparing download…' : 'Building PDF…');
+    try {
+      const isSigned = contract.signature_status === 'signed';
+      const copy = isSigned ? 'employee_copy' : 'draft';
+      const { data, error } = await supabase.functions.invoke('contract-signing', {
+        body: { action: 'get_pdf', contract_id: contract.id, copy },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const url = data?.signed_url as string | undefined;
+      if (!url) throw new Error('No PDF URL returned');
+      toast.success(isSigned ? 'PDF ready' : 'Draft PDF ready', { id: t });
+      if (mode === 'download') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Contract-${contract._resolvedCode || contract.id}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: any) {
+      // Fallback to client-side draft so the user is never stuck.
+      toast.error(e?.message || 'Server PDF failed — using local fallback', { id: t });
+      openContractPdf(contract);
+    }
+  };
+
+  const voidContract = async (contract: any) => {
+    try {
+      await cancelContract(contract.id);
+      toast.success('Contract voided');
+      queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to void contract');
+    }
   };
 
   const createContractSignLink = async (
@@ -636,115 +685,101 @@ export default function HRMPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openContractPdf(contract)}
-                              title="Preview / Print Contract"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openContractPdf(contract)}
-                              title="Print or Save as PDF"
-                            >
-                              <Printer className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openContractPdf(contract)}
-                              title="Download Contract PDF"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            {contract.document_url && (
+                          <div className="flex items-center gap-1.5 justify-end">
+                            {/* Preview group */}
+                            <div className="inline-flex rounded-md border border-border overflow-hidden">
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                onClick={() => window.open(contract.document_url, '_blank', 'noopener,noreferrer')}
-                                title="Open uploaded contract"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {contract.signature_status === 'signed' ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={() => {
+                                variant={contract.signature_status === 'signed' ? 'default' : 'outline'}
+                                className={`h-8 rounded-none border-0 ${contract.signature_status === 'signed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                onClick={() => {
+                                  if (contract.signature_status === 'signed') {
                                     setViewingSignedContract(contract);
                                     setSignedViewerOpen(true);
-                                  }}
-                                  title="View signed contract"
-                                >
-                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                  View Signed
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    const t = toast.loading('Generating stamped PDF...');
-                                    try {
-                                      const { data, error } = await supabase.functions.invoke('contract-signing', {
-                                        body: { action: 'get_pdf', contract_id: contract.id, copy: 'employee_copy' },
-                                      });
-                                      if (error) throw error;
-                                      if (data?.error) throw new Error(data.error);
-                                      if (data?.signed_url) window.open(data.signed_url, '_blank', 'noopener,noreferrer');
-                                      toast.success('Stamped PDF ready', { id: t });
-                                    } catch (e: any) {
-                                      toast.error(e?.message || 'Failed to generate stamped PDF', { id: t });
-                                    }
-                                  }}
-                                  title="Download stamped, branded PDF copy"
-                                >
-                                  <FileBadge className="h-3.5 w-3.5 mr-1" />
-                                  Stamped PDF
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => createContractSignLink(contract, 'employee')}
-                                  title="Copy employee fill + signing link"
-                                >
-                                  <Link className="h-3.5 w-3.5 mr-1" />
-                                  Sign link
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => createContractSignLink(contract, 'witness_1')}
-                                  title="Copy Witness 1 fill link"
-                                >
-                                  W1
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => createContractSignLink(contract, 'witness_2')}
-                                  title="Copy Witness 2 fill link"
-                                >
-                                  W2
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => createContractSignLink(contract, 'hr')}
-                                  title="Copy HR override fill link"
-                                >
-                                  HR
-                                </Button>
-                              </>
+                                  } else {
+                                    openServerPdf(contract, 'preview');
+                                  }
+                                }}
+                                title={contract.signature_status === 'signed' ? 'View signed contract' : 'Preview draft PDF'}
+                              >
+                                {contract.signature_status === 'signed'
+                                  ? <><CheckCircle className="h-3.5 w-3.5 mr-1" />View Signed</>
+                                  : <><Eye className="h-3.5 w-3.5 mr-1" />Preview</>}
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline" className="h-8 rounded-none border-0 border-l border-border px-2" title="More preview options">
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  <DropdownMenuLabel className="text-xs">Contract PDF</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => openServerPdf(contract, 'preview')}>
+                                    <Printer className="h-3.5 w-3.5 mr-2" /> Print
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openServerPdf(contract, 'download')}>
+                                    <Download className="h-3.5 w-3.5 mr-2" /> Download
+                                  </DropdownMenuItem>
+                                  {contract.document_url && (
+                                    <DropdownMenuItem onClick={() => window.open(contract.document_url, '_blank', 'noopener,noreferrer')}>
+                                      <ExternalLink className="h-3.5 w-3.5 mr-2" /> Open uploaded file
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+
+                            {/* Share / Sign links */}
+                            {contract.signature_status !== 'signed' && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline" className="h-8" title="Copy fill / signing links">
+                                    <Share2 className="h-3.5 w-3.5 mr-1" /> Share
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuLabel className="text-xs">Fill &amp; Sign links</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Employee — sign
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_1')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 1 — fill
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_2')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 2 — fill
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'hr')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> HR override link
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+
+                            {/* Void */}
+                            {contract.status !== 'cancelled' && contract.signature_status !== 'signed' && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="ghost" className="h-8 text-destructive hover:text-destructive" title="Void contract">
+                                    <XCircle className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Void this contract?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Marks contract <b>{contract.contract_number || contract.id}</b> as cancelled.
+                                      Existing fill/sign links will stop working. This action is audit-logged.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Keep contract</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => voidContract(contract)} className="bg-destructive text-destructive-foreground">
+                                      Void contract
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             )}
                           </div>
                         </TableCell>

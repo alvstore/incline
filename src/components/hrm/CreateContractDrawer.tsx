@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createContract } from '@/services/hrmService';
 import { toast } from 'sonner';
-import { FileText, Lock } from 'lucide-react';
+import { FileText, Lock, ChevronDown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { CONTRACT_VARIABLES, type ContractVariableKey } from '@/lib/hrm/contractVariables';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
@@ -334,7 +336,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
   const defaultRole = defaultRoleProp || detectAgreementRole(employee);
   const defaultEmployeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
   const defaultStartDate = new Date().toISOString().split('T')[0];
-  const defaultSalary = Number(employee?.salary || 0);
+  const defaultSalary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
   const employeePrefill: EmployeePrefill = {
     employeeCode: employee?.employee_code,
     email: employee?.profile?.email,
@@ -353,34 +355,37 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill),
     documentUrl: '',
   });
+  const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [commissionLocked, setCommissionLocked] = useState(true);
   const [legalTermsUnlocked, setLegalTermsUnlocked] = useState(false);
   const [legalTermsUnlockedAt, setLegalTermsUnlockedAt] = useState<string | null>(null);
-  const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null } | null>(null);
+  const [linkedRecord, setLinkedRecord] = useState<{ kind: 'employee' | 'trainer'; code?: string | null; salary?: number | null; pt_share?: number | null } | null>(null);
 
-  // Detect dual-role: when creating a trainer contract, check if same user has an employee record (and vice-versa)
+  // Detect dual-role + auto-fetch trainer commission from pt_share_percentage.
   useEffect(() => {
     if (!open || !employee?.user_id) { setLinkedRecord(null); return; }
     const isTrainer = employee.staff_type === 'trainer';
     (async () => {
       if (isTrainer) {
+        // Current record IS the trainer — seed commission from its pt_share_percentage.
+        const { data: trainerSelf } = await supabase
+          .from('trainers').select('pt_share_percentage').eq('id', employee.id).maybeSingle();
+        const pct = Number((trainerSelf as any)?.pt_share_percentage ?? 40);
+        setFormData((f) => ({ ...f, commissionPercentage: pct }));
         const { data } = await supabase
-          .from('employees')
-          .select('employee_code, salary')
-          .eq('user_id', employee.user_id)
-          .maybeSingle();
+          .from('employees').select('employee_code, salary').eq('user_id', employee.user_id).maybeSingle();
         if (data) setLinkedRecord({ kind: 'employee', code: data.employee_code, salary: data.salary });
         else setLinkedRecord(null);
       } else {
         const { data } = await supabase
-          .from('trainers')
-          .select('id, fixed_salary')
-          .eq('user_id', employee.user_id)
-          .maybeSingle();
-        if (data) setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary });
-        else setLinkedRecord(null);
+          .from('trainers').select('id, fixed_salary, pt_share_percentage').eq('user_id', employee.user_id).maybeSingle();
+        if (data) {
+          setLinkedRecord({ kind: 'trainer', salary: (data as any).fixed_salary, pt_share: (data as any).pt_share_percentage });
+        } else setLinkedRecord(null);
       }
     })();
-  }, [open, employee?.user_id, employee?.staff_type]);
+  }, [open, employee?.user_id, employee?.staff_type, employee?.id]);
 
   const logContractAudit = async (action: string, actionDescription: string, newData?: any) => {
     try {
@@ -405,7 +410,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     const role = defaultRoleProp || detectAgreementRole(employee);
     const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
     const startDate = new Date().toISOString().split('T')[0];
-    const salary = Number(employee?.salary || 0);
+    const salary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
 
     setFormData({
       agreementRole: role,
@@ -413,7 +418,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       startDate,
       endDate: '',
       salary,
-      commissionPercentage: role === 'trainer' ? 10 : 0,
+      commissionPercentage: 0, // overwritten by useEffect above for trainers
       terms: getEmploymentAgreementTemplate(role, employeeName, salary, startDate, {
         employeeCode: employee?.employee_code,
         email: employee?.profile?.email,
@@ -423,6 +428,9 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       }),
       documentUrl: '',
     });
+    setVariables({} as any);
+    setAdvancedOpen(false);
+    setCommissionLocked(true);
     setLegalTermsUnlocked(false);
     setLegalTermsUnlockedAt(null);
   }, [open, employee, defaultRoleProp]);
@@ -482,9 +490,20 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     e.preventDefault();
     if (!employee?.id) return;
 
+    if (!Number(formData.salary) || Number(formData.salary) <= 0) {
+      toast.error('Base Salary is required. Set it on the staff record first or enter a value here.');
+      return;
+    }
+
     // Trainer contract goes to trainers table; manager/staff to employees table.
     // When dual-role, the caller passes defaultRole + the matching role record id as employee.id.
     const isTrainer = formData.agreementRole === 'trainer';
+
+    // Persist contract_variables alongside terms.
+    const cleanedVariables: Record<string, string> = {};
+    for (const [k, v] of Object.entries(variables)) {
+      if (v && String(v).trim() !== '') cleanedVariables[k] = String(v).trim();
+    }
 
     createContractMutation.mutate({
       employeeId: isTrainer ? undefined : employee.id,
@@ -498,6 +517,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       commissionPercentage: Number(formData.commissionPercentage),
       terms: formData.terms ? {
         conditions: formData.terms,
+        contract_variables: cleanedVariables,
         compliance_meta: {
           template_version: 'incline-employment-v1',
           agreement_role: formData.agreementRole,
@@ -515,7 +535,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-accent" />
@@ -669,92 +689,129 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
             </div>
             {formData.agreementRole === 'trainer' && (
             <div className="space-y-2">
-              <Label>Commission % *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Commission % *</Label>
+                {canEditLegalClauses && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setCommissionLocked((v) => !v)}
+                  >
+                    {commissionLocked ? 'Override for this contract' : 'Lock to trainer default'}
+                  </button>
+                )}
+              </div>
               <Input
                 type="number"
                 value={formData.commissionPercentage}
                 onChange={(e) => setFormData({ ...formData, commissionPercentage: Number(e.target.value) })}
                 min={1}
                 max={100}
-                placeholder="10"
+                placeholder="40"
+                readOnly={commissionLocked}
                 required
               />
-              <p className="text-xs text-muted-foreground">PT session commission rate — required for trainers</p>
+              <p className="text-xs text-muted-foreground">
+                Auto-filled from trainer profile (<span className="font-medium">pt_share_percentage</span>).{' '}
+                {commissionLocked ? 'Click "Override" to change for this contract only.' : 'Override active — trainer default unchanged.'}
+              </p>
             </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Terms & Conditions</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
-                    setFormData({
-                      ...formData,
-                      terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, {
-                        employeeCode: employee?.employee_code,
-                        email: employee?.profile?.email,
-                        phone: employee?.profile?.phone,
-                        position: employee?.position,
-                        department: employee?.department,
-                      }),
-                    });
-                    setLegalTermsUnlocked(false);
-                    setLegalTermsUnlockedAt(null);
-                    await logContractAudit(
-                      'CONTRACT_TERMS_TEMPLATE_RESET',
-                      `Reset agreement template for ${employeeName}`,
-                      { agreement_role: formData.agreementRole },
-                    );
-                    toast.success('Agreement reset to template');
-                  }}
-                >
-                  Reset Template
-                </Button>
-                {canEditLegalClauses ? (
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <Label className="text-xs text-muted-foreground">Unlock Legal Clauses</Label>
-                    <Switch
-                      checked={legalTermsUnlocked}
-                      onCheckedChange={async (checked) => {
-                        if (!checked) {
-                          setLegalTermsUnlocked(false);
-                          return;
-                        }
-
-                        const unlockedAt = new Date().toISOString();
-                        setLegalTermsUnlocked(true);
-                        setLegalTermsUnlockedAt(unlockedAt);
-                        await logContractAudit(
-                          'CONTRACT_LEGAL_TERMS_UNLOCKED',
-                          `Unlocked legal clauses for ${employee?.profile?.full_name || employee?.full_name || 'employee'}`,
-                          { agreement_role: formData.agreementRole, unlocked_at: unlockedAt },
-                        );
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <Badge variant="outline" className="text-xs">Locked: Admin/Owner/Manager only</Badge>
-                )}
-              </div>
+          {/* Contract Variables — HR-fillable fields. Employee/witness fields
+              are collected later on the public /contract/:token/fill page. */}
+          <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <Label className="text-sm font-semibold">Contract Variables</Label>
+              <Badge variant="outline" className="text-[10px] ml-auto">HR section</Badge>
             </div>
-            <Textarea
-              value={formData.terms}
-              onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
-              placeholder="Employment agreement terms..."
-              rows={16}
-              readOnly={!legalTermsUnlocked}
-            />
-            <p className="text-xs text-muted-foreground">
-              Agreement is prefilled and legally locked by default. Only admin-level users can unlock and edit legal clauses.
+            <p className="text-xs text-muted-foreground -mt-1">
+              Only fill the HR-side fields here. Employee personal details (S/o, address, emergency contact)
+              and witness signatures are collected on the secure signing link.
             </p>
+            <div className="grid grid-cols-1 gap-3">
+              {CONTRACT_VARIABLES.filter((v) => v.role === 'hr').map((v) => (
+                <div key={v.key} className="space-y-1">
+                  <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
+                  <Input
+                    type={v.input === 'number' ? 'number' : v.input === 'tel' ? 'tel' : 'text'}
+                    placeholder={v.placeholder}
+                    value={(variables as any)[v.key] ?? ''}
+                    onChange={(e) => setVariables((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                  />
+                  {v.helper && <p className="text-[11px] text-muted-foreground">{v.helper}</p>}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Advanced: legal clauses unlock (admin/owner/manager only) */}
+          {canEditLegalClauses && (
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-between px-2">
+                  <span className="flex items-center gap-2 text-xs">
+                    <Lock className="h-3.5 w-3.5" />
+                    Advanced — Edit legal clauses
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-2">
+                <div className="flex items-center justify-between rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5">
+                  <div className="text-xs text-amber-900">
+                    Unlock legal clauses to edit the boilerplate template. Action is audit-logged.
+                  </div>
+                  <Switch
+                    checked={legalTermsUnlocked}
+                    onCheckedChange={async (checked) => {
+                      if (!checked) { setLegalTermsUnlocked(false); return; }
+                      const unlockedAt = new Date().toISOString();
+                      setLegalTermsUnlocked(true);
+                      setLegalTermsUnlockedAt(unlockedAt);
+                      await logContractAudit(
+                        'CONTRACT_LEGAL_TERMS_UNLOCKED',
+                        `Unlocked legal clauses for ${employee?.profile?.full_name || employee?.full_name || 'employee'}`,
+                        { agreement_role: formData.agreementRole, unlocked_at: unlockedAt },
+                      );
+                    }}
+                  />
+                </div>
+                {legalTermsUnlocked && (
+                  <>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button" size="sm" variant="outline"
+                        onClick={async () => {
+                          const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
+                          setFormData((f) => ({
+                            ...f,
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill),
+                          }));
+                          await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
+                          toast.success('Template reset');
+                        }}
+                      >
+                        Reset Template
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={formData.terms}
+                      onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
+                      placeholder="Employment agreement terms..."
+                      rows={14}
+                    />
+                  </>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Final PDF (header, footer, employer details, signatures, witnesses) is rendered server-side from the
+                  employer profile — no need to type any of that here.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           <div className="space-y-2">
             <Label>Contract Document (Upload)</Label>
