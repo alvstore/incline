@@ -1,13 +1,12 @@
 // SSOT list of AI handles. One HandleCard per ai_purposes row.
-// No more "Advanced editor" toggle, no embedded AIPurposesTab — one editor per row.
+// Operational settings (auto-reply, cadence, etc.) live in
+// ai_purposes.ops_config and are edited via HandleOpsSettings.
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Info } from 'lucide-react';
 import { HandleCard, type PurposeRow } from './HandleCard';
-import { WhatsAppAISettings } from '@/components/settings/WhatsAppAISettings';
-import { LeadNurtureSettings } from '@/components/settings/LeadNurtureSettings';
-import { AIFlowBuilderSettings } from '@/components/settings/AIFlowBuilderSettings';
+import { HandleOpsSettings } from './HandleOpsSettings';
 
 const PURPOSE_LABELS: Record<string, { title: string; desc: string; channel: string }> = {
   whatsapp_reply: {
@@ -69,21 +68,7 @@ const PRIORITY = [
   'automation_rule',
 ];
 
-function opsSlotFor(purpose: string): React.ReactNode | null {
-  switch (purpose) {
-    case 'whatsapp_reply':
-      return (
-        <div className="space-y-4">
-          <WhatsAppAISettings />
-          <AIFlowBuilderSettings />
-        </div>
-      );
-    case 'lead_nurture':
-      return <LeadNurtureSettings />;
-    default:
-      return null;
-  }
-}
+const PURPOSES_WITH_OPS = new Set(['whatsapp_reply', 'lead_nurture']);
 
 export function HandlesTab({ onJumpToKnowledge }: { onJumpToKnowledge?: () => void }) {
   const [openHandle, setOpenHandle] = useState<string | null>('whatsapp_reply');
