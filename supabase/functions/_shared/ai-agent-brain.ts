@@ -1,6 +1,12 @@
-// v3.3.0 — Unified AI Agent Brain (single source of truth)
+// v3.4.0 — Founder's Phase hardening (pre-opening, no plans/PT/prices)
+// 3.4.0: Removed plan_interest interactive list emission, replaced lead capture
+//        wording with "Founding Member invite" CTA, added plain-text outbound
+//        sanitizer (sanitizeFoundersPhaseText) that rewrites any reply leaking
+//        Monthly/Quarterly/Half-Yearly/Annual/price/PT-package text to the next
+//        deterministic missing-field ask. Webhook sender no longer auto-promotes
+//        plan-duration text into the canonical 4-row Meta list.
 // 3.3.0: Placeholder-name guard — never greet user by Sample/Test/User/phone/
-//        emoji-only WhatsApp profile names. Forces "ask for real name" path.
+
 // 3.2.0: Hard server-side guards against repeated questions —
 //        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
 //        (b) deterministic plan_interest capture from list_reply titles,
