@@ -861,6 +861,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     memberName,
     membershipId,
     planId,
+    planName,
+    planEndsAt: endDate,
     contextPrompt,
   };
 }
