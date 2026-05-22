@@ -1,4 +1,10 @@
-// v3.4.0 — Founder's Phase hardening (pre-opening, no plans/PT/prices)
+// v3.5.0 — Founder's Phase, lead-friendly plan_interest capture
+// 3.5.0: Re-enabled goal + plan_interest capture as plain-text free-form
+//        questions (Name → Email → Goal → Plan Interest). Non-annual leads
+//        are captured & nurtured, never refused. Sanitizer now blocks only
+//        prices/PT package names/send-details — plan-duration words are
+//        allowed so we can ask & acknowledge. Annual answers get the
+//        Founding Member confirm pitch; non-annual answers get a soft note.
 // 3.4.0: Removed plan_interest interactive list emission, replaced lead capture
 //        wording with "Founding Member invite" CTA, added plain-text outbound
 //        sanitizer (sanitizeFoundersPhaseText) that rewrites any reply leaking
