@@ -755,19 +755,31 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   if (!memberMatch) {
     // Check existing lead for context (variant-aware)
     let leadContext = "";
+    let leadId: string | undefined;
+    let leadName: string | undefined;
+    let leadStage: string | undefined;
     if (variants.length > 0) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("full_name, status, fitness_goal")
+        .select("id, full_name, status, fitness_goal")
         .in("phone", variants)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (lead) {
+        leadId = (lead as any).id;
+        leadName = (lead as any).full_name || undefined;
+        leadStage = (lead as any).status || undefined;
         leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
       }
     }
-    return { isMember: false, contextPrompt: leadContext || "Speaking to a guest/lead." };
+    return {
+      isMember: false,
+      contextPrompt: leadContext || "Speaking to a guest/lead.",
+      leadId,
+      leadName,
+      leadStage,
+    };
   }
 
   const memberName = (memberMatch as any).profiles?.full_name || "Member";
