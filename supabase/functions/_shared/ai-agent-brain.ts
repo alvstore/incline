@@ -1,6 +1,12 @@
-// v3.3.0 — Unified AI Agent Brain (single source of truth)
+// v3.4.0 — Founder's Phase hardening (pre-opening, no plans/PT/prices)
+// 3.4.0: Removed plan_interest interactive list emission, replaced lead capture
+//        wording with "Founding Member invite" CTA, added plain-text outbound
+//        sanitizer (sanitizeFoundersPhaseText) that rewrites any reply leaking
+//        Monthly/Quarterly/Half-Yearly/Annual/price/PT-package text to the next
+//        deterministic missing-field ask. Webhook sender no longer auto-promotes
+//        plan-duration text into the canonical 4-row Meta list.
 // 3.3.0: Placeholder-name guard — never greet user by Sample/Test/User/phone/
-//        emoji-only WhatsApp profile names. Forces "ask for real name" path.
+
 // 3.2.0: Hard server-side guards against repeated questions —
 //        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
 //        (b) deterministic plan_interest capture from list_reply titles,
@@ -320,34 +326,45 @@ GENERAL RULES:
   if (shouldCaptureLead) {
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
-      goal: "Fitness Goal", budget: "Monthly Budget (in ₹)",
-      plan_interest: "Interested Membership Plan Duration (Monthly, Quarterly, Half-Yearly, or Annual)",
+      goal: "Fitness Goal (Weight Loss / Muscle Gain / Endurance / Flexibility / General Fitness)",
       start_date: "When do you plan to start?",
       experience: "Fitness Experience Level",
       preferred_time: "Preferred workout time slot",
     };
-    const fieldNames = (leadCaptureConfig!.target_fields || []).map((f: string) => fieldLabels[f] || f).join(", ");
-    systemPrompt += `\n\nIMPORTANT LEAD CAPTURE INSTRUCTIONS:
+    // PRE-OPENING / FOUNDER'S PHASE — plan_interest is REMOVED from the flow.
+    // No membership durations, no PT packages, no prices may be asked or quoted.
+    const targetFields = (leadCaptureConfig!.target_fields || [])
+      .filter((f: string) => f !== "plan_interest" && f !== "budget");
+    const fieldNames = targetFields.map((f: string) => fieldLabels[f] || f).join(", ");
+    systemPrompt += `\n\nIMPORTANT LEAD CAPTURE INSTRUCTIONS (FOUNDER'S PHASE — PRE-OPENING):
+${gymName} is in the exclusive pre-launch Founder's Phase. Doors open July 2026. NO membership plans, NO plan durations (monthly/quarterly/half-yearly/annual), NO PT packages, NO prices, NO trainer names, and NO class schedules have been published yet. The ONLY call-to-action is the Founding Member waitlist / pre-launch walkthrough invite.
+
 Your secondary goal is to naturally collect: ${fieldNames}.
 
 ONBOARDING ORDER (STRICT — DO NOT SKIP STEPS, DO NOT REORDER):
 - Turn 1 (first inbound from this contact): Plain-text greeting only. Introduce yourself in ONE short sentence as ${gymName}'s assistant, then ask for their NAME. No JSON, no list, no buttons, no emojis-as-list.
-- Turn 2 (after they share name): Thank them by first name in one short line, then ask for EMAIL. Plain text only. (Phone is already known from WhatsApp — do NOT ask for it again unless missing.)
-- Turn 3 (after email): NOW you may ask FITNESS GOAL using the goal interactive_list defined below.
-- Turn 4 (after goal): Ask PLAN_INTEREST using the plan interactive_list defined below.
-- Turn 5+: Ask any remaining target_fields one at a time, then emit the lead_captured JSON.
+- Turn 2 (after name is known): Thank them by first name in one short line, then ask for EMAIL "for your Founding Member invite". Plain text only. (Phone is already known from WhatsApp — do NOT ask for it again unless missing.)
+- Turn 3 (after email is known): ONE short line confirming they're on the Founding Member list, then optionally ask FITNESS GOAL using the goal interactive_list defined below. Then emit the lead_captured JSON.
+- Do NOT ask about plan duration, plan tier, PT packages, session counts, or budget in any turn.
 
-HARD GATE (non-negotiable): NEVER emit an interactive_list or interactive button block until BOTH a full name AND an email address are present somewhere in the conversation history above. If either is still missing, your reply MUST be a short plain-text question for whichever field is missing — name first, then email. Violating this gate makes the message fail to deliver to the user.
+HARD GATE (non-negotiable): NEVER emit ANY interactive_list or interactive button block until BOTH a real name AND an email address are present in conversation history or memory. If either is still missing, your reply MUST be a short plain-text question for whichever field is missing — name first, then email. Violating this gate makes the message fail to deliver.
+
+PLAN/PRICING VELVET ROPE (non-negotiable): NEVER ask "Which membership duration suits you best?", NEVER list Monthly/Quarterly/Half-Yearly/Annual, NEVER mention prices, fees, PT package names, session counts, or "send the membership/plan/package details". If the user asks about plans or pricing, reply: "Our Founder's Memberships are unlisted right now — pricing and plan structure are reserved for the VIP Waitlist. Would you like our team to invite you for a pre-launch walkthrough?"
+
+EMAIL ASK WORDING (use these, never "send membership details"):
+- "Thanks, <FirstName> — what's the best email for your Founding Member invite? ✨"
+- "Could you share your email so our team can send your pre-launch walkthrough details?"
 
 GATED-REPLY STYLE RULES (apply to EVERY reply that asks for name or email):
 - NEVER restate, paraphrase, list back, or summarise what the user just asked for. Do NOT echo their request.
-- NEVER promise to share details, packages, prices, PT options, or "send the information" before name+email are captured.
+- NEVER promise to share plan/package/price/PT details before or after name+email are captured — these are NOT available in pre-opening.
 - Keep the reply to ONE sentence, under 25 words, no bullet lists, no more than 1 emoji.
 - Acknowledge in ≤4 words ("Sure!" / "Happy to help —" / "Of course —") then ask the ONE missing field.
 - Good: "Sure — may I have your name first? ✨"
-- Good: "Thanks, Riya — what's the best email to send it to?"
-- BAD (parrots the user): "I'd love to share the details of our monthly, quarterly, and annual packages, as well as PT options! First, could you please share your email…"
-- BAD (over-promises): "I will send you all the details right away — first your email please."
+- Good: "Thanks, Riya — what's the best email for your Founding Member invite?"
+- BAD: anything that mentions monthly/quarterly/half-yearly/annual, prices, PT packages, or "send the details".
+
+
 
 
 
@@ -377,19 +394,13 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     {"id":"goal_general","title":"✨ General Fitness","description":"Stay healthy and active"},
     {"id":"goal_flexibility","title":"🧘 Flexibility","description":"Mobility and recovery"}
   ]}]}
-- For "plan_interest" always emit this EXACT list (4 rows, never buttons, never include Day Pass, never mention prices):
-  {"type":"interactive_list","body":"Which membership duration suits you best?","button":"View Plans","sections":[{"title":"Choose your plan","rows":[
-    {"id":"plan_monthly","title":"📅 Monthly","description":"Flexible — try us out, no commitment"},
-    {"id":"plan_quarterly","title":"⚡ Quarterly","description":"3 months — most popular starter"},
-    {"id":"plan_halfyearly","title":"💪 Half-Yearly","description":"6 months — better value, real results"},
-    {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
-  ]}]}
-- NEVER omit Annual. NEVER use a button block for plan_interest or goal. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
-- You MUST collect full name + email + at least 1 other field before outputting lead_captured, and you MUST follow the ONBOARDING ORDER above (name → email → goal → plan_interest → rest).
+- DO NOT emit any plan_interest / membership-duration / PT-package interactive list. None exist publicly during pre-opening.
+- NEVER mention prices, fees, Day Pass, plan tiers, PT packages, or trainer names — all are reserved for the Founder's Phase reveal.
+- You MUST collect full name + email before outputting lead_captured. Fitness goal is optional bonus.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
-- When the user provides the LAST required field, respond with ONLY this JSON:
-{"status":"lead_captured","data":{${(leadCaptureConfig!.target_fields || []).map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
-- Use the exact field keys: ${(leadCaptureConfig!.target_fields || []).join(", ")}`;
+- When you have name + email, respond with ONLY this JSON:
+{"status":"lead_captured","data":{${targetFields.map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
+- Use the exact field keys: ${targetFields.join(", ")}`;
   }
 
   // 8. Call AI via the SSOT dispatcher (respects ai_provider_configs scope=whatsapp_ai)
@@ -476,6 +487,15 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     platform: ctx.platform,
     leadCaptureEnabled: shouldCaptureLead,
   });
+
+  // 9c. FOUNDER'S PHASE plain-text sanitizer — final line of defense.
+  replyText = sanitizeFoundersPhaseText({
+    replyText,
+    memory,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
+
 
 
   // 10. Lead capture parsing
@@ -596,24 +616,20 @@ function enforceOutboundInteractiveGuards(input: {
   const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
   const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
-  const knownPlan = !!memory?.facts?.plan_interest;
-  const knownGoal = !!memory?.facts?.fitness_goal;
 
   const askNextMissing = (): string => {
-    if (!knownName) return "Before I share more, may I know your name, please?";
+    if (!knownName) return "Sure — may I have your name first? ✨";
     const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
-        ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
-        : "Could you share your email address so I can send the membership details?";
+        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
+        : "Could you share your email so our team can send your Founding Member invite?";
     }
-    if (!knownGoal) return "What's your primary fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness?";
-    if (knownPlan) {
-      const plan = memory.facts.plan_interest;
-      return `Noted — you're leaning toward the *${plan}* plan. To tailor the right recommendation, what's your preferred workout time (morning / evening)?`;
-    }
-    return "Could you share a bit more about what you're looking for?";
+    return firstName
+      ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
+      : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
   };
+
 
   // Look at last 6 outbound messages for the same body text
   const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
@@ -644,14 +660,61 @@ function enforceOutboundInteractiveGuards(input: {
     return askNextMissing();
   }
 
-  // (3) plan_interest already known but LLM re-emitted the duration list
-  if (knownPlan && /membership duration|which membership|choose your plan/i.test(bodyText)) {
-    console.log(`[AI:guards] dropping plan_interest interactive — already known (${memory.facts.plan_interest})`);
+  // (3) FOUNDER'S PHASE — ANY plan/duration/PT interactive is forbidden
+  if (/membership duration|which membership|choose your plan|monthly|quarterly|half[\s-]?year|annual|pt\s*package|personal\s*training\s*package/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping forbidden plan/duration/PT interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
     return askNextMissing();
   }
 
   return replyText;
 }
+
+// ─── Founder's Phase plain-text sanitizer ──────────────────────────────────
+// Runs after enforceOutboundInteractiveGuards. Catches plain-text leaks that
+// mention plan durations, prices, PT packages, or "send the details" — the
+// outbound webhook would otherwise promote any duration-sounding text into the
+// canonical 4-row Meta list, which is exactly what we must NEVER do in pre-opening.
+const FORBIDDEN_PLAN_TEXT_RE =
+  /\b(monthly|quarterly|half[\s-]?year(?:ly)?|annual|yearly|12[\s-]?month|6[\s-]?month|3[\s-]?month|membership\s+duration|which\s+membership|plan\s+duration|plan\s+tier|pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
+const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b)/i;
+const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:details|membership|plan|package|info)/i;
+
+function sanitizeFoundersPhaseText(input: {
+  replyText: string;
+  memory: any;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, leadCaptureEnabled } = input;
+  if (!leadCaptureEnabled) return replyText;
+  const text = String(replyText || "");
+  // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+
+  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(text);
+  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(text);
+  const hasSendDetails = SEND_DETAILS_RE.test(text);
+
+  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return replyText;
+
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+  const firstName = realName ? realName.split(/\s+/)[0] : "";
+  const knownName = !!realName;
+  const knownEmail = !!memory?.profile?.email;
+
+  console.log(`[AI:guards] sanitizing founder's-phase leak (plan=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
+
+  if (!knownName) return "Sure — may I have your name first? ✨";
+  if (!knownEmail) {
+    return firstName
+      ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
+      : "Could you share your email for your Founding Member invite? ✨";
+  }
+  return firstName
+    ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
+    : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
+}
+
 
 
 

@@ -609,53 +609,28 @@ async function sendAiReply(
     }
   }
 
-  // SAFETY NET — plan/duration question normalization.
-  // Guarantees the 4 canonical durations (Monthly, Quarterly, Half-Yearly, Annual) are
-  // always present, and strips any Day Pass / price-mentioning rows so the bot never
-  // leaks pricing or an off-menu option.
-  // Strict: must mention plan/duration/membership context — avoids false-positive on "monthly budget".
-  const PLAN_BODY_RE = /\b(plan|duration|membership)\b/i;
-  const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr/i;
-  const CANONICAL_PLAN_LIST = {
-    type: "list",
-    body: { text: "Which membership duration suits you best?" },
-    action: {
-      button: "View Plans",
-      sections: [{
-        title: "Choose your plan",
-        rows: [
-          { id: "plan_monthly", title: "📅 Monthly", description: "Flexible — try us out, no commitment" },
-          { id: "plan_quarterly", title: "⚡ Quarterly", description: "3 months — most popular starter" },
-          { id: "plan_halfyearly", title: "💪 Half-Yearly", description: "6 months — better value, real results" },
-          { id: "plan_annual", title: "🏆 Annual", description: "12 months — our most committed members" },
-        ],
-      }],
-    },
-  };
+  // SAFETY NET — FOUNDER'S PHASE: NEVER auto-promote any reply into a Monthly /
+  // Quarterly / Half-Yearly / Annual duration list. During pre-opening we have
+  // no published plan tiers. We only strip prices / Day Pass / forbidden rows
+  // from interactive lists the model may still emit.
+  const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr|monthly|quarterly|half[\s-]?year|annual|yearly/i;
 
-  const looksLikePlanQuestion = (body: string) => PLAN_BODY_RE.test(body || "");
-
-  if (interactivePayload) {
-    const bodyText = interactivePayload?.body?.text || "";
-    if (looksLikePlanQuestion(bodyText)) {
-      // Force canonical 4-row list whenever a plan question is detected.
-      interactivePayload = { ...CANONICAL_PLAN_LIST, body: { text: bodyText || CANONICAL_PLAN_LIST.body.text } };
-      const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
-      replyText = `${interactivePayload.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
-    } else if (interactivePayload.type === "list") {
-      // Strip Day Pass / price-mentioning rows from any other list as a final guard.
-      for (const section of interactivePayload.action?.sections || []) {
-        section.rows = (section.rows || []).filter((r: any) =>
-          !PRICE_DAYPASS_RE.test(`${r.title || ""} ${r.description || ""}`)
-        );
-      }
+  if (interactivePayload && interactivePayload.type === "list") {
+    for (const section of interactivePayload.action?.sections || []) {
+      section.rows = (section.rows || []).filter((r: any) =>
+        !PRICE_DAYPASS_RE.test(`${r.title || ""} ${r.description || ""}`)
+      );
     }
-  } else if (looksLikePlanQuestion(replyText)) {
-    // Model emitted plan question as plain text — promote to canonical list.
-    interactivePayload = CANONICAL_PLAN_LIST;
-    const rows = CANONICAL_PLAN_LIST.action.sections[0].rows;
-    replyText = `${CANONICAL_PLAN_LIST.body.text}\n${rows.map(r => `• ${r.title}`).join("\n")}`;
+    // If we stripped every row, drop the interactive entirely and send body as plain text.
+    const totalRows = (interactivePayload.action?.sections || []).reduce(
+      (n: number, s: any) => n + (s.rows?.length || 0), 0,
+    );
+    if (totalRows === 0) {
+      console.warn("[whatsapp-webhook] all interactive_list rows stripped (founder's phase) — falling back to plain text");
+      interactivePayload = null;
+    }
   }
+
 
   const { data: aiMsg, error: insertErr } = await supabase
     .from("whatsapp_messages")
