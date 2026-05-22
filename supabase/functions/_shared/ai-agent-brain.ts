@@ -217,10 +217,39 @@ export async function runUnifiedAgent(
     );
   }
 
+  // Build identity for SSOT prompt routing (member vs lead vs unknown).
+  const identity: Parameters<typeof buildSystemPrompt>[0]["identity"] =
+    memberCtx.isMember
+      ? {
+          role: "member",
+          senderId: ctx.senderId,
+          memberId: memberCtx.memberId ?? null,
+          name: memberCtx.memberName ?? null,
+          planLabel: memberCtx.planName ?? null,
+          planEndsAt: memberCtx.planEndsAt ?? null,
+          branchName: orgConfig?.name ?? null,
+        }
+      : memberCtx.leadId
+        ? {
+            role: "lead",
+            senderId: ctx.senderId,
+            leadId: memberCtx.leadId,
+            name: memberCtx.leadName ?? null,
+            funnelStage: memberCtx.leadStage ?? null,
+            branchName: orgConfig?.name ?? null,
+          }
+        : {
+            role: "unknown",
+            senderId: ctx.senderId,
+            branchName: orgConfig?.name ?? null,
+          };
+
   const built = await buildSystemPrompt({
     supabase,
     purpose: "whatsapp_reply",
     branchId: ctx.branchId,
+    userMessage: ctx.messageContent,
+    identity,
     dynamicContext: dynamicSegments.join("\n\n"),
     defaultPersona: `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`,
   });
@@ -721,7 +750,13 @@ interface MemberResolveResult {
   memberName?: string;
   membershipId?: string;
   planId?: string;
+  planName?: string;
+  planEndsAt?: string;
   contextPrompt: string;
+  // Set only when isMember=false and a lead row exists for this sender.
+  leadId?: string;
+  leadName?: string;
+  leadStage?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
@@ -755,19 +790,31 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   if (!memberMatch) {
     // Check existing lead for context (variant-aware)
     let leadContext = "";
+    let leadId: string | undefined;
+    let leadName: string | undefined;
+    let leadStage: string | undefined;
     if (variants.length > 0) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("full_name, status, fitness_goal")
+        .select("id, full_name, status, fitness_goal")
         .in("phone", variants)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (lead) {
+        leadId = (lead as any).id;
+        leadName = (lead as any).full_name || undefined;
+        leadStage = (lead as any).status || undefined;
         leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
       }
     }
-    return { isMember: false, contextPrompt: leadContext || "Speaking to a guest/lead." };
+    return {
+      isMember: false,
+      contextPrompt: leadContext || "Speaking to a guest/lead.",
+      leadId,
+      leadName,
+      leadStage,
+    };
   }
 
   const memberName = (memberMatch as any).profiles?.full_name || "Member";
@@ -843,6 +890,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     memberName,
     membershipId,
     planId,
+    planName,
+    planEndsAt: endDate,
     contextPrompt,
   };
 }
