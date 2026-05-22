@@ -1,4 +1,7 @@
-// v3.5.0 — Founder's Phase, lead-friendly plan_interest capture
+// v3.6.0 — Founder's Phase, structured 4-option lists for goal + plan_interest
+// 3.6.0: Goal & plan_interest captured via Meta interactive_list (4 rows each)
+//        after name+email — eliminates dirty free-text and matches the original
+//        onboarding UX that staff signed off on.
 // 3.5.0: Re-enabled goal + plan_interest capture as plain-text free-form
 //        questions (Name → Email → Goal → Plan Interest). Non-annual leads
 //        are captured & nurtured, never refused. Sanitizer now blocks only
