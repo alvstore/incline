@@ -466,6 +466,18 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     const lastSentence = trimmed.split(/(?<=[.!?])\s+/).pop() || trimmed;
     askedNow.push(lastSentence.slice(0, 200));
   }
+  // Also log emitted interactive_list/button body so duplicate detection can see it
+  if (/"type"\s*:\s*"interactive(_list)?"/.test(trimmed)) {
+    try {
+      const j = trimmed.match(/\{[\s\S]*\}/)?.[0];
+      if (j) {
+        const p = JSON.parse(j);
+        const b = String(p?.body?.text ?? p?.body ?? "").trim();
+        if (b) askedNow.push(b.slice(0, 200));
+      }
+    } catch { /* noop */ }
+  }
+
   await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
     profile: profilePatch,
     asked_questions_add: askedNow,
