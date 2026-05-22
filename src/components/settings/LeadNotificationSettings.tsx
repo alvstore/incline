@@ -89,10 +89,13 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
         setForm({
           sms_to_lead: rules.sms_to_lead ?? false,
           whatsapp_to_lead: rules.whatsapp_to_lead ?? false,
+          email_to_lead: (rules as any).email_to_lead ?? false,
           sms_to_admins: rules.sms_to_admins ?? false,
           whatsapp_to_admins: rules.whatsapp_to_admins ?? false,
+          email_to_admins: (rules as any).email_to_admins ?? false,
           sms_to_managers: rules.sms_to_managers ?? false,
           whatsapp_to_managers: rules.whatsapp_to_managers ?? false,
+          email_to_managers: (rules as any).email_to_managers ?? false,
           lead_welcome_sms: rules.lead_welcome_sms || DEFAULTS.lead_welcome_sms,
           lead_welcome_whatsapp: rules.lead_welcome_whatsapp || DEFAULTS.lead_welcome_whatsapp,
           team_alert_sms: rules.team_alert_sms || DEFAULTS.team_alert_sms,
