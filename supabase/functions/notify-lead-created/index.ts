@@ -1,16 +1,13 @@
-// v2.0.0 — Staff/admin/manager WhatsApp lead alerts now route through
-//          dispatch-communication with the `lead_alert` approved Meta template
-//          (template_id resolved by meta_template_name='lead_alert'). This is
-//          REQUIRED because admins are almost always outside the 24h customer-
-//          service window for our number, so freeform text was silently dropped
-//          by Meta (HTTP 200, wamid issued, no `delivered` webhook). Lead's own
-//          welcome message still uses freeform text — leads ARE in-window when
-//          they submit the form.
-// v1.3.0 — Capture Meta wamid (provider_message_id) + error_message + raw payload for every WhatsApp send so silent drops outside the 24h customer-service window are auditable from the Live Feed.
-// Called after lead creation from any source (manual, capture-lead, webhook-lead-capture)
-// Reads lead_notification_rules + integration_settings to send SMS/WhatsApp to lead + team
+// v3.0.0 — Full SSOT cutover. ALL channels (whatsapp / sms / email) now route
+//          through dispatch-communication. Team WhatsApp alerts use the approved
+//          Meta template `internal_new_lead_alert` (resolved via templates table
+//          by meta_template_name), eliminating silent drops outside the 24h
+//          customer-service window. Email channel added end-to-end with a
+//          per-admin opt-in (`email_enabled`).
+//
+//          Lead's own welcome WhatsApp stays freeform because the lead is by
+//          definition inside the 24h window when they submit the form.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { META_API_BASE } from "../_shared/meta-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,32 +15,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-interface NotificationResult {
-  channel: string;
+type Channel = "whatsapp" | "sms" | "email";
+
+interface DispatchSummary {
+  channel: Channel;
   recipient: string;
-  success: boolean;
-  error?: string;
+  status: string;
+  reason?: string;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { lead_id, branch_id } = await req.json();
-
-    if (!lead_id || !branch_id) {
-      return json({ error: "Missing lead_id or branch_id" }, 400);
-    }
+    if (!lead_id || !branch_id) return json({ error: "Missing lead_id or branch_id" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Atomic claim: only the first caller for this lead proceeds.
-    // Concurrent invocations (DB trigger + edge fetch) are serialized by Postgres;
-    // the loser gets 0 rows back and exits without sending.
+    // 1) Atomic claim so concurrent invocations don't double-send
     const { data: claimed, error: claimErr } = await supabase
       .from("leads")
       .update({ notified_at: new Date().toISOString() })
@@ -56,368 +48,235 @@ Deno.serve(async (req) => {
       console.error("Lead claim error:", claimErr);
       return json({ error: "Lead claim failed" }, 500);
     }
-
     if (!claimed) {
-      console.log(`Lead ${lead_id} already claimed by another invocation, skipping`);
       return json({ success: true, sent: 0, skipped: true, reason: "already_claimed" });
     }
-
     const lead = claimed;
 
-    // 2. Fetch branch name
+    // 2) Branch name
     const { data: branch } = await supabase
-      .from("branches")
-      .select("name")
-      .eq("id", branch_id)
-      .single();
-
+      .from("branches").select("name").eq("id", branch_id).single();
     const branchName = branch?.name || "Our Gym";
 
-    // 3. Fetch notification rules: branch-specific first, then global fallback
-    let rules: any = null;
+    // 3) Rules (branch override → global)
     const { data: branchRules } = await supabase
-      .from("lead_notification_rules")
-      .select("*")
-      .eq("branch_id", branch_id)
-      .maybeSingle();
-
-    if (branchRules) {
-      rules = branchRules;
-    } else {
+      .from("lead_notification_rules").select("*").eq("branch_id", branch_id).maybeSingle();
+    let rules: any = branchRules;
+    if (!rules) {
       const { data: globalRules } = await supabase
-        .from("lead_notification_rules")
-        .select("*")
-        .is("branch_id", null)
-        .maybeSingle();
+        .from("lead_notification_rules").select("*").is("branch_id", null).maybeSingle();
       rules = globalRules;
     }
+    if (!rules) return json({ success: true, sent: 0, message: "No notification rules configured" });
 
-    if (!rules) {
-      console.log("No lead notification rules configured, skipping notifications");
-      return json({ success: true, sent: 0, message: "No notification rules configured" });
-    }
-
-    // Check if any channel is enabled
     const anyEnabled =
-      rules.sms_to_lead || rules.whatsapp_to_lead ||
-      rules.sms_to_admins || rules.whatsapp_to_admins ||
-      rules.sms_to_managers || rules.whatsapp_to_managers;
+      rules.sms_to_lead || rules.whatsapp_to_lead || rules.email_to_lead ||
+      rules.sms_to_admins || rules.whatsapp_to_admins || rules.email_to_admins ||
+      rules.sms_to_managers || rules.whatsapp_to_managers || rules.email_to_managers;
+    if (!anyEnabled) return json({ success: true, sent: 0, message: "All notification channels disabled" });
 
-    if (!anyEnabled) {
-      return json({ success: true, sent: 0, message: "All notification channels disabled" });
-    }
+    // 4) Resolve approved team-alert WhatsApp template once
+    const { data: teamTpl } = await supabase
+      .from("templates")
+      .select("id")
+      .eq("meta_template_name", "internal_new_lead_alert")
+      .maybeSingle();
+    const teamWaTemplateId: string | null = teamTpl?.id ?? null;
 
-    // 4. Template placeholders
-    const replacePlaceholders = (template: string): string => {
-      return template
-        .replace(/\{\{lead_name\}\}/g, lead.full_name || "Guest")
-        .replace(/\{\{lead_phone\}\}/g, lead.phone || "")
-        .replace(/\{\{lead_source\}\}/g, lead.source || "direct")
-        .replace(/\{\{branch_name\}\}/g, branchName);
+    // 5) Variable bag + simple {{token}} renderer for SMS/email bodies
+    const vars: Record<string, string> = {
+      lead_name: lead.full_name || "Guest",
+      lead_phone: lead.phone || "",
+      lead_email: lead.email || "",
+      lead_source: lead.source || "direct",
+      source: lead.source || "direct",
+      branch_name: branchName,
+    };
+    const render = (tpl: string): string =>
+      String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => vars[k] ?? "");
+
+    const results: DispatchSummary[] = [];
+
+    const dispatch = async (input: {
+      channel: Channel;
+      category: string;
+      recipient: string;
+      body: string;
+      subject?: string;
+      template_id?: string | null;
+      dedupe_suffix: string;
+      use_branded_template?: boolean;
+    }) => {
+      try {
+        const resp = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            branch_id,
+            channel: input.channel,
+            category: input.category,
+            recipient: input.recipient,
+            template_id: input.template_id ?? null,
+            payload: {
+              subject: input.subject,
+              body: input.body,
+              variables: vars,
+              use_branded_template: input.use_branded_template ?? true,
+            },
+            dedupe_key: `lead:${lead.id}:${input.channel}:${input.dedupe_suffix}`,
+            force: true, // lead notifications are transactional team ops
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        results.push({
+          channel: input.channel,
+          recipient: input.recipient,
+          status: data?.status || (resp.ok ? "sent" : "failed"),
+          reason: data?.reason,
+        });
+      } catch (e) {
+        results.push({
+          channel: input.channel,
+          recipient: input.recipient,
+          status: "failed",
+          reason: (e as Error).message,
+        });
+      }
     };
 
-    const results: NotificationResult[] = [];
-
-    // 5. Resolve integrations
-    const smsIntegration = await getActiveIntegration(supabase, "sms", branch_id);
-    const whatsappIntegration = await getActiveIntegration(supabase, "whatsapp", branch_id);
-
-    // 6. Send to lead
-    if (rules.sms_to_lead && lead.phone && smsIntegration) {
-      const msg = replacePlaceholders(rules.lead_welcome_sms);
-      const r = await sendSMS(smsIntegration, lead.phone, msg);
-      results.push({ channel: "sms", recipient: lead.phone, ...r });
-      await logCommunication(supabase, branch_id, "sms", lead.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
+    // 6) Lead-facing welcome messages (lead is in-window → freeform OK)
+    if (rules.sms_to_lead && lead.phone) {
+      await dispatch({
+        channel: "sms",
+        category: "transactional",
+        recipient: lead.phone,
+        body: render(rules.lead_welcome_sms),
+        dedupe_suffix: `welcome:${lead.phone}`,
+      });
+    }
+    if (rules.whatsapp_to_lead && lead.phone) {
+      await dispatch({
+        channel: "whatsapp",
+        category: "transactional",
+        recipient: lead.phone,
+        body: render(rules.lead_welcome_whatsapp),
+        dedupe_suffix: `welcome:${lead.phone}`,
+      });
+    }
+    if (rules.email_to_lead && lead.email) {
+      await dispatch({
+        channel: "email",
+        category: "transactional",
+        recipient: lead.email,
+        subject: render(rules.lead_welcome_email_subject || "Welcome to {{branch_name}}"),
+        body: render(rules.lead_welcome_email_body || ""),
+        dedupe_suffix: `welcome:${lead.email}`,
+      });
     }
 
-    if (rules.whatsapp_to_lead && lead.phone && whatsappIntegration) {
-      const msg = replacePlaceholders(rules.lead_welcome_whatsapp);
-      const r = await sendWhatsApp(whatsappIntegration, lead.phone, msg);
-      results.push({ channel: "whatsapp", recipient: lead.phone, ...r });
-      await logCommunication(supabase, branch_id, "whatsapp", lead.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
-    }
+    // 7) Helper: send team-alert bundle to one user profile (honours per-user prefs)
+    const teamAlertSmsBody = render(rules.team_alert_sms);
+    const teamAlertWaFreeformBody = render(rules.team_alert_whatsapp); // fallback if no template
+    const teamAlertEmailSubject = render(rules.team_alert_email_subject || "New Lead: {{lead_name}}");
+    const teamAlertEmailBody = render(rules.team_alert_email_body || "");
 
-    // 7. Send to admins (owners + admins) — honour per-admin opt-out prefs
-    if (rules.sms_to_admins || rules.whatsapp_to_admins) {
-      const { data: adminProfiles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .in("role", ["owner", "admin"]);
+    const sendTeamBundle = async (
+      profile: { id?: string; phone: string | null; email?: string | null },
+      pref: { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean },
+      audience: "admin" | "manager",
+    ) => {
+      const tag = `${audience}:${profile.id || profile.phone || profile.email}`;
 
-      if (adminProfiles?.length) {
-        const adminUserIds = Array.from(new Set(adminProfiles.map((r: any) => r.user_id)));
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, phone")
-          .in("id", adminUserIds)
-          .not("phone", "is", null);
+      if (rules[`sms_to_${audience}s`] && pref.sms_enabled && profile.phone) {
+        await dispatch({
+          channel: "sms",
+          category: "new_lead",
+          recipient: profile.phone,
+          body: teamAlertSmsBody,
+          dedupe_suffix: `team:${tag}`,
+        });
+      }
+      if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
+        await dispatch({
+          channel: "whatsapp",
+          category: "new_lead",
+          recipient: profile.phone,
+          template_id: teamWaTemplateId,
+          body: teamAlertWaFreeformBody,
+          dedupe_suffix: `team:${tag}`,
+        });
+      }
+      if (rules[`email_to_${audience}s`] && pref.email_enabled && profile.email) {
+        await dispatch({
+          channel: "email",
+          category: "new_lead",
+          recipient: profile.email,
+          subject: teamAlertEmailSubject,
+          body: teamAlertEmailBody,
+          dedupe_suffix: `team:${tag}`,
+        });
+      }
+    };
 
-        const { data: prefRows } = await supabase
-          .from("lead_notification_admin_prefs")
-          .select("user_id, whatsapp_enabled, sms_enabled")
-          .in("user_id", adminUserIds);
-        const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+    // 8) Admins (owners + admins) — per-admin opt-out
+    if (rules.sms_to_admins || rules.whatsapp_to_admins || rules.email_to_admins) {
+      const { data: roleRows } = await supabase
+        .from("user_roles").select("user_id").in("role", ["owner", "admin"]);
+      const adminIds = Array.from(new Set((roleRows || []).map((r: any) => r.user_id)));
+
+      if (adminIds.length) {
+        const [{ data: profiles }, { data: prefRows }] = await Promise.all([
+          supabase.from("profiles").select("id, phone, email").in("id", adminIds),
+          supabase
+            .from("lead_notification_admin_prefs")
+            .select("user_id, whatsapp_enabled, sms_enabled, email_enabled")
+            .in("user_id", adminIds),
+        ]);
+        const prefMap = new Map<string, any>();
         for (const p of prefRows || []) prefMap.set(p.user_id, p);
 
         for (const profile of profiles || []) {
-          const pref = prefMap.get(profile.id) ?? { whatsapp_enabled: true, sms_enabled: true };
-          if (rules.sms_to_admins && pref.sms_enabled && profile.phone && smsIntegration) {
-            const msg = replacePlaceholders(rules.team_alert_sms);
-            const r = await sendSMS(smsIntegration, profile.phone, msg);
-            results.push({ channel: "sms", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
-          }
-          if (rules.whatsapp_to_admins && pref.whatsapp_enabled && profile.phone && whatsappIntegration) {
-            const msg = replacePlaceholders(rules.team_alert_whatsapp);
-            const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
-            results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
-          }
+          const pref = prefMap.get(profile.id) ?? {
+            whatsapp_enabled: true, sms_enabled: true, email_enabled: true,
+          };
+          await sendTeamBundle(profile, pref, "admin");
         }
       }
     }
 
-    // 8. Send to branch managers
-    if (rules.sms_to_managers || rules.whatsapp_to_managers) {
+    // 9) Branch managers (no per-manager prefs table yet — all opt-in)
+    if (rules.sms_to_managers || rules.whatsapp_to_managers || rules.email_to_managers) {
       const { data: managers } = await supabase
-        .from("branch_managers")
-        .select("user_id")
-        .eq("branch_id", branch_id);
+        .from("branch_managers").select("user_id").eq("branch_id", branch_id);
+      const mgrIds = (managers || []).map((m: any) => m.user_id);
 
-      if (managers?.length) {
-        const managerIds = managers.map((m: any) => m.user_id);
+      if (mgrIds.length) {
         const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, phone")
-          .in("id", managerIds)
-          .not("phone", "is", null);
-
+          .from("profiles").select("id, phone, email").in("id", mgrIds);
         for (const profile of profiles || []) {
-          if (rules.sms_to_managers && profile.phone && smsIntegration) {
-            const msg = replacePlaceholders(rules.team_alert_sms);
-            const r = await sendSMS(smsIntegration, profile.phone, msg);
-            results.push({ channel: "sms", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "sms", profile.phone, msg, r.success ? "sent" : "failed", { error_message: r.success ? null : (r.error ?? null) });
-          }
-          if (rules.whatsapp_to_managers && profile.phone && whatsappIntegration) {
-            const msg = replacePlaceholders(rules.team_alert_whatsapp);
-            const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
-            results.push({ channel: "whatsapp", recipient: profile.phone, ...r });
-            await logCommunication(supabase, branch_id, "whatsapp", profile.phone, msg, r.success ? "sent" : "failed", { provider_message_id: r.messageId ?? null, error_message: r.success ? null : (r.error ?? null), delivery_metadata: r.raw ?? {} });
-          }
+          await sendTeamBundle(
+            profile,
+            { whatsapp_enabled: true, sms_enabled: true, email_enabled: true },
+            "manager",
+          );
         }
       }
     }
 
-    const sent = results.filter((r) => r.success).length;
-    const failed = results.filter((r) => !r.success).length;
+    const sent = results.filter((r) => r.status === "sent" || r.status === "queued").length;
+    const failed = results.filter((r) => r.status === "failed").length;
+    console.log(`Lead ${lead_id}: ${sent} sent/queued, ${failed} failed of ${results.length}`);
 
-    console.log(`Lead ${lead_id}: ${sent} sent, ${failed} failed out of ${results.length} notifications`);
-
-    // notified_at was already set atomically at the top of this handler.
-    return json({ success: true, sent, failed, total: results.length });
+    return json({ success: true, sent, failed, total: results.length, results });
   } catch (error) {
     console.error("notify-lead-created error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
     return json({ error: msg }, 500);
   }
 });
-
-// === Integration resolution: branch-specific > global fallback ===
-async function getActiveIntegration(supabase: any, type: string, branchId: string) {
-  // Try branch-specific first
-  const { data: branchInt } = await supabase
-    .from("integration_settings")
-    .select("*")
-    .eq("integration_type", type)
-    .eq("is_active", true)
-    .eq("branch_id", branchId)
-    .limit(1)
-    .maybeSingle();
-
-  if (branchInt) return branchInt;
-
-  // Fallback: global (null branch_id) or any active
-  const { data: globalInt } = await supabase
-    .from("integration_settings")
-    .select("*")
-    .eq("integration_type", type)
-    .eq("is_active", true)
-    .or("branch_id.is.null")
-    .limit(1)
-    .maybeSingle();
-
-  if (globalInt) return globalInt;
-
-  // Last fallback: any active integration of this type
-  const { data: anyInt } = await supabase
-    .from("integration_settings")
-    .select("*")
-    .eq("integration_type", type)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
-  return anyInt || null;
-}
-
-// === SMS sending (mirrors send-sms logic, reads from integration_settings) ===
-async function sendSMS(integration: any, phone: string, message: string): Promise<{ success: boolean; error?: string }> {
-  const config = integration.config || {};
-  const credentials = integration.credentials || {};
-  const provider = integration.provider;
-
-  try {
-    switch (provider) {
-      case "roundsms": {
-        const cleanPhone = phone.replace(/^(\+?91)/, "");
-        const base = config.api_base_url || config.api_url || "http://voice.roundsms.co/api";
-        const endpoint = config.send_endpoint || "/sendmsg.php";
-        const auth = `user=${encodeURIComponent(credentials.username || "")}&pass=${encodeURIComponent(credentials.password || "")}`;
-        const url = `${base}${endpoint}?${auth}&sender=${encodeURIComponent(config.sender_id || "")}&phone=${cleanPhone}&text=${encodeURIComponent(message)}&priority=${config.priority || "ndnd"}&stype=${config.stype || "normal"}`;
-        const resp = await fetch(url);
-        const text = await resp.text();
-        return text.startsWith("S.") ? { success: true } : { success: false, error: `RoundSMS: ${text.trim()}` };
-      }
-      case "msg91": {
-        const cleanPhone = phone.replace(/^(\+?91)/, "");
-        const resp = await fetch("https://control.msg91.com/api/v5/flow/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", authkey: credentials.auth_key || "" },
-          body: JSON.stringify({ sender: config.sender_id, route: config.route || "4", DLT_TE_ID: config.dlt_template_id, mobiles: `91${cleanPhone}`, message }),
-        });
-        const data = await resp.json();
-        return data.type === "success" ? { success: true } : { success: false, error: data.message || "MSG91 error" };
-      }
-      case "twilio": {
-        const sid = credentials.account_sid;
-        const token = credentials.auth_token;
-        const to = phone.startsWith("+") ? phone : `+91${phone.replace(/^91/, "")}`;
-        const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-          method: "POST",
-          headers: { Authorization: `Basic ${btoa(`${sid}:${token}`)}`, "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ To: to, From: config.from_number || "", Body: message }),
-        });
-        const data = await resp.json();
-        return data.sid ? { success: true } : { success: false, error: data.message || "Twilio error" };
-      }
-      case "textlocal": {
-        const cleanPhone = phone.replace(/^(\+?91)/, "");
-        const resp = await fetch("https://api.textlocal.in/send/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ apikey: credentials.api_key || "", numbers: `91${cleanPhone}`, message }),
-        });
-        const data = await resp.json();
-        return data.status === "success" ? { success: true } : { success: false, error: JSON.stringify(data.errors || data) };
-      }
-      case "fast2sms": {
-        const cleanPhone = phone.replace(/^(\+?91)/, "");
-        const resp = await fetch("https://www.fast2sms.com/dev/bulkV2", {
-          method: "POST",
-          headers: { Authorization: credentials.api_key || "", "Content-Type": "application/json" },
-          body: JSON.stringify({ route: config.route || "dlt", sender_id: config.sender_id, message: config.dlt_template_id, variables_values: message, flash: 0, numbers: cleanPhone }),
-        });
-        const data = await resp.json();
-        return data.return ? { success: true } : { success: false, error: data.message?.[0] || "Fast2SMS error" };
-      }
-      default:
-        return { success: false, error: `Unsupported SMS provider: ${provider}` };
-    }
-  } catch (e) {
-    return { success: false, error: `SMS send error: ${(e as Error).message}` };
-  }
-}
-
-// === WhatsApp sending (mirrors send-whatsapp logic) ===
-// Returns Meta wamid (provider_message_id) on success so silent drops outside the
-// 24h customer-service window are auditable. Meta accepts the API call (HTTP 2xx)
-// even when delivery is dropped — the wamid is still issued, but no `delivered`
-// webhook arrives. Pair this with a UI badge for "sent but never delivered".
-async function sendWhatsApp(
-  integration: any,
-  phone: string,
-  message: string,
-): Promise<{ success: boolean; error?: string; messageId?: string; raw?: any }> {
-  const config = integration.config || {};
-  const credentials = integration.credentials || {};
-  const provider = integration.provider;
-
-  try {
-    const accessToken = credentials.access_token || credentials.api_token || credentials.api_key;
-    const phoneNumberId = config.phone_number_id;
-
-    if (!accessToken) return { success: false, error: "No WhatsApp access token configured" };
-
-    const sendMeta = async (cleanPhone: string) => {
-      const resp = await fetch(`${META_API_BASE}/${phoneNumberId}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        return { success: false, error: data?.error?.message || `Meta API error (${resp.status})`, raw: data };
-      }
-      const wamid = data?.messages?.[0]?.id;
-      return { success: true, messageId: wamid, raw: data };
-    };
-
-    switch (provider) {
-      case "meta_cloud":
-      case "custom": {
-        if (!phoneNumberId) return { success: false, error: "No phone_number_id configured" };
-        return await sendMeta(phone.replace(/[\s\-\+]/g, ""));
-      }
-      case "wati": {
-        const endpoint = config.api_endpoint_url;
-        if (!endpoint) return { success: false, error: "No WATI API endpoint configured" };
-        const cleanPhone = phone.replace(/[\s\-\+]/g, "");
-        const resp = await fetch(`${endpoint}/api/v1/sendSessionMessage/${cleanPhone}?messageText=${encodeURIComponent(message)}`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const data = await resp.json().catch(() => ({}));
-        return data.result
-          ? { success: true, messageId: data?.id || undefined, raw: data }
-          : { success: false, error: data.info || "WATI error", raw: data };
-      }
-      default:
-        if (phoneNumberId) return await sendMeta(phone.replace(/[\s\-\+]/g, ""));
-        return { success: false, error: `WhatsApp provider ${provider} not fully supported for text messages` };
-    }
-  } catch (e) {
-    return { success: false, error: `WhatsApp send error: ${(e as Error).message}` };
-  }
-}
-
-// === Communication logging ===
-async function logCommunication(
-  supabase: any,
-  branchId: string,
-  type: string,
-  recipient: string,
-  content: string,
-  status: string,
-  extras?: { provider_message_id?: string | null; error_message?: string | null; delivery_metadata?: any },
-) {
-  try {
-    await supabase.from("communication_logs").insert({
-      branch_id: branchId,
-      type,
-      channel: type,
-      recipient,
-      content: content.slice(0, 500),
-      status,
-      sent_at: new Date().toISOString(),
-      provider_message_id: extras?.provider_message_id ?? null,
-      error_message: extras?.error_message ?? null,
-      delivery_metadata: extras?.delivery_metadata ?? {},
-    });
-  } catch (e) {
-    console.error("Failed to log communication:", e);
-  }
-}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
