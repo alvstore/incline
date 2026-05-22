@@ -12,10 +12,13 @@ import { UserCheck, Users, ShieldCheck } from 'lucide-react';
 type LeadRulesForm = {
   sms_to_lead: boolean;
   whatsapp_to_lead: boolean;
+  email_to_lead: boolean;
   sms_to_admins: boolean;
   whatsapp_to_admins: boolean;
+  email_to_admins: boolean;
   sms_to_managers: boolean;
   whatsapp_to_managers: boolean;
+  email_to_managers: boolean;
   lead_welcome_sms: string;
   lead_welcome_whatsapp: string;
   team_alert_sms: string;
@@ -25,10 +28,13 @@ type LeadRulesForm = {
 const DEFAULTS: LeadRulesForm = {
   sms_to_lead: false,
   whatsapp_to_lead: false,
+  email_to_lead: false,
   sms_to_admins: false,
   whatsapp_to_admins: false,
+  email_to_admins: false,
   sms_to_managers: false,
   whatsapp_to_managers: false,
+  email_to_managers: false,
   lead_welcome_sms: 'Hi {{lead_name}}, thank you for your interest in {{branch_name}}! We will contact you shortly.',
   lead_welcome_whatsapp: 'Hi {{lead_name}}, welcome to {{branch_name}}! 🏋️ Our team will reach out to you soon.',
   team_alert_sms: 'New lead: {{lead_name}} ({{lead_phone}}) from {{lead_source}} at {{branch_name}}',
