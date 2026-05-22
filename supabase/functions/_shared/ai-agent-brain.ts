@@ -645,14 +645,61 @@ function enforceOutboundInteractiveGuards(input: {
     return askNextMissing();
   }
 
-  // (3) plan_interest already known but LLM re-emitted the duration list
-  if (knownPlan && /membership duration|which membership|choose your plan/i.test(bodyText)) {
-    console.log(`[AI:guards] dropping plan_interest interactive — already known (${memory.facts.plan_interest})`);
+  // (3) FOUNDER'S PHASE — ANY plan/duration/PT interactive is forbidden
+  if (/membership duration|which membership|choose your plan|monthly|quarterly|half[\s-]?year|annual|pt\s*package|personal\s*training\s*package/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping forbidden plan/duration/PT interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
     return askNextMissing();
   }
 
   return replyText;
 }
+
+// ─── Founder's Phase plain-text sanitizer ──────────────────────────────────
+// Runs after enforceOutboundInteractiveGuards. Catches plain-text leaks that
+// mention plan durations, prices, PT packages, or "send the details" — the
+// outbound webhook would otherwise promote any duration-sounding text into the
+// canonical 4-row Meta list, which is exactly what we must NEVER do in pre-opening.
+const FORBIDDEN_PLAN_TEXT_RE =
+  /\b(monthly|quarterly|half[\s-]?year(?:ly)?|annual|yearly|12[\s-]?month|6[\s-]?month|3[\s-]?month|membership\s+duration|which\s+membership|plan\s+duration|plan\s+tier|pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
+const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b)/i;
+const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:details|membership|plan|package|info)/i;
+
+function sanitizeFoundersPhaseText(input: {
+  replyText: string;
+  memory: any;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, leadCaptureEnabled } = input;
+  if (!leadCaptureEnabled) return replyText;
+  const text = String(replyText || "");
+  // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+
+  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(text);
+  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(text);
+  const hasSendDetails = SEND_DETAILS_RE.test(text);
+
+  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return replyText;
+
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+  const firstName = realName ? realName.split(/\s+/)[0] : "";
+  const knownName = !!realName;
+  const knownEmail = !!memory?.profile?.email;
+
+  console.log(`[AI:guards] sanitizing founder's-phase leak (plan=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
+
+  if (!knownName) return "Sure — may I have your name first? ✨";
+  if (!knownEmail) {
+    return firstName
+      ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
+      : "Could you share your email for your Founding Member invite? ✨";
+  }
+  return firstName
+    ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
+    : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
+}
+
 
 
 
