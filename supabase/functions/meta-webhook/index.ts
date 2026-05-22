@@ -1,3 +1,6 @@
+// v5.1.0 — Persist IG profile pictures to Supabase Storage (avatars/meta/…)
+//          + classify "User consent is required" responses so comment-only
+//          contacts are not re-queried on every inbound message.
 // v5.0.0 — Unified AI brain: Instagram/Messenger now use the same shared agent
 //          as WhatsApp with full lead capture, partial data, story reply guard,
 //          and consistent Ananya persona across all platforms.
