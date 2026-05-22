@@ -601,24 +601,20 @@ function enforceOutboundInteractiveGuards(input: {
   const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
   const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
-  const knownPlan = !!memory?.facts?.plan_interest;
-  const knownGoal = !!memory?.facts?.fitness_goal;
 
   const askNextMissing = (): string => {
-    if (!knownName) return "Before I share more, may I know your name, please?";
+    if (!knownName) return "Sure — may I have your name first? ✨";
     const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
-        ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
-        : "Could you share your email address so I can send the membership details?";
+        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
+        : "Could you share your email so our team can send your Founding Member invite?";
     }
-    if (!knownGoal) return "What's your primary fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness?";
-    if (knownPlan) {
-      const plan = memory.facts.plan_interest;
-      return `Noted — you're leaning toward the *${plan}* plan. To tailor the right recommendation, what's your preferred workout time (morning / evening)?`;
-    }
-    return "Could you share a bit more about what you're looking for?";
+    return firstName
+      ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
+      : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
   };
+
 
   // Look at last 6 outbound messages for the same body text
   const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
