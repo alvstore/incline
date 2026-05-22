@@ -974,6 +974,39 @@ const GOAL_HINTS: Record<string, RegExp> = {
   flexibility: /\b(flexibility|mobility|yoga\s*for|stretch)\b/i,
   general:     /\b(general\s*fitness|stay\s*fit|overall\s*health|toning)\b/i,
 };
+// v1.1.0 — plan_interest deterministic capture from interactive list_reply titles.
+// Matches the EXACT row titles emitted by the brain (lines ~324-329).
+const PLAN_HINTS: Record<string, RegExp> = {
+  Monthly:       /\bmonthly\b/i,
+  Quarterly:     /\bquarterly\b/i,
+  "Half-Yearly": /\bhalf[\s-]?year(?:ly)?\b/i,
+  Annual:        /\b(annual|yearly|12\s*month)\b/i,
+};
+// Normalize LLM-generated do_not_ask synonyms to canonical keys so downstream
+// gates can reason about them consistently.
+const DNA_ALIASES: Record<string, string> = {
+  "membership duration": "plan_interest",
+  "duration": "plan_interest",
+  "plan": "plan_interest",
+  "membership": "plan_interest",
+  "fitness goal": "goal",
+  "fitness_goal": "goal",
+  "phone number": "phone",
+  "mobile": "phone",
+  "mobile number": "phone",
+  "email address": "email",
+  "full name": "name",
+  "name": "name",
+};
+function canonicalizeDNA(keys: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of keys) {
+    const k = String(raw || "").trim().toLowerCase();
+    if (!k) continue;
+    out.push(DNA_ALIASES[k] || k);
+  }
+  return Array.from(new Set(out));
+}
 
 interface ContextDelta {
   profile?: Record<string, any>;
@@ -1008,6 +1041,21 @@ async function extractContextDelta(
       delta.do_not_ask_add!.push("goal");
       break;
     }
+  }
+
+  // Plan interest — capture from interactive list_reply titles (e.g. "🏆 Annual").
+  // Only fires when prior bot turn was the duration prompt OR memory lacks it.
+  if (!memory?.facts?.plan_interest) {
+    for (const [plan, re] of Object.entries(PLAN_HINTS)) {
+      if (re.test(lastUser)) {
+        delta.facts!.plan_interest = plan;
+        delta.do_not_ask_add!.push("plan_interest");
+        break;
+      }
+    }
+  } else {
+    // Already known — make sure it stays in do_not_ask going forward.
+    delta.do_not_ask_add!.push("plan_interest");
   }
 
   // ── LLM enrichment (best-effort; failure is silent) ────────────────────────
