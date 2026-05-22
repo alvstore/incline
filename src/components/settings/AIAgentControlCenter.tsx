@@ -405,54 +405,70 @@ function ToolsTab() {
   const [testRunning, setTestRunning] = useState(false);
   const [search, setSearch] = useState('');
 
-  const { data: orgSettings, isLoading: configLoading } = useQuery({
-    queryKey: ['ai-tool-config'],
+  // SSOT: tool allow-list lives on ai_purposes.tools_allowed for the
+  // global whatsapp_reply handle. Empty array = all tools allowed (permissive).
+  const { data: purposeRow, isLoading: configLoading } = useQuery({
+    queryKey: ['ai-tools-allowed', 'whatsapp_reply', 'global'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('organization_settings')
-        .select('id, ai_tool_config')
-        .limit(1)
+        .from('ai_purposes')
+        .select('id, tools_allowed')
+        .eq('purpose', 'whatsapp_reply')
+        .is('branch_id', null)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
   });
 
-  const toolConfig = (orgSettings?.ai_tool_config as Record<string, boolean>) || {};
+  const allowedList: string[] = (purposeRow?.tools_allowed as string[]) ?? [];
+  const allowedSet = new Set(allowedList);
+  // Permissive default: if no allow-list has ever been set, treat as all-on.
+  const isPermissive = allowedList.length === 0;
+  const toolEnabled = (name: string) => isPermissive || allowedSet.has(name);
+  // Back-compat shape for the rest of the component below.
+  const toolConfig: Record<string, boolean> = {};
+
+  async function persistAllowed(next: string[]) {
+    if (!purposeRow?.id) throw new Error('whatsapp_reply handle not found');
+    const { error } = await supabase
+      .from('ai_purposes')
+      .update({ tools_allowed: next })
+      .eq('id', purposeRow.id);
+    if (error) throw error;
+  }
 
   const toggleTool = useMutation({
     mutationFn: async ({ toolName, enabled }: { toolName: string; enabled: boolean }) => {
-      const newConfig = { ...toolConfig, [toolName]: enabled };
-      if (!orgSettings?.id) throw new Error('Organization settings not found');
-      const { error } = await supabase
-        .from('organization_settings')
-        .update({ ai_tool_config: newConfig })
-        .eq('id', orgSettings.id);
-      if (error) throw error;
+      const base = isPermissive
+        ? TOOL_CATEGORIES.flatMap((c) => c.tools.map((t) => t.name))
+        : [...allowedList];
+      const set = new Set(base);
+      if (enabled) set.add(toolName);
+      else set.delete(toolName);
+      await persistAllowed(Array.from(set));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-tool-config'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-tools-allowed'] });
       toast.success('Tool config updated');
     },
-    onError: () => toast.error('Failed to update tool config'),
+    onError: (e: any) => toast.error(e.message || 'Failed to update tool config'),
   });
 
   const bulkToggle = useMutation({
     mutationFn: async ({ toolNames, enabled }: { toolNames: string[]; enabled: boolean }) => {
-      if (!orgSettings?.id) throw new Error('Organization settings not found');
-      const newConfig = { ...toolConfig };
-      toolNames.forEach((n) => { newConfig[n] = enabled; });
-      const { error } = await supabase
-        .from('organization_settings')
-        .update({ ai_tool_config: newConfig })
-        .eq('id', orgSettings.id);
-      if (error) throw error;
+      const base = isPermissive
+        ? TOOL_CATEGORIES.flatMap((c) => c.tools.map((t) => t.name))
+        : [...allowedList];
+      const set = new Set(base);
+      toolNames.forEach((n) => (enabled ? set.add(n) : set.delete(n)));
+      await persistAllowed(Array.from(set));
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['ai-tool-config'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-tools-allowed'] });
       toast.success(vars.enabled ? 'Tools enabled' : 'Tools disabled');
     },
-    onError: () => toast.error('Bulk update failed'),
+    onError: (e: any) => toast.error(e.message || 'Bulk update failed'),
   });
 
   const handleTestExecute = async () => {
@@ -488,7 +504,7 @@ function ToolsTab() {
 
   // Stats across all tools
   const allTools = TOOL_CATEGORIES.flatMap((c) => c.tools);
-  const enabledCount = allTools.filter((t) => toolConfig[t.name] !== false).length;
+  const enabledCount = allTools.filter((t) => toolEnabled(t.name)).length;
   const totalCount = allTools.length;
 
   return (
@@ -566,7 +582,7 @@ function ToolsTab() {
       ) : (
         filteredCategories.map((category) => {
           const Icon = category.icon;
-          const catEnabled = category.tools.filter((t) => toolConfig[t.name] !== false).length;
+          const catEnabled = category.tools.filter((t) => toolEnabled(t.name)).length;
           const catTotal = category.tools.length;
           return (
             <Card key={category.id} className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
@@ -602,7 +618,7 @@ function ToolsTab() {
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {category.tools.map((tool) => {
-                    const isEnabled = toolConfig[tool.name] !== false;
+                    const isEnabled = toolEnabled(tool.name);
                     const ToolIcon = tool.icon;
                     const risk = RISK_BADGE[tool.risk];
                     return (

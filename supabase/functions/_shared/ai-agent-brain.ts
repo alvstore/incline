@@ -83,13 +83,10 @@ export async function runUnifiedAgent(
   // LOVABLE_API_KEY here — the dispatcher will resolve the active provider key
   // (Google/OpenRouter/Lovable/etc.) and fall back to Lovable if needed.
 
-  // 1. Load org AI config + purpose row (single source of truth)
+  // 1. Load org name + purpose row (SSOT — ai_purposes only)
   const orgConfig = await loadOrgConfig(supabase);
   const purposeRow = await loadAiPurpose(supabase, "whatsapp_reply", ctx.branchId);
-  const aiConfig: OrgAiConfig = mergePurposeIntoConfig(
-    (orgConfig?.whatsapp_ai_config as any) || {},
-    purposeRow,
-  );
+  const aiConfig: OrgAiConfig = purposeToConfig(purposeRow);
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
@@ -230,20 +227,14 @@ export async function runUnifiedAgent(
   let systemPrompt = built.prompt;
 
 
-  // Member tool instructions — gated by ai_purposes.tools_allowed (UI-managed)
-  // with legacy organization_settings.ai_tool_config as a fallback.
+  // Member tool instructions — gated by ai_purposes.tools_allowed (SSOT, UI-managed).
+  // Empty array means permissive (all tools allowed).
   let tools: any[] | undefined;
   if (memberCtx.isMember && memberCtx.memberId) {
     tools = getAllToolDefinitions();
     const allowList = (aiConfig as any)._tools_allowed as string[] | undefined;
     if (allowList && allowList.length > 0) {
       tools = tools.filter((t: any) => allowList.includes(t.function.name));
-    } else {
-      try {
-        const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
-        const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
-        tools = tools.filter((t: any) => cfg[t.function.name] !== false);
-      } catch { /* keep all */ }
     }
     if (tools.length === 0) tools = undefined;
 
@@ -642,7 +633,7 @@ let _orgConfigCache: any = null;
 let _orgConfigTs = 0;
 async function loadOrgConfig(supabase: any) {
   if (_orgConfigCache && Date.now() - _orgConfigTs < 60_000) return _orgConfigCache;
-  const { data } = await supabase.from("organization_settings").select("whatsapp_ai_config, name, lead_nurture_config, ai_tool_config").limit(1).maybeSingle();
+  const { data } = await supabase.from("organization_settings").select("name").limit(1).maybeSingle();
   _orgConfigCache = data;
   _orgConfigTs = Date.now();
   return data;
@@ -678,27 +669,20 @@ export async function loadAiPurpose(supabase: any, purpose: string, branchId: st
   return row;
 }
 
-// Overlay an ai_purposes row onto the legacy whatsapp_ai_config JSONB.
-// SSOT model: purpose.system_prompt is the base; legacy.system_prompt is
-// APPENDED as a per-org "Extra Gym Context" overlay (offers, branch notes).
-// Other fields: purpose wins, legacy fills gaps.
-export function mergePurposeIntoConfig(legacy: OrgAiConfig, purpose: any): OrgAiConfig {
-  if (!purpose) return legacy;
+// Translate an ai_purposes row into the runtime OrgAiConfig shape.
+// SSOT: persona/tone comes from purpose.system_prompt + ai_knowledge;
+// operational toggles come from purpose.ops_config; lead-capture from purpose.extra.
+export function purposeToConfig(purpose: any): OrgAiConfig {
+  if (!purpose) return { auto_reply_enabled: false } as OrgAiConfig;
+  const ops = (purpose.ops_config ?? {}) as Record<string, any>;
   const extraLeadCapture = purpose.extra?.lead_capture as OrgAiConfig["lead_capture"] | undefined;
-  const base = (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
-    ? purpose.system_prompt.trim()
-    : "";
-  const overlay = (legacy.system_prompt && legacy.system_prompt.trim().length > 0)
-    ? legacy.system_prompt.trim()
-    : "";
-  const merged = [base, overlay].filter(Boolean).join("\n\n");
   return {
-    auto_reply_enabled: purpose.enabled ?? legacy.auto_reply_enabled ?? false,
-    reply_delay_seconds: purpose.reply_delay_seconds ?? legacy.reply_delay_seconds ?? 0,
-    system_prompt: merged || base || overlay,
-    model: purpose.model || legacy.model,
-    lead_capture: extraLeadCapture ?? legacy.lead_capture,
-    instagram_story_reply_enabled: legacy.instagram_story_reply_enabled,
+    auto_reply_enabled: ops.auto_reply_enabled ?? purpose.enabled ?? false,
+    reply_delay_seconds: ops.reply_delay_seconds ?? purpose.reply_delay_seconds ?? 0,
+    system_prompt: (purpose.system_prompt ?? "").trim(),
+    model: purpose.model || undefined,
+    lead_capture: extraLeadCapture,
+    instagram_story_reply_enabled: ops.instagram_story_reply_enabled === true,
     ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
       ? { _tools_allowed: purpose.tools_allowed }
       : {}),
