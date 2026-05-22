@@ -1,4 +1,6 @@
-// v3.2.0 — Unified AI Agent Brain (single source of truth)
+// v3.3.0 — Unified AI Agent Brain (single source of truth)
+// 3.3.0: Placeholder-name guard — never greet user by Sample/Test/User/phone/
+//        emoji-only WhatsApp profile names. Forces "ask for real name" path.
 // 3.2.0: Hard server-side guards against repeated questions —
 //        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
 //        (b) deterministic plan_interest capture from list_reply titles,
@@ -33,6 +35,32 @@ import {
   renderMemoryBlock,
 } from "./ai-memory.ts";
 import { buildSystemPrompt } from "./ai-prompt.ts";
+
+// ─── Placeholder-name guard ────────────────────────────────────────────────────
+// Reject WhatsApp/IG profile names that aren't real human names so the brain
+// doesn't greet anyone as "Sample", "Test", a phone number, or emoji-only handle.
+const FAKE_NAME_TOKENS = new Set([
+  "sample", "test", "testing", "tester", "user", "demo", "customer",
+  "unknown", "na", "none", "null", "n/a", "admin", "guest", "anon",
+  "anonymous", "default", "client", "whatsapp", "instagram",
+]);
+export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 40) return false;
+  // Pure digits / phone-like
+  if (/^\+?\d[\d\s().-]{4,}$/.test(trimmed)) return false;
+  // Equals the sender phone
+  if (phone && trimmed.replace(/\D/g, "") === phone.replace(/\D/g, "") && trimmed.replace(/\D/g, "").length > 4) return false;
+  // Blocklist (case-insensitive, ignoring punctuation)
+  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9/]/g, "");
+  if (FAKE_NAME_TOKENS.has(normalized)) return false;
+  // Must contain letters and be >50% letters
+  const letters = (trimmed.match(/\p{L}/gu) || []).length;
+  if (letters < 2) return false;
+  if (letters / trimmed.length < 0.5) return false;
+  return true;
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -564,14 +592,16 @@ function enforceOutboundInteractiveGuards(input: {
   }
   if (!parsed || !bodyText) return replyText;
 
-  const knownName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+  const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
   const knownPlan = !!memory?.facts?.plan_interest;
   const knownGoal = !!memory?.facts?.fitness_goal;
 
   const askNextMissing = (): string => {
     if (!knownName) return "Before I share more, may I know your name, please?";
-    const firstName = memory?.profile?.first_name || memory?.profile?.name || "";
+    const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
         ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
@@ -1299,7 +1329,11 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     rules.push(`KNOWN PLAN_INTEREST: User already chose "${memory.facts.plan_interest}" membership duration. NEVER re-emit the "Which membership duration suits you best?" interactive_list. Acknowledge their choice (one short line) and move to the NEXT missing onboarding field (email if missing, else budget/preferred_time/start_date).`);
   }
   if (memory?.profile?.first_name) {
-    rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
+    if (looksLikeRealName(memory.profile.first_name, (memory as any)?.profile?.phone)) {
+      rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
+    } else {
+      rules.push(`NAME UNVERIFIED: The stored profile name "${memory.profile.first_name}" looks like a placeholder (test/sample/phone/emoji). NEVER greet or address the user by that name. Greet generically ("Hi there!") and ask for their real first name as the first onboarding step.`);
+    }
   }
   // Surface the canonical do_not_ask list so the LLM has a definitive blocklist.
   const dna = canonicalizeDNA(memory?.do_not_ask || []);
