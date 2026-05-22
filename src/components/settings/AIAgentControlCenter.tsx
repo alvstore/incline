@@ -22,14 +22,9 @@ import {
   Users, Star, ShoppingBag, Bell, MapPin, ClipboardList,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { WhatsAppAISettings } from '@/components/settings/WhatsAppAISettings';
-import { AIFlowBuilderSettings } from '@/components/settings/AIFlowBuilderSettings';
-import { LeadNurtureSettings } from '@/components/settings/LeadNurtureSettings';
-import { AIProvidersSettings } from '@/components/settings/AIProvidersSettings';
-import { AIPurposesTab } from '@/components/settings/AIPurposesTab';
 import { AIBrainTab } from '@/components/settings/AIBrainTab';
-import { AICallLogsTab } from '@/components/settings/AICallLogsTab';
-import { AIToolLogsTab } from '@/components/settings/AIToolLogsTab';
+import { HandlesTab } from '@/components/settings/ai/HandlesTab';
+import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
 
 type ToolDef = {
   name: string;
