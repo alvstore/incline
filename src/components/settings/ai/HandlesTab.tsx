@@ -118,7 +118,15 @@ export function HandlesTab({ onJumpToKnowledge }: { onJumpToKnowledge?: () => vo
             open={openHandle === row.purpose}
             onOpenChange={(o) => setOpenHandle(o ? row.purpose : null)}
             onJumpToKnowledge={onJumpToKnowledge}
-            opsSlot={opsSlotFor(row.purpose)}
+            opsSlot={
+              PURPOSES_WITH_OPS.has(row.purpose) ? (
+                <HandleOpsSettings
+                  purposeId={row.id}
+                  purpose={row.purpose}
+                  opsConfig={(row as any).ops_config ?? {}}
+                />
+              ) : null
+            }
           />
         ))}
       </div>
