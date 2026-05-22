@@ -53,7 +53,10 @@ export const getProviderDisplayName = (type: string, provider: string): string =
     sms: { roundsms: 'RoundSMS', msg91: 'MSG91', gupshup: 'Gupshup', twilio: 'Twilio', textlocal: 'TextLocal', fast2sms: 'Fast2SMS', custom: 'Custom API' },
     email: { smtp: 'Custom SMTP', sendgrid: 'SendGrid', ses: 'Amazon SES', mailgun: 'Mailgun' },
     whatsapp: { meta_cloud: 'Meta Cloud API', wati: 'WATI', interakt: 'Interakt', gupshup: 'Gupshup', aisensy: 'AiSensy', custom: 'Custom API' },
-    instagram: { instagram_meta: 'Instagram Direct (Meta)' },
+    instagram: {
+      instagram_meta: 'Instagram via Facebook (EAA)',
+      instagram_login: 'Instagram Business Login (IGAA)',
+    },
     messenger: { messenger_meta: 'Facebook Messenger (Meta)' },
     google_business: { google_business: 'Google Business Profile' },
   };
