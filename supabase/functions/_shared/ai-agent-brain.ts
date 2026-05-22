@@ -633,7 +633,7 @@ let _orgConfigCache: any = null;
 let _orgConfigTs = 0;
 async function loadOrgConfig(supabase: any) {
   if (_orgConfigCache && Date.now() - _orgConfigTs < 60_000) return _orgConfigCache;
-  const { data } = await supabase.from("organization_settings").select("whatsapp_ai_config, name, lead_nurture_config, ai_tool_config").limit(1).maybeSingle();
+  const { data } = await supabase.from("organization_settings").select("name").limit(1).maybeSingle();
   _orgConfigCache = data;
   _orgConfigTs = Date.now();
   return data;
@@ -669,27 +669,20 @@ export async function loadAiPurpose(supabase: any, purpose: string, branchId: st
   return row;
 }
 
-// Overlay an ai_purposes row onto the legacy whatsapp_ai_config JSONB.
-// SSOT model: purpose.system_prompt is the base; legacy.system_prompt is
-// APPENDED as a per-org "Extra Gym Context" overlay (offers, branch notes).
-// Other fields: purpose wins, legacy fills gaps.
-export function mergePurposeIntoConfig(legacy: OrgAiConfig, purpose: any): OrgAiConfig {
-  if (!purpose) return legacy;
+// Translate an ai_purposes row into the runtime OrgAiConfig shape.
+// SSOT: persona/tone comes from purpose.system_prompt + ai_knowledge;
+// operational toggles come from purpose.ops_config; lead-capture from purpose.extra.
+export function purposeToConfig(purpose: any): OrgAiConfig {
+  if (!purpose) return { auto_reply_enabled: false } as OrgAiConfig;
+  const ops = (purpose.ops_config ?? {}) as Record<string, any>;
   const extraLeadCapture = purpose.extra?.lead_capture as OrgAiConfig["lead_capture"] | undefined;
-  const base = (purpose.system_prompt && purpose.system_prompt.trim().length > 0)
-    ? purpose.system_prompt.trim()
-    : "";
-  const overlay = (legacy.system_prompt && legacy.system_prompt.trim().length > 0)
-    ? legacy.system_prompt.trim()
-    : "";
-  const merged = [base, overlay].filter(Boolean).join("\n\n");
   return {
-    auto_reply_enabled: purpose.enabled ?? legacy.auto_reply_enabled ?? false,
-    reply_delay_seconds: purpose.reply_delay_seconds ?? legacy.reply_delay_seconds ?? 0,
-    system_prompt: merged || base || overlay,
-    model: purpose.model || legacy.model,
-    lead_capture: extraLeadCapture ?? legacy.lead_capture,
-    instagram_story_reply_enabled: legacy.instagram_story_reply_enabled,
+    auto_reply_enabled: ops.auto_reply_enabled ?? purpose.enabled ?? false,
+    reply_delay_seconds: ops.reply_delay_seconds ?? purpose.reply_delay_seconds ?? 0,
+    system_prompt: (purpose.system_prompt ?? "").trim(),
+    model: purpose.model || undefined,
+    lead_capture: extraLeadCapture,
+    instagram_story_reply_enabled: ops.instagram_story_reply_enabled === true,
     ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
       ? { _tools_allowed: purpose.tools_allowed }
       : {}),
