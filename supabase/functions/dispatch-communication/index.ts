@@ -685,11 +685,19 @@ Deno.serve(async (req) => {
               throw new Error(`attachment_error: ${(e as Error).message}`);
             }
           }
+          // Normalize plain-text bodies for HTML email: decode literal `\n` escape
+          // sequences (as stored in lead_notification_rules etc.) into real newlines,
+          // then convert newlines to <br> so they render correctly inside the
+          // branded shell. HTML markup already in the body is preserved.
+          const rawBody = String(input.payload.body || '');
+          const emailHtml = /<\s*(br|p|div|table|html)\b/i.test(rawBody)
+            ? rawBody.replace(/\\r\\n|\\n/g, '<br>')
+            : rawBody.replace(/\\r\\n|\\n/g, '\n').replace(/\r?\n/g, '<br>');
           const r = await supabase.functions.invoke('send-email', {
             body: {
               to: input.recipient,
               subject: input.payload.subject,
-              html: input.payload.body,
+              html: emailHtml,
               branch_id: input.branch_id,
               // Default ON — every dispatched email gets the branded INCLINE shell.
               // Callers can opt out by explicitly passing use_branded_template:false.

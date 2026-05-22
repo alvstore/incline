@@ -1,3 +1,7 @@
+// v2.4.0 — Honor skip_log from dispatcher to avoid duplicate communication_logs rows.
+//           Mirrors send-whatsapp v2.2.0. When dispatch-communication invokes send-email
+//           it already owns the canonical log row (with channel + dedupe_key); this
+//           prevents the second orphan row that was breaking Live Feed grouping.
 // v2.3.0 — SMTP IO hardened: chunked DATA writes (16KB), proper readUntilSmtpResponse
 //           loop with 120s post-DATA timeout — fixes Hostinger 421 timeout on
 //           multipart messages with PDF attachments.
@@ -103,7 +107,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables } = body;
+    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables, skip_log } = body;
 
     if (!to || !subject || (!html && !text)) {
       return json({ error: "Missing required fields: to, subject, html or text" }, 400);
@@ -171,8 +175,9 @@ Deno.serve(async (req) => {
         result = { success: false, error: `Unsupported email provider: ${provider}` };
     }
 
-    // Log to communication_logs (capture attachment metadata for auditability)
-    if (branch_id) {
+    // Log to communication_logs (capture attachment metadata for auditability).
+    // Skip when the dispatcher already owns the canonical row (skip_log=true).
+    if (branch_id && !skip_log) {
       const attachmentMeta = (attachments || []).map((a: any) => ({
         filename: a.filename, content_type: a.content_type,
         size_b64: (a.content_base64 || '').length,
