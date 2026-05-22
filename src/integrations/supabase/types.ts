@@ -306,9 +306,13 @@ export type Database = {
           content: string
           created_at: string
           created_by: string | null
+          embedding: string | null
           id: string
           is_active: boolean
           priority: number
+          source: string
+          source_data: Json
+          source_ref: string | null
           status: string
           tags: string[]
           title: string
@@ -321,9 +325,13 @@ export type Database = {
           content: string
           created_at?: string
           created_by?: string | null
+          embedding?: string | null
           id?: string
           is_active?: boolean
           priority?: number
+          source?: string
+          source_data?: Json
+          source_ref?: string | null
           status?: string
           tags?: string[]
           title: string
@@ -336,9 +344,13 @@ export type Database = {
           content?: string
           created_at?: string
           created_by?: string | null
+          embedding?: string | null
           id?: string
           is_active?: boolean
           priority?: number
+          source?: string
+          source_data?: Json
+          source_ref?: string | null
           status?: string
           tags?: string[]
           title?: string
@@ -13519,6 +13531,26 @@ export type Database = {
         Returns: Json
       }
       mark_no_show_bookings: { Args: never; Returns: number }
+      match_ai_knowledge: {
+        Args: {
+          p_branch_id?: string
+          p_max?: number
+          p_purpose: string
+          p_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          is_rule: boolean
+          priority: number
+          similarity: number
+          source: string
+          source_data: Json
+          title: string
+          topic: string
+        }[]
+      }
       match_common_plans: {
         Args: { p_member_id: string; p_type: string }
         Returns: {
