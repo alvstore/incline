@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import {
   Bot, Activity, AlertTriangle, CheckCircle2, Sparkles, Search,
-  Filter, ChevronDown, Play, RefreshCw,
+  Filter, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import { AutomationRuleRow } from './automations/AutomationRuleRow';
 import { AutomationActivityRail } from './automations/AutomationActivityRail';
