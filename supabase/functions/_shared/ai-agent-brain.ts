@@ -678,15 +678,14 @@ function enforceOutboundInteractiveGuards(input: {
   return replyText;
 }
 
-// ─── Founder's Phase plain-text sanitizer ──────────────────────────────────
-// Runs after enforceOutboundInteractiveGuards. Catches plain-text leaks that
-// mention plan durations, prices, PT packages, or "send the details" — the
-// outbound webhook would otherwise promote any duration-sounding text into the
-// canonical 4-row Meta list, which is exactly what we must NEVER do in pre-opening.
+// ─── Founder's Phase plain-text sanitizer (v3.5.0) ─────────────────────────
+// We DO allow the words monthly/quarterly/half-yearly/annual/Founding/plan/goal
+// because we now capture plan_interest as free text. We block only price
+// mentions, fee mentions, PT package names, and "send the details" promises.
 const FORBIDDEN_PLAN_TEXT_RE =
-  /\b(monthly|quarterly|half[\s-]?year(?:ly)?|annual|yearly|12[\s-]?month|6[\s-]?month|3[\s-]?month|membership\s+duration|which\s+membership|plan\s+duration|plan\s+tier|pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
-const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b)/i;
-const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:details|membership|plan|package|info)/i;
+  /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
+const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
+const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
 
 function sanitizeFoundersPhaseText(input: {
   replyText: string;
@@ -710,8 +709,10 @@ function sanitizeFoundersPhaseText(input: {
   const firstName = realName ? realName.split(/\s+/)[0] : "";
   const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
+  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const knownPlan = !!memory?.facts?.plan_interest;
 
-  console.log(`[AI:guards] sanitizing founder's-phase leak (plan=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
+  console.log(`[AI:guards] sanitizing founder's-phase leak (pt/pack=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
 
   if (!knownName) return "Sure — may I have your name first? ✨";
   if (!knownEmail) {
@@ -719,10 +720,21 @@ function sanitizeFoundersPhaseText(input: {
       ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
       : "Could you share your email for your Founding Member invite? ✨";
   }
+  if (!knownGoal) {
+    return firstName
+      ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
+      : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
+  }
+  if (!knownPlan) {
+    return firstName
+      ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
+      : "Are you thinking monthly, quarterly, half-yearly, or annual?";
+  }
   return firstName
-    ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
+    ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough closer to opening. ✨`
     : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
 }
+
 
 
 
