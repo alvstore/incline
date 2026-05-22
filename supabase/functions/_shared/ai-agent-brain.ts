@@ -1,4 +1,11 @@
-// v3.1.0 — Unified AI Agent Brain (single source of truth)
+// v3.2.0 — Unified AI Agent Brain (single source of truth)
+// 3.2.0: Hard server-side guards against repeated questions —
+//        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
+//        (b) deterministic plan_interest capture from list_reply titles,
+//        (c) KNOWN PLAN_INTEREST + DO_NOT_ASK_LIST runtime rules,
+//        (d) enforceOutboundInteractiveGuards strips duplicate / gate-violating
+//            interactive blocks before they reach Meta.
+
 // 3.1.0: Routes ALL model calls through `_shared/ai-dispatcher.ts → callAI`
 //        with scope='whatsapp_ai' so providers in `ai_provider_configs` are
 //        honored (no more hardcoded Lovable fetch). Legacy whatsapp_ai_config
