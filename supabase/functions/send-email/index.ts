@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables } = body;
+    const { to, subject, html, text, branch_id, attachments, from_override, use_branded_template, variables, skip_log } = body;
 
     if (!to || !subject || (!html && !text)) {
       return json({ error: "Missing required fields: to, subject, html or text" }, 400);
