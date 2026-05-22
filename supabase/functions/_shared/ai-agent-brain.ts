@@ -1,4 +1,7 @@
-// v3.5.0 — Founder's Phase, lead-friendly plan_interest capture
+// v3.6.0 — Founder's Phase, structured 4-option lists for goal + plan_interest
+// 3.6.0: Goal & plan_interest captured via Meta interactive_list (4 rows each)
+//        after name+email — eliminates dirty free-text and matches the original
+//        onboarding UX that staff signed off on.
 // 3.5.0: Re-enabled goal + plan_interest capture as plain-text free-form
 //        questions (Name → Email → Goal → Plan Interest). Non-annual leads
 //        are captured & nurtured, never refused. Sanitizer now blocks only
@@ -351,14 +354,14 @@ Your secondary goal is to naturally collect: ${fieldNames}.
 ONBOARDING ORDER (STRICT — DO NOT SKIP STEPS, DO NOT REORDER):
 - Turn 1 (first inbound): Plain-text greeting in ONE short sentence as ${gymName}'s assistant, ask for their NAME. No JSON, no list, no buttons.
 - Turn 2 (after name): Thank them by first name in one short line, ask for EMAIL "for your Founding Member invite". Plain text only. (Phone is already known from WhatsApp — never ask again.)
-- Turn 3 (after email): Ask their FITNESS GOAL in plain text, open-ended: "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness?". Do NOT emit an interactive list for goal in this phase.
-- Turn 4 (after goal): Ask plan-duration interest in plain text: "Are you thinking monthly, quarterly, half-yearly, or annual?". Capture whatever they say. Do NOT emit an interactive list.
+- Turn 3 (after email): Ask their FITNESS GOAL as a Meta interactive_list with EXACTLY these 4 rows: {id:"weight_loss",title:"Weight Loss"}, {id:"muscle_gain",title:"Muscle Gain"}, {id:"endurance",title:"Endurance"}, {id:"general",title:"Flexibility / General"}. Body: "What's your main fitness goal, {{first_name}}?". Button: "Choose goal".
+- Turn 4 (after goal): Ask plan-duration interest as a Meta interactive_list with EXACTLY these 4 rows: {id:"monthly",title:"Monthly"}, {id:"quarterly",title:"Quarterly"}, {id:"half_yearly",title:"Half-Yearly"}, {id:"annual",title:"Annual — Founding Member"}. Body: "Which membership duration are you thinking about?". Button: "Choose duration". Capture whatever they tap.
 - Turn 5 (after plan_interest captured):
     • If their answer maps to **annual / yearly / 12-month** → confirm warmly and pitch Founding Member: "Perfect — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot?"
     • If their answer is **monthly / quarterly / half-yearly** → acknowledge softly, capture as lead, do NOT push: "Noted — I've logged your interest in {duration}. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open." NEVER refuse or hard-redirect non-annual leads.
 - Then emit the lead_captured JSON.
 
-HARD GATE (non-negotiable): NEVER emit ANY interactive_list or button block until BOTH a real name AND an email are present. After that, plain text is still strongly preferred over interactive blocks for goal / plan_interest in this phase.
+HARD GATE (non-negotiable): NEVER emit ANY interactive_list or button block until BOTH a real name AND an email are present. AFTER name+email are present, you MUST use interactive_list for goal (Turn 3) and plan_interest (Turn 4) — do NOT ask either of those as plain text.
 
 PRICING VELVET ROPE (non-negotiable): NEVER mention ₹ amounts, Rs., fees, prices, cost, charges, PT package names, session counts, or "send the price/fee details". You MAY use the words "monthly / quarterly / half-yearly / annual / yearly / Founding Member / plan / goal" — those are required for capture and nurture. If the user directly asks for prices: "Our Founding Member pricing is reserved for our launch reveal — our team will share full details closer to opening. Can I lock in your Founding spot in the meantime?"
 
@@ -392,9 +395,9 @@ For any of these, reply with this single short message (plain text only, no JSON
   "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏"
 Then stop — do NOT continue onboarding and do NOT output the lead_captured JSON.
 
-- INTERACTIVE FORMAT (Meta Cloud API v25.0): only used AFTER name+email captured, for non-onboarding flows. Prefer plain text for goal and plan_interest in this phase. Buttons cap at 3; lists for 4–10. Never emit "1. … 2. …" plain text when ≥4 options exist.
-- DO NOT emit any plan_interest / membership-duration / PT-package interactive list. Capture plan_interest via free text instead.
-- DO NOT emit any fitness-goal interactive list in this phase. Capture via free text.
+- INTERACTIVE FORMAT (Meta Cloud API v25.0): only used AFTER name+email captured. Buttons cap at 3; lists for 4–10 rows. Never emit "1. … 2. …" plain text when ≥4 options exist.
+- Goal (Turn 3) and plan_interest (Turn 4) MUST be emitted as interactive_list with the exact rows defined above. No free-text fallback.
+- DO NOT emit any PT-package / personal-training / day-pass interactive list at any time.
 - NEVER mention ₹/Rs./prices/fees/Day Pass/PT package names/trainer names.
 - You MUST collect full name + email + goal + plan_interest before outputting lead_captured.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
@@ -619,6 +622,36 @@ function enforceOutboundInteractiveGuards(input: {
   const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
 
+  // v3.6.0 — goal & plan_interest fall back to interactive_list JSON (4 rows each).
+  const goalListJson = (firstName: string) => JSON.stringify({
+    type: "interactive_list",
+    body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
+    button: "Choose goal",
+    sections: [{
+      title: "Fitness Goal",
+      rows: [
+        { id: "weight_loss", title: "Weight Loss" },
+        { id: "muscle_gain", title: "Muscle Gain" },
+        { id: "endurance", title: "Endurance" },
+        { id: "general", title: "Flexibility / General" },
+      ],
+    }],
+  });
+  const planListJson = (firstName: string) => JSON.stringify({
+    type: "interactive_list",
+    body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
+    button: "Choose duration",
+    sections: [{
+      title: "Membership Duration",
+      rows: [
+        { id: "monthly", title: "Monthly" },
+        { id: "quarterly", title: "Quarterly" },
+        { id: "half_yearly", title: "Half-Yearly" },
+        { id: "annual", title: "Annual — Founding Member" },
+      ],
+    }],
+  });
+
   const askNextMissing = (): string => {
     if (!knownName) return "Sure — may I have your name first? ✨";
     const firstName = realName.split(/\s+/)[0];
@@ -628,17 +661,9 @@ function enforceOutboundInteractiveGuards(input: {
         : "Could you share your email so our team can send your Founding Member invite?";
     }
     const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-    if (!knownGoal) {
-      return firstName
-        ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
-        : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
-    }
+    if (!knownGoal) return goalListJson(firstName);
     const knownPlan = !!memory?.facts?.plan_interest;
-    if (!knownPlan) {
-      return firstName
-        ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
-        : "Are you thinking monthly, quarterly, half-yearly, or annual?";
-    }
+    if (!knownPlan) return planListJson(firstName);
     return firstName
       ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
       : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
@@ -675,9 +700,10 @@ function enforceOutboundInteractiveGuards(input: {
     return askNextMissing();
   }
 
-  // (3) FOUNDER'S PHASE — ANY plan/duration/PT interactive is forbidden
-  if (/membership duration|which membership|choose your plan|monthly|quarterly|half[\s-]?year|annual|pt\s*package|personal\s*training\s*package/i.test(bodyText)) {
-    console.log(`[AI:guards] dropping forbidden plan/duration/PT interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
+  // (3) FOUNDER'S PHASE — only PT-package / day-pass interactives are forbidden.
+  //     Duration/goal interactives are explicitly allowed (v3.6.0).
+  if (/pt\s*package|personal\s*training\s*package|day\s*pass|session\s*pack/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping forbidden PT/day-pass interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
     return askNextMissing();
   }
 
@@ -727,14 +753,30 @@ function sanitizeFoundersPhaseText(input: {
       : "Could you share your email for your Founding Member invite? ✨";
   }
   if (!knownGoal) {
-    return firstName
-      ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
-      : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
+    return JSON.stringify({
+      type: "interactive_list",
+      body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
+      button: "Choose goal",
+      sections: [{ title: "Fitness Goal", rows: [
+        { id: "weight_loss", title: "Weight Loss" },
+        { id: "muscle_gain", title: "Muscle Gain" },
+        { id: "endurance", title: "Endurance" },
+        { id: "general", title: "Flexibility / General" },
+      ] }],
+    });
   }
   if (!knownPlan) {
-    return firstName
-      ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
-      : "Are you thinking monthly, quarterly, half-yearly, or annual?";
+    return JSON.stringify({
+      type: "interactive_list",
+      body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
+      button: "Choose duration",
+      sections: [{ title: "Membership Duration", rows: [
+        { id: "monthly", title: "Monthly" },
+        { id: "quarterly", title: "Quarterly" },
+        { id: "half_yearly", title: "Half-Yearly" },
+        { id: "annual", title: "Annual — Founding Member" },
+      ] }],
+    });
   }
   return firstName
     ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough closer to opening. ✨`

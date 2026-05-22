@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ChevronDown, ChevronRight, Search, MessageSquare, Mail, Phone, Bell,
@@ -387,7 +387,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               <p className="text-xs text-muted-foreground">Adjust filters or send a broadcast</p>
             </div>
           ) : (
-            <ScrollArea className="max-h-[600px]">
+            <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
               <div className="divide-y divide-border/50">
                 {filtered.map((log: any, i: number) => {
                   const ch = channelMeta[log.type] || channelMeta.in_app;
@@ -450,7 +450,8 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                   );
                 })}
               </div>
-            </ScrollArea>
+            </div>
+
           )}
 
           {!isLoading && logs.length > 0 && (

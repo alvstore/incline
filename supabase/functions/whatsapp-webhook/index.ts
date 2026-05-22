@@ -609,19 +609,17 @@ async function sendAiReply(
     }
   }
 
-  // SAFETY NET — FOUNDER'S PHASE: NEVER auto-promote any reply into a Monthly /
-  // Quarterly / Half-Yearly / Annual duration list. During pre-opening we have
-  // no published plan tiers. We only strip prices / Day Pass / forbidden rows
-  // from interactive lists the model may still emit.
-  const PRICE_DAYPASS_RE = /day\s*pass|₹|\bRs\.?\b|\/-|price|fee|cost|inr|monthly|quarterly|half[\s-]?year|annual|yearly/i;
+  // FOUNDER'S PHASE (v3.6.0): Allow goal + duration (monthly/quarterly/half-yearly/
+  // annual) interactive rows — these are required onboarding lists. Strip only
+  // PT-package, day-pass and price-bearing rows that leak unpublished offers.
+  const FORBIDDEN_ROW_RE = /day\s*pass|₹|\bRs\.?\b|\/-|\bprice\b|\bfee\b|\bcost\b|\bINR\b|pt\s*package|personal\s*training\s*package|session\s*pack/i;
 
   if (interactivePayload && interactivePayload.type === "list") {
     for (const section of interactivePayload.action?.sections || []) {
       section.rows = (section.rows || []).filter((r: any) =>
-        !PRICE_DAYPASS_RE.test(`${r.title || ""} ${r.description || ""}`)
+        !FORBIDDEN_ROW_RE.test(`${r.title || ""} ${r.description || ""}`)
       );
     }
-    // If we stripped every row, drop the interactive entirely and send body as plain text.
     const totalRows = (interactivePayload.action?.sections || []).reduce(
       (n: number, s: any) => n + (s.rows?.length || 0), 0,
     );
