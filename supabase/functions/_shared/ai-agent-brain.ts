@@ -388,19 +388,13 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     {"id":"goal_general","title":"✨ General Fitness","description":"Stay healthy and active"},
     {"id":"goal_flexibility","title":"🧘 Flexibility","description":"Mobility and recovery"}
   ]}]}
-- For "plan_interest" always emit this EXACT list (4 rows, never buttons, never include Day Pass, never mention prices):
-  {"type":"interactive_list","body":"Which membership duration suits you best?","button":"View Plans","sections":[{"title":"Choose your plan","rows":[
-    {"id":"plan_monthly","title":"📅 Monthly","description":"Flexible — try us out, no commitment"},
-    {"id":"plan_quarterly","title":"⚡ Quarterly","description":"3 months — most popular starter"},
-    {"id":"plan_halfyearly","title":"💪 Half-Yearly","description":"6 months — better value, real results"},
-    {"id":"plan_annual","title":"🏆 Annual","description":"12 months — our most committed members"}
-  ]}]}
-- NEVER omit Annual. NEVER use a button block for plan_interest or goal. NEVER mention prices, fees, or Day Pass — pricing is handled by a human teammate.
-- You MUST collect full name + email + at least 1 other field before outputting lead_captured, and you MUST follow the ONBOARDING ORDER above (name → email → goal → plan_interest → rest).
+- DO NOT emit any plan_interest / membership-duration / PT-package interactive list. None exist publicly during pre-opening.
+- NEVER mention prices, fees, Day Pass, plan tiers, PT packages, or trainer names — all are reserved for the Founder's Phase reveal.
+- You MUST collect full name + email before outputting lead_captured. Fitness goal is optional bonus.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
-- When the user provides the LAST required field, respond with ONLY this JSON:
-{"status":"lead_captured","data":{${(leadCaptureConfig!.target_fields || []).map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
-- Use the exact field keys: ${(leadCaptureConfig!.target_fields || []).join(", ")}`;
+- When you have name + email, respond with ONLY this JSON:
+{"status":"lead_captured","data":{${targetFields.map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
+- Use the exact field keys: ${targetFields.join(", ")}`;
   }
 
   // 8. Call AI via the SSOT dispatcher (respects ai_provider_configs scope=whatsapp_ai)
