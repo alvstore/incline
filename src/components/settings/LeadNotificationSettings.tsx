@@ -176,6 +176,12 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
                 checked={form.whatsapp_to_lead}
                 onChange={() => toggle('whatsapp_to_lead')}
               />
+              <Row
+                label="Email to Lead"
+                desc="Send a branded welcome email to the lead"
+                checked={form.email_to_lead}
+                onChange={() => toggle('email_to_lead')}
+              />
             </CardContent>
           </Card>
         )}
