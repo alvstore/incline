@@ -1118,6 +1118,33 @@ export default function WhatsAppChatPage() {
                             <Eye className="h-4 w-4 mr-2" /> View Profile
                           </DropdownMenuItem>
                         )}
+                        {(selectedContact.platform === 'instagram' || selectedContact.platform === 'messenger') && isIgsid(selectedContact.phone_number) && (
+                          <DropdownMenuItem onClick={async () => {
+                            const tid = toast.loading('Fetching profile from Meta...');
+                            try {
+                              const { data, error } = await supabase.functions.invoke('meta-admin', {
+                                body: {
+                                  action: 'refresh_ig_profile',
+                                  phone_number: selectedContact.phone_number,
+                                  branch_id: selectedBranch && selectedBranch !== 'all' ? selectedBranch : null,
+                                  platform: selectedContact.platform,
+                                },
+                              });
+                              if (error) throw error;
+                              if (data?.success && data?.name) {
+                                toast.success(`Resolved: ${data.name}`, { id: tid });
+                                queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
+                                queryClient.invalidateQueries({ queryKey: ['whatsapp-chat-settings'] });
+                              } else {
+                                toast.error(data?.error || 'Meta returned no profile. Check page token scopes.', { id: tid });
+                              }
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Failed to refresh profile', { id: tid });
+                            }
+                          }}>
+                            <RefreshCw className="h-4 w-4 mr-2 text-pink-600" /> Refresh {selectedContact.platform === 'instagram' ? 'Instagram' : 'Messenger'} Profile
+                          </DropdownMenuItem>
+                        )}
                         {((selectedContact as any).identity_source === 'unknown' || (selectedContact as any).identity_source === undefined) && (
                           <DropdownMenuItem onClick={() => {
                             setSaveContactForm({
