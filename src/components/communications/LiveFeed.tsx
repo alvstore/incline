@@ -310,6 +310,106 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     });
   }, [logs, channel, statusFilter, search]);
 
+  // ---------- Consolidation ----------
+  // Group rows sharing recipient identity + body fingerprint within a 10-min window.
+  // The same alert sent across WA+Email+SMS+In-App collapses into one row with per-channel chips.
+  type Group = {
+    key: string;
+    logs: any[];
+    latest: any;
+    channels: Record<string, any[]>;
+    name: string | null;
+    recipientDisplay: string;
+    subject: string | null;
+    content: string;
+  };
+
+  const GROUP_WINDOW_MS = 10 * 60 * 1000;
+
+  const groups = useMemo<Group[]>(() => {
+    const fingerprint = (s: string) =>
+      (s || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 160);
+    const recipientKey = (l: any) => {
+      if (l.member_id) return `m:${l.member_id}`;
+      if (l.type === 'whatsapp' || l.type === 'sms') {
+        const v = phoneVariants(l.recipient);
+        return `p:${v[v.length - 1] || l.recipient || ''}`;
+      }
+      return `e:${String(l.recipient || '').toLowerCase()}`;
+    };
+    const baseKey = (l: any) =>
+      `${recipientKey(l)}|${l.dedupe_key || fingerprint((l.subject || '') + '|' + (l.content || ''))}`;
+
+    const open = new Map<string, Group>(); // baseKey -> active bucket
+    const out: Group[] = [];
+    for (const l of filtered as any[]) {
+      const bk = baseKey(l);
+      const ts = new Date(l.created_at).getTime();
+      const cand = open.get(bk);
+      const inWindow =
+        cand && Math.abs(new Date(cand.latest.created_at).getTime() - ts) <= GROUP_WINDOW_MS;
+      let g: Group;
+      if (inWindow && cand) {
+        g = cand;
+      } else {
+        g = {
+          key: `${bk}@${l.id}`,
+          logs: [],
+          latest: l,
+          channels: {},
+          name: resolveName(l),
+          recipientDisplay:
+            l.type === 'whatsapp' || l.type === 'sms'
+              ? formatPhoneDisplay(l.recipient) || l.recipient || ''
+              : l.recipient || '',
+          subject: l.subject || null,
+          content: l.content || '',
+        };
+        open.set(bk, g);
+        out.push(g);
+      }
+      g.logs.push(l);
+      (g.channels[l.type] ||= []).push(l);
+      if (ts > new Date(g.latest.created_at).getTime()) g.latest = l;
+      if ((l.content || '').length > (g.content || '').length) g.content = l.content || g.content;
+      if (!g.subject && l.subject) g.subject = l.subject;
+      if (!g.name) g.name = resolveName(l);
+    }
+    return out;
+  }, [filtered, nameMap]);
+
+  const groupRollup = (g: Group) => {
+    const ss = g.logs.map(normalizeStatus);
+    const failed = ss.filter((s) => s === 'failed' || s === 'bounced').length;
+    const pending = ss.filter((s) => s === 'pending' || s === 'queued').length;
+    let primary = 'pending';
+    if (ss.includes('replied')) primary = 'replied';
+    else if (ss.includes('read')) primary = 'read';
+    else if (ss.includes('delivered')) primary = 'delivered';
+    else if (ss.includes('sent')) primary = 'sent';
+    else if (failed && failed === ss.length) primary = 'failed';
+    return { primary, failed, pending, total: ss.length };
+  };
+
+  const channelStatus = (chLogs: any[]): string => {
+    const ss = chLogs.map(normalizeStatus);
+    if (ss.some((s) => s === 'failed' || s === 'bounced')) return 'failed';
+    if (ss.includes('replied')) return 'replied';
+    if (ss.includes('read')) return 'read';
+    if (ss.includes('delivered')) return 'delivered';
+    if (ss.includes('sent')) return 'sent';
+    return 'pending';
+  };
+
+  const dotColor: Record<string, string> = {
+    sent: 'bg-sky-500',
+    delivered: 'bg-emerald-500',
+    read: 'bg-violet-500',
+    replied: 'bg-indigo-500',
+    failed: 'bg-rose-500',
+    pending: 'bg-amber-500',
+  };
+
   return (
     <div className="space-y-4">
       <KpiStrip counts={counts} activeKey={statusFilter} onSelect={setStatusFilter} />
