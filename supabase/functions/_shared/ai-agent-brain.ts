@@ -217,10 +217,39 @@ export async function runUnifiedAgent(
     );
   }
 
+  // Build identity for SSOT prompt routing (member vs lead vs unknown).
+  const identity: Parameters<typeof buildSystemPrompt>[0]["identity"] =
+    memberCtx.isMember
+      ? {
+          role: "member",
+          senderId: ctx.senderId,
+          memberId: memberCtx.memberId ?? null,
+          name: memberCtx.memberName ?? null,
+          planLabel: memberCtx.planName ?? null,
+          planEndsAt: memberCtx.planEndsAt ?? null,
+          branchName: orgConfig?.name ?? null,
+        }
+      : memberCtx.leadId
+        ? {
+            role: "lead",
+            senderId: ctx.senderId,
+            leadId: memberCtx.leadId,
+            name: memberCtx.leadName ?? null,
+            funnelStage: memberCtx.leadStage ?? null,
+            branchName: orgConfig?.name ?? null,
+          }
+        : {
+            role: "unknown",
+            senderId: ctx.senderId,
+            branchName: orgConfig?.name ?? null,
+          };
+
   const built = await buildSystemPrompt({
     supabase,
     purpose: "whatsapp_reply",
     branchId: ctx.branchId,
+    userMessage: ctx.messageContent,
+    identity,
     dynamicContext: dynamicSegments.join("\n\n"),
     defaultPersona: `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`,
   });
