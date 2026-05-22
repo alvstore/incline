@@ -1,41 +1,78 @@
-## Live Feed Consolidation — Audit & Plan
+## Audit findings (from DB + code)
 
-### What's wrong today (from your screenshot)
-The Live Feed renders one row per `communication_logs` row. The "New Lead: Rajat Lekhari" alert fans out to 3 staff × 3 channels (email/WA/SMS) and we get **8+ near-identical rows** stacked together. Same recipient also gets duplicate rows when an alert is sent on both Email and WhatsApp (e.g. Yogita + Rajat each show Email + WhatsApp as separate lines).
+Looked at the actual rows behind your screenshot:
 
-Root cause: `LiveFeed.tsx` maps `filtered.map((log) => row)` 1:1, no grouping. The dispatcher already writes a `dedupe_key` and `content` we can group by.
+```
+recipient                      channel  dedupe_key                 created_at
+yogitamotiramani@hotmail.com   ''       (null)                     21:50:34   ← duplicate
+yogitamotiramani@hotmail.com   email    lead:...:email:team:admin  21:50:33   ← real
+rajat.lekhari@hotmail.com      ''       (null)                     21:50:39   ← duplicate
+rajat.lekhari@hotmail.com      email    lead:...:email:team:admin  21:50:37   ← real
+bhagirathbhau@gmail.com        ''       (null)                     21:50:40   ← duplicate
+bhagirathbhau@gmail.com        email    lead:...:email:team:mgr    21:50:39   ← real
+```
 
-### Consolidation rule (the audit)
-Group rows that share **all** of:
-1. **Recipient identity** — `member_id` if present, else normalized phone (for WA/SMS) or lowercase email
-2. **Message body fingerprint** — `dedupe_key` if set, else `sha1(subject + content)` truncated
-3. **Time bucket** — created within a 10-minute rolling window of each other
+Only **one** `leads` row exists for Rajat and `notified_at` was set atomically — so `notify-lead-created` only fired once. The "multiple messages to same person" is **not** double-sending. It's **two `communication_logs` rows being written for every single email**, ~1 second apart.
 
-Each group renders as **one row**:
-- Recipient name + contact (resolved once)
-- Single message preview (longest non-empty body wins)
-- **Channel chips**: WA · Email · SMS · In-App — each chip colored by channel, with a tiny status dot (sent/delivered/read/failed) derived per-channel from the worst-to-best status of that channel's logs
-- Right side: most-recent timestamp + worst-status badge (e.g. if any failed → red "1 failed of 3")
-- Expand row → existing `DeliveryTimeline` shown per channel (tabbed or stacked)
+### Root cause #1 — duplicate log inserts (email only)
 
-Counts in tabs/KPIs stay raw (per-log), so "WA 102 / Email 6" still reflects true volume — only the **rendered list** collapses.
+Path: `notify-lead-created` → `dispatch-communication` → `send-email`.
 
-### Files to change
+- `dispatch-communication` inserts the canonical row with `channel='email'` + `dedupe_key` + `status='sending'` (line ~419 of dispatch-communication/index.ts).
+- It then invokes `send-email` with `skip_log: true` (line ~698).
+- **`send-email` ignores `skip_log`** and writes its own second row with `type='email'`, no `channel`, no `dedupe_key` (send-email/index.ts line 180).
+
+`send-whatsapp` and `send-sms` already honor `skip_log` (note in send-whatsapp v2.2.0). Email is the odd one out — that's why only email appears duplicated in the feed, not WhatsApp/SMS.
+
+### Root cause #2 — literal `\n\n` in email body
+
+`lead_notification_rules.team_alert_email_body` is stored as:
+```
+A new lead was captured.\n\nName: {{lead_name}}\nPhone: ...\n\nPlease follow up at the earliest.
+```
+Those are 4 literal characters (`\`, `n`, `\`, `n`), not real newlines. Sent as HTML → renders as visible `\n\n`. The template renderer in `notify-lead-created` does only `{{token}}` substitution, no escape decoding.
+
+### Why the new grouped Live Feed didn't collapse them
+
+Grouping keys off recipient + dedupe_key (or content fingerprint) within a 10-min window. Both rows have the same recipient and same content body, so they SHOULD merge — but the duplicate row has `channel=''` and a different status path, which means the channel-chip cluster shows them as two separate channels. Once root cause #1 is fixed there's nothing left to group: one row per email per recipient.
+
+---
+
+## Fix plan (3 small changes, no schema migration)
+
+### 1. `supabase/functions/send-email/index.ts` — honor `skip_log`
+Read `skip_log` from the request body. Wrap the `communication_logs.insert` block with `if (branch_id && !skip_log)`. Mirrors what `send-whatsapp` v2.2.0 already does. Bumps to v1.x.0 with a comment.
+
+### 2. `supabase/functions/dispatch-communication/index.ts` — normalize body whitespace for email
+Just before invoking `send-email`, decode literal `\n` → real newline and convert to `<br>` so plain-text templates from `lead_notification_rules` render correctly inside the branded HTML shell:
+```ts
+const renderedHtml = String(input.payload.body || '')
+  .replace(/\\r\\n|\\n/g, '\n')
+  .replace(/\n/g, '<br>');
+```
+Pass `renderedHtml` as `html`. Leaves WhatsApp/SMS untouched (they handle `\n` natively).
+
+### 3. Backfill the existing rule row (one-line SQL via migration)
+```sql
+UPDATE lead_notification_rules
+SET team_alert_email_body = replace(team_alert_email_body, '\n', E'\n');
+```
+Stores real newlines going forward so the renderer can keep treating body as plain text and the email path converts to `<br>` consistently. Cosmetic only — no schema change.
+
+### Out of scope (intentionally)
+- No change to `notify-lead-created` claim logic (it's correct — single atomic claim per lead).
+- No change to dispatcher dedupe_key / unique index.
+- No change to Live Feed grouping (after fix #1 it's already right).
+- No edits to WhatsApp/SMS senders.
+
+### Verification after build
+- Trigger one test lead → expect **one** `communication_logs` row per (admin × channel), no duplicates.
+- Open the resulting email → newlines render as visible line breaks instead of `\n\n`.
+- Live Feed shows one grouped row per recipient with WA + Email chips, no stacking.
+
+### Files touched
 | File | Change |
 |---|---|
-| `src/components/communications/LiveFeed.tsx` | Add `groupLogs(filtered)` memo producing `Group[]`. Replace `filtered.map(...)` with `groups.map(...)`. New `<GroupRow />` inline component renders channel chip cluster + consolidated status. Expanded view loops each underlying log into `DeliveryTimeline`. Search/channel-filter still operates on raw logs *before* grouping so filtering by WA correctly collapses to WA-only chips. |
-| (no DB / no edge fn changes) | Pure UI consolidation — dispatcher, dedupe, retries untouched. |
-
-### Edge cases handled
-- Channel filter = WA → groups become single-chip (correct)
-- Same person, same body, 3h apart → two separate groups (time bucket)
-- Different recipients of the same broadcast → separate groups (recipient identity)
-- One channel fails, others delivered → group shows "2 delivered · 1 failed" pill
-- Realtime insert: invalidation already in place, grouping re-runs
-
-### Out of scope
-- No changes to `dedupe_key` semantics, no schema migration, no edge-function edits
-- KPI strip and channel tab counts remain per-log (intentional — ops still need true volume)
-- Notification reliability fixes (Meta 131049 etc.) tracked separately
-
-Used the redesign + ui-ux-pro-max skill lenses: anchor on real screen → fix density (8 rows → 3 rows) → preserve information (channel chips + per-channel status) → no new modal, expand-in-place.
+| `supabase/functions/send-email/index.ts` | Honor `skip_log` flag |
+| `supabase/functions/dispatch-communication/index.ts` | Convert `\n` → `<br>` before sending email |
+| New migration | Backfill `team_alert_email_body` to real newlines |
