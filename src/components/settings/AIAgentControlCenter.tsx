@@ -22,14 +22,9 @@ import {
   Users, Star, ShoppingBag, Bell, MapPin, ClipboardList,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { WhatsAppAISettings } from '@/components/settings/WhatsAppAISettings';
-import { AIFlowBuilderSettings } from '@/components/settings/AIFlowBuilderSettings';
-import { LeadNurtureSettings } from '@/components/settings/LeadNurtureSettings';
-import { AIProvidersSettings } from '@/components/settings/AIProvidersSettings';
-import { AIPurposesTab } from '@/components/settings/AIPurposesTab';
 import { AIBrainTab } from '@/components/settings/AIBrainTab';
-import { AICallLogsTab } from '@/components/settings/AICallLogsTab';
-import { AIToolLogsTab } from '@/components/settings/AIToolLogsTab';
+import { HandlesTab } from '@/components/settings/ai/HandlesTab';
+import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
 
 type ToolDef = {
   name: string;
@@ -164,94 +159,58 @@ export function AIAgentControlCenter() {
         <div>
           <h2 className="text-xl font-bold text-foreground">AI Agent Hub</h2>
           <p className="text-sm text-muted-foreground">
-            Manage all AI capabilities — monitoring, tools, auto-reply, and lead intelligence
+            Single source of truth — Overview, Knowledge, Handles and Plumbing.
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid grid-cols-4 lg:grid-cols-9 w-full h-auto p-1">
-          <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Activity className="h-3.5 w-3.5 hidden sm:block" />
-            Dashboard
-          </TabsTrigger>
-          <TabsTrigger value="brain" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Brain className="h-3.5 w-3.5 hidden sm:block" />
-            Brain
-          </TabsTrigger>
-          <TabsTrigger value="purposes" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Bot className="h-3.5 w-3.5 hidden sm:block" />
-            Purposes
-          </TabsTrigger>
-          <TabsTrigger value="tools" className="text-xs sm:text-sm gap-1.5 py-2">
-            <ToggleLeft className="h-3.5 w-3.5 hidden sm:block" />
-            Tools
-          </TabsTrigger>
-          <TabsTrigger value="auto-reply" className="text-xs sm:text-sm gap-1.5 py-2">
-            <MessageSquare className="h-3.5 w-3.5 hidden sm:block" />
-            Auto-Reply
-          </TabsTrigger>
-          <TabsTrigger value="lead-capture" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Brain className="h-3.5 w-3.5 hidden sm:block" />
-            Lead Capture
-          </TabsTrigger>
-          <TabsTrigger value="lead-nurture" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Clock className="h-3.5 w-3.5 hidden sm:block" />
-            Lead Nurture
-          </TabsTrigger>
-          <TabsTrigger value="providers" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Brain className="h-3.5 w-3.5 hidden sm:block" />
-            Providers
-          </TabsTrigger>
-          <TabsTrigger value="call-logs" className="text-xs sm:text-sm gap-1.5 py-2">
-            <Activity className="h-3.5 w-3.5 hidden sm:block" />
-            Call Logs
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="dashboard">
-          <DashboardTab />
-        </TabsContent>
-
-        <TabsContent value="brain">
-          <AIBrainTab />
-        </TabsContent>
-
-        <TabsContent value="purposes">
-          <AIPurposesTab />
-        </TabsContent>
-
-        <TabsContent value="tools">
-          <ToolsTab />
-        </TabsContent>
-
-        <TabsContent value="auto-reply">
-          <WhatsAppAISettings />
-        </TabsContent>
-
-        <TabsContent value="lead-capture">
-          <AIFlowBuilderSettings />
-        </TabsContent>
-
-        <TabsContent value="lead-nurture">
-          <LeadNurtureSettings />
-        </TabsContent>
-
-        <TabsContent value="providers">
-          <AIProvidersSettings />
-        </TabsContent>
-
-        <TabsContent value="call-logs">
-          <AICallLogsTab />
-        </TabsContent>
-
-        <TabsContent value="tool-logs">
-          <AIToolLogsTab />
-        </TabsContent>
-      </Tabs>
+      <AIAgentTabs />
     </div>
   );
 }
+
+function AIAgentTabs() {
+  const [tab, setTab] = useState<'overview' | 'knowledge' | 'handles' | 'plumbing'>('overview');
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
+      <TabsList className="grid grid-cols-4 w-full h-auto p-1">
+        <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Activity className="h-3.5 w-3.5 hidden sm:block" />
+          Overview
+        </TabsTrigger>
+        <TabsTrigger value="knowledge" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Brain className="h-3.5 w-3.5 hidden sm:block" />
+          Knowledge
+        </TabsTrigger>
+        <TabsTrigger value="handles" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Bot className="h-3.5 w-3.5 hidden sm:block" />
+          Handles
+        </TabsTrigger>
+        <TabsTrigger value="plumbing" className="text-xs sm:text-sm gap-1.5 py-2">
+          <ToggleLeft className="h-3.5 w-3.5 hidden sm:block" />
+          Plumbing
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="overview">
+        <DashboardTab />
+      </TabsContent>
+
+      <TabsContent value="knowledge">
+        <AIBrainTab />
+      </TabsContent>
+
+      <TabsContent value="handles">
+        <HandlesTab onJumpToKnowledge={() => setTab('knowledge')} />
+      </TabsContent>
+
+      <TabsContent value="plumbing">
+        <PlumbingTab toolsPanel={<ToolsTab />} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 
 function DashboardTab() {
   const queryClient = useQueryClient();
