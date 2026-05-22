@@ -721,7 +721,13 @@ interface MemberResolveResult {
   memberName?: string;
   membershipId?: string;
   planId?: string;
+  planName?: string;
+  planEndsAt?: string;
   contextPrompt: string;
+  // Set only when isMember=false and a lead row exists for this sender.
+  leadId?: string;
+  leadName?: string;
+  leadStage?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
