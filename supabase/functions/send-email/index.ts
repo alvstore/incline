@@ -1,3 +1,7 @@
+// v2.4.0 — Honor skip_log from dispatcher to avoid duplicate communication_logs rows.
+//           Mirrors send-whatsapp v2.2.0. When dispatch-communication invokes send-email
+//           it already owns the canonical log row (with channel + dedupe_key); this
+//           prevents the second orphan row that was breaking Live Feed grouping.
 // v2.3.0 — SMTP IO hardened: chunked DATA writes (16KB), proper readUntilSmtpResponse
 //           loop with 120s post-DATA timeout — fixes Hostinger 421 timeout on
 //           multipart messages with PDF attachments.
