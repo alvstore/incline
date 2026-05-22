@@ -652,6 +652,69 @@ async function handleTestIgCommentMatch(body: any) {
 }
 
 
+// ──────────────── REFRESH SINGLE IG PROFILE ────────────────
+// Per-conversation rescue used by the chat ⋯ menu. Resolves name+avatar for one
+// IGSID/PSID and upserts whatsapp_chat_settings.contact_name/contact_avatar_url.
+async function handleRefreshIgProfile(body: any) {
+  const phone: string | undefined = body?.phone_number;
+  const branchId: string | null = body?.branch_id || null;
+  const platform: string = body?.platform === 'messenger' ? 'messenger' : 'instagram';
+  if (!phone) return json({ error: 'phone_number required' }, 400);
+
+  // Find an active IG/Meta integration for this branch (or global fallback).
+  let iq = supabase
+    .from('integration_settings')
+    .select('id, credentials, branch_id')
+    .or([
+      'integration_type.in.(instagram,instagram_login,instagram_meta)',
+      'provider.in.(instagram,instagram_login,instagram_meta,meta,facebook_page)',
+    ].join(','))
+    .eq('is_active', true);
+  if (branchId) iq = iq.or(`branch_id.eq.${branchId},branch_id.is.null`);
+  const { data: integrations, error: iErr } = await iq;
+  if (iErr) return json({ error: iErr.message }, 500);
+  const integ = (integrations || []).find((r: any) => r.branch_id === branchId) || (integrations || [])[0];
+  if (!integ) return json({ error: 'No active Instagram integration found for this branch.' }, 404);
+
+  const creds: any = integ.credentials || {};
+  const token = creds.page_access_token || creds.access_token;
+  if (!token) return json({ error: 'Integration has no access token configured.' }, 400);
+
+  const { isInstagramLogin } = detectMetaHost(token);
+  const primary = isInstagramLogin ? IG_API_BASE : META_API_BASE;
+  const fallback = isInstagramLogin ? META_API_BASE : IG_API_BASE;
+  const fields = 'name,username,profile_pic_url';
+  const tryFetch = async (base: string) => {
+    const url = `${base}/${encodeURIComponent(phone)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+    try {
+      const r = await metaFetchWithFallback(url);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d?.error) return { ok: false, err: d?.error?.message || `HTTP ${r.status}` };
+      const meaningful = d && (d.id || d.name || d.username || d.profile_pic_url);
+      if (!meaningful) return { ok: false, err: 'empty body' };
+      const username = d.username ? `@${d.username}` : null;
+      return { ok: true, name: d.name || username || null, avatar_url: d.profile_pic_url || null };
+    } catch (e) { return { ok: false, err: e instanceof Error ? e.message : String(e) }; }
+  };
+  let res = await tryFetch(primary);
+  if (!res.ok) res = await tryFetch(fallback);
+  if (!res.ok) return json({ success: false, error: `Meta lookup failed: ${(res as any).err}. Check that the page access token has instagram_basic + pages_messaging scopes.` }, 200);
+
+  try {
+    await supabase.rpc('upsert_meta_contact_profile', {
+      p_branch_id: branchId,
+      p_phone: phone,
+      p_platform: platform,
+      p_external_id: phone,
+      p_display_name: (res as any).name,
+      p_avatar_url: (res as any).avatar_url,
+    });
+  } catch (e) {
+    return json({ success: false, error: `Upsert failed: ${e instanceof Error ? e.message : String(e)}` }, 500);
+  }
+  return json({ success: true, name: (res as any).name, avatar_url: (res as any).avatar_url });
+}
+
 // ──────────────── DISPATCHER ────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -663,6 +726,7 @@ Deno.serve(async (req) => {
       case "diagnose":             return await handleDiagnose(body);
       case "refresh_page_token":   return await handleRefreshPageToken(body);
       case "backfill_ig_profiles": return await handleBackfillIgProfiles(body);
+      case "refresh_ig_profile":   return await handleRefreshIgProfile(body);
       case "list_ig_accounts":     return await handleListIgAccounts(body);
       case "list_ig_media":        return await handleListIgMedia(body);
       case "test_ig_comment_match":return await handleTestIgCommentMatch(body);

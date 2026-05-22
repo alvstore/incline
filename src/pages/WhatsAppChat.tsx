@@ -40,7 +40,7 @@ import { format, isToday, isYesterday } from 'date-fns';
 import {
   MessageSquare, Send, Search, Phone, User,
   CheckCheck, Check, Clock, Paperclip, Smile, MoreVertical, Sparkles, Loader2, Plus, AlertTriangle, Bot, UserPlus, Image, FileText,
-  Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser,
+  Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser, RefreshCw, AtSign,
 } from 'lucide-react';
 
 // Platform icon helper
@@ -1055,8 +1055,20 @@ export default function WhatsAppChatPage() {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        {formatPhoneDisplay(selectedContact.phone_number)}
+                        {(() => {
+                          const plat = selectedContact.platform;
+                          const ph = selectedContact.phone_number;
+                          if ((plat === 'instagram' || plat === 'messenger') && isIgsid(ph)) {
+                            // Show @username if contact_name looks like a handle, else the raw scoped ID.
+                            const looksLikeHandle = selectedContact.contact_name?.startsWith('@');
+                            if (looksLikeHandle) {
+                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{selectedContact.contact_name?.replace(/^@/, '')}</span></>);
+                            }
+                            const label = plat === 'instagram' ? 'IG ID' : 'MSG ID';
+                            return (<><PlatformIcon platform={plat} className="h-3 w-3" /><span className="font-mono text-[11px]">{label} · {ph}</span></>);
+                          }
+                          return (<><Phone className="h-3 w-3" />{formatPhoneDisplay(ph)}</>);
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1104,6 +1116,33 @@ export default function WhatsAppChatPage() {
                         {selectedContact.member_id && (
                           <DropdownMenuItem onClick={() => navigate(`/members`)}>
                             <Eye className="h-4 w-4 mr-2" /> View Profile
+                          </DropdownMenuItem>
+                        )}
+                        {(selectedContact.platform === 'instagram' || selectedContact.platform === 'messenger') && isIgsid(selectedContact.phone_number) && (
+                          <DropdownMenuItem onClick={async () => {
+                            const tid = toast.loading('Fetching profile from Meta...');
+                            try {
+                              const { data, error } = await supabase.functions.invoke('meta-admin', {
+                                body: {
+                                  action: 'refresh_ig_profile',
+                                  phone_number: selectedContact.phone_number,
+                                  branch_id: selectedBranch && selectedBranch !== 'all' ? selectedBranch : null,
+                                  platform: selectedContact.platform,
+                                },
+                              });
+                              if (error) throw error;
+                              if (data?.success && data?.name) {
+                                toast.success(`Resolved: ${data.name}`, { id: tid });
+                                queryClient.invalidateQueries({ queryKey: ['whatsapp-contacts'] });
+                                queryClient.invalidateQueries({ queryKey: ['whatsapp-chat-settings'] });
+                              } else {
+                                toast.error(data?.error || 'Meta returned no profile. Check page token scopes.', { id: tid });
+                              }
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Failed to refresh profile', { id: tid });
+                            }
+                          }}>
+                            <RefreshCw className="h-4 w-4 mr-2 text-pink-600" /> Refresh {selectedContact.platform === 'instagram' ? 'Instagram' : 'Messenger'} Profile
                           </DropdownMenuItem>
                         )}
                         {((selectedContact as any).identity_source === 'unknown' || (selectedContact as any).identity_source === undefined) && (

@@ -1,102 +1,86 @@
-# Automation Brain — Redesign + Instagram DM consolidation
+# Audit findings — IG chat header + AI parroting
 
-## Goals
-1. **Single source of truth** for *every* scheduled background job (incl. Instagram Comment-to-DM).
-2. **Redesigned control room** — denser, scannable, with clearer health signals and faster edit/run flow.
-3. Keep Vuexy tokens locked (Indigo/Violet, `rounded-2xl`, slate shadows).
+## What the screenshot actually shows
 
----
+Conversation `f7ace3d9-3b18-405d-b4e6-f885bd875d13` (platform `instagram`, IGSID `3513066218863423`):
 
-## Part A — Move Instagram DM into Automation Brain
+- `contact_name` = NULL
+- `contact_avatar_url` = NULL
+- The "phone" `+3513066218863423` is **not a phone** — it is the Instagram Scoped ID rendered by `formatPhoneDisplay()` with a `+` slapped on the front.
 
-### Current state
-- `process-ig-comment-runs` edge fn runs on its **own dedicated `pg_cron`** (every 1 min).
-- Lives outside the `automation_rules` registry → not visible / pausable from the control room.
-- The IG **management UI** (campaigns, keywords, approval queue, runs log) lives in `Announcements → Instagram` and is *content management*, not orchestration. It stays where it is.
+## Issue 1 — IG header shows fake "+phone"
 
-### Migration
-1. Register a new row in `automation_rules`:
-   - `key = 'process_ig_comment_runs'`
-   - `category = 'engagement'`
-   - `worker = 'edge:process-ig-comment-runs'`
-   - `cron_expression = '*/1 * * * *'` (we keep 1‑min cadence — IG DMs are time-sensitive)
-   - `is_system = true`, `is_active = true`
-2. Teach `automation-brain-tick` to dispatch `edge:process-ig-comment-runs` (already generic — just confirm worker prefix is supported).
-3. **Drop the standalone `pg_cron` job** for IG runs (replaced by master tick).
-4. Add a deep-link button on the rule row → *"Manage campaigns"* → `/announcements?tab=instagram`.
+`src/pages/WhatsAppChat.tsx` line 1057-1060 always renders:
 
-Result: pausing/editing/Run-now for IG DMs works exactly like every other rule; the campaign editor stays where staff already manage IG content.
-
----
-
-## Part B — Control Room redesign
-
-### Information architecture (single page, three zones)
-
-```
-┌─ Header ─────────────────────────────────────────────────────┐
-│  Automation Brain  ·  Master tick: every 5 min  · [Run tick] │
-├─ Health strip (4 KPI tiles) ─────────────────────────────────┤
-│  Active rules · Runs 24h · Failures 24h · Dispatched 24h     │
-├─ Toolbar ────────────────────────────────────────────────────┤
-│  [Search] [Category ▾] [Status ▾] [AI only ☐] [Failing only☐]│
-├─ Rules (grouped, collapsible) ───────────────────────────────┤
-│  ▸ Billing (3)                                               │
-│  ▾ Engagement (5)                                            │
-│     ● Daily Reminders   ⏱ Daily 8:00  ✓ success 2h ago  [⋯]  │
-│     ● IG Comment → DM   ⏱ Every 1m    ⚠ 2 errors        [⋯]  │
-│  ▸ Lifecycle (2)                                             │
-├─ Activity rail (right column on ≥lg, below on mobile) ───────┤
-│  Live runs feed (auto-refresh 15s), filterable by rule       │
-└──────────────────────────────────────────────────────────────┘
+```tsx
+<Phone className="h-3 w-3" />
+{formatPhoneDisplay(selectedContact.phone_number)}
 ```
 
-### Key UX upgrades
-- **One row per rule** (not a card per rule) → ~2× density. Inline: name, AI chip, last-status badge, sparkline of last 10 runs, cron summary, last/next run, switch, ⋯ menu (Run now / Edit / View runs / Open target).
-- **Category collapse** with counts + per-group failure badge so failing groups stay open.
-- **Failing-only filter** — single click triage.
-- **Health strip** gains a tiny trend (▲/▼ vs prior 24h) and turns rose when failures > 0.
-- **Activity rail** replaces the bottom "Recent runs" card; persistent, click-to-filter by rule.
-- **Edit Sheet** reorganised into three sections: *Identity* (name/desc) · *Schedule* (presets + cron + next-3-fire preview) · *AI personalisation* (toggle + tone + sample preview button calling `ai-test-purpose`).
-- **System-rule guardrail** — system rules show a lock chip; only schedule + AI tone + name editable.
-- **Empty / loading / error** states per Vuexy rules (skeleton rows, lucide-only icons, colored badges).
+For IG/Messenger, `phone_number` is the IGSID/PSID, never a phone. `displayLabel()` already handles this for the title (`IG · 863423`), but the sub-line ignores platform.
 
-### Accessibility & perf
-- Rule rows are buttons w/ visible focus ring; switches have aria-labels (already partly present).
-- Virtualise the rules list only if >50 rows (currently 13 → not needed).
-- Realtime via `useQuery` `refetchInterval` already in place; add Supabase Realtime subscription on `automation_runs` for the activity rail.
+**Fix:** branch on platform in the header sub-line:
+- IG → `Instagram` icon + `@username` if known, else `IG ID · 3513066218863423` (full ID, monospace, muted)
+- Messenger → `Facebook` icon + `Messenger ID · …`
+- WhatsApp → existing `Phone` icon + `formatPhoneDisplay`
 
----
+Same treatment in the chat-list row preview where a phone is shown next to IG/MSG contacts.
 
-## Technical changes
+## Issue 2 — IG username "chinmay biswas" never resolved
 
-### Database (migration)
-- INSERT row into `automation_rules` for `process_ig_comment_runs`.
-- DROP the legacy `cron.unschedule(...)` for the IG-specific job (via insert tool — user-data).
+`supabase/functions/meta-webhook/index.ts → resolveInstagramSenderProfile()` runs on first inbound IG message and writes `contact_name` + `contact_avatar_url`. For this thread it returned empty — almost certainly because the page access token on the IG integration lacks `instagram_basic` / `pages_messaging` scopes, or Meta returned `{}` (common when the user has never previously interacted with the Page).
 
-### Frontend
-- Rewrite `src/components/settings/AutomationsControlRoom.tsx` into:
-  - `AutomationsControlRoom.tsx` (shell + filters + KPIs)
-  - `AutomationRuleRow.tsx` (single dense row)
-  - `AutomationActivityRail.tsx` (live runs, realtime)
-  - `AutomationEditSheet.tsx` (extracted, reorganised)
-  - `lib/automations/cronHumanize.ts` (describe + next-3-runs via tiny cron parser)
-- Add deep-link target buttons per rule key (e.g. IG → `/announcements?tab=instagram`, Reminders → `/settings?tab=communication-templates`).
+Today the empty result is cached for **24 h** (`_igProfileCache`) and never retried on subsequent inbound messages, so the chat stays anonymous forever.
 
-### Edge / worker
-- Confirm `automation-brain-tick` already handles `edge:*` workers generically (it does — `process_comm_retry_queue` uses the same pattern). No change beyond registering the row.
-- Keep `process-ig-comment-runs` fn unchanged (it's idempotent; can be called by either cron or the brain).
+**Fix:**
+1. **Do not cache empty results** — only cache when at least `name` or `username` came back. Failed lookups should retry on the next inbound message (cheap, one Graph call).
+2. **Backfill action** — add a "Refresh Instagram profile" item to the chat-header `⋯` menu that calls `meta-admin` (already exports `resolveInstagramSenderProfile`) for the selected IGSID and upserts `whatsapp_chat_settings.contact_name/avatar_url` via `upsert_meta_contact_profile`. One-click rescue for any historical anonymous IG thread.
+3. **Diagnostics log line** — when Graph returns 200 with empty body, log `[IG profile] empty body for IGSID=… token_scope=page|user` so we can spot scope problems in edge logs.
+4. **One-off backfill** — run `backfill-meta-profiles` for current `whatsapp_chat_settings` rows where `platform='instagram' AND contact_name IS NULL` (29 rows max based on quick count).
 
-### Cleanup
-- Remove dedicated pg_cron entry for `process-ig-comment-runs` after the new rule is verified once via "Run now".
-- Update memory index entry **Automation Brain** to note IG DMs are now orchestrated centrally.
+No DB schema changes required.
 
----
+## Issue 3 — AI parrots the customer before asking for email
+
+Last AI reply:
+
+> "I'd love to share the details of our monthly, quarterly, and annual packages, as well as our personal training options! First, could you please share your email address…"
+
+This is the lead-capture HARD GATE doing its job (name+email required before any plan info), but the prompt does not tell the model **how** to ask — so Gemini echoes the customer's question back almost verbatim before pivoting to the ask. Reads like the AI didn't listen.
+
+**Fix (prompt-only, no logic change):** in `_shared/ai-agent-brain.ts` lead-capture block (~line 273), add:
+
+```
+STYLE RULES (apply to every gated reply):
+- NEVER restate, paraphrase, or list back what the user just asked for.
+- NEVER promise "I'll share the details" before name+email are captured.
+- Acknowledge in ≤6 words ("Sure!" / "Happy to help, ") then ask the ONE missing field.
+- Keep gated replies under 25 words. One sentence. No bullet lists. No emoji storm.
+```
+
+Add 2 few-shot examples (good vs bad) so the model anchors on the brief style.
+
+No change to the gate itself, no change to lead-capture flow, no change to the email regex.
+
+## Files touched
+
+- `src/pages/WhatsAppChat.tsx` — header sub-line + chat-row preview (IG/MSG branch)
+- `supabase/functions/meta-webhook/index.ts` — don't cache empty profile, extra diag log
+- `supabase/functions/meta-admin/index.ts` — add `refresh_ig_profile` action (single IGSID)
+- `src/pages/WhatsAppChat.tsx` — `⋯` menu item "Refresh Instagram profile"
+- `supabase/functions/_shared/ai-agent-brain.ts` — STYLE RULES + 2 examples in gated block
+- One-off backfill call (no migration)
+
+## Memory update
+
+Append to `mem://integrations/whatsapp-crm-system-v25-0` (or the IG memory file):
+- IG/MSG threads store **IGSID/PSID in `phone_number`** — UI must never render it as a phone.
+- `resolveInstagramSenderProfile` must NOT cache empty results; retry on next inbound.
+- "Refresh Instagram profile" header action exists for anonymous IG threads.
+- AI gated replies must follow the STYLE RULES (no parroting, ≤25 words, one ask).
 
 ## Out of scope
-- IG campaign editor / approval queue UI (stays in `/announcements?tab=instagram`).
-- Changing the master tick cadence (5 min) or worker contract.
-- Multi-tenant / per-branch automation rules (already supported via `branch_id` filter; UI unchanged).
 
-## Open question
-Confirm: keep IG cadence at **1 min** (matches today) — or relax to **5 min** to align with the master tick (simpler, but +up-to-4-min DM latency).
+- Schema change to split `phone_number` into `external_id` (large refactor, separate task).
+- Re-architecting the email gate itself (still a sensible rule for lead-capture).
+- IG comment-to-DM flow (already moved to Automation Brain last loop).
