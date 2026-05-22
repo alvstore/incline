@@ -1107,8 +1107,8 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     console.warn(`[AI:${ctx.platform}] context extract failed:`, (e as Error).message);
   }
 
-  // Dedup do_not_ask
-  delta.do_not_ask_add = Array.from(new Set(delta.do_not_ask_add || []));
+  // Dedup + canonicalize do_not_ask
+  delta.do_not_ask_add = canonicalizeDNA(delta.do_not_ask_add || []);
   return delta;
 }
 
@@ -1126,8 +1126,17 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
   if (memory?.facts?.fitness_goal) {
     rules.push(`KNOWN GOAL: User's fitness goal is "${memory.facts.fitness_goal}". Do NOT re-ask for goal. Tailor the answer to this goal.`);
   }
+  if (memory?.facts?.plan_interest) {
+    rules.push(`KNOWN PLAN_INTEREST: User already chose "${memory.facts.plan_interest}" membership duration. NEVER re-emit the "Which membership duration suits you best?" interactive_list. Acknowledge their choice (one short line) and move to the NEXT missing onboarding field (email if missing, else budget/preferred_time/start_date).`);
+  }
   if (memory?.profile?.first_name) {
     rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
   }
+  // Surface the canonical do_not_ask list so the LLM has a definitive blocklist.
+  const dna = canonicalizeDNA(memory?.do_not_ask || []);
+  if (dna.length > 0) {
+    rules.push(`DO_NOT_ASK_LIST: [${dna.join(", ")}] — these fields are already known or refused. Do NOT ask them again in any form (plain text, button, or interactive_list).`);
+  }
   return rules.length ? `\n\n[RUNTIME RULES — non-negotiable, override softer instructions below]\n- ${rules.join("\n- ")}` : "";
 }
+
