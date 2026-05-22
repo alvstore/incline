@@ -618,7 +618,7 @@ function ToolsTab() {
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {category.tools.map((tool) => {
-                    const isEnabled = toolConfig[tool.name] !== false;
+                    const isEnabled = toolEnabled(tool.name);
                     const ToolIcon = tool.icon;
                     const risk = RISK_BADGE[tool.risk];
                     return (
