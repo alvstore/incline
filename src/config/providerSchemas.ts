@@ -206,6 +206,13 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'app_secret', label: 'App Secret', placeholder: 'From Meta App Dashboard → Settings → Basic', type: 'password', section: 'credentials' },
   ],
 
+  instagram_instagram_login: [
+    { key: 'instagram_user_id', label: 'Instagram User ID', placeholder: 'From Meta → Instagram product → API setup with Instagram login', type: 'text', section: 'config' },
+    { key: 'webhook_verify_token', label: 'Webhook Verify Token', placeholder: 'Any secret string you choose', type: 'text', section: 'config' },
+    { key: 'access_token', label: 'Access Token (IGAA…)', placeholder: 'IGAA…', type: 'password', section: 'credentials' },
+    { key: 'app_secret', label: 'Instagram App Secret', placeholder: 'Meta → Instagram product → API setup → Instagram app secret', type: 'password', section: 'credentials' },
+  ],
+
   // ── Messenger ──
   messenger_messenger_meta: [
     { key: 'page_id', label: 'Facebook Page ID', placeholder: 'From Facebook Page → About → Page ID', type: 'text', section: 'config' },
