@@ -112,7 +112,10 @@ export function isConsentBlockedError(err: any): boolean {
   const code = Number(err?.code ?? err?.error?.code ?? 0);
   const sub = Number(err?.error_subcode ?? err?.error?.error_subcode ?? 0);
   if (msg.includes("user consent is required")) return true;
-  if (code === 10) return true; // permission denied — typically consent-class
+  if (msg.includes("does not have permission")) return true;
+  if (msg.includes("object with id") && msg.includes("does not exist")) return true;
+  if (msg.includes("unsupported get request")) return true;
+  if (code === 10 || code === 100 || code === 200 || code === 803) return true;
   if (sub === 2018338) return true;
   return false;
 }

@@ -559,7 +559,23 @@ async function handleRefreshAllIgAvatars(body: any) {
       continue;
     }
     const cdn = res.data?.profile_pic_url as string | undefined;
-    if (!cdn) { results.failed++; continue; }
+    if (!cdn) {
+      // No profile pic returned (private/no-consent/deleted IGSID). Mark as
+      // blocked so we stop re-scanning the same row on every sweep.
+      await supabase.rpc("upsert_meta_contact_profile", {
+        p_branch_id: row.branch_id,
+        p_phone: row.phone_number,
+        p_platform: "instagram",
+        p_external_id: row.phone_number,
+        p_display_name: res.data?.name || (res.data?.username ? `@${res.data.username}` : null),
+        p_avatar_url: null,
+        p_avatar_source: null,
+        p_avatar_synced_at: null,
+        p_avatar_consent_blocked: true,
+      });
+      results.consent_blocked++;
+      continue;
+    }
     const persisted = await persistMetaAvatar({
       scopedId: row.phone_number,
       platform: "instagram",
