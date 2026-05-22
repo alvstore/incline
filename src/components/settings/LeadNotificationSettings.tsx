@@ -273,8 +273,10 @@ interface AdminRow {
   id: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   whatsapp_enabled: boolean;
   sms_enabled: boolean;
+  email_enabled: boolean;
 }
 
 function maskPhone(p: string | null): string {
@@ -298,31 +300,38 @@ export function AdminRecipientsCard() {
       if (ids.length === 0) return [];
 
       const [{ data: profiles }, { data: prefs }] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, phone').in('id', ids),
+        supabase.from('profiles').select('id, full_name, phone, email').in('id', ids),
         supabase
           .from('lead_notification_admin_prefs')
-          .select('user_id, whatsapp_enabled, sms_enabled')
+          .select('user_id, whatsapp_enabled, sms_enabled, email_enabled')
           .in('user_id', ids),
       ]);
 
-      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean }>();
       for (const p of prefs || []) prefMap.set((p as any).user_id, p as any);
 
       return (profiles || []).map((p: any) => {
-        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true };
+        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true, email_enabled: true };
         return {
           id: p.id,
           full_name: p.full_name,
           phone: p.phone,
+          email: p.email ?? null,
           whatsapp_enabled: pref.whatsapp_enabled,
           sms_enabled: pref.sms_enabled,
+          email_enabled: pref.email_enabled ?? true,
         };
       });
     },
   });
 
   const updatePref = useMutation({
-    mutationFn: async (input: { user_id: string; whatsapp_enabled: boolean; sms_enabled: boolean }) => {
+    mutationFn: async (input: {
+      user_id: string;
+      whatsapp_enabled: boolean;
+      sms_enabled: boolean;
+      email_enabled: boolean;
+    }) => {
       const { error } = await supabase
         .from('lead_notification_admin_prefs')
         .upsert(input, { onConflict: 'user_id' });
@@ -358,7 +367,10 @@ export function AdminRecipientsCard() {
               <div key={a.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0">
                   <Label className="block">{a.full_name || 'Unnamed'}</Label>
-                  <p className="text-sm text-muted-foreground">{maskPhone(a.phone)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {maskPhone(a.phone)}
+                    {a.email ? <span className="ml-2">· {a.email}</span> : null}
+                  </p>
                 </div>
                 <div className="flex items-center gap-5">
                   <label className="flex items-center gap-2 text-xs">
@@ -366,7 +378,12 @@ export function AdminRecipientsCard() {
                     <Switch
                       checked={a.whatsapp_enabled}
                       onCheckedChange={(v) =>
-                        updatePref.mutate({ user_id: a.id, whatsapp_enabled: v, sms_enabled: a.sms_enabled })
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: v,
+                          sms_enabled: a.sms_enabled,
+                          email_enabled: a.email_enabled,
+                        })
                       }
                     />
                   </label>
@@ -375,7 +392,26 @@ export function AdminRecipientsCard() {
                     <Switch
                       checked={a.sms_enabled}
                       onCheckedChange={(v) =>
-                        updatePref.mutate({ user_id: a.id, whatsapp_enabled: a.whatsapp_enabled, sms_enabled: v })
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: a.whatsapp_enabled,
+                          sms_enabled: v,
+                          email_enabled: a.email_enabled,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Email</span>
+                    <Switch
+                      checked={a.email_enabled}
+                      onCheckedChange={(v) =>
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: a.whatsapp_enabled,
+                          sms_enabled: a.sms_enabled,
+                          email_enabled: v,
+                        })
                       }
                     />
                   </label>
