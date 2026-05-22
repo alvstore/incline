@@ -1410,7 +1410,13 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     rules.push(`KNOWN GOAL: User's fitness goal is "${memory.facts.fitness_goal}". Do NOT re-ask for goal. Tailor the answer to this goal.`);
   }
   if (memory?.facts?.plan_interest) {
-    rules.push(`KNOWN PLAN_INTEREST: User already chose "${memory.facts.plan_interest}" membership duration. NEVER re-emit the "Which membership duration suits you best?" interactive_list. Acknowledge their choice (one short line) and move to the NEXT missing onboarding field (email if missing, else budget/preferred_time/start_date).`);
+    const plan = String(memory.facts.plan_interest).toLowerCase();
+    const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
+    if (isAnnual) {
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and pitch Founding Member (Annual) — "Want our team to lock in your Founding spot?". Never quote prices.`);
+    } else {
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open." Never quote prices.`);
+    }
   }
   if (memory?.profile?.first_name) {
     if (looksLikeRealName(memory.profile.first_name, (memory as any)?.profile?.phone)) {
