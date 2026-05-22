@@ -98,7 +98,7 @@ const EMPTY_ROW: Omit<BrainRow, 'id' | 'updated_at'> = {
 
 export function AIBrainTab() {
   const queryClient = useQueryClient();
-  const { branches = [] } = useBranches();
+  const { data: branches = [] } = useBranches();
   const [editing, setEditing] = useState<Partial<BrainRow> | null>(null);
 
   const { data: rows, isLoading } = useQuery({
@@ -117,12 +117,12 @@ export function AIBrainTab() {
   const { data: health } = useQuery({
     queryKey: ['ai_brain_health'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ai_brain_health' as any)
+      const { data, error } = await (supabase as any)
+        .from('ai_brain_health')
         .select('*')
         .order('purpose');
       if (error) throw error;
-      return (data ?? []) as HealthRow[];
+      return ((data ?? []) as unknown) as HealthRow[];
     },
     refetchInterval: 60_000,
   });
