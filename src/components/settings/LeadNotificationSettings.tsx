@@ -204,9 +204,15 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
               />
               <Row
                 label="WhatsApp to Admins"
-                desc="Alert owners & admins via WhatsApp"
+                desc="Alert owners & admins via WhatsApp (approved template)"
                 checked={form.whatsapp_to_admins}
                 onChange={() => toggle('whatsapp_to_admins')}
+              />
+              <Row
+                label="Email to Admins"
+                desc="Alert owners & admins via email"
+                checked={form.email_to_admins}
+                onChange={() => toggle('email_to_admins')}
               />
               <Row
                 label="SMS to Managers"
@@ -216,16 +222,21 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
               />
               <Row
                 label="WhatsApp to Managers"
-                desc="Alert branch managers via WhatsApp"
+                desc="Alert branch managers via WhatsApp (approved template)"
                 checked={form.whatsapp_to_managers}
                 onChange={() => toggle('whatsapp_to_managers')}
               />
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                <strong>Heads up:</strong> Meta WhatsApp Cloud API only delivers free-form text alerts to admins
-                who have messaged the business number in the last 24&nbsp;hours. Admins who have never replied to
-                the business WhatsApp will see <em>"sent"</em> in the Live Feed but won't actually receive the
-                message until an approved template is used. Ask each admin to send a quick "Hi" once, or set up
-                an approved <code>lead_alert_team</code> template in Meta Business Manager.
+              <Row
+                label="Email to Managers"
+                desc="Alert branch managers via email"
+                checked={form.email_to_managers}
+                onChange={() => toggle('email_to_managers')}
+              />
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                <strong>Delivery:</strong> Team WhatsApp alerts are sent via the approved
+                Meta template <code>internal_new_lead_alert</code>, so they deliver to
+                admins/managers even outside the 24-hour customer-service window. SMS and
+                email use your configured providers.
               </p>
             </CardContent>
           </Card>
