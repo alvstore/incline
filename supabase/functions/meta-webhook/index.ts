@@ -432,10 +432,25 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
 // F4: resolve IG sender display name + avatar on first contact
   let contactName: string | null = null;
   let contactAvatarUrl: string | null = null;
+  let avatarSource: "storage" | "meta_cdn" | null = null;
+  let avatarSyncedAt: string | null = null;
+  let avatarConsentBlocked = false;
   if (platform === "instagram" && !isOutbound && integration) {
     const profile = await resolveInstagramSenderProfile(contactId, integration);
     contactName = profile?.name ?? null;
-    contactAvatarUrl = profile?.avatar_url ?? null;
+    avatarConsentBlocked = !!profile?.consent_blocked;
+    // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
+    if (profile?.avatar_url && !avatarConsentBlocked) {
+      const persisted = await persistMetaAvatar({
+        scopedId: contactId,
+        platform: "instagram",
+        cdnUrl: profile.avatar_url,
+        serviceClient: supabase,
+      });
+      contactAvatarUrl = persisted.publicUrl;
+      avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
+      avatarSyncedAt = persisted.syncedAt;
+    }
   }
 
   const { data: inserted, error } = await supabase
@@ -468,9 +483,10 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       { onConflict: "branch_id,phone_number" }
     );
 
-    // Persist display name / avatar so the chat list/header stay populated
-    // even when newer message rows lack them.
-    if (contactName || contactAvatarUrl) {
+    // Persist display name / avatar / provenance so the chat list/header stay
+    // populated even when newer message rows lack them, and so consent-blocked
+    // contacts aren't re-queried.
+    if (contactName || contactAvatarUrl || avatarConsentBlocked) {
       try {
         await supabase.rpc("upsert_meta_contact_profile", {
           p_branch_id: branchId,
@@ -479,6 +495,9 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
           p_external_id: contactId,
           p_display_name: contactName,
           p_avatar_url: contactAvatarUrl,
+          p_avatar_source: avatarSource,
+          p_avatar_synced_at: avatarSyncedAt,
+          p_avatar_consent_blocked: avatarConsentBlocked,
         });
       } catch (profileErr) {
         console.warn(`[${platform}] profile upsert failed:`, profileErr);
