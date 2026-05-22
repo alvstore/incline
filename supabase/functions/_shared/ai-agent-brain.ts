@@ -1329,7 +1329,11 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     rules.push(`KNOWN PLAN_INTEREST: User already chose "${memory.facts.plan_interest}" membership duration. NEVER re-emit the "Which membership duration suits you best?" interactive_list. Acknowledge their choice (one short line) and move to the NEXT missing onboarding field (email if missing, else budget/preferred_time/start_date).`);
   }
   if (memory?.profile?.first_name) {
-    rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
+    if (looksLikeRealName(memory.profile.first_name, (memory as any)?.profile?.phone)) {
+      rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
+    } else {
+      rules.push(`NAME UNVERIFIED: The stored profile name "${memory.profile.first_name}" looks like a placeholder (test/sample/phone/emoji). NEVER greet or address the user by that name. Greet generically ("Hi there!") and ask for their real first name as the first onboarding step.`);
+    }
   }
   // Surface the canonical do_not_ask list so the LLM has a definitive blocklist.
   const dna = canonicalizeDNA(memory?.do_not_ask || []);
