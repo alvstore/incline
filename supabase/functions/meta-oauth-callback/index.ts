@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
       await supabase.from("integration_settings").insert({
         branch_id: branchId,
         provider: "instagram_login",
-        type: "instagram",
+        integration_type: "instagram",
         credentials,
         config,
         is_active: true,
