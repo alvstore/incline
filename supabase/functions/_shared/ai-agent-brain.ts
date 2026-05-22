@@ -621,10 +621,23 @@ function enforceOutboundInteractiveGuards(input: {
         ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
         : "Could you share your email so our team can send your Founding Member invite?";
     }
+    const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+    if (!knownGoal) {
+      return firstName
+        ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
+        : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
+    }
+    const knownPlan = !!memory?.facts?.plan_interest;
+    if (!knownPlan) {
+      return firstName
+        ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
+        : "Are you thinking monthly, quarterly, half-yearly, or annual?";
+    }
     return firstName
       ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
       : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
   };
+
 
 
   // Look at last 6 outbound messages for the same body text
