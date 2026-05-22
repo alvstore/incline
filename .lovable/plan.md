@@ -1,86 +1,115 @@
 
-## Audit — what actually happened
+# AI Brain & Context — Single Source of Truth
 
-Transcript replay against live `ai_memory` for `919414296741`:
+## 1. Audit findings (where persona/context lives today)
 
+We currently have **5 places** that feed the same AI prompt, edited from **3 different UIs**, with **2 separate handles** (`whatsapp_reply`, `lead_nurture`) reading them inconsistently.
+
+| # | Source | Edited from | Read by | Problem |
+|---|---|---|---|---|
+| 1 | `ai_purposes.system_prompt` (per purpose, branch-aware) | Settings → AI Agent → **Purposes** | `ai-runtime.generateOnce` and `ai-agent-brain` (SSOT, the intended one) | Correct layer, but not the only one. |
+| 2 | `whatsapp_ai_config.system_prompt` (legacy "overlay") | Settings → AI Agent → **Auto-Reply** | `ai-agent-brain.ts` line 202 — appended *after* purpose prompt | Duplicate persona surface for WhatsApp only. Drift vs purpose row. |
+| 3 | `organization_settings.lead_nurture_config.nurture_prompt` | Settings → AI Agent → **Lead Nurture** | `lead-nurture-followup` injects into `userMessage` (not system) | Duplicate persona surface for nurture only. Different injection point. |
+| 4 | Hardcoded blocks in `ai-agent-brain.ts` (FORMATTING RULES, CRITICAL BEHAVIORAL RULE, ABSOLUTE IDENTITY RULE, fallback "You are a helpful gym assistant…") | Code only | WhatsApp/Meta replies only | Nurture path never gets these rules → tonal/format drift between the two handles. |
+| 5 | `ai_knowledge` table (branch + global, topic-tagged) | **No UI exists** | `ai-agent-brain` only (loadKnowledge) — `0 rows` in prod | Designed as the brain, but unreachable and unused. |
+
+Plus hydrated facts (`hydrateGymFacts`) from DB — deterministic, fine to keep.
+
+**Net effect:** the same intent ("be warm, short, push the New Year offer") has to be typed into 2-3 different boxes; WhatsApp gets behavioral rules nurture never sees; `ai_knowledge` (the actual "brain") is empty and invisible.
+
+The user-visible symptom: "we have ai context, also ai brain, frontend, hardcoded… two handles" — exactly the picture above.
+
+---
+
+## 2. Target architecture — one brain, many handles
+
+```text
+                     ┌──────────────────────────┐
+                     │   ai_knowledge (BRAIN)   │
+                     │  gym facts, offers, FAQs │
+                     │  branch + global, topics │
+                     └────────────┬─────────────┘
+                                  │ shared by ALL purposes
+        ┌─────────────────────────┼─────────────────────────┐
+        ▼                         ▼                         ▼
+ ai_purposes               ai_purposes               ai_purposes
+ whatsapp_reply            lead_nurture              review_reply / …
+ (persona + tools          (persona + cadence        (per-handle persona)
+  + guards)                 + guards)
+        │                         │                         │
+        ▼                         ▼                         ▼
+ ai-agent-brain        lead-nurture-followup        other edge fns
+ (WhatsApp/Meta)       (cron nudges)
 ```
-ai_memory row:
-  profile.first_name      = "Sandeep"
-  facts.fitness_goal      = "muscle_gain"
-  facts.plan_interest     = "Annual"
-  do_not_ask              = ["phone", "membership duration", "goal"]
-  asked_questions         = [name×1, email×4]   ← plan_interest list never logged
-```
 
-The data layer is correct — the auto-learn extractor in `extractContextDelta` (lines 986-1064) did capture `plan_interest="Annual"` after the very first tap. The bug is **purely in prompt enforcement + outbound de-dup**, not in storage:
+Two **purpose rows** = two handles, each with its own persona/temperature/tools.
+One **knowledge table** = one brain shared by every handle.
+**No** overlays, **no** hardcoded persona, **no** per-tab prompt boxes.
 
-1. **`renderRuntimeRules`** (lines 1068-1084) emits "KNOWN GOAL" and "KNOWN NAME" runtime rules but has **no `KNOWN PLAN_INTEREST` rule** — so the LLM never sees a hard "do not re-ask duration" instruction.
-2. **`do_not_ask` is not surfaced** to the model in any structured way. The extractor stores `"membership duration"` (LLM-generated synonym) instead of the canonical `plan_interest` key, so nothing downstream matches.
-3. **No outbound de-dup guard** — if the LLM returns the same `interactive_list` JSON whose `body` text already appears in the last N outbound messages, it is sent again. This is what produced the 3 identical "Which membership duration suits you best?" prompts.
-4. **Onboarding `HARD GATE` (line 296) is prompt-only**. The model violated it (skipped email → jumped to plan_interest). There is no server-side guard that strips interactive blocks when `email` is missing.
-5. **`asked_questions` tracker** is fed by the LLM extractor only; interactive lists emitted by the bot are never logged, so the existing "Never repeat the same question more than twice" rule has no data to act on.
+---
 
-No DB schema change is needed — `ai_memory.facts` already has what we need.
+## 3. Changes
 
-## Fix plan (single edge function file)
+### 3.1 Database (migration)
 
-**File: `supabase/functions/_shared/ai-agent-brain.ts`**
+- Backfill content: move `whatsapp_ai_config.system_prompt` into `ai_purposes(purpose='whatsapp_reply').system_prompt` (append if non-empty and not already present), then **null it out**.
+- Backfill content: move `organization_settings.lead_nurture_config.nurture_prompt` into `ai_purposes(purpose='lead_nurture').system_prompt`, then drop that key from the JSONB.
+- Seed `ai_knowledge` with the currently-hardcoded behavioral rules as global rows:
+  - `topic='format_rules'`, `topic='behavior_rules'`, `topic='identity_rules'` (the member-first rule).
+- Add `ai_knowledge.priority smallint default 100` and `ai_knowledge.applies_to text[] default '{all}'` so a row can be scoped to specific purposes (e.g., `{'whatsapp_reply'}`) or left global.
+- Optional view `ai_brain_health` aggregating: empty purposes, stale knowledge, recent `ai_call_logs` error rate per purpose — feeds the self-healing dashboard.
 
-### 1. Canonicalize `do_not_ask` keys (extractContextDelta + upsertMemory side)
-Add a small `DNA_ALIASES` map and normalize before push:
-```
-membership duration | plan | duration  → plan_interest
-fitness goal | goal                    → goal
-phone number | mobile                  → phone
-```
-Apply both to LLM output and to deterministic pushes.
+### 3.2 Edge code (one prompt assembler)
 
-### 2. Deterministic plan_interest capture from interactive list_reply title
-Mirror the existing `GOAL_HINTS` block. Add a `PLAN_HINTS` map keyed off the list-reply titles the bot sends:
-```
-/monthly/i      → "Monthly"
-/quarterly/i    → "Quarterly"
-/half[- ]?year/i → "Half-Yearly"
-/annual|yearly/i → "Annual"
-```
-Set `delta.facts.plan_interest` + `do_not_ask_add: ["plan_interest"]` when the last user message matches and memory doesn't already have it.
+- New shared helper `supabase/functions/_shared/ai-prompt.ts::buildSystemPrompt({ purpose, branchId, context })` that returns the final system string for **every** purpose, in this fixed order:
+  1. `ai_purposes.system_prompt` (the persona for this handle)
+  2. `ai_knowledge` rows where `applies_to` contains `purpose` or `'all'`, ordered by `priority`
+  3. Deterministic `hydrateGymFacts(branchId)` block
+  4. Per-call dynamic context (member identity, missing fields, etc.) passed in as `context`
+- Rewrite `ai-agent-brain.ts` to call this helper — delete the inline `FORMATTING RULES / CRITICAL BEHAVIORAL RULE / ABSOLUTE IDENTITY RULE / customPrompt fallback` strings.
+- Rewrite `lead-nurture-followup` to call this helper too (currently it stuffs `nurturePrompt` into the user message — that path goes away).
+- Both handlers now produce structurally identical prompts; only the `ai_purposes` row differs.
 
-### 3. Add `KNOWN PLAN_INTEREST` runtime rule in `renderRuntimeRules`
-```
-if (memory?.facts?.plan_interest) {
-  rules.push(`KNOWN PLAN_INTEREST: "${memory.facts.plan_interest}". 
-    Do NOT re-emit the membership duration interactive_list. 
-    Acknowledge their choice and move to the NEXT missing field.`);
-}
-```
-Also append a generic line that lists `do_not_ask` keys so the LLM sees the canonical set.
+### 3.3 Frontend (collapse the 3 tabs into 1 brain + N handles)
 
-### 4. Outbound interactive-list de-dup guard (post-LLM, pre-send)
-Right after the LLM returns `replyText`, before the lead-capture parse:
-- Detect if `replyText` is/contains a JSON block with `type:"interactive_list"`.
-- Pull `body.text` (or the `body` string).
-- Compare against the last 8 outbound messages already in `history` (already loaded at line 174).
-- If the same `body` appears in the last 3 outbound turns → drop the interactive block and substitute a short plain-text follow-up using the canonical "next missing field" picker (email if missing, else goal, else plan_interest acknowledgement + ask for budget/time).
+Settings → AI Agent restructured:
 
-### 5. Hard-gate enforcement (server-side, not prompt-only)
-Before sending an interactive block, if `memory.profile.full_name` or any email-bearing field is missing → strip interactive entirely and substitute a plain-text question for the missing field. This makes the "HARD GATE" actually hard.
+- **Brain** (new) — CRUD over `ai_knowledge`. Columns: Topic, Title, Applies to (multi-select of purposes or "All"), Branch (global / specific), Priority, Active.
+- **Handles** — one row per `ai_purposes` record (whatsapp_reply, lead_nurture, review_reply, …). Click → drawer with: persona prompt, model/provider, temperature, tools_allowed, guards, "Preview merged prompt" that calls the new helper and shows exactly what the LLM will see.
+- **Auto-Reply** tab keeps only the *operational* toggles (bot on/off, working hours, reply delay) — the persona textarea is removed.
+- **Lead Nurture** tab keeps only the *cadence* controls (enabled, delay_hours, max_retries, run-now, stats) — the prompt textarea is removed.
 
-### 6. Log emitted interactive lists into `ai_memory.asked_questions`
-When we send an interactive_list, append the `body` text so the existing repeat-detection logic and future analytics can see it.
+Result: one place to write what the AI knows (Brain), one place per handle to shape *how* it speaks, zero overlap.
 
-## Out of scope (do not touch)
+### 3.4 Self-learning & self-healing (lightweight, no new infra)
 
-- DB schema, RLS, migrations — none required.
-- `whatsapp-webhook/index.ts` message extraction is already correct (`list_reply.title` is forwarded).
-- `meta-webhook/index.ts` — same brain, gets the fix transitively.
-- UI / frontend — no changes.
-- Lead capture write path (`tryParseAndCaptureLead`) — unchanged.
+- **Self-learning loop:** nightly job scans the last 24h of `whatsapp_messages` where the AI asked the same question ≥3 times or the user replied with negative-intent regex, summarises with `generateOnce({purpose:'dashboard_insight'})`, and **proposes** new `ai_knowledge` rows (status `suggested`) for an admin to one-click approve in the Brain tab.
+- **Self-healing loop:** `ai_brain_health` view + a card on the AI Agent Dashboard flags: purpose disabled, prompt < 50 chars, error rate > 5% in last 1k calls, knowledge older than 90 days. Each flag has a "Fix" button that opens the right drawer.
 
-## Verification after build
+---
 
-1. `supabase--read_query` on `ai_memory` for `919414296741` → confirm `do_not_ask` now includes canonical `plan_interest`.
-2. Send a test inbound via `supabase--curl_edge_functions` to `/whatsapp-webhook` simulating a 5th turn for the same phone with text "tell me more" → assert the response does NOT contain `"Which membership duration suits you best?"`.
-3. Edge logs (`supabase--edge_function_logs` for `whatsapp-webhook`) → look for new `[AI:whatsapp] dropping duplicate interactive_list` line.
-4. Manually replay the transcript flow with a fresh phone via curl: name → email → goal → plan → confirm only ONE plan list is ever sent.
+## 4. Migration & rollout (safe, reversible)
 
-Used the senior-architect + senior-backend skills.
+1. Ship migration + new helper + Brain UI behind a feature flag (`ai_ssot_v1`).
+2. Run backfill in shadow mode — log diffs between old assembled prompt and new one for 24h.
+3. Flip flag; legacy textareas become read-only with a "Moved to Brain →" link for one release.
+4. Next release: drop the legacy columns/keys and the read-only widgets.
+
+---
+
+## 5. Out of scope (this plan)
+
+- Provider/model registry (`ai_provider_configs`) — already SSOT, untouched.
+- `ai_memory` per-contact short-term memory — unrelated, untouched.
+- IG comment automation persona — already reads `ai_purposes`, gets the fix for free.
+- WhatsApp template content (`templates` table) — different system, untouched.
+
+---
+
+## 6. Acceptance checks
+
+- `select count(*) from whatsapp_ai_config where system_prompt is not null` → 0
+- `lead_nurture_config ? 'nurture_prompt'` → false on every row
+- `rg -n "FORMATTING RULES|CRITICAL BEHAVIORAL RULE|ABSOLUTE IDENTITY RULE" supabase/functions` → 0 matches in code (only in seeded `ai_knowledge` rows)
+- Sending the same test message via WhatsApp and via a nurture run produces prompts that differ **only** in the `ai_purposes.system_prompt` segment (verified by the Preview tool).
+- Admin can change the gym's address in **one** place (Brain → Branch Info) and both handles pick it up on next call.

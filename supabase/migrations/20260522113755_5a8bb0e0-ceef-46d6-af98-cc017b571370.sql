@@ -1,0 +1,1 @@
+ALTER VIEW public.ai_brain_health SET (security_invoker = true);

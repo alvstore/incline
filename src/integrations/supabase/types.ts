@@ -301,36 +301,45 @@ export type Database = {
       }
       ai_knowledge: {
         Row: {
+          applies_to: string[]
           branch_id: string | null
           content: string
           created_at: string
           created_by: string | null
           id: string
           is_active: boolean
+          priority: number
+          status: string
           tags: string[]
           title: string
           topic: string
           updated_at: string
         }
         Insert: {
+          applies_to?: string[]
           branch_id?: string | null
           content: string
           created_at?: string
           created_by?: string | null
           id?: string
           is_active?: boolean
+          priority?: number
+          status?: string
           tags?: string[]
           title: string
           topic: string
           updated_at?: string
         }
         Update: {
+          applies_to?: string[]
           branch_id?: string | null
           content?: string
           created_at?: string
           created_by?: string | null
           id?: string
           is_active?: boolean
+          priority?: number
+          status?: string
           tags?: string[]
           title?: string
           topic?: string
@@ -12422,6 +12431,28 @@ export type Database = {
       }
     }
     Views: {
+      ai_brain_health: {
+        Row: {
+          branch_id: string | null
+          calls_24h: number | null
+          enabled: boolean | null
+          error_rate_pct: number | null
+          errors_24h: number | null
+          health_flag: string | null
+          prompt_len: number | null
+          purpose: string | null
+          purpose_updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_purposes_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_messages: {
         Row: {
           branch_id: string | null
