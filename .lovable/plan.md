@@ -1,89 +1,86 @@
-## Audit findings — Payroll Processing table
 
-### 1. Conflict / duplicate logic (CRITICAL — shown across both screenshots)
+## Audit — what actually happened
 
-The two screenshots aren't just a "loading flash" — they expose a real **business-rule conflict**:
+Transcript replay against live `ai_memory` for `919414296741`:
 
-- **Image 1 (initial fallback render)** — every row shows `0/26`, `₹0` net pay. This is the placeholder injected in `HRM.tsx:250` when `calculatePayrollForStaff` throws (`workingDays: 26` is hardcoded — May has 31 days, so the default is already wrong).
-- **Image 2 (after query resolves)** — same rows now show `4/31`, prorated `₹3,226`, *and* an amber **"Attendance not recorded"** chip on the same line.
-
-Root cause in `compute_payroll` RPC + `hrmService.calculatePayrollForStaff`:
-- The RPC walks every calendar day and returns `payable=true` for non-Sunday/non-leave days even when **no `staff_attendance` row exists**. So `payableDays` accumulates from shift-template / default-working-day logic, not from actual punches.
-- `attendanceRowsTotal` only increments when `hours_worked > 0`. That's the value driving the `attendanceRecorded` flag.
-- Result: the warning chip says "no attendance" while the prorated column simultaneously credits ₹3,226. The user sees two contradictory truths in one row, and a manager could hit **Process** and pay a no-show staff member.
-
-This is the duplicate/conflict the user is asking us to remove.
-
-### 2. Initial-flash UX issue
-The 0/26 → 4/31 flicker happens because the empty-result fallback is rendered as real data instead of a skeleton. There is no per-row loading state — only the page-level staff list shows a spinner.
-
-### 3. Badge styling issue (visible in image 2)
-Line 1321:
 ```
-<Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
-  ⚠ Attendance not recorded
-</Badge>
+ai_memory row:
+  profile.first_name      = "Sandeep"
+  facts.fitness_goal      = "muscle_gain"
+  facts.plan_interest     = "Annual"
+  do_not_ask              = ["phone", "membership duration", "goal"]
+  asked_questions         = [name×1, email×4]   ← plan_interest list never logged
 ```
-- Sits inside a narrow `Days` column with `flex-col`, so the long label wraps into a tall pill (looks like a stadium/oval blob in the screenshot).
-- Uses an emoji `⚠` (violates project rule: lucide-react only, no emoji).
-- `text-[10px]` + `px-1 py-0` is too cramped; outline + soft amber tint feels weak against the dense table.
-- Color tokens are raw Tailwind (`bg-amber-500/10`) instead of semantic Vuexy tokens.
 
----
+The data layer is correct — the auto-learn extractor in `extractContextDelta` (lines 986-1064) did capture `plan_interest="Annual"` after the very first tap. The bug is **purely in prompt enforcement + outbound de-dup**, not in storage:
 
-## Plan
+1. **`renderRuntimeRules`** (lines 1068-1084) emits "KNOWN GOAL" and "KNOWN NAME" runtime rules but has **no `KNOWN PLAN_INTEREST` rule** — so the LLM never sees a hard "do not re-ask duration" instruction.
+2. **`do_not_ask` is not surfaced** to the model in any structured way. The extractor stores `"membership duration"` (LLM-generated synonym) instead of the canonical `plan_interest` key, so nothing downstream matches.
+3. **No outbound de-dup guard** — if the LLM returns the same `interactive_list` JSON whose `body` text already appears in the last N outbound messages, it is sent again. This is what produced the 3 identical "Which membership duration suits you best?" prompts.
+4. **Onboarding `HARD GATE` (line 296) is prompt-only**. The model violated it (skipped email → jumped to plan_interest). There is no server-side guard that strips interactive blocks when `email` is missing.
+5. **`asked_questions` tracker** is fed by the LLM extractor only; interactive lists emitted by the bot are never logged, so the existing "Never repeat the same question more than twice" rule has no data to act on.
 
-### A. Backend logic fix — `src/services/hrmService.ts`
+No DB schema change is needed — `ai_memory.facts` already has what we need.
 
-When `attendanceRecorded === false` AND the row hasn't been manually overridden via `payroll_mark_full_present`, zero out the payable side so the UI and the database agree:
+## Fix plan (single edge function file)
 
-```ts
-const hasManualOverride = dailyBreakdown.some(r => r.source === 'manual_override');
-if (!attendanceRecorded && !hasManualOverride) {
-  payableDays = 0;
-  // proRatedPay, grossPay, deductions, netPay all become 0
+**File: `supabase/functions/_shared/ai-agent-brain.ts`**
+
+### 1. Canonicalize `do_not_ask` keys (extractContextDelta + upsertMemory side)
+Add a small `DNA_ALIASES` map and normalize before push:
+```
+membership duration | plan | duration  → plan_interest
+fitness goal | goal                    → goal
+phone number | mobile                  → phone
+```
+Apply both to LLM output and to deterministic pushes.
+
+### 2. Deterministic plan_interest capture from interactive list_reply title
+Mirror the existing `GOAL_HINTS` block. Add a `PLAN_HINTS` map keyed off the list-reply titles the bot sends:
+```
+/monthly/i      → "Monthly"
+/quarterly/i    → "Quarterly"
+/half[- ]?year/i → "Half-Yearly"
+/annual|yearly/i → "Annual"
+```
+Set `delta.facts.plan_interest` + `do_not_ask_add: ["plan_interest"]` when the last user message matches and memory doesn't already have it.
+
+### 3. Add `KNOWN PLAN_INTEREST` runtime rule in `renderRuntimeRules`
+```
+if (memory?.facts?.plan_interest) {
+  rules.push(`KNOWN PLAN_INTEREST: "${memory.facts.plan_interest}". 
+    Do NOT re-emit the membership duration interactive_list. 
+    Acknowledge their choice and move to the NEXT missing field.`);
 }
 ```
+Also append a generic line that lists `do_not_ask` keys so the LLM sees the canonical set.
 
-This keeps `payroll_mark_full_present` as the single, audited path to credit a full month when attendance was genuinely missed. No silent auto-payment.
+### 4. Outbound interactive-list de-dup guard (post-LLM, pre-send)
+Right after the LLM returns `replyText`, before the lead-capture parse:
+- Detect if `replyText` is/contains a JSON block with `type:"interactive_list"`.
+- Pull `body.text` (or the `body` string).
+- Compare against the last 8 outbound messages already in `history` (already loaded at line 174).
+- If the same `body` appears in the last 3 outbound turns → drop the interactive block and substitute a short plain-text follow-up using the canonical "next missing field" picker (email if missing, else goal, else plan_interest acknowledgement + ask for budget/time).
 
-Also fix the fallback default in `HRM.tsx:250`: replace hardcoded `workingDays: 26` with `getDaysInMonth(payrollMonth)` so the placeholder matches reality.
+### 5. Hard-gate enforcement (server-side, not prompt-only)
+Before sending an interactive block, if `memory.profile.full_name` or any email-bearing field is missing → strip interactive entirely and substitute a plain-text question for the missing field. This makes the "HARD GATE" actually hard.
 
-### B. Per-row loading state — `src/pages/HRM.tsx`
+### 6. Log emitted interactive lists into `ai_memory.asked_questions`
+When we send an interactive_list, append the `body` text so the existing repeat-detection logic and future analytics can see it.
 
-- Track `isLoading` from the `hrm-payroll` query and, while pending, render `<Skeleton>` cells for Days/Pro-rated/Gross/Deductions/Net Pay instead of zeros. Eliminates the 0/26 → 4/31 flash.
-- Keep Process / download / email action buttons disabled during load.
+## Out of scope (do not touch)
 
-### C. Badge redesign — replace the amber blob
+- DB schema, RLS, migrations — none required.
+- `whatsapp-webhook/index.ts` message extraction is already correct (`list_reply.title` is forwarded).
+- `meta-webhook/index.ts` — same brain, gets the fix transitively.
+- UI / frontend — no changes.
+- Lead capture write path (`tryParseAndCaptureLead`) — unchanged.
 
-New component `src/components/hrm/AttendanceStateBadge.tsx`:
+## Verification after build
 
-- Uses `AlertTriangle` from lucide-react (no emoji).
-- Inline chip: `inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap`.
-- Tooltip on hover: "No check-ins recorded for this period. Use 'Mark full month present' or sync MIPS attendance before processing."
-- Days cell layout changes from `flex-col` to a tight 2-line stack: `font-mono` "0/31" on top, single-line chip below — no wrapping.
+1. `supabase--read_query` on `ai_memory` for `919414296741` → confirm `do_not_ask` now includes canonical `plan_interest`.
+2. Send a test inbound via `supabase--curl_edge_functions` to `/whatsapp-webhook` simulating a 5th turn for the same phone with text "tell me more" → assert the response does NOT contain `"Which membership duration suits you best?"`.
+3. Edge logs (`supabase--edge_function_logs` for `whatsapp-webhook`) → look for new `[AI:whatsapp] dropping duplicate interactive_list` line.
+4. Manually replay the transcript flow with a fresh phone via curl: name → email → goal → plan → confirm only ONE plan list is ever sent.
 
-When the override has been applied, swap to a green chip: `Manually marked present` with `CheckCircle2` icon, same shape.
-
-### D. Process-row guard
-
-`Process` button (and `Process All`) becomes disabled with a tooltip when **any** visible row has `attendanceRecorded === false && !manualOverride`. Prevents accidental zero-attendance payouts.
-
-### E. Files touched
-
-- `src/services/hrmService.ts` — zero-out logic + override detection.
-- `src/pages/HRM.tsx` — fallback fix, skeletons, Process All guard, badge swap.
-- `src/components/hrm/AttendanceStateBadge.tsx` — new.
-
-### Out of scope
-- Server-side `compute_payroll` SQL rewrite (would require migration; current frontend gate is sufficient and reversible).
-- Manager/Owner bulk "Mark full month present" — already exists per row.
-- ESI/PT calculation engine changes.
-
-### Acceptance
-- No flicker: rows show skeleton then final values in one transition.
-- No row simultaneously shows "Attendance not recorded" and a non-zero Net Pay.
-- Badge renders as a single-line pill with a lucide icon, matches Vuexy density.
-- `Process` / `Process All` blocked while any row is in unrecorded state.
-
-Used the senior-architect and ui-ux-pro-max skills.
+Used the senior-architect + senior-backend skills.

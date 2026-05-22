@@ -1,4 +1,11 @@
-// v3.1.0 — Unified AI Agent Brain (single source of truth)
+// v3.2.0 — Unified AI Agent Brain (single source of truth)
+// 3.2.0: Hard server-side guards against repeated questions —
+//        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
+//        (b) deterministic plan_interest capture from list_reply titles,
+//        (c) KNOWN PLAN_INTEREST + DO_NOT_ASK_LIST runtime rules,
+//        (d) enforceOutboundInteractiveGuards strips duplicate / gate-violating
+//            interactive blocks before they reach Meta.
+
 // 3.1.0: Routes ALL model calls through `_shared/ai-dispatcher.ts → callAI`
 //        with scope='whatsapp_ai' so providers in `ai_provider_configs` are
 //        honored (no more hardcoded Lovable fetch). Legacy whatsapp_ai_config
@@ -409,6 +416,18 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 
   if (!replyText) return skip("no_reply_text");
 
+  // 9b. OUTBOUND GUARDS — strip / replace interactive blocks the LLM emitted that
+  // would violate the hard onboarding gate or duplicate a question already asked.
+  // v1.0.0 — defense-in-depth: prompt rules can fail, this cannot.
+  replyText = enforceOutboundInteractiveGuards({
+    replyText,
+    memory,
+    history,
+    platform: ctx.platform,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
+
   // 10. Lead capture parsing
   if (shouldCaptureLead) {
     const leadResult = await tryParseAndCaptureLead(
@@ -454,6 +473,18 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     const lastSentence = trimmed.split(/(?<=[.!?])\s+/).pop() || trimmed;
     askedNow.push(lastSentence.slice(0, 200));
   }
+  // Also log emitted interactive_list/button body so duplicate detection can see it
+  if (/"type"\s*:\s*"interactive(_list)?"/.test(trimmed)) {
+    try {
+      const j = trimmed.match(/\{[\s\S]*\}/)?.[0];
+      if (j) {
+        const p = JSON.parse(j);
+        const b = String(p?.body?.text ?? p?.body ?? "").trim();
+        if (b) askedNow.push(b.slice(0, 200));
+      }
+    } catch { /* noop */ }
+  }
+
   await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
     profile: profilePatch,
     asked_questions_add: askedNow,
@@ -468,6 +499,109 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 function skip(reason: string): AgentResult {
   return { replyText: null, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: true, skipReason: reason };
 }
+
+// ── Outbound interactive guards ──────────────────────────────────────────────
+// Server-side defense for the prompt-only HARD GATE + duplicate interactive_list
+// emissions. The LLM violates these rules occasionally; this function never does.
+//
+// Behavior:
+//  1. If reply contains an interactive_list/interactive JSON whose body text
+//     was already sent in the last 3 outbound turns → strip the JSON and fall
+//     back to a plain-text "next missing field" question.
+//  2. If reply contains interactive JSON but lead-capture HARD GATE prereqs
+//     (name + email) are missing → strip and fall back to plain-text ask for
+//     whichever field is missing first.
+//  3. If reply is interactive_list for plan_interest but memory.facts.plan_interest
+//     is already set → strip and acknowledge + advance.
+function enforceOutboundInteractiveGuards(input: {
+  replyText: string;
+  memory: any;
+  history: Array<{ role: string; content: string }>;
+  platform: Platform;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, history, leadCaptureEnabled } = input;
+  const trimmed = (replyText || "").trim();
+
+  // Cheap reject — not interactive JSON
+  if (!/"type"\s*:\s*"interactive(_list)?"/.test(trimmed)) return replyText;
+
+  // Try to parse the JSON envelope
+  let parsed: any = null;
+  let bodyText = "";
+  try {
+    const jsonStr = trimmed.startsWith("{") ? trimmed : (trimmed.match(/\{[\s\S]*\}/)?.[0] ?? "");
+    if (jsonStr) {
+      parsed = JSON.parse(jsonStr);
+      bodyText = String(
+        parsed?.body?.text ?? parsed?.body ?? parsed?.text ?? "",
+      ).trim();
+    }
+  } catch {
+    return replyText; // malformed JSON — let downstream handle/log
+  }
+  if (!parsed || !bodyText) return replyText;
+
+  const knownName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const knownEmail = !!memory?.profile?.email;
+  const knownPlan = !!memory?.facts?.plan_interest;
+  const knownGoal = !!memory?.facts?.fitness_goal;
+
+  const askNextMissing = (): string => {
+    if (!knownName) return "Before I share more, may I know your name, please?";
+    const firstName = memory?.profile?.first_name || memory?.profile?.name || "";
+    if (!knownEmail) {
+      return firstName
+        ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
+        : "Could you share your email address so I can send the membership details?";
+    }
+    if (!knownGoal) return "What's your primary fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness?";
+    if (knownPlan) {
+      const plan = memory.facts.plan_interest;
+      return `Noted — you're leaning toward the *${plan}* plan. To tailor the right recommendation, what's your preferred workout time (morning / evening)?`;
+    }
+    return "Could you share a bit more about what you're looking for?";
+  };
+
+  // Look at last 6 outbound messages for the same body text
+  const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
+  const sameBodyCount = recentOutbound.filter((m) => {
+    const c = String(m.content || "");
+    if (c.includes(bodyText)) return true;
+    // Also match if the prior message was a JSON whose body equals bodyText
+    try {
+      const j = c.match(/\{[\s\S]*\}/)?.[0];
+      if (j) {
+        const p = JSON.parse(j);
+        const b = String(p?.body?.text ?? p?.body ?? "").trim();
+        return b && b === bodyText;
+      }
+    } catch { /* noop */ }
+    return false;
+  }).length;
+
+  // (1) Duplicate interactive — fall back to plain text
+  if (sameBodyCount >= 1) {
+    console.log(`[AI:guards] dropping duplicate interactive — bodyText="${bodyText.slice(0, 60)}"`);
+    return askNextMissing();
+  }
+
+  // (2) Hard gate — interactive before name + email is captured
+  if (leadCaptureEnabled && (!knownName || !knownEmail)) {
+    console.log(`[AI:guards] stripping interactive — hard gate (name=${knownName}, email=${knownEmail})`);
+    return askNextMissing();
+  }
+
+  // (3) plan_interest already known but LLM re-emitted the duration list
+  if (knownPlan && /membership duration|which membership|choose your plan/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping plan_interest interactive — already known (${memory.facts.plan_interest})`);
+    return askNextMissing();
+  }
+
+  return replyText;
+}
+
+
 
 // Gym knowledge cache (refreshes every 5 min)
 let _gymFactsCache: string | null = null;
@@ -974,6 +1108,39 @@ const GOAL_HINTS: Record<string, RegExp> = {
   flexibility: /\b(flexibility|mobility|yoga\s*for|stretch)\b/i,
   general:     /\b(general\s*fitness|stay\s*fit|overall\s*health|toning)\b/i,
 };
+// v1.1.0 — plan_interest deterministic capture from interactive list_reply titles.
+// Matches the EXACT row titles emitted by the brain (lines ~324-329).
+const PLAN_HINTS: Record<string, RegExp> = {
+  Monthly:       /\bmonthly\b/i,
+  Quarterly:     /\bquarterly\b/i,
+  "Half-Yearly": /\bhalf[\s-]?year(?:ly)?\b/i,
+  Annual:        /\b(annual|yearly|12\s*month)\b/i,
+};
+// Normalize LLM-generated do_not_ask synonyms to canonical keys so downstream
+// gates can reason about them consistently.
+const DNA_ALIASES: Record<string, string> = {
+  "membership duration": "plan_interest",
+  "duration": "plan_interest",
+  "plan": "plan_interest",
+  "membership": "plan_interest",
+  "fitness goal": "goal",
+  "fitness_goal": "goal",
+  "phone number": "phone",
+  "mobile": "phone",
+  "mobile number": "phone",
+  "email address": "email",
+  "full name": "name",
+  "name": "name",
+};
+function canonicalizeDNA(keys: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of keys) {
+    const k = String(raw || "").trim().toLowerCase();
+    if (!k) continue;
+    out.push(DNA_ALIASES[k] || k);
+  }
+  return Array.from(new Set(out));
+}
 
 interface ContextDelta {
   profile?: Record<string, any>;
@@ -1008,6 +1175,21 @@ async function extractContextDelta(
       delta.do_not_ask_add!.push("goal");
       break;
     }
+  }
+
+  // Plan interest — capture from interactive list_reply titles (e.g. "🏆 Annual").
+  // Only fires when prior bot turn was the duration prompt OR memory lacks it.
+  if (!memory?.facts?.plan_interest) {
+    for (const [plan, re] of Object.entries(PLAN_HINTS)) {
+      if (re.test(lastUser)) {
+        delta.facts!.plan_interest = plan;
+        delta.do_not_ask_add!.push("plan_interest");
+        break;
+      }
+    }
+  } else {
+    // Already known — make sure it stays in do_not_ask going forward.
+    delta.do_not_ask_add!.push("plan_interest");
   }
 
   // ── LLM enrichment (best-effort; failure is silent) ────────────────────────
@@ -1059,8 +1241,8 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     console.warn(`[AI:${ctx.platform}] context extract failed:`, (e as Error).message);
   }
 
-  // Dedup do_not_ask
-  delta.do_not_ask_add = Array.from(new Set(delta.do_not_ask_add || []));
+  // Dedup + canonicalize do_not_ask
+  delta.do_not_ask_add = canonicalizeDNA(delta.do_not_ask_add || []);
   return delta;
 }
 
@@ -1078,8 +1260,17 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
   if (memory?.facts?.fitness_goal) {
     rules.push(`KNOWN GOAL: User's fitness goal is "${memory.facts.fitness_goal}". Do NOT re-ask for goal. Tailor the answer to this goal.`);
   }
+  if (memory?.facts?.plan_interest) {
+    rules.push(`KNOWN PLAN_INTEREST: User already chose "${memory.facts.plan_interest}" membership duration. NEVER re-emit the "Which membership duration suits you best?" interactive_list. Acknowledge their choice (one short line) and move to the NEXT missing onboarding field (email if missing, else budget/preferred_time/start_date).`);
+  }
   if (memory?.profile?.first_name) {
     rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
   }
+  // Surface the canonical do_not_ask list so the LLM has a definitive blocklist.
+  const dna = canonicalizeDNA(memory?.do_not_ask || []);
+  if (dna.length > 0) {
+    rules.push(`DO_NOT_ASK_LIST: [${dna.join(", ")}] — these fields are already known or refused. Do NOT ask them again in any form (plain text, button, or interactive_list).`);
+  }
   return rules.length ? `\n\n[RUNTIME RULES — non-negotiable, override softer instructions below]\n- ${rules.join("\n- ")}` : "";
 }
+
