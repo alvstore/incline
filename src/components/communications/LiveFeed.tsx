@@ -489,40 +489,64 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
           ) : (
             <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
               <div className="divide-y divide-border/50">
-                {filtered.map((log: any, i: number) => {
-                  const ch = channelMeta[log.type] || channelMeta.in_app;
-                  const Icon = ch.icon;
-                  const status = normalizeStatus(log);
-                  const isOpen = expanded === log.id;
-                  const name = resolveName(log);
-                  const isPhone = log.type === 'whatsapp' || log.type === 'sms';
-                  const recipientDisplay = isPhone ? formatPhoneDisplay(log.recipient) || log.recipient : log.recipient;
+                {groups.map((g, i) => {
+                  const isOpen = expanded === g.key;
+                  const primaryType = (Object.keys(g.channels)[0] || 'in_app') as string;
+                  const primaryMeta = channelMeta[primaryType] || channelMeta.in_app;
+                  const PrimaryIcon = primaryMeta.icon;
+                  const rollup = groupRollup(g);
+                  const channelEntries = Object.entries(g.channels);
                   return (
-                    <div key={log.id} style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }} className="animate-fade-in">
+                    <div key={g.key} style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }} className="animate-fade-in">
                       <button
-                        onClick={() => setExpanded(isOpen ? null : log.id)}
+                        onClick={() => setExpanded(isOpen ? null : g.key)}
                         className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors overflow-hidden"
                       >
-                        <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', ch.color)}>
-                          <Icon className="h-4 w-4" />
+                        <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', primaryMeta.color)}>
+                          <PrimaryIcon className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
                             <span className="text-sm font-semibold text-foreground truncate min-w-0">
-                              {name || <span className="text-muted-foreground italic">Unknown</span>}
+                              {g.name || <span className="text-muted-foreground italic">Unknown</span>}
                             </span>
-                            <span className="text-xs text-muted-foreground tabular-nums truncate hidden sm:inline-block max-w-[160px]">{recipientDisplay}</span>
-                            <Badge variant="outline" className="rounded-full text-[10px] capitalize flex-shrink-0">{ch.label}</Badge>
+                            <span className="text-xs text-muted-foreground tabular-nums truncate hidden sm:inline-block max-w-[160px]">
+                              {g.recipientDisplay}
+                            </span>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {channelEntries.map(([type, chLogs]) => {
+                                const meta = channelMeta[type] || channelMeta.in_app;
+                                const ChIcon = meta.icon;
+                                const st = channelStatus(chLogs);
+                                return (
+                                  <span
+                                    key={type}
+                                    title={`${meta.label} · ${st}${chLogs.length > 1 ? ` (${chLogs.length})` : ''}`}
+                                    className={cn(
+                                      'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                                      meta.color,
+                                    )}
+                                  >
+                                    <ChIcon className="h-2.5 w-2.5" />
+                                    <span className={cn('h-1.5 w-1.5 rounded-full', dotColor[st] || 'bg-muted-foreground')} />
+                                    {chLogs.length > 1 && <span className="tabular-nums">{chLogs.length}</span>}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           </div>
                           <p className="text-xs text-muted-foreground truncate mt-0.5 pr-2">
-                            {log.subject ? <span className="font-medium text-foreground/80">{log.subject} · </span> : null}
-                            {log.content}
+                            {g.subject ? <span className="font-medium text-foreground/80">{g.subject} · </span> : null}
+                            {g.content}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-auto">
-                          {statusBadge(status)}
+                          {statusBadge(rollup.primary)}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {format(new Date(log.created_at), 'HH:mm:ss')}
+                            {rollup.failed > 0 && rollup.failed < rollup.total && (
+                              <span className="text-rose-600 dark:text-rose-400 mr-1">{rollup.failed} failed ·</span>
+                            )}
+                            {format(new Date(g.latest.created_at), 'HH:mm:ss')}
                           </span>
                         </div>
                         <div className="text-muted-foreground/60 flex-shrink-0">
@@ -530,20 +554,40 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                         </div>
                       </button>
                       {isOpen && (
-                        <div className="bg-muted/20 border-t border-border/50 animate-accordion-down">
-                          <DeliveryTimeline
-                            logId={log.id}
-                            createdAt={log.created_at}
-                            logStatus={log.status}
-                            logDeliveryStatus={log.delivery_status}
-                            logSentAt={log.sent_at}
-                            logErrorMessage={log.error_message}
-                          />
-                          {log.error_message && (
-                            <div className="px-4 pb-3 text-xs text-rose-600 dark:text-rose-400">
-                              <strong>Error:</strong> {log.error_message}
-                            </div>
-                          )}
+                        <div className="bg-muted/20 border-t border-border/50 animate-accordion-down divide-y divide-border/40">
+                          {g.logs
+                            .slice()
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                            .map((log) => {
+                              const meta = channelMeta[log.type] || channelMeta.in_app;
+                              const MIcon = meta.icon;
+                              return (
+                                <div key={log.id} className="px-4 py-3">
+                                  <div className="flex items-center gap-2 mb-2 text-xs">
+                                    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', meta.color)}>
+                                      <MIcon className="h-3 w-3" /> {meta.label}
+                                    </span>
+                                    <span className="text-muted-foreground">→ {log.recipient}</span>
+                                    <span className="ml-auto tabular-nums text-muted-foreground">
+                                      {format(new Date(log.created_at), 'HH:mm:ss')}
+                                    </span>
+                                  </div>
+                                  <DeliveryTimeline
+                                    logId={log.id}
+                                    createdAt={log.created_at}
+                                    logStatus={log.status}
+                                    logDeliveryStatus={log.delivery_status}
+                                    logSentAt={log.sent_at}
+                                    logErrorMessage={log.error_message}
+                                  />
+                                  {log.error_message && (
+                                    <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+                                      <strong>Error:</strong> {log.error_message}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                         </div>
                       )}
                     </div>
@@ -557,7 +601,8 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
           {!isLoading && logs.length > 0 && (
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between border-t border-border/50 bg-muted/20 px-4 py-2.5">
               <div className="text-xs text-muted-foreground tabular-nums">
-                Showing <span className="font-semibold text-foreground">{filtered.length}</span> of {logs.length} loaded
+                Showing <span className="font-semibold text-foreground">{groups.length}</span> grouped ·{' '}
+                <span className="font-semibold text-foreground">{filtered.length}</span> of {logs.length} loaded
                 {logs.length > 0 && (
                   <> · oldest: {format(new Date(logs[logs.length - 1].created_at), 'd MMM, HH:mm')}</>
                 )}
