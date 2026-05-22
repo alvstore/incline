@@ -8,12 +8,12 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Clock, Brain, Play, CheckCircle, RefreshCw, Info, Eye, EyeOff } from 'lucide-react';
+import { Clock, Play, CheckCircle, RefreshCw, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+// Cadence-only. Persona lives in Purposes → lead_nurture; shared knowledge in Brain tab.
 export function LeadNurtureSettings() {
   const queryClient = useQueryClient();
 
@@ -30,7 +30,6 @@ export function LeadNurtureSettings() {
     },
   });
 
-  // Fetch stale chat stats for observability
   const { data: staleStats } = useQuery({
     queryKey: ['lead-nurture-stats'],
     queryFn: async () => {
@@ -56,25 +55,14 @@ export function LeadNurtureSettings() {
     refetchInterval: 30000,
   });
 
-  const config = orgSettings?.lead_nurture_config as any ?? { enabled: true, delay_hours: 4, max_retries: 2, nurture_prompt: '' };
+  const config = (orgSettings?.lead_nurture_config as any) ?? {
+    enabled: true,
+    delay_hours: 4,
+    max_retries: 2,
+  };
   const [enabled, setEnabled] = useState(config.enabled ?? true);
   const [delayHours, setDelayHours] = useState(String(config.delay_hours ?? 4));
   const [maxRetries, setMaxRetries] = useState(String(config.max_retries ?? 2));
-  const [nurturePrompt, setNurturePrompt] = useState(config.nurture_prompt ?? '');
-  const [showPreview, setShowPreview] = useState(false);
-
-  const { data: purposePrompt = '' } = useQuery({
-    queryKey: ['ai_purpose_prompt', 'lead_nurture'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('ai_purposes')
-        .select('system_prompt')
-        .eq('purpose', 'lead_nurture')
-        .is('branch_id', null)
-        .maybeSingle();
-      return (data?.system_prompt as string) ?? '';
-    },
-  });
 
   useEffect(() => {
     if (orgSettings?.lead_nurture_config) {
@@ -82,18 +70,20 @@ export function LeadNurtureSettings() {
       setEnabled(c.enabled ?? true);
       setDelayHours(String(c.delay_hours ?? 4));
       setMaxRetries(String(c.max_retries ?? 2));
-      setNurturePrompt(c.nurture_prompt ?? '');
     }
   }, [orgSettings]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const existing = (orgSettings?.lead_nurture_config as any) || {};
       const payload = {
+        ...existing,
         enabled,
         delay_hours: parseInt(delayHours) || 4,
         max_retries: parseInt(maxRetries) || 2,
-        nurture_prompt: nurturePrompt,
       };
+      // Strip the deprecated persona key.
+      delete payload.nurture_prompt;
       if (orgSettings?.id) {
         const { error } = await supabase
           .from('organization_settings')
@@ -118,7 +108,9 @@ export function LeadNurtureSettings() {
       return data;
     },
     onSuccess: (data: any) => {
-      toast.success(`Nurture run complete: ${data?.nudged || 0} nudged, ${data?.retries_reset || 0} counters reset`);
+      toast.success(
+        `Nurture run complete: ${data?.nudged || 0} nudged, ${data?.retries_reset || 0} counters reset`,
+      );
       queryClient.invalidateQueries({ queryKey: ['lead-nurture-stats'] });
     },
     onError: (e: any) => toast.error(e.message || 'Failed to run nurture'),
@@ -143,8 +135,7 @@ export function LeadNurtureSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Observability Stats */}
-      <Card className="rounded-2xl shadow-lg shadow-primary/5">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-4">
@@ -184,7 +175,9 @@ export function LeadNurtureSettings() {
                 disabled={resetCountersMutation.isPending}
                 className="gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${resetCountersMutation.isPending ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${resetCountersMutation.isPending ? 'animate-spin' : ''}`}
+                />
                 Reset Counters
               </Button>
             </div>
@@ -192,18 +185,20 @@ export function LeadNurtureSettings() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow-primary/5">
+      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <div className="p-2 rounded-full bg-amber-50">
               <Clock className="h-5 w-5 text-amber-600" />
             </div>
-            AI Lead Nurture Follow-up
+            Lead Nurture Cadence
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Automatically send a contextual follow-up to leads who haven't replied within the configured time window. The AI generates personalized nudges based on collected data and missing fields.
+            Controls <b>when and how often</b> the AI follows up with stale leads. The message itself is
+            generated using the <b>lead_nurture</b> persona (Purposes tab) and the shared knowledge in
+            the <b>Brain</b> tab.
           </p>
           <div className="flex items-center gap-3">
             <Switch checked={enabled} onCheckedChange={setEnabled} />
@@ -218,10 +213,12 @@ export function LeadNurtureSettings() {
                 min="1"
                 max="24"
                 value={delayHours}
-                onChange={e => setDelayHours(e.target.value)}
+                onChange={(e) => setDelayHours(e.target.value)}
                 placeholder="4"
               />
-              <p className="text-xs text-muted-foreground">How long to wait before sending a follow-up</p>
+              <p className="text-xs text-muted-foreground">
+                How long to wait before sending a follow-up.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Max Retries</Label>
@@ -230,60 +227,24 @@ export function LeadNurtureSettings() {
                 min="1"
                 max="5"
                 value={maxRetries}
-                onChange={e => setMaxRetries(e.target.value)}
+                onChange={(e) => setMaxRetries(e.target.value)}
                 placeholder="2"
               />
-              <p className="text-xs text-muted-foreground">Maximum number of follow-up attempts within 24 hours</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl shadow-lg shadow-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-violet-50">
-              <Brain className="h-5 w-5 text-violet-600" />
-            </div>
-            Extra Nurture Context (overlay)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This text is <b>appended</b> to the base Lead Nurture prompt configured in
-            {' '}<b>Settings → AI Agent → Purposes</b> (lead_nurture). Use it for current offers, gym USPs, or
-            specific talking points. Provider/model is set in the <b>Providers</b> tab.
-          </p>
-          <div className="space-y-2">
-            <Label>Overlay Prompt</Label>
-            <Textarea
-              value={nurturePrompt}
-              onChange={e => setNurturePrompt(e.target.value)}
-              placeholder="e.g., We're running a 20% off New Year offer. Mention our premium sauna and ice bath facilities. Our trainers are nationally certified..."
-              rows={4}
-            />
-            <div className="flex items-start gap-2 p-2.5 rounded-md bg-indigo-50/60 border border-indigo-100">
-              <Info className="h-3.5 w-3.5 text-indigo-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-slate-600">
-                Leave empty to use only the base purpose prompt. Edit the base persona in the Purposes tab.
+              <p className="text-xs text-muted-foreground">
+                Maximum follow-up attempts within 24 hours.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-xs gap-1.5 px-0 h-7"
-              onClick={() => setShowPreview(v => !v)}
-            >
-              {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {showPreview ? 'Hide' : 'Show'} merged final prompt
-            </Button>
-            {showPreview && (
-              <pre className="text-[11px] font-mono whitespace-pre-wrap bg-slate-50 border rounded-md p-3 max-h-64 overflow-y-auto text-slate-700">
-                {[purposePrompt.trim(), nurturePrompt.trim()].filter(Boolean).join('\n\n') || '(empty — set a base prompt in Purposes tab)'}
-              </pre>
-            )}
           </div>
+
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+            <Info className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-slate-600">
+              The old <i>Extra Nurture Context</i> textarea was removed. Any text you had there has been
+              merged into the <b>lead_nurture</b> purpose prompt and is now shared with the brain
+              architecture.
+            </p>
+          </div>
+
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Saving...' : 'Save Nurture Settings'}
           </Button>
