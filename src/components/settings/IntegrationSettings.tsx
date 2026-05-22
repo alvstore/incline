@@ -108,7 +108,7 @@ export function IntegrationSettings() {
 
   const runMetaDiagnostics = async () => {
     const igInteg = (integrations as any[]).find(
-      (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+      (i: any) => (i.integration_type === 'instagram') && i.is_active
     );
     if (!igInteg) {
       toast.error('Save your Instagram integration first.');
@@ -695,7 +695,7 @@ export function IntegrationSettings() {
                     className="gap-1.5"
                     onClick={async () => {
                       const igInteg = (integrations as any[]).find(
-                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                        (i: any) => (i.integration_type === 'instagram') && i.is_active
                       );
                       if (!igInteg) { toast.error('Save your Instagram integration first.'); return; }
                       const t = toast.loading('Fetching Page Access Token from Meta…');
@@ -724,7 +724,7 @@ export function IntegrationSettings() {
                     className="gap-1.5"
                     onClick={async () => {
                       const igInteg = (integrations as any[]).find(
-                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                        (i: any) => (i.integration_type === 'instagram') && i.is_active
                       );
                       if (!igInteg) { toast.error('Save your Instagram integration first.'); return; }
                       const t = toast.loading('Backfilling Instagram usernames & avatars…');
@@ -753,7 +753,7 @@ export function IntegrationSettings() {
                     className="gap-1.5"
                     onClick={async () => {
                       const igInteg = (integrations as any[]).find(
-                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                        (i: any) => (i.integration_type === 'instagram') && i.is_active
                       );
                       const t = toast.loading('Re-syncing IG avatars into Storage…');
                       try {

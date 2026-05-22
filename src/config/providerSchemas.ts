@@ -53,7 +53,10 @@ export const getProviderDisplayName = (type: string, provider: string): string =
     sms: { roundsms: 'RoundSMS', msg91: 'MSG91', gupshup: 'Gupshup', twilio: 'Twilio', textlocal: 'TextLocal', fast2sms: 'Fast2SMS', custom: 'Custom API' },
     email: { smtp: 'Custom SMTP', sendgrid: 'SendGrid', ses: 'Amazon SES', mailgun: 'Mailgun' },
     whatsapp: { meta_cloud: 'Meta Cloud API', wati: 'WATI', interakt: 'Interakt', gupshup: 'Gupshup', aisensy: 'AiSensy', custom: 'Custom API' },
-    instagram: { instagram_meta: 'Instagram Direct (Meta)' },
+    instagram: {
+      instagram_meta: 'Instagram via Facebook (EAA)',
+      instagram_login: 'Instagram Business Login (IGAA)',
+    },
     messenger: { messenger_meta: 'Facebook Messenger (Meta)' },
     google_business: { google_business: 'Google Business Profile' },
   };
@@ -201,6 +204,13 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'webhook_verify_token', label: 'Webhook Verify Token', placeholder: 'Any secret string you choose', type: 'text', section: 'config' },
     { key: 'access_token', label: 'Page Access Token', placeholder: 'Enter Meta permanent page access token', type: 'password', section: 'credentials' },
     { key: 'app_secret', label: 'App Secret', placeholder: 'From Meta App Dashboard → Settings → Basic', type: 'password', section: 'credentials' },
+  ],
+
+  instagram_instagram_login: [
+    { key: 'instagram_user_id', label: 'Instagram User ID', placeholder: 'From Meta → Instagram product → API setup with Instagram login', type: 'text', section: 'config' },
+    { key: 'webhook_verify_token', label: 'Webhook Verify Token', placeholder: 'Any secret string you choose', type: 'text', section: 'config' },
+    { key: 'access_token', label: 'Access Token (IGAA…)', placeholder: 'IGAA…', type: 'password', section: 'credentials' },
+    { key: 'app_secret', label: 'Instagram App Secret', placeholder: 'Meta → Instagram product → API setup → Instagram app secret', type: 'password', section: 'credentials' },
   ],
 
   // ── Messenger ──
