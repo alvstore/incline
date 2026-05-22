@@ -31,9 +31,8 @@ import {
   loadMemory,
   upsertMemory,
   renderMemoryBlock,
-  loadKnowledge,
-  renderKnowledgeBlock,
 } from "./ai-memory.ts";
+import { buildSystemPrompt } from "./ai-prompt.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -191,55 +190,45 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
-  // 7. Hydrate gym facts (plans, facilities, timings) + custom knowledge base
+  // 7. Hydrate deterministic gym facts (plans, facilities, timings).
+  //    Persona, behavior rules, FAQs and offers all come from the SSOT brain
+  //    (ai_purposes.system_prompt + ai_knowledge) via buildSystemPrompt().
   const gymFacts = await hydrateGymFacts(supabase, ctx.branchId);
-  const kbRows = await loadKnowledge(supabase, ctx.branchId);
-  const kbBlock = renderKnowledgeBlock(kbRows);
 
-  // 8. Build system prompt
+  // 8. Assemble system prompt via the single-source-of-truth helper.
   const gymName = orgConfig?.name || "Incline Fitness";
-  const platformLabel = ctx.platform === "instagram" ? "Instagram DM" : ctx.platform === "messenger" ? "Facebook Messenger" : "WhatsApp";
-  const customPrompt = aiConfig.system_prompt || `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`;
+  const platformLabel =
+    ctx.platform === "instagram"
+      ? "Instagram DM"
+      : ctx.platform === "messenger"
+        ? "Facebook Messenger"
+        : "WhatsApp";
 
-  const memoryPrefix = memoryBlock ? `\n\n${memoryBlock}` : "";
-  let systemPrompt = `${memberCtx.contextPrompt}${summaryBlock}${alreadyCaptured}${memoryPrefix}${runtimeRules}\n\n${customPrompt}`;
-
-  // ── HARD RULE #1 — member-first identity ────────────────────────────────────
-  if (memberCtx.isMember) {
-    systemPrompt += `\n\nABSOLUTE IDENTITY RULE (HIGHEST PRIORITY):
-This person is a CONFIRMED ACTIVE MEMBER of the gym. Their identity is already known.
-- GREET THEM BY NAME (${memberCtx.memberName}) on your first reply.
-- NEVER ask for their name, email, phone, fitness goal, budget, experience, or preferred time. We already have all of this.
-- NEVER output the {"status":"lead_captured", ...} JSON. They are NOT a lead.
-- If they ask about visiting, politely note that the gym is in pre-opening and share the timeline if known.
-- Use the available member tools (membership status, benefits, bookings, PT sessions, invoices) for any account question.
-- If you are unsure about an account-specific detail, USE A TOOL — do not guess.`;
+  const dynamicSegments: string[] = [];
+  if (memberCtx.contextPrompt) dynamicSegments.push(memberCtx.contextPrompt);
+  if (summaryBlock) dynamicSegments.push(summaryBlock.trim());
+  if (alreadyCaptured) dynamicSegments.push(alreadyCaptured.trim());
+  if (memoryBlock) dynamicSegments.push(memoryBlock.trim());
+  if (runtimeRules) dynamicSegments.push(runtimeRules.trim());
+  if (gymFacts) dynamicSegments.push(gymFacts.trim());
+  dynamicSegments.push(
+    `You are responding on ${platformLabel}. Conversation history may include messages from other channels — treat them as one continuous conversation.`,
+  );
+  if (memberCtx.isMember && memberCtx.memberName) {
+    dynamicSegments.push(
+      `KNOWN MEMBER NAME: ${memberCtx.memberName}. Greet them by name on your first reply.`,
+    );
   }
 
-  systemPrompt += `\n\nYou are responding on ${platformLabel}. Conversation history may include messages from other channels — treat them as one continuous conversation.
-  
-  FORMATTING RULES:
-  - Use *bold* for emphasis (e.g. *FREE* trial, *7:00 AM*, *₹2,500*).
-  - Use bullet points for lists.
-  - Keep replies short (1-3 sentences), warm, professional.
-  - Use emojis sparingly but effectively (💪, 🔥, ✨).`;
+  const built = await buildSystemPrompt({
+    supabase,
+    purpose: "whatsapp_reply",
+    branchId: ctx.branchId,
+    dynamicContext: dynamicSegments.join("\n\n"),
+    defaultPersona: `You are a helpful gym assistant for "${gymName}". Answer questions about membership, timings, and facilities. Keep responses short and friendly.`,
+  });
+  let systemPrompt = built.prompt;
 
-  // Inject gym knowledge so the AI can answer common questions directly
-  if (gymFacts) {
-    systemPrompt += `\n\n${gymFacts}`;
-  }
-  if (kbBlock) {
-    systemPrompt += `\n\n${kbBlock}`;
-  }
-
-  // Global behavioral rules
-  systemPrompt += `\n\nCRITICAL BEHAVIORAL RULE:
-  - When a person asks a factual question (location, timings, fees, facilities, equipment), ALWAYS answer it directly using the GYM KNOWLEDGE above.
-  - Do NOT gatekeep answers behind "registration" or "sign up first".
-  - After answering their question, you may then naturally transition into collecting their details.
-  - Never repeat the same question more than twice. If the user ignores a question, move on.
-  - If the user sends short replies like "ok", "hmm", "yes", treat it as acknowledgment and ask a NEW question.
-  - For pricing, always mention the plan name, duration, and price. If the gym has a day pass, mention it first for casual inquirers.`;
 
   // Member tool instructions — gated by ai_purposes.tools_allowed (UI-managed)
   // with legacy organization_settings.ai_tool_config as a fallback.
