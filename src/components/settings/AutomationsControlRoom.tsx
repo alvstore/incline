@@ -201,7 +201,7 @@ export function AutomationsControlRoom() {
                 <p className="text-2xl font-bold text-slate-900 mt-1">{k.value}</p>
                 {k.trend && <p className="text-xs text-slate-500 mt-1">{k.trend}</p>}
               </div>
-              <div className={`bg-${k.tone}-50 text-${k.tone}-600 p-2 rounded-full`}>
+              <div className={`${k.tone} p-2 rounded-full`}>
                 <k.icon className="h-5 w-5" />
               </div>
             </CardContent>
