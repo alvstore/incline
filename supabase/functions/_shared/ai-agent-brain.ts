@@ -36,6 +36,32 @@ import {
 } from "./ai-memory.ts";
 import { buildSystemPrompt } from "./ai-prompt.ts";
 
+// ─── Placeholder-name guard ────────────────────────────────────────────────────
+// Reject WhatsApp/IG profile names that aren't real human names so the brain
+// doesn't greet anyone as "Sample", "Test", a phone number, or emoji-only handle.
+const FAKE_NAME_TOKENS = new Set([
+  "sample", "test", "testing", "tester", "user", "demo", "customer",
+  "unknown", "na", "none", "null", "n/a", "admin", "guest", "anon",
+  "anonymous", "default", "client", "whatsapp", "instagram",
+]);
+export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 40) return false;
+  // Pure digits / phone-like
+  if (/^\+?\d[\d\s().-]{4,}$/.test(trimmed)) return false;
+  // Equals the sender phone
+  if (phone && trimmed.replace(/\D/g, "") === phone.replace(/\D/g, "") && trimmed.replace(/\D/g, "").length > 4) return false;
+  // Blocklist (case-insensitive, ignoring punctuation)
+  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9/]/g, "");
+  if (FAKE_NAME_TOKENS.has(normalized)) return false;
+  // Must contain letters and be >50% letters
+  const letters = (trimmed.match(/\p{L}/gu) || []).length;
+  if (letters < 2) return false;
+  if (letters / trimmed.length < 0.5) return false;
+  return true;
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type Platform = "whatsapp" | "instagram" | "messenger";
