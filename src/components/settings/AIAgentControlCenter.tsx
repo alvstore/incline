@@ -582,7 +582,7 @@ function ToolsTab() {
       ) : (
         filteredCategories.map((category) => {
           const Icon = category.icon;
-          const catEnabled = category.tools.filter((t) => toolConfig[t.name] !== false).length;
+          const catEnabled = category.tools.filter((t) => toolEnabled(t.name)).length;
           const catTotal = category.tools.length;
           return (
             <Card key={category.id} className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
