@@ -71,15 +71,22 @@ async function logProcessing(entry: {
 let _orgAiConfig: any = null;
 let _orgAiConfigFetchedAt = 0;
 
+// SSOT: ops toggles come from ai_purposes.ops_config (purpose='whatsapp_reply', branch=NULL).
 async function getOrgAiConfig() {
   if (_orgAiConfig && Date.now() - _orgAiConfigFetchedAt < 60_000) return _orgAiConfig;
-  const { data, error } = await supabase
-    .from("organization_settings")
-    .select("whatsapp_ai_config, name")
-    .limit(1)
-    .maybeSingle();
-  if (error) console.error("[meta-webhook] getOrgAiConfig error:", error.message);
-  _orgAiConfig = data ? { whatsapp_ai_config: (data as any).whatsapp_ai_config, gym_name: (data as any).name } : {};
+  const [{ data: org }, { data: purpose }] = await Promise.all([
+    supabase.from("organization_settings").select("name").limit(1).maybeSingle(),
+    supabase
+      .from("ai_purposes")
+      .select("ops_config")
+      .eq("purpose", "whatsapp_reply")
+      .is("branch_id", null)
+      .maybeSingle(),
+  ]);
+  _orgAiConfig = {
+    gym_name: (org as any)?.name ?? null,
+    ops: ((purpose as any)?.ops_config as Record<string, any>) ?? {},
+  };
   _orgAiConfigFetchedAt = Date.now();
   return _orgAiConfig;
 }
