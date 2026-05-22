@@ -622,6 +622,36 @@ function enforceOutboundInteractiveGuards(input: {
   const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
 
+  // v3.6.0 — goal & plan_interest fall back to interactive_list JSON (4 rows each).
+  const goalListJson = (firstName: string) => JSON.stringify({
+    type: "interactive_list",
+    body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
+    button: "Choose goal",
+    sections: [{
+      title: "Fitness Goal",
+      rows: [
+        { id: "weight_loss", title: "Weight Loss" },
+        { id: "muscle_gain", title: "Muscle Gain" },
+        { id: "endurance", title: "Endurance" },
+        { id: "general", title: "Flexibility / General" },
+      ],
+    }],
+  });
+  const planListJson = (firstName: string) => JSON.stringify({
+    type: "interactive_list",
+    body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
+    button: "Choose duration",
+    sections: [{
+      title: "Membership Duration",
+      rows: [
+        { id: "monthly", title: "Monthly" },
+        { id: "quarterly", title: "Quarterly" },
+        { id: "half_yearly", title: "Half-Yearly" },
+        { id: "annual", title: "Annual — Founding Member" },
+      ],
+    }],
+  });
+
   const askNextMissing = (): string => {
     if (!knownName) return "Sure — may I have your name first? ✨";
     const firstName = realName.split(/\s+/)[0];
@@ -631,17 +661,9 @@ function enforceOutboundInteractiveGuards(input: {
         : "Could you share your email so our team can send your Founding Member invite?";
     }
     const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-    if (!knownGoal) {
-      return firstName
-        ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
-        : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
-    }
+    if (!knownGoal) return goalListJson(firstName);
     const knownPlan = !!memory?.facts?.plan_interest;
-    if (!knownPlan) {
-      return firstName
-        ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
-        : "Are you thinking monthly, quarterly, half-yearly, or annual?";
-    }
+    if (!knownPlan) return planListJson(firstName);
     return firstName
       ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
       : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
