@@ -673,10 +673,10 @@ async function ingestInstagramComment(value: any, igAccountId: string) {
     console.error("[IG] comment automation queue failed:", e instanceof Error ? e.message : e);
   }
 
-  // Auto-reply on comments only when explicitly enabled
+  // Auto-reply on comments only when explicitly enabled (SSOT: ai_purposes.ops_config)
   const orgConfig = await getOrgAiConfig();
-  const aiConfig = orgConfig?.whatsapp_ai_config as any;
-  if (aiConfig?.instagram_auto_reply_comments === true && inserted) {
+  const ops = (orgConfig?.ops ?? {}) as Record<string, any>;
+  if (ops.instagram_auto_reply_comments === true && inserted) {
     await triggerAiReply(inserted.id, fromId, branchId, "instagram", integration);
   }
 }
