@@ -753,14 +753,30 @@ function sanitizeFoundersPhaseText(input: {
       : "Could you share your email for your Founding Member invite? ✨";
   }
   if (!knownGoal) {
-    return firstName
-      ? `Got it, ${firstName} — what's your main fitness goal (weight loss, muscle gain, endurance, flexibility, or general fitness)? ✨`
-      : "What's your main fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness? ✨";
+    return JSON.stringify({
+      type: "interactive_list",
+      body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
+      button: "Choose goal",
+      sections: [{ title: "Fitness Goal", rows: [
+        { id: "weight_loss", title: "Weight Loss" },
+        { id: "muscle_gain", title: "Muscle Gain" },
+        { id: "endurance", title: "Endurance" },
+        { id: "general", title: "Flexibility / General" },
+      ] }],
+    });
   }
   if (!knownPlan) {
-    return firstName
-      ? `Perfect — are you thinking monthly, quarterly, half-yearly, or annual, ${firstName}?`
-      : "Are you thinking monthly, quarterly, half-yearly, or annual?";
+    return JSON.stringify({
+      type: "interactive_list",
+      body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
+      button: "Choose duration",
+      sections: [{ title: "Membership Duration", rows: [
+        { id: "monthly", title: "Monthly" },
+        { id: "quarterly", title: "Quarterly" },
+        { id: "half_yearly", title: "Half-Yearly" },
+        { id: "annual", title: "Annual — Founding Member" },
+      ] }],
+    });
   }
   return firstName
     ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough closer to opening. ✨`
