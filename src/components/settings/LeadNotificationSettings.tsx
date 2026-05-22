@@ -12,10 +12,13 @@ import { UserCheck, Users, ShieldCheck } from 'lucide-react';
 type LeadRulesForm = {
   sms_to_lead: boolean;
   whatsapp_to_lead: boolean;
+  email_to_lead: boolean;
   sms_to_admins: boolean;
   whatsapp_to_admins: boolean;
+  email_to_admins: boolean;
   sms_to_managers: boolean;
   whatsapp_to_managers: boolean;
+  email_to_managers: boolean;
   lead_welcome_sms: string;
   lead_welcome_whatsapp: string;
   team_alert_sms: string;
@@ -25,10 +28,13 @@ type LeadRulesForm = {
 const DEFAULTS: LeadRulesForm = {
   sms_to_lead: false,
   whatsapp_to_lead: false,
+  email_to_lead: false,
   sms_to_admins: false,
   whatsapp_to_admins: false,
+  email_to_admins: false,
   sms_to_managers: false,
   whatsapp_to_managers: false,
+  email_to_managers: false,
   lead_welcome_sms: 'Hi {{lead_name}}, thank you for your interest in {{branch_name}}! We will contact you shortly.',
   lead_welcome_whatsapp: 'Hi {{lead_name}}, welcome to {{branch_name}}! 🏋️ Our team will reach out to you soon.',
   team_alert_sms: 'New lead: {{lead_name}} ({{lead_phone}}) from {{lead_source}} at {{branch_name}}',
@@ -83,10 +89,13 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
         setForm({
           sms_to_lead: rules.sms_to_lead ?? false,
           whatsapp_to_lead: rules.whatsapp_to_lead ?? false,
+          email_to_lead: (rules as any).email_to_lead ?? false,
           sms_to_admins: rules.sms_to_admins ?? false,
           whatsapp_to_admins: rules.whatsapp_to_admins ?? false,
+          email_to_admins: (rules as any).email_to_admins ?? false,
           sms_to_managers: rules.sms_to_managers ?? false,
           whatsapp_to_managers: rules.whatsapp_to_managers ?? false,
+          email_to_managers: (rules as any).email_to_managers ?? false,
           lead_welcome_sms: rules.lead_welcome_sms || DEFAULTS.lead_welcome_sms,
           lead_welcome_whatsapp: rules.lead_welcome_whatsapp || DEFAULTS.lead_welcome_whatsapp,
           team_alert_sms: rules.team_alert_sms || DEFAULTS.team_alert_sms,
@@ -167,6 +176,12 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
                 checked={form.whatsapp_to_lead}
                 onChange={() => toggle('whatsapp_to_lead')}
               />
+              <Row
+                label="Email to Lead"
+                desc="Send a branded welcome email to the lead"
+                checked={form.email_to_lead}
+                onChange={() => toggle('email_to_lead')}
+              />
             </CardContent>
           </Card>
         )}
@@ -189,9 +204,15 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
               />
               <Row
                 label="WhatsApp to Admins"
-                desc="Alert owners & admins via WhatsApp"
+                desc="Alert owners & admins via WhatsApp (approved template)"
                 checked={form.whatsapp_to_admins}
                 onChange={() => toggle('whatsapp_to_admins')}
+              />
+              <Row
+                label="Email to Admins"
+                desc="Alert owners & admins via email"
+                checked={form.email_to_admins}
+                onChange={() => toggle('email_to_admins')}
               />
               <Row
                 label="SMS to Managers"
@@ -201,16 +222,21 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
               />
               <Row
                 label="WhatsApp to Managers"
-                desc="Alert branch managers via WhatsApp"
+                desc="Alert branch managers via WhatsApp (approved template)"
                 checked={form.whatsapp_to_managers}
                 onChange={() => toggle('whatsapp_to_managers')}
               />
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                <strong>Heads up:</strong> Meta WhatsApp Cloud API only delivers free-form text alerts to admins
-                who have messaged the business number in the last 24&nbsp;hours. Admins who have never replied to
-                the business WhatsApp will see <em>"sent"</em> in the Live Feed but won't actually receive the
-                message until an approved template is used. Ask each admin to send a quick "Hi" once, or set up
-                an approved <code>lead_alert_team</code> template in Meta Business Manager.
+              <Row
+                label="Email to Managers"
+                desc="Alert branch managers via email"
+                checked={form.email_to_managers}
+                onChange={() => toggle('email_to_managers')}
+              />
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                <strong>Delivery:</strong> Team WhatsApp alerts are sent via the approved
+                Meta template <code>internal_new_lead_alert</code>, so they deliver to
+                admins/managers even outside the 24-hour customer-service window. SMS and
+                email use your configured providers.
               </p>
             </CardContent>
           </Card>
@@ -247,8 +273,10 @@ interface AdminRow {
   id: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   whatsapp_enabled: boolean;
   sms_enabled: boolean;
+  email_enabled: boolean;
 }
 
 function maskPhone(p: string | null): string {
@@ -272,31 +300,38 @@ export function AdminRecipientsCard() {
       if (ids.length === 0) return [];
 
       const [{ data: profiles }, { data: prefs }] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, phone').in('id', ids),
+        supabase.from('profiles').select('id, full_name, phone, email').in('id', ids),
         supabase
           .from('lead_notification_admin_prefs')
-          .select('user_id, whatsapp_enabled, sms_enabled')
+          .select('user_id, whatsapp_enabled, sms_enabled, email_enabled')
           .in('user_id', ids),
       ]);
 
-      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean }>();
+      const prefMap = new Map<string, { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean }>();
       for (const p of prefs || []) prefMap.set((p as any).user_id, p as any);
 
       return (profiles || []).map((p: any) => {
-        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true };
+        const pref = prefMap.get(p.id) ?? { whatsapp_enabled: true, sms_enabled: true, email_enabled: true };
         return {
           id: p.id,
           full_name: p.full_name,
           phone: p.phone,
+          email: p.email ?? null,
           whatsapp_enabled: pref.whatsapp_enabled,
           sms_enabled: pref.sms_enabled,
+          email_enabled: pref.email_enabled ?? true,
         };
       });
     },
   });
 
   const updatePref = useMutation({
-    mutationFn: async (input: { user_id: string; whatsapp_enabled: boolean; sms_enabled: boolean }) => {
+    mutationFn: async (input: {
+      user_id: string;
+      whatsapp_enabled: boolean;
+      sms_enabled: boolean;
+      email_enabled: boolean;
+    }) => {
       const { error } = await supabase
         .from('lead_notification_admin_prefs')
         .upsert(input, { onConflict: 'user_id' });
@@ -332,7 +367,10 @@ export function AdminRecipientsCard() {
               <div key={a.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0">
                   <Label className="block">{a.full_name || 'Unnamed'}</Label>
-                  <p className="text-sm text-muted-foreground">{maskPhone(a.phone)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {maskPhone(a.phone)}
+                    {a.email ? <span className="ml-2">· {a.email}</span> : null}
+                  </p>
                 </div>
                 <div className="flex items-center gap-5">
                   <label className="flex items-center gap-2 text-xs">
@@ -340,7 +378,12 @@ export function AdminRecipientsCard() {
                     <Switch
                       checked={a.whatsapp_enabled}
                       onCheckedChange={(v) =>
-                        updatePref.mutate({ user_id: a.id, whatsapp_enabled: v, sms_enabled: a.sms_enabled })
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: v,
+                          sms_enabled: a.sms_enabled,
+                          email_enabled: a.email_enabled,
+                        })
                       }
                     />
                   </label>
@@ -349,7 +392,26 @@ export function AdminRecipientsCard() {
                     <Switch
                       checked={a.sms_enabled}
                       onCheckedChange={(v) =>
-                        updatePref.mutate({ user_id: a.id, whatsapp_enabled: a.whatsapp_enabled, sms_enabled: v })
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: a.whatsapp_enabled,
+                          sms_enabled: v,
+                          email_enabled: a.email_enabled,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Email</span>
+                    <Switch
+                      checked={a.email_enabled}
+                      onCheckedChange={(v) =>
+                        updatePref.mutate({
+                          user_id: a.id,
+                          whatsapp_enabled: a.whatsapp_enabled,
+                          sms_enabled: a.sms_enabled,
+                          email_enabled: v,
+                        })
                       }
                     />
                   </label>
