@@ -821,6 +821,7 @@ async function handleRefreshIgProfile(body: any) {
     try {
       const r = await metaFetchWithFallback(url);
       const d = await r.json().catch(() => ({}));
+      if (isConsentBlockedError(d)) return { ok: false, consent: true, err: 'User consent is required' };
       if (!r.ok || d?.error) return { ok: false, err: d?.error?.message || `HTTP ${r.status}` };
       const meaningful = d && (d.id || d.name || d.username || d.profile_pic_url);
       if (!meaningful) return { ok: false, err: 'empty body' };
@@ -828,23 +829,46 @@ async function handleRefreshIgProfile(body: any) {
       return { ok: true, name: d.name || username || null, avatar_url: d.profile_pic_url || null };
     } catch (e) { return { ok: false, err: e instanceof Error ? e.message : String(e) }; }
   };
-  let res = await tryFetch(primary);
-  if (!res.ok) res = await tryFetch(fallback);
-  if (!res.ok) return json({ success: false, error: `Meta lookup failed: ${(res as any).err}. Check that the page access token has instagram_basic + pages_messaging scopes.` }, 200);
+  let res: any = await tryFetch(primary);
+  if (!res.ok && !res.consent) res = await tryFetch(fallback);
+  if (res.consent) {
+    await supabase.rpc('upsert_meta_contact_profile', {
+      p_branch_id: branchId, p_phone: phone, p_platform: platform, p_external_id: phone,
+      p_display_name: null, p_avatar_url: null,
+      p_avatar_source: null, p_avatar_synced_at: null, p_avatar_consent_blocked: true,
+    });
+    return json({ success: false, consent_blocked: true, error: 'User consent is required — this contact has not initiated a DM. Marked as consent-blocked; will not retry.' }, 200);
+  }
+  if (!res.ok) return json({ success: false, error: `Meta lookup failed: ${res.err}. Check that the page access token has instagram_basic + pages_messaging scopes.` }, 200);
 
+  // Persist Meta CDN avatar → Storage so the URL never expires.
+  let storedUrl: string | null = res.avatar_url;
+  let source: 'storage' | 'meta_cdn' | null = null;
+  let syncedAt: string | null = null;
+  if (res.avatar_url) {
+    const persisted = await persistMetaAvatar({
+      scopedId: phone, platform: 'instagram', cdnUrl: res.avatar_url, serviceClient: supabase,
+    });
+    storedUrl = persisted.publicUrl;
+    source = persisted.source === 'storage' ? 'storage' : 'meta_cdn';
+    syncedAt = persisted.syncedAt;
+  }
   try {
     await supabase.rpc('upsert_meta_contact_profile', {
       p_branch_id: branchId,
       p_phone: phone,
       p_platform: platform,
       p_external_id: phone,
-      p_display_name: (res as any).name,
-      p_avatar_url: (res as any).avatar_url,
+      p_display_name: res.name,
+      p_avatar_url: storedUrl,
+      p_avatar_source: source,
+      p_avatar_synced_at: syncedAt,
+      p_avatar_consent_blocked: false,
     });
   } catch (e) {
     return json({ success: false, error: `Upsert failed: ${e instanceof Error ? e.message : String(e)}` }, 500);
   }
-  return json({ success: true, name: (res as any).name, avatar_url: (res as any).avatar_url });
+  return json({ success: true, name: res.name, avatar_url: storedUrl, source });
 }
 
 // ──────────────── DISPATCHER ────────────────
