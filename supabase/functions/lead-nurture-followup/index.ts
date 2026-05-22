@@ -1,11 +1,12 @@
-// v4.0.0 — SSOT: AI nudge text now generated via shared ai-runtime.generateOnce
-//          (purpose='lead_nurture'). Hardcoded prompt + direct fetch removed.
-// v3.4.0 — Enforce Meta 24h customer-service window. If the lead has not
-//          replied within 24h, do NOT send a freeform AI nudge (Meta rejects
-//          with 131047). Instead, send the approved `lead_nurture_followup`
-//          WhatsApp template via dispatch-communication, or skip & cool down.
+// v5.0.0 — SSOT: persona + brain come from ai_purposes + ai_knowledge via
+//          buildSystemPrompt(). The deprecated `lead_nurture_config.nurture_prompt`
+//          overlay is gone — any text that lived there was migrated into the
+//          `lead_nurture` purpose row.
+// v4.0.0 — AI nudge text generated via shared ai-runtime.generateOnce.
+// v3.4.0 — Enforce Meta 24h customer-service window.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import { buildSystemPrompt } from "../_shared/ai-prompt.ts";
 const serve = Deno.serve;
 
 const corsHeaders = {
@@ -46,7 +47,6 @@ serve(async (req) => {
 
     const delayHours = config.delay_hours || 4;
     const maxRetries = config.max_retries || 2;
-    const nurturePrompt = config.nurture_prompt || "";
     const cooldownHours = config.cooldown_hours || delayHours;
     const cutoffTime = new Date(Date.now() - delayHours * 60 * 60 * 1000).toISOString();
 
@@ -186,7 +186,7 @@ serve(async (req) => {
         }
       }
 
-      // Generate contextual nudge message
+      // Generate contextual nudge message via SSOT (persona + shared brain).
       let nudgeMessage: string | undefined;
 
       if ((partialData || lead) && !outsideWindow) {
@@ -198,11 +198,10 @@ serve(async (req) => {
         const contextInfo = partialData
           ? `Partial data collected so far: ${JSON.stringify(partialData)}. Missing: ${missingFields.join(", ") || "none"}.`
           : lead
-          ? `Lead exists: ${lead.full_name}. This is a re-engagement nudge.`
-          : "No data collected yet.";
+            ? `Lead exists: ${lead.full_name}. This is a re-engagement nudge.`
+            : "No data collected yet.";
 
         const userMsg = [
-          nurturePrompt ? `Additional context from admin: ${nurturePrompt}` : "",
           contextInfo,
           missingFields.length > 0
             ? `Naturally ask for their ${missingFields[0]} in the message.`
@@ -211,10 +210,20 @@ serve(async (req) => {
         ].filter(Boolean).join("\n");
 
         try {
+          // Build the full system prompt the same way ai-agent-brain does, so
+          // both handles share persona + brain knowledge.
+          const built = await buildSystemPrompt({
+            supabase,
+            purpose: "lead_nurture",
+            branchId: chat.branch_id,
+          });
           const r = await generateOnce({
             purpose: "lead_nurture",
             branchId: chat.branch_id,
             userMessage: userMsg,
+            systemOverride: built.knowledge.length || built.persona
+              ? built.prompt.slice(built.persona.length).trim()
+              : undefined,
             supabase,
           });
           const generated = r.content?.trim();
@@ -223,6 +232,7 @@ serve(async (req) => {
           console.warn("AI nudge generation failed, using fallback:", aiErr);
         }
       }
+
 
       const contactName = lead?.full_name || partialData?.name || partialData?.whatsapp_name || null;
       const prospectName = contactName || "there";
