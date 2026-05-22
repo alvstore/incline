@@ -1,4 +1,6 @@
-// v3.2.0 — Unified AI Agent Brain (single source of truth)
+// v3.3.0 — Unified AI Agent Brain (single source of truth)
+// 3.3.0: Placeholder-name guard — never greet user by Sample/Test/User/phone/
+//        emoji-only WhatsApp profile names. Forces "ask for real name" path.
 // 3.2.0: Hard server-side guards against repeated questions —
 //        (a) canonicalized do_not_ask aliases ("membership duration" → "plan_interest"),
 //        (b) deterministic plan_interest capture from list_reply titles,
