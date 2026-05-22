@@ -133,33 +133,33 @@ export function AutomationsControlRoom() {
 
   const categories = useMemo(() => Array.from(new Set(rules.map((r) => r.category))).sort(), [rules]);
 
-  const kpis = [
+  const kpis: Array<{ label: string; value: string | number; icon: typeof Activity; tone: string; trend: string | null }> = [
     {
       label: 'Active rules',
       value: `${stats.active}/${stats.total}`,
       icon: CheckCircle2,
-      tone: 'emerald',
-      trend: null as string | null,
+      tone: 'bg-emerald-50 text-emerald-600',
+      trend: null,
     },
     {
       label: 'Runs (24h)',
       value: stats.runs24,
       icon: Activity,
-      tone: 'sky',
+      tone: 'bg-sky-50 text-sky-600',
       trend: trendString(stats.runs24, stats.runs24Prev),
     },
     {
       label: 'Failures (24h)',
       value: stats.failures24,
       icon: AlertTriangle,
-      tone: stats.failures24 > 0 ? 'rose' : 'slate',
+      tone: stats.failures24 > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-500',
       trend: trendString(stats.failures24, stats.failures24Prev, true),
     },
     {
       label: 'Dispatched (24h)',
       value: stats.dispatched24,
       icon: Sparkles,
-      tone: 'violet',
+      tone: 'bg-violet-50 text-violet-600',
       trend: trendString(stats.dispatched24, stats.dispatched24Prev),
     },
   ];
