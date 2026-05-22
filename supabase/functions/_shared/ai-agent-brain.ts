@@ -83,13 +83,10 @@ export async function runUnifiedAgent(
   // LOVABLE_API_KEY here — the dispatcher will resolve the active provider key
   // (Google/OpenRouter/Lovable/etc.) and fall back to Lovable if needed.
 
-  // 1. Load org AI config + purpose row (single source of truth)
+  // 1. Load org name + purpose row (SSOT — ai_purposes only)
   const orgConfig = await loadOrgConfig(supabase);
   const purposeRow = await loadAiPurpose(supabase, "whatsapp_reply", ctx.branchId);
-  const aiConfig: OrgAiConfig = mergePurposeIntoConfig(
-    (orgConfig?.whatsapp_ai_config as any) || {},
-    purposeRow,
-  );
+  const aiConfig: OrgAiConfig = purposeToConfig(purposeRow);
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
