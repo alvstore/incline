@@ -396,8 +396,9 @@ async function handleBackfillIgProfiles(body: any) {
 
   // Inline a slim version of the IG profile resolver to avoid importing the
   // webhook module (its top-level Deno.serve() would conflict with this one).
-  async function resolveIgProfile(igUserId: string): Promise<{ name: string | null; avatar_url: string | null }> {
-    const empty = { name: null, avatar_url: null };
+  // Returns the raw CDN URL — caller persists it into Storage.
+  async function resolveIgProfile(igUserId: string): Promise<{ name: string | null; avatar_url: string | null; consent_blocked: boolean }> {
+    const empty = { name: null, avatar_url: null, consent_blocked: false };
     const creds: any = integ.credentials || {};
     const token = creds.page_access_token || creds.access_token;
     if (!token) return empty;
@@ -405,15 +406,16 @@ async function handleBackfillIgProfiles(body: any) {
     const primary = isInstagramLogin ? IG_API_BASE : META_API_BASE;
     const fallback = isInstagramLogin ? META_API_BASE : IG_API_BASE;
     const fields = "name,username,profile_pic_url";
-    const tryFetch = async (base: string) => {
+    const tryFetch = async (base: string): Promise<{ name: string | null; avatar_url: string | null; consent_blocked: boolean } | null> => {
       const url = `${base}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
       try {
         const r = await metaFetchWithFallback(url);
         const d = await r.json().catch(() => ({}));
+        if (isConsentBlockedError(d)) return { name: null, avatar_url: null, consent_blocked: true };
         const meaningful = d && (d.id || d.name || d.username || d.profile_pic_url);
         if (!r.ok || d?.error || !meaningful) return null;
         const username = d.username ? `@${d.username}` : null;
-        return { name: d.name || username || null, avatar_url: d.profile_pic_url || null };
+        return { name: d.name || username || null, avatar_url: d.profile_pic_url || null, consent_blocked: false };
       } catch { return null; }
     };
     return (await tryFetch(primary)) || (await tryFetch(fallback)) || empty;
@@ -426,23 +428,55 @@ async function handleBackfillIgProfiles(body: any) {
     .select("phone_number, platform, branch_id")
     .in("platform", ["instagram", "messenger"])
     .is("contact_name", null)
+    .eq("avatar_consent_blocked", false)
     .limit(limit);
   if (integ.branch_id) q = q.eq("branch_id", integ.branch_id);
 
   const { data: rows, error: rowsErr } = await q;
   if (rowsErr) return json({ error: rowsErr.message }, 500);
 
-  const results = { scanned: rows?.length || 0, resolved: 0, failed: 0, skipped_test_ids: 0 };
+  const results = { scanned: rows?.length || 0, resolved: 0, failed: 0, skipped_test_ids: 0, consent_blocked: 0 };
   for (const row of rows || []) {
-    // Skip seeded/test IDs (won't resolve against Graph).
     if (/^IG_(USER_)?(PHASE_E_)?TEST/i.test(row.phone_number) || /^999000111222/.test(row.phone_number)) {
       results.skipped_test_ids++;
       continue;
     }
     const profile = await resolveIgProfile(row.phone_number);
+    if (profile.consent_blocked) {
+      try {
+        await supabase.rpc("upsert_meta_contact_profile", {
+          p_branch_id: row.branch_id,
+          p_phone: row.phone_number,
+          p_platform: row.platform,
+          p_external_id: row.phone_number,
+          p_display_name: null,
+          p_avatar_url: null,
+          p_avatar_source: null,
+          p_avatar_synced_at: null,
+          p_avatar_consent_blocked: true,
+        });
+      } catch { /* swallow */ }
+      results.consent_blocked++;
+      continue;
+    }
     if (!profile.name && !profile.avatar_url) {
       results.failed++;
       continue;
+    }
+    // Persist CDN → Storage so the URL survives.
+    let storedUrl = profile.avatar_url;
+    let source: "storage" | "meta_cdn" | null = null;
+    let syncedAt: string | null = null;
+    if (profile.avatar_url) {
+      const persisted = await persistMetaAvatar({
+        scopedId: row.phone_number,
+        platform: "instagram",
+        cdnUrl: profile.avatar_url,
+        serviceClient: supabase,
+      });
+      storedUrl = persisted.publicUrl;
+      source = persisted.source === "storage" ? "storage" : "meta_cdn";
+      syncedAt = persisted.syncedAt;
     }
     try {
       await supabase.rpc("upsert_meta_contact_profile", {
@@ -451,11 +485,102 @@ async function handleBackfillIgProfiles(body: any) {
         p_platform: row.platform,
         p_external_id: row.phone_number,
         p_display_name: profile.name,
-        p_avatar_url: profile.avatar_url,
+        p_avatar_url: storedUrl,
+        p_avatar_source: source,
+        p_avatar_synced_at: syncedAt,
+        p_avatar_consent_blocked: false,
       });
       results.resolved++;
     } catch (e) {
       console.warn(`[backfill] upsert failed for ${row.phone_number}:`, e instanceof Error ? e.message : e);
+      results.failed++;
+    }
+  }
+
+  return json({ success: true, ...results });
+}
+
+// ──────────────── REFRESH ALL IG AVATARS ────────────────
+// Bulk upgrade existing rows whose avatar lives on Meta's CDN (expiring) or
+// whose Storage copy is older than 20 days.
+async function handleRefreshAllIgAvatars(body: any) {
+  const branchId: string | null = body?.branch_id || null;
+  const limit: number = Math.min(Number(body?.limit) || 200, 500);
+
+  // Find an IG integration to source the access token.
+  const integrations = await loadIgIntegrations(branchId);
+  const integ = (integrations || []).find((r: any) => r.branch_id === branchId) || (integrations || [])[0];
+  if (!integ) return json({ error: "No active Instagram integration found." }, 404);
+  const creds: any = integ.credentials || {};
+  const token = creds.page_access_token || creds.access_token;
+  if (!token) return json({ error: "Integration has no access token." }, 400);
+  const { isInstagramLogin } = detectMetaHost(token);
+  const primary = isInstagramLogin ? IG_API_BASE : META_API_BASE;
+  const fallback = isInstagramLogin ? META_API_BASE : IG_API_BASE;
+  const fields = "name,username,profile_pic_url";
+
+  let q = supabase
+    .from("whatsapp_chat_settings")
+    .select("phone_number, platform, branch_id, avatar_source, avatar_synced_at")
+    .eq("platform", "instagram")
+    .eq("avatar_consent_blocked", false)
+    .or(`avatar_source.is.null,avatar_source.eq.meta_cdn,avatar_synced_at.lt.${new Date(Date.now() - 20 * 86400_000).toISOString()}`)
+    .limit(limit);
+  if (branchId) q = q.eq("branch_id", branchId);
+
+  const { data: rows, error: rErr } = await q;
+  if (rErr) return json({ error: rErr.message }, 500);
+
+  const results = { scanned: rows?.length || 0, upgraded: 0, failed: 0, consent_blocked: 0 };
+
+  for (const row of rows || []) {
+    if (/^IG_(USER_)?(PHASE_E_)?TEST/i.test(row.phone_number)) continue;
+    const tryFetch = async (base: string) => {
+      const url = `${base}/${encodeURIComponent(row.phone_number)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+      try {
+        const r = await metaFetchWithFallback(url);
+        const d = await r.json().catch(() => ({}));
+        return { ok: r.ok && !d?.error && (d.id || d.profile_pic_url), data: d };
+      } catch { return { ok: false, data: {} }; }
+    };
+    let res = await tryFetch(primary);
+    if (!res.ok) res = await tryFetch(fallback);
+    if (isConsentBlockedError(res.data)) {
+      await supabase.rpc("upsert_meta_contact_profile", {
+        p_branch_id: row.branch_id,
+        p_phone: row.phone_number,
+        p_platform: "instagram",
+        p_external_id: row.phone_number,
+        p_display_name: null, p_avatar_url: null,
+        p_avatar_source: null, p_avatar_synced_at: null,
+        p_avatar_consent_blocked: true,
+      });
+      results.consent_blocked++;
+      continue;
+    }
+    const cdn = res.data?.profile_pic_url as string | undefined;
+    if (!cdn) { results.failed++; continue; }
+    const persisted = await persistMetaAvatar({
+      scopedId: row.phone_number,
+      platform: "instagram",
+      cdnUrl: cdn,
+      serviceClient: supabase,
+    });
+    try {
+      await supabase.rpc("upsert_meta_contact_profile", {
+        p_branch_id: row.branch_id,
+        p_phone: row.phone_number,
+        p_platform: "instagram",
+        p_external_id: row.phone_number,
+        p_display_name: res.data?.name || (res.data?.username ? `@${res.data.username}` : null),
+        p_avatar_url: persisted.publicUrl,
+        p_avatar_source: persisted.source === "storage" ? "storage" : "meta_cdn",
+        p_avatar_synced_at: persisted.syncedAt,
+        p_avatar_consent_blocked: false,
+      });
+      results.upgraded++;
+    } catch (e) {
+      console.warn(`[refresh_all] upsert failed ${row.phone_number}:`, e instanceof Error ? e.message : e);
       results.failed++;
     }
   }
