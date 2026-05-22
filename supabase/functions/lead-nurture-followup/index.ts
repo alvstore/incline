@@ -219,6 +219,16 @@ serve(async (req) => {
             supabase,
             purpose: "lead_nurture",
             branchId: chat.branch_id,
+            userMessage: userMsg,
+            identity: lead?.id
+              ? {
+                  role: "lead",
+                  senderId: chat.phone_number,
+                  leadId: lead.id,
+                  name: lead.full_name ?? null,
+                  funnelStage: (lead as any).status ?? null,
+                }
+              : { role: "unknown", senderId: chat.phone_number },
           });
           const r = await generateOnce({
             purpose: "lead_nurture",
