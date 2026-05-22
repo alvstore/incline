@@ -9,8 +9,6 @@ verify_jwt = true
 [functions.mips-webhook-receiver]
 verify_jwt = false
 
-[functions.admin-create-user]
-verify_jwt = true
 
 [functions.capture-lead]
 verify_jwt = false
@@ -51,8 +49,6 @@ verify_jwt = false
 [functions.ai-auto-reply]
 verify_jwt = false
 
-[functions.export-data]
-verify_jwt = false
 
 [functions.send-whatsapp]
 verify_jwt = false
