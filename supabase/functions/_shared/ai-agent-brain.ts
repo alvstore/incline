@@ -409,6 +409,18 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 
   if (!replyText) return skip("no_reply_text");
 
+  // 9b. OUTBOUND GUARDS — strip / replace interactive blocks the LLM emitted that
+  // would violate the hard onboarding gate or duplicate a question already asked.
+  // v1.0.0 — defense-in-depth: prompt rules can fail, this cannot.
+  replyText = enforceOutboundInteractiveGuards({
+    replyText,
+    memory,
+    history,
+    platform: ctx.platform,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
+
   // 10. Lead capture parsing
   if (shouldCaptureLead) {
     const leadResult = await tryParseAndCaptureLead(
