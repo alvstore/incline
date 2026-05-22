@@ -482,6 +482,15 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9c. FOUNDER'S PHASE plain-text sanitizer — final line of defense.
+  replyText = sanitizeFoundersPhaseText({
+    replyText,
+    memory,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
+
+
 
   // 10. Lead capture parsing
   if (shouldCaptureLead) {
