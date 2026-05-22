@@ -464,6 +464,7 @@ export type Database = {
       }
       ai_purposes: {
         Row: {
+          allowed_tools: string[]
           branch_id: string | null
           created_at: string
           description: string | null
@@ -473,6 +474,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           model: string | null
+          ops_config: Json
           provider_id: string | null
           purpose: string
           reply_delay_seconds: number
@@ -483,6 +485,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          allowed_tools?: string[]
           branch_id?: string | null
           created_at?: string
           description?: string | null
@@ -492,6 +495,7 @@ export type Database = {
           id?: string
           max_tokens?: number | null
           model?: string | null
+          ops_config?: Json
           provider_id?: string | null
           purpose: string
           reply_delay_seconds?: number
@@ -502,6 +506,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          allowed_tools?: string[]
           branch_id?: string | null
           created_at?: string
           description?: string | null
@@ -511,6 +516,7 @@ export type Database = {
           id?: string
           max_tokens?: number | null
           model?: string | null
+          ops_config?: Json
           provider_id?: string | null
           purpose?: string
           reply_delay_seconds?: number
@@ -13294,6 +13300,7 @@ export type Database = {
       get_ai_purpose: {
         Args: { _branch_id?: string; _purpose: string }
         Returns: {
+          allowed_tools: string[]
           branch_id: string | null
           created_at: string
           description: string | null
@@ -13303,6 +13310,7 @@ export type Database = {
           id: string
           max_tokens: number | null
           model: string | null
+          ops_config: Json
           provider_id: string | null
           purpose: string
           reply_delay_seconds: number
