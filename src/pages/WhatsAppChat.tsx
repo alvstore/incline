@@ -1055,8 +1055,20 @@ export default function WhatsAppChatPage() {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        {formatPhoneDisplay(selectedContact.phone_number)}
+                        {(() => {
+                          const plat = selectedContact.platform;
+                          const ph = selectedContact.phone_number;
+                          if ((plat === 'instagram' || plat === 'messenger') && isIgsid(ph)) {
+                            // Show @username if contact_name looks like a handle, else the raw scoped ID.
+                            const looksLikeHandle = selectedContact.contact_name?.startsWith('@');
+                            if (looksLikeHandle) {
+                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{selectedContact.contact_name?.replace(/^@/, '')}</span></>);
+                            }
+                            const label = plat === 'instagram' ? 'IG ID' : 'MSG ID';
+                            return (<><PlatformIcon platform={plat} className="h-3 w-3" /><span className="font-mono text-[11px]">{label} · {ph}</span></>);
+                          }
+                          return (<><Phone className="h-3 w-3" />{formatPhoneDisplay(ph)}</>);
+                        })()}
                       </div>
                     </div>
                   </div>
