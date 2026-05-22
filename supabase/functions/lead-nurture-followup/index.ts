@@ -1,7 +1,7 @@
-// v5.0.0 — SSOT: persona + brain come from ai_purposes + ai_knowledge via
-//          buildSystemPrompt(). The deprecated `lead_nurture_config.nurture_prompt`
-//          overlay is gone — any text that lived there was migrated into the
-//          `lead_nurture` purpose row.
+// v6.0.0 — SSOT: all operational toggles (enabled/delay/retries/cooldown) come
+//          from ai_purposes.ops_config for purpose='lead_nurture'. The legacy
+//          organization_settings.lead_nurture_config column has been dropped.
+// v5.0.0 — persona + brain come from ai_purposes + ai_knowledge via buildSystemPrompt().
 // v4.0.0 — AI nudge text generated via shared ai-runtime.generateOnce.
 // v3.4.0 — Enforce Meta 24h customer-service window.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -23,19 +23,22 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // AI provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: orgSettings } = await supabase
-      .from("organization_settings")
-      .select("lead_nurture_config")
-      .limit(1)
+    // SSOT: read ops_config from ai_purposes (global row).
+    const { data: purposeRow } = await supabase
+      .from("ai_purposes")
+      .select("enabled, ops_config")
+      .eq("purpose", "lead_nurture")
+      .is("branch_id", null)
       .maybeSingle();
 
-    const config = (orgSettings?.lead_nurture_config as any) ?? {
-      enabled: true,
-      delay_hours: 4,
-      max_retries: 2,
+    const ops = ((purposeRow?.ops_config as Record<string, any>) ?? {});
+    const config = {
+      enabled: ops.enabled ?? purposeRow?.enabled ?? true,
+      delay_hours: ops.delay_hours ?? 4,
+      max_retries: ops.max_retries ?? 2,
+      cooldown_hours: ops.cooldown_hours ?? ops.delay_hours ?? 4,
     };
 
     if (!config.enabled) {
@@ -45,9 +48,9 @@ serve(async (req) => {
       });
     }
 
-    const delayHours = config.delay_hours || 4;
-    const maxRetries = config.max_retries || 2;
-    const cooldownHours = config.cooldown_hours || delayHours;
+    const delayHours = config.delay_hours;
+    const maxRetries = config.max_retries;
+    const cooldownHours = config.cooldown_hours;
     const cutoffTime = new Date(Date.now() - delayHours * 60 * 60 * 1000).toISOString();
 
     // Find chats where bot is active AND the contact hasn't asked us to stop.
