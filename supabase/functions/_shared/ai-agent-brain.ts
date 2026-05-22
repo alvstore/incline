@@ -592,14 +592,16 @@ function enforceOutboundInteractiveGuards(input: {
   }
   if (!parsed || !bodyText) return replyText;
 
-  const knownName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+  const knownName = !!realName;
   const knownEmail = !!memory?.profile?.email;
   const knownPlan = !!memory?.facts?.plan_interest;
   const knownGoal = !!memory?.facts?.fitness_goal;
 
   const askNextMissing = (): string => {
     if (!knownName) return "Before I share more, may I know your name, please?";
-    const firstName = memory?.profile?.first_name || memory?.profile?.name || "";
+    const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
         ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
