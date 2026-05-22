@@ -1,79 +1,102 @@
-## Audit findings
+# Automation Brain — Redesign + Instagram DM consolidation
 
-### 1. Two log tabs — different data, bad labels
-- `AICallLogsTab` reads `ai_call_logs` (LLM provider calls — latency, fallback, errors).
-- `AIToolLogsTab` reads `ai_tool_logs` (tool/function invocations — `get_membership_status`, etc.).
-- They are NOT duplicates, but the labels "Call Logs" / "Tool Logs" tell the user nothing, and they share filter/clear UX.
-- Fix: single **Logs** tab with a segmented control `[ LLM calls · Tool calls ]` and a shared toolbar (window, status, clear). Plumbing tab drops from 4 sub-tabs to 3 (Providers · Tools · Logs).
-
-### 2. Handles tab — five surfaces per row, two editors for the same data
-Today each `whatsapp_reply` card stacks:
-1. Persona stub preview (read-only)
-2. `KnowledgeForHandle` (shared)
-3. `WhatsAppAISettings` (ops, writes legacy column)
-4. `AIFlowBuilderSettings` (capture flow, writes legacy column)
-5. Footer with **"Edit persona / model"** that opens **AIPurposesTab** — a second full editor of persona/provider/model/temperature
-
-That's two editors writing the same `ai_purposes` row, plus embedded panels that still write to deprecated JSONB columns.
-
-Fix: one `HandleCard` with these sections only:
-- **Persona & tone** — inline editable Textarea (≤ 800 chars), provider/model select, temperature slider. No "Advanced" toggle. No `AIPurposesTab` mount.
-- **Knowledge in use** — `KnowledgeForHandle` (already SSOT, keep).
-- **Operational settings** — rendered from `ai_purposes.ops_config` directly (auto-reply delay, quiet hours, cadence, retries, capture-flow questions). Single save writes `ai_purposes`.
-- **Test handle** — unchanged.
-
-Result: one row = one editor = one table write. Removes the dual-editor confusion the user is flagging.
-
-### 3. Deprecated layer still alive
-DB has both the new SSOT and the old JSONB:
-
-| Surface | New (SSOT) | Old (still written) |
-|---|---|---|
-| Persona | `ai_purposes.system_prompt` | `ai_knowledge` row `"Legacy persona for whatsapp_reply"` (4 595 chars, duplicates the prompt) |
-| WhatsApp ops | `ai_purposes.ops_config` (added, never used) | `organization_settings.whatsapp_ai_config` JSONB |
-| Lead nurture ops | `ai_purposes.ops_config` (added, never used) | `organization_settings.lead_nurture_config` JSONB |
-| Capture flow | `ai_purposes.ops_config` (added, never used) | `organization_settings.whatsapp_ai_config.flow` |
-
-The May 22 migration added `ops_config` + `allowed_tools` on `ai_purposes` and the new tabs, but the frontend (`WhatsAppAISettings`, `LeadNurtureSettings`, `AIFlowBuilderSettings`) and edge functions (`meta-webhook`, `lead-nurture-followup`, `_shared/ai-agent-brain`) still read/write the old JSONB. So we're paying SSOT cost with zero SSOT benefit.
-
-### 4. Unused/dead files to delete after migration
-- `src/components/settings/AIPurposesTab.tsx` — its only caller becomes the inline editor inside `HandleCard`.
-- `src/components/settings/WhatsAppAISettings.tsx` — fields move into `HandleCard` ops section for `whatsapp_reply`.
-- `src/components/settings/LeadNurtureSettings.tsx` — fields move into `HandleCard` ops section for `lead_nurture`.
-- `src/components/settings/AIFlowBuilderSettings.tsx` — fields move into `HandleCard` ops section for `whatsapp_reply`.
+## Goals
+1. **Single source of truth** for *every* scheduled background job (incl. Instagram Comment-to-DM).
+2. **Redesigned control room** — denser, scannable, with clearer health signals and faster edit/run flow.
+3. Keep Vuexy tokens locked (Indigo/Violet, `rounded-2xl`, slate shadows).
 
 ---
 
-## Plan
+## Part A — Move Instagram DM into Automation Brain
 
-### Phase 1 — Frontend collapse (no DB changes)
-1. **Logs**: build `AILogsTab.tsx` with a `Tabs` of `llm | tools` reusing the existing fetch/filter logic from `AICallLogsTab` and `AIToolLogsTab`. Update `PlumbingTab` to render `[Providers · Tools · Logs]`. Delete `AICallLogsTab.tsx` and `AIToolLogsTab.tsx`.
-2. **Handles**: rewrite `HandlesTab.tsx` to render one `HandleCard.tsx` per row. `HandleCard` owns persona/provider/model/temperature inline (replaces the "Show model & sampling editors" toggle and the embedded `AIPurposesTab`).
-3. Remove the `AIPurposesTab` import from `HandlesTab.tsx` and delete the file.
+### Current state
+- `process-ig-comment-runs` edge fn runs on its **own dedicated `pg_cron`** (every 1 min).
+- Lives outside the `automation_rules` registry → not visible / pausable from the control room.
+- The IG **management UI** (campaigns, keywords, approval queue, runs log) lives in `Announcements → Instagram` and is *content management*, not orchestration. It stays where it is.
 
-### Phase 2 — Backend SSOT cutover (one migration + edge-function edits)
-4. Migration: backfill `ai_purposes.ops_config` from `organization_settings.whatsapp_ai_config` and `lead_nurture_config` for the matching purposes. Move capture-flow questions into `ai_purposes.ops_config.capture_flow`.
-5. Edge functions: switch reads to `ai_purposes.ops_config`:
-   - `supabase/functions/_shared/ai-agent-brain.ts` (drop the `whatsapp_ai_config` overlay path; rely on `buildSystemPrompt`).
-   - `supabase/functions/meta-webhook/index.ts` (read auto-reply toggle from `ops_config`).
-   - `supabase/functions/lead-nurture-followup/index.ts` (read cadence from `ops_config`).
-6. Frontend `HandleCard` ops section reads/writes `ai_purposes.ops_config` only.
-7. Delete the duplicate `ai_knowledge` row `"Legacy persona for whatsapp_reply"` (DB-only delete, ai_purposes.system_prompt is already the 177-char SSOT).
-8. Delete `WhatsAppAISettings.tsx`, `LeadNurtureSettings.tsx`, `AIFlowBuilderSettings.tsx`.
+### Migration
+1. Register a new row in `automation_rules`:
+   - `key = 'process_ig_comment_runs'`
+   - `category = 'engagement'`
+   - `worker = 'edge:process-ig-comment-runs'`
+   - `cron_expression = '*/1 * * * *'` (we keep 1‑min cadence — IG DMs are time-sensitive)
+   - `is_system = true`, `is_active = true`
+2. Teach `automation-brain-tick` to dispatch `edge:process-ig-comment-runs` (already generic — just confirm worker prefix is supported).
+3. **Drop the standalone `pg_cron` job** for IG runs (replaced by master tick).
+4. Add a deep-link button on the rule row → *"Manage campaigns"* → `/announcements?tab=instagram`.
 
-### Phase 3 — Drop deprecated columns (after Phase 2 ships green)
-9. Migration: `ALTER TABLE organization_settings DROP COLUMN whatsapp_ai_config, DROP COLUMN lead_nurture_config, DROP COLUMN ai_tool_config;` plus a `dr_block_writes`-safe migration. Update `src/integrations/supabase/types.ts` regenerates automatically.
+Result: pausing/editing/Run-now for IG DMs works exactly like every other rule; the campaign editor stays where staff already manage IG content.
 
-### Acceptance checks
-- AI Agent Hub renders 4 top tabs; Plumbing renders 3 sub-tabs.
-- Each Handle row has exactly one editor; saving updates `ai_purposes` and nothing else.
-- `rg "whatsapp_ai_config|lead_nurture_config"` returns zero matches in `src/` and `supabase/functions/`.
-- Live WhatsApp message still routes through `ai-agent-brain` and uses the same persona text as `ai_purposes.system_prompt`.
-- `ai_call_logs` and `ai_tool_logs` both visible under one Logs tab with working filters and clear.
+---
 
-### Out of scope
-- `ai_memory`, `ai_dashboard_insights`, `ai_brain_health` view, IG comment automation, template generator, provider catalog.
-- The repetitive-question bug on live WhatsApp (separate root-cause work; tracked under the AI brain conversation loop, not this UI audit).
+## Part B — Control Room redesign
 
-### Open question
-Phase 3 drops three JSONB columns from `organization_settings`. Confirm you want them dropped in the same release as Phase 2, or staged one release later with the columns left in place as read-only fallback for one week.
+### Information architecture (single page, three zones)
+
+```
+┌─ Header ─────────────────────────────────────────────────────┐
+│  Automation Brain  ·  Master tick: every 5 min  · [Run tick] │
+├─ Health strip (4 KPI tiles) ─────────────────────────────────┤
+│  Active rules · Runs 24h · Failures 24h · Dispatched 24h     │
+├─ Toolbar ────────────────────────────────────────────────────┤
+│  [Search] [Category ▾] [Status ▾] [AI only ☐] [Failing only☐]│
+├─ Rules (grouped, collapsible) ───────────────────────────────┤
+│  ▸ Billing (3)                                               │
+│  ▾ Engagement (5)                                            │
+│     ● Daily Reminders   ⏱ Daily 8:00  ✓ success 2h ago  [⋯]  │
+│     ● IG Comment → DM   ⏱ Every 1m    ⚠ 2 errors        [⋯]  │
+│  ▸ Lifecycle (2)                                             │
+├─ Activity rail (right column on ≥lg, below on mobile) ───────┤
+│  Live runs feed (auto-refresh 15s), filterable by rule       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Key UX upgrades
+- **One row per rule** (not a card per rule) → ~2× density. Inline: name, AI chip, last-status badge, sparkline of last 10 runs, cron summary, last/next run, switch, ⋯ menu (Run now / Edit / View runs / Open target).
+- **Category collapse** with counts + per-group failure badge so failing groups stay open.
+- **Failing-only filter** — single click triage.
+- **Health strip** gains a tiny trend (▲/▼ vs prior 24h) and turns rose when failures > 0.
+- **Activity rail** replaces the bottom "Recent runs" card; persistent, click-to-filter by rule.
+- **Edit Sheet** reorganised into three sections: *Identity* (name/desc) · *Schedule* (presets + cron + next-3-fire preview) · *AI personalisation* (toggle + tone + sample preview button calling `ai-test-purpose`).
+- **System-rule guardrail** — system rules show a lock chip; only schedule + AI tone + name editable.
+- **Empty / loading / error** states per Vuexy rules (skeleton rows, lucide-only icons, colored badges).
+
+### Accessibility & perf
+- Rule rows are buttons w/ visible focus ring; switches have aria-labels (already partly present).
+- Virtualise the rules list only if >50 rows (currently 13 → not needed).
+- Realtime via `useQuery` `refetchInterval` already in place; add Supabase Realtime subscription on `automation_runs` for the activity rail.
+
+---
+
+## Technical changes
+
+### Database (migration)
+- INSERT row into `automation_rules` for `process_ig_comment_runs`.
+- DROP the legacy `cron.unschedule(...)` for the IG-specific job (via insert tool — user-data).
+
+### Frontend
+- Rewrite `src/components/settings/AutomationsControlRoom.tsx` into:
+  - `AutomationsControlRoom.tsx` (shell + filters + KPIs)
+  - `AutomationRuleRow.tsx` (single dense row)
+  - `AutomationActivityRail.tsx` (live runs, realtime)
+  - `AutomationEditSheet.tsx` (extracted, reorganised)
+  - `lib/automations/cronHumanize.ts` (describe + next-3-runs via tiny cron parser)
+- Add deep-link target buttons per rule key (e.g. IG → `/announcements?tab=instagram`, Reminders → `/settings?tab=communication-templates`).
+
+### Edge / worker
+- Confirm `automation-brain-tick` already handles `edge:*` workers generically (it does — `process_comm_retry_queue` uses the same pattern). No change beyond registering the row.
+- Keep `process-ig-comment-runs` fn unchanged (it's idempotent; can be called by either cron or the brain).
+
+### Cleanup
+- Remove dedicated pg_cron entry for `process-ig-comment-runs` after the new rule is verified once via "Run now".
+- Update memory index entry **Automation Brain** to note IG DMs are now orchestrated centrally.
+
+---
+
+## Out of scope
+- IG campaign editor / approval queue UI (stays in `/announcements?tab=instagram`).
+- Changing the master tick cadence (5 min) or worker contract.
+- Multi-tenant / per-branch automation rules (already supported via `branch_id` filter; UI unchanged).
+
+## Open question
+Confirm: keep IG cadence at **1 min** (matches today) — or relax to **5 min** to align with the master tick (simpler, but +up-to-4-min DM latency).
