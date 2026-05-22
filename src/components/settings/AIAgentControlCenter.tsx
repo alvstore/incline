@@ -504,7 +504,7 @@ function ToolsTab() {
 
   // Stats across all tools
   const allTools = TOOL_CATEGORIES.flatMap((c) => c.tools);
-  const enabledCount = allTools.filter((t) => toolConfig[t.name] !== false).length;
+  const enabledCount = allTools.filter((t) => toolEnabled(t.name)).length;
   const totalCount = allTools.length;
 
   return (
