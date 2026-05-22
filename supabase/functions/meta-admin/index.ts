@@ -882,6 +882,7 @@ Deno.serve(async (req) => {
       case "diagnose":             return await handleDiagnose(body);
       case "refresh_page_token":   return await handleRefreshPageToken(body);
       case "backfill_ig_profiles": return await handleBackfillIgProfiles(body);
+      case "refresh_all_ig_avatars": return await handleRefreshAllIgAvatars(body);
       case "refresh_ig_profile":   return await handleRefreshIgProfile(body);
       case "list_ig_accounts":     return await handleListIgAccounts(body);
       case "list_ig_media":        return await handleListIgMedia(body);
