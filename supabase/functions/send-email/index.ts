@@ -175,8 +175,9 @@ Deno.serve(async (req) => {
         result = { success: false, error: `Unsupported email provider: ${provider}` };
     }
 
-    // Log to communication_logs (capture attachment metadata for auditability)
-    if (branch_id) {
+    // Log to communication_logs (capture attachment metadata for auditability).
+    // Skip when the dispatcher already owns the canonical row (skip_log=true).
+    if (branch_id && !skip_log) {
       const attachmentMeta = (attachments || []).map((a: any) => ({
         filename: a.filename, content_type: a.content_type,
         size_b64: (a.content_base64 || '').length,
