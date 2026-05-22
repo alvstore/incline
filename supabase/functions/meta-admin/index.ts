@@ -1,3 +1,7 @@
+// v1.2.0 — IG avatar persistence: backfill and single-refresh actions now
+//          download Meta CDN images into Storage (avatars/meta/instagram/…),
+//          flag consent-blocked contacts, and a new `refresh_all_ig_avatars`
+//          action upgrades existing meta_cdn rows to permanent storage URLs.
 // v1.1.0 — Unified Meta admin function.
 // Replaces: meta-subscribe + meta-diagnose.
 // Body: { action, ...action-specific fields }
@@ -8,6 +12,8 @@
 //                          Required for IG-via-FB-Page profile resolution.
 //   backfill_ig_profiles:  { integration_id, limit? } — re-resolves name/avatar
 //                          for IG contacts where contact_name/contact_avatar_url is NULL.
+//   refresh_all_ig_avatars:{ branch_id?, limit? } — re-resolves and persists IG
+//                          avatars whose source is meta_cdn / missing / stale.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   META_API_BASE,
@@ -15,6 +21,7 @@ import {
   detectMetaHost,
   metaFetchWithFallback,
 } from "../_shared/meta-config.ts";
+import { persistMetaAvatar, isConsentBlockedError } from "../_shared/metaAvatar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
