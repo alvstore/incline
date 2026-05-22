@@ -464,7 +464,6 @@ export type Database = {
       }
       ai_purposes: {
         Row: {
-          allowed_tools: string[]
           branch_id: string | null
           created_at: string
           description: string | null
@@ -485,7 +484,6 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
-          allowed_tools?: string[]
           branch_id?: string | null
           created_at?: string
           description?: string | null
@@ -506,7 +504,6 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
-          allowed_tools?: string[]
           branch_id?: string | null
           created_at?: string
           description?: string | null
@@ -8466,7 +8463,6 @@ export type Database = {
       }
       organization_settings: {
         Row: {
-          ai_tool_config: Json | null
           alert_config: Json | null
           branch_id: string | null
           created_at: string
@@ -8475,7 +8471,6 @@ export type Database = {
           gst_rates: Json | null
           hsn_defaults: Json | null
           id: string
-          lead_nurture_config: Json | null
           logo_url: string | null
           name: string | null
           session_timeout_hours: number | null
@@ -8483,10 +8478,8 @@ export type Database = {
           updated_at: string
           webhook_slug: string | null
           website_theme: Json | null
-          whatsapp_ai_config: Json | null
         }
         Insert: {
-          ai_tool_config?: Json | null
           alert_config?: Json | null
           branch_id?: string | null
           created_at?: string
@@ -8495,7 +8488,6 @@ export type Database = {
           gst_rates?: Json | null
           hsn_defaults?: Json | null
           id?: string
-          lead_nurture_config?: Json | null
           logo_url?: string | null
           name?: string | null
           session_timeout_hours?: number | null
@@ -8503,10 +8495,8 @@ export type Database = {
           updated_at?: string
           webhook_slug?: string | null
           website_theme?: Json | null
-          whatsapp_ai_config?: Json | null
         }
         Update: {
-          ai_tool_config?: Json | null
           alert_config?: Json | null
           branch_id?: string | null
           created_at?: string
@@ -8515,7 +8505,6 @@ export type Database = {
           gst_rates?: Json | null
           hsn_defaults?: Json | null
           id?: string
-          lead_nurture_config?: Json | null
           logo_url?: string | null
           name?: string | null
           session_timeout_hours?: number | null
@@ -8523,7 +8512,6 @@ export type Database = {
           updated_at?: string
           webhook_slug?: string | null
           website_theme?: Json | null
-          whatsapp_ai_config?: Json | null
         }
         Relationships: [
           {
@@ -13300,7 +13288,6 @@ export type Database = {
       get_ai_purpose: {
         Args: { _branch_id?: string; _purpose: string }
         Returns: {
-          allowed_tools: string[]
           branch_id: string | null
           created_at: string
           description: string | null
