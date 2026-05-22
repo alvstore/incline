@@ -481,6 +481,109 @@ function skip(reason: string): AgentResult {
   return { replyText: null, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: true, skipReason: reason };
 }
 
+// ── Outbound interactive guards ──────────────────────────────────────────────
+// Server-side defense for the prompt-only HARD GATE + duplicate interactive_list
+// emissions. The LLM violates these rules occasionally; this function never does.
+//
+// Behavior:
+//  1. If reply contains an interactive_list/interactive JSON whose body text
+//     was already sent in the last 3 outbound turns → strip the JSON and fall
+//     back to a plain-text "next missing field" question.
+//  2. If reply contains interactive JSON but lead-capture HARD GATE prereqs
+//     (name + email) are missing → strip and fall back to plain-text ask for
+//     whichever field is missing first.
+//  3. If reply is interactive_list for plan_interest but memory.facts.plan_interest
+//     is already set → strip and acknowledge + advance.
+function enforceOutboundInteractiveGuards(input: {
+  replyText: string;
+  memory: any;
+  history: Array<{ role: string; content: string }>;
+  platform: Platform;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, history, leadCaptureEnabled } = input;
+  const trimmed = (replyText || "").trim();
+
+  // Cheap reject — not interactive JSON
+  if (!/"type"\s*:\s*"interactive(_list)?"/.test(trimmed)) return replyText;
+
+  // Try to parse the JSON envelope
+  let parsed: any = null;
+  let bodyText = "";
+  try {
+    const jsonStr = trimmed.startsWith("{") ? trimmed : (trimmed.match(/\{[\s\S]*\}/)?.[0] ?? "");
+    if (jsonStr) {
+      parsed = JSON.parse(jsonStr);
+      bodyText = String(
+        parsed?.body?.text ?? parsed?.body ?? parsed?.text ?? "",
+      ).trim();
+    }
+  } catch {
+    return replyText; // malformed JSON — let downstream handle/log
+  }
+  if (!parsed || !bodyText) return replyText;
+
+  const knownName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const knownEmail = !!memory?.profile?.email;
+  const knownPlan = !!memory?.facts?.plan_interest;
+  const knownGoal = !!memory?.facts?.fitness_goal;
+
+  const askNextMissing = (): string => {
+    if (!knownName) return "Before I share more, may I know your name, please?";
+    const firstName = memory?.profile?.first_name || memory?.profile?.name || "";
+    if (!knownEmail) {
+      return firstName
+        ? `Thanks, ${firstName}! May I have your email address so I can share the membership details with you?`
+        : "Could you share your email address so I can send the membership details?";
+    }
+    if (!knownGoal) return "What's your primary fitness goal — weight loss, muscle gain, endurance, flexibility, or general fitness?";
+    if (knownPlan) {
+      const plan = memory.facts.plan_interest;
+      return `Noted — you're leaning toward the *${plan}* plan. To tailor the right recommendation, what's your preferred workout time (morning / evening)?`;
+    }
+    return "Could you share a bit more about what you're looking for?";
+  };
+
+  // Look at last 6 outbound messages for the same body text
+  const recentOutbound = history.filter((m) => m.role === "assistant").slice(-6);
+  const sameBodyCount = recentOutbound.filter((m) => {
+    const c = String(m.content || "");
+    if (c.includes(bodyText)) return true;
+    // Also match if the prior message was a JSON whose body equals bodyText
+    try {
+      const j = c.match(/\{[\s\S]*\}/)?.[0];
+      if (j) {
+        const p = JSON.parse(j);
+        const b = String(p?.body?.text ?? p?.body ?? "").trim();
+        return b && b === bodyText;
+      }
+    } catch { /* noop */ }
+    return false;
+  }).length;
+
+  // (1) Duplicate interactive — fall back to plain text
+  if (sameBodyCount >= 1) {
+    console.log(`[AI:guards] dropping duplicate interactive — bodyText="${bodyText.slice(0, 60)}"`);
+    return askNextMissing();
+  }
+
+  // (2) Hard gate — interactive before name + email is captured
+  if (leadCaptureEnabled && (!knownName || !knownEmail)) {
+    console.log(`[AI:guards] stripping interactive — hard gate (name=${knownName}, email=${knownEmail})`);
+    return askNextMissing();
+  }
+
+  // (3) plan_interest already known but LLM re-emitted the duration list
+  if (knownPlan && /membership duration|which membership|choose your plan/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping plan_interest interactive — already known (${memory.facts.plan_interest})`);
+    return askNextMissing();
+  }
+
+  return replyText;
+}
+
+
+
 // Gym knowledge cache (refreshes every 5 min)
 let _gymFactsCache: string | null = null;
 let _gymFactsTs = 0;
