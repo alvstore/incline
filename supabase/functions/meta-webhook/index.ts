@@ -783,13 +783,17 @@ export async function resolveInstagramSenderProfile(igUserId: string, integratio
       result = await attempt(fallbackBase, accessToken, "alt-host");
     }
     if (!result.ok) {
-      _igProfileCache.set(igUserId, { profile: empty, ts: Date.now() });
+      // v2.1.0 — do NOT cache empty results. The token may be misconfigured
+      // (missing pages_messaging/instagram_basic scopes) or Meta may return
+      // empty body on first contact. Retry on the next inbound message.
+      console.warn(`[IG profile] all attempts failed for IGSID=${igUserId} pageToken=${pageToken ? 'present' : 'absent'} userToken=${userToken ? 'present' : 'absent'} — NOT caching, will retry on next message`);
       return empty;
     }
     const username = result.data.username ? `@${result.data.username}` : null;
     const display = result.data.name || username || null;
     const profile: IgProfile = { name: display, avatar_url: result.data.profile_pic_url || null };
-    _igProfileCache.set(igUserId, { profile, ts: Date.now() });
+    // Only cache successful resolutions so transient failures don't poison the cache.
+    if (display || profile.avatar_url) _igProfileCache.set(igUserId, { profile, ts: Date.now() });
     if (display) console.log(`[IG profile] resolved ${igUserId} → ${display}${profile.avatar_url ? ' (with avatar)' : ''}`);
     return profile;
   } catch (e) {
