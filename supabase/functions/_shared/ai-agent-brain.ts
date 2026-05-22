@@ -700,9 +700,10 @@ function enforceOutboundInteractiveGuards(input: {
     return askNextMissing();
   }
 
-  // (3) FOUNDER'S PHASE — ANY plan/duration/PT interactive is forbidden
-  if (/membership duration|which membership|choose your plan|monthly|quarterly|half[\s-]?year|annual|pt\s*package|personal\s*training\s*package/i.test(bodyText)) {
-    console.log(`[AI:guards] dropping forbidden plan/duration/PT interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
+  // (3) FOUNDER'S PHASE — only PT-package / day-pass interactives are forbidden.
+  //     Duration/goal interactives are explicitly allowed (v3.6.0).
+  if (/pt\s*package|personal\s*training\s*package|day\s*pass|session\s*pack/i.test(bodyText)) {
+    console.log(`[AI:guards] dropping forbidden PT/day-pass interactive (founder's phase) — body="${bodyText.slice(0, 80)}"`);
     return askNextMissing();
   }
 
