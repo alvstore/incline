@@ -6,7 +6,7 @@ import { Clock, Play, Pencil, MoreVertical, Sparkles, Lock, ExternalLink, AlertT
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { describeCron } from '@/lib/automations/cronHumanize';
-import { type AutomationRule, type AutomationRun, STATUS_COLOR, RULE_DEEP_LINKS } from './types';
+import { type AutomationRule, type AutomationRun, RULE_DEEP_LINKS } from './types';
 
 interface Props {
   rule: AutomationRule;
