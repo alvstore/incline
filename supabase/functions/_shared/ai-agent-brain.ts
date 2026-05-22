@@ -227,20 +227,14 @@ export async function runUnifiedAgent(
   let systemPrompt = built.prompt;
 
 
-  // Member tool instructions — gated by ai_purposes.tools_allowed (UI-managed)
-  // with legacy organization_settings.ai_tool_config as a fallback.
+  // Member tool instructions — gated by ai_purposes.tools_allowed (SSOT, UI-managed).
+  // Empty array means permissive (all tools allowed).
   let tools: any[] | undefined;
   if (memberCtx.isMember && memberCtx.memberId) {
     tools = getAllToolDefinitions();
     const allowList = (aiConfig as any)._tools_allowed as string[] | undefined;
     if (allowList && allowList.length > 0) {
       tools = tools.filter((t: any) => allowList.includes(t.function.name));
-    } else {
-      try {
-        const { data: orgRow } = await supabase.from("organization_settings").select("ai_tool_config").limit(1).maybeSingle();
-        const cfg = (orgRow?.ai_tool_config as Record<string, boolean>) || {};
-        tools = tools.filter((t: any) => cfg[t.function.name] !== false);
-      } catch { /* keep all */ }
     }
     if (tools.length === 0) tools = undefined;
 
