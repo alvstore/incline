@@ -1,70 +1,71 @@
-# Lead Alert Hardening — Audit & Plan
+## Goal
+Persist Meta (Instagram + Messenger) profile pictures into Supabase Storage so they never expire, and stop hammering Meta when consent is missing. WhatsApp avatars stay out of scope (Cloud API does not expose them).
 
-## Root cause of the failure log
-`supabase/functions/notify-lead-created/index.ts` (current v2.0.0) advertises in its
-header comment that team WhatsApp alerts route through `dispatch-communication`
-using the approved `lead_alert` template. **The implementation does not match the
-comment.** It still calls a local `sendWhatsApp()` that posts a freeform
-`type: "text"` message directly to Meta:
+## Current state
+- `meta-webhook` and `meta-admin` call `GET /{IGSID}?fields=name,username,profile_pic_url` and write the raw Meta CDN URL into `whatsapp_chat_settings.contact_avatar_url` via `upsert_meta_contact_profile`. That URL expires in days → broken avatars in CRM.
+- No consent-error branch — comment-only IGSIDs keep getting re-fetched on every inbound message and silently fail.
+- A public `avatars` bucket already exists in Storage. To avoid mixing with member/staff avatars, all Meta-sourced files will live under a dedicated subfolder.
 
-```ts
-const r = await sendWhatsApp(whatsappIntegration, profile.phone, msg);
-```
+## Plan
 
-For any owner/admin/manager who has never replied to the business number in the
-last 24h (the realistic case), Meta accepts the POST (HTTP 200, wamid issued)
-but silently drops it — exactly the failure pattern in your screenshot.
+### 1. Storage layout (subfolder, not new bucket)
+- Reuse the existing public `avatars` bucket.
+- New path convention: `avatars/meta/{platform}/{scoped_id}.jpg`
+  - `platform` = `instagram` | `messenger`
+  - One file per contact, `upsert: true` so re-syncs reuse the same public URL.
+- Migration adds a Storage RLS policy: anyone can SELECT objects in `avatars` where `name LIKE 'meta/%'`; writes restricted to service role (used by edge functions only).
 
-There is already an **approved** Meta template that matches this use case:
+### 2. Schema additions on `whatsapp_chat_settings`
+- `avatar_synced_at timestamptz` — last successful Storage upload.
+- `avatar_source text check (... in ('storage','meta_cdn','default'))` — provenance.
+- `avatar_consent_blocked boolean default false` — true when Meta returns "User consent is required" (error code 10 / OAuthException subcode 2018338).
+- Partial index `(platform, contact_jid) where avatar_consent_blocked = true` for bulk retry sweeps later.
 
-| name | status | body |
-|---|---|---|
-| `internal_new_lead_alert` | APPROVED | `New Lead Alert:\nName: {{1}}\nPhone: {{2}}\nEmail: {{3}}\nSource: {{4}}\nPlease follow up at the earliest.` |
+### 3. RPC update
+Extend `upsert_meta_contact_profile` with three optional args: `p_avatar_source`, `p_avatar_synced_at`, `p_avatar_consent_blocked`, written atomically alongside name/avatar.
 
-A matching row exists in `templates` (id `59e80c78-…`) with variables
-`[lead_name, lead_phone, lead_email, source]`. `dispatch-communication` already
-knows how to render approved templates when given a `template_id`.
+### 4. Shared helper `supabase/functions/_shared/metaAvatar.ts` (new)
+Exports `persistMetaAvatar({ scopedId, platform, cdnUrl, serviceClient })`:
+1. `fetch(cdnUrl)` with 5s timeout, follow redirects, body capped at 2MB.
+2. Validate `Content-Type` starts with `image/`; otherwise abort.
+3. `storage.from('avatars').upload('meta/{platform}/{scopedId}.jpg', bytes, { upsert: true, contentType, cacheControl: '86400' })`.
+4. Return `{ publicUrl, source: 'storage', syncedAt }`. On any failure return `{ publicUrl: cdnUrl, source: 'meta_cdn' }` (degrade, never break the webhook).
 
-## Fix — Epic 1: Route team WhatsApp through approved template
-Rewrite `notify-lead-created` (v3.0.0) so **every** outbound message
-(lead-facing + team-facing, all channels) goes through
-`dispatch-communication`. Team WhatsApp passes
-`template_id = <internal_new_lead_alert>` so Meta delivers it outside the 24h
-window. Lead's own welcome WhatsApp stays freeform (lead IS in-window when they
-submit the form). Removes ~200 lines of duplicate SMS/WA provider code.
+### 5. `meta-webhook/index.ts`
+At the IG profile resolution block (around lines 730–800):
+- After `fetchIgProfile` returns `profile_pic_url`, call `persistMetaAvatar(...)` and use its `publicUrl` when calling `upsert_meta_contact_profile`, also passing the new provenance fields.
+- Add error classification around the Graph call:
+  - Meta error code `10` OR message includes `"User consent is required"` → call `upsert_meta_contact_profile` with `p_avatar_consent_blocked=true`, write name if returned, do NOT retry on subsequent messages.
+  - Other transient errors → existing retry-next-message behavior preserved.
+- Skip Storage upload entirely when consent is blocked.
 
-## Fix — Epic 2: Add Email channel to Team Alerts
-1. **Schema migration** on `lead_notification_rules`:
-   - `email_to_lead boolean default false`
-   - `email_to_admins boolean default false`
-   - `email_to_managers boolean default false`
-   - `lead_welcome_email_subject text`, `lead_welcome_email_body text`
-   - `team_alert_email_subject text`, `team_alert_email_body text`
-   (sensible defaults so existing rows stay valid)
-2. **Schema migration** on `lead_notification_admin_prefs`:
-   - `email_enabled boolean default true` (per-admin opt-out, mirrors
-     `whatsapp_enabled` / `sms_enabled`)
-3. **Edge function** sends an extra dispatch call per recipient when the email
-   toggle is on and the recipient profile has an `email`.
+### 6. `meta-admin/index.ts`
+- The existing manual IG profile refresh (`/{IGSID}` lookup) routes through the same `persistMetaAvatar` helper so admin "Refresh profile" upgrades a `meta_cdn` row to `storage`.
+- New action `refresh_all_ig_avatars`:
+  - Selects up to 200 rows from `whatsapp_chat_settings` where `platform='instagram'` AND `avatar_consent_blocked=false` AND (`avatar_source IS NULL` OR `avatar_source='meta_cdn'` OR `avatar_synced_at < now() - interval '20 days'`).
+  - Re-resolves + persists each. Returns `{ scanned, upgraded, failed, consent_blocked }`.
+  - Wired to a new "Refresh all IG avatars" button in the Meta admin panel (small, owner-only).
 
-## Fix — Epic 3: UI toggles in Team Alerts / Lead Alerts cards
-`src/components/settings/LeadNotificationSettings.tsx`:
-- Add an **Email to Lead** row in the Lead Alerts card.
-- Add **Email to Admins** and **Email to Managers** rows in the Team Alerts card.
-- Extend `LeadRulesForm` + `DEFAULTS` with the new booleans + email templates.
-- Add an **Email** switch next to WhatsApp / SMS in `AdminRecipientsCard` for
-  per-admin opt-out, wired to the new `email_enabled` column.
-- Soften the existing amber "24h window" warning since the team WA path no
-  longer depends on the 24h window (kept short note for legacy ops only).
+### 7. Frontend (minimal)
+- No change to `WhatsAppChat.tsx` happy path — it already renders `contact_avatar_url`.
+- For consent-blocked rows the column stays NULL → existing platform-icon fallback already shown.
+- Optional small badge "consent blocked" in the contact detail drawer so staff understand why no photo is present.
 
-## Verification
-- After deploy, trigger a test lead capture → confirm Live Feed shows three
-  rows (`whatsapp` + `email` + `sms`) for each enabled admin, with
-  `template_name = internal_new_lead_alert` on the WhatsApp row and an actual
-  Meta `delivered` webhook arriving (not just `sent`).
-- Toggle each switch off → confirm no extra dispatch for that channel.
+### 8. Out of scope
+- WhatsApp avatars (impossible via Cloud API).
+- Backfill cron — only manual admin bulk action ships now; can be promoted to a 5-min `automation-brain-tick` rule later if desired.
+- New buckets — explicitly reusing `avatars` with a `meta/` subfolder per the user's preference.
 
-## Files touched (build-mode actions)
-- `supabase/migrations/<new>.sql` — columns above
-- `supabase/functions/notify-lead-created/index.ts` — full rewrite to v3.0.0
-- `src/components/settings/LeadNotificationSettings.tsx` — UI rows + state
+## Technical notes
+- `instagram_manage_messages` + `pages_read_engagement` are already approved on the connected app; no scope change required for DM-initiated lookups.
+- Bucket is public → `getPublicUrl('meta/instagram/{IGSID}.jpg')` returns a stable URL with zero signing overhead.
+- Cache-busting after re-sync: append `?v={avatar_synced_at_unix}` on the frontend `<img src>` so browsers refresh when the underlying file changes.
+- Meta CDN images are typically <100KB; the 2MB cap is a safety net.
+
+## Files touched
+- `supabase/migrations/<ts>_meta_avatar_persistence.sql` — new columns + storage policy + RPC update.
+- `supabase/functions/_shared/metaAvatar.ts` — new helper.
+- `supabase/functions/meta-webhook/index.ts` — use helper + consent branch.
+- `supabase/functions/meta-admin/index.ts` — use helper in single refresh + new bulk action.
+- (Optional) `src/components/settings/MetaAdminPanel.tsx` (or equivalent) — "Refresh all IG avatars" button.
+- Memory: extend `mem://integrations/omnichannel-meta-messaging` with the Storage persistence + consent-blocked rule.

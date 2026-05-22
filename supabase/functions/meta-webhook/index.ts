@@ -1,3 +1,6 @@
+// v5.1.0 — Persist IG profile pictures to Supabase Storage (avatars/meta/…)
+//          + classify "User consent is required" responses so comment-only
+//          contacts are not re-queried on every inbound message.
 // v5.0.0 — Unified AI brain: Instagram/Messenger now use the same shared agent
 //          as WhatsApp with full lead capture, partial data, story reply guard,
 //          and consistent Ananya persona across all platforms.
@@ -27,6 +30,7 @@ import { getAllToolDefinitions } from "../_shared/ai-tools.ts";
 import { executeSharedToolCall } from "../_shared/ai-tool-executor.ts";
 import { META_API_BASE, IG_API_BASE, detectMetaHost, metaFetchWithFallback, verifyXHubSignature } from "../_shared/meta-config.ts";
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
+import { persistMetaAvatar, isConsentBlockedError, type MetaPlatform } from "../_shared/metaAvatar.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -428,10 +432,25 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
 // F4: resolve IG sender display name + avatar on first contact
   let contactName: string | null = null;
   let contactAvatarUrl: string | null = null;
+  let avatarSource: "storage" | "meta_cdn" | null = null;
+  let avatarSyncedAt: string | null = null;
+  let avatarConsentBlocked = false;
   if (platform === "instagram" && !isOutbound && integration) {
     const profile = await resolveInstagramSenderProfile(contactId, integration);
     contactName = profile?.name ?? null;
-    contactAvatarUrl = profile?.avatar_url ?? null;
+    avatarConsentBlocked = !!profile?.consent_blocked;
+    // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
+    if (profile?.avatar_url && !avatarConsentBlocked) {
+      const persisted = await persistMetaAvatar({
+        scopedId: contactId,
+        platform: "instagram",
+        cdnUrl: profile.avatar_url,
+        serviceClient: supabase,
+      });
+      contactAvatarUrl = persisted.publicUrl;
+      avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
+      avatarSyncedAt = persisted.syncedAt;
+    }
   }
 
   const { data: inserted, error } = await supabase
@@ -464,9 +483,10 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       { onConflict: "branch_id,phone_number" }
     );
 
-    // Persist display name / avatar so the chat list/header stay populated
-    // even when newer message rows lack them.
-    if (contactName || contactAvatarUrl) {
+    // Persist display name / avatar / provenance so the chat list/header stay
+    // populated even when newer message rows lack them, and so consent-blocked
+    // contacts aren't re-queried.
+    if (contactName || contactAvatarUrl || avatarConsentBlocked) {
       try {
         await supabase.rpc("upsert_meta_contact_profile", {
           p_branch_id: branchId,
@@ -475,6 +495,9 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
           p_external_id: contactId,
           p_display_name: contactName,
           p_avatar_url: contactAvatarUrl,
+          p_avatar_source: avatarSource,
+          p_avatar_synced_at: avatarSyncedAt,
+          p_avatar_consent_blocked: avatarConsentBlocked,
         });
       } catch (profileErr) {
         console.warn(`[${platform}] profile upsert failed:`, profileErr);
@@ -726,20 +749,23 @@ async function ingestInstagramMention(value: any, igAccountId: string) {
 
 // ─── F4: Instagram sender profile resolution ──────────────────────────────────
 
-type IgProfile = { name: string | null; avatar_url: string | null };
+type IgProfile = {
+  name: string | null;
+  avatar_url: string | null;     // raw Meta CDN URL (caller persists to Storage)
+  consent_blocked: boolean;      // true → comment-only contact, don't retry
+};
 const _igProfileCache = new Map<string, { profile: IgProfile; ts: number }>();
 
-// v2.0.0 — Prefer page_access_token for IG-via-FB-Page lookups (required by
-// Meta for /{IGSID}?fields=name,username,profile_pic_url). Treat empty
-// responses as failures and log the upstream error for actionable debugging.
+// v2.2.0 — Surface consent-required errors so the caller can flag the row
+// and stop re-querying Meta on every inbound message. Avatar URL returned is
+// the raw Meta CDN link (short-lived) — the caller is expected to download
+// it and persist into Supabase Storage via persistMetaAvatar().
 // Exported so meta-admin can reuse it for the backfill action.
 export async function resolveInstagramSenderProfile(igUserId: string, integration: any): Promise<IgProfile> {
   const cached = _igProfileCache.get(igUserId);
   if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) return cached.profile;
 
-  const empty: IgProfile = { name: null, avatar_url: null };
-  // For IG-via-FB-Page flow, profile-field lookup requires the PAGE access
-  // token. The user/long-lived token returns empty body or permission errors.
+  const empty: IgProfile = { name: null, avatar_url: null, consent_blocked: false };
   const pageToken = integration?.credentials?.page_access_token;
   const userToken = integration?.credentials?.access_token;
   const accessToken = pageToken || userToken;
@@ -753,46 +779,47 @@ export async function resolveInstagramSenderProfile(igUserId: string, integratio
   const fallbackBase = isInstagramLogin ? META_API_BASE : IG_API_BASE;
   const fields = "name,username,profile_pic_url";
 
-  async function attempt(base: string, token: string, label: string): Promise<{ ok: boolean; data: any; status: number }> {
+  async function attempt(base: string, token: string, label: string): Promise<{ ok: boolean; data: any; status: number; consent: boolean }> {
     const url = `${base}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
     try {
       const resp = await metaFetchWithFallback(url);
       const data = await resp.json().catch(() => ({}));
-      // Treat empty objects / responses without identifying fields as failures
-      // so we surface the upstream error instead of caching null.
+      const consent = isConsentBlockedError(data);
       const meaningful = data && (data.id || data.name || data.username || data.profile_pic_url);
       if (!resp.ok || data?.error || !meaningful) {
-        console.warn(`[IG profile] ${label} (${base}) returned no profile for ${igUserId} — status=${resp.status} error="${data?.error?.message || 'empty body'}"`);
-        return { ok: false, data, status: resp.status };
+        console.warn(`[IG profile] ${label} (${base}) returned no profile for ${igUserId} — status=${resp.status} error="${data?.error?.message || 'empty body'}"${consent ? ' [consent_blocked]' : ''}`);
+        return { ok: false, data, status: resp.status, consent };
       }
-      return { ok: true, data, status: resp.status };
+      return { ok: true, data, status: resp.status, consent: false };
     } catch (e) {
       console.warn(`[IG profile] ${label} fetch threw on ${base}:`, e instanceof Error ? e.message : e);
-      return { ok: false, data: {}, status: 0 };
+      return { ok: false, data: {}, status: 0, consent: false };
     }
   }
 
   try {
-    // Try page token first (correct path for IG-via-Page), then user token as
-    // last-ditch fallback so previously-working setups don't regress.
     let result = await attempt(primaryBase, accessToken, pageToken ? "page-token" : "user-token");
-    if (!result.ok && pageToken && userToken && userToken !== pageToken) {
+    // If primary returned consent-required, every other path will too — fail fast.
+    if (!result.ok && !result.consent && pageToken && userToken && userToken !== pageToken) {
       result = await attempt(primaryBase, userToken, "user-token-fallback");
     }
-    if (!result.ok) {
+    if (!result.ok && !result.consent) {
       result = await attempt(fallbackBase, accessToken, "alt-host");
     }
     if (!result.ok) {
-      // v2.1.0 — do NOT cache empty results. The token may be misconfigured
-      // (missing pages_messaging/instagram_basic scopes) or Meta may return
-      // empty body on first contact. Retry on the next inbound message.
+      if (result.consent) {
+        // Cache the consent-blocked result so we don't keep hitting Meta.
+        const blocked: IgProfile = { name: null, avatar_url: null, consent_blocked: true };
+        _igProfileCache.set(igUserId, { profile: blocked, ts: Date.now() });
+        console.warn(`[IG profile] IGSID=${igUserId} is consent-blocked — caching, will NOT retry`);
+        return blocked;
+      }
       console.warn(`[IG profile] all attempts failed for IGSID=${igUserId} pageToken=${pageToken ? 'present' : 'absent'} userToken=${userToken ? 'present' : 'absent'} — NOT caching, will retry on next message`);
       return empty;
     }
     const username = result.data.username ? `@${result.data.username}` : null;
     const display = result.data.name || username || null;
-    const profile: IgProfile = { name: display, avatar_url: result.data.profile_pic_url || null };
-    // Only cache successful resolutions so transient failures don't poison the cache.
+    const profile: IgProfile = { name: display, avatar_url: result.data.profile_pic_url || null, consent_blocked: false };
     if (display || profile.avatar_url) _igProfileCache.set(igUserId, { profile, ts: Date.now() });
     if (display) console.log(`[IG profile] resolved ${igUserId} → ${display}${profile.avatar_url ? ' (with avatar)' : ''}`);
     return profile;

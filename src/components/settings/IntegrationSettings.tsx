@@ -747,8 +747,36 @@ export function IntegrationSettings() {
                     <RefreshCw className="h-3.5 w-3.5" />
                     Backfill IG Profiles
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={async () => {
+                      const igInteg = (integrations as any[]).find(
+                        (i: any) => (i.integration_type === 'instagram' || i.integration_type === 'instagram_login') && i.is_active
+                      );
+                      const t = toast.loading('Re-syncing IG avatars into Storage…');
+                      try {
+                        const { data, error } = await supabase.functions.invoke('meta-admin', {
+                          body: { action: 'refresh_all_ig_avatars', branch_id: igInteg?.branch_id ?? null, limit: 200 },
+                        });
+                        toast.dismiss(t);
+                        if (error) throw error;
+                        toast.success(
+                          `Avatar refresh done — scanned ${data.scanned}, upgraded ${data.upgraded}, consent-blocked ${data.consent_blocked}, failed ${data.failed}.`,
+                          { duration: 8000 }
+                        );
+                      } catch (e: any) {
+                        toast.dismiss(t);
+                        toast.error(e?.message || 'Avatar refresh failed');
+                      }
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Re-sync IG Avatars
+                  </Button>
                   <p className="text-[11px] text-muted-foreground">
-                    Required after first connection. Without this, Meta won't deliver DMs to our endpoint even if the URL is configured. If IG chats show no username/avatar, click <b>Refresh Page Token</b> then <b>Backfill IG Profiles</b>.
+                    Required after first connection. Without this, Meta won't deliver DMs to our endpoint even if the URL is configured. If IG chats show no username/avatar, click <b>Refresh Page Token</b> then <b>Backfill IG Profiles</b>. Meta CDN avatar URLs expire in a few days — <b>Re-sync IG Avatars</b> downloads them into Storage so they stay permanent.
                   </p>
                 </div>
 

@@ -12018,6 +12018,9 @@ export type Database = {
       whatsapp_chat_settings: {
         Row: {
           assigned_to: string | null
+          avatar_consent_blocked: boolean
+          avatar_source: string | null
+          avatar_synced_at: string | null
           bot_active: boolean | null
           branch_id: string | null
           captured_lead_id: string | null
@@ -12047,6 +12050,9 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          avatar_consent_blocked?: boolean
+          avatar_source?: string | null
+          avatar_synced_at?: string | null
           bot_active?: boolean | null
           branch_id?: string | null
           captured_lead_id?: string | null
@@ -12076,6 +12082,9 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          avatar_consent_blocked?: boolean
+          avatar_source?: string | null
+          avatar_synced_at?: string | null
           bot_active?: boolean | null
           branch_id?: string | null
           captured_lead_id?: string | null
@@ -14158,6 +14167,9 @@ export type Database = {
       }
       upsert_meta_contact_profile: {
         Args: {
+          p_avatar_consent_blocked?: boolean
+          p_avatar_source?: string
+          p_avatar_synced_at?: string
           p_avatar_url: string
           p_branch_id: string
           p_display_name: string
