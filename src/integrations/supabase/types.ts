@@ -5981,18 +5981,21 @@ export type Database = {
       }
       lead_notification_admin_prefs: {
         Row: {
+          email_enabled: boolean
           sms_enabled: boolean
           updated_at: string
           user_id: string
           whatsapp_enabled: boolean
         }
         Insert: {
+          email_enabled?: boolean
           sms_enabled?: boolean
           updated_at?: string
           user_id: string
           whatsapp_enabled?: boolean
         }
         Update: {
+          email_enabled?: boolean
           sms_enabled?: boolean
           updated_at?: string
           user_id?: string
@@ -6019,12 +6022,19 @@ export type Database = {
         Row: {
           branch_id: string | null
           created_at: string
+          email_to_admins: boolean
+          email_to_lead: boolean
+          email_to_managers: boolean
           id: string
+          lead_welcome_email_body: string
+          lead_welcome_email_subject: string
           lead_welcome_sms: string
           lead_welcome_whatsapp: string
           sms_to_admins: boolean
           sms_to_lead: boolean
           sms_to_managers: boolean
+          team_alert_email_body: string
+          team_alert_email_subject: string
           team_alert_sms: string
           team_alert_whatsapp: string
           updated_at: string
@@ -6035,12 +6045,19 @@ export type Database = {
         Insert: {
           branch_id?: string | null
           created_at?: string
+          email_to_admins?: boolean
+          email_to_lead?: boolean
+          email_to_managers?: boolean
           id?: string
+          lead_welcome_email_body?: string
+          lead_welcome_email_subject?: string
           lead_welcome_sms?: string
           lead_welcome_whatsapp?: string
           sms_to_admins?: boolean
           sms_to_lead?: boolean
           sms_to_managers?: boolean
+          team_alert_email_body?: string
+          team_alert_email_subject?: string
           team_alert_sms?: string
           team_alert_whatsapp?: string
           updated_at?: string
@@ -6051,12 +6068,19 @@ export type Database = {
         Update: {
           branch_id?: string | null
           created_at?: string
+          email_to_admins?: boolean
+          email_to_lead?: boolean
+          email_to_managers?: boolean
           id?: string
+          lead_welcome_email_body?: string
+          lead_welcome_email_subject?: string
           lead_welcome_sms?: string
           lead_welcome_whatsapp?: string
           sms_to_admins?: boolean
           sms_to_lead?: boolean
           sms_to_managers?: boolean
+          team_alert_email_body?: string
+          team_alert_email_subject?: string
           team_alert_sms?: string
           team_alert_whatsapp?: string
           updated_at?: string
