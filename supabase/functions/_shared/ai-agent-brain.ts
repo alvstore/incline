@@ -386,25 +386,17 @@ For any of these, reply with this single short message (plain text only, no JSON
   "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏"
 Then stop — do NOT continue onboarding and do NOT output the lead_captured JSON.
 
-- INTERACTIVE FORMAT (Meta Cloud API v25.0): for closed questions with 1–3 choices use a button block; for 4–10 choices you MUST use an interactive_list block (Meta hard-caps reply buttons at 3). Never emit "1. … 2. … 3. … 4. …" as plain text when ≥4 options exist.
-  Buttons: {"type":"interactive","body":"…","buttons":["A","B","C"]}
-  List:    {"type":"interactive_list","body":"…","button":"Select","sections":[{"title":"Choose one","rows":[{"id":"opt_1","title":"…"}, …]}]}
-- When you emit interactive JSON, output ONLY the JSON object — NO prose, greeting, or acknowledgement before or after. Mixing prose with JSON causes the raw JSON to leak to the user as text.
-- For "fitness goal" always emit this EXACT list (5 rows, never buttons):
-  {"type":"interactive_list","body":"What's your primary fitness goal?","button":"Select Goal","sections":[{"title":"Your goal","rows":[
-    {"id":"goal_weight_loss","title":"🔥 Weight Loss","description":"Burn fat, get leaner"},
-    {"id":"goal_muscle_gain","title":"💪 Muscle Gain","description":"Build strength and mass"},
-    {"id":"goal_endurance","title":"🏃 Endurance","description":"Boost stamina and cardio"},
-    {"id":"goal_general","title":"✨ General Fitness","description":"Stay healthy and active"},
-    {"id":"goal_flexibility","title":"🧘 Flexibility","description":"Mobility and recovery"}
-  ]}]}
-- DO NOT emit any plan_interest / membership-duration / PT-package interactive list. None exist publicly during pre-opening.
-- NEVER mention prices, fees, Day Pass, plan tiers, PT packages, or trainer names — all are reserved for the Founder's Phase reveal.
-- You MUST collect full name + email before outputting lead_captured. Fitness goal is optional bonus.
+- INTERACTIVE FORMAT (Meta Cloud API v25.0): only used AFTER name+email captured, for non-onboarding flows. Prefer plain text for goal and plan_interest in this phase. Buttons cap at 3; lists for 4–10. Never emit "1. … 2. …" plain text when ≥4 options exist.
+- DO NOT emit any plan_interest / membership-duration / PT-package interactive list. Capture plan_interest via free text instead.
+- DO NOT emit any fitness-goal interactive list in this phase. Capture via free text.
+- NEVER mention ₹/Rs./prices/fees/Day Pass/PT package names/trainer names.
+- You MUST collect full name + email + goal + plan_interest before outputting lead_captured.
 - The ${ctx.platform === "whatsapp" ? "phone number" : "platform contact ID"} is already known: ${ctx.senderId}
-- When you have name + email, respond with ONLY this JSON:
+- When you have name + email + goal + plan_interest, respond with ONLY this JSON:
 {"status":"lead_captured","data":{${targetFields.map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
-- Use the exact field keys: ${targetFields.join(", ")}`;
+- Use the exact field keys: ${targetFields.join(", ")}
+- For plan_interest, normalize to one of: monthly | quarterly | half_yearly | annual.`;
+
   }
 
   // 8. Call AI via the SSOT dispatcher (respects ai_provider_configs scope=whatsapp_ai)
