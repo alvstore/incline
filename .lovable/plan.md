@@ -1,63 +1,64 @@
-# Clean up Instagram chat header
+# Outbound Instagram DMs not being sent
 
-## Problem (from screenshot)
+## Root cause
 
-The header for an IG conversation is rendering **three** Instagram icons stacked together plus two text badges, and the title falls back to `IG · 076057` whenever Meta hasn't returned a username/avatar:
+The chat composer in `src/pages/WhatsAppChat.tsx` (lines 471–479) always invokes the **`send-whatsapp`** edge function regardless of the conversation's `platform`. That function (`supabase/functions/send-whatsapp/index.ts`):
 
-```
-[IG-icon avatar]   [IG-icon] IG · 076057  [Unknown]  [Instagram]
-                   [IG-icon] IG ID · 1503595468076057
-```
+1. Loads only `integration_type = "whatsapp"` integrations.
+2. Calls Meta's **WhatsApp Cloud API** (`META_API_BASE/{phone_number_id}/messages`).
+3. Runs `normalizePhoneDigits()` which **returns `null` for any string longer than 15 digits** (line 85).
 
-That's three IG glyphs + an "Instagram" word badge for a row that already lives in a pink "Instagram" themed pane.
+An Instagram-Scoped ID like `1466606398344744` is **16 digits** → normalize returns `null` → 400 "Invalid recipient phone number". Even if the IGSID were ≤15 digits, the call would still hit the wrong Graph endpoint with the wrong token.
 
-Root cause in `src/pages/WhatsAppChat.tsx`:
-- Avatar shows an IG fallback glyph **and** a corner platform dot (~lines 1020–1024).
-- The title row prepends another `<PlatformIcon platform="instagram">` next to the name (line 1028).
-- The subtitle row prepends a third `<PlatformIcon>` next to `IG ID · …` (line 1068).
-- A separate "Instagram" word badge sits next to the "Unknown" identity badge (lines 1047–1055).
+That's why inbound IG DMs arrive (handled by `meta-webhook`) but nothing goes out for `IG · 344744`.
 
-The same three‑icon stack also appears in the **contact list rows** (around line 918) and in the **empty‑state hero** at the very bottom (line 1561).
+There IS a working IG send pattern already in `supabase/functions/process-ig-comment-runs/index.ts` (`sendIgPrivateReply`) and the right integration loader (`loadIntegration` picks `instagram` / `instagram_login` / `meta` / `facebook_page`). We will reuse the same pattern.
 
 ## Scope
 
-UI‑only cleanup, no business logic / backend changes. The username/avatar resolution pipeline (Meta webhook → `upsert_meta_contact_profile`) is already correct — when Meta returns nothing (consent‑blocked IGSIDs), we simply present that fallback state more elegantly instead of stacking glyphs.
+Add outbound Instagram (and Messenger) DM dispatch from the unified inbox composer. Backend-only fix + a tiny client routing change. No UI redesign.
 
 ## Changes
 
-All in `src/pages/WhatsAppChat.tsx`.
+### 1. New edge function: `supabase/functions/send-meta-dm/index.ts`
 
-### 1. Chat header (selected conversation)
+- Inputs: `{ message_id, platform: 'instagram' | 'messenger', recipient_id (IGSID/PSID), content, branch_id }`.
+- Loads the right integration via the same logic as `process-ig-comment-runs.loadIntegration` (IG-native first → fallback to FB Page).
+- Resolves the **business account id** to call (`igAccountId` for IG; FB Page id for Messenger).
+- POSTs to `https://graph.facebook.com/{version}/{accountId}/messages` with body `{ recipient: { id }, message: { text }, messaging_type: 'RESPONSE' }` and `Authorization: Bearer <page_access_token | access_token>`.
+- On success → updates `whatsapp_messages.status = 'sent'` and stores returned `message_id` if any. On failure → marks `status='failed'`, writes to `log_error_event` with the Meta error message, and returns 4xx/5xx.
+- Standard CORS + try/catch wrapper + `// v1.0.0` header comment, per project edge standards.
 
-- **Avatar block (lines 1002–1025):** keep the avatar. The small corner platform dot stays **only when an actual `contact_avatar_url` is present** (so users can tell which network a real photo came from). When we're showing the platform glyph as the fallback itself, suppress the corner dot — no point stacking IG‑on‑IG.
-- **Title row (line 1028):** remove the inline `<PlatformIcon …/>` before the name. The avatar already carries the platform signal.
-- **"Instagram" word badge (lines 1047–1055):** remove. Redundant with the themed pink border + avatar dot. Keep only the identity badge (Unknown / Member / Lead / Contact).
-- **Subtitle row (lines 1058–1071):** drop the leading `<PlatformIcon>` for IG/Messenger. Prefer this hierarchy:
-  1. If `contact_name` looks like a handle (`@something`) → render `@handle` in mono, no icon.
-  2. Else if it's an IGSID → render a friendlier label: `Instagram user · 076057` (last‑6 of the scoped id) in muted mono, no IG icon.
-  3. WhatsApp branch unchanged (keeps the phone icon since it's a different glyph than the avatar).
+### 2. Client: route by platform in `src/pages/WhatsAppChat.tsx` `sendMessage` (around line 472)
 
-### 2. `displayLabel()` (lines 156–164)
+Replace the unconditional `send-whatsapp` invoke with:
 
-Soften the IG/Messenger fallback string from `IG · 076057` → `Instagram user` (no id in the bold title). The id moves to the subtitle only, where it's clearly metadata. WhatsApp branch untouched.
+```ts
+const isMeta = selectedContact.platform === 'instagram' || selectedContact.platform === 'messenger';
+const fn = isMeta ? 'send-meta-dm' : 'send-whatsapp';
+const payload = isMeta
+  ? { message_id, platform: selectedContact.platform, recipient_id: selectedContact.phone_number, content, branch_id: selectedBranch }
+  : { message_id, phone_number: selectedContact.phone_number, content, branch_id: selectedBranch };
+const { error: sendError } = await supabase.functions.invoke(fn, { body: payload });
+```
 
-### 3. Contact list rows (around lines 905–935)
+Same status-update + auto-pause-bot logic afterward. The duplicate call at line 591 (in the message-retry path) gets the same routing.
 
-Apply the same dedupe: keep the avatar (with corner dot only when a real avatar image exists), drop the inline `<PlatformIcon>` next to the name in the row. The pink left‑border + avatar already mark IG rows.
+### 3. Same route in `dispatch-communication`
 
-### 4. Empty‑state hero (line 1561 area)
+`supabase/functions/dispatch-communication/index.ts` currently has a WhatsApp branch only. Add a parallel **`channel: 'instagram'`** branch that calls the new `send-meta-dm` so any automation that goes through the dispatcher (e.g. handoff replies, future IG triggers) also works. WhatsApp branch untouched. Per-member `do_not_contact` honoring stays unchanged.
 
-Leave as-is — it's a single decorative IG glyph, not a stack.
+### 4. Verification
 
-## Out of scope (call out explicitly)
+- Open the IG conversation for `IG · 344744`, type a message, send → check:
+  - Network: POST to `send-meta-dm` returns 200.
+  - DB: `whatsapp_messages` row goes `pending → sent`.
+  - DM lands on the recipient's Instagram (within the 24h reply window — same constraint as Meta's Private Replies).
+- Try sending to a brand-new IG sender outside the 24h window → expect a graceful "outside_messaging_window" error surfaced in the toast.
+- WhatsApp send still works (regression check on a WA contact).
 
-- No edge‑function changes. The `resolveInstagramSenderProfile` flow and consent‑blocked caching stay as they are.
-- No DB migration. We don't backfill any rows in this pass.
-- Live Feed (`src/components/communications/LiveFeed.tsx`) is **not** touched — last turn's consolidation work stands.
+## Out of scope
 
-## Verification
-
-- Open an IG chat where Meta returned no profile (current Rajat‑style row): header shows **one** avatar with the IG fallback glyph, title reads `Instagram user`, subtitle reads `Instagram user · 076057`, only the identity badge ("Unknown") remains. No duplicate IG glyphs.
-- Open an IG chat where `contact_name` starts with `@` (handle resolved): title shows the handle, subtitle shows `@handle` once, avatar corner dot present because an avatar image exists.
-- Open a WhatsApp chat: header unchanged (phone icon + number in subtitle, no platform word badge needed since WA is the default).
-- Contact list rows: each row shows at most one IG glyph (the avatar/avatar‑corner combo).
+- No header/avatar/UI changes (last turn's cleanup stands).
+- No backfill changes — Meta backfill skipped 6 test IDs because those IGSIDs are not real users for this token (test IDs from app-review tooling); that's a Meta-side dataset issue, not a code bug.
+- Messenger attachments / IG media outbound — text-only in v1; we can add image/document later using the same `/messages` endpoint with `attachment` payload.
