@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
       if (typeof t.body_html === 'string') t.body_html = fixBody(t.body_html);
     }
 
-    if (allTemplates.length === 0) return json({ error: "AI returned no proposals" }, 500);
+    if (allTemplates.length === 0) return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
     console.error("ai-generate-whatsapp-templates error:", e);
