@@ -1,78 +1,63 @@
-## Audit findings (from DB + code)
+# Clean up Instagram chat header
 
-Looked at the actual rows behind your screenshot:
+## Problem (from screenshot)
+
+The header for an IG conversation is rendering **three** Instagram icons stacked together plus two text badges, and the title falls back to `IG · 076057` whenever Meta hasn't returned a username/avatar:
 
 ```
-recipient                      channel  dedupe_key                 created_at
-yogitamotiramani@hotmail.com   ''       (null)                     21:50:34   ← duplicate
-yogitamotiramani@hotmail.com   email    lead:...:email:team:admin  21:50:33   ← real
-rajat.lekhari@hotmail.com      ''       (null)                     21:50:39   ← duplicate
-rajat.lekhari@hotmail.com      email    lead:...:email:team:admin  21:50:37   ← real
-bhagirathbhau@gmail.com        ''       (null)                     21:50:40   ← duplicate
-bhagirathbhau@gmail.com        email    lead:...:email:team:mgr    21:50:39   ← real
+[IG-icon avatar]   [IG-icon] IG · 076057  [Unknown]  [Instagram]
+                   [IG-icon] IG ID · 1503595468076057
 ```
 
-Only **one** `leads` row exists for Rajat and `notified_at` was set atomically — so `notify-lead-created` only fired once. The "multiple messages to same person" is **not** double-sending. It's **two `communication_logs` rows being written for every single email**, ~1 second apart.
+That's three IG glyphs + an "Instagram" word badge for a row that already lives in a pink "Instagram" themed pane.
 
-### Root cause #1 — duplicate log inserts (email only)
+Root cause in `src/pages/WhatsAppChat.tsx`:
+- Avatar shows an IG fallback glyph **and** a corner platform dot (~lines 1020–1024).
+- The title row prepends another `<PlatformIcon platform="instagram">` next to the name (line 1028).
+- The subtitle row prepends a third `<PlatformIcon>` next to `IG ID · …` (line 1068).
+- A separate "Instagram" word badge sits next to the "Unknown" identity badge (lines 1047–1055).
 
-Path: `notify-lead-created` → `dispatch-communication` → `send-email`.
+The same three‑icon stack also appears in the **contact list rows** (around line 918) and in the **empty‑state hero** at the very bottom (line 1561).
 
-- `dispatch-communication` inserts the canonical row with `channel='email'` + `dedupe_key` + `status='sending'` (line ~419 of dispatch-communication/index.ts).
-- It then invokes `send-email` with `skip_log: true` (line ~698).
-- **`send-email` ignores `skip_log`** and writes its own second row with `type='email'`, no `channel`, no `dedupe_key` (send-email/index.ts line 180).
+## Scope
 
-`send-whatsapp` and `send-sms` already honor `skip_log` (note in send-whatsapp v2.2.0). Email is the odd one out — that's why only email appears duplicated in the feed, not WhatsApp/SMS.
+UI‑only cleanup, no business logic / backend changes. The username/avatar resolution pipeline (Meta webhook → `upsert_meta_contact_profile`) is already correct — when Meta returns nothing (consent‑blocked IGSIDs), we simply present that fallback state more elegantly instead of stacking glyphs.
 
-### Root cause #2 — literal `\n\n` in email body
+## Changes
 
-`lead_notification_rules.team_alert_email_body` is stored as:
-```
-A new lead was captured.\n\nName: {{lead_name}}\nPhone: ...\n\nPlease follow up at the earliest.
-```
-Those are 4 literal characters (`\`, `n`, `\`, `n`), not real newlines. Sent as HTML → renders as visible `\n\n`. The template renderer in `notify-lead-created` does only `{{token}}` substitution, no escape decoding.
+All in `src/pages/WhatsAppChat.tsx`.
 
-### Why the new grouped Live Feed didn't collapse them
+### 1. Chat header (selected conversation)
 
-Grouping keys off recipient + dedupe_key (or content fingerprint) within a 10-min window. Both rows have the same recipient and same content body, so they SHOULD merge — but the duplicate row has `channel=''` and a different status path, which means the channel-chip cluster shows them as two separate channels. Once root cause #1 is fixed there's nothing left to group: one row per email per recipient.
+- **Avatar block (lines 1002–1025):** keep the avatar. The small corner platform dot stays **only when an actual `contact_avatar_url` is present** (so users can tell which network a real photo came from). When we're showing the platform glyph as the fallback itself, suppress the corner dot — no point stacking IG‑on‑IG.
+- **Title row (line 1028):** remove the inline `<PlatformIcon …/>` before the name. The avatar already carries the platform signal.
+- **"Instagram" word badge (lines 1047–1055):** remove. Redundant with the themed pink border + avatar dot. Keep only the identity badge (Unknown / Member / Lead / Contact).
+- **Subtitle row (lines 1058–1071):** drop the leading `<PlatformIcon>` for IG/Messenger. Prefer this hierarchy:
+  1. If `contact_name` looks like a handle (`@something`) → render `@handle` in mono, no icon.
+  2. Else if it's an IGSID → render a friendlier label: `Instagram user · 076057` (last‑6 of the scoped id) in muted mono, no IG icon.
+  3. WhatsApp branch unchanged (keeps the phone icon since it's a different glyph than the avatar).
 
----
+### 2. `displayLabel()` (lines 156–164)
 
-## Fix plan (3 small changes, no schema migration)
+Soften the IG/Messenger fallback string from `IG · 076057` → `Instagram user` (no id in the bold title). The id moves to the subtitle only, where it's clearly metadata. WhatsApp branch untouched.
 
-### 1. `supabase/functions/send-email/index.ts` — honor `skip_log`
-Read `skip_log` from the request body. Wrap the `communication_logs.insert` block with `if (branch_id && !skip_log)`. Mirrors what `send-whatsapp` v2.2.0 already does. Bumps to v1.x.0 with a comment.
+### 3. Contact list rows (around lines 905–935)
 
-### 2. `supabase/functions/dispatch-communication/index.ts` — normalize body whitespace for email
-Just before invoking `send-email`, decode literal `\n` → real newline and convert to `<br>` so plain-text templates from `lead_notification_rules` render correctly inside the branded HTML shell:
-```ts
-const renderedHtml = String(input.payload.body || '')
-  .replace(/\\r\\n|\\n/g, '\n')
-  .replace(/\n/g, '<br>');
-```
-Pass `renderedHtml` as `html`. Leaves WhatsApp/SMS untouched (they handle `\n` natively).
+Apply the same dedupe: keep the avatar (with corner dot only when a real avatar image exists), drop the inline `<PlatformIcon>` next to the name in the row. The pink left‑border + avatar already mark IG rows.
 
-### 3. Backfill the existing rule row (one-line SQL via migration)
-```sql
-UPDATE lead_notification_rules
-SET team_alert_email_body = replace(team_alert_email_body, '\n', E'\n');
-```
-Stores real newlines going forward so the renderer can keep treating body as plain text and the email path converts to `<br>` consistently. Cosmetic only — no schema change.
+### 4. Empty‑state hero (line 1561 area)
 
-### Out of scope (intentionally)
-- No change to `notify-lead-created` claim logic (it's correct — single atomic claim per lead).
-- No change to dispatcher dedupe_key / unique index.
-- No change to Live Feed grouping (after fix #1 it's already right).
-- No edits to WhatsApp/SMS senders.
+Leave as-is — it's a single decorative IG glyph, not a stack.
 
-### Verification after build
-- Trigger one test lead → expect **one** `communication_logs` row per (admin × channel), no duplicates.
-- Open the resulting email → newlines render as visible line breaks instead of `\n\n`.
-- Live Feed shows one grouped row per recipient with WA + Email chips, no stacking.
+## Out of scope (call out explicitly)
 
-### Files touched
-| File | Change |
-|---|---|
-| `supabase/functions/send-email/index.ts` | Honor `skip_log` flag |
-| `supabase/functions/dispatch-communication/index.ts` | Convert `\n` → `<br>` before sending email |
-| New migration | Backfill `team_alert_email_body` to real newlines |
+- No edge‑function changes. The `resolveInstagramSenderProfile` flow and consent‑blocked caching stay as they are.
+- No DB migration. We don't backfill any rows in this pass.
+- Live Feed (`src/components/communications/LiveFeed.tsx`) is **not** touched — last turn's consolidation work stands.
+
+## Verification
+
+- Open an IG chat where Meta returned no profile (current Rajat‑style row): header shows **one** avatar with the IG fallback glyph, title reads `Instagram user`, subtitle reads `Instagram user · 076057`, only the identity badge ("Unknown") remains. No duplicate IG glyphs.
+- Open an IG chat where `contact_name` starts with `@` (handle resolved): title shows the handle, subtitle shows `@handle` once, avatar corner dot present because an avatar image exists.
+- Open a WhatsApp chat: header unchanged (phone icon + number in subtitle, no platform word badge needed since WA is the default).
+- Contact list rows: each row shows at most one IG glyph (the avatar/avatar‑corner combo).
