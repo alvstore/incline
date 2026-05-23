@@ -446,6 +446,9 @@ export default function WhatsAppChatPage() {
 
       const isNote = whisperMode;
 
+      const contactPlatform = (selectedContact.platform || 'whatsapp') as string;
+      const isMetaDm = contactPlatform === 'instagram' || contactPlatform === 'messenger';
+
       const { data, error } = await supabase
         .from('whatsapp_messages')
         .insert({
@@ -458,6 +461,7 @@ export default function WhatsAppChatPage() {
           status: isNote ? 'delivered' : 'pending',
           message_type: 'text',
           is_internal_note: isNote,
+          platform: contactPlatform,
         })
         .select()
         .single();
@@ -469,18 +473,29 @@ export default function WhatsAppChatPage() {
       const messageId: string = data.id;
 
       try {
-        const { error: sendError } = await supabase.functions.invoke('send-whatsapp', {
-          body: {
-            message_id: messageId,
-            phone_number: selectedContact.phone_number,
-            content,
-            branch_id: selectedBranch,
-          },
-        });
+        const fnName = isMetaDm ? 'send-meta-dm' : 'send-whatsapp';
+        const fnBody = isMetaDm
+          ? {
+              message_id: messageId,
+              platform: contactPlatform,
+              recipient_id: selectedContact.phone_number,
+              content,
+              branch_id: selectedBranch,
+            }
+          : {
+              message_id: messageId,
+              phone_number: selectedContact.phone_number,
+              content,
+              branch_id: selectedBranch,
+            };
+        const { error: sendError, data: sendData } = await supabase.functions.invoke(fnName, { body: fnBody });
 
-        if (sendError) {
-          console.warn('WhatsApp delivery failed (message saved as pending):', sendError);
-          toast.info('Message saved. WhatsApp delivery failed — check integration settings.');
+        const providerErr = (sendData as { error?: unknown; meta_error?: string } | null)?.error;
+        if (sendError || providerErr) {
+          const detail = (sendData as { meta_error?: string } | null)?.meta_error
+            || (typeof providerErr === 'string' ? providerErr : sendError?.message);
+          console.warn(`${fnName} delivery failed (message saved as pending):`, detail || sendError);
+          toast.info(`Message saved. ${isMetaDm ? 'Instagram/Messenger' : 'WhatsApp'} delivery failed${detail ? `: ${detail}` : ''} — check integration settings.`);
         } else {
           const { error: updateErr } = await supabase
             .from('whatsapp_messages')
