@@ -461,7 +461,7 @@ export default function WhatsAppChatPage() {
           status: isNote ? 'delivered' : 'pending',
           message_type: 'text',
           is_internal_note: isNote,
-          platform: contactPlatform,
+          platform: contactPlatform as 'whatsapp' | 'instagram' | 'messenger',
         })
         .select()
         .single();
