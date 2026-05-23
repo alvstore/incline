@@ -1,0 +1,2 @@
+UPDATE public.ai_provider_configs SET is_default = false, updated_at = now() WHERE scope = 'all' AND provider = 'google';
+UPDATE public.ai_provider_configs SET is_default = true, is_active = true, updated_at = now() WHERE scope = 'all' AND provider = 'lovable';
