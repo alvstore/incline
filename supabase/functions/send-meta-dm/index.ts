@@ -114,8 +114,12 @@ Deno.serve(async (req) => {
       return json(400, { error: "Missing account_id or access_token in integration credentials" });
     }
 
-    const { base } = detectMetaHost(accessToken);
-    const url = `${base}/${encodeURIComponent(accountId)}/messages`;
+    const { base, isInstagramLogin } = detectMetaHost(accessToken);
+    // IG Login (IGAA token) → POST /me/messages on graph.instagram.com.
+    // FB Page / Meta token → POST /{accountId}/messages on graph.facebook.com.
+    const url = isInstagramLogin
+      ? `${base}/me/messages`
+      : `${base}/${encodeURIComponent(accountId)}/messages`;
     const payload = {
       recipient: { id: recipientId },
       message: { text: content },
