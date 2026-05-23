@@ -1,36 +1,50 @@
 ## Problem
 
-In the Live Feed, the same notification (e.g. "New Lead: Devraj Mathur" → Rajat Lekhari) appears as two rows: one for Email and one for SMS. They should collapse into a single row with both channel badges (WA · SMS · Email · In-App), exactly like the design already supports for grouped rows.
+`ai-generate-whatsapp-templates` returns 500. Edge logs show:
 
-## Root cause
+```
+[ai-dispatcher] primary provider google failed: google HTTP 403:
+"Your project has been denied access. Please contact support." (PERMISSION_DENIED)
+```
 
-`src/components/communications/LiveFeed.tsx` builds a `baseKey = recipientKey | dedupe_key|fingerprint` to group logs:
+The active default AI provider for scope `all` is **Google** (direct `generativelanguage.googleapis.com` via your `GOOGLE_API_KEY`). That Google Cloud project has been **blocked by Google** — every request now returns 403. This is a Google-side account block, not a code bug.
 
-- **Recipient key differs per channel**: email row uses `e:rajat.lekhari@hotmail.com`, SMS row uses `p:+919887601200` — so they never share a bucket even though both reach the same person.
-- **Dedupe key is channel-scoped**: `notify-lead-created` writes `lead:<id>:<channel>:<suffix>`, so email and SMS have different dedupe keys.
-- Fallback fingerprint also differs because the email subject/body and SMS body are worded differently.
+The dispatcher *does* attempt fallback to Lovable AI (because `enable_fallback=true` on the row), but:
+1. The fallback strips the model + sends the same `tools` schema to Lovable. When Gemini-on-Lovable replies without a tool_call (which happens when the upstream is degraded or the prompt batch is too large), the function ends with `allTemplates.length === 0` → `500 "AI returned no proposals"`.
+2. Even when fallback works, every call eats a 60s timeout retry on the dead Google key first — slow + noisy logs.
 
-Result: two rows instead of one grouped row.
+## Fix (two layers)
 
-## Fix (LiveFeed.tsx only, ~15 lines)
+### 1. Stop calling the dead Google key — switch default provider to Lovable AI
 
-1. **Unify recipient identity across channels.** In `recipientKey(l)`:
-   - If `l.member_id` → keep `m:<member_id>`.
-   - Else if `resolveName(l)` returns a name → use `n:<lowercased name>` (this is what already powers the row's display name, so it's a trustworthy cross-channel identity).
-   - Else fall back to the existing phone/email keys.
+In `ai_provider_configs` (scope=`all`):
+- Set the **Google** row `is_default = false` (keep it active so you can switch back later if Google restores the project).
+- Set the **Lovable AI** row `is_default = true`.
 
-2. **Strip channel suffix from `dedupe_key` before grouping.** Normalize trailing `:wa|:whatsapp|:sms|:em|:email|:in_app|:in` (case-insensitive) off `l.dedupe_key` inside `baseKey(l)` so `lead:<id>:sms:...` and `lead:<id>:email:...` collapse to the same bucket.
+This is one migration, no code change. All AI features (template generation, campaign drafts, dashboard insights, lead nurture) immediately route to Lovable AI gateway, which has no per-project auth issue.
 
-3. Leave the 10-minute window, `channels` map, badge rendering, expanded view, and KpiStrip untouched — the existing grouped UI (chips with per-channel icon + status dot + count) already renders correctly once two logs share a bucket.
+### 2. Harden `ai-generate-whatsapp-templates` so a partial AI failure no longer surfaces as 500
+
+In `supabase/functions/ai-generate-whatsapp-templates/index.ts`:
+- When `r.toolCallArgs` is missing, try a **one-shot retry without `tools`** asking the model to return JSON via `response_format: json_object` matching the same schema. Parse `r.json` instead.
+- If after retry `allTemplates.length === 0`, return **502** with a clear message (`"AI provider returned no usable output — try again or switch provider in Settings → AI."`) instead of generic 500. 502 = upstream issue, matches existing 429/402 handling.
+
+### 3. (Optional, recommended) Surface provider health in the UI
+
+The Templates → "Generate with AI" drawer already shows errors via toast. Add a small one-liner under the button: *"Active AI provider: {provider_display_name}"* sourced from `ai_provider_configs` (default row). Lets you spot when you're on a dead provider without digging into logs.
 
 ## Out of scope
 
-- No DB / edge-function changes (dedupe keys stay per-channel for the dispatcher's own dedupe logic; we only collapse them for display).
-- No changes to KPI counts, channel tabs, search, pagination, or expanded delivery timeline.
-- No changes to `notify-lead-created` or other senders.
+- No change to Lovable AI account, billing, or credits.
+- No change to `ai_purposes` rows.
+- No changes to the WhatsApp template approval flow (`manage-whatsapp-templates`) or Meta API.
 
 ## Verification
 
-- Reload Communications → Live Feed: the four rows in the screenshot (Rajat × 2, Yogita × 2) should become **2 rows**, each with two channel chips (Email + SMS). One Yogita chip should show the red "failed" dot for SMS.
-- Filtering by channel (WA / SMS / Email / In-App) still narrows correctly because filtering happens before grouping.
-- WhatsApp / In-App rows that have no cross-channel sibling continue to render as single-channel rows.
+1. Run the migration → confirm `select provider, is_default from ai_provider_configs where scope='all' and is_default=true;` returns `lovable`.
+2. Open Settings → Communication Templates → WhatsApp → "Generate with AI", select a few events, Generate. Should complete in <15s, no 500, no Google 403 in edge logs.
+3. Tail `ai-generate-whatsapp-templates` edge logs — should see `provider=lovable status=success` rows.
+
+## Note on the underlying Google block
+
+The 403 means your Google AI Studio / Cloud project itself was blocked (TOS, billing, or fraud signal). To restore Google as a provider you'd need to either appeal to Google support or create a new GOOGLE_API_KEY from a different Google account and update the secret. Until then, Lovable AI is the right default.

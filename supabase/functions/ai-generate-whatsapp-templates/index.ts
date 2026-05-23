@@ -1,4 +1,4 @@
-// v3.2.0 — Hard rule: bodies must use {{1}}/{{member_name}} placeholders for ANY personalization
+// v3.3.0 — Auto-retry in JSON mode when provider skips tool_call; surface 502 (not 500) on AI failures; explicit 403/permission_denied message.
 //          (never write a literal example like "Hi Sample"). Validator strips obvious literal-name
 //          openings post-generation so Meta never receives a static-greeting template.
 // v3.1.0 — Deterministic category mapping for marketing/utility/auth events.
@@ -160,14 +160,31 @@ Deno.serve(async (req) => {
           tools: [TOOL_SCHEMA],
           toolChoice: { type: "function", function: { name: "propose_templates" } },
         });
-        const parsed = r.toolCallArgs;
-        if (!parsed) continue;
+        let parsed = r.toolCallArgs;
+        // Fallback: provider returned no tool_call (e.g. Lovable AI gateway in
+        // fallback mode sometimes ignores tool_choice). Retry once in JSON mode.
+        if (!parsed) {
+          const jsonRetry = await generateOnce({
+            purpose: "template_generate",
+            userMessage:
+              userPrompt +
+              `\n\nReturn ONLY valid JSON of shape: { "templates": [ ${
+                JSON.stringify(TOOL_SCHEMA.function.parameters.properties.templates.items.properties)
+              } ] }. No prose, no markdown.`,
+            systemOverride: SYSTEM_PROMPTS[channel],
+            responseFormat: "json",
+          });
+          parsed = jsonRetry.json;
+        }
         const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
         for (const t of templates) allTemplates.push(t);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI gateway error";
         if (/429|rate/i.test(msg)) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
         if (/402|credits/i.test(msg)) return json({ error: "AI credits exhausted — top up Lovable AI usage." }, 402);
+        if (/403|permission_denied|denied access/i.test(msg)) {
+          return json({ error: "AI provider blocked (403). Switch provider in Settings → AI Studio.", details: msg.slice(0, 400) }, 502);
+        }
         return json({ error: "AI gateway error", details: msg.slice(0, 400) }, 502);
       }
     }
@@ -243,7 +260,7 @@ Deno.serve(async (req) => {
       if (typeof t.body_html === 'string') t.body_html = fixBody(t.body_html);
     }
 
-    if (allTemplates.length === 0) return json({ error: "AI returned no proposals" }, 500);
+    if (allTemplates.length === 0) return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
     console.error("ai-generate-whatsapp-templates error:", e);
