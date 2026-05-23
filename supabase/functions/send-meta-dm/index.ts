@@ -2,7 +2,7 @@
 // Mirrors process-ig-comment-runs.loadIntegration + sendIgPrivateReply logic.
 // Inputs: { message_id, platform: 'instagram'|'messenger', recipient_id, content, branch_id, ig_account_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { META_GRAPH_VERSION } from "../_shared/meta-config.ts";
+import { META_GRAPH_VERSION, detectMetaHost, metaFetchWithFallback } from "../_shared/meta-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +26,7 @@ async function loadIntegration(
     const { data: igRow } = await supabase
       .from("integration_settings")
       .select("*")
-      .in("provider", ["instagram", "instagram_login"])
+      .in("integration_type", ["instagram", "instagram_login"])
       .eq("is_active", true)
       .or(`branch_id.eq.${branchId},branch_id.is.null`)
       .order("branch_id", { ascending: false, nullsFirst: false })
@@ -38,7 +38,7 @@ async function loadIntegration(
   const { data: metaRows } = await supabase
     .from("integration_settings")
     .select("*")
-    .in("provider", ["meta", "facebook_page"])
+    .in("integration_type", ["meta", "facebook_page", "messenger"])
     .eq("is_active", true)
     .or(`branch_id.eq.${branchId},branch_id.is.null`)
     .order("branch_id", { ascending: false, nullsFirst: false });
@@ -114,14 +114,19 @@ Deno.serve(async (req) => {
       return json(400, { error: "Missing account_id or access_token in integration credentials" });
     }
 
-    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(accountId)}/messages`;
+    const { base, isInstagramLogin } = detectMetaHost(accessToken);
+    // IG Login (IGAA token) → POST /me/messages on graph.instagram.com.
+    // FB Page / Meta token → POST /{accountId}/messages on graph.facebook.com.
+    const url = isInstagramLogin
+      ? `${base}/me/messages`
+      : `${base}/${encodeURIComponent(accountId)}/messages`;
     const payload = {
       recipient: { id: recipientId },
       message: { text: content },
       messaging_type: "RESPONSE",
     };
 
-    const r = await fetch(url, {
+    const r = await metaFetchWithFallback(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

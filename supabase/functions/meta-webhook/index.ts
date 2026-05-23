@@ -966,19 +966,22 @@ async function triggerAiReply(
 
   if (!replyMsg) return;
 
-  // Send via send-message edge function
+  // Send via correct sender per platform
   try {
-    await fetch(`${SUPABASE_URL}/functions/v1/send-message`, {
+    const isMetaDm = platform === "instagram" || platform === "messenger";
+    const fnName = isMetaDm ? "send-meta-dm" : "send-whatsapp";
+    const fnBody = isMetaDm
+      ? { message_id: replyMsg.id, platform, recipient_id: senderId, content: result.replyText, branch_id: branchId }
+      : { message_id: replyMsg.id, phone_number: senderId, content: result.replyText, branch_id: branchId };
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-      body: JSON.stringify({
-        message_id: replyMsg.id,
-        recipient_id: senderId,
-        content: result.replyText,
-        branch_id: branchId,
-        platform,
-      }),
+      body: JSON.stringify(fnBody),
     });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      console.error(`[AI:${platform}] ${fnName} HTTP ${r.status}: ${detail}`);
+    }
   } catch (sendErr) {
     console.error(`[AI:${platform}] send reply failed:`, sendErr);
   }
