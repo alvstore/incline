@@ -160,14 +160,31 @@ Deno.serve(async (req) => {
           tools: [TOOL_SCHEMA],
           toolChoice: { type: "function", function: { name: "propose_templates" } },
         });
-        const parsed = r.toolCallArgs;
-        if (!parsed) continue;
+        let parsed = r.toolCallArgs;
+        // Fallback: provider returned no tool_call (e.g. Lovable AI gateway in
+        // fallback mode sometimes ignores tool_choice). Retry once in JSON mode.
+        if (!parsed) {
+          const jsonRetry = await generateOnce({
+            purpose: "template_generate",
+            userMessage:
+              userPrompt +
+              `\n\nReturn ONLY valid JSON of shape: { "templates": [ ${
+                JSON.stringify(TOOL_SCHEMA.function.parameters.properties.templates.items.properties)
+              } ] }. No prose, no markdown.`,
+            systemOverride: SYSTEM_PROMPTS[channel],
+            responseFormat: "json",
+          });
+          parsed = jsonRetry.json;
+        }
         const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
         for (const t of templates) allTemplates.push(t);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI gateway error";
         if (/429|rate/i.test(msg)) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
         if (/402|credits/i.test(msg)) return json({ error: "AI credits exhausted — top up Lovable AI usage." }, 402);
+        if (/403|permission_denied|denied access/i.test(msg)) {
+          return json({ error: "AI provider blocked (403). Switch provider in Settings → AI Studio.", details: msg.slice(0, 400) }, 502);
+        }
         return json({ error: "AI gateway error", details: msg.slice(0, 400) }, 502);
       }
     }
