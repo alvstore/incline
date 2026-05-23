@@ -331,14 +331,21 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       (s || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 160);
     const recipientKey = (l: any) => {
       if (l.member_id) return `m:${l.member_id}`;
+      const name = resolveName(l);
+      if (name) return `n:${name.toLowerCase().trim()}`;
       if (l.type === 'whatsapp' || l.type === 'sms') {
         const v = phoneVariants(l.recipient);
         return `p:${v[v.length - 1] || l.recipient || ''}`;
       }
       return `e:${String(l.recipient || '').toLowerCase()}`;
     };
-    const baseKey = (l: any) =>
-      `${recipientKey(l)}|${l.dedupe_key || fingerprint((l.subject || '') + '|' + (l.content || ''))}`;
+    const stripChannelSuffix = (k: string) =>
+      k.replace(/:(wa|whatsapp|sms|em|email|in_app|in)(?=(:|$))/gi, '');
+    const baseKey = (l: any) => {
+      const dk = l.dedupe_key ? stripChannelSuffix(String(l.dedupe_key)) : '';
+      return `${recipientKey(l)}|${dk || fingerprint((l.subject || '') + '|' + (l.content || ''))}`;
+    };
+
 
     const open = new Map<string, Group>(); // baseKey -> active bucket
     const out: Group[] = [];

@@ -1,24 +1,36 @@
-Root cause found: Instagram inbound is working, the AI auto-reply rows are being created, but they remain `pending` because `meta-webhook` still calls the old `/functions/v1/send-message` endpoint. That function no longer exists in this project, so the new `send-meta-dm` function is never reached. This matches the database rows for `IG · 344744`: inbound received, outbound pending, and zero `send-meta-dm` logs.
+## Problem
 
-Plan:
+In the Live Feed, the same notification (e.g. "New Lead: Devraj Mathur" → Rajat Lekhari) appears as two rows: one for Email and one for SMS. They should collapse into a single row with both channel badges (WA · SMS · Email · In-App), exactly like the design already supports for grouped rows.
 
-1. Route AI Instagram replies through the new sender
-   - Update `supabase/functions/meta-webhook/index.ts` so `triggerAiReply()` calls `send-meta-dm` for `instagram` and `messenger`.
-   - Keep WhatsApp on `send-whatsapp`.
-   - Check the HTTP response body and log delivery failures instead of silently ignoring them.
+## Root cause
 
-2. Fix other remaining Instagram outbound automation
-   - Update `supabase/functions/lead-nurture-followup/index.ts` to call `send-meta-dm` instead of the removed `send-message` endpoint for Instagram/Messenger nurture messages.
+`src/components/communications/LiveFeed.tsx` builds a `baseKey = recipientKey | dedupe_key|fingerprint` to group logs:
 
-3. Add backward compatibility for the old endpoint
-   - Create a small `supabase/functions/send-message/index.ts` wrapper that routes:
-     - `platform: instagram|messenger` → `send-meta-dm`
-     - everything else → `send-whatsapp`
-   - This prevents any older automation path from breaking again if it still calls `send-message`.
+- **Recipient key differs per channel**: email row uses `e:rajat.lekhari@hotmail.com`, SMS row uses `p:+919887601200` — so they never share a bucket even though both reach the same person.
+- **Dedupe key is channel-scoped**: `notify-lead-created` writes `lead:<id>:<channel>:<suffix>`, so email and SMS have different dedupe keys.
+- Fallback fingerprint also differs because the email subject/body and SMS body are worded differently.
 
-4. Deploy and verify
-   - Deploy `send-meta-dm`, `send-message`, `meta-webhook`, and `lead-nurture-followup`.
-   - Test `send-meta-dm` against the pending message for `IG · 344744`.
-   - Confirm the message status changes from `pending` to `sent`, or capture the exact Meta error if credentials/window/permissions are the remaining issue.
+Result: two rows instead of one grouped row.
 
-Out of scope: profile picture/name fetching, UI header changes, and changing the AI reply content.
+## Fix (LiveFeed.tsx only, ~15 lines)
+
+1. **Unify recipient identity across channels.** In `recipientKey(l)`:
+   - If `l.member_id` → keep `m:<member_id>`.
+   - Else if `resolveName(l)` returns a name → use `n:<lowercased name>` (this is what already powers the row's display name, so it's a trustworthy cross-channel identity).
+   - Else fall back to the existing phone/email keys.
+
+2. **Strip channel suffix from `dedupe_key` before grouping.** Normalize trailing `:wa|:whatsapp|:sms|:em|:email|:in_app|:in` (case-insensitive) off `l.dedupe_key` inside `baseKey(l)` so `lead:<id>:sms:...` and `lead:<id>:email:...` collapse to the same bucket.
+
+3. Leave the 10-minute window, `channels` map, badge rendering, expanded view, and KpiStrip untouched — the existing grouped UI (chips with per-channel icon + status dot + count) already renders correctly once two logs share a bucket.
+
+## Out of scope
+
+- No DB / edge-function changes (dedupe keys stay per-channel for the dispatcher's own dedupe logic; we only collapse them for display).
+- No changes to KPI counts, channel tabs, search, pagination, or expanded delivery timeline.
+- No changes to `notify-lead-created` or other senders.
+
+## Verification
+
+- Reload Communications → Live Feed: the four rows in the screenshot (Rajat × 2, Yogita × 2) should become **2 rows**, each with two channel chips (Email + SMS). One Yogita chip should show the red "failed" dot for SMS.
+- Filtering by channel (WA / SMS / Email / In-App) still narrows correctly because filtering happens before grouping.
+- WhatsApp / In-App rows that have no cross-channel sibling continue to render as single-channel rows.
