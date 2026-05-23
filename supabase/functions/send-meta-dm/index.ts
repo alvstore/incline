@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       const metaErrSubcode = data?.error?.error_subcode;
       console.error(`[send-meta-dm] ${platform} send failed for ${recipientId}: ${metaErrMsg} (code=${metaErrCode}/${metaErrSubcode})`);
       await supabase.from("whatsapp_messages")
-        .update({ status: "failed", error_message: metaErrMsg })
+        .update({ status: "failed" })
         .eq("id", messageId);
       try {
         await supabase.rpc("log_error_event" as any, {
@@ -152,10 +152,7 @@ Deno.serve(async (req) => {
 
     const providerMessageId = data?.message_id || null;
     await supabase.from("whatsapp_messages")
-      .update({
-        status: "sent",
-        ...(providerMessageId ? { external_message_id: providerMessageId } : {}),
-      })
+      .update({ status: "sent" })
       .eq("id", messageId);
 
     return json(200, { success: true, message_id: providerMessageId });
