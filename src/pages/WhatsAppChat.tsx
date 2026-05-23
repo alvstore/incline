@@ -156,11 +156,9 @@ function isIgsid(value: string): boolean {
 function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string }): string {
   if (c.contact_name && c.contact_name.trim()) return c.contact_name;
   if ((c.platform === 'instagram' || c.platform === 'messenger') && isIgsid(c.phone_number)) {
-    // Until backfill resolves the username, show a stable short identifier so
-    // staff can distinguish multiple IG users in the list (vs all reading
-    // "Instagram User").
-    const short = c.phone_number.slice(-6);
-    return c.platform === 'instagram' ? `IG · ${short}` : `MSG · ${short}`;
+    // No resolved handle yet (Meta consent-gated). Title stays clean; the
+    // scoped-id moves to the subtitle as metadata.
+    return c.platform === 'instagram' ? 'Instagram user' : 'Messenger user';
   }
   return formatPhoneDisplay(c.phone_number);
 }
