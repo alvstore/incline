@@ -1015,7 +1015,7 @@ export default function WhatsAppChatPage() {
                             <User className="h-5 w-5" />)}
                         </AvatarFallback>
                       </Avatar>
-                      {selectedContact.platform && selectedContact.platform !== 'whatsapp' && (
+                      {selectedContact.platform && selectedContact.platform !== 'whatsapp' && selectedContact.contact_avatar_url && (
                         <span className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-0.5">
                           <PlatformIcon platform={selectedContact.platform} className="h-3.5 w-3.5" />
                         </span>
@@ -1023,7 +1023,6 @@ export default function WhatsAppChatPage() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <PlatformIcon platform={selectedContact.platform} className="h-4 w-4" />
                         <h3 className="font-semibold text-foreground text-sm break-words [overflow-wrap:anywhere]">
                           {displayLabel(selectedContact)}
                         </h3>
@@ -1042,28 +1041,19 @@ export default function WhatsAppChatPage() {
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-blue-300 bg-blue-50 text-blue-700">Contact</Badge>
                           );
                         })()}
-                        <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ml-1 ${
-                          selectedContact.platform === 'instagram'
-                            ? 'border-pink-300 text-pink-600 bg-pink-50 dark:bg-pink-500/10'
-                            : selectedContact.platform === 'messenger'
-                            ? 'border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-500/10'
-                            : 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10'
-                        }`}>
-                          {selectedContact.platform === 'instagram' ? 'Instagram' : selectedContact.platform === 'messenger' ? 'Messenger' : 'WhatsApp'}
-                        </Badge>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {(() => {
                           const plat = selectedContact.platform;
                           const ph = selectedContact.phone_number;
                           if ((plat === 'instagram' || plat === 'messenger') && isIgsid(ph)) {
-                            // Show @username if contact_name looks like a handle, else the raw scoped ID.
                             const looksLikeHandle = selectedContact.contact_name?.startsWith('@');
                             if (looksLikeHandle) {
                               return (<><AtSign className="h-3 w-3" /><span className="font-mono">{selectedContact.contact_name?.replace(/^@/, '')}</span></>);
                             }
-                            const label = plat === 'instagram' ? 'IG ID' : 'MSG ID';
-                            return (<><PlatformIcon platform={plat} className="h-3 w-3" /><span className="font-mono text-[11px]">{label} · {ph}</span></>);
+                            const short = ph.slice(-6);
+                            const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
+                            return (<span className="font-mono text-[11px]">{label} user · {short}</span>);
                           }
                           return (<><Phone className="h-3 w-3" />{formatPhoneDisplay(ph)}</>);
                         })()}
