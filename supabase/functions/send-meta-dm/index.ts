@@ -2,7 +2,7 @@
 // Mirrors process-ig-comment-runs.loadIntegration + sendIgPrivateReply logic.
 // Inputs: { message_id, platform: 'instagram'|'messenger', recipient_id, content, branch_id, ig_account_id? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { META_GRAPH_VERSION } from "../_shared/meta-config.ts";
+import { META_GRAPH_VERSION, detectMetaHost, metaFetchWithFallback } from "../_shared/meta-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,14 +114,15 @@ Deno.serve(async (req) => {
       return json(400, { error: "Missing account_id or access_token in integration credentials" });
     }
 
-    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(accountId)}/messages`;
+    const { base } = detectMetaHost(accessToken);
+    const url = `${base}/${encodeURIComponent(accountId)}/messages`;
     const payload = {
       recipient: { id: recipientId },
       message: { text: content },
       messaging_type: "RESPONSE",
     };
 
-    const r = await fetch(url, {
+    const r = await metaFetchWithFallback(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
