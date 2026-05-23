@@ -26,7 +26,7 @@ async function loadIntegration(
     const { data: igRow } = await supabase
       .from("integration_settings")
       .select("*")
-      .in("provider", ["instagram", "instagram_login"])
+      .in("integration_type", ["instagram", "instagram_login"])
       .eq("is_active", true)
       .or(`branch_id.eq.${branchId},branch_id.is.null`)
       .order("branch_id", { ascending: false, nullsFirst: false })
@@ -38,7 +38,7 @@ async function loadIntegration(
   const { data: metaRows } = await supabase
     .from("integration_settings")
     .select("*")
-    .in("provider", ["meta", "facebook_page"])
+    .in("integration_type", ["meta", "facebook_page", "messenger"])
     .eq("is_active", true)
     .or(`branch_id.eq.${branchId},branch_id.is.null`)
     .order("branch_id", { ascending: false, nullsFirst: false });
