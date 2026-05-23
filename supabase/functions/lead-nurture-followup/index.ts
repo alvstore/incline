@@ -314,11 +314,11 @@ serve(async (req) => {
             });
             if (!sendRes.ok) console.error(`Send failed for ${chat.phone_number}: ${sendRes.status}`);
           } else {
-            // Instagram or Messenger — use unified send-message
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-message`, {
+            // Instagram or Messenger — use send-meta-dm
+            const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-meta-dm`, {
               method: "POST",
               headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ message_id: msgData.id, recipient_id: chat.phone_number, content: nudgeMessage, branch_id: chat.branch_id, platform: chatPlatform }),
+              body: JSON.stringify({ message_id: msgData.id, platform: chatPlatform, recipient_id: chat.phone_number, content: nudgeMessage, branch_id: chat.branch_id }),
             });
             if (!sendRes.ok) console.error(`Send (${chatPlatform}) failed for ${chat.phone_number}: ${sendRes.status}`);
           }
