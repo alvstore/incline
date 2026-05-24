@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     const provider = integration.provider;
 
     const fromEmail = from_override || config.from_email || "noreply@inclinefitness.in";
-    const fromName = config.from_name || "Incline Fitness";
+    const fromName = config.from_name || "Incline";
 
     let result: { success: boolean; message_id?: string; error?: string };
 
