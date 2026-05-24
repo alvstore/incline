@@ -26,6 +26,19 @@ function wrapInBrandedTemplate(
   opts?: { logoUrl?: string; brandName?: string; unsubscribeUrl?: string; branchName?: string },
 ): string {
   let content = bodyHtml;
+
+  // Defensive: strip full-document wrappers so legacy/AI-drafted HTML docs
+  // don't nest inside the branded shell.
+  content = content
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\/?(html|head|body)[^>]*>/gi, '')
+    .replace(/<title[\s\S]*?<\/title>/gi, '')
+    .replace(/<meta[^>]*>/gi, '')
+    .replace(/<link[^>]*>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .trim();
+
   if (variables) {
     for (const [key, value] of Object.entries(variables)) {
       content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value ?? '');
