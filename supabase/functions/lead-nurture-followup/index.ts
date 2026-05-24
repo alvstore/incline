@@ -253,7 +253,7 @@ serve(async (req) => {
       // Fallback message (also used as the rendered body when sending the
       // approved template — dispatcher infers variable values from this).
       if (!nudgeMessage) {
-        nudgeMessage = `Hi ${prospectName}! 👋 Just checking in — we'd love to help you get started on your fitness journey at Incline Fitness. Feel free to reply anytime with your questions! 💪`;
+        nudgeMessage = `Hi ${prospectName}! 👋 Just checking in — we'd love to help you get started on your fitness journey at Incline. Feel free to reply anytime with your questions! 💪`;
       }
 
       try {

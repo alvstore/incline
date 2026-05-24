@@ -1,3 +1,6 @@
+// v2.5.0 — Branded shell hardening: brand "INCLINE" + tagline "Rise. Reflect. Repeat.";
+//           defensively strips <html>/<head>/<body>/<style>/<script>/<meta>/<link> from
+//           incoming HTML so AI-drafted or legacy full documents don't nest inside shell.
 // v2.4.0 — Honor skip_log from dispatcher to avoid duplicate communication_logs rows.
 //           Mirrors send-whatsapp v2.2.0. When dispatch-communication invokes send-email
 //           it already owns the canonical log row (with channel + dedupe_key); this
@@ -26,6 +29,19 @@ function wrapInBrandedTemplate(
   opts?: { logoUrl?: string; brandName?: string; unsubscribeUrl?: string; branchName?: string },
 ): string {
   let content = bodyHtml;
+
+  // Defensive: strip full-document wrappers so legacy/AI-drafted HTML docs
+  // don't nest inside the branded shell.
+  content = content
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<\/?(html|head|body)[^>]*>/gi, '')
+    .replace(/<title[\s\S]*?<\/title>/gi, '')
+    .replace(/<meta[^>]*>/gi, '')
+    .replace(/<link[^>]*>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .trim();
+
   if (variables) {
     for (const [key, value] of Object.entries(variables)) {
       content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value ?? '');
@@ -153,7 +169,7 @@ Deno.serve(async (req) => {
     const provider = integration.provider;
 
     const fromEmail = from_override || config.from_email || "noreply@inclinefitness.in";
-    const fromName = config.from_name || "Incline Fitness";
+    const fromName = config.from_name || "Incline";
 
     let result: { success: boolean; message_id?: string; error?: string };
 

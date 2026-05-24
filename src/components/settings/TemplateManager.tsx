@@ -1346,12 +1346,21 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 </div>
 
                 {isEmail && (
-                  <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200">
                     <div className="px-4 py-2 bg-slate-50 border-b text-xs">
-                      <div><span className="text-slate-500">From: </span>Incline Fitness &lt;noreply@inclinefitness.in&gt;</div>
+                      <div><span className="text-slate-500">From: </span>Incline &lt;noreply@theincline.in&gt;</div>
                       <div><span className="text-slate-500">Subject: </span><span className="font-medium">{subject || '(no subject)'}</span></div>
                     </div>
-                    <div className="p-4 text-sm whitespace-pre-wrap text-slate-800" dangerouslySetInnerHTML={{ __html: rendered.replace(/\n/g, '<br/>') }} />
+                    {/* Branded shell preview — mirrors supabase/functions/send-email/index.ts */}
+                    <div className="bg-black px-6 py-5 text-center border-b-2 border-[#EAB308]">
+                      <div className="text-[#EAB308] text-2xl font-extrabold tracking-[2px]">INCLINE</div>
+                      <div className="text-white/60 text-[10px] tracking-[4px] uppercase mt-1">Rise. Reflect. Repeat.</div>
+                    </div>
+                    <div className="bg-[#111111] p-6 text-white/90 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: rendered.replace(/\n/g, '<br/>') }} />
+                    <div className="bg-[#0a0a0a] px-6 py-4 text-center border-t border-white/10">
+                      <div className="text-[#EAB308] text-xs font-semibold">The Incline Life by Incline</div>
+                      <div className="text-white/40 text-[11px] mt-1">theincline.in</div>
+                    </div>
                   </div>
                 )}
 
