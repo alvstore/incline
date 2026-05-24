@@ -1,4 +1,11 @@
-// v3.6.0 — Founder's Phase, structured 4-option lists for goal + plan_interest
+// v3.7.0 — Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
+// 3.7.0: Non-fitness redirect (a) reads pattern/message/window from
+//        ai_purposes.guards (no inline hardcoding), (b) dedupes against the
+//        last outbound within configurable window so the same canned reply is
+//        not re-sent on every follow-up, (c) calls mark_do_not_contact RPC +
+//        flips whatsapp_chat_settings.bot_active=false so lead-nurture and
+//        retention crons stop pinging the contact, (d) writes current_intent
+//        'non_fitness' to ai_memory.
 // 3.6.0: Goal & plan_interest captured via Meta interactive_list (4 rows each)
 //        after name+email — eliminates dirty free-text and matches the original
 //        onboarding UX that staff signed off on.
@@ -157,14 +164,83 @@ export async function runUnifiedAgent(
   }
 
   // 3b. Deterministic non-fitness intent guard (defense-in-depth, applies to
-  //     all platforms). Short-circuits BEFORE the LLM so a prose+JSON leak is
-  //     impossible. Toggle via ai_purposes.guards.non_fitness_redirect.
-  const nonFitnessGuardOn = (purposeRow?.guards?.non_fitness_redirect ?? true) === true;
-  const NON_FITNESS_RE =
-    /\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\s]?data|interview\s+for|i(?:'?m)?\s+(?:looking\s+(?:for|out)\s+)?(?:a\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\s+(?:at|with|in)\s+(?:your|incline)|sales\s+(?:job|department|position)|trainer\s+(?:job|position|vacancy)|front\s*desk\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\s]?up)\b/i;
+  //     all platforms). Short-circuits BEFORE the LLM. All knobs live in
+  //     ai_purposes.guards so copy/regex/window/pause can be tuned without redeploy.
+  const guards = (purposeRow?.guards ?? {}) as Record<string, unknown>;
+  const nonFitnessGuardOn = (guards.non_fitness_redirect ?? true) === true;
+  const DEFAULT_NON_FITNESS_PATTERN =
+    "\\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\\s]?data|interview\\s+for|i(?:'?m)?\\s+(?:looking\\s+(?:for|out)\\s+)?(?:a\\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\\s+(?:at|with|in)\\s+(?:your|incline)|sales\\s+(?:job|department|position)|trainer\\s+(?:job|position|vacancy)|front\\s*desk\\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\\s]?up)\\b";
+  const DEFAULT_NON_FITNESS_MESSAGE =
+    "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏";
+  let NON_FITNESS_RE: RegExp;
+  try {
+    NON_FITNESS_RE = new RegExp((guards.non_fitness_pattern as string) || DEFAULT_NON_FITNESS_PATTERN, "i");
+  } catch {
+    NON_FITNESS_RE = new RegExp(DEFAULT_NON_FITNESS_PATTERN, "i");
+  }
   if (nonFitnessGuardOn && NON_FITNESS_RE.test(ctx.messageContent || "")) {
-    const REDIRECT = (purposeRow?.guards?.non_fitness_message as string) ||
-      "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏";
+    const REDIRECT = (guards.non_fitness_message as string) || DEFAULT_NON_FITNESS_MESSAGE;
+    const pauseNurture = (guards.non_fitness_pause_nurture ?? true) === true;
+    const dedupeWindowHours = Number(guards.non_fitness_dedupe_window_hours ?? 24) || 24;
+
+    // 3b.i Dedupe: if the same redirect was sent within the window, skip
+    //      silently so the contact doesn't get spammed on every reply.
+    try {
+      const since = new Date(Date.now() - dedupeWindowHours * 3600 * 1000).toISOString();
+      const { data: lastOut } = await supabase
+        .from("whatsapp_messages")
+        .select("content, created_at")
+        .eq("branch_id", ctx.branchId)
+        .eq("phone_number", ctx.senderId)
+        .eq("direction", "outbound")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastOut && String(lastOut.content || "").trim() === REDIRECT.trim()) {
+        console.log(`[AI:${ctx.platform}] non-fitness redirect already sent within ${dedupeWindowHours}h, skipping`);
+        return skip("non_fitness_already_redirected");
+      }
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] non-fitness dedupe check failed (continuing):`, (e as Error).message);
+    }
+
+    // 3b.ii Pause nurture: DNC across chat_settings/leads/members + bot_active=false.
+    if (pauseNurture) {
+      try {
+        await supabase.rpc("mark_do_not_contact", {
+          p_phone: ctx.senderId,
+          p_branch_id: ctx.branchId,
+          p_reason: "non_fitness_inquiry",
+          p_source: "ai_guard",
+        });
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] mark_do_not_contact failed (continuing):`, (e as Error).message);
+      }
+      try {
+        await supabase
+          .from("whatsapp_chat_settings")
+          .update({
+            bot_active: false,
+            paused_at: new Date().toISOString(),
+            handoff_reason: "non_fitness_inquiry",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("branch_id", ctx.branchId)
+          .eq("phone_number", ctx.senderId);
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] pause bot_active failed (continuing):`, (e as Error).message);
+      }
+      try {
+        await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+          current_intent: "non_fitness",
+          do_not_ask_add: ["fitness_goal", "plan_interest"],
+        });
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] non-fitness memory write failed (continuing):`, (e as Error).message);
+      }
+    }
+
     return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
   }
 
