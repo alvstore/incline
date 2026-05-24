@@ -46,9 +46,9 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32 rounded-2xl" />
+          <Skeleton key={i} className="h-20 sm:h-24 rounded-2xl" />
         ))}
       </div>
     );
@@ -90,12 +90,13 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
       {tiles.map((t) => (
         <div
           key={t.label}
+          title={`${t.value.toLocaleString()} members · ${t.label}`}
           className={cn(
-            'group relative overflow-hidden rounded-2xl bg-card p-4 ring-1 ring-border/60',
+            'group relative overflow-hidden rounded-2xl bg-card p-3 sm:p-4 ring-1 ring-border/60',
             'shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl',
             t.glow,
           )}
@@ -103,35 +104,33 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
           {/* Decorative gradient glow */}
           <div
             className={cn(
-              'pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br opacity-20 blur-2xl transition-opacity duration-300 group-hover:opacity-40',
+              'pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br opacity-20 blur-2xl transition-opacity duration-300 group-hover:opacity-40',
               t.accent,
             )}
           />
           {/* Subtle grid texture */}
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:24px_24px] opacity-[0.04]" />
 
-          <div className="relative flex items-start justify-between">
+          {/* NEW chip (hidden on xs to save room) */}
+          <span className="absolute right-2 top-2 hidden sm:inline-flex rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            New
+          </span>
+
+          <div className="relative flex items-center gap-3">
             <div
               className={cn(
-                'inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md',
+                'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md',
                 t.accent,
               )}
             >
-              <t.icon className="h-5 w-5" />
+              <t.icon className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              New
-            </span>
-          </div>
-
-          <div className="relative mt-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-4xl font-bold tabular-nums leading-none text-transparent">
+            <div className="min-w-0 flex-1">
+              <div className="text-2xl md:text-3xl font-bold tabular-nums leading-tight text-foreground">
                 {t.value.toLocaleString()}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">members</span>
+              </div>
+              <p className="text-[11px] font-medium text-muted-foreground truncate">{t.label}</p>
             </div>
-            <p className="mt-2 text-xs font-medium text-muted-foreground">{t.label}</p>
           </div>
         </div>
       ))}
