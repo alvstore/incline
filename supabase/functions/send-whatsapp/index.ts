@@ -1,3 +1,6 @@
+// v2.7.0 — Structured Meta error envelope: returns meta_code/meta_subcode/fallbackable/
+//           category_issue/pace_limited so dispatch-communication can persist them in
+//           communication_logs.delivery_metadata and stop retrying category-drift loops.
 // v2.6.0 — native video message_type (server-uploads MP4 to Meta with video/mp4).
 // v2.5.0 — harden IN phone normalization for Meta digits-only E.164 payloads.
 // v2.4.0 — document/image media is fetched server-side and uploaded to Meta first;
@@ -294,7 +297,22 @@ serve(async (req) => {
     }
 
     if (!metaResponse.ok) {
-      const metaErrorMsg = metaData?.error?.message || "Unknown Meta API error";
+      const metaErr = metaData?.error || {};
+      const metaErrorMsg = metaErr.message || "Unknown Meta API error";
+      const metaCode = metaErr.code ?? null;
+      const metaSubcode = metaErr.error_subcode ?? null;
+      // Classify so callers know whether a fallback / suppression is appropriate.
+      const PACE_CODES = new Set([131049, 130472]);
+      const CATEGORY_CODES = new Set([132001, 132012, 132000, 131051]);
+      const RECIPIENT_CODES = new Set([131026, 133010]);
+      const SESSION_CODES = new Set([131047]);
+      const pace_limited = PACE_CODES.has(Number(metaCode));
+      const category_issue = CATEGORY_CODES.has(Number(metaCode));
+      const session_required = SESSION_CODES.has(Number(metaCode));
+      const recipient_unreachable = RECIPIENT_CODES.has(Number(metaCode));
+      const fallbackable = pace_limited || metaResponse.status >= 500
+        || recipient_unreachable || session_required;
+
       console.error("Meta API error:", JSON.stringify(metaData));
       await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", message_id);
       await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status}`, metaErrorMsg);
@@ -302,6 +320,14 @@ serve(async (req) => {
         JSON.stringify({
           error: "Failed to send WhatsApp message",
           meta_error: metaErrorMsg,
+          meta_code: metaCode,
+          meta_subcode: metaSubcode,
+          fbtrace_id: metaErr.fbtrace_id ?? null,
+          pace_limited,
+          category_issue,
+          session_required,
+          recipient_unreachable,
+          fallbackable,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );

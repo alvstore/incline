@@ -1,8 +1,13 @@
-// dispatch-communication v1.14.0
+// dispatch-communication v1.15.0
+// v1.15.0: WhatsApp template pre-flight guard — before invoking send-whatsapp with a
+//          template_id we check live whatsapp_templates.status/category/is_stale.
+//          - Not APPROVED OR stale → suppressed (template_not_approved / template_stale)
+//          - Operational category drift (UTILITY→MARKETING on transactional events)
+//            still sends but is flagged in delivery_metadata.category_drift=true so
+//            ops can react. Structured Meta error fields (meta_code, meta_subcode,
+//            pace_limited, category_issue, fallbackable) are persisted into
+//            delivery_metadata for every failed WhatsApp send.
 // v1.14.0: WhatsApp Cloud API error-code humaniser. 131047 / 131049 / 131026 /
-//          132000 / 132001 / 132012 / 133010 → plain-English hints written to
-//          communication_logs.error_message so the Campaign Report explains
-//          delivery drops instead of showing opaque "Meta API error (400)".
 // v1.13.0: Freeform WhatsApp video attachments are now sent as native video
 //          (was previously force-collapsed to document, which Meta rejected).
 // v1.12.0: Channel-level kill switch — if Settings → Integrations has the
@@ -457,6 +462,21 @@ Deno.serve(async (req) => {
     // ── 5) channel routing ──
     let providerMessageId: string | undefined;
     let sendError: string | undefined;
+    // Structured Meta error envelope captured from send-whatsapp v2.7.0
+    // and persisted into communication_logs.delivery_metadata so the UI
+    // can show pacing vs template-config vs recipient issues distinctly.
+    const metaErrorFields: Record<string, unknown> = {};
+    const captureMetaErrorFields = (r: { data?: unknown }) => {
+      const d = r?.data as Record<string, unknown> | undefined;
+      if (!d) return;
+      for (const k of [
+        'meta_code', 'meta_subcode', 'fbtrace_id',
+        'pace_limited', 'category_issue', 'session_required',
+        'recipient_unreachable', 'fallbackable',
+      ]) {
+        if (d[k] !== undefined && d[k] !== null) metaErrorFields[k] = d[k];
+      }
+    };
 
     try {
       switch (input.channel) {
@@ -474,22 +494,71 @@ Deno.serve(async (req) => {
             if (tpl?.meta_template_name) {
               templateName = tpl.meta_template_name;
               templateHeaderType = (tpl.header_type ?? 'none').toLowerCase();
+
+              // ── Live Meta health pre-flight ──────────────────────────────
+              // whatsapp_templates is the canonical mirror of Meta's WABA state.
+              // If the row is missing, not APPROVED, or stale, suppress cleanly
+              // instead of paying the round-trip + opaque Meta rejection.
+              const { data: wt } = await supabase
+                .from('whatsapp_templates')
+                .select('status, category, is_stale, rejected_reason')
+                .eq('name', templateName)
+                .limit(1)
+                .maybeSingle();
+
+              let categoryDrift = false;
+              if (wt) {
+                const liveStatus = String(wt.status || '').toUpperCase();
+                if (liveStatus !== 'APPROVED' || wt.is_stale) {
+                  const reason = wt.is_stale
+                    ? 'template_stale_in_meta'
+                    : `template_not_approved:${liveStatus || 'UNKNOWN'}`;
+                  await supabase
+                    .from('communication_logs')
+                    .update({
+                      status: 'suppressed',
+                      delivery_status: 'suppressed',
+                      error_message: `${reason}${wt.rejected_reason ? ` (${wt.rejected_reason})` : ''}`,
+                      delivery_metadata: {
+                        template: templateName,
+                        meta_status: liveStatus,
+                        category: wt.category,
+                        is_stale: !!wt.is_stale,
+                        rejected_reason: wt.rejected_reason ?? null,
+                      },
+                    })
+                    .eq('id', log!.id);
+                  return ok({ status: 'suppressed', log_id: log!.id, reason });
+                }
+                // Operational categories that should NOT be MARKETING.
+                const OPERATIONAL_CATEGORIES: Category[] = [
+                  'membership_reminder', 'payment_receipt', 'class_notification',
+                  'low_stock', 'new_lead', 'payment_alert', 'task_reminder',
+                  'review_request', 'transactional',
+                ];
+                if (
+                  String(wt.category || '').toUpperCase() === 'MARKETING' &&
+                  OPERATIONAL_CATEGORIES.includes(input.category)
+                ) {
+                  categoryDrift = true;
+                  console.warn(
+                    `[dispatch-communication] template "${templateName}" reclassified ` +
+                    `by Meta as MARKETING but used for operational category=${input.category}. ` +
+                    `Send will proceed but is subject to Meta pacing (131049).`,
+                  );
+                }
+              }
+
               const keys = orderedTemplateKeys(tpl.content ?? input.payload.body, tpl.variables);
               const inferred = inferTemplateValues(tpl.content ?? input.payload.body, input.payload.body, keys);
               const defaults = templateName === 'gym_closure_update' ? gymClosureDefaultValues(keys) : {};
               const baseValues = { ...defaults, ...inferred, ...(input.payload.variables ?? {}) };
-              // Only inject signed PDF URL into BODY when there is NO media header.
-              // Native document-header templates carry the PDF in the HEADER
-              // component — leaking the URL into body would show a "Download: …"
-              // line in WhatsApp even though the PDF is already attached.
               const hasMediaHeader = ['document', 'image', 'video'].includes(templateHeaderType);
               const templateValues = hasMediaHeader
                 ? baseValues
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
               components = templateComponents(keys, templateValues);
 
-              // Build a clean rendered body for audit/inbox display so the
-              // signed URL never surfaces in communication_logs / whatsapp_messages.
               if (tpl.content) {
                 const rendered = String(tpl.content)
                   .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
@@ -502,8 +571,6 @@ Deno.serve(async (req) => {
                 if (rendered) input.payload.body = rendered;
               }
 
-              // Native attachment header: prepend HEADER component when the
-              // template was approved with header_type=document/image/video.
               if (input.attachment?.url && hasMediaHeader) {
                 const header: Record<string, unknown> = { type: 'header', parameters: [] };
                 const params: any[] = [];
@@ -519,6 +586,12 @@ Deno.serve(async (req) => {
                 }
                 header.parameters = params;
                 components = [header, ...(components ?? [])];
+              }
+
+              // Stash category-drift flag on the in-flight log row metadata so
+              // it lands in delivery_metadata.category_drift on the final write.
+              if (categoryDrift) {
+                (input as any).__category_drift = true;
               }
             }
           }
@@ -594,6 +667,7 @@ Deno.serve(async (req) => {
                 skip_log: true,
               },
             });
+            captureMetaErrorFields(r);
             if (r.error) throw new Error(await functionErrorDetail(r.error));
             const errPayload = (r.data as { error?: unknown; meta_error?: unknown })?.error;
             const metaErr = (r.data as { meta_error?: string })?.meta_error;
@@ -639,6 +713,7 @@ Deno.serve(async (req) => {
               source_log_id: log!.id,
             },
           });
+          captureMetaErrorFields(r);
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { whatsapp_message_id?: string; message_id?: string })?.whatsapp_message_id
             ?? (r.data as { message_id?: string })?.message_id;
@@ -758,6 +833,8 @@ Deno.serve(async (req) => {
     const finalMeta: Record<string, unknown> = {};
     if (input.attachment) finalMeta.attachment = input.attachment;
     if (providerMessageId) finalMeta.provider_message_id = providerMessageId;
+    if ((input as any).__category_drift) finalMeta.category_drift = true;
+    if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
     await supabase
       .from('communication_logs')
