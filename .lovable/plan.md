@@ -1,47 +1,30 @@
-## Audit findings
+## Scope
+Only `src/components/dashboard/JoinedSummaryStrip.tsx`. No other file touched, no data/logic change.
 
-- Meta can reclassify approved WhatsApp templates after approval, so `internal_lead_alert` must not be treated as permanently UTILITY.
-- The local cache currently stores Meta category in `whatsapp_templates.category`, but the legacy `templates` row used by sends does not store/validate the live category before dispatch.
-- `dispatch-communication` already humanises common Meta errors, but failed WhatsApp sends still stop at `failed`; there is no automatic channel fallback or template health suppression.
-- `notify-lead-created` has a naming mismatch risk: the code looks for `internal_new_lead_alert`, while your live row is `internal_lead_alert`. This can cause it to send without a template and then hit Meta errors.
-- `lead_nurture_followup` is MARKETING and can be paced by Meta with 131049. That should be expected behavior, not a system error loop.
+## Problem
+At ~1100px the strip sits next to other content and each tile becomes a tall, narrow column. The big 4xl number + "members" word wraps and gets cut to "memb"; icon, NEW chip, number, and label stack vertically and look broken.
 
-## Plan
+## Redesign (Vuexy-aligned, lucide-react only)
 
-1. **Backfill and sync live Meta category context**
-   - Extend the template status view to expose `whatsapp_category`, `whatsapp_meta_status`, `quality_score`, `is_stale`, and a derived `send_risk` field.
-   - Update the Meta sync function so category/status changes from Meta are mirrored into the main `templates` row validation context, not just `whatsapp_templates`.
-   - Backfill the current `internal_lead_alert` / lead templates from Meta cache so UI and send logic see the real category.
+Switch from a vertical "hero tile" to a **compact horizontal KPI row** that scales gracefully:
 
-2. **Fix lead-alert template resolution**
-   - Change `notify-lead-created` to resolve by `trigger_event='lead_created'` first, then fallback to both known Meta names: `internal_lead_alert` and `internal_new_lead_alert`.
-   - Only use a WhatsApp template if the live Meta status is APPROVED and not stale.
-   - If no safe template is available, send admin alerts via SMS/email/in-app where enabled instead of attempting a risky WhatsApp send.
+- Container: same `rounded-2xl bg-card ring-1 ring-border/60 shadow-lg` shell, retain hover lift and gradient glow corner.
+- Layout inside each tile: single horizontal flex — `[icon] [value + label stacked] [NEW chip top-right]`.
+  - Icon badge: 9x9, gradient bg, rounded-xl, shrink-0.
+  - Value: `text-2xl md:text-3xl font-bold tabular-nums`, no gradient clip (avoids clipping/blur at small size), `leading-tight`.
+  - Sub-label: `text-[11px] font-medium text-muted-foreground truncate` — full label like "Joined Today".
+  - Drop the redundant "members" word (value is self-explanatory; tooltip on hover via `title` keeps it).
+  - NEW chip: absolute top-right, smaller (`text-[9px] px-1.5 py-0.5`), only show on `sm+` to save space.
+- Padding: `p-3 sm:p-4` (was `p-4`).
+- Grid: `grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3` — 2x2 on small/medium (including this 1113px viewport where the dashboard column is narrow), 1x4 only when there's real room.
+- Keep gradient accent glow + grid texture for premium feel; reduce glow size to `h-24 w-24` so it doesn't dominate compact tiles.
+- Skeleton height drops to `h-20 sm:h-24`.
 
-3. **Add pre-flight WhatsApp template guard**
-   - In `dispatch-communication`, before sending any WhatsApp template, look up the live `whatsapp_templates` row.
-   - Block send cleanly with `delivery_status='suppressed'` when the template is not APPROVED, stale, missing, or category-incompatible for the use case.
-   - For Meta category drift:
-     - internal/team operational alerts should not be retried endlessly if Meta reclassifies to MARKETING.
-     - marketing/nurture sends should be allowed but treated as paceable.
+## Result
+- No text truncation ("memb" bug gone).
+- Reads cleanly at 1113px (2x2) and on mobile (2x2 with tighter spacing).
+- At ≥1024px (full-width dashboard), expands to 1x4 row.
+- Same data, same query, same colors, same brand language.
 
-4. **Graceful fallback for Meta pacing and category failures**
-   - Enhance `send-whatsapp` to return structured Meta error fields: `meta_code`, `meta_subcode`, `fallbackable`, `category_issue`, `pace_limited`.
-   - Enhance `dispatch-communication` to record those fields in `communication_logs.delivery_metadata`.
-   - For fallbackable WhatsApp failures, queue or mark fallback intent instead of returning opaque errors.
-
-5. **Update Templates Hub visibility**
-   - Show the live Meta category badge next to the approval badge.
-   - Highlight category drift for operational templates like lead alerts.
-   - Add a clear action hint: “Request Meta review” or “Create alternate template”.
-   - Keep this as audit/status UI only; no hardcoded one-off category assumptions.
-
-6. **AI template generation guardrails**
-   - Update system-event category mapping so internal staff lead alerts are treated as operational UTILITY proposals, but also label them as Meta-risk because Meta may reclassify them.
-   - Ensure AI-generated WhatsApp templates include rationale/category notes for staff to review before Meta submission.
-
-7. **Validation**
-   - Query recent `communication_logs` for 131049/131047/132001 failures.
-   - Sync Meta templates and verify `internal_lead_alert` displays its live category.
-   - Test `notify-lead-created` with the existing lead template row and confirm it either sends via approved template or suppresses WhatsApp with a clear fallback reason.
-   - Test `lead_nurture_followup` failure handling so Meta pacing is recorded as “paced by Meta”, not a generic error.
+## Out of scope
+Dashboard layout, other widgets, query logic, branch filter, theming tokens.
