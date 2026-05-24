@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const brand = body.brand ?? "Incline Fitness";
+    const brand = body.brand ?? "Incline";
     const tone = body.tone ?? "warm";
     const eventLine = body.event_meta?.name
       ? `Event: ${body.event_meta.name}${body.event_meta.date ? " on " + body.event_meta.date : ""}${body.event_meta.time ? " at " + body.event_meta.time : ""}${body.event_meta.venue ? " · " + body.event_meta.venue : ""}${body.event_meta.rsvp_url ? " · RSVP: " + body.event_meta.rsvp_url : ""}.`
