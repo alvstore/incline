@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
       finalHtml = wrapInBrandedTemplate(finalHtml, subject, variables, {
         logoUrl,
         branchName,
-        brandName: 'Incline Fitness',
+        brandName: 'Incline',
         unsubscribeUrl: body?.unsubscribe_url,
       });
     }
