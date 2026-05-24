@@ -1,12 +1,14 @@
+// v3.1.0 — Resolve the team-alert template by trigger_event='lead_created' first,
+//          then fall back to either of the known Meta names (internal_lead_alert,
+//          internal_new_lead_alert, lead_alert). Only use the template when the
+//          live Meta status is APPROVED and the row is not stale, so a Meta
+//          category drift (UTILITY → MARKETING reclassification) does not
+//          silently break sends. WhatsApp team alerts are SKIPPED (not failed)
+//          when no safe template exists — SMS/email still attempted.
 // v3.0.0 — Full SSOT cutover. ALL channels (whatsapp / sms / email) now route
-//          through dispatch-communication. Team WhatsApp alerts use the approved
-//          Meta template `internal_new_lead_alert` (resolved via templates table
-//          by meta_template_name), eliminating silent drops outside the 24h
-//          customer-service window. Email channel added end-to-end with a
-//          per-admin opt-in (`email_enabled`).
-//
-//          Lead's own welcome WhatsApp stays freeform because the lead is by
-//          definition inside the 24h window when they submit the form.
+//          through dispatch-communication. Team WhatsApp alerts use an approved
+//          Meta template (resolved via templates table by trigger/meta_template_name),
+//          eliminating silent drops outside the 24h customer-service window.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -75,13 +77,58 @@ Deno.serve(async (req) => {
       rules.sms_to_managers || rules.whatsapp_to_managers || rules.email_to_managers;
     if (!anyEnabled) return json({ success: true, sent: 0, message: "All notification channels disabled" });
 
-    // 4) Resolve approved team-alert WhatsApp template once
-    const { data: teamTpl } = await supabase
-      .from("templates")
-      .select("id")
-      .eq("meta_template_name", "internal_new_lead_alert")
-      .maybeSingle();
-    const teamWaTemplateId: string | null = teamTpl?.id ?? null;
+    // 4) Resolve approved team-alert WhatsApp template once.
+    //    Strategy: prefer trigger_event='lead_created'; then any of the known
+    //    Meta names. Only accept the row when the live Meta status is APPROVED
+    //    and not stale — protects against Meta UTILITY→MARKETING drift silently
+    //    breaking transactional team alerts.
+    let teamWaTemplateId: string | null = null;
+    try {
+      const { data: candidates } = await supabase
+        .from("v_template_with_meta_status")
+        .select("id, trigger_event, meta_template_name, approval_status, whatsapp_meta_status, is_stale, send_risk, branch_id")
+        .eq("type", "whatsapp")
+        .or(
+          [
+            "trigger_event.eq.lead_created",
+            "meta_template_name.eq.internal_lead_alert",
+            "meta_template_name.eq.internal_new_lead_alert",
+            "meta_template_name.eq.lead_alert",
+          ].join(","),
+        );
+      const ordered = (candidates || []).slice().sort((a: any, b: any) => {
+        const score = (r: any) => {
+          let s = 0;
+          if (r.branch_id === branch_id) s += 100;
+          if (r.approval_status === "approved" || r.whatsapp_meta_status === "APPROVED") s += 50;
+          if (!r.is_stale) s += 10;
+          if (r.send_risk === "ok" || r.send_risk === null) s += 5;
+          if (r.trigger_event === "lead_created") s += 3;
+          return s;
+        };
+        return score(b) - score(a);
+      });
+      const usable = ordered.find((r: any) =>
+        (r.approval_status === "approved" || r.whatsapp_meta_status === "APPROVED") &&
+        !r.is_stale
+      );
+      if (usable) {
+        teamWaTemplateId = usable.id;
+        if (usable.send_risk === "category_drift_to_marketing") {
+          console.warn(
+            `notify-lead-created: team alert template ${usable.meta_template_name} ` +
+            `was reclassified by Meta to MARKETING — sends may be paced (131049).`,
+          );
+        }
+      } else {
+        console.warn(
+          "notify-lead-created: no APPROVED+fresh team-alert WhatsApp template; " +
+          "skipping WhatsApp team alerts (SMS/email still attempted).",
+        );
+      }
+    } catch (e) {
+      console.error("notify-lead-created: template resolution failed", e);
+    }
 
     // 5) Variable bag + simple {{token}} renderer for SMS/email bodies
     const vars: Record<string, string> = {
@@ -200,14 +247,25 @@ Deno.serve(async (req) => {
         });
       }
       if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
-        await dispatch({
-          channel: "whatsapp",
-          category: "new_lead",
-          recipient: profile.phone,
-          template_id: teamWaTemplateId,
-          body: teamAlertWaFreeformBody,
-          dedupe_suffix: `team:${tag}`,
-        });
+        if (!teamWaTemplateId) {
+          // No safe template available — record a clean skip instead of attempting
+          // a freeform send that hits Meta 131047 outside the 24h window.
+          results.push({
+            channel: "whatsapp",
+            recipient: profile.phone,
+            status: "skipped",
+            reason: "no_approved_team_alert_template",
+          });
+        } else {
+          await dispatch({
+            channel: "whatsapp",
+            category: "new_lead",
+            recipient: profile.phone,
+            template_id: teamWaTemplateId,
+            body: teamAlertWaFreeformBody,
+            dedupe_suffix: `team:${tag}`,
+          });
+        }
       }
       if (rules[`email_to_${audience}s`] && pref.email_enabled && profile.email) {
         await dispatch({
