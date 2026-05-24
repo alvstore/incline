@@ -34,7 +34,7 @@ const DOCUMENT_EVENTS = new Set([
 ]);
 
 const SYSTEM_PROMPTS: Record<Channel, string> = {
-  whatsapp: `You write WhatsApp Business message templates for a premium Indian gym brand "Incline Fitness".
+  whatsapp: `You write WhatsApp Business message templates for a premium Indian gym brand "Incline".
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
 - Each body ≤ 850 chars; named variables in {{snake_case}}; never duplicate the existing list.
@@ -50,7 +50,7 @@ Rules:
 - For events tagged "[DOCUMENT]" PREFER header_type='document' with header_sample_url='https://www.africau.edu/images/default/sample.pdf' (the platform auto-uploads it to Meta as the approval handle). Body must NOT include {{document_link}} — the file is delivered natively as the header attachment.
 - For other attachment events (e.g. flyers, posters) header_type='image' is allowed with header_sample_url='https://placehold.co/600x400.png'.
 - One template per event.`,
-  sms: `You write Indian-DLT-compliant transactional/promotional SMS for "Incline Fitness".
+  sms: `You write Indian-DLT-compliant transactional/promotional SMS for "Incline".
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
 - Each body ≤ 160 chars (single segment) unless absolutely needed (max 320 chars).
@@ -61,7 +61,7 @@ Rules:
 - For events tagged "[DOCUMENT]" reference {{document_link}} (a short URL) in the body and include "document_link" in variables.
 - Names: lower_snake_case ≤ 30 chars.
 - One template per event.`,
-  email: `You write transactional & marketing emails for "Incline Fitness", a premium Indian gym brand.
+  email: `You write transactional & marketing emails for "Incline", a premium Indian gym brand.
 Rules:
 - Output ONLY via the propose_templates tool. No prose.
 - For each event return: subject (≤ 70 chars, no clickbait), preheader (≤ 110 chars), body_html (clean, mobile-first, inline styles, max 600px width, no external CSS, brand color #6d28d9), body_text fallback.
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < body.events.length; i += BATCH) {
       const slice = body.events.slice(i, i + BATCH);
       const userPrompt = [
-        `Brand: ${body.brand || "Incline Fitness"}`,
+        `Brand: ${body.brand || "Incline"}`,
         `Channel: ${channel}`,
         "",
         "Events to generate templates for:",

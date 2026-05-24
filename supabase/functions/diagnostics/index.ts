@@ -229,9 +229,9 @@ async function testEmail(provider: string, config: any, credentials: any, adminE
           },
           body: JSON.stringify({
             personalizations: [{ to: [{ email: adminEmail }] }],
-            from: { email: config?.from_email || "test@test.com", name: config?.from_name || "Incline Fitness" },
+            from: { email: config?.from_email || "test@test.com", name: config?.from_name || "Incline" },
             subject: "🧪 Test Email — Incline Fitness",
-            content: [{ type: "text/html", value: "<h2>✅ Email integration is working!</h2><p>This is a test email from Incline Fitness CRM.</p>" }],
+            content: [{ type: "text/html", value: "<h2>✅ Email integration is working!</h2><p>This is a test email from Incline CRM.</p>" }],
           }),
         });
         return resp.ok || resp.status === 202
@@ -251,7 +251,7 @@ async function testEmail(provider: string, config: any, credentials: any, adminE
             from: `${config.from_name || "Test"} <${config.from_email || `test@${config.domain}`}>`,
             to: adminEmail,
             subject: "🧪 Test Email — Incline Fitness",
-            html: "<h2>✅ Email integration is working!</h2><p>This is a test email from Incline Fitness CRM.</p>",
+            html: "<h2>✅ Email integration is working!</h2><p>This is a test email from Incline CRM.</p>",
           }),
         });
         return resp.ok

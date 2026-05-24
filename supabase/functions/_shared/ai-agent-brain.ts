@@ -312,7 +312,7 @@ export async function runUnifiedAgent(
   const gymFacts = await hydrateGymFacts(supabase, ctx.branchId);
 
   // 8. Assemble system prompt via the single-source-of-truth helper.
-  const gymName = orgConfig?.name || "Incline Fitness";
+  const gymName = orgConfig?.name || "Incline";
   const platformLabel =
     ctx.platform === "instagram"
       ? "Instagram DM"
@@ -878,7 +878,7 @@ async function hydrateGymFacts(supabase: any, branchId: string): Promise<string>
 
     if (branchRes.data) {
       const b = branchRes.data;
-      parts.push(`Location: ${b.name || "Incline Fitness"}, ${b.address || ""}, ${b.city || "Udaipur"}. Phone: ${b.phone || "N/A"}.`);
+      parts.push(`Location: ${b.name || "Incline"}, ${b.address || ""}, ${b.city || "Udaipur"}. Phone: ${b.phone || "N/A"}.`);
       if (b.opening_time && b.closing_time) parts.push(`Timings: ${b.opening_time} – ${b.closing_time}`);
     }
 

@@ -148,14 +148,14 @@ async function runBirthdayWish(rule: any): Promise<{ dispatched: number; error?:
   for (const m of todays) {
     const profile = profileByUser.get((m as any).user_id);
     const memberName = profile?.full_name ?? "there";
-    let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline Fitness.`;
+    let body = `Happy birthday, ${memberName}! 🎉 Wishing you an amazing year ahead from all of us at Incline.`;
     if (rule.use_ai) {
       try {
         const r = await generateOnce({
           purpose: "automation_rule",
           branchId: m.branch_id,
           userMessage: `Member name: ${memberName}`,
-          systemOverride: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emojis overload. Sign off as "Incline Fitness".`,
+          systemOverride: `Compose a short, warm WhatsApp birthday message (under 280 chars) in a ${rule.ai_tone || "friendly"} tone. No emojis overload. Sign off as "Incline".`,
           supabase: admin,
         });
         const text = r.content?.trim();
