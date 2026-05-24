@@ -12777,22 +12777,26 @@ export type Database = {
           branch_id: string | null
           content: string | null
           created_at: string | null
-          header_media_handle: string | null
           header_media_url: string | null
           header_type: string | null
           id: string | null
           is_active: boolean | null
+          is_stale: boolean | null
           meta_rejection_reason: string | null
+          meta_synced_at: string | null
           meta_template_name: string | null
           meta_template_status: string | null
           name: string | null
+          send_risk: string | null
           subject: string | null
           trigger_event: string | null
           type: string | null
           updated_at: string | null
+          variables: Json | null
           whatsapp_category: string | null
           whatsapp_language: string | null
           whatsapp_meta_status: string | null
+          whatsapp_quality_score: string | null
           whatsapp_rejected_reason: string | null
           whatsapp_template_id: string | null
         }
