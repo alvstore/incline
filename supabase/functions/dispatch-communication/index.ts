@@ -652,6 +652,7 @@ Deno.serve(async (req) => {
                 skip_log: true,
               },
             });
+            captureMetaErrorFields(r);
             if (r.error) throw new Error(await functionErrorDetail(r.error));
             const errPayload = (r.data as { error?: unknown; meta_error?: unknown })?.error;
             const metaErr = (r.data as { meta_error?: string })?.meta_error;
@@ -697,6 +698,7 @@ Deno.serve(async (req) => {
               source_log_id: log!.id,
             },
           });
+          captureMetaErrorFields(r);
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { whatsapp_message_id?: string; message_id?: string })?.whatsapp_message_id
             ?? (r.data as { message_id?: string })?.message_id;
@@ -816,6 +818,8 @@ Deno.serve(async (req) => {
     const finalMeta: Record<string, unknown> = {};
     if (input.attachment) finalMeta.attachment = input.attachment;
     if (providerMessageId) finalMeta.provider_message_id = providerMessageId;
+    if ((input as any).__category_drift) finalMeta.category_drift = true;
+    if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
     await supabase
       .from('communication_logs')
