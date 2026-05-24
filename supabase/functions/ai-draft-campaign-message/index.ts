@@ -1,3 +1,6 @@
+// v2.1.0 — Brand alignment: "Incline" + branded shell. AI email body_html is a FRAGMENT
+//          (no <html>/<head>/<body>/<style>); the send-email branded shell wraps it.
+//          Brand color gold #EAB308 on dark; allowed classes: cta-btn, kpi, kpi-label, kpi-value, details.
 // v2.0.0 — SSOT: routes through ai-runtime.generateOnce (purpose='campaign_draft').
 // v1.0.0 — AI campaign message drafter (WhatsApp / SMS / Email).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
