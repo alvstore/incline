@@ -1,3 +1,6 @@
+// v2.5.0 — Branded shell hardening: brand "INCLINE" + tagline "Rise. Reflect. Repeat.";
+//           defensively strips <html>/<head>/<body>/<style>/<script>/<meta>/<link> from
+//           incoming HTML so AI-drafted or legacy full documents don't nest inside shell.
 // v2.4.0 — Honor skip_log from dispatcher to avoid duplicate communication_logs rows.
 //           Mirrors send-whatsapp v2.2.0. When dispatch-communication invokes send-email
 //           it already owns the canonical log row (with channel + dedupe_key); this
