@@ -1,4 +1,11 @@
-// v3.6.0 — Founder's Phase, structured 4-option lists for goal + plan_interest
+// v3.7.0 — Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
+// 3.7.0: Non-fitness redirect (a) reads pattern/message/window from
+//        ai_purposes.guards (no inline hardcoding), (b) dedupes against the
+//        last outbound within configurable window so the same canned reply is
+//        not re-sent on every follow-up, (c) calls mark_do_not_contact RPC +
+//        flips whatsapp_chat_settings.bot_active=false so lead-nurture and
+//        retention crons stop pinging the contact, (d) writes current_intent
+//        'non_fitness' to ai_memory.
 // 3.6.0: Goal & plan_interest captured via Meta interactive_list (4 rows each)
 //        after name+email — eliminates dirty free-text and matches the original
 //        onboarding UX that staff signed off on.
