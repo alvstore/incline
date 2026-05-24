@@ -479,22 +479,71 @@ Deno.serve(async (req) => {
             if (tpl?.meta_template_name) {
               templateName = tpl.meta_template_name;
               templateHeaderType = (tpl.header_type ?? 'none').toLowerCase();
+
+              // ── Live Meta health pre-flight ──────────────────────────────
+              // whatsapp_templates is the canonical mirror of Meta's WABA state.
+              // If the row is missing, not APPROVED, or stale, suppress cleanly
+              // instead of paying the round-trip + opaque Meta rejection.
+              const { data: wt } = await supabase
+                .from('whatsapp_templates')
+                .select('status, category, is_stale, rejected_reason')
+                .eq('name', templateName)
+                .limit(1)
+                .maybeSingle();
+
+              let categoryDrift = false;
+              if (wt) {
+                const liveStatus = String(wt.status || '').toUpperCase();
+                if (liveStatus !== 'APPROVED' || wt.is_stale) {
+                  const reason = wt.is_stale
+                    ? 'template_stale_in_meta'
+                    : `template_not_approved:${liveStatus || 'UNKNOWN'}`;
+                  await supabase
+                    .from('communication_logs')
+                    .update({
+                      status: 'suppressed',
+                      delivery_status: 'suppressed',
+                      error_message: `${reason}${wt.rejected_reason ? ` (${wt.rejected_reason})` : ''}`,
+                      delivery_metadata: {
+                        template: templateName,
+                        meta_status: liveStatus,
+                        category: wt.category,
+                        is_stale: !!wt.is_stale,
+                        rejected_reason: wt.rejected_reason ?? null,
+                      },
+                    })
+                    .eq('id', log!.id);
+                  return ok({ status: 'suppressed', log_id: log!.id, reason });
+                }
+                // Operational categories that should NOT be MARKETING.
+                const OPERATIONAL_CATEGORIES: Category[] = [
+                  'membership_reminder', 'payment_receipt', 'class_notification',
+                  'low_stock', 'new_lead', 'payment_alert', 'task_reminder',
+                  'review_request', 'transactional',
+                ];
+                if (
+                  String(wt.category || '').toUpperCase() === 'MARKETING' &&
+                  OPERATIONAL_CATEGORIES.includes(input.category)
+                ) {
+                  categoryDrift = true;
+                  console.warn(
+                    `[dispatch-communication] template "${templateName}" reclassified ` +
+                    `by Meta as MARKETING but used for operational category=${input.category}. ` +
+                    `Send will proceed but is subject to Meta pacing (131049).`,
+                  );
+                }
+              }
+
               const keys = orderedTemplateKeys(tpl.content ?? input.payload.body, tpl.variables);
               const inferred = inferTemplateValues(tpl.content ?? input.payload.body, input.payload.body, keys);
               const defaults = templateName === 'gym_closure_update' ? gymClosureDefaultValues(keys) : {};
               const baseValues = { ...defaults, ...inferred, ...(input.payload.variables ?? {}) };
-              // Only inject signed PDF URL into BODY when there is NO media header.
-              // Native document-header templates carry the PDF in the HEADER
-              // component — leaking the URL into body would show a "Download: …"
-              // line in WhatsApp even though the PDF is already attached.
               const hasMediaHeader = ['document', 'image', 'video'].includes(templateHeaderType);
               const templateValues = hasMediaHeader
                 ? baseValues
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
               components = templateComponents(keys, templateValues);
 
-              // Build a clean rendered body for audit/inbox display so the
-              // signed URL never surfaces in communication_logs / whatsapp_messages.
               if (tpl.content) {
                 const rendered = String(tpl.content)
                   .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
@@ -507,8 +556,6 @@ Deno.serve(async (req) => {
                 if (rendered) input.payload.body = rendered;
               }
 
-              // Native attachment header: prepend HEADER component when the
-              // template was approved with header_type=document/image/video.
               if (input.attachment?.url && hasMediaHeader) {
                 const header: Record<string, unknown> = { type: 'header', parameters: [] };
                 const params: any[] = [];
@@ -524,6 +571,12 @@ Deno.serve(async (req) => {
                 }
                 header.parameters = params;
                 components = [header, ...(components ?? [])];
+              }
+
+              // Stash category-drift flag on the in-flight log row metadata so
+              // it lands in delivery_metadata.category_drift on the final write.
+              if (categoryDrift) {
+                (input as any).__category_drift = true;
               }
             }
           }
