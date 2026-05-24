@@ -1,50 +1,54 @@
 ## Problem
 
-`ai-generate-whatsapp-templates` returns 500. Edge logs show:
+When the AI's non-fitness intent guard fires (careers / vendor / press / partnership), it sends the `info@theinclinelife.com` redirect — but:
 
+1. **Duplicate replies** — every subsequent inbound message re-runs the guard and re-sends the same canned reply (visible in your screenshot).
+2. **Nurture keeps running** — WhatsApp/IG/FB lead-nurture and retention cron jobs continue pinging the contact because `do_not_contact` and `bot_active` are never set.
+3. **Hardcoded context** — the regex + redirect copy live inline in `ai-agent-brain.ts` instead of `ai_purposes.guards`, so tweaking it needs a deploy.
+
+## Fix (audit + backfill, no inline hardcoding)
+
+### 1. `supabase/functions/_shared/ai-agent-brain.ts` — non-fitness guard block (lines ~159-169)
+
+After detecting a non-fitness intent, in this order:
+
+- **Dedupe**: query last outbound message on this `(branch_id, phone_number, platform)` within last 24h. If its content equals the redirect text, return `skip("non_fitness_already_redirected")` — no second send, no re-pause.
+- **Send the redirect once** (existing behaviour).
+- **Pause nurture atomically**:
+  - `supabase.rpc('mark_do_not_contact', { p_phone: ctx.senderId, p_branch_id: ctx.branchId, p_reason: 'non_fitness_inquiry', p_source: 'ai_guard' })` — flips `do_not_contact=true` across `whatsapp_chat_settings`, `leads`, `members`. This is what the nurture/retention crons already honor (`lead-nurture-followup` line 60-77, `run-retention-nudges` line 61-67), so no worker changes needed.
+  - Update `whatsapp_chat_settings` for this contact: `bot_active=false`, `paused_at=now()`, `pause_reason='non_fitness_inquiry'` — mirrors the pattern used at lines 1197/1216/1248 when a lead is captured.
+- Wrap both in try/catch + console.warn so a failed pause never breaks the reply.
+
+### 2. Move guard data into `ai_purposes.guards` (backfill in context, not code)
+
+Migration to `UPDATE public.ai_purposes` and seed the `guards` JSONB with:
+
+```json
+{
+  "non_fitness_redirect": true,
+  "non_fitness_message": "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏",
+  "non_fitness_pattern": "\\b(job|jobs|vacancy|...|tie[-\\s]?up)\\b",
+  "non_fitness_pause_nurture": true,
+  "non_fitness_dedupe_window_hours": 24
+}
 ```
-[ai-dispatcher] primary provider google failed: google HTTP 403:
-"Your project has been denied access. Please contact support." (PERMISSION_DENIED)
-```
 
-The active default AI provider for scope `all` is **Google** (direct `generativelanguage.googleapis.com` via your `GOOGLE_API_KEY`). That Google Cloud project has been **blocked by Google** — every request now returns 403. This is a Google-side account block, not a code bug.
+Code reads `purposeRow.guards.non_fitness_pattern` (fall back to current hardcoded regex if absent) and `non_fitness_pause_nurture` / `non_fitness_dedupe_window_hours`. So future tweaks are a DB row, not a deploy. Bump file header to `v3.6.0`.
 
-The dispatcher *does* attempt fallback to Lovable AI (because `enable_fallback=true` on the row), but:
-1. The fallback strips the model + sends the same `tools` schema to Lovable. When Gemini-on-Lovable replies without a tool_call (which happens when the upstream is degraded or the prompt batch is too large), the function ends with `allTemplates.length === 0` → `500 "AI returned no proposals"`.
-2. Even when fallback works, every call eats a 60s timeout retry on the dead Google key first — slow + noisy logs.
+### 3. Memory write
 
-## Fix (two layers)
-
-### 1. Stop calling the dead Google key — switch default provider to Lovable AI
-
-In `ai_provider_configs` (scope=`all`):
-- Set the **Google** row `is_default = false` (keep it active so you can switch back later if Google restores the project).
-- Set the **Lovable AI** row `is_default = true`.
-
-This is one migration, no code change. All AI features (template generation, campaign drafts, dashboard insights, lead nurture) immediately route to Lovable AI gateway, which has no per-project auth issue.
-
-### 2. Harden `ai-generate-whatsapp-templates` so a partial AI failure no longer surfaces as 500
-
-In `supabase/functions/ai-generate-whatsapp-templates/index.ts`:
-- When `r.toolCallArgs` is missing, try a **one-shot retry without `tools`** asking the model to return JSON via `response_format: json_object` matching the same schema. Parse `r.json` instead.
-- If after retry `allTemplates.length === 0`, return **502** with a clear message (`"AI provider returned no usable output — try again or switch provider in Settings → AI."`) instead of generic 500. 502 = upstream issue, matches existing 429/402 handling.
-
-### 3. (Optional, recommended) Surface provider health in the UI
-
-The Templates → "Generate with AI" drawer already shows errors via toast. Add a small one-liner under the button: *"Active AI provider: {provider_display_name}"* sourced from `ai_provider_configs` (default row). Lets you spot when you're on a dead provider without digging into logs.
+After pausing, also push `do_not_ask_add: ['fitness_goal','plan_interest']` + `current_intent: 'non_fitness'` into `ai_memory` via `upsertMemory`, so even if the contact is un-paused later we don't restart the onboarding script mid-thread.
 
 ## Out of scope
 
-- No change to Lovable AI account, billing, or credits.
-- No change to `ai_purposes` rows.
-- No changes to the WhatsApp template approval flow (`manage-whatsapp-templates`) or Meta API.
+- No change to nurture cron workers — they already honor `do_not_contact` and `bot_active`.
+- No change to the redirect text content or who it routes to.
+- No change to Meta-webhook / `send-meta-dm` / `send-message` / WhatsApp webhook — guard fires inside the shared AI brain that all three call.
+- No new tables, no RLS changes.
 
 ## Verification
 
-1. Run the migration → confirm `select provider, is_default from ai_provider_configs where scope='all' and is_default=true;` returns `lovable`.
-2. Open Settings → Communication Templates → WhatsApp → "Generate with AI", select a few events, Generate. Should complete in <15s, no 500, no Google 403 in edge logs.
-3. Tail `ai-generate-whatsapp-templates` edge logs — should see `provider=lovable status=success` rows.
-
-## Note on the underlying Google block
-
-The 403 means your Google AI Studio / Cloud project itself was blocked (TOS, billing, or fraud signal). To restore Google as a provider you'd need to either appeal to Google support or create a new GOOGLE_API_KEY from a different Google account and update the secret. Until then, Lovable AI is the right default.
+1. New inbound containing "job/vendor/press" → one redirect sent, `whatsapp_chat_settings.do_not_contact=true`, `bot_active=false`.
+2. Same contact sends another off-topic message → guard short-circuits at dedupe check, zero outbound.
+3. `lead-nurture-followup` next tick → contact filtered out by existing `do_not_contact=false` predicate.
+4. Edit `ai_purposes.guards.non_fitness_message` in DB → next reply uses the new copy with no redeploy.
