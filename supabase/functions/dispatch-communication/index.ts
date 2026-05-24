@@ -462,6 +462,21 @@ Deno.serve(async (req) => {
     // ── 5) channel routing ──
     let providerMessageId: string | undefined;
     let sendError: string | undefined;
+    // Structured Meta error envelope captured from send-whatsapp v2.7.0
+    // and persisted into communication_logs.delivery_metadata so the UI
+    // can show pacing vs template-config vs recipient issues distinctly.
+    const metaErrorFields: Record<string, unknown> = {};
+    const captureMetaErrorFields = (r: { data?: unknown }) => {
+      const d = r?.data as Record<string, unknown> | undefined;
+      if (!d) return;
+      for (const k of [
+        'meta_code', 'meta_subcode', 'fbtrace_id',
+        'pace_limited', 'category_issue', 'session_required',
+        'recipient_unreachable', 'fallbackable',
+      ]) {
+        if (d[k] !== undefined && d[k] !== null) metaErrorFields[k] = d[k];
+      }
+    };
 
     try {
       switch (input.channel) {
