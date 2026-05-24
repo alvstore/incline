@@ -34,11 +34,10 @@ function wrapInBrandedTemplate(
 
   const logoBlock = opts?.logoUrl
     ? `<img src="${opts.logoUrl}" alt="${opts?.brandName ?? 'Incline'}" style="max-height:48px;display:block;margin:0 auto 8px;" />`
-    : `<p class="logo-text">INCLINE</p><p class="logo-sub">Fitness</p>`;
+    : `<p class="logo-text">INCLINE</p><p class="logo-sub">Rise. Reflect. Repeat.</p>`;
 
-  const branchLine = opts?.branchName
-    ? `<p style="color:#ffffff60;font-size:11px;margin-top:6px;">${opts.branchName}</p>`
-    : '';
+  // Branch name intentionally omitted from header — brand is single-identity "INCLINE".
+  const branchLine = '';
 
   const unsubBlock = opts?.unsubscribeUrl
     ? `<p style="margin-top:14px;"><a href="${opts.unsubscribeUrl}" style="color:#ffffff40;font-size:11px;">Unsubscribe from marketing emails</a></p>`
@@ -131,7 +130,7 @@ Deno.serve(async (req) => {
       finalHtml = wrapInBrandedTemplate(finalHtml, subject, variables, {
         logoUrl,
         branchName,
-        brandName: 'Incline Fitness',
+        brandName: 'Incline',
         unsubscribeUrl: body?.unsubscribe_url,
       });
     }
