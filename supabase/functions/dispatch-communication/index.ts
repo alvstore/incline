@@ -1,8 +1,13 @@
-// dispatch-communication v1.14.0
+// dispatch-communication v1.15.0
+// v1.15.0: WhatsApp template pre-flight guard — before invoking send-whatsapp with a
+//          template_id we check live whatsapp_templates.status/category/is_stale.
+//          - Not APPROVED OR stale → suppressed (template_not_approved / template_stale)
+//          - Operational category drift (UTILITY→MARKETING on transactional events)
+//            still sends but is flagged in delivery_metadata.category_drift=true so
+//            ops can react. Structured Meta error fields (meta_code, meta_subcode,
+//            pace_limited, category_issue, fallbackable) are persisted into
+//            delivery_metadata for every failed WhatsApp send.
 // v1.14.0: WhatsApp Cloud API error-code humaniser. 131047 / 131049 / 131026 /
-//          132000 / 132001 / 132012 / 133010 → plain-English hints written to
-//          communication_logs.error_message so the Campaign Report explains
-//          delivery drops instead of showing opaque "Meta API error (400)".
 // v1.13.0: Freeform WhatsApp video attachments are now sent as native video
 //          (was previously force-collapsed to document, which Meta rejected).
 // v1.12.0: Channel-level kill switch — if Settings → Integrations has the
