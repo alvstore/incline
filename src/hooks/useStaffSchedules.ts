@@ -52,12 +52,16 @@ export function useStaffSchedules(branchId: string | undefined) {
       if (eErr) throw eErr;
 
       // Build user → role map (trainer wins if both)
-      const roleMap = new Map<string, { role: StaffRoleLabel; position: string | null }>();
+      const roleMap = new Map<string, { role: StaffRoleLabel; position: string | null; department: string | null }>();
       (employees || []).forEach((e: any) => {
-        if (e.user_id) roleMap.set(e.user_id, { role: inferRole(e), position: e.position || null });
+        if (e.user_id) roleMap.set(e.user_id, {
+          role: inferRole(e),
+          position: e.position || null,
+          department: e.department || null,
+        });
       });
       (trainers || []).forEach((t: any) => {
-        if (t.user_id) roleMap.set(t.user_id, { role: 'Trainer', position: 'Trainer' });
+        if (t.user_id) roleMap.set(t.user_id, { role: 'Trainer', position: 'Trainer', department: 'Training' });
       });
 
       const userIds = Array.from(roleMap.keys());
@@ -85,6 +89,7 @@ export function useStaffSchedules(branchId: string | undefined) {
           avatar_url: p?.avatar_url || null,
           role: rl.role,
           position: rl.position,
+          department: rl.department,
           shifts: map,
         };
       }).sort((a, b) => a.full_name.localeCompare(b.full_name));
