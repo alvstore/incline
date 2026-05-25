@@ -123,3 +123,35 @@ export function useDeleteShift(branchId: string | undefined) {
     }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Attendance roll-up (migrated from HRM "Attendance" tab)
+// ---------------------------------------------------------------------------
+export interface AttendanceLogRow {
+  id: string;
+  user_id: string;
+  check_in: string | null;
+  check_out: string | null;
+  shift_type?: string | null;
+  total_hours?: number | null;
+}
+
+export function useStaffAttendanceMonth(branchId: string | undefined, ym: string) {
+  return useQuery({
+    queryKey: ['staff-attendance-month', branchId, ym],
+    enabled: !!branchId && /^\d{4}-\d{2}$/.test(ym),
+    queryFn: async (): Promise<AttendanceLogRow[]> => {
+      const [y, m] = ym.split('-').map(Number);
+      const startIso = `${ym}-01T00:00:00`;
+      const endIso = new Date(y, m, 0, 23, 59, 59).toISOString();
+      const { data, error } = await supabase
+        .from('staff_attendance')
+        .select('id,user_id,check_in,check_out,shift_type,total_hours')
+        .gte('check_in', startIso)
+        .lte('check_in', endIso)
+        .order('check_in', { ascending: false });
+      if (error) throw error;
+      return (data || []) as AttendanceLogRow[];
+    },
+  });
+}

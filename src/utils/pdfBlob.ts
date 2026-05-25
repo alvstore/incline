@@ -1425,3 +1425,168 @@ export async function downloadPlanPdf(input: PlanPdfInput, brand?: BrandContext)
   downloadBlob(blob, planPdfFilename({ name: input.name, type: input.type }));
   return blob;
 }
+
+// ============================================================================
+// STAFF ROSTER PDF
+// ============================================================================
+export type RosterScope = 'day' | 'week' | 'month';
+
+export interface RosterShiftLite {
+  morning_start: string | null;
+  morning_end: string | null;
+  evening_start: string | null;
+  evening_end: string | null;
+  is_weekly_off: boolean;
+}
+
+export interface RosterTrainerLite {
+  user_id: string;
+  full_name: string;
+  /** Map weekday (0=Sun…6=Sat) -> shift row */
+  shifts: Record<number, RosterShiftLite | undefined>;
+}
+
+export interface RosterPdfInput {
+  scope: RosterScope;
+  /** e.g. "Monday, 25 May 2026" or "Week of 25 May" or "May 2026" */
+  periodLabel: string;
+  /** For day scope: which weekday (0-6). Ignored otherwise. */
+  weekday?: number;
+  /** For month scope: anchor date in that month. */
+  monthAnchor?: Date;
+  trainers: RosterTrainerLite[];
+  branchId?: string | null;
+  branchName?: string | null;
+}
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function fmtT(t?: string | null) {
+  return t ? t.slice(0, 5) : '—';
+}
+
+function shiftCell(s: RosterShiftLite | undefined): string {
+  if (!s) return '—';
+  if (s.is_weekly_off) return 'OFF';
+  const parts: string[] = [];
+  if (s.morning_start && s.morning_end) parts.push(`AM ${fmtT(s.morning_start)}–${fmtT(s.morning_end)}`);
+  if (s.evening_start && s.evening_end) parts.push(`PM ${fmtT(s.evening_start)}–${fmtT(s.evening_end)}`);
+  return parts.length ? parts.join('\n') : '—';
+}
+
+export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> {
+  const landscape = input.scope !== 'day';
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' });
+  const brand = await resolveBrandAsync(input.branchId ?? null, input.branchName ?? null);
+  const title = input.scope === 'day' ? 'DAILY ROSTER'
+    : input.scope === 'week' ? 'WEEKLY ROSTER'
+    : 'MONTHLY ROSTER';
+
+  header(doc, title, brand, {
+    docNumber: input.scope.toUpperCase(),
+    issueDate: new Date().toLocaleDateString('en-IN'),
+  });
+
+  // Period strip
+  let y = 56;
+  doc.setFillColor(248, 250, 252);
+  const pageW = doc.internal.pageSize.width;
+  doc.rect(0, y, pageW, 10, 'F');
+  setColor(doc, BRAND.text);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(input.periodLabel, 14, y + 7);
+  setColor(doc, BRAND.muted);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(`${input.trainers.length} trainer${input.trainers.length === 1 ? '' : 's'}`, pageW - 14, y + 7, { align: 'right' });
+  y += 16;
+
+  if (input.scope === 'day') {
+    const wd = input.weekday ?? new Date().getDay();
+    autoTable(doc, {
+      startY: y,
+      head: [['Trainer', 'Morning Shift', 'Evening Shift', 'Status']],
+      body: input.trainers.map((t) => {
+        const s = t.shifts[wd];
+        if (!s) return [t.full_name, '—', '—', 'Unscheduled'];
+        if (s.is_weekly_off) return [t.full_name, '—', '—', 'Weekly Off'];
+        const m = s.morning_start && s.morning_end ? `${fmtT(s.morning_start)} – ${fmtT(s.morning_end)}` : '—';
+        const e = s.evening_start && s.evening_end ? `${fmtT(s.evening_start)} – ${fmtT(s.evening_end)}` : '—';
+        return [t.full_name, m, e, 'Scheduled'];
+      }),
+      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      theme: 'grid',
+    });
+  } else if (input.scope === 'week') {
+    const days = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
+    autoTable(doc, {
+      startY: y,
+      head: [['Trainer', ...days.map((d) => WEEKDAY_LABELS[d])]],
+      body: input.trainers.map((t) => [
+        t.full_name,
+        ...days.map((d) => shiftCell(t.shifts[d])),
+      ]),
+      styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'middle' },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', halign: 'center' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 42 } },
+      theme: 'grid',
+    });
+  } else {
+    // Month: trainer rows × day-of-month columns, color-coded
+    const anchor = input.monthAnchor || new Date();
+    const year = anchor.getFullYear();
+    const month = anchor.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const dayNums = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const head = [['Trainer', ...dayNums.map(String)]];
+    const body = input.trainers.map((t) => {
+      const cells: string[] = [t.full_name];
+      for (const d of dayNums) {
+        const wd = new Date(year, month, d).getDay();
+        const s = t.shifts[wd];
+        if (!s) cells.push('-');
+        else if (s.is_weekly_off) cells.push('O');
+        else {
+          const am = s.morning_start ? 'A' : '';
+          const pm = s.evening_start ? 'P' : '';
+          cells.push((am + pm) || '-');
+        }
+      }
+      return cells;
+    });
+
+    autoTable(doc, {
+      startY: y,
+      head,
+      body,
+      styles: { fontSize: 6.5, cellPadding: 1, halign: 'center' },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { fontStyle: 'bold', halign: 'left', cellWidth: 38, fontSize: 8 } },
+      theme: 'grid',
+      didParseCell: (data) => {
+        if (data.section !== 'body' || data.column.index === 0) return;
+        const v = String(data.cell.raw ?? '');
+        if (v === 'O') { data.cell.styles.fillColor = [219, 234, 254]; data.cell.styles.textColor = [29, 78, 216]; }
+        else if (v === 'AP') { data.cell.styles.fillColor = [199, 210, 254]; data.cell.styles.textColor = [55, 48, 163]; }
+        else if (v === 'A') { data.cell.styles.fillColor = [209, 250, 229]; data.cell.styles.textColor = [4, 120, 87]; }
+        else if (v === 'P') { data.cell.styles.fillColor = [224, 231, 255]; data.cell.styles.textColor = [67, 56, 202]; }
+        else if (v === '-') { data.cell.styles.textColor = [148, 163, 184]; }
+      },
+    });
+
+    // Legend
+    const afterY = (doc as any).lastAutoTable?.finalY || y + 100;
+    setColor(doc, BRAND.muted);
+    doc.setFontSize(8);
+    doc.text('Legend:  A = AM shift   P = PM shift   AP = Split shift   O = Weekly off   - = Unscheduled', 14, afterY + 6);
+  }
+
+  footer(doc, brand);
+  return doc.output('blob');
+}

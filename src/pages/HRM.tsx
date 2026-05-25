@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,10 +85,17 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 
 export default function HRMPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'employees';
+  const navigate = useNavigate();
+  const rawInitialTab = searchParams.get('tab') || 'employees';
+  // Attendance has moved to /staff-roster — redirect any deep links.
+  const initialTab = rawInitialTab === 'attendance' ? 'employees' : rawInitialTab;
   const [activeTab, setActiveTab] = useState(initialTab);
   useEffect(() => {
     const t = searchParams.get('tab');
+    if (t === 'attendance') {
+      navigate('/staff-roster?view=attendance', { replace: true });
+      return;
+    }
     if (t && t !== activeTab) setActiveTab(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -735,7 +742,6 @@ export default function HRMPage() {
           <TabsList className="bg-muted/50">
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="contracts">Contracts</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
             <TabsTrigger value="policies"><BookOpen className="h-3.5 w-3.5 mr-1" />Policies</TabsTrigger>
             <TabsTrigger value="settings"><SettingsIcon className="h-3.5 w-3.5 mr-1" />HR Settings</TabsTrigger>
@@ -1139,114 +1145,8 @@ export default function HRMPage() {
             </Card>
           </TabsContent>
 
-          {/* Attendance Tab - NOW UNIFIED */}
-          <TabsContent value="attendance" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-accent" />
-                    Staff Attendance
-                  </CardTitle>
-                  <Input
-                    type="month"
-                    value={payrollMonth}
-                    onChange={(e) => setPayrollMonth(e.target.value)}
-                    className="w-[180px]"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Summary per unified staff */}
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                  {payrollStaff.map((staff: PayrollStaffItem) => {
-                    const summary = getStaffAttendanceSummary(staff.user_id);
-                    return (
-                      <Card key={staff.id} className="border">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarFallback className="bg-accent/10 text-accent text-sm font-semibold">
-                                {getInitials(staff.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{staff.name}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">{staff.code}</span>
-                                {getStaffTypeBadge(staff)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-3 grid grid-cols-2 gap-2">
-                            <div className="bg-muted/50 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-foreground">{summary.totalDays}</p>
-                              <p className="text-xs text-muted-foreground">Days Present</p>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-foreground">{summary.totalHours}h</p>
-                              <p className="text-xs text-muted-foreground">Total Hours</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+          {/* Attendance moved to /staff-roster — see redirect in useEffect above. */}
 
-                {/* Detailed log */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff Member</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Check In</TableHead>
-                      <TableHead>Check Out</TableHead>
-                      <TableHead>Duration</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {staffAttendance.slice(0, 50).map((record: any) => {
-                      const staff = payrollStaff.find((s: PayrollStaffItem) => s.user_id === record.user_id);
-                      const duration = getDurationHours(record.check_in, record.check_out);
-                      return (
-                        <TableRow key={record.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-7 w-7">
-                                <AvatarFallback className="bg-accent/10 text-accent text-xs">
-                                  {getInitials(staff?.name || null)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm font-medium">{staff?.name || 'Unknown'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {staff ? getStaffTypeBadge(staff) : <span className="text-muted-foreground">-</span>}
-                          </TableCell>
-                          <TableCell>{formatDateSafe(record.check_in, 'dd MMM yyyy')}</TableCell>
-                          <TableCell>{formatDateSafe(record.check_in, 'hh:mm a')}</TableCell>
-                          <TableCell>
-                            {record.check_out ? formatDateSafe(record.check_out, 'hh:mm a') : <Badge variant="outline" className="text-warning">Active</Badge>}
-                          </TableCell>
-                          <TableCell>{duration !== null ? `${duration.toFixed(1)}h` : '-'}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {staffAttendance.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                          <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>No attendance records for this month</p>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Payroll Tab */}
           <TabsContent value="payroll" className="mt-4 space-y-4">
