@@ -429,6 +429,20 @@ export default function HRMPage() {
 
   // Server-side branded PDF (draft for unsigned, employee_copy for signed).
   const openServerPdf = async (contract: any, mode: 'preview' | 'download' | 'print' = 'preview') => {
+    // Pre-flight: warn (but don't block) if the linked profile is missing the
+    // identity fields rendered in the contract preamble. Avoids surprise blanks.
+    if (contract.signature_status !== 'signed') {
+      const missing: string[] = [];
+      if (!contract._resolvedName) missing.push('full name');
+      if (!contract._resolvedEmail) missing.push('email');
+      if (!contract._resolvedPhone) missing.push('phone');
+      if (missing.length) {
+        toast.warning(
+          `Profile is missing ${missing.join(', ')}. Open Employees → Edit to fill these before sending to the employee.`,
+          { duration: 6000 },
+        );
+      }
+    }
     const t = toast.loading(mode === 'download' ? 'Preparing download…' : 'Building PDF…');
     try {
       const isSigned = contract.signature_status === 'signed';
