@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useBranch } from '@/contexts/BranchContext';
+import { useBranchContext } from '@/contexts/BranchContext';
 import {
   useStaffSchedules, useUpsertShift, useDeleteShift,
   type ShiftRow, type TrainerRosterRow,
