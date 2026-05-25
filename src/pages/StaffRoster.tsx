@@ -526,23 +526,47 @@ export default function StaffRoster() {
       <SundayAssignSheet
         open={sundayOpen}
         onClose={() => setSundayOpen(false)}
-        candidates={allStaff.filter((s) => {
-          const sh = s.shifts[0];
-          return !sh || sh.is_weekly_off || (!sh.morning_start && !sh.evening_start);
-        })}
-        onAssign={async (assignments) => {
-          for (const a of assignments) {
-            await upsert.mutateAsync({
-              user_id: a.user_id,
-              weekday: 0,
-              morning_start: a.morning_start || null,
-              morning_end: a.morning_end || null,
-              evening_start: a.evening_start || null,
-              evening_end: a.evening_end || null,
-              is_weekly_off: false,
-            });
+        sundayDate={sundayDate}
+        onChangeSundayDate={setSundayDate}
+        allStaff={allStaff}
+        existingOverrides={sundayOverrides}
+        onAssign={async ({ scope, picks, removedUserIds }) => {
+          // Save assigned picks
+          for (const a of picks) {
+            if (scope === 'recurring') {
+              await upsert.mutateAsync({
+                user_id: a.user_id,
+                weekday: 0,
+                morning_start: a.morning_start || null,
+                morning_end: a.morning_end || null,
+                evening_start: a.evening_start || null,
+                evening_end: a.evening_end || null,
+                is_weekly_off: false,
+              });
+            } else {
+              await upsertOverride.mutateAsync({
+                user_id: a.user_id,
+                date: sundayDateISO,
+                morning_start: a.morning_start || null,
+                morning_end: a.morning_end || null,
+                evening_start: a.evening_start || null,
+                evening_end: a.evening_end || null,
+                is_weekly_off: false,
+              });
+            }
           }
-          toast({ title: `Sunday duty assigned to ${assignments.length} staff` });
+          // Remove deselected (one-off scope only — delete the override row)
+          if (scope === 'one_off') {
+            for (const uid of removedUserIds) {
+              await deleteOverride.mutateAsync({ userId: uid, date: sundayDateISO });
+            }
+          }
+          const dateLabel = format(sundayDate, 'dd MMM');
+          toast({
+            title: scope === 'recurring'
+              ? `Sunday duty saved for ${picks.length} staff — repeats every Sunday`
+              : `Sunday duty saved for ${picks.length} staff on ${dateLabel}`,
+          });
           setSundayOpen(false);
         }}
       />
