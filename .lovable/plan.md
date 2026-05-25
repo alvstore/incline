@@ -1,55 +1,44 @@
-## Replace dashboard widget: "Growth Pulse" (2026 design)
 
-Scope: ONLY `src/components/dashboard/JoinedSummaryStrip.tsx`. Same props (`branchFilter`), same data source (`members.created_at` counts), same export name so `Dashboard.tsx` keeps working. No layout, query, or business-logic changes elsewhere.
+## Audit of the two skill packs
 
-### Why the current widget fails
-- Four equal vertical tiles waste horizontal space at 1113px, causing the cramped "tall column" look.
-- Heavy gradient glows + "NEW" chips + grid texture compete for attention while the actual numbers are all zero.
-- It's a KPI strip pretending to be a hero — no comparison, no trend, no context.
+I fetched both folders from `alirezarezvani/claude-skills` and reviewed each SKILL.md. Here's the fit for Incline (multi-branch gym CRM):
 
-### New widget: "Growth Pulse — New Members"
-A single unified card (not 4 separate tiles) that's far more relevant for a gym SaaS dashboard:
+| Skill | Pack | Verdict | Reason |
+|---|---|---|---|
+| `saas-metrics-coach` | finance | **Adopt** | Memberships = subscriptions. ARR/MRR/churn/LTV/CAC/NRR all map directly to Incline's recurring membership model and dashboard KPIs. |
+| `customer-success-manager` | business-growth | **Adopt** | Health scoring, churn risk, expansion. Direct fit for Smart Retention Nudge Engine + lifecycle automation. |
+| `revenue-operations` | business-growth | **Adopt** | Pipeline health, forecasting, GTM. Fits Leads/CRM + Marketing CRM v2 (lead → trial → member funnel). |
+| `financial-analyst` | finance | Skip | DCF, WACC, corporate valuation — not relevant to single-business gym ops. |
+| `sales-engineer` | business-growth | Skip | RFPs, PoCs, competitive matrices — B2B enterprise sales, not B2C gym. |
+| `contract-and-proposal-writer` | business-growth | Skip | MSA/NDA/SOW drafting — Incline already has HRM Contracts v2 for staff and a fixed membership T&C; no B2B proposals. |
+| `finance-skills` / `business-growth-skills` | both | Skip | These are README index files for the parent packs, not actual skills. |
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│ NEW MEMBERS                          [ Today · 7D · 30D · YTD ]│
-│                                                                │
-│  24            ▲ +18% vs prev period                           │
-│  this month                                                    │
-│                                                                │
-│  ╭──── sparkline (last 14/30 days, area chart) ────╮           │
-│                                                                │
-│ ─────────────────────────────────────────────────────          │
-│ Today  1   ·  7D  6   ·  30D  24   ·  YTD  142                 │
-└────────────────────────────────────────────────────────────────┘
-```
+## What I'll do
 
-Key elements:
-1. **Segmented period switcher** (top-right) — Today / 7D / 30D / YTD. Default = 30D. Pill style, `rounded-full bg-muted p-1`, active pill `bg-background shadow-sm`.
-2. **Hero number** — large `text-4xl md:text-5xl font-bold tabular-nums` for the selected period, with delta chip (`+18%` green / `-5%` red / `—` neutral) vs previous equivalent window.
-3. **Sparkline** — small area chart using Recharts (already in project), 60px tall, showing daily signups across the selected window. Gradient fill from `primary` to transparent. No axes, no grid — just the curve.
-4. **Compact summary row** — bottom strip with all 4 periods shown as inline `label · value` pairs so nothing is hidden when one is selected. Clickable to switch period.
-5. **Branch-aware** — uses `branchFilter` exactly like today.
+1. **Fetch the 3 adopted skills** (SKILL.md + references/ + scripts/ + assets/) from GitHub raw URLs.
+2. **Write them under `.agents/skills/`** as drafts:
+   - `.agents/skills/saas-metrics-coach/`
+   - `.agents/skills/customer-success-manager/`
+   - `.agents/skills/revenue-operations/`
+3. **Light adaptation pass** on each SKILL.md description and Step-1 input prompts so retrieval and behaviour match Incline's domain:
+   - "customer / subscription" → "member / membership"
+   - "ARR/MRR" examples → use Incline plan types (monthly, quarterly, half-yearly, annual)
+   - Add a short "Incline data sources" note pointing each skill at its real tables (`members`, `memberships`, `payments`, `leads`, `whatsapp_chat_settings`, `member_benefits`, etc.) so the agent queries the right place via `supabase--read_query`.
+   - Add an `INR / ₹` note replacing `$` defaults.
+   - Keep all Python scripts and reference files as-is (stdlib-only, deterministic).
+4. **Apply each draft** with `skills--apply_draft` so they become active workspace skills surfaced by retrieval (and via `/` in the composer).
+5. **No app/codebase changes.** No DB migrations. No edge-function changes. Skills are agent tooling, not runtime code.
 
-### Visual language (Vuexy 2026)
-- Container: `rounded-2xl bg-card ring-1 ring-border/60 shadow-lg p-5`
-- Single subtle gradient halo top-right (indigo → violet), no per-tile glows
-- Inter font, `tabular-nums` on all numbers
-- Delta chip: `rounded-full px-2 py-0.5 text-xs font-semibold` with `bg-emerald-100 text-emerald-700` / `bg-red-100 text-red-700` / `bg-slate-100 text-slate-600`
-- Segmented control: matches the WEEKLY/MONTHLY/YEARLY pill used elsewhere on the dashboard for consistency
-- No emojis, lucide-react only (`Sparkles` for header icon, `TrendingUp` / `TrendingDown` for delta)
+## Out of scope
 
-### Responsive
-- ≥768px: header row (title + segmented) on one line, hero + sparkline side-by-side (`grid-cols-[auto_1fr]`)
-- <768px: stacked — title, segmented below, hero, sparkline full-width, summary row wraps
-- Summary row uses `flex flex-wrap gap-x-4 gap-y-1` so it never overflows at 1113px
+- Building UI for these analytics (skills are agent-side; if you later want a "Retention Health" dashboard widget powered by the same scoring model, that's a follow-up task).
+- Modifying the 3 skipped skills.
+- Touching existing skills already in `skills-lock.json`.
 
-### Data
-- One `useQuery` keyed `['growth-pulse', branchFilter]` that fetches the last 365 daily signup counts via a single grouped query (`select created_at` filtered to YTD, then bucketed client-side). Avoids 4 round-trips and gives data for the sparkline + all 4 period totals + previous-period deltas in one shot.
-- Falls back gracefully when count is 0 (shows "0" + "No new members in this window" muted helper).
+## Technical notes
 
-### Out of scope
-- `Dashboard.tsx`, other widgets, sidebar, theming tokens, business logic
-- No new dependencies (Recharts already in the project)
+- Drafts go to `.agents/skills/<name>/` only (never `.workspace/skills/` directly — that's managed by `apply_draft`).
+- Each skill's `scripts/` are stdlib-only Python, runnable via the `code--exec` "copy then run" pattern.
+- After apply, the skills will appear in Settings → Skills and trigger automatically when the user mentions churn, MRR, pipeline, health score, expansion, etc.
 
-Used the `ui-ux-pro-max` skill for the redesign direction.
+Confirm and I'll switch to build mode to fetch + adapt + apply the 3 skills.
