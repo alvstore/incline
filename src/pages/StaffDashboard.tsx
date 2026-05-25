@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import { communicationService } from '@/services/communicationService';
 import { SmartAssistDrawer } from '@/components/retention/SmartAssistDrawer';
 import { ConvertMemberDrawer } from '@/components/leads/ConvertMemberDrawer';
+import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 
 export default function StaffDashboard() {
   const { profile, user } = useAuth();
