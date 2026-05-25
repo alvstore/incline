@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import { communicationService } from '@/services/communicationService';
 import { SmartAssistDrawer } from '@/components/retention/SmartAssistDrawer';
 import { ConvertMemberDrawer } from '@/components/leads/ConvertMemberDrawer';
+import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 
 export default function StaffDashboard() {
   const { profile, user } = useAuth();
@@ -167,6 +168,9 @@ export default function StaffDashboard() {
           <Link to="/invoices"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><FileText className="h-8 w-8 text-primary" /><span className="font-medium text-center">View Invoices</span></CardContent></Card></Link>
           <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl" onClick={() => setPricingOpen(true)}><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><TrendingUp className="h-8 w-8 text-violet-500" /><span className="font-medium text-center">View Pricing</span></CardContent></Card>
         </div>
+
+        {/* My shift this week + Late badges */}
+        <MyShiftWeekCard userId={user?.id} />
 
         {/* Stats Row */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">

@@ -41,6 +41,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
 
 // Returns the next upcoming Sunday (today if today is Sunday)
 function nextSunday(from: Date = new Date()): Date {
@@ -113,6 +115,11 @@ export default function StaffRoster() {
   const { effectiveBranchId, currentBranchName } = useBranchContext();
   const branchId = effectiveBranchId;
   const { toast } = useToast();
+  const { user, roles } = useAuth();
+  const roleNames = useMemo(() => roles.map((r) => r.role), [roles]);
+  const editAny = canEditAnyRoster(roleNames);
+  const exportOk = canExportRoster(roleNames);
+  const canEditFor = (uid: string) => canEditRosterRow(roleNames, uid, user?.id);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialView = (searchParams.get('view') as View) || 'day';
@@ -290,49 +297,53 @@ export default function StaffRoster() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-md overflow-hidden">
-                <Button
-                  variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
-                  onClick={() => handleExportPdf('download')} disabled={busyPdf}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {busyPdf ? 'Building…' : 'Export weekly PDF'}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+              {exportOk && (
+                <>
+                  <div className="inline-flex rounded-md overflow-hidden">
                     <Button
-                      variant="secondary"
-                      className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
-                      disabled={busyPdf} aria-label="More export options"
+                      variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
+                      onClick={() => handleExportPdf('download')} disabled={busyPdf}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <Download className="mr-2 h-4 w-4" />
+                      {busyPdf ? 'Building…' : 'Export weekly PDF'}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'week')}>
-                      <CalIcon className="mr-2 h-4 w-4" /> This week (default)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'day')}>
-                      <Sun className="mr-2 h-4 w-4" /> Today only
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'month')}>
-                      <CalIcon className="mr-2 h-4 w-4" /> Full month
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <Button
-                variant="ghost" className="text-white hover:bg-white/15"
-                onClick={() => handleExportPdf('print')} disabled={busyPdf}
-              >
-                <Printer className="mr-2 h-4 w-4" /> Print
-              </Button>
-              <Button
-                variant="ghost" className="text-white hover:bg-white/15"
-                onClick={() => setSendOpen(true)}
-              >
-                <Send className="mr-2 h-4 w-4" /> Send
-              </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
+                          disabled={busyPdf} aria-label="More export options"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'week')}>
+                          <CalIcon className="mr-2 h-4 w-4" /> This week (default)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'day')}>
+                          <Sun className="mr-2 h-4 w-4" /> Today only
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'month')}>
+                          <CalIcon className="mr-2 h-4 w-4" /> Full month
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <Button
+                    variant="ghost" className="text-white hover:bg-white/15"
+                    onClick={() => handleExportPdf('print')} disabled={busyPdf}
+                  >
+                    <Printer className="mr-2 h-4 w-4" /> Print
+                  </Button>
+                  <Button
+                    variant="ghost" className="text-white hover:bg-white/15"
+                    onClick={() => setSendOpen(true)}
+                  >
+                    <Send className="mr-2 h-4 w-4" /> Send
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -411,6 +422,8 @@ export default function StaffRoster() {
           onChangeSundayDate={setSundayDate}
           entries={sundayDuty}
           allStaffCount={allStaff.length}
+          canEditFor={canEditFor}
+          canAssign={editAny}
           onEdit={(t) => setEdit({ trainer: t, weekday: 0 })}
           onAssign={() => setSundayOpen(true)}
         />
@@ -492,10 +505,10 @@ export default function StaffRoster() {
             )}
 
             {!isLoading && !isError && trainers.length > 0 && view === 'day' && (
-              <DayView trainers={trainers} weekday={weekday} onEdit={setEdit} onDelete={(uid, wd) => del.mutate({ userId: uid, weekday: wd })} />
+              <DayView trainers={trainers} weekday={weekday} canEditFor={canEditFor} onEdit={setEdit} onDelete={(uid, wd) => del.mutate({ userId: uid, weekday: wd })} />
             )}
             {!isLoading && !isError && trainers.length > 0 && view === 'week' && (
-              <WeekView trainers={trainers} onEdit={setEdit} />
+              <WeekView trainers={trainers} canEditFor={canEditFor} onEdit={setEdit} />
             )}
             {!isLoading && !isError && trainers.length > 0 && view === 'month' && (
               <MonthView trainers={trainers} monthAnchor={monthAnchor} onEditDay={(wd) => { setWeekday(wd); setView('day'); }} />
@@ -578,9 +591,10 @@ export default function StaffRoster() {
 // Day view
 // ---------------------------------------------------------------------------
 function DayView({
-  trainers, weekday, onEdit, onDelete,
+  trainers, weekday, canEditFor, onEdit, onDelete,
 }: {
   trainers: TrainerRosterRow[]; weekday: number;
+  canEditFor: (uid: string) => boolean;
   onEdit: (e: EditState) => void; onDelete: (uid: string, wd: number) => void;
 }) {
   return (
@@ -637,16 +651,22 @@ function DayView({
               </TableCell>
               <TableCell className="text-right">
                 <div className="inline-flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
-                    onClick={() => onEdit({ trainer: t, weekday })} aria-label="Edit shift">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  {s?.id && (
-                    <Button size="sm" variant="ghost"
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => onDelete(t.user_id, weekday)} aria-label="Delete shift">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  {canEditFor(t.user_id) ? (
+                    <>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                        onClick={() => onEdit({ trainer: t, weekday })} aria-label="Edit shift">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {s?.id && (
+                        <Button size="sm" variant="ghost"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => onDelete(t.user_id, weekday)} aria-label="Delete shift">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">View only</span>
                   )}
                 </div>
               </TableCell>
@@ -661,7 +681,7 @@ function DayView({
 // ---------------------------------------------------------------------------
 // Week view
 // ---------------------------------------------------------------------------
-function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: (e: EditState) => void }) {
+function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow[]; canEditFor: (uid: string) => boolean; onEdit: (e: EditState) => void }) {
   // Detect if anyone is contracted to work on Sunday
   const sundayContracted = trainers.some((t) => {
     const s = t.shifts[0];
@@ -711,8 +731,9 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
                 return (
                   <td key={d.idx} className="px-2 py-2 text-center align-middle">
                     <button
-                      onClick={() => onEdit({ trainer: t, weekday: d.idx })}
-                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                      onClick={() => canEditFor(t.user_id) && onEdit({ trainer: t, weekday: d.idx })}
+                      disabled={!canEditFor(t.user_id)}
+                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 enabled:hover:border-indigo-200 enabled:hover:bg-indigo-50/40 transition-colors disabled:cursor-default"
                     >
                       {s?.is_weekly_off ? (
                         <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">OFF</span>
@@ -1556,12 +1577,14 @@ function SundayDatePicker({
 }
 
 function SundayDutyCard({
-  sundayDate, onChangeSundayDate, entries, allStaffCount, onEdit, onAssign,
+  sundayDate, onChangeSundayDate, entries, allStaffCount, canEditFor, canAssign, onEdit, onAssign,
 }: {
   sundayDate: Date;
   onChangeSundayDate: (d: Date) => void;
   entries: SundayEntryPublic[];
   allStaffCount: number;
+  canEditFor: (uid: string) => boolean;
+  canAssign: boolean;
   onEdit: (t: TrainerRosterRow) => void;
   onAssign: () => void;
 }) {
@@ -1578,14 +1601,16 @@ function SundayDutyCard({
           </Badge>
           <SundayDatePicker date={sundayDate} onChange={onChangeSundayDate} />
         </div>
-        <Button
-          size="sm"
-          onClick={onAssign}
-          className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
-          disabled={allStaffCount === 0}
-        >
-          + Assign Sunday
-        </Button>
+        {canAssign && (
+          <Button
+            size="sm"
+            onClick={onAssign}
+            className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+            disabled={allStaffCount === 0}
+          >
+            + Assign Sunday
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-0">
         {entries.length === 0 ? (

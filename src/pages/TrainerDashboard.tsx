@@ -17,6 +17,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 import { TrainerTodayPanel } from '@/components/pt/TrainerTodayPanel';
+import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 
 export default function TrainerDashboard() {
   const { profile } = useAuth();
@@ -107,6 +108,9 @@ export default function TrainerDashboard() {
 
         {/* Duty Status — clock in / clock out */}
         <DutyStatusCard userId={trainer.user_id} />
+
+        {/* My weekly shift strip with Late badges */}
+        <MyShiftWeekCard userId={trainer.user_id} />
 
         {/* Primary Stats */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-5">

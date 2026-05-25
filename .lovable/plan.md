@@ -1,73 +1,90 @@
-## Sunday Duty — date scope + recurring / one-off toggle
 
-### Goal
-Today's "Assign Sunday Duty" sheet writes recurring `staff_shifts` rows for weekday=0 but the UI says "this Sunday" with no date. Fix the ambiguity: the sheet shows the **target Sunday date**, lets the user pick which Sunday, and toggle between **recurring** (every Sunday) and **just this Sunday** (one-off override).
+## Scope
 
-### Database (new table)
+Two related changes:
 
-`staff_shift_overrides` — per-date override of a staff member's recurring weekday shift. One-off rules win over `staff_shifts` for that exact date.
+1. **Permission matrix for StaffRoster** (view / edit / export of shifts, Sunday duty, overrides).
+2. **Trainer & Staff dashboards** show *their own* shift times for today + the week, with a **Late** badge per day when check-in is after the scheduled start.
 
-Columns:
-- `id uuid pk default gen_random_uuid()`
-- `user_id uuid not null`
-- `branch_id uuid not null`
-- `date date not null` (the specific Sunday — or any date in future, not Sunday-only)
-- `morning_start time null`, `morning_end time null`
-- `evening_start time null`, `evening_end time null`
-- `is_weekly_off boolean not null default false` (lets us also use this to one-off-revoke a Sunday duty)
-- `note text null`
-- `created_by uuid null`, `created_at timestamptz default now()`, `updated_at timestamptz default now()`
-- Unique `(user_id, date)` so an upsert replaces.
+No schema changes — `staff_shifts`, `staff_shift_overrides`, and `staff_attendance` already cover everything.
 
-RLS: same scope as `staff_shifts` — branch-scoped read for staff/manager/owner; insert/update restricted to roles with `staff.manage` capability (mirrors existing `staff_shifts` policies). Indexes: `(branch_id, date)`, `(user_id, date)`.
+---
 
-### Frontend — `SundayAssignSheet` (`src/pages/StaffRoster.tsx`)
+## 1. Permission matrix
 
-Add at the top of the sheet body, above the search box:
+Source of truth: `roles` from `useAuth()` evaluated against the row being edited (`employee.user_id` / `trainer.user_id`).
 
-1. **Sunday picker row** (sticky inside the sheet):
-   - Left: `‹` button → previous Sunday.
-   - Center: shadcn `Popover` + `Calendar` (mode=single, `disabled={d => d.getDay() !== 0 || d < startOfToday}`) showing `"Sun, 02 Jun 2026"`. Default = next upcoming Sunday (today if today is Sun, else next Sun).
-   - Right: `›` button → next Sunday.
-   - Subline: `"Effective on this date"` or `"Repeats every Sunday from this date"` depending on the toggle below.
+| Role | View roster | Export / Print / Send | Edit any row (shift, override, Sunday) | Edit own row |
+|---|---|---|---|---|
+| Owner / Admin | yes | yes | yes | yes |
+| Manager (own branch) | yes | yes | yes (staff + trainer) | **no** |
+| Staff | yes (own branch) | yes | no | no |
+| Trainer | (out of scope — no roster page) | — | — | — |
 
-2. **Scope toggle** (segmented control, `Tabs` or two-button group):
-   - **Just this Sunday** (default) — writes to `staff_shift_overrides`.
-   - **Every Sunday going forward** — writes to `staff_shifts` (current behavior).
-   - Tooltip explains the difference.
+Helper added inline in `StaffRoster.tsx` (or `src/lib/auth/permissions.ts` as `canEditRosterRow`):
 
-3. **Already-assigned hint**: when the sheet opens with a date selected, prefetch existing overrides + recurring shifts for that Sunday and pre-check those staff with their saved times, so the user sees the current state and can edit instead of duplicating.
+```ts
+canEditRosterRow(roles, targetUserId, currentUserId):
+  if owner|admin → true
+  if manager → targetUserId !== currentUserId
+  else → false
 
-4. **Sheet description** rewrites to: `"Assigning Sunday duty for Sun, 02 Jun 2026. Toggle whether it applies just to this Sunday or to every Sunday going forward."`
-
-### Save logic (`onAssign` in `StaffRoster.tsx`)
-
-```text
-if scope === 'recurring':
-  upsert staff_shifts (user_id, weekday=0, times…, is_weekly_off=false)
-else:  // one-off
-  upsert staff_shift_overrides (user_id, date=selectedSunday, times…, is_weekly_off=false)
+canExportRoster(roles): any of owner|admin|manager|staff
+canEditAnyRoster(roles): owner|admin|manager
 ```
 
-Toast: `"Sunday duty assigned to N staff for 02 Jun"` or `"…for every Sunday going forward"`.
+UI gating in `StaffRoster.tsx`:
 
-### Read path — overrides win
+- "Assign Sunday Duty", "Add Shift", per-row edit/delete, save buttons in `SundayAssignSheet` and shift sheets → hidden/disabled via `canEditAnyRoster` and per-row `canEditRosterRow`.
+- In the Sunday sheet checklist, the manager's **own row** renders read-only (badge: *"You — ask another manager or owner to edit"*).
+- Export / Print / Send buttons remain visible for staff and managers.
+- Read-only mode shows the same layout but inputs become `disabled`, action buttons return `null`, and pointer cursors drop.
 
-Update `useStaffSchedules` (and any day/week renderer that resolves a Sunday cell) to fetch overrides for the visible date range and use the override row when one exists for `(user_id, date)`; fall back to the recurring `staff_shifts` row otherwise. Day view (already pinned to a real date) and Week view (real Mon–Sun dates) both honor overrides; Month matrix continues to show the recurring pattern but flags dates with overrides via a subtle dot.
+Defense-in-depth on the server: the existing RLS on `staff_shifts` / `staff_shift_overrides` already restricts to owner/admin/manager. Add a Postgres trigger `tg_block_manager_self_edit` on both tables — reject `INSERT/UPDATE/DELETE` when `auth.uid() = NEW.user_id` AND caller has *only* `manager` (not owner/admin). Uses existing `has_role` helper, no recursion risk.
 
-### `SundayDutyCard` updates
+## 2. Own-shift visibility + Late badge
 
-- Header: show the selected/next Sunday date next to the title.
-- Body lists staff working that specific Sunday (overrides merged onto recurring).
-- Each row shows a small badge: `One-off` (amber) or `Recurring` (slate) so managers can tell at a glance.
+### Shared hook — `src/hooks/useMyShiftWeek.ts`
 
-### Files touched
+Returns, for a `userId` and date range (default = current week, Mon–Sun):
 
-- New: `supabase/migrations/<ts>_staff_shift_overrides.sql`
-- `src/hooks/useStaffSchedules.ts` — fetch + merge overrides; expose `useUpsertShiftOverride` mutation.
-- `src/pages/StaffRoster.tsx` — `SundayAssignSheet` (date picker + scope toggle + prefill), `SundayDutyCard` (date header + badge), day/week resolvers.
+```ts
+{ date, weekday, morning_start/end, evening_start/end, is_off,
+  source: 'override' | 'recurring' | 'none',
+  attendance: { first_check_in, late_minutes, is_late } | null }
+```
 
-### Out of scope
+- Reads `staff_shift_overrides` for the range first, then falls back per-date to `staff_shifts` by weekday (same merge logic as Sunday card).
+- Joins `staff_attendance` rows for the user in the date range, takes the earliest `check_in` per local date.
+- **Late rule:** `is_late = first_check_in > scheduled_start + 10 min grace` (configurable constant `LATE_GRACE_MIN = 10`). Compute against `morning_start` when present, otherwise `evening_start`.
 
-- Generalizing overrides to non-Sunday days (table supports it; UI stays Sunday-only for now).
-- Editing/removing an existing override from the card — handled in a follow-up; for now re-opening the sheet on the same Sunday and unchecking a person + saving will be the path (add a "Remove from this Sunday" action in v2).
+### TrainerDashboard.tsx
+
+Augment the existing "My Shift" card:
+- Show today's AM/PM windows (already present) + a small `Late` chip next to today if `is_late`.
+- New **"This week"** strip: 7 day pills (Mon–Sun) each showing `06:00 AM – 12:00 PM` (12-h format via existing `fmtTime12`) and a `Late` badge for days with `is_late`. Off days show "Weekly off".
+
+### StaffDashboard.tsx
+
+Add the same **"My shift & attendance"** card (currently missing). Same data, same Late badge. Placed above the existing "Today's check-ins" card.
+
+### Badge style
+
+`bg-red-100 text-red-700 rounded-full px-2 py-0.5 text-xs font-medium` with `Clock` icon (lucide). Tooltip: `Checked in at 06:18 AM (18 min late)`.
+
+---
+
+## Files touched
+
+- `src/pages/StaffRoster.tsx` — gate buttons + sheet inputs by `canEditRosterRow` / `canEditAnyRoster`; show "You" read-only chip for manager self-row.
+- `src/lib/auth/permissions.ts` — add `canEditRosterRow`, `canEditAnyRoster`, `canExportRoster` helpers.
+- `src/hooks/useMyShiftWeek.ts` — **new** shared hook (overrides ∪ recurring + attendance merge, late computation).
+- `src/pages/TrainerDashboard.tsx` — wire weekly strip + Late badge.
+- `src/pages/StaffDashboard.tsx` — add "My shift & attendance" card.
+- **Migration**: trigger `tg_block_manager_self_edit` on `staff_shifts` and `staff_shift_overrides` (manager-only self-edit guard).
+
+## Out of scope
+
+- Changing the late grace per branch (hard-coded 10 min for now).
+- Adding shift visibility for members or owners' own card.
+- Editing the Late threshold from settings UI.
