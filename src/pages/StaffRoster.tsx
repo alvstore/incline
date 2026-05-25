@@ -502,7 +502,12 @@ function DayView({
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-slate-900">{t.full_name}</span>
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-medium text-slate-900">{t.full_name}</span>
+                    {t.position && t.position !== t.role && (
+                      <span className="text-[11px] text-slate-500">{t.position}{t.department ? ` · ${t.department}` : ''}</span>
+                    )}
+                  </div>
                 </div>
               </TableCell>
               <TableCell>
