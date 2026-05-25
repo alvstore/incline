@@ -281,27 +281,80 @@ export default function StaffRoster() {
           </div>
         </div>
 
-        {/* Role filter chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Users className="h-4 w-4 text-slate-500" />
-          {(['all', 'Trainer', 'Manager', 'Front Desk', 'Cleaning', 'Staff'] as RoleFilter[]).map((r) => {
-            const active = roleFilter === r;
-            const count = roleCounts[r] || 0;
-            return (
+        {/* Dynamic role + department filter chips */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <Users className="h-3.5 w-3.5" /> Role
+            </span>
+            <button
+              onClick={() => { setRoleFilter('all'); setDeptFilter(null); }}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                roleFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All <span className="opacity-70">· {allStaff.length}</span>
+            </button>
+            {roleChips.map(({ role, count }) => {
+              const active = roleFilter === role;
+              return (
+                <button
+                  key={role}
+                  onClick={() => { setRoleFilter(role); setDeptFilter(null); }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : `${ROLE_TONES[role]} hover:opacity-80`
+                  }`}
+                >
+                  {role} <span className="opacity-70">· {count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {deptChips.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Department
+              </span>
               <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                onClick={() => setDeptFilter(null)}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  deptFilter === null
+                    ? 'bg-slate-900 text-white'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {r === 'all' ? 'All' : r} <span className="opacity-70">· {count}</span>
+                Any
               </button>
-            );
-          })}
+              {deptChips.map(({ dept, count }) => {
+                const active = deptFilter === dept;
+                return (
+                  <button
+                    key={dept}
+                    onClick={() => setDeptFilter(active ? null : dept)}
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {dept} <span className="opacity-70">· {count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+        {/* Sunday Duty card */}
+        <SundayDutyCard
+          staff={sundayDuty}
+          onEdit={(t) => setEdit({ trainer: t, weekday: 0 })}
+          onAssign={() => setSundayOpen(true)}
+        />
 
         {/* View switcher */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
