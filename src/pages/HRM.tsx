@@ -1180,22 +1180,6 @@ export default function HRMPage() {
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )}
-                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
-                                    <Link className="h-3.5 w-3.5 mr-2" /> Employee — sign
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_1')}>
-                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 1 — fill
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_2')}>
-                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 2 — fill
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'hr')}>
-                                    <Link className="h-3.5 w-3.5 mr-2" /> HR override link
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
 
                             {/* Void */}
                             {contract.status !== 'cancelled' && contract.signature_status !== 'signed' && (
