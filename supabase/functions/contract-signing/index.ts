@@ -1,4 +1,4 @@
-// v5.1.0 — Single edge function for the entire contract signing lifecycle.
+// v5.2.0 — Branded PDF (logo + brand header), no underscore placeholders.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -620,12 +620,49 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  // Brand: download org logo (branch override → global) once and embed it.
+  // Matches the staff-roster PDF brand language (indigo header, slate metadata).
+  let logoImage: any = null;
+  let logoDims: { w: number; h: number } | null = null;
+  try {
+    let logoUrl: string | null = null;
+    if (contract.branch_id) {
+      const { data: br } = await supabase.from("organization_settings")
+        .select("logo_url").eq("branch_id", contract.branch_id).maybeSingle();
+      logoUrl = (br as any)?.logo_url ?? null;
+    }
+    if (!logoUrl) {
+      const { data: g } = await supabase.from("organization_settings")
+        .select("logo_url").is("branch_id", null).maybeSingle();
+      logoUrl = (g as any)?.logo_url ?? null;
+    }
+    if (logoUrl) {
+      const res = await fetch(logoUrl);
+      if (res.ok) {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const ct = res.headers.get("content-type") || "";
+        try {
+          logoImage = ct.includes("jpeg") || ct.includes("jpg")
+            ? await pdfDoc.embedJpg(bytes)
+            : await pdfDoc.embedPng(bytes);
+          const scale = 32 / logoImage.height;
+          logoDims = { w: logoImage.width * scale, h: 32 };
+        } catch (_) { logoImage = null; }
+      }
+    }
+  } catch (_) { /* logo is best-effort */ }
+
   const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT — NOT YET SIGNED" : "EMPLOYEE COPY";
   const isDraft = copy === "draft";
   const pageWidth = PageSizes.A4[0];
   const pageHeight = PageSizes.A4[1];
   const marginX = 50;
   const marginY = 60;
+  // Brand palette (HSL→RGB approximations of the app's indigo/slate tokens).
+  const INDIGO = rgb(0.18, 0.16, 0.42);
+  const SLATE_500 = rgb(0.4, 0.42, 0.5);
+  const SLATE_900 = rgb(0.09, 0.1, 0.15);
+  const SLATE_50 = rgb(0.97, 0.97, 0.99);
 
   let page = pdfDoc.addPage(PageSizes.A4);
   let y = pageHeight - marginY;
@@ -636,33 +673,44 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   const headerContact = [employer.phone, employer.email].filter(Boolean).join("  ·  ");
 
   function drawHeader(p: any) {
-    p.drawText(headerLegal, { x: marginX, y: pageHeight - 38, size: 11, font: fontBold, color: rgb(0.18, 0.16, 0.42) });
-    if (headerAddr) p.drawText(headerAddr, { x: marginX, y: pageHeight - 52, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
-    if (headerContact) p.drawText(headerContact, { x: marginX, y: pageHeight - 63, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+    // Soft slate rule beneath the header
+    p.drawRectangle({ x: marginX, y: pageHeight - 78, width: pageWidth - marginX * 2, height: 0.6, color: SLATE_500, opacity: 0.4 });
+    const textX = logoImage && logoDims ? marginX + logoDims.w + 12 : marginX;
+    if (logoImage && logoDims) {
+      p.drawImage(logoImage, { x: marginX, y: pageHeight - 38 - (logoDims.h - 11), width: logoDims.w, height: logoDims.h });
+    }
+    p.drawText(headerLegal, { x: textX, y: pageHeight - 38, size: 11, font: fontBold, color: INDIGO });
+    if (headerAddr) p.drawText(headerAddr, { x: textX, y: pageHeight - 52, size: 7.5, font, color: SLATE_500 });
+    if (headerContact) p.drawText(headerContact, { x: textX, y: pageHeight - 63, size: 7.5, font, color: SLATE_500 });
     const idRight: string[] = [];
     if (employer.gstin) idRight.push(`GSTIN: ${employer.gstin}`);
     if (employer.pan) idRight.push(`PAN: ${employer.pan}`);
     if (employer.firm_registration_no) idRight.push(`Reg: ${employer.firm_registration_no}`);
     idRight.forEach((t, i) => {
       const w = font.widthOfTextAtSize(t, 7.5);
-      p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: rgb(0.4, 0.4, 0.5) });
+      p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: SLATE_500 });
     });
+    // Diagonal copy watermark
     p.drawText(copyLabel, {
       x: pageWidth / 2 - 100, y: pageHeight / 2,
-      size: 60, font: fontBold, color: rgb(0.93, 0.93, 0.97),
-      opacity: 0.6, rotate: { type: "degrees", angle: 35 } as any,
+      size: 60, font: fontBold, color: SLATE_50,
+      opacity: 0.7, rotate: { type: "degrees", angle: 35 } as any,
     });
   }
 
   function drawFooter(p: any, pageNum: number, totalPages: number) {
+    p.drawRectangle({ x: marginX, y: 44, width: pageWidth - marginX * 2, height: 0.6, color: SLATE_500, opacity: 0.4 });
     const refLine = `Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`;
-    p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+    p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: SLATE_500 });
     const verify = `Verify: /verify/contract/${contractId.slice(0, 8)}`;
     const vw = font.widthOfTextAtSize(verify, 7);
-    p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+    p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: SLATE_500 });
   }
 
   drawHeader(page);
+  // Push first-page content below the brand header rule
+  y = pageHeight - marginY - 30;
+
 
   function newPageIfNeeded(needed = lineHeight) {
     if (y - needed < marginY + 40) {
