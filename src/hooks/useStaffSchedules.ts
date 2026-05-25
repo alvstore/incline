@@ -22,6 +22,7 @@ export interface TrainerRosterRow {
   avatar_url: string | null;
   role: StaffRoleLabel;
   position: string | null;
+  department: string | null;
   shifts: Record<number, ShiftRow | undefined>;
 }
 
