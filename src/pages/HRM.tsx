@@ -742,7 +742,6 @@ export default function HRMPage() {
           <TabsList className="bg-muted/50">
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="contracts">Contracts</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
             <TabsTrigger value="policies"><BookOpen className="h-3.5 w-3.5 mr-1" />Policies</TabsTrigger>
             <TabsTrigger value="settings"><SettingsIcon className="h-3.5 w-3.5 mr-1" />HR Settings</TabsTrigger>
