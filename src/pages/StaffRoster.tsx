@@ -1570,12 +1570,14 @@ function SundayDatePicker({
 }
 
 function SundayDutyCard({
-  sundayDate, onChangeSundayDate, entries, allStaffCount, onEdit, onAssign,
+  sundayDate, onChangeSundayDate, entries, allStaffCount, canEditFor, canAssign, onEdit, onAssign,
 }: {
   sundayDate: Date;
   onChangeSundayDate: (d: Date) => void;
   entries: SundayEntryPublic[];
   allStaffCount: number;
+  canEditFor: (uid: string) => boolean;
+  canAssign: boolean;
   onEdit: (t: TrainerRosterRow) => void;
   onAssign: () => void;
 }) {
@@ -1592,14 +1594,16 @@ function SundayDutyCard({
           </Badge>
           <SundayDatePicker date={sundayDate} onChange={onChangeSundayDate} />
         </div>
-        <Button
-          size="sm"
-          onClick={onAssign}
-          className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
-          disabled={allStaffCount === 0}
-        >
-          + Assign Sunday
-        </Button>
+        {canAssign && (
+          <Button
+            size="sm"
+            onClick={onAssign}
+            className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+            disabled={allStaffCount === 0}
+          >
+            + Assign Sunday
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="pt-0">
         {entries.length === 0 ? (
