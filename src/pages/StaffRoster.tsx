@@ -675,7 +675,7 @@ function DayView({
 // ---------------------------------------------------------------------------
 // Week view
 // ---------------------------------------------------------------------------
-function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: (e: EditState) => void }) {
+function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow[]; canEditFor: (uid: string) => boolean; onEdit: (e: EditState) => void }) {
   // Detect if anyone is contracted to work on Sunday
   const sundayContracted = trainers.some((t) => {
     const s = t.shifts[0];
