@@ -1,78 +1,62 @@
 
-## 1. Replace stale emails system-wide
+## Scope
+Frontend-only refinements to `src/pages/StaffRoster.tsx` and `src/hooks/useStaffSchedules.ts`. No DB schema, no business-logic changes.
 
-Single source of truth for "where it shows up" is the brand context + a couple of stragglers:
+---
 
-- `src/lib/brand/useBrandContext.ts` → `DEFAULT_BRAND.supportEmail`: `hello@theincline.in` → `info@theinclinelife.com`
-- `src/services/cmsService.ts` → `contactEmail`: `info@inclinefitness.com` → `info@theinclinelife.com`
-- Run a repo-wide grep for `hello@theincline`, `info@incline`, `@inclinefitness`, `@theincline.in` and replace any remaining hard-coded strings (templates, seed/help text, footers). Branch-level emails stored in the `branches` table are user-editable data and are left alone (the screenshot's `info@theinclinelife.com` already comes from there).
+## 1. Dynamic role + department filters (replace hardcoded chips)
 
-Website string `theincline.in` stays — that's correct and the user only flagged the email.
+**Problem:** The chipbar `All · Trainer · Manager · Front Desk · Cleaning · Staff` is a fixed literal — branches that hire a "Sales Rep" or "Maintenance Staff" never appear as their own chip, and 0-count chips clutter the UI.
 
-## 2. Roster PDF redesign (professional, branded)
+**Fix in `useStaffSchedules.ts`:**
+- Extend `TrainerRosterRow` with `department: string | null` (already fetched, just expose it).
+- Keep `role` as the broad bucket (Trainer / Manager / Front Desk / Cleaning / Staff) — this stays the *primary* filter axis because it drives RBAC tone and matrix colour.
+- Add `position` (already there) so the UI can show the real job title under the name.
 
-File: `src/utils/pdfBlob.ts`
+**Fix in `StaffRoster.tsx`:**
+- Build `roleChips` from the live data: `Array.from(new Set(allStaff.map(s => s.role)))`, sorted by count desc. Drop any chip with 0 — the "All" chip stays pinned first.
+- Add a second chip row "Department" rendered the same way, sourced from `Array.from(new Set(allStaff.map(s => s.department).filter(Boolean)))`. Selecting a department narrows within the active role.
+- State becomes `{ role: RoleFilter; department: string | null }`. Reset department to null when role changes.
+- Show each chip with its dynamic count, e.g. `Training · 3`. Use Vuexy chip styling already in place.
+- In Day / Week / Month rows, render the real `position` as a muted subline under the name (e.g. "Personal Trainer", "Branch Manager") so the role chip and the actual job title both surface.
 
-### 2a. Bundled logo fallback
-Import the project logo as a module asset:
-```ts
-import inclineLogoUrl from '@/assets/incline-logo.png';
-```
-Update `resolveBrandAsync` / `loadLogoDataUrl` flow so when no DB `logo_url` is found, we fall back to `inclineLogoUrl` instead of rendering the plain "INCLINE" wordmark. The current header's `doc.text('INCLINE', 14, 18)` branch becomes a true logo render in 100% of cases.
+**Empty-state copy:** "No staff in this branch yet — add from HRM or Trainers." (replaces current "change the role filter" hint when the underlying list is empty, not just filtered).
 
-### 2b. New roster-specific header (replaces the generic `header()` for `buildStaffRosterPdf` only — invoices etc. stay untouched)
-Layout (landscape A4, top 48mm):
+---
+
+## 2. Sunday Duty assignment UI
+
+**Problem:** Sunday handling today is buried inside the Edit drawer (the amber hint). Managers need an at-a-glance "who's on Sunday" view and a one-click way to add someone.
+
+**Add a new collapsible card above the main grid, visible on all views:**
 
 ```text
-┌──────────────────────────────────────────────────────────────────────┐
-│ [indigo→violet gradient band, 14mm tall]                             │
-│ ░░ logo ░░   INCLINE                              WEEKLY ROSTER      │
-│              Rise. Reflect. Repeat.               Week 22 · 2026     │
-├──────────────────────────────────────────────────────────────────────┤
-│ Branch · Address line                       Generated 25 May 2026    │
-│ +91 8298293003 · info@theinclinelife.com    5 staff members          │
-│ GSTIN 08BMRPM7424A1ZY                                                │
-└──────────────────────────────────────────────────────────────────────┘
+┌─ Sunday Duty · 25 May ──────────────────── [+ Assign Sunday] ┐
+│  Avatars of staff with a non-weekly-off Sunday shift,         │
+│  each with their AM/PM pill. Empty state: "No one assigned    │
+│  for Sunday — tap Assign Sunday."                             │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-- Gradient simulated by stacking two thin filled rects (indigo 99,102,241 → violet 139,92,246) — jsPDF has no native gradient, this is the standard trick.
-- Logo: square 22×22mm, left-aligned with 4mm padding, white background panel inside the band so the colored logo stays legible.
-- Title right-aligned in white inside the band; subtitle (period meta) right-aligned below in muted white.
-- Contact block sits below the band in a soft `slate-50` strip — replaces the current cramped lines under "INCLINE".
-- Drops the empty period strip at y=56; period info is now in the header subtitle, freeing vertical space for the table.
+- Source: `allStaff.filter(s => s.shifts[0] && !s.shifts[0].is_weekly_off)`.
+- Each pill is clickable → opens existing `ShiftEditSheet` with `weekday=0` pre-selected so timings can be tweaked.
+- **`+ Assign Sunday` button** opens a new compact sheet `SundayAssignSheet`:
+  - Searchable list of staff who currently have Sunday as weekly-off OR no Sunday row.
+  - Per-row time inputs (default 06:00–12:00, editable, AM/PM display).
+  - Confirm writes via existing `useUpsertShift` for each selected staff (loops `mutateAsync`). The row's existing `is_weekly_off=true` row gets overwritten to a working shift — the contractual override the user described.
+  - Toast: "Sunday duty assigned to N staff."
+- Keep the inline amber hint inside `ShiftEditSheet` for the case when a manager edits Sunday directly — it complements the new card.
 
-### 2c. AM/PM time icons
-jsPDF + helvetica can't render emoji, so draw vector icons (no extra fonts needed):
+**Why a card, not a separate tab:** Sunday duty is exceptional, not a recurring rhythm. Surfacing it persistently next to the day/week/month grid matches the "data-dense premium SaaS" tone without inventing new navigation.
 
-- `drawSunIcon(doc, x, y)` — filled amber circle (2mm) with 6 short rays.
-- `drawMoonIcon(doc, x, y)` — indigo crescent (filled circle minus overlapping bg-color circle).
+---
 
-Helper `fmtShiftWithIcon(s)` returns a callback used in `autoTable`'s `didDrawCell`:
-- Morning shift cell → sun icon drawn 1.5mm before the time text.
-- Evening shift cell → moon icon drawn 1.5mm before the time text.
-- For the **week view** where each cell may contain both shifts stacked, draw sun then text on line 1 and moon then text on line 2, computed off `cell.x`, `cell.y`, `cell.padding('top')`.
-- For the **month matrix** the single-letter `A` / `P` legend stays (the cells are too small for icons); the legend text is updated to "☼ A = Morning · ☾ P = Evening · AP = Split · O = Weekly off".
+## Files touched
+- `src/hooks/useStaffSchedules.ts` — expose `department`, keep types backward-compatible.
+- `src/pages/StaffRoster.tsx` — dynamic chips, dual-axis filter (role × department), position subline, new `SundayDutyCard` + `SundayAssignSheet`.
 
-### 2d. Table polish
-- Header row: indigo→violet 2-tone via two `fillColor` segments isn't supported by autoTable; instead use a single indigo `[99,102,241]` head with `lineColor:[255,255,255]` and `lineWidth:0.4` for crisper separators.
-- Row striping uses `[249,250,253]` (softer than current `[248,250,252]`) and row min-height bumped to 12mm so the icon+two-line time block breathes.
-- "Staff" column gets a left-aligned bold name **plus** a secondary muted-grey role line (Trainer / Manager / Front Desk / Cleaning) using `didDrawCell` — currently roles aren't surfaced in the PDF at all.
-- "Sun" column: if `is_weekly_off`, render a tiny blue pill "Weekly off"; if a shift exists (Sunday duty override), render normally with the moon/sun icons — visually distinguishes contracted Sunday workers.
+## Out of scope
+- No changes to PDF export, attendance matrix, employee creation forms, or the DB.
+- No new RPCs — reuses `useUpsertShift` already wired.
 
-### 2e. Footer
-Existing `footer()` already pulls `b.supportEmail` + `b.website`, so once step 1 lands the footer reads:
-`theincline.in  •  info@theinclinelife.com` automatically.
-
-Add one extra line above it for the roster only: `Page X of Y` right-aligned, using `doc.getNumberOfPages()` in a post-loop pass.
-
-## 3. Out of scope (explicit)
-- Invoice / receipt / member-card PDF layouts are **not** restyled in this loop — only the header email/logo fallback flow them through. Roster is the one redesign.
-- No DB migrations. Branch emails in the `branches` table remain user-editable.
-
-## 4. Files touched
-- `src/lib/brand/useBrandContext.ts` (email default)
-- `src/services/cmsService.ts` (contact email)
-- `src/utils/pdfBlob.ts` (logo fallback, new roster header, AM/PM icon helpers, table polish, page numbers)
-- Any other file flagged by the `hello@theincline` / `@inclinefitness` grep sweep
-
-Skills used: `/skill:ui-ux-pro-max`, `/skill:redesign`, `/skill:senior-frontend`.
+**Skills applied:** ui-ux-pro-max (chip density + Sunday card pattern), senior-frontend (state shape, dynamic chip derivation).
