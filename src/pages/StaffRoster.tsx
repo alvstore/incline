@@ -41,6 +41,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
 
 // Returns the next upcoming Sunday (today if today is Sunday)
 function nextSunday(from: Date = new Date()): Date {
