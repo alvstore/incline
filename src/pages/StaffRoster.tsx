@@ -166,7 +166,7 @@ export default function StaffRoster() {
         weekday: scope === 'day' ? weekday : undefined,
         monthAnchor: scope === 'month' ? monthAnchor : undefined,
         trainers: trainers.map((t) => ({
-          user_id: t.user_id, full_name: t.full_name, shifts: t.shifts,
+          user_id: t.user_id, full_name: t.full_name, shifts: t.shifts, role: t.role,
         })),
         branchId, branchName: currentBranchName,
       });

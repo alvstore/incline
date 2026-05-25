@@ -1,91 +1,78 @@
-## Staff Roster v2 — Universal, AM/PM, Bulk Edit, Robust Attendance
 
-Scope is presentation + a small data-fetch widening. No schema changes.
+## 1. Replace stale emails system-wide
 
-### 1. Universal staff (drop "trainer-only")
-- Replace `useStaffSchedules` source from `trainers` table to **`useUnifiedStaff`** (already returns trainers + employees with managers/frontdesk/cleaning).
-- Filter to people whose `branch_id === effectiveBranchId` AND `is_active`.
-- Rename type `TrainerRosterRow` → `StaffRosterRow` and add `roles: StaffRole[]` + `position` so the UI can show a role chip (Trainer / Manager / Front Desk / Cleaning / Staff).
-- Hero title: "Staff Roster" stays, but every "Trainer" label (table headers, badges, empty state, edit drawer copy, PDF) becomes "Staff" / "Team member". Add a **role filter** chipbar (All · Trainers · Managers · Front Desk · Cleaning · Other) at the top of every view.
-- Audit string sweep in `StaffRoster.tsx`, `pdfBlob.buildStaffRosterPdf`, `RosterSendDrawer`, send messages, toast copy.
+Single source of truth for "where it shows up" is the brand context + a couple of stragglers:
 
-### 2. Edit Shift drawer — "Apply to all days until changed"
-Drawer gets a new top section:
+- `src/lib/brand/useBrandContext.ts` → `DEFAULT_BRAND.supportEmail`: `hello@theincline.in` → `info@theinclinelife.com`
+- `src/services/cmsService.ts` → `contactEmail`: `info@inclinefitness.com` → `info@theinclinelife.com`
+- Run a repo-wide grep for `hello@theincline`, `info@incline`, `@inclinefitness`, `@theincline.in` and replace any remaining hard-coded strings (templates, seed/help text, footers). Branch-level emails stored in the `branches` table are user-editable data and are left alone (the screenshot's `info@theinclinelife.com` already comes from there).
+
+Website string `theincline.in` stays — that's correct and the user only flagged the email.
+
+## 2. Roster PDF redesign (professional, branded)
+
+File: `src/utils/pdfBlob.ts`
+
+### 2a. Bundled logo fallback
+Import the project logo as a module asset:
+```ts
+import inclineLogoUrl from '@/assets/incline-logo.png';
+```
+Update `resolveBrandAsync` / `loadLogoDataUrl` flow so when no DB `logo_url` is found, we fall back to `inclineLogoUrl` instead of rendering the plain "INCLINE" wordmark. The current header's `doc.text('INCLINE', 14, 18)` branch becomes a true logo render in 100% of cases.
+
+### 2b. New roster-specific header (replaces the generic `header()` for `buildStaffRosterPdf` only — invoices etc. stay untouched)
+Layout (landscape A4, top 48mm):
 
 ```text
-┌─ Apply to ─────────────────────────────┐
-│  ( ) Only Monday                       │
-│  (•) All weekdays (Mon–Sat)            │
-│  ( ) Every day (Mon–Sun)               │
-│  ( ) Custom… [Mon][Tue][Wed]…          │
-└────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ [indigo→violet gradient band, 14mm tall]                             │
+│ ░░ logo ░░   INCLINE                              WEEKLY ROSTER      │
+│              Rise. Reflect. Repeat.               Week 22 · 2026     │
+├──────────────────────────────────────────────────────────────────────┤
+│ Branch · Address line                       Generated 25 May 2026    │
+│ +91 8298293003 · info@theinclinelife.com    5 staff members          │
+│ GSTIN 08BMRPM7424A1ZY                                                │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Default = "Only this day" (preserves current behavior).
-- When user picks a multi-day option, save runs a **batched upsert** through `useUpsertShift` over each selected weekday in parallel; one toast at end.
-- "All weekdays" honors existing weekly-off rows (skips them unless the user also enables a checkbox "Overwrite weekly-off rows"). Prevents the duplicate-weekly-off index error.
-- Validation moves to the bulk path: if Sunday is included AND the staff has weekly_off=Sun, show inline confirm ("This will replace their Sunday off-day with a working shift").
+- Gradient simulated by stacking two thin filled rects (indigo 99,102,241 → violet 139,92,246) — jsPDF has no native gradient, this is the standard trick.
+- Logo: square 22×22mm, left-aligned with 4mm padding, white background panel inside the band so the colored logo stays legible.
+- Title right-aligned in white inside the band; subtitle (period meta) right-aligned below in muted white.
+- Contact block sits below the band in a soft `slate-50` strip — replaces the current cramped lines under "INCLINE".
+- Drops the empty period strip at y=56; period info is now in the header subtitle, freeing vertical space for the table.
 
-### 3. Sunday-as-duty override (per agreement)
-- Sunday is no longer treated as a forced off-day. The system already allows any weekday as weekly_off; the UI gains:
-  - In Day view, add a Sunday tab (already present in WEEKDAYS array, keep as-is).
-  - In edit drawer, a new helper banner appears only on Sunday: "Sunday is a contractual working day for some staff. Toggle 'Weekly off' OFF and assign normal shifts." with a quick "Assign standard 6h shift" button (06:00–12:00).
-  - Week view: Sunday column gets a subtle "contracted" badge when any staff is working that day.
-- No DB change required (`is_weekly_off` is per row/weekday).
+### 2c. AM/PM time icons
+jsPDF + helvetica can't render emoji, so draw vector icons (no extra fonts needed):
 
-### 4. 12-hour AM/PM display everywhere on Staff Roster
-- Add a `fmtTime12(t)` helper (e.g., `06:00` → `6:00 AM`, `17:30` → `5:30 PM`). Inputs in the edit drawer remain native `type="time"` (browser localizes the picker chrome) — only **display** changes.
-- Replace every `fmtTime(s.morning_start)` render in `ShiftPill`, `DayView`, `WeekView`, `MonthView` tooltip text, attendance check-in/out columns (already use `hh:mm a` — good), and **`buildStaffRosterPdf`** table cells/legend.
+- `drawSunIcon(doc, x, y)` — filled amber circle (2mm) with 6 short rays.
+- `drawMoonIcon(doc, x, y)` — indigo crescent (filled circle minus overlapping bg-color circle).
 
-### 5. PDF download = weekly by default
-- Hero "Export PDF" button always exports the **current week** (scope `week`), regardless of which tab is open.
-- A small dropdown next to it offers: "This week (default)" · "Today" · "This month" · "Attendance log".
-- `buildStaffRosterPdf` already supports `scope: week`; we just change the default invocation. Update filename: `roster-{branch}-week-{YYYY-MM-DD}.pdf`.
-- All PDF labels switched to AM/PM + "Staff" wording.
+Helper `fmtShiftWithIcon(s)` returns a callback used in `autoTable`'s `didDrawCell`:
+- Morning shift cell → sun icon drawn 1.5mm before the time text.
+- Evening shift cell → moon icon drawn 1.5mm before the time text.
+- For the **week view** where each cell may contain both shifts stacked, draw sun then text on line 1 and moon then text on line 2, computed off `cell.x`, `cell.y`, `cell.padding('top')`.
+- For the **month matrix** the single-letter `A` / `P` legend stays (the cells are too small for icons); the legend text is updated to "☼ A = Morning · ☾ P = Evening · AP = Split · O = Weekly off".
 
-### 6. Attendance log — robust monthly view
-Replace the current flat list with a **summary + drill-down matrix**:
+### 2d. Table polish
+- Header row: indigo→violet 2-tone via two `fillColor` segments isn't supported by autoTable; instead use a single indigo `[99,102,241]` head with `lineColor:[255,255,255]` and `lineWidth:0.4` for crisper separators.
+- Row striping uses `[249,250,253]` (softer than current `[248,250,252]`) and row min-height bumped to 12mm so the icon+two-line time block breathes.
+- "Staff" column gets a left-aligned bold name **plus** a secondary muted-grey role line (Trainer / Manager / Front Desk / Cleaning) using `didDrawCell` — currently roles aren't surfaced in the PDF at all.
+- "Sun" column: if `is_weekly_off`, render a tiny blue pill "Weekly off"; if a shift exists (Sunday duty override), render normally with the moon/sun icons — visually distinguishes contracted Sunday workers.
 
-**Top KPI strip** (4 cards): Total staff · On-time % · Late arrivals · Absences (scheduled − present).
+### 2e. Footer
+Existing `footer()` already pulls `b.supportEmail` + `b.website`, so once step 1 lands the footer reads:
+`theincline.in  •  info@theinclinelife.com` automatically.
 
-**Per-staff monthly matrix** (table, sticky first column):
+Add one extra line above it for the roster only: `Page X of Y` right-aligned, using `doc.getNumberOfPages()` in a post-loop pass.
 
-```text
-Name          | 1 | 2 | 3 | ... | 31 | Present | Late | Absent | Off | Hours
-Ritesh Sharma | ✓ | ✓ | L | ... | ✗  |   22    |  3   |   2    |  4  | 176h
-```
+## 3. Out of scope (explicit)
+- Invoice / receipt / member-card PDF layouts are **not** restyled in this loop — only the header email/logo fallback flow them through. Roster is the one redesign.
+- No DB migrations. Branch emails in the `branches` table remain user-editable.
 
-Cell legend:
-- ✓ green — on time (check_in ≤ shift_start + 10 min grace)
-- L amber — late (check_in > grace; tooltip shows minutes late)
-- ✗ red — absent (scheduled but no check_in, and not weekly-off)
-- — blue — weekly off
-- · gray — not scheduled / future date
-
-**Late detection** joins the attendance log against the staff's `staff_shifts` row for that weekday (`morning_start` is the reference; if only evening shift, use that). 10-minute grace is configurable later; ships as a constant.
-
-**Filters**: month picker · role filter · "Show only late" toggle · search by name.
-
-**Drill-down**: clicking any cell opens a side sheet with that day's check-in/out times, total hours, and a "Mark present" / "Add manual entry" action (wired to existing `staffAttendanceService`).
-
-**Export**: "Export attendance PDF" reuses `buildStaffRosterPdf({ scope: 'month' })` extended with an `attendanceMatrix` mode that prints the same grid in landscape A4 with branded header.
-
-### 7. Notifications (already in flight — no change in this loop)
-Lateness email/WhatsApp notifications are out of scope here; this loop only surfaces lateness in UI/PDF. We'll wire the existing `staffAttendanceNotify` dispatcher to the late-detection logic in a follow-up if you want.
-
----
-
-### Technical notes (for devs)
-
-- New hook: `useStaffRoster(branchId)` — wraps `useUnifiedStaff` + the existing `staff_shifts` fetch, keyed by `['staff-roster', branchId]`. Old `useStaffSchedules` removed.
-- `useUpsertShift` gains `mutateAsync` use inside a `useBulkUpsertShifts({ user_id, weekdays[], payload })` helper for the bulk-apply path.
-- `pdfBlob.ts`: extract `formatTime12()` shared with the page; add an `attendanceMatrix` rendering branch to `buildStaffRosterPdf`.
-- New components: `RosterRoleFilter.tsx`, `AttendanceMatrix.tsx`, `AttendanceDayDrawer.tsx`, `ApplyToDaysControl.tsx`.
-- Files touched: `src/pages/StaffRoster.tsx`, `src/hooks/useStaffSchedules.ts` (rename/expand), `src/utils/pdfBlob.ts`, plus the four new components above.
-
-### Out of scope
-- Schema migrations.
-- Lateness push/WhatsApp notification wiring (separate loop).
-- MIPS auto check-in.
+## 4. Files touched
+- `src/lib/brand/useBrandContext.ts` (email default)
+- `src/services/cmsService.ts` (contact email)
+- `src/utils/pdfBlob.ts` (logo fallback, new roster header, AM/PM icon helpers, table polish, page numbers)
+- Any other file flagged by the `hello@theincline` / `@inclinefitness` grep sweep
 
 Skills used: `/skill:ui-ux-pro-max`, `/skill:redesign`, `/skill:senior-frontend`.

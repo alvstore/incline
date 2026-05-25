@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DEFAULT_BRAND, type BrandContext } from '@/lib/brand/useBrandContext';
 import { supabase } from '@/integrations/supabase/client';
+import inclineLogoAsset from '@/assets/incline-logo.png';
 
 const BRAND = {
   primary: [99, 102, 241] as [number, number, number], // indigo
@@ -70,6 +71,8 @@ async function resolveBrandAsync(branchId?: string | null, branchName?: string |
     const { data: branchRow } = await supabase.from('organization_settings').select('logo_url').eq('branch_id', branchId).limit(1).maybeSingle();
     if (branchRow?.logo_url) logoUrl = branchRow.logo_url;
   }
+  // Fallback to bundled brand asset so PDFs are never wordmark-only.
+  if (!logoUrl) logoUrl = inclineLogoAsset;
   return { ...DEFAULT_BRAND, logoUrl, branch };
 }
 
@@ -1442,6 +1445,8 @@ export interface RosterShiftLite {
 export interface RosterTrainerLite {
   user_id: string;
   full_name: string;
+  /** Optional role label rendered under the staff name */
+  role?: string | null;
   /** Map weekday (0=Sun…6=Sat) -> shift row */
   shifts: Record<number, RosterShiftLite | undefined>;
 }
@@ -1459,7 +1464,7 @@ export interface RosterPdfInput {
   branchName?: string | null;
 }
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_LABELS_LONG = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function fmtT(t?: string | null) {
   if (!t) return '—';
@@ -1472,75 +1477,225 @@ function fmtT(t?: string | null) {
   return `${h}:${m} ${period}`;
 }
 
-function shiftCell(s: RosterShiftLite | undefined): string {
-  if (!s) return '—';
-  if (s.is_weekly_off) return 'OFF';
-  const parts: string[] = [];
-  if (s.morning_start && s.morning_end) parts.push(`${fmtT(s.morning_start)}–${fmtT(s.morning_end)}`);
-  if (s.evening_start && s.evening_end) parts.push(`${fmtT(s.evening_start)}–${fmtT(s.evening_end)}`);
-  return parts.length ? parts.join('\n') : '—';
+// ---------- Vector AM/PM icons (no font dependency) ----------
+function drawSunIcon(doc: jsPDF, cx: number, cy: number, r = 1.2) {
+  doc.setFillColor(245, 158, 11); // amber-500
+  doc.circle(cx, cy, r, 'F');
+  doc.setDrawColor(245, 158, 11);
+  doc.setLineWidth(0.25);
+  const rays = 8;
+  for (let i = 0; i < rays; i++) {
+    const a = (i * Math.PI * 2) / rays;
+    const x1 = cx + Math.cos(a) * (r + 0.4);
+    const y1 = cy + Math.sin(a) * (r + 0.4);
+    const x2 = cx + Math.cos(a) * (r + 1.1);
+    const y2 = cy + Math.sin(a) * (r + 1.1);
+    doc.line(x1, y1, x2, y2);
+  }
+}
+function drawMoonIcon(doc: jsPDF, cx: number, cy: number, bg: [number, number, number] = [255, 255, 255], r = 1.6) {
+  // Indigo crescent: filled circle then overlapping bg-colored circle on the right side
+  doc.setFillColor(99, 102, 241); // indigo-500
+  doc.circle(cx, cy, r, 'F');
+  doc.setFillColor(...bg);
+  doc.circle(cx + r * 0.55, cy - r * 0.1, r * 0.95, 'F');
+}
+
+function shiftLinesAMPM(s: RosterShiftLite | undefined): { am?: string; pm?: string; off?: boolean } {
+  if (!s) return {};
+  if (s.is_weekly_off) return { off: true };
+  const am = s.morning_start && s.morning_end ? `${fmtT(s.morning_start)} – ${fmtT(s.morning_end)}` : undefined;
+  const pm = s.evening_start && s.evening_end ? `${fmtT(s.evening_start)} – ${fmtT(s.evening_end)}` : undefined;
+  return { am, pm };
 }
 
 export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> {
   const landscape = input.scope !== 'day';
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' });
   const brand = await resolveBrandAsync(input.branchId ?? null, input.branchName ?? null);
+  const logo = await loadLogoDataUrl(brand.logoUrl);
+  const pageW = doc.internal.pageSize.width;
   const title = input.scope === 'day' ? 'DAILY ROSTER'
     : input.scope === 'week' ? 'WEEKLY ROSTER'
     : 'MONTHLY ROSTER';
 
-  header(doc, title, brand, {
-    docNumber: input.scope.toUpperCase(),
-    issueDate: new Date().toLocaleDateString('en-IN'),
-  });
+  // ============== HERO BAND ==============
+  // Simulated indigo→violet gradient via vertical slivers
+  const bandH = 28;
+  const steps = 60;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const r = Math.round(99 + (139 - 99) * t);
+    const g = Math.round(102 + (92 - 102) * t);
+    const b = Math.round(241 + (246 - 241) * t);
+    doc.setFillColor(r, g, b);
+    doc.rect((pageW * i) / steps, 0, pageW / steps + 0.3, bandH, 'F');
+  }
 
-  // Period strip
-  let y = 56;
-  doc.setFillColor(248, 250, 252);
-  const pageW = doc.internal.pageSize.width;
-  doc.rect(0, y, pageW, 10, 'F');
-  setColor(doc, BRAND.text);
+  // Logo card (white panel)
+  if (logo) {
+    const maxH = 16, maxW = 28;
+    const ratio = logo.w / Math.max(1, logo.h);
+    let lh = maxH, lw = lh * ratio;
+    if (lw > maxW) { lw = maxW; lh = lw / ratio; }
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(10, (bandH - lh) / 2 - 2, lw + 6, lh + 4, 1.5, 1.5, 'F');
+    try { doc.addImage(logo.dataUrl, 'PNG', 13, (bandH - lh) / 2, lw, lh, undefined, 'FAST'); } catch { /* ignore */ }
+  }
+
+  // Wordmark next to logo
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(input.periodLabel, 14, y + 7);
-  setColor(doc, BRAND.muted);
+  doc.setFontSize(18);
+  doc.setTextColor(255, 255, 255);
+  doc.text(brand.companyName.toUpperCase(), 48, 14);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(226, 232, 240);
+  doc.text(brand.tagline || 'Rise. Reflect. Repeat.', 48, 19);
+
+  // Title block (right)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(255, 255, 255);
+  doc.text(title, pageW - 12, 14, { align: 'right' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text(`${input.trainers.length} staff member${input.trainers.length === 1 ? '' : 's'}`, pageW - 14, y + 7, { align: 'right' });
-  y += 16;
+  doc.setTextColor(226, 232, 240);
+  doc.text(input.periodLabel, pageW - 12, 20, { align: 'right' });
 
+  // ============== CONTACT STRIP ==============
+  let y = bandH;
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, y, pageW, 14, 'F');
+  setColor(doc, BRAND.muted);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const leftLines: string[] = [];
+  if (brand.branch.name) leftLines.push(brand.branch.name);
+  if (brand.branch.address) leftLines.push(brand.branch.address);
+  const contact = [brand.branch.phone, brand.branch.email || brand.supportEmail].filter(Boolean).join('  •  ');
+  if (contact) leftLines.push(contact);
+  doc.text(leftLines, 14, y + 5);
+
+  const rightLines = [
+    `Generated ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    `${input.trainers.length} staff member${input.trainers.length === 1 ? '' : 's'}`,
+  ];
+  doc.text(rightLines, pageW - 14, y + 5, { align: 'right' });
+  y += 18;
+
+  // ============== TABLES ==============
   if (input.scope === 'day') {
     const wd = input.weekday ?? new Date().getDay();
     autoTable(doc, {
       startY: y,
       head: [['Staff', 'Morning Shift', 'Evening Shift', 'Status']],
       body: input.trainers.map((t) => {
-        const s = t.shifts[wd];
-        if (!s) return [t.full_name, '—', '—', 'Unscheduled'];
-        if (s.is_weekly_off) return [t.full_name, '—', '—', 'Weekly Off'];
-        const m = s.morning_start && s.morning_end ? `${fmtT(s.morning_start)} – ${fmtT(s.morning_end)}` : '—';
-        const e = s.evening_start && s.evening_end ? `${fmtT(s.evening_start)} – ${fmtT(s.evening_end)}` : '—';
-        return [t.full_name, m, e, 'Scheduled'];
+        const lines = shiftLinesAMPM(t.shifts[wd]);
+        const status = lines.off ? 'Weekly Off' : (lines.am || lines.pm) ? 'Scheduled' : 'Unscheduled';
+        return [
+          { content: t.full_name, _role: t.role } as any,
+          lines.am || '—',
+          lines.pm || '—',
+          status,
+        ];
       }),
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 10, cellPadding: 3.5, valign: 'middle', minCellHeight: 11 },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', lineColor: [255, 255, 255], lineWidth: 0.4 },
+      alternateRowStyles: { fillColor: [249, 250, 253] },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 }, 1: { cellWidth: 55 }, 2: { cellWidth: 55 } },
       theme: 'grid',
+      didDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        const rowIdx = data.row.index;
+        if (data.column.index === 0) {
+          const role = (input.trainers[rowIdx]?.role) || null;
+          if (role) {
+            setColor(doc, BRAND.muted);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.text(String(role), data.cell.x + 3, data.cell.y + data.cell.height - 2.5);
+          }
+        } else if (data.column.index === 1 || data.column.index === 2) {
+          const raw = String((data.cell.raw as any) ?? '');
+          if (raw !== '—') {
+            const bg: [number, number, number] = rowIdx % 2 === 1 ? [249, 250, 253] : [255, 255, 255];
+            if (data.column.index === 1) drawSunIcon(doc, data.cell.x + 3.5, data.cell.y + data.cell.height / 2, 1.1);
+            else drawMoonIcon(doc, data.cell.x + 3.5, data.cell.y + data.cell.height / 2, bg, 1.5);
+          }
+        }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && (data.column.index === 1 || data.column.index === 2)) {
+          const raw = String((data.cell.raw as any) ?? '');
+          if (raw !== '—') data.cell.styles.cellPadding = { top: 3.5, right: 3, bottom: 3.5, left: 8 };
+        }
+      },
     });
   } else if (input.scope === 'week') {
     const days = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
     autoTable(doc, {
       startY: y,
-      head: [['Staff', ...days.map((d) => WEEKDAY_LABELS[d])]],
+      head: [['Staff', ...days.map((d) => WEEKDAY_LABELS_LONG[d])]],
       body: input.trainers.map((t) => [
-        t.full_name,
-        ...days.map((d) => shiftCell(t.shifts[d])),
+        { content: t.full_name } as any,
+        ...days.map((d) => {
+          const lines = shiftLinesAMPM(t.shifts[d]);
+          if (lines.off) return 'Weekly Off';
+          const parts: string[] = [];
+          if (lines.am) parts.push(lines.am);
+          if (lines.pm) parts.push(lines.pm);
+          return parts.length ? parts.join('\n') : '—';
+        }),
       ]),
-      styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'middle' },
-      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', halign: 'center' },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 42 } },
+      styles: { fontSize: 8.5, cellPadding: { top: 2.5, right: 2, bottom: 2.5, left: 6 }, valign: 'middle', minCellHeight: 12 },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', halign: 'center', lineColor: [255, 255, 255], lineWidth: 0.4 },
+      alternateRowStyles: { fillColor: [249, 250, 253] },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 46, halign: 'left', cellPadding: { top: 2.5, right: 2, bottom: 2.5, left: 3 } } },
       theme: 'grid',
+      didDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        const rowIdx = data.row.index;
+        if (data.column.index === 0) {
+          const role = (input.trainers[rowIdx]?.role) || null;
+          if (role) {
+            setColor(doc, BRAND.muted);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.text(String(role), data.cell.x + 3, data.cell.y + data.cell.height - 2);
+          }
+          return;
+        }
+        const raw = String((data.cell.raw as any) ?? '');
+        if (!raw || raw === '—') return;
+        const bg: [number, number, number] = rowIdx % 2 === 1 ? [249, 250, 253] : [255, 255, 255];
+        if (raw === 'Weekly Off') {
+          // Subtle blue pill
+          const pillW = 18, pillH = 5;
+          const px = data.cell.x + (data.cell.width - pillW) / 2;
+          const py = data.cell.y + (data.cell.height - pillH) / 2;
+          doc.setFillColor(219, 234, 254);
+          doc.roundedRect(px, py, pillW, pillH, 1.2, 1.2, 'F');
+          doc.setTextColor(29, 78, 216);
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.text('WEEKLY OFF', px + pillW / 2, py + 3.5, { align: 'center' });
+          return;
+        }
+        const linesArr = raw.split('\n');
+        const lineH = 3.4;
+        const totalH = linesArr.length * lineH;
+        let cy = data.cell.y + (data.cell.height - totalH) / 2 + 1.7;
+        linesArr.forEach((ln) => {
+          const isPM = /PM\s*$/i.test(ln.split('–').pop()?.trim() || '') && /PM/i.test(ln);
+          const startsAM = /AM/i.test(ln.split('–')[0] || '');
+          // Heuristic: morning if first time is AM, evening otherwise
+          if (startsAM && !isPM) drawSunIcon(doc, data.cell.x + 2.6, cy - 0.6, 1);
+          else if (!startsAM) drawMoonIcon(doc, data.cell.x + 2.6, cy - 0.7, bg, 1.3);
+          else drawSunIcon(doc, data.cell.x + 2.6, cy - 0.6, 1);
+          cy += lineH;
+        });
+      },
     });
   } else {
     // Month: trainer rows × day-of-month columns, color-coded
@@ -1552,7 +1707,7 @@ export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> 
 
     const head = [['Staff', ...dayNums.map(String)]];
     const body = input.trainers.map((t) => {
-      const cells: string[] = [t.full_name];
+      const cells: any[] = [{ content: t.full_name }];
       for (const d of dayNums) {
         const wd = new Date(year, month, d).getDay();
         const s = t.shifts[wd];
@@ -1571,29 +1726,61 @@ export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> 
       startY: y,
       head,
       body,
-      styles: { fontSize: 6.5, cellPadding: 1, halign: 'center' },
-      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', fontSize: 7 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { fontStyle: 'bold', halign: 'left', cellWidth: 38, fontSize: 8 } },
+      styles: { fontSize: 6.5, cellPadding: 1, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold', fontSize: 7, lineColor: [255, 255, 255], lineWidth: 0.3 },
+      alternateRowStyles: { fillColor: [249, 250, 253] },
+      columnStyles: { 0: { fontStyle: 'bold', halign: 'left', cellWidth: 40, fontSize: 8 } },
       theme: 'grid',
       didParseCell: (data) => {
         if (data.section !== 'body' || data.column.index === 0) return;
         const v = String(data.cell.raw ?? '');
         if (v === 'O') { data.cell.styles.fillColor = [219, 234, 254]; data.cell.styles.textColor = [29, 78, 216]; }
         else if (v === 'AP') { data.cell.styles.fillColor = [199, 210, 254]; data.cell.styles.textColor = [55, 48, 163]; }
-        else if (v === 'A') { data.cell.styles.fillColor = [209, 250, 229]; data.cell.styles.textColor = [4, 120, 87]; }
+        else if (v === 'A') { data.cell.styles.fillColor = [254, 243, 199]; data.cell.styles.textColor = [146, 64, 14]; }
         else if (v === 'P') { data.cell.styles.fillColor = [224, 231, 255]; data.cell.styles.textColor = [67, 56, 202]; }
         else if (v === '-') { data.cell.styles.textColor = [148, 163, 184]; }
       },
+      didDrawCell: (data) => {
+        if (data.section !== 'body' || data.column.index !== 0) return;
+        const role = (input.trainers[data.row.index]?.role) || null;
+        if (role) {
+          setColor(doc, BRAND.muted);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(5.5);
+          doc.text(String(role), data.cell.x + 2, data.cell.y + data.cell.height - 1.2);
+        }
+      },
     });
 
-    // Legend
+    // Legend with icons
     const afterY = (doc as any).lastAutoTable?.finalY || y + 100;
+    const lx = 14, ly = afterY + 6;
+    drawSunIcon(doc, lx + 1.5, ly - 0.6, 1);
     setColor(doc, BRAND.muted);
     doc.setFontSize(8);
-    doc.text('Legend:  A = AM shift   P = PM shift   AP = Split shift   O = Weekly off   - = Unscheduled', 14, afterY + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text('A  Morning shift', lx + 4.5, ly);
+    drawMoonIcon(doc, lx + 32, ly - 0.7, [255, 255, 255], 1.3);
+    doc.text('P  Evening shift', lx + 35, ly);
+    doc.text('AP  Split shift', lx + 62, ly);
+    doc.text('O  Weekly off', lx + 88, ly);
+    doc.text('-  Unscheduled', lx + 112, ly);
   }
 
-  footer(doc, brand);
+  // ============== FOOTER (with page numbers) ==============
+  const pageH = doc.internal.pageSize.height;
+  const totalPages = (doc as any).internal.getNumberOfPages?.() || 1;
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    setColor(doc, BRAND.muted);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    const line1 = `Generated ${new Date().toLocaleString('en-IN')} • ${brand.legalName}`;
+    doc.text(line1, pageW / 2, pageH - 12, { align: 'center' });
+    const line2 = [brand.website, brand.supportEmail].filter(Boolean).join('  •  ');
+    if (line2) doc.text(line2, pageW / 2, pageH - 7, { align: 'center' });
+    doc.text(`Page ${p} of ${totalPages}`, pageW - 12, pageH - 7, { align: 'right' });
+  }
+
   return doc.output('blob');
 }
