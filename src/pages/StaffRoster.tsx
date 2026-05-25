@@ -422,6 +422,8 @@ export default function StaffRoster() {
           onChangeSundayDate={setSundayDate}
           entries={sundayDuty}
           allStaffCount={allStaff.length}
+          canEditFor={canEditFor}
+          canAssign={editAny}
           onEdit={(t) => setEdit({ trainer: t, weekday: 0 })}
           onAssign={() => setSundayOpen(true)}
         />
