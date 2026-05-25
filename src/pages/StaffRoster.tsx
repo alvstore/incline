@@ -297,49 +297,53 @@ export default function StaffRoster() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-md overflow-hidden">
-                <Button
-                  variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
-                  onClick={() => handleExportPdf('download')} disabled={busyPdf}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {busyPdf ? 'Building…' : 'Export weekly PDF'}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+              {exportOk && (
+                <>
+                  <div className="inline-flex rounded-md overflow-hidden">
                     <Button
-                      variant="secondary"
-                      className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
-                      disabled={busyPdf} aria-label="More export options"
+                      variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
+                      onClick={() => handleExportPdf('download')} disabled={busyPdf}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <Download className="mr-2 h-4 w-4" />
+                      {busyPdf ? 'Building…' : 'Export weekly PDF'}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'week')}>
-                      <CalIcon className="mr-2 h-4 w-4" /> This week (default)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'day')}>
-                      <Sun className="mr-2 h-4 w-4" /> Today only
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'month')}>
-                      <CalIcon className="mr-2 h-4 w-4" /> Full month
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <Button
-                variant="ghost" className="text-white hover:bg-white/15"
-                onClick={() => handleExportPdf('print')} disabled={busyPdf}
-              >
-                <Printer className="mr-2 h-4 w-4" /> Print
-              </Button>
-              <Button
-                variant="ghost" className="text-white hover:bg-white/15"
-                onClick={() => setSendOpen(true)}
-              >
-                <Send className="mr-2 h-4 w-4" /> Send
-              </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
+                          disabled={busyPdf} aria-label="More export options"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'week')}>
+                          <CalIcon className="mr-2 h-4 w-4" /> This week (default)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'day')}>
+                          <Sun className="mr-2 h-4 w-4" /> Today only
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExportPdf('download', 'month')}>
+                          <CalIcon className="mr-2 h-4 w-4" /> Full month
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <Button
+                    variant="ghost" className="text-white hover:bg-white/15"
+                    onClick={() => handleExportPdf('print')} disabled={busyPdf}
+                  >
+                    <Printer className="mr-2 h-4 w-4" /> Print
+                  </Button>
+                  <Button
+                    variant="ghost" className="text-white hover:bg-white/15"
+                    onClick={() => setSendOpen(true)}
+                  >
+                    <Send className="mr-2 h-4 w-4" /> Send
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
