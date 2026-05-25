@@ -114,22 +114,50 @@ export default function StaffRoster() {
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [attendanceMonth, setAttendanceMonth] = useState<string>(format(today, 'yyyy-MM'));
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [deptFilter, setDeptFilter] = useState<string | null>(null);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
+  const [sundayOpen, setSundayOpen] = useState(false);
 
   const allStaff = useMemo(() => data ?? [], [data]);
-  const trainers = useMemo(
-    () => roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter),
-    [allStaff, roleFilter],
-  );
+  const trainers = useMemo(() => {
+    let list = roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter);
+    if (deptFilter) list = list.filter((s) => (s.department || '—') === deptFilter);
+    return list;
+  }, [allStaff, roleFilter, deptFilter]);
 
-  const roleCounts = useMemo(() => {
-    const c: Record<string, number> = { all: allStaff.length };
-    allStaff.forEach((s) => { c[s.role] = (c[s.role] || 0) + 1; });
-    return c;
+  // Dynamic role chips — only roles that actually exist in this branch, with counts.
+  const roleChips = useMemo(() => {
+    const c = new Map<StaffRoleLabel, number>();
+    allStaff.forEach((s) => c.set(s.role, (c.get(s.role) || 0) + 1));
+    return Array.from(c.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([role, count]) => ({ role, count }));
   }, [allStaff]);
+
+  // Dynamic department chips — scoped to current role filter so they stay relevant.
+  const deptChips = useMemo(() => {
+    const scope = roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter);
+    const c = new Map<string, number>();
+    scope.forEach((s) => {
+      const d = s.department || '—';
+      c.set(d, (c.get(d) || 0) + 1);
+    });
+    return Array.from(c.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([dept, count]) => ({ dept, count }));
+  }, [allStaff, roleFilter]);
+
+  // Sunday duty roster — staff with a non-off Sunday shift.
+  const sundayDuty = useMemo(
+    () => allStaff.filter((s) => {
+      const sh = s.shifts[0];
+      return sh && !sh.is_weekly_off && (sh.morning_start || sh.evening_start);
+    }),
+    [allStaff],
+  );
 
   const periodLabel = useMemo(() => {
     if (view === 'day') {
@@ -253,27 +281,80 @@ export default function StaffRoster() {
           </div>
         </div>
 
-        {/* Role filter chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Users className="h-4 w-4 text-slate-500" />
-          {(['all', 'Trainer', 'Manager', 'Front Desk', 'Cleaning', 'Staff'] as RoleFilter[]).map((r) => {
-            const active = roleFilter === r;
-            const count = roleCounts[r] || 0;
-            return (
+        {/* Dynamic role + department filter chips */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <Users className="h-3.5 w-3.5" /> Role
+            </span>
+            <button
+              onClick={() => { setRoleFilter('all'); setDeptFilter(null); }}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                roleFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All <span className="opacity-70">· {allStaff.length}</span>
+            </button>
+            {roleChips.map(({ role, count }) => {
+              const active = roleFilter === role;
+              return (
+                <button
+                  key={role}
+                  onClick={() => { setRoleFilter(role); setDeptFilter(null); }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : `${ROLE_TONES[role]} hover:opacity-80`
+                  }`}
+                >
+                  {role} <span className="opacity-70">· {count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {deptChips.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Department
+              </span>
               <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                onClick={() => setDeptFilter(null)}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  deptFilter === null
+                    ? 'bg-slate-900 text-white'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {r === 'all' ? 'All' : r} <span className="opacity-70">· {count}</span>
+                Any
               </button>
-            );
-          })}
+              {deptChips.map(({ dept, count }) => {
+                const active = deptFilter === dept;
+                return (
+                  <button
+                    key={dept}
+                    onClick={() => setDeptFilter(active ? null : dept)}
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {dept} <span className="opacity-70">· {count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+        {/* Sunday Duty card */}
+        <SundayDutyCard
+          staff={sundayDuty}
+          onEdit={(t) => setEdit({ trainer: t, weekday: 0 })}
+          onAssign={() => setSundayOpen(true)}
+        />
 
         {/* View switcher */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -382,6 +463,30 @@ export default function StaffRoster() {
         monthAnchor={monthAnchor}
         trainers={trainers}
       />
+
+      <SundayAssignSheet
+        open={sundayOpen}
+        onClose={() => setSundayOpen(false)}
+        candidates={allStaff.filter((s) => {
+          const sh = s.shifts[0];
+          return !sh || sh.is_weekly_off || (!sh.morning_start && !sh.evening_start);
+        })}
+        onAssign={async (assignments) => {
+          for (const a of assignments) {
+            await upsert.mutateAsync({
+              user_id: a.user_id,
+              weekday: 0,
+              morning_start: a.morning_start || null,
+              morning_end: a.morning_end || null,
+              evening_start: a.evening_start || null,
+              evening_end: a.evening_end || null,
+              is_weekly_off: false,
+            });
+          }
+          toast({ title: `Sunday duty assigned to ${assignments.length} staff` });
+          setSundayOpen(false);
+        }}
+      />
     </AppLayout>
   );
 }
@@ -421,7 +526,12 @@ function DayView({
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-slate-900">{t.full_name}</span>
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-medium text-slate-900">{t.full_name}</span>
+                    {t.position && t.position !== t.role && (
+                      <span className="text-[11px] text-slate-500">{t.position}{t.department ? ` · ${t.department}` : ''}</span>
+                    )}
+                  </div>
                 </div>
               </TableCell>
               <TableCell>
@@ -504,6 +614,9 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
                   </Avatar>
                   <div className="flex flex-col">
                     <span className="font-medium text-slate-900 whitespace-nowrap leading-tight">{t.full_name}</span>
+                    {t.position && t.position !== t.role && (
+                      <span className="text-[10px] text-slate-500 leading-tight">{t.position}</span>
+                    )}
                     <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium mt-0.5 ${ROLE_TONES[t.role]}`}>
                       {t.role}
                     </span>
@@ -1286,6 +1399,218 @@ function RosterSendDrawer({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSend} disabled={sending}>
             {sending ? 'Sending…' : 'Send roster'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sunday Duty card + Assign sheet
+// ---------------------------------------------------------------------------
+function SundayDutyCard({
+  staff, onEdit, onAssign,
+}: {
+  staff: TrainerRosterRow[];
+  onEdit: (t: TrainerRosterRow) => void;
+  onAssign: () => void;
+}) {
+  return (
+    <Card className="rounded-2xl border-0 shadow-lg shadow-amber-100/40 bg-gradient-to-br from-amber-50/60 via-white to-white">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sun className="h-5 w-5 text-amber-500" />
+          Sunday Duty
+          <Badge variant="outline" className="ml-2 rounded-full text-[10px]">
+            {staff.length} assigned
+          </Badge>
+        </CardTitle>
+        <Button
+          size="sm"
+          onClick={onAssign}
+          className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+        >
+          + Assign Sunday
+        </Button>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {staff.length === 0 ? (
+          <p className="text-xs text-slate-500 py-2">
+            No one assigned for Sunday yet. Most staff have Sunday as their weekly off — tap <b>Assign Sunday</b> to add contractual Sunday duty for selected staff.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {staff.map((t) => {
+              const sh = t.shifts[0]!;
+              return (
+                <button
+                  key={t.user_id}
+                  onClick={() => onEdit(t)}
+                  className="group flex items-center gap-2 rounded-full bg-white border border-amber-200 pl-1 pr-3 py-1 hover:border-amber-400 hover:shadow-sm transition-all"
+                >
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={t.avatar_url || undefined} />
+                    <AvatarFallback className="bg-amber-100 text-amber-700 text-[10px] font-semibold">
+                      {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs font-medium text-slate-900">{t.full_name}</span>
+                  <span className="text-[10px] text-amber-700 font-medium">
+                    {sh.morning_start && fmtTime12(sh.morning_start)}
+                    {sh.morning_start && sh.morning_end && '–'}
+                    {sh.morning_end && fmtTime12(sh.morning_end)}
+                    {sh.evening_start && (sh.morning_start ? ' · ' : '')}
+                    {sh.evening_start && fmtTime12(sh.evening_start)}
+                    {sh.evening_start && sh.evening_end && '–'}
+                    {sh.evening_end && fmtTime12(sh.evening_end)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface SundayPick {
+  user_id: string;
+  morning_start: string;
+  morning_end: string;
+  evening_start: string;
+  evening_end: string;
+}
+
+function SundayAssignSheet({
+  open, onClose, candidates, onAssign,
+}: {
+  open: boolean;
+  onClose: () => void;
+  candidates: TrainerRosterRow[];
+  onAssign: (picks: SundayPick[]) => Promise<void> | void;
+}) {
+  const [picks, setPicks] = useState<Record<string, SundayPick>>({});
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setPicks({}); setSearch(''); }
+  }, [open]);
+
+  const filtered = candidates.filter((c) =>
+    !search.trim() || c.full_name.toLowerCase().includes(search.trim().toLowerCase())
+  );
+  const selected = Object.values(picks);
+
+  const toggle = (uid: string) => {
+    setPicks((p) => {
+      if (p[uid]) { const next = { ...p }; delete next[uid]; return next; }
+      return { ...p, [uid]: { user_id: uid, morning_start: '06:00', morning_end: '12:00', evening_start: '', evening_end: '' } };
+    });
+  };
+
+  const updateField = (uid: string, field: keyof SundayPick, val: string) => {
+    setPicks((p) => p[uid] ? { ...p, [uid]: { ...p[uid], [field]: val } } : p);
+  };
+
+  const handleConfirm = async () => {
+    if (selected.length === 0) return;
+    setSaving(true);
+    try { await onAssign(selected); } finally { setSaving(false); }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Sun className="h-5 w-5 text-amber-500" /> Assign Sunday Duty
+          </SheetTitle>
+          <SheetDescription>
+            Pick staff who are contractually working this Sunday and override their weekly-off. Times default to 6 AM – 12 PM and are editable per person.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="py-4 space-y-3">
+          <Input
+            placeholder="Search staff…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9"
+          />
+          <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+            {filtered.length === 0 && (
+              <p className="p-6 text-center text-sm text-slate-500">No matching staff.</p>
+            )}
+            {filtered.map((c) => {
+              const pick = picks[c.user_id];
+              const isOn = !!pick;
+              return (
+                <div key={c.user_id} className={`p-3 ${isOn ? 'bg-amber-50/50' : 'bg-white'}`}>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isOn}
+                      onChange={() => toggle(c.user_id)}
+                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={c.avatar_url || undefined} />
+                      <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                        {c.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900 truncate">{c.full_name}</div>
+                      <div className="text-[11px] text-slate-500 truncate">
+                        {c.position || c.role}{c.department ? ` · ${c.department}` : ''}
+                      </div>
+                    </div>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${ROLE_TONES[c.role]}`}>
+                      {c.role}
+                    </span>
+                  </label>
+
+                  {isOn && (
+                    <div className="mt-3 ml-7 grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+                          <Sun className="h-3 w-3" /> Morning
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input type="time" value={pick.morning_start} onChange={(e) => updateField(c.user_id, 'morning_start', e.target.value)} className="h-8 text-xs" />
+                          <span className="text-slate-400 text-xs">→</span>
+                          <Input type="time" value={pick.morning_end} onChange={(e) => updateField(c.user_id, 'morning_end', e.target.value)} className="h-8 text-xs" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-indigo-700 flex items-center gap-1">
+                          <Moon className="h-3 w-3" /> Evening
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input type="time" value={pick.evening_start} onChange={(e) => updateField(c.user_id, 'evening_start', e.target.value)} className="h-8 text-xs" />
+                          <span className="text-slate-400 text-xs">→</span>
+                          <Input type="time" value={pick.evening_end} onChange={(e) => updateField(c.user_id, 'evening_end', e.target.value)} className="h-8 text-xs" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <SheetFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={selected.length === 0 || saving}
+            className="bg-amber-500 hover:bg-amber-600 text-white"
+          >
+            {saving ? 'Assigning…' : `Assign ${selected.length || ''} staff`}
           </Button>
         </SheetFooter>
       </SheetContent>
