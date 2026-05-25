@@ -416,6 +416,12 @@ ${rows.map(r => `<tr>
                 <CalendarDays className="h-4 w-4" /> Calendar
               </Button>
             </div>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={totalFiltered === 0} className="gap-2 rounded-xl">
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={totalFiltered === 0} className="gap-2 rounded-xl">
+              <Printer className="h-4 w-4" /> Print
+            </Button>
             <Button onClick={() => setConciergeOpen(true)} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
               <Plus className="h-4 w-4" /> New Booking
             </Button>
