@@ -115,6 +115,11 @@ export default function StaffRoster() {
   const { effectiveBranchId, currentBranchName } = useBranchContext();
   const branchId = effectiveBranchId;
   const { toast } = useToast();
+  const { user, roles } = useAuth();
+  const roleNames = useMemo(() => roles.map((r) => r.role), [roles]);
+  const editAny = canEditAnyRoster(roleNames);
+  const exportOk = canExportRoster(roleNames);
+  const canEditFor = (uid: string) => canEditRosterRow(roleNames, uid, user?.id);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialView = (searchParams.get('view') as View) || 'day';
