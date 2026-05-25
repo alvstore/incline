@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/ui/stat-card';
@@ -5,15 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useTrainerData } from '@/hooks/useMemberData';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import {
   Calendar, Clock, Users, Dumbbell, TrendingUp,
-  CheckCircle, AlertCircle, User, Wallet
+  CheckCircle, AlertCircle, User, Wallet, Sun, Moon, Play, Square, Loader2,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 import { TrainerTodayPanel } from '@/components/pt/TrainerTodayPanel';
 
