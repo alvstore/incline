@@ -1445,6 +1445,8 @@ export interface RosterShiftLite {
 export interface RosterTrainerLite {
   user_id: string;
   full_name: string;
+  /** Optional role label rendered under the staff name */
+  role?: string | null;
   /** Map weekday (0=Sun…6=Sat) -> shift row */
   shifts: Record<number, RosterShiftLite | undefined>;
 }
