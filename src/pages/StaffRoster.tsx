@@ -543,6 +543,7 @@ export default function StaffRoster() {
         onChangeSundayDate={setSundayDate}
         allStaff={allStaff}
         existingOverrides={sundayOverrides}
+        canEditFor={canEditFor}
         onAssign={async ({ scope, picks, removedUserIds }) => {
           // Save assigned picks
           for (const a of picks) {
