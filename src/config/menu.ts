@@ -268,7 +268,7 @@ export const managerMenuConfig: MenuSection[] = [
       { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['manager'] },
       
       { label: 'Trainers', href: '/trainers', icon: Dumbbell, roles: ['manager'] },
-      { label: 'Staff Roster', href: '/staff-roster', icon: Clock, roles: ['manager'] },
+
       { label: 'All Bookings', href: '/all-bookings', icon: Calendar, roles: ['manager'] },
       { label: 'Benefit Tracking', href: '/benefit-tracking', icon: Heart, roles: ['manager'] },
     ],
@@ -305,6 +305,9 @@ export const managerMenuConfig: MenuSection[] = [
     title: 'Admin & HR',
     items: [
       { label: 'HRM', href: '/hrm', icon: Briefcase, roles: ['manager'] },
+      { label: 'Staff Roster', href: '/staff-roster', icon: Clock, roles: ['manager'] },
+      
+
       
       
       { label: 'Tasks', href: '/tasks', icon: CheckSquare, roles: ['manager'] },
