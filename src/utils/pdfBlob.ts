@@ -1506,14 +1506,14 @@ export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> 
   setColor(doc, BRAND.muted);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text(`${input.trainers.length} trainer${input.trainers.length === 1 ? '' : 's'}`, pageW - 14, y + 7, { align: 'right' });
+  doc.text(`${input.trainers.length} staff member${input.trainers.length === 1 ? '' : 's'}`, pageW - 14, y + 7, { align: 'right' });
   y += 16;
 
   if (input.scope === 'day') {
     const wd = input.weekday ?? new Date().getDay();
     autoTable(doc, {
       startY: y,
-      head: [['Trainer', 'Morning Shift', 'Evening Shift', 'Status']],
+      head: [['Staff', 'Morning Shift', 'Evening Shift', 'Status']],
       body: input.trainers.map((t) => {
         const s = t.shifts[wd];
         if (!s) return [t.full_name, '—', '—', 'Unscheduled'];
@@ -1531,7 +1531,7 @@ export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> 
     const days = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
     autoTable(doc, {
       startY: y,
-      head: [['Trainer', ...days.map((d) => WEEKDAY_LABELS[d])]],
+      head: [['Staff', ...days.map((d) => WEEKDAY_LABELS[d])]],
       body: input.trainers.map((t) => [
         t.full_name,
         ...days.map((d) => shiftCell(t.shifts[d])),
