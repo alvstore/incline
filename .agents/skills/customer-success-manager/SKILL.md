@@ -213,3 +213,36 @@ python scripts/expansion_opportunity_scorer.py customer_data.json --format json
 **Last Updated:** February 2026
 **Tools:** 3 Python CLI tools
 **Dependencies:** Python 3.7+ standard library only
+
+---
+
+## 🏋️ Incline Adaptation (gym CRM context)
+
+Map customer-success concepts to Incline's member lifecycle:
+
+| CS term | Incline equivalent |
+|---|---|
+| Customer / account | Member (`members` row) |
+| Segment (Enterprise / Mid / SMB) | Plan tier: Annual / Half-yearly / Quarterly / Monthly |
+| ARR | Annualised membership value (amount ÷ months × 12) |
+| Login frequency / DAU-MAU | Attendance frequency from `attendance` table (check-ins per week) |
+| Feature adoption | Use of facilities: gym + classes + PT + recovery (sauna/ice/steam) — see `member_benefits`, `benefit_bookings` |
+| Support tickets | `member_requests` open + escalated |
+| NPS / CSAT | `feedback` table ratings + `google_review_requests` outcomes |
+| Executive sponsor | Primary trainer assignment + relationship_manager |
+| Renewal sentiment | Days-to-expiry on `memberships.end_date` + recent attendance trend |
+
+**Churn signals to weigh heavier for Incline:**
+- No check-in in last 14/21/30 days (`attendance`)
+- Open `member_requests` aging > 48h
+- Failed/declined payment on `payments`
+- `do_not_contact = true` (skip outreach, count as high churn risk)
+- Membership status = 'frozen' for > 30 days
+
+**Expansion opportunities:**
+- Member without active PT package → PT upsell (`pt_packages`)
+- Plan ending in <30 days with high attendance → renewal nudge / upgrade
+- Member on Monthly with 3+ months tenure → upgrade to Quarterly/Half-yearly
+- Member with strong attendance + no recovery bookings → add-on (sauna/ice bath)
+
+**Honour Do-Not-Contact:** Never include `do_not_contact=true` members in outreach action lists. Currency is **INR (₹)**.

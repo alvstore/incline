@@ -271,3 +271,33 @@ Combine all three tools for a comprehensive QBR analysis.
 | [GTM Dashboard Template](assets/gtm_dashboard_template.md) | GTM efficiency dashboard for leadership review |
 | [Sample Pipeline Data](assets/sample_pipeline_data.json) | Example input for pipeline_analyzer.py |
 | [Expected Output](assets/expected_output.json) | Reference output from pipeline_analyzer.py |
+
+---
+
+## 🏋️ Incline Adaptation (gym CRM context)
+
+This skill operates on Incline's lead → member funnel (Marketing CRM v2), not B2B sales pipelines:
+
+| RevOps term | Incline equivalent |
+|---|---|
+| Opportunity / deal | `leads` row with `pending_plan` |
+| Pipeline stage | `leads.status` (new → contacted → trial_scheduled → trial_done → negotiation → converted / lost) |
+| ACV / deal size | `pending_plan.amount` or chosen membership price |
+| Win rate | converted leads ÷ total leads in period |
+| Sales cycle length | converted_at − created_at (days) |
+| Quota | Branch monthly new-member target (`branches.monthly_target` if present, else ask) |
+| Forecast (commit/best/upside) | High-intent / medium-intent / cold leads in current month, by source |
+| Pipeline coverage | open pipeline value ÷ remaining quota for the period |
+| GTM motion | Walk-in vs WhatsApp inbound vs Meta Ads vs Referral (`leads.source`) |
+
+**Data sources:**
+- `leads` (status, source, owner, pending_plan, created_at, converted_at)
+- `members` (for converted leads' actual membership amount via `memberships`)
+- `tasks` (follow-up activity / SLA)
+- `whatsapp_messages` (engagement signal)
+- `referrals` (channel attribution)
+- `campaigns` / `campaign_recipients` (marketing-sourced pipeline)
+
+**Branch scoping is mandatory** — quotas, forecasts, and pipeline coverage are per-branch unless the Owner explicitly requests global rollup.
+
+**Currency:** INR (₹). Honour `do_not_contact` when generating outreach action lists.

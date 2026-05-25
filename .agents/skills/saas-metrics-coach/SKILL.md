@@ -156,3 +156,31 @@ python scripts/unit_economics_simulator.py --mrr 50000 --growth 10 --churn 3 --c
 
 - **financial-analyst**: Use for DCF valuation, budget variance analysis, and traditional financial modeling. NOT for SaaS-specific metrics like CAC, LTV, or churn.
 - **business-growth/customer-success**: Use for retention strategies and customer health scoring. Complements this skill when churn is flagged as CRITICAL.
+
+---
+
+## 🏋️ Incline Adaptation (gym CRM context)
+
+When running inside the Incline Fitness project, map SaaS terms to gym terms:
+
+| SaaS term | Incline equivalent |
+|---|---|
+| Subscription / customer | Active membership / member |
+| MRR | Sum of (membership amount ÷ months in plan) for status='active' |
+| New MRR | New `memberships` rows this month (status='active') |
+| Churned MRR | `memberships` with status in ('expired','cancelled') ending this month |
+| Expansion MRR | PT package + add-on purchases by existing members |
+| CAC | (marketing spend + sales staff cost) ÷ new members in period |
+| LTV | avg membership value × (1 ÷ monthly churn) |
+
+**Data sources (via `supabase--read_query`):**
+- `members` — active count, joins (`created_at`)
+- `memberships` — plan, amount, start_date, end_date, status (active/frozen/expired/cancelled)
+- `payments` — revenue, payment_method
+- `pt_packages` / `pt_package_purchases` — expansion revenue
+- `leads` — top-of-funnel for CAC denominators
+- `attendance` — engagement signal for churn risk
+
+**Currency:** All amounts in **INR (₹)**, not USD. Multiply by exchange rate only if the user explicitly asks for USD.
+
+**Branch scoping:** Always filter by `branch_id` unless the user (Owner) asks for "all branches" or "global".
