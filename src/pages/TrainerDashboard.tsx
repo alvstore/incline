@@ -17,6 +17,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { PtPackageBadge } from '@/components/pt/PtPackageBadge';
 import { TrainerTodayPanel } from '@/components/pt/TrainerTodayPanel';
+import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
 
 export default function TrainerDashboard() {
   const { profile } = useAuth();
