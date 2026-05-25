@@ -1125,16 +1125,61 @@ export default function HRMPage() {
                               </DropdownMenu>
                             </div>
 
+                            <Badge
+                              variant="outline"
+                              className={
+                                contractFillState(contract) === 'signed'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                  : contractFillState(contract) === 'ready_to_sign'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 text-[10px]'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 text-[10px]'
+                              }
+                              title={
+                                contractFillState(contract) === 'signed'
+                                  ? 'Contract is signed'
+                                  : contractFillState(contract) === 'ready_to_sign'
+                                  ? 'All employee details filled — ready to sign'
+                                  : 'Employee still needs to complete the fill link before signing'
+                              }
+                            >
+                              {contractFillState(contract) === 'signed'
+                                ? 'Signed'
+                                : contractFillState(contract) === 'ready_to_sign'
+                                ? 'Ready to sign'
+                                : 'Awaiting employee details'}
+                            </Badge>
+
                             {/* Share / Sign links */}
                             {contract.signature_status !== 'signed' && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-8" title="Copy fill / signing links">
+                                  <Button size="sm" variant="outline" className="h-8" title="Copy or send fill / signing links">
                                     <Share2 className="h-3.5 w-3.5 mr-1" /> Share
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  <DropdownMenuLabel className="text-xs">Fill &amp; Sign links</DropdownMenuLabel>
+                                <DropdownMenuContent align="end" className="w-64">
+                                  <DropdownMenuLabel className="text-xs">Send to employee</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsApp: true })}>
+                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send fill link via WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Copy employee fill / sign link
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-xs">Witnesses</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_1')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 1 — fill
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_2')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Witness 2 — fill
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'hr')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> HR override link
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
                                     <Link className="h-3.5 w-3.5 mr-2" /> Employee — sign
                                   </DropdownMenuItem>
