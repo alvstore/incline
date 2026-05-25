@@ -480,7 +480,36 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           contract_type: formData.contractType,
         },
       );
-      toast.success(`Contract created — Base ₹${Number(formData.salary).toLocaleString('en-IN')}/mo${formData.commissionPercentage ? `, ${formData.commissionPercentage}% commission` : ''}`);
+
+      // Auto-generate the employee fill/sign link so the manager has a one-click
+      // "Send to employee" action right from the success toast — no need to hunt
+      // for the row in the contracts list first.
+      let fillUrl: string | null = null;
+      try {
+        const { data: linkRes } = await supabase.functions.invoke('contract-signing', {
+          body: { action: 'create_link', contract_id: createdContract?.id, role: 'employee' },
+        });
+        fillUrl = (linkRes as any)?.sign_url ?? null;
+      } catch { /* non-fatal */ }
+
+      toast.success(
+        `Contract created — Base ₹${Number(formData.salary).toLocaleString('en-IN')}/mo${formData.commissionPercentage ? `, ${formData.commissionPercentage}% commission` : ''}`,
+        {
+          duration: 8000,
+          description: fillUrl
+            ? 'Employee still needs to fill personal details (S/o · D/o, address, emergency contact, ID). Share the fill link now.'
+            : undefined,
+          action: fillUrl
+            ? {
+                label: 'Copy fill link',
+                onClick: () => {
+                  navigator.clipboard.writeText(fillUrl!);
+                  toast.success('Fill link copied to clipboard');
+                },
+              }
+            : undefined,
+        },
+      );
       queryClient.invalidateQueries({ queryKey: ['employee-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
       onOpenChange(false);
