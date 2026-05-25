@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useBranchContext } from '@/contexts/BranchContext';
 import {
-  useStaffSchedules, useUpsertShift, useDeleteShift,
+  useStaffSchedules, useUpsertShift, useBulkUpsertShifts, useDeleteShift,
   useStaffAttendanceMonth,
-  type ShiftRow, type TrainerRosterRow,
+  type ShiftRow, type TrainerRosterRow, type StaffRoleLabel,
 } from '@/hooks/useStaffSchedules';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,12 @@ import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from '@/components/ui/table';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Pencil, Trash2, Sun, Moon, Calendar as CalIcon, AlertCircle,
-  Download, Send, Printer, Clock,
+  Download, Send, Printer, Clock, ChevronDown, CheckCircle2, XCircle,
+  Users, AlertTriangle,
 } from 'lucide-react';
 import { buildStaffRosterPdf } from '@/utils/pdfBlob';
 import { downloadBlob, printBlob } from '@/utils/pdfBlob';
@@ -43,14 +47,29 @@ const WEEKDAYS = [
   { idx: 0, short: 'Sun', full: 'Sunday' },
 ];
 
-const fmtTime = (t: string | null) => (t ? t.slice(0, 5) : null);
+// 12-hour AM/PM display ("17:30" -> "5:30 PM")
+function fmtTime12(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const [hStr, mStr] = t.slice(0, 5).split(':');
+  let h = Number(hStr);
+  const period = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${mStr} ${period}`;
+}
+
+const ROLE_TONES: Record<StaffRoleLabel, string> = {
+  Trainer: 'bg-indigo-100 text-indigo-700',
+  Manager: 'bg-violet-100 text-violet-700',
+  'Front Desk': 'bg-amber-100 text-amber-700',
+  Cleaning: 'bg-emerald-100 text-emerald-700',
+  Staff: 'bg-slate-100 text-slate-700',
+};
 
 type View = 'day' | 'week' | 'month' | 'attendance';
+type RoleFilter = 'all' | StaffRoleLabel;
 
 function ShiftPill({ start, end, tone }: { start: string | null; end: string | null; tone: 'morning' | 'evening' }) {
-  if (!start || !end) {
-    return <span className="text-xs text-muted-foreground">—</span>;
-  }
+  if (!start || !end) return <span className="text-xs text-muted-foreground">—</span>;
   const overnight = end < start;
   const baseCls = overnight
     ? 'bg-blue-100 text-blue-700'
@@ -61,7 +80,7 @@ function ShiftPill({ start, end, tone }: { start: string | null; end: string | n
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${baseCls}`}>
       <Icon className="h-3 w-3" />
-      {fmtTime(start)} → {fmtTime(end)}
+      {fmtTime12(start)} → {fmtTime12(end)}
       {overnight && <span className="ml-0.5 text-[10px] opacity-70">overnight</span>}
     </span>
   );
@@ -86,6 +105,7 @@ export default function StaffRoster() {
 
   const { data, isLoading, isError, error } = useStaffSchedules(branchId);
   const upsert = useUpsertShift(branchId);
+  const bulkUpsert = useBulkUpsertShifts(branchId);
   const del = useDeleteShift(branchId);
 
   const today = new Date();
@@ -93,12 +113,23 @@ export default function StaffRoster() {
   const [weekAnchor, setWeekAnchor] = useState<Date>(startOfWeek(today, { weekStartsOn: 1 }));
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [attendanceMonth, setAttendanceMonth] = useState<string>(format(today, 'yyyy-MM'));
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
 
-  const trainers = useMemo(() => data ?? [], [data]);
+  const allStaff = useMemo(() => data ?? [], [data]);
+  const trainers = useMemo(
+    () => roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter),
+    [allStaff, roleFilter],
+  );
+
+  const roleCounts = useMemo(() => {
+    const c: Record<string, number> = { all: allStaff.length };
+    allStaff.forEach((s) => { c[s.role] = (c[s.role] || 0) + 1; });
+    return c;
+  }, [allStaff]);
 
   const periodLabel = useMemo(() => {
     if (view === 'day') {
@@ -113,19 +144,27 @@ export default function StaffRoster() {
     return `Attendance · ${format(new Date(attendanceMonth + '-01'), 'MMMM yyyy')}`;
   }, [view, weekday, weekAnchor, monthAnchor, attendanceMonth, today]);
 
-  const handleExportPdf = async (mode: 'download' | 'print') => {
+  const handleExportPdf = async (
+    mode: 'download' | 'print',
+    explicitScope?: 'day' | 'week' | 'month',
+  ) => {
     if (trainers.length === 0) {
-      toast({ title: 'Nothing to export', description: 'No trainers in this branch yet.', variant: 'destructive' });
+      toast({ title: 'Nothing to export', description: 'No staff in this branch yet.', variant: 'destructive' });
       return;
     }
     try {
       setBusyPdf(true);
-      const scope = view === 'attendance' ? 'month' : view;
+      // Default to WEEK regardless of which tab is open.
+      const scope: 'day' | 'week' | 'month' = explicitScope ?? (view === 'attendance' ? 'month' : view === 'day' ? 'week' : view);
+      const labelForScope =
+        scope === 'day' ? `${WEEKDAYS.find((d) => d.idx === weekday)?.full} · ${format(today, 'dd MMM yyyy')}`
+        : scope === 'week' ? `Week of ${format(weekAnchor, 'dd MMM')} – ${format(new Date(weekAnchor.getTime() + 6 * 86400000), 'dd MMM yyyy')}`
+        : `${format(monthAnchor, 'MMMM yyyy')}`;
       const blob = await buildStaffRosterPdf({
         scope,
-        periodLabel,
-        weekday: view === 'day' ? weekday : undefined,
-        monthAnchor: view === 'month' ? monthAnchor : view === 'attendance' ? new Date(attendanceMonth + '-01') : undefined,
+        periodLabel: labelForScope,
+        weekday: scope === 'day' ? weekday : undefined,
+        monthAnchor: scope === 'month' ? monthAnchor : undefined,
         trainers: trainers.map((t) => ({
           user_id: t.user_id, full_name: t.full_name, shifts: t.shifts,
         })),
@@ -135,7 +174,7 @@ export default function StaffRoster() {
         printBlob(blob);
       } else {
         const safeBranch = (currentBranchName || 'incline').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-        downloadBlob(blob, `roster-${safeBranch}-${view}-${format(new Date(), 'yyyyMMdd')}.pdf`);
+        downloadBlob(blob, `roster-${safeBranch}-${scope}-${format(new Date(), 'yyyyMMdd')}.pdf`);
       }
     } catch (e: any) {
       toast({ title: 'PDF generation failed', description: e?.message, variant: 'destructive' });
@@ -159,21 +198,45 @@ export default function StaffRoster() {
               <p className="mt-1 text-sm text-white/80">{periodLabel}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge className="rounded-full bg-white/15 text-white hover:bg-white/20">
-                  {trainers.length} trainer{trainers.length === 1 ? '' : 's'}
+                  {allStaff.length} staff
                 </Badge>
                 <Badge className="rounded-full bg-white/15 text-white hover:bg-white/20">
-                  {trainers.filter((t) => Object.values(t.shifts).some((s) => s?.is_weekly_off)).length} with weekly-off
+                  {allStaff.filter((t) => Object.values(t.shifts).some((s) => s?.is_weekly_off)).length} with weekly-off
                 </Badge>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90"
-                onClick={() => handleExportPdf('download')} disabled={busyPdf}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {busyPdf ? 'Building…' : 'Export PDF'}
-              </Button>
+              <div className="inline-flex rounded-md overflow-hidden">
+                <Button
+                  variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
+                  onClick={() => handleExportPdf('download')} disabled={busyPdf}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {busyPdf ? 'Building…' : 'Export weekly PDF'}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
+                      disabled={busyPdf} aria-label="More export options"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'week')}>
+                      <CalIcon className="mr-2 h-4 w-4" /> This week (default)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'day')}>
+                      <Sun className="mr-2 h-4 w-4" /> Today only
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportPdf('download', 'month')}>
+                      <CalIcon className="mr-2 h-4 w-4" /> Full month
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Button
                 variant="ghost" className="text-white hover:bg-white/15"
                 onClick={() => handleExportPdf('print')} disabled={busyPdf}
@@ -190,6 +253,28 @@ export default function StaffRoster() {
           </div>
         </div>
 
+        {/* Role filter chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Users className="h-4 w-4 text-slate-500" />
+          {(['all', 'Trainer', 'Manager', 'Front Desk', 'Cleaning', 'Staff'] as RoleFilter[]).map((r) => {
+            const active = roleFilter === r;
+            const count = roleCounts[r] || 0;
+            return (
+              <button
+                key={r}
+                onClick={() => setRoleFilter(r)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {r === 'all' ? 'All' : r} <span className="opacity-70">· {count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* View switcher */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs value={view} onValueChange={(v) => setView(v as View)}>
@@ -197,10 +282,9 @@ export default function StaffRoster() {
               <TabsTrigger value="day">Day</TabsTrigger>
               <TabsTrigger value="week">Week</TabsTrigger>
               <TabsTrigger value="month">Month</TabsTrigger>
-              <TabsTrigger value="attendance">Attendance</TabsTrigger>
+              <TabsTrigger value="attendance">Attendance log</TabsTrigger>
             </TabsList>
           </Tabs>
-          {/* Period controls */}
           {view === 'day' && (
             <Tabs value={String(weekday)} onValueChange={(v) => setWeekday(Number(v))}>
               <TabsList>
@@ -244,7 +328,7 @@ export default function StaffRoster() {
               {view === 'attendance' && 'Attendance log'}
             </CardTitle>
             <Badge variant="outline" className="rounded-full">
-              {trainers.length} {trainers.length === 1 ? 'trainer' : 'trainers'}
+              {trainers.length} {trainers.length === 1 ? 'person' : 'people'}
             </Badge>
           </CardHeader>
           <CardContent className="p-0">
@@ -262,8 +346,8 @@ export default function StaffRoster() {
             {!isLoading && !isError && trainers.length === 0 && view !== 'attendance' && (
               <div className="p-12 flex flex-col items-center text-center gap-2">
                 <CalIcon className="h-10 w-10 text-slate-300" />
-                <p className="text-sm font-medium text-slate-700">No trainers in this branch yet</p>
-                <p className="text-xs text-slate-500">Add trainers from the Trainers page to start building the roster.</p>
+                <p className="text-sm font-medium text-slate-700">No staff match this filter</p>
+                <p className="text-xs text-slate-500">Add staff from the Trainers or HRM pages, or change the role filter.</p>
               </div>
             )}
 
@@ -277,7 +361,7 @@ export default function StaffRoster() {
               <MonthView trainers={trainers} monthAnchor={monthAnchor} onEditDay={(wd) => { setWeekday(wd); setView('day'); }} />
             )}
             {view === 'attendance' && (
-              <AttendanceView branchId={branchId} ym={attendanceMonth} trainers={trainers} />
+              <AttendanceMatrix branchId={branchId} ym={attendanceMonth} staff={trainers} />
             )}
           </CardContent>
         </Card>
@@ -286,16 +370,16 @@ export default function StaffRoster() {
       <ShiftEditSheet
         edit={edit} onClose={() => setEdit(null)}
         onSave={(payload) => upsert.mutate(payload, { onSuccess: () => setEdit(null) })}
-        saving={upsert.isPending}
+        onSaveBulk={(payload) => bulkUpsert.mutate(payload, { onSuccess: () => setEdit(null) })}
+        saving={upsert.isPending || bulkUpsert.isPending}
       />
 
       <RosterSendDrawer
         open={sendOpen} onClose={() => setSendOpen(false)}
         branchId={branchId} branchName={currentBranchName}
-        scope={view === 'attendance' ? 'month' : view}
-        periodLabel={periodLabel}
-        weekday={view === 'day' ? weekday : undefined}
-        monthAnchor={view === 'month' ? monthAnchor : view === 'attendance' ? new Date(attendanceMonth + '-01') : undefined}
+        scope="week"
+        periodLabel={`Week of ${format(weekAnchor, 'dd MMM yyyy')}`}
+        monthAnchor={monthAnchor}
         trainers={trainers}
       />
     </AppLayout>
@@ -315,7 +399,8 @@ function DayView({
     <Table>
       <TableHeader>
         <TableRow className="bg-slate-50/80">
-          <TableHead className="font-semibold text-slate-600">Trainer</TableHead>
+          <TableHead className="font-semibold text-slate-600">Staff</TableHead>
+          <TableHead className="font-semibold text-slate-600">Role</TableHead>
           <TableHead className="font-semibold text-slate-600">Morning Shift</TableHead>
           <TableHead className="font-semibold text-slate-600">Evening Shift</TableHead>
           <TableHead className="font-semibold text-slate-600">Status</TableHead>
@@ -340,6 +425,11 @@ function DayView({
                 </div>
               </TableCell>
               <TableCell>
+                <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${ROLE_TONES[t.role]}`}>
+                  {t.role}
+                </span>
+              </TableCell>
+              <TableCell>
                 {off ? <span className="text-xs text-slate-400">Weekly off</span> :
                   <ShiftPill start={s?.morning_start ?? null} end={s?.morning_end ?? null} tone="morning" />}
               </TableCell>
@@ -348,7 +438,7 @@ function DayView({
                   <ShiftPill start={s?.evening_start ?? null} end={s?.evening_end ?? null} tone="evening" />}
               </TableCell>
               <TableCell>
-                {off ? <Badge className="bg-slate-100 text-slate-600 rounded-full">Off</Badge>
+                {off ? <Badge className="bg-blue-100 text-blue-700 rounded-full">Off</Badge>
                   : s ? <Badge className="bg-emerald-100 text-emerald-700 rounded-full">Scheduled</Badge>
                   : <Badge variant="outline" className="rounded-full text-slate-500">Unscheduled</Badge>}
               </TableCell>
@@ -379,21 +469,32 @@ function DayView({
 // Week view
 // ---------------------------------------------------------------------------
 function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: (e: EditState) => void }) {
+  // Detect if anyone is contracted to work on Sunday
+  const sundayContracted = trainers.some((t) => {
+    const s = t.shifts[0];
+    return s && !s.is_weekly_off && (s.morning_start || s.evening_start);
+  });
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-slate-50/80">
           <tr>
-            <th className="sticky left-0 z-10 bg-slate-50/80 px-4 py-3 text-left font-semibold text-slate-600">Trainer</th>
+            <th className="sticky left-0 z-10 bg-slate-50/80 px-4 py-3 text-left font-semibold text-slate-600">Staff</th>
             {WEEKDAYS.map((d) => (
-              <th key={d.idx} className="px-3 py-3 text-center font-semibold text-slate-600 min-w-[110px]">{d.short}</th>
+              <th key={d.idx} className="px-3 py-3 text-center font-semibold text-slate-600 min-w-[110px]">
+                {d.short}
+                {d.idx === 0 && sundayContracted && (
+                  <span className="block text-[9px] font-normal text-amber-600 mt-0.5">contracted</span>
+                )}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {trainers.map((t) => (
             <tr key={t.user_id} className="border-t border-slate-100 hover:bg-slate-50/50">
-              <td className="sticky left-0 z-10 bg-white px-4 py-3 group-hover:bg-slate-50">
+              <td className="sticky left-0 z-10 bg-white px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-7 w-7">
                     <AvatarImage src={t.avatar_url || undefined} />
@@ -401,7 +502,12 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="font-medium text-slate-900 whitespace-nowrap">{t.full_name}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium text-slate-900 whitespace-nowrap leading-tight">{t.full_name}</span>
+                    <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium mt-0.5 ${ROLE_TONES[t.role]}`}>
+                      {t.role}
+                    </span>
+                  </div>
                 </div>
               </td>
               {WEEKDAYS.map((d) => {
@@ -418,12 +524,12 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
                         <>
                           {s.morning_start && s.morning_end && (
                             <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                              {fmtTime(s.morning_start)}–{fmtTime(s.morning_end)}
+                              {fmtTime12(s.morning_start)}–{fmtTime12(s.morning_end)}
                             </span>
                           )}
                           {s.evening_start && s.evening_end && (
                             <span className="inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
-                              {fmtTime(s.evening_start)}–{fmtTime(s.evening_end)}
+                              {fmtTime12(s.evening_start)}–{fmtTime12(s.evening_end)}
                             </span>
                           )}
                           {!(s.morning_start || s.evening_start) && (
@@ -446,7 +552,7 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
 }
 
 // ---------------------------------------------------------------------------
-// Month view
+// Month view (heatmap by weekday duty)
 // ---------------------------------------------------------------------------
 function MonthView({
   trainers, monthAnchor, onEditDay,
@@ -493,16 +599,8 @@ function MonthView({
             >
               <span className="text-sm font-bold text-slate-900">{d}</span>
               <div className="mt-auto space-y-0.5">
-                {onDuty > 0 && (
-                  <div className="text-[10px] font-medium text-indigo-700">
-                    {onDuty} on duty
-                  </div>
-                )}
-                {off > 0 && (
-                  <div className="text-[10px] font-medium text-blue-600">
-                    {off} off
-                  </div>
-                )}
+                {onDuty > 0 && <div className="text-[10px] font-medium text-indigo-700">{onDuty} on duty</div>}
+                {off > 0 && <div className="text-[10px] font-medium text-blue-600">{off} off</div>}
               </div>
             </button>
           );
@@ -514,35 +612,118 @@ function MonthView({
 }
 
 // ---------------------------------------------------------------------------
-// Attendance view (migrated from HRM)
+// Attendance Matrix (robust monthly log with on-time/late/absent detection)
 // ---------------------------------------------------------------------------
-function AttendanceView({
-  branchId, ym, trainers,
+const GRACE_MINUTES = 10;
+
+type AttCellKind = 'ontime' | 'late' | 'absent' | 'off' | 'unscheduled' | 'future';
+
+function AttendanceMatrix({
+  branchId, ym, staff,
 }: {
-  branchId: string | undefined; ym: string; trainers: TrainerRosterRow[];
+  branchId: string | undefined; ym: string; staff: TrainerRosterRow[];
 }) {
   const { data: logs = [], isLoading } = useStaffAttendanceMonth(branchId, ym);
-  const trainerMap = useMemo(() => {
-    const m = new Map<string, TrainerRosterRow>();
-    trainers.forEach((t) => m.set(t.user_id, t));
-    return m;
-  }, [trainers]);
+  const [showOnlyLate, setShowOnlyLate] = useState(false);
+  const [search, setSearch] = useState('');
 
-  const summary = useMemo(() => {
-    const map = new Map<string, { days: Set<string>; hours: number }>();
+  const [year, monthNum] = ym.split('-').map(Number);
+  const month = monthNum - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const dayNums = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const todayDate = today.getDate();
+
+  // Group logs: user_id → date(YYYY-MM-DD) → earliest check_in
+  const checkInByDay = useMemo(() => {
+    const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number }>>();
     for (const log of logs) {
-      const uid = log.user_id;
-      if (!map.has(uid)) map.set(uid, { days: new Set(), hours: 0 });
-      const entry = map.get(uid)!;
-      if (log.check_in) entry.days.add(log.check_in.slice(0, 10));
-      if (log.total_hours) entry.hours += Number(log.total_hours);
-      else if (log.check_in && log.check_out) {
-        const h = (new Date(log.check_out).getTime() - new Date(log.check_in).getTime()) / 3_600_000;
-        if (h > 0) entry.hours += h;
+      if (!log.check_in) continue;
+      const date = log.check_in.slice(0, 10);
+      if (!map.has(log.user_id)) map.set(log.user_id, new Map());
+      const userMap = map.get(log.user_id)!;
+      const hrs = log.total_hours != null ? Number(log.total_hours)
+        : (log.check_in && log.check_out
+          ? (new Date(log.check_out).getTime() - new Date(log.check_in).getTime()) / 3_600_000
+          : 0);
+      const existing = userMap.get(date);
+      if (!existing || log.check_in < existing.check_in) {
+        userMap.set(date, { check_in: log.check_in, check_out: log.check_out, hours: hrs });
       }
     }
     return map;
   }, [logs]);
+
+  function cellFor(staffRow: TrainerRosterRow, d: number): { kind: AttCellKind; lateMin?: number; checkIn?: string; checkOut?: string | null; hours?: number } {
+    const dateObj = new Date(year, month, d);
+    const wd = dateObj.getDay();
+    const shift = staffRow.shifts[wd];
+    const dateStr = `${ym}-${String(d).padStart(2, '0')}`;
+    const isFuture = isCurrentMonth && d > todayDate;
+
+    if (shift?.is_weekly_off) return { kind: 'off' };
+
+    const log = checkInByDay.get(staffRow.user_id)?.get(dateStr);
+    const scheduledStart = shift?.morning_start || shift?.evening_start;
+
+    if (!scheduledStart) {
+      if (log) {
+        return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
+      }
+      return { kind: isFuture ? 'future' : 'unscheduled' };
+    }
+
+    if (!log) {
+      return { kind: isFuture ? 'future' : 'absent' };
+    }
+
+    // Compare check-in time vs scheduled start (HH:MM)
+    const checkInTime = new Date(log.check_in);
+    const [sh, sm] = scheduledStart.slice(0, 5).split(':').map(Number);
+    const scheduled = new Date(year, month, d, sh, sm);
+    const lateMs = checkInTime.getTime() - scheduled.getTime();
+    const lateMin = Math.round(lateMs / 60000);
+
+    if (lateMin > GRACE_MINUTES) {
+      return { kind: 'late', lateMin, checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
+    }
+    return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
+  }
+
+  const rows = useMemo(() => {
+    return staff
+      .filter((s) => !search.trim() || s.full_name.toLowerCase().includes(search.trim().toLowerCase()))
+      .map((s) => {
+        const cells = dayNums.map((d) => cellFor(s, d));
+        const stats = cells.reduce(
+          (acc, c) => {
+            if (c.kind === 'ontime') acc.present++;
+            if (c.kind === 'late') { acc.present++; acc.late++; }
+            if (c.kind === 'absent') acc.absent++;
+            if (c.kind === 'off') acc.off++;
+            if (c.hours) acc.hours += c.hours;
+            return acc;
+          },
+          { present: 0, late: 0, absent: 0, off: 0, hours: 0 },
+        );
+        return { staff: s, cells, stats };
+      })
+      .filter((r) => !showOnlyLate || r.stats.late > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staff, dayNums, checkInByDay, showOnlyLate, search, ym]);
+
+  const kpis = useMemo(() => {
+    let totalCheckIns = 0, totalLate = 0, totalAbsent = 0;
+    rows.forEach((r) => {
+      totalCheckIns += r.stats.present;
+      totalLate += r.stats.late;
+      totalAbsent += r.stats.absent;
+    });
+    const onTime = totalCheckIns - totalLate;
+    const onTimePct = totalCheckIns > 0 ? Math.round((onTime / totalCheckIns) * 100) : 0;
+    return { totalStaff: rows.length, onTimePct, totalLate, totalAbsent };
+  }, [rows]);
 
   if (isLoading) {
     return (
@@ -554,99 +735,196 @@ function AttendanceView({
 
   return (
     <div className="p-4 space-y-4">
-      {/* Per-trainer summary cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {trainers.map((t) => {
-          const s = summary.get(t.user_id) || { days: new Set(), hours: 0 };
-          return (
-            <div key={t.user_id} className="rounded-xl bg-white border border-slate-100 shadow-sm p-3">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-9 w-9">
-                  <AvatarImage src={t.avatar_url || undefined} />
-                  <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-semibold">
-                    {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="font-medium text-slate-900 truncate">{t.full_name}</span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-emerald-50 p-2 text-center">
-                  <p className="text-lg font-bold text-emerald-700">{s.days.size}</p>
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-600">Days</p>
-                </div>
-                <div className="rounded-lg bg-indigo-50 p-2 text-center">
-                  <p className="text-lg font-bold text-indigo-700">{s.hours.toFixed(1)}h</p>
-                  <p className="text-[10px] uppercase tracking-wider text-indigo-600">Hours</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      {/* KPI strip */}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <KpiCard label="Staff tracked" value={String(kpis.totalStaff)} icon={<Users className="h-4 w-4" />} tone="indigo" />
+        <KpiCard label="On-time rate" value={`${kpis.onTimePct}%`} icon={<CheckCircle2 className="h-4 w-4" />} tone="emerald" />
+        <KpiCard label="Late arrivals" value={String(kpis.totalLate)} icon={<AlertTriangle className="h-4 w-4" />} tone="amber" />
+        <KpiCard label="Absences" value={String(kpis.totalAbsent)} icon={<XCircle className="h-4 w-4" />} tone="red" />
       </div>
 
-      {/* Detailed log */}
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-slate-50/80">
-            <TableHead>Staff</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Check In</TableHead>
-            <TableHead>Check Out</TableHead>
-            <TableHead>Hours</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {logs.slice(0, 100).map((log) => {
-            const t = trainerMap.get(log.user_id);
-            const hrs = log.total_hours ?? (log.check_in && log.check_out
-              ? (new Date(log.check_out).getTime() - new Date(log.check_in).getTime()) / 3_600_000
-              : null);
-            return (
-              <TableRow key={log.id}>
-                <TableCell>
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Search staff…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-[200px] h-9"
+        />
+        <Button
+          size="sm" variant={showOnlyLate ? 'default' : 'outline'}
+          onClick={() => setShowOnlyLate((v) => !v)}
+          className={showOnlyLate ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+        >
+          <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+          {showOnlyLate ? 'Showing late only' : 'Show only late'}
+        </Button>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+          <LegendDot tone="emerald" label="On time" />
+          <LegendDot tone="amber" label="Late" />
+          <LegendDot tone="red" label="Absent" />
+          <LegendDot tone="blue" label="Weekly off" />
+          <LegendDot tone="slate" label="Unscheduled" />
+        </div>
+      </div>
+
+      {/* Matrix */}
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 sticky top-0">
+            <tr>
+              <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600 min-w-[180px]">Staff</th>
+              {dayNums.map((d) => {
+                const wd = new Date(year, month, d).getDay();
+                const isWeekend = wd === 0 || wd === 6;
+                return (
+                  <th key={d} className={`px-1 py-2 text-center font-semibold ${isWeekend ? 'text-indigo-600' : 'text-slate-600'} min-w-[24px]`}>
+                    <div>{d}</div>
+                    <div className="text-[8px] font-normal text-slate-400">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][wd]}</div>
+                  </th>
+                );
+              })}
+              <th className="px-2 py-2 text-center font-semibold text-emerald-700 min-w-[44px]">P</th>
+              <th className="px-2 py-2 text-center font-semibold text-amber-700 min-w-[44px]">L</th>
+              <th className="px-2 py-2 text-center font-semibold text-red-700 min-w-[44px]">A</th>
+              <th className="px-2 py-2 text-center font-semibold text-blue-700 min-w-[44px]">O</th>
+              <th className="px-2 py-2 text-center font-semibold text-slate-700 min-w-[56px]">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={daysInMonth + 6} className="py-12 text-center text-slate-500">
+                  <Clock className="mx-auto h-10 w-10 opacity-40 mb-2" />
+                  No attendance to show.
+                </td>
+              </tr>
+            )}
+            {rows.map(({ staff: s, cells, stats }) => (
+              <tr key={s.user_id} className="border-t border-slate-100 hover:bg-slate-50/40">
+                <td className="sticky left-0 z-10 bg-white px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-7 w-7">
-                      <AvatarFallback className="bg-indigo-50 text-indigo-700 text-[10px]">
-                        {(t?.full_name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={s.avatar_url || undefined} />
+                      <AvatarFallback className="bg-indigo-50 text-indigo-700 text-[9px]">
+                        {s.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">{t?.full_name || 'Unknown'}</span>
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-medium text-slate-900 text-xs">{s.full_name}</span>
+                      <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium ${ROLE_TONES[s.role]}`}>
+                        {s.role}
+                      </span>
+                    </div>
                   </div>
-                </TableCell>
-                <TableCell>{log.check_in ? format(new Date(log.check_in), 'dd MMM yyyy') : '—'}</TableCell>
-                <TableCell>{log.check_in ? format(new Date(log.check_in), 'hh:mm a') : '—'}</TableCell>
-                <TableCell>
-                  {log.check_out
-                    ? format(new Date(log.check_out), 'hh:mm a')
-                    : <Badge variant="outline" className="text-amber-700 border-amber-300">Active</Badge>}
-                </TableCell>
-                <TableCell>{hrs != null ? `${Number(hrs).toFixed(1)}h` : '—'}</TableCell>
-              </TableRow>
-            );
-          })}
-          {logs.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="py-12 text-center text-slate-500">
-                <Clock className="mx-auto h-10 w-10 opacity-40 mb-2" />
-                No attendance records this month.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                </td>
+                {cells.map((c, i) => (
+                  <AttCell key={i} cell={c} day={i + 1} />
+                ))}
+                <td className="text-center font-semibold text-emerald-700">{stats.present}</td>
+                <td className="text-center font-semibold text-amber-700">{stats.late}</td>
+                <td className="text-center font-semibold text-red-700">{stats.absent}</td>
+                <td className="text-center font-semibold text-blue-700">{stats.off}</td>
+                <td className="text-center font-semibold text-slate-700">{stats.hours.toFixed(1)}h</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[11px] text-slate-500">
+        Late = check-in more than {GRACE_MINUTES} min after scheduled start. Absent = scheduled day with no check-in.
+      </p>
     </div>
   );
 }
 
+function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: number }) {
+  const tone = {
+    ontime: 'bg-emerald-100 text-emerald-700',
+    late: 'bg-amber-100 text-amber-700',
+    absent: 'bg-red-100 text-red-700',
+    off: 'bg-blue-100 text-blue-700',
+    unscheduled: 'text-slate-300',
+    future: 'text-slate-200',
+  }[cell.kind as AttCellKind];
+
+  const symbol = {
+    ontime: '✓',
+    late: 'L',
+    absent: '✗',
+    off: '—',
+    unscheduled: '·',
+    future: '·',
+  }[cell.kind as AttCellKind];
+
+  const title = (() => {
+    if (cell.kind === 'late') return `Day ${day} · ${cell.lateMin} min late · in ${cell.checkIn ? format(new Date(cell.checkIn), 'hh:mm a') : '?'}`;
+    if (cell.kind === 'ontime') return `Day ${day} · ${cell.checkIn ? format(new Date(cell.checkIn), 'hh:mm a') : ''}${cell.checkOut ? ` → ${format(new Date(cell.checkOut), 'hh:mm a')}` : ''}`;
+    if (cell.kind === 'absent') return `Day ${day} · absent`;
+    if (cell.kind === 'off') return `Day ${day} · weekly off`;
+    return `Day ${day}`;
+  })();
+
+  return (
+    <td className="px-0.5 py-1 text-center">
+      <span
+        title={title}
+        className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold ${tone}`}
+      >
+        {symbol}
+      </span>
+    </td>
+  );
+}
+
+function KpiCard({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: 'indigo' | 'emerald' | 'amber' | 'red' }) {
+  const toneCls = {
+    indigo: 'bg-indigo-50 text-indigo-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-700',
+  }[tone];
+  return (
+    <div className="rounded-xl bg-white border border-slate-100 shadow-sm p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</span>
+        <span className={`p-1.5 rounded-full ${toneCls}`}>{icon}</span>
+      </div>
+      <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+    </div>
+  );
+}
+
+function LegendDot({ tone, label }: { tone: 'emerald' | 'amber' | 'red' | 'blue' | 'slate'; label: string }) {
+  const cls = {
+    emerald: 'bg-emerald-400', amber: 'bg-amber-400', red: 'bg-red-400', blue: 'bg-blue-400', slate: 'bg-slate-300',
+  }[tone];
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`h-2 w-2 rounded-full ${cls}`} />{label}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Edit drawer (with weekly-off duplicate guard)
+// Edit drawer (with Apply-to-days bulk control)
 // ---------------------------------------------------------------------------
+type ApplyMode = 'this' | 'weekdays' | 'all' | 'custom';
+
 function ShiftEditSheet({
-  edit, onClose, onSave, saving,
+  edit, onClose, onSave, onSaveBulk, saving,
 }: {
   edit: EditState | null;
   onClose: () => void;
   onSave: (row: Partial<ShiftRow> & { user_id: string; weekday: number }) => void;
+  onSaveBulk: (input: {
+    user_id: string;
+    weekdays: number[];
+    template: Omit<Partial<ShiftRow>, 'user_id' | 'weekday'>;
+    existingShifts: Record<number, ShiftRow | undefined>;
+    overwriteWeeklyOff?: boolean;
+  }) => void;
   saving: boolean;
 }) {
   const existing = edit?.trainer.shifts[edit.weekday];
@@ -656,18 +934,22 @@ function ShiftEditSheet({
   const [eveningEnd, setEveningEnd] = useState('');
   const [off, setOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [applyMode, setApplyMode] = useState<ApplyMode>('this');
+  const [customDays, setCustomDays] = useState<Set<number>>(new Set());
+  const [overwriteOff, setOverwriteOff] = useState(false);
 
-  // Reset state whenever the edit target changes
   useMemo(() => {
-    setMorningStart(fmtTime(existing?.morning_start ?? null) ?? '');
-    setMorningEnd(fmtTime(existing?.morning_end ?? null) ?? '');
-    setEveningStart(fmtTime(existing?.evening_start ?? null) ?? '');
-    setEveningEnd(fmtTime(existing?.evening_end ?? null) ?? '');
+    setMorningStart(existing?.morning_start?.slice(0, 5) ?? '');
+    setMorningEnd(existing?.morning_end?.slice(0, 5) ?? '');
+    setEveningStart(existing?.evening_start?.slice(0, 5) ?? '');
+    setEveningEnd(existing?.evening_end?.slice(0, 5) ?? '');
     setOff(!!existing?.is_weekly_off);
     setError(null);
+    setApplyMode('this');
+    setCustomDays(new Set([edit?.weekday ?? 0]));
+    setOverwriteOff(false);
   }, [edit?.trainer.user_id, edit?.weekday, existing]);
 
-  // Detect existing weekly-off on a different weekday
   const otherOffDay = useMemo(() => {
     if (!edit || !off) return null;
     for (const [wdKey, s] of Object.entries(edit.trainer.shifts)) {
@@ -681,6 +963,13 @@ function ShiftEditSheet({
 
   if (!edit) return null;
 
+  const targetWeekdays = (): number[] => {
+    if (applyMode === 'this') return [edit.weekday];
+    if (applyMode === 'weekdays') return [1, 2, 3, 4, 5, 6]; // Mon–Sat
+    if (applyMode === 'all') return [0, 1, 2, 3, 4, 5, 6];
+    return Array.from(customDays).sort();
+  };
+
   const handleSave = () => {
     setError(null);
     if (!off) {
@@ -690,18 +979,41 @@ function ShiftEditSheet({
       if (eFilled && (!eveningStart || !eveningEnd)) { setError('Evening shift needs both start and end times.'); return; }
       if (!mFilled && !eFilled) { setError('Add at least one shift block or mark as weekly off.'); return; }
     }
-    onSave({
-      user_id: edit.trainer.user_id,
-      weekday: edit.weekday,
+
+    const template: Omit<Partial<ShiftRow>, 'user_id' | 'weekday'> = {
       is_weekly_off: off,
       morning_start: off ? null : (morningStart || null),
       morning_end:   off ? null : (morningEnd || null),
       evening_start: off ? null : (eveningStart || null),
       evening_end:   off ? null : (eveningEnd || null),
-    });
+    };
+
+    const days = targetWeekdays();
+    if (days.length === 0) { setError('Pick at least one day to apply this to.'); return; }
+
+    // Bulk weekly-off is forbidden (one-off-per-user db index)
+    if (off && days.length > 1) {
+      setError('Weekly-off can only be applied to one day. Switch "Apply to" to "Only this day".');
+      return;
+    }
+
+    if (days.length === 1) {
+      onSave({ user_id: edit.trainer.user_id, weekday: days[0], ...template });
+    } else {
+      onSaveBulk({
+        user_id: edit.trainer.user_id,
+        weekdays: days,
+        template,
+        existingShifts: edit.trainer.shifts,
+        overwriteWeeklyOff: overwriteOff,
+      });
+    }
   };
 
   const dayName = WEEKDAYS.find((d) => d.idx === edit.weekday)?.full;
+  const isSunday = edit.weekday === 0;
+
+  const previewCount = targetWeekdays().length;
 
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
@@ -712,10 +1024,87 @@ function ShiftEditSheet({
         </SheetHeader>
 
         <div className="py-6 space-y-6">
+          {/* Apply to days */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalIcon className="h-4 w-4 text-indigo-600" />
+              <span className="font-semibold text-sm text-indigo-900">Apply this shift to</span>
+              <Badge variant="outline" className="ml-auto text-[10px] rounded-full">{previewCount} day{previewCount === 1 ? '' : 's'}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {([
+                ['this', `Only ${dayName}`],
+                ['weekdays', 'All weekdays (Mon–Sat)'],
+                ['all', 'Every day (Mon–Sun)'],
+                ['custom', 'Custom days…'],
+              ] as [ApplyMode, string][]).map(([k, label]) => (
+                <label key={k} className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer ${
+                  applyMode === k ? 'border-indigo-400 bg-white' : 'border-slate-200 bg-white/60'
+                }`}>
+                  <input
+                    type="radio" name="apply-mode" value={k}
+                    checked={applyMode === k}
+                    onChange={() => setApplyMode(k)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            {applyMode === 'custom' && (
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((d) => {
+                  const sel = customDays.has(d.idx);
+                  return (
+                    <button
+                      key={d.idx} type="button"
+                      onClick={() => {
+                        const next = new Set(customDays);
+                        if (next.has(d.idx)) next.delete(d.idx); else next.add(d.idx);
+                        setCustomDays(next);
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        sel ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {d.short}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {applyMode !== 'this' && !off && (
+              <div className="flex items-start gap-2 text-xs text-slate-600">
+                <input
+                  id="ow" type="checkbox" className="mt-0.5"
+                  checked={overwriteOff} onChange={(e) => setOverwriteOff(e.target.checked)}
+                />
+                <label htmlFor="ow">
+                  Overwrite existing weekly-off days. <span className="text-slate-400">(Off by default — weekly-off rows are preserved.)</span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {isSunday && !off && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <div>
+                Sunday is a contractual working day for some staff. You can assign a normal shift here.
+                <button
+                  type="button"
+                  className="ml-2 underline font-medium"
+                  onClick={() => { setMorningStart('06:00'); setMorningEnd('12:00'); }}
+                >
+                  Assign 6 AM – 12 PM
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 px-4">
             <div>
               <Label htmlFor="off-toggle" className="font-medium">Weekly off</Label>
-              <p className="text-xs text-slate-500">Marks this day as a rest day. Only one weekly-off allowed per trainer.</p>
+              <p className="text-xs text-slate-500">Marks this day as a rest day. Only one weekly-off allowed per staff member.</p>
             </div>
             <Switch id="off-toggle" checked={off} onCheckedChange={setOff} />
           </div>
@@ -740,10 +1129,12 @@ function ShiftEditSheet({
                 <div>
                   <Label htmlFor="ms" className="text-xs">Start</Label>
                   <Input id="ms" type="time" value={morningStart} onChange={(e) => setMorningStart(e.target.value)} />
+                  {morningStart && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(morningStart)}</p>}
                 </div>
                 <div>
                   <Label htmlFor="me" className="text-xs">End</Label>
                   <Input id="me" type="time" value={morningEnd} onChange={(e) => setMorningEnd(e.target.value)} />
+                  {morningEnd && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(morningEnd)}</p>}
                 </div>
               </div>
               {morningStart && morningEnd && morningEnd < morningStart && (
@@ -764,10 +1155,12 @@ function ShiftEditSheet({
                 <div>
                   <Label htmlFor="es" className="text-xs">Start</Label>
                   <Input id="es" type="time" value={eveningStart} onChange={(e) => setEveningStart(e.target.value)} />
+                  {eveningStart && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(eveningStart)}</p>}
                 </div>
                 <div>
                   <Label htmlFor="ee" className="text-xs">End</Label>
                   <Input id="ee" type="time" value={eveningEnd} onChange={(e) => setEveningEnd(e.target.value)} />
+                  {eveningEnd && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(eveningEnd)}</p>}
                 </div>
               </div>
             </div>
@@ -779,7 +1172,7 @@ function ShiftEditSheet({
         <SheetFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save shift'}
+            {saving ? 'Saving…' : previewCount > 1 ? `Save to ${previewCount} days` : 'Save shift'}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -886,7 +1279,7 @@ function RosterSendDrawer({
             />
           </div>
           <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
-            A branded PDF of this roster will be generated and sent as an attachment.
+            A branded weekly roster PDF will be generated and sent as an attachment.
           </div>
         </div>
         <SheetFooter className="gap-2">
