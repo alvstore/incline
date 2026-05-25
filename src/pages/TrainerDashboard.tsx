@@ -109,6 +109,9 @@ export default function TrainerDashboard() {
         {/* Duty Status — clock in / clock out */}
         <DutyStatusCard userId={trainer.user_id} />
 
+        {/* My weekly shift strip with Late badges */}
+        <MyShiftWeekCard userId={trainer.user_id} />
+
         {/* Primary Stats */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
           <StatCard
