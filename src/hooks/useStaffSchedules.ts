@@ -236,3 +236,92 @@ export function useStaffAttendanceMonth(branchId: string | undefined, ym: string
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Per-date shift overrides (e.g. ad-hoc Sunday duty for a specific date)
+// ---------------------------------------------------------------------------
+export interface ShiftOverrideRow {
+  id?: string;
+  user_id: string;
+  branch_id: string | null;
+  date: string; // 'YYYY-MM-DD'
+  morning_start: string | null;
+  morning_end: string | null;
+  evening_start: string | null;
+  evening_end: string | null;
+  is_weekly_off: boolean;
+  note?: string | null;
+}
+
+export function useShiftOverridesForDate(branchId: string | undefined, dateISO: string | undefined) {
+  return useQuery({
+    queryKey: ['staff-shift-overrides', branchId, dateISO],
+    enabled: !!branchId && !!dateISO,
+    queryFn: async (): Promise<ShiftOverrideRow[]> => {
+      const { data, error } = await supabase
+        .from('staff_shift_overrides')
+        .select('*')
+        .eq('branch_id', branchId!)
+        .eq('date', dateISO!);
+      if (error) throw error;
+      return (data || []) as ShiftOverrideRow[];
+    },
+  });
+}
+
+export function useUpsertShiftOverride(branchId: string | undefined) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (row: Omit<ShiftOverrideRow, 'id' | 'branch_id'>) => {
+      const payload = {
+        user_id: row.user_id,
+        branch_id: branchId ?? null,
+        date: row.date,
+        morning_start: row.morning_start || null,
+        morning_end: row.morning_end || null,
+        evening_start: row.evening_start || null,
+        evening_end: row.evening_end || null,
+        is_weekly_off: !!row.is_weekly_off,
+        note: row.note || null,
+      };
+      const { data, error } = await supabase
+        .from('staff_shift_overrides')
+        .upsert(payload, { onConflict: 'user_id,date' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['staff-shift-overrides', branchId, vars.date] });
+      qc.invalidateQueries({ queryKey: ['staff-schedules', branchId] });
+    },
+    onError: (e: any) => toast({
+      title: 'Failed to save override', description: e.message, variant: 'destructive',
+    }),
+  });
+}
+
+export function useDeleteShiftOverride(branchId: string | undefined) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ userId, date }: { userId: string; date: string }) => {
+      const { error } = await supabase
+        .from('staff_shift_overrides')
+        .delete()
+        .eq('user_id', userId)
+        .eq('date', date);
+      if (error) throw error;
+      return { userId, date };
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['staff-shift-overrides', branchId, res.date] });
+      qc.invalidateQueries({ queryKey: ['staff-schedules', branchId] });
+    },
+    onError: (e: any) => toast({
+      title: 'Failed to remove override', description: e.message, variant: 'destructive',
+    }),
+  });
+}

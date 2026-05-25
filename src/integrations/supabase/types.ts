@@ -10935,6 +10935,54 @@ export type Database = {
           },
         ]
       }
+      staff_shift_overrides: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          evening_end: string | null
+          evening_start: string | null
+          id: string
+          is_weekly_off: boolean
+          morning_end: string | null
+          morning_start: string | null
+          note: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date: string
+          evening_end?: string | null
+          evening_start?: string | null
+          id?: string
+          is_weekly_off?: boolean
+          morning_end?: string | null
+          morning_start?: string | null
+          note?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          evening_end?: string | null
+          evening_start?: string | null
+          id?: string
+          is_weekly_off?: boolean
+          morning_end?: string | null
+          morning_start?: string | null
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       staff_shifts: {
         Row: {
           branch_id: string | null
