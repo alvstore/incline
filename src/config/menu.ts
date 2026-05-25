@@ -190,7 +190,6 @@ export const adminMenuConfig: MenuSection[] = [
       { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
       
       { label: 'Trainers', href: '/trainers', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
-      { label: 'Staff Roster', href: '/staff-roster', icon: Clock, roles: ['owner', 'admin', 'manager'] },
       { label: 'All Bookings', href: '/all-bookings', icon: Calendar, roles: ['owner', 'admin', 'manager'] },
       { label: 'Benefit Tracking', href: '/benefit-tracking', icon: Heart, roles: ['owner', 'admin', 'manager'] },
       { label: 'Diet & Workout', href: '/fitness/create', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
@@ -229,6 +228,7 @@ export const adminMenuConfig: MenuSection[] = [
     title: 'Admin & HR',
     items: [
       { label: 'HRM', href: '/hrm', icon: Briefcase, roles: ['owner', 'admin', 'manager'] },
+      { label: 'Staff Roster', href: '/staff-roster', icon: Clock, roles: ['owner', 'admin', 'manager'] },
       { label: 'Roles and Permission', href: '/admin-roles', icon: UserCog, roles: ['owner', 'admin'] },
       
       { label: 'Tasks', href: '/tasks', icon: CheckSquare, roles: ['owner', 'admin', 'manager'] },
@@ -239,6 +239,7 @@ export const adminMenuConfig: MenuSection[] = [
     ],
   },
 ];
+
 
 // Manager-specific menu
 export const managerMenuConfig: MenuSection[] = [
