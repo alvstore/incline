@@ -505,10 +505,10 @@ export default function StaffRoster() {
             )}
 
             {!isLoading && !isError && trainers.length > 0 && view === 'day' && (
-              <DayView trainers={trainers} weekday={weekday} onEdit={setEdit} onDelete={(uid, wd) => del.mutate({ userId: uid, weekday: wd })} />
+              <DayView trainers={trainers} weekday={weekday} canEditFor={canEditFor} onEdit={setEdit} onDelete={(uid, wd) => del.mutate({ userId: uid, weekday: wd })} />
             )}
             {!isLoading && !isError && trainers.length > 0 && view === 'week' && (
-              <WeekView trainers={trainers} onEdit={setEdit} />
+              <WeekView trainers={trainers} canEditFor={canEditFor} onEdit={setEdit} />
             )}
             {!isLoading && !isError && trainers.length > 0 && view === 'month' && (
               <MonthView trainers={trainers} monthAnchor={monthAnchor} onEditDay={(wd) => { setWeekday(wd); setView('day'); }} />
