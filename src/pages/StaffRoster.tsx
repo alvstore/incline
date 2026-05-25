@@ -1621,13 +1621,16 @@ function SundayDutyCard({
           <div className="flex flex-wrap gap-2">
             {entries.map((e) => {
               const t = e.staff;
-              return (
-                <button
-                  key={t.user_id}
-                  onClick={() => onEdit(t)}
-                  className="group flex items-center gap-2 rounded-full bg-white border border-amber-200 pl-1 pr-3 py-1 hover:border-amber-400 hover:shadow-sm transition-all"
-                  title={e.source === 'override' ? `One-off for ${format(sundayDate, 'dd MMM')}` : 'Recurring every Sunday'}
-                >
+              const editable = canEditFor(t.user_id);
+              const commonClass = cn(
+                'group flex items-center gap-2 rounded-full bg-white border border-amber-200 pl-1 pr-3 py-1 transition-all',
+                editable ? 'hover:border-amber-400 hover:shadow-sm cursor-pointer' : 'cursor-default opacity-90',
+              );
+              const titleText = editable
+                ? (e.source === 'override' ? `One-off for ${format(sundayDate, 'dd MMM')} · tap to edit` : 'Recurring every Sunday · tap to edit')
+                : (e.source === 'override' ? `One-off for ${format(sundayDate, 'dd MMM')} · read-only` : 'Recurring every Sunday · read-only');
+              const inner = (
+                <>
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={t.avatar_url || undefined} />
                     <AvatarFallback className="bg-amber-100 text-amber-700 text-[10px] font-semibold">
@@ -1652,7 +1655,16 @@ function SundayDutyCard({
                     {e.evening_start && e.evening_end && '–'}
                     {e.evening_end && fmtTime12(e.evening_end)}
                   </span>
+                </>
+              );
+              return editable ? (
+                <button key={t.user_id} type="button" onClick={() => onEdit(t)} className={commonClass} title={titleText}>
+                  {inner}
                 </button>
+              ) : (
+                <div key={t.user_id} className={commonClass} title={titleText} aria-disabled="true">
+                  {inner}
+                </div>
               );
             })}
           </div>
