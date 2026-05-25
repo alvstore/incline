@@ -113,6 +113,7 @@ const FollowUpCenter = lazy(() => import("./pages/FollowUpCenter"));
 // Admin pages
 const AdminRoles = lazy(() => import("./pages/AdminRoles"));
 const DeviceManagement = lazy(() => import("./pages/DeviceManagement"));
+const StaffRosterPage = lazy(() => import("./pages/StaffRoster"));
 const ApprovalQueue = lazy(() => import("./pages/ApprovalQueue"));
 const DiscountCouponsPage = lazy(() => import("./pages/DiscountCoupons"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealth"));
@@ -268,6 +269,7 @@ function RoutedContent() {
           <Route path="/tasks" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><TasksPage /></ProtectedRoute>} />
           <Route path="/employees" element={<Navigate to="/hrm?tab=employees" replace />} />
           <Route path="/trainers" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><TrainersPage /></ProtectedRoute>} />
+          <Route path="/staff-roster" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><StaffRosterPage /></ProtectedRoute>} />
           <Route path="/staff-attendance" element={<Navigate to="/attendance-dashboard" replace />} />
           <Route path="/attendance-dashboard" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><AttendanceDashboardPage /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><AnalyticsPage /></ProtectedRoute>} />

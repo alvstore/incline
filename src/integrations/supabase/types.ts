@@ -10833,6 +10833,8 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          total_hours: number | null
           user_id: string
         }
         Insert: {
@@ -10842,6 +10844,8 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
+          total_hours?: number | null
           user_id: string
         }
         Update: {
@@ -10851,6 +10855,8 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
+          total_hours?: number | null
           user_id?: string
         }
         Relationships: [
@@ -10933,42 +10939,54 @@ export type Database = {
         Row: {
           branch_id: string | null
           created_at: string
-          end_time: string
+          end_time: string | null
+          evening_end: string | null
+          evening_start: string | null
           half_day_threshold_hours: number
           id: string
           is_weekly_off: boolean
           late_grace_min: number
+          morning_end: string | null
+          morning_start: string | null
           ot_multiplier: number
           ot_threshold_hours: number
-          start_time: string
+          start_time: string | null
           user_id: string
           weekday: number
         }
         Insert: {
           branch_id?: string | null
           created_at?: string
-          end_time?: string
+          end_time?: string | null
+          evening_end?: string | null
+          evening_start?: string | null
           half_day_threshold_hours?: number
           id?: string
           is_weekly_off?: boolean
           late_grace_min?: number
+          morning_end?: string | null
+          morning_start?: string | null
           ot_multiplier?: number
           ot_threshold_hours?: number
-          start_time?: string
+          start_time?: string | null
           user_id: string
           weekday: number
         }
         Update: {
           branch_id?: string | null
           created_at?: string
-          end_time?: string
+          end_time?: string | null
+          evening_end?: string | null
+          evening_start?: string | null
           half_day_threshold_hours?: number
           id?: string
           is_weekly_off?: boolean
           late_grace_min?: number
+          morning_end?: string | null
+          morning_start?: string | null
           ot_multiplier?: number
           ot_threshold_hours?: number
-          start_time?: string
+          start_time?: string | null
           user_id?: string
           weekday?: number
         }
@@ -13024,6 +13042,10 @@ export type Database = {
           total: number
         }[]
       }
+      calculate_shift_hours: {
+        Args: { p_clock_in: string; p_clock_out: string }
+        Returns: number
+      }
       can_access_biometric_photo: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -13727,6 +13749,26 @@ export type Database = {
         Args: { p_announcement_id: string }
         Returns: Json
       }
+      punch_duty: {
+        Args: { p_branch_id?: string; p_shift_type?: string }
+        Returns: {
+          branch_id: string
+          check_in: string
+          check_out: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          total_hours: number | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "staff_attendance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       purchase_benefit_credits: {
         Args: {
           p_branch_id?: string
@@ -14227,6 +14269,7 @@ export type Database = {
         | "contract"
         | "comp_gift"
         | "branch_transfer"
+      attendance_shift_type: "morning" | "evening" | "night" | "full_day"
       benefit_booking_status:
         | "booked"
         | "confirmed"
@@ -14504,6 +14547,7 @@ export const Constants = {
         "comp_gift",
         "branch_transfer",
       ],
+      attendance_shift_type: ["morning", "evening", "night", "full_day"],
       benefit_booking_status: [
         "booked",
         "confirmed",
