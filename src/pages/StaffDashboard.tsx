@@ -169,6 +169,9 @@ export default function StaffDashboard() {
           <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl" onClick={() => setPricingOpen(true)}><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><TrendingUp className="h-8 w-8 text-violet-500" /><span className="font-medium text-center">View Pricing</span></CardContent></Card>
         </div>
 
+        {/* My shift this week + Late badges */}
+        <MyShiftWeekCard userId={user?.id} />
+
         {/* Stats Row */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <Link to="/attendance"><StatCard title="Today's Check-ins" value={stats?.todayCheckins || 0} icon={UserCheck} description={`${stats?.currentlyIn || 0} currently in`} variant="success" /></Link>
