@@ -165,6 +165,10 @@ const Sidebar = React.forwardRef<
           }
           side={side}
         >
+          <VisuallyHidden>
+            <SheetTitle>Navigation</SheetTitle>
+            <SheetDescription>Main navigation menu</SheetDescription>
+          </VisuallyHidden>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
