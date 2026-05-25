@@ -128,6 +128,8 @@ export default function StaffRoster() {
   const upsert = useUpsertShift(branchId);
   const bulkUpsert = useBulkUpsertShifts(branchId);
   const del = useDeleteShift(branchId);
+  const upsertOverride = useUpsertShiftOverride(branchId);
+  const deleteOverride = useDeleteShiftOverride(branchId);
 
   const today = new Date();
   const [weekday, setWeekday] = useState<number>(today.getDay());
@@ -141,6 +143,10 @@ export default function StaffRoster() {
   const [sendOpen, setSendOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
   const [sundayOpen, setSundayOpen] = useState(false);
+  const [sundayDate, setSundayDate] = useState<Date>(nextSunday());
+
+  const sundayDateISO = toISODate(sundayDate);
+  const { data: sundayOverrides = [] } = useShiftOverridesForDate(branchId, sundayDateISO);
 
   const allStaff = useMemo(() => data ?? [], [data]);
   const trainers = useMemo(() => {
