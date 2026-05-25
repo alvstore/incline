@@ -26,10 +26,10 @@ export function useStaffSchedules(branchId: string | undefined) {
     queryKey: ['staff-schedules', branchId],
     enabled: !!branchId,
     queryFn: async (): Promise<TrainerRosterRow[]> => {
-      // Trainers in this branch
+      // Trainers in this branch (no nested FK alias — fetch profiles separately)
       const { data: trainers, error: tErr } = await supabase
         .from('trainers')
-        .select('user_id, profile:profiles!trainers_user_id_fkey(id, full_name, avatar_url)')
+        .select('user_id')
         .eq('branch_id', branchId!)
         .eq('is_active', true);
       if (tErr) throw tErr;
@@ -40,27 +40,34 @@ export function useStaffSchedules(branchId: string | undefined) {
 
       if (userIds.length === 0) return [];
 
-      const { data: shifts, error: sErr } = await supabase
-        .from('staff_shifts')
-        .select('*')
-        .in('user_id', userIds);
+      const [{ data: profiles, error: pErr }, { data: shifts, error: sErr }] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, avatar_url').in('id', userIds),
+        supabase.from('staff_shifts').select('*').in('user_id', userIds),
+      ]);
+      if (pErr) throw pErr;
       if (sErr) throw sErr;
 
-      return (trainers || []).map((t: any) => {
+      const profileMap = new Map<string, any>(
+        (profiles || []).map((p: any) => [p.id, p])
+      );
+
+      return userIds.map((uid: string) => {
+        const p = profileMap.get(uid);
         const map: Record<number, ShiftRow> = {};
         (shifts || [])
-          .filter((s: any) => s.user_id === t.user_id)
+          .filter((s: any) => s.user_id === uid)
           .forEach((s: any) => { map[s.weekday] = s as ShiftRow; });
         return {
-          user_id: t.user_id,
-          full_name: t.profile?.full_name || 'Unnamed Trainer',
-          avatar_url: t.profile?.avatar_url || null,
+          user_id: uid,
+          full_name: p?.full_name || 'Unnamed Trainer',
+          avatar_url: p?.avatar_url || null,
           shifts: map,
         };
       });
     },
   });
 }
+
 
 export function useUpsertShift(branchId: string | undefined) {
   const qc = useQueryClient();
