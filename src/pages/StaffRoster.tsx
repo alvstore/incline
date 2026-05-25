@@ -114,22 +114,50 @@ export default function StaffRoster() {
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [attendanceMonth, setAttendanceMonth] = useState<string>(format(today, 'yyyy-MM'));
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [deptFilter, setDeptFilter] = useState<string | null>(null);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
+  const [sundayOpen, setSundayOpen] = useState(false);
 
   const allStaff = useMemo(() => data ?? [], [data]);
-  const trainers = useMemo(
-    () => roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter),
-    [allStaff, roleFilter],
-  );
+  const trainers = useMemo(() => {
+    let list = roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter);
+    if (deptFilter) list = list.filter((s) => (s.department || '—') === deptFilter);
+    return list;
+  }, [allStaff, roleFilter, deptFilter]);
 
-  const roleCounts = useMemo(() => {
-    const c: Record<string, number> = { all: allStaff.length };
-    allStaff.forEach((s) => { c[s.role] = (c[s.role] || 0) + 1; });
-    return c;
+  // Dynamic role chips — only roles that actually exist in this branch, with counts.
+  const roleChips = useMemo(() => {
+    const c = new Map<StaffRoleLabel, number>();
+    allStaff.forEach((s) => c.set(s.role, (c.get(s.role) || 0) + 1));
+    return Array.from(c.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([role, count]) => ({ role, count }));
   }, [allStaff]);
+
+  // Dynamic department chips — scoped to current role filter so they stay relevant.
+  const deptChips = useMemo(() => {
+    const scope = roleFilter === 'all' ? allStaff : allStaff.filter((s) => s.role === roleFilter);
+    const c = new Map<string, number>();
+    scope.forEach((s) => {
+      const d = s.department || '—';
+      c.set(d, (c.get(d) || 0) + 1);
+    });
+    return Array.from(c.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([dept, count]) => ({ dept, count }));
+  }, [allStaff, roleFilter]);
+
+  // Sunday duty roster — staff with a non-off Sunday shift.
+  const sundayDuty = useMemo(
+    () => allStaff.filter((s) => {
+      const sh = s.shifts[0];
+      return sh && !sh.is_weekly_off && (sh.morning_start || sh.evening_start);
+    }),
+    [allStaff],
+  );
 
   const periodLabel = useMemo(() => {
     if (view === 'day') {
