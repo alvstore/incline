@@ -407,7 +407,10 @@ export default function StaffRoster() {
 
         {/* Sunday Duty card */}
         <SundayDutyCard
-          staff={sundayDuty}
+          sundayDate={sundayDate}
+          onChangeSundayDate={setSundayDate}
+          entries={sundayDuty}
+          allStaffCount={allStaff.length}
           onEdit={(t) => setEdit({ trainer: t, weekday: 0 })}
           onAssign={() => setSundayOpen(true)}
         />
