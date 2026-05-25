@@ -64,6 +64,36 @@ export const can = {
 };
 
 /**
+ * Roster permissions.
+ *  - Owner/Admin: full edit on any row (including own).
+ *  - Manager: can edit staff/trainer rows, but NOT their own row.
+ *  - Staff: view + export only.
+ *  - Trainer/Member: no roster page access.
+ *
+ * Server-side guard: trigger `tg_block_manager_self_edit` mirrors this on the DB.
+ */
+export function canEditAnyRoster(roles?: string[]): boolean {
+  if (!roles) return false;
+  return roles.some((r) => r === 'owner' || r === 'admin' || r === 'manager');
+}
+
+export function canEditRosterRow(
+  roles: string[] | undefined,
+  targetUserId: string | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!roles || !targetUserId) return false;
+  if (roles.some((r) => r === 'owner' || r === 'admin')) return true;
+  if (roles.includes('manager')) return targetUserId !== currentUserId;
+  return false;
+}
+
+export function canExportRoster(roles?: string[]): boolean {
+  if (!roles) return false;
+  return roles.some((r) => r === 'owner' || r === 'admin' || r === 'manager' || r === 'staff');
+}
+
+/**
  * Strict "punch up" rule for manual staff attendance (biometric-failure fallback).
  *
  * Nobody marks their own attendance — even owners must pass the turnstile.
