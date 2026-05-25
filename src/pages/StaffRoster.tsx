@@ -177,14 +177,43 @@ export default function StaffRoster() {
       .map(([dept, count]) => ({ dept, count }));
   }, [allStaff, roleFilter]);
 
-  // Sunday duty roster — staff with a non-off Sunday shift.
-  const sundayDuty = useMemo(
-    () => allStaff.filter((s) => {
+  // Sunday duty roster for the selected Sunday — merges recurring shifts (weekday=0)
+  // with per-date overrides. Overrides win, including is_weekly_off=true to revoke.
+  type SundayEntry = {
+    staff: TrainerRosterRow;
+    source: 'override' | 'recurring';
+    morning_start: string | null;
+    morning_end: string | null;
+    evening_start: string | null;
+    evening_end: string | null;
+  };
+  const sundayDuty = useMemo<SundayEntry[]>(() => {
+    const overrideMap = new Map<string, ShiftOverrideRow>();
+    sundayOverrides.forEach((o) => overrideMap.set(o.user_id, o));
+    const out: SundayEntry[] = [];
+    allStaff.forEach((s) => {
+      const ov = overrideMap.get(s.user_id);
+      if (ov) {
+        if (ov.is_weekly_off) return; // explicitly off this Sunday
+        if (!ov.morning_start && !ov.evening_start) return;
+        out.push({
+          staff: s, source: 'override',
+          morning_start: ov.morning_start, morning_end: ov.morning_end,
+          evening_start: ov.evening_start, evening_end: ov.evening_end,
+        });
+        return;
+      }
       const sh = s.shifts[0];
-      return sh && !sh.is_weekly_off && (sh.morning_start || sh.evening_start);
-    }),
-    [allStaff],
-  );
+      if (sh && !sh.is_weekly_off && (sh.morning_start || sh.evening_start)) {
+        out.push({
+          staff: s, source: 'recurring',
+          morning_start: sh.morning_start, morning_end: sh.morning_end,
+          evening_start: sh.evening_start, evening_end: sh.evening_end,
+        });
+      }
+    });
+    return out;
+  }, [allStaff, sundayOverrides]);
 
   const periodLabel = useMemo(() => {
     if (view === 'day') {
