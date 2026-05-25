@@ -58,11 +58,28 @@ function getEmploymentAgreementTemplate(
   const fixedSalary = Number.isFinite(salary) && salary > 0 ? Math.round(salary).toLocaleString('en-IN') : '________';
   const executionDate = formatExecutionDate(startDate);
   const companyAddress = 'Udaipur, Rajasthan';
-  const employeeCode = prefill?.employeeCode || '-';
-  const email = prefill?.email || '-';
-  const phone = prefill?.phone || '-';
+  const employeeCode = prefill?.employeeCode;
+  const email = prefill?.email;
+  const phone = prefill?.phone;
   const position = prefill?.position || (role === 'trainer' ? 'Trainer' : role === 'manager' ? 'Manager' : 'Staff');
   const department = prefill?.department || (role === 'trainer' ? 'Training' : role === 'manager' ? 'Management' : 'Operations');
+
+  // Build the "AND" (employee) block conditionally — missing fields show a
+  // clear "[Pending — to be filled by employee]" marker instead of underscores
+  // so the document never looks like a stamp-paper template with blanks.
+  const PENDING = '[Pending — to be filled by employee before signing]';
+  const employeeLines: string[] = [];
+  employeeLines.push(`Mr./Ms. ${employeeName && !employeeName.startsWith('___') ? employeeName : PENDING}`);
+  if (employeeCode) employeeLines.push(`Employee Code: ${employeeCode}`);
+  if (email)        employeeLines.push(`Email: ${email}`);
+  if (phone)        employeeLines.push(`Phone: ${phone}`);
+  employeeLines.push(`Position: ${position}`);
+  employeeLines.push(`Department: ${department}`);
+  // S/o / D/o + Residing at come from the Contract Fill page (contract_variables).
+  // The PDF builder appends them in the "Filled details" section, so we render a
+  // single muted reference line here instead of two blank-looking underscores.
+  employeeLines.push(`Personal details (S/o · D/o, residential address, emergency contact, ID): see "Filled details" section below — completed by employee via the secure fill link.`);
+  employeeLines.push(`(hereinafter referred to as the "Employee")`);
 
   return `# EMPLOYMENT AGREEMENT
 
@@ -77,15 +94,7 @@ Having its principal place of business at: ${companyAddress}
 
 ## AND
 
-Mr./Ms. ${employeeName || '__________________________'},
-Employee Code: ${employeeCode}
-Email: ${email}
-Phone: ${phone}
-Position: ${position}
-Department: ${department}
-S/o / D/o __________________________,
-Residing at: ___________________________
-(hereinafter referred to as the "Employee")
+${employeeLines.join('\n')}
 
 ---
 
@@ -471,7 +480,36 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           contract_type: formData.contractType,
         },
       );
-      toast.success(`Contract created — Base ₹${Number(formData.salary).toLocaleString('en-IN')}/mo${formData.commissionPercentage ? `, ${formData.commissionPercentage}% commission` : ''}`);
+
+      // Auto-generate the employee fill/sign link so the manager has a one-click
+      // "Send to employee" action right from the success toast — no need to hunt
+      // for the row in the contracts list first.
+      let fillUrl: string | null = null;
+      try {
+        const { data: linkRes } = await supabase.functions.invoke('contract-signing', {
+          body: { action: 'create_link', contract_id: createdContract?.id, role: 'employee' },
+        });
+        fillUrl = (linkRes as any)?.sign_url ?? null;
+      } catch { /* non-fatal */ }
+
+      toast.success(
+        `Contract created — Base ₹${Number(formData.salary).toLocaleString('en-IN')}/mo${formData.commissionPercentage ? `, ${formData.commissionPercentage}% commission` : ''}`,
+        {
+          duration: 8000,
+          description: fillUrl
+            ? 'Employee still needs to fill personal details (S/o · D/o, address, emergency contact, ID). Share the fill link now.'
+            : undefined,
+          action: fillUrl
+            ? {
+                label: 'Copy fill link',
+                onClick: () => {
+                  navigator.clipboard.writeText(fillUrl!);
+                  toast.success('Fill link copied to clipboard');
+                },
+              }
+            : undefined,
+        },
+      );
       queryClient.invalidateQueries({ queryKey: ['employee-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
       onOpenChange(false);

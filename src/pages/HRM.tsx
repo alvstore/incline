@@ -429,6 +429,20 @@ export default function HRMPage() {
 
   // Server-side branded PDF (draft for unsigned, employee_copy for signed).
   const openServerPdf = async (contract: any, mode: 'preview' | 'download' | 'print' = 'preview') => {
+    // Pre-flight: warn (but don't block) if the linked profile is missing the
+    // identity fields rendered in the contract preamble. Avoids surprise blanks.
+    if (contract.signature_status !== 'signed') {
+      const missing: string[] = [];
+      if (!contract._resolvedName) missing.push('full name');
+      if (!contract._resolvedEmail) missing.push('email');
+      if (!contract._resolvedPhone) missing.push('phone');
+      if (missing.length) {
+        toast.warning(
+          `Profile is missing ${missing.join(', ')}. Open Employees → Edit to fill these before sending to the employee.`,
+          { duration: 6000 },
+        );
+      }
+    }
     const t = toast.loading(mode === 'download' ? 'Preparing download…' : 'Building PDF…');
     try {
       const isSigned = contract.signature_status === 'signed';
@@ -469,6 +483,7 @@ export default function HRMPage() {
   const createContractSignLink = async (
     contract: any,
     role: 'employee' | 'witness_1' | 'witness_2' | 'hr' = 'employee',
+    options: { sendWhatsApp?: boolean } = {},
   ) => {
     try {
       const { data, error } = await supabase.functions.invoke('contract-signing', {
@@ -481,18 +496,67 @@ export default function HRMPage() {
       const link = data?.sign_url as string | undefined;
       if (!link) throw new Error('No sign URL returned');
 
-      await navigator.clipboard.writeText(link);
       const label =
-        role === 'employee' ? 'Employee signing link'
+        role === 'employee' ? 'Employee fill / signing link'
         : role === 'hr' ? 'HR override link'
         : role === 'witness_1' ? 'Witness 1 link'
         : 'Witness 2 link';
-      toast.success(`${label} copied to clipboard`);
+
+      if (options.sendWhatsApp) {
+        const recipient = contract._resolvedPhone as string | null | undefined;
+        if (!recipient) {
+          toast.error('No phone on file for this employee — link copied to clipboard instead.');
+          await navigator.clipboard.writeText(link);
+        } else {
+          const employerName = 'The Incline Life by Incline';
+          const employeeName = contract._resolvedName || 'there';
+          const dispatch = await supabase.functions.invoke('dispatch-communication', {
+            body: {
+              branch_id: contract.branch_id || null,
+              channel: 'whatsapp',
+              category: 'transactional',
+              recipient,
+              event: 'contract_fill_link',
+              payload: {
+                body: `Hi ${employeeName}, please complete your employment agreement details (S/o · D/o, residential address, emergency contact, ID) at this secure link before signing:\n\n${link}\n\nLink expires in 7 days. — ${employerName}`,
+                variables: { name: employeeName, link, employer_name: employerName },
+              },
+              dedupe_key: `contract_fill_link:${contract.id}:${role}:${Date.now()}`,
+              force: true,
+            },
+          });
+          if (dispatch.error) {
+            toast.error('WhatsApp send failed — link copied to clipboard instead.');
+            await navigator.clipboard.writeText(link);
+          } else {
+            toast.success(`${label} sent to ${recipient} on WhatsApp`);
+          }
+        }
+      } else {
+        await navigator.clipboard.writeText(link);
+        toast.success(`${label} copied to clipboard`);
+      }
 
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
     } catch (err: any) {
       toast.error(err?.message || 'Failed to generate link');
     }
+  };
+
+  // Required keys mirror the server-side REQUIRED_BEFORE_SIGN list — keep in sync.
+  const CONTRACT_REQUIRED_KEYS = [
+    'father_or_husband_name', 'residential_address',
+    'emergency_contact_name', 'emergency_contact_phone',
+    'witness_1_name', 'witness_2_name',
+  ] as const;
+  const contractFillState = (contract: any): 'awaiting_details' | 'ready_to_sign' | 'signed' => {
+    if (contract.signature_status === 'signed') return 'signed';
+    const v = (contract.contract_variables ?? {}) as Record<string, unknown>;
+    const missing = CONTRACT_REQUIRED_KEYS.some((k) => {
+      const val = v[k];
+      return val === undefined || val === null || String(val).trim() === '';
+    });
+    return missing ? 'awaiting_details' : 'ready_to_sign';
   };
 
   // Payroll processing
@@ -1075,19 +1139,48 @@ export default function HRMPage() {
                               </DropdownMenu>
                             </div>
 
+                            <Badge
+                              variant="outline"
+                              className={
+                                contractFillState(contract) === 'signed'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                  : contractFillState(contract) === 'ready_to_sign'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 text-[10px]'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 text-[10px]'
+                              }
+                              title={
+                                contractFillState(contract) === 'signed'
+                                  ? 'Contract is signed'
+                                  : contractFillState(contract) === 'ready_to_sign'
+                                  ? 'All employee details filled — ready to sign'
+                                  : 'Employee still needs to complete the fill link before signing'
+                              }
+                            >
+                              {contractFillState(contract) === 'signed'
+                                ? 'Signed'
+                                : contractFillState(contract) === 'ready_to_sign'
+                                ? 'Ready to sign'
+                                : 'Awaiting employee details'}
+                            </Badge>
+
                             {/* Share / Sign links */}
                             {contract.signature_status !== 'signed' && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-8" title="Copy fill / signing links">
+                                  <Button size="sm" variant="outline" className="h-8" title="Copy or send fill / signing links">
                                     <Share2 className="h-3.5 w-3.5 mr-1" /> Share
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  <DropdownMenuLabel className="text-xs">Fill &amp; Sign links</DropdownMenuLabel>
-                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
-                                    <Link className="h-3.5 w-3.5 mr-2" /> Employee — sign
+                                <DropdownMenuContent align="end" className="w-64">
+                                  <DropdownMenuLabel className="text-xs">Send to employee</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsApp: true })}>
+                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send fill link via WhatsApp
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
+                                    <Link className="h-3.5 w-3.5 mr-2" /> Copy employee fill / sign link
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-xs">Witnesses</DropdownMenuLabel>
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'witness_1')}>
                                     <Link className="h-3.5 w-3.5 mr-2" /> Witness 1 — fill
                                   </DropdownMenuItem>

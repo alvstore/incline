@@ -1,90 +1,97 @@
+## Why the agreement currently shows blanks
 
-## Scope
+The preamble template renders `Mr./Ms. ___`, `S/o / D/o ___`, `Email: -`, `Phone: -` from `src/lib/hrm/contractTemplateV2.ts` (lines 132–144). Each blank has its own root cause:
 
-Two related changes:
+| Field in PDF | Source | Why it's blank today |
+|---|---|---|
+| `Mr./Ms. _______________________` | `employees.profiles.full_name` (via `resolveRecipient`) | Profile row has no `full_name` — staff was created without a linked profile or name was never filled in **Employees → Edit → Personal**. |
+| `Email: -` / `Phone: -` | `profiles.email` / `profiles.phone` | Same profile is missing email/phone. |
+| `S/o / D/o ___` | `contract_variables.father_or_husband_name` | Employee never opened the **Contract Fill** link (`/contract-fill/:token`) — that page is what writes `father_or_husband_name`, `residential_address`, `emergency_contact_*`, `pan_or_aadhaar_last4`, and witnesses. |
+| `Residing at: ___` | `contract_variables.residential_address` | Same as above. |
+| `Employee Code: EMP-MOZWZUNA` | `employees.employee_code` | This one *is* correct — proves the contract is wired to the right employee row. |
 
-1. **Permission matrix for StaffRoster** (view / edit / export of shifts, Sunday duty, overrides).
-2. **Trainer & Staff dashboards** show *their own* shift times for today + the week, with a **Late** badge per day when check-in is after the scheduled start.
+So two distinct gaps need to be closed:
 
-No schema changes — `staff_shifts`, `staff_shift_overrides`, and `staff_attendance` already cover everything.
+1. **Profile data** — `full_name`, `email`, `phone` must exist on the `profiles` row before generating a contract.
+2. **Self-fill variables** — the employee must complete the public Contract Fill link before signing. Until they do, the PDF falls back to underscores by design.
 
----
+## Why we don't already share the roster's branded PDF format
 
-## 1. Permission matrix
+The Staff Roster PDF is built **client-side with jsPDF** (`src/utils/pdfBlob.ts` → `buildStaffRosterPdf`) using a shared `header(doc, …)` / `footer(doc, …)` helper that reads `brand.logoUrl` from `organization_settings` and renders the Incline logo, address, GSTIN, page numbers, etc.
 
-Source of truth: `roles` from `useAuth()` evaluated against the row being edited (`employee.user_id` / `trainer.user_id`).
+The Employment Agreement PDF is built **server-side in the `contract-signing` edge function with pdf-lib** (`supabase/functions/contract-signing/index.ts` lines 619–789). It has its own ad-hoc `drawHeader()` / `drawFooter()` that prints the legal name as text only — **no logo, no rounded card branding**, plus a giant `EMPLOYEE COPY` watermark.
 
-| Role | View roster | Export / Print / Send | Edit any row (shift, override, Sunday) | Edit own row |
-|---|---|---|---|---|
-| Owner / Admin | yes | yes | yes | yes |
-| Manager (own branch) | yes | yes | yes (staff + trainer) | **no** |
-| Staff | yes (own branch) | yes | no | no |
-| Trainer | (out of scope — no roster page) | — | — | — |
+We *can* and *should* reuse one brand language across both, but the contract PDF must keep running server-side, because:
+- it embeds the typed/drawn signature image from a private storage bucket,
+- it computes the `signed_pdf_hash` and persists it on `contracts.stamped_pdf_path`,
+- the SHA-256 of `terms` must match `contract_signatures.terms_hash_at_sign` for tamper-evidence under IT Act §10A.
 
-Helper added inline in `StaffRoster.tsx` (or `src/lib/auth/permissions.ts` as `canEditRosterRow`):
+So the fix is: **extract a single branded layout module (logo, header, footer, watermark, typography) that both the roster PDF and the contract PDF call** — not move the contract PDF to the client.
 
-```ts
-canEditRosterRow(roles, targetUserId, currentUserId):
-  if owner|admin → true
-  if manager → targetUserId !== currentUserId
-  else → false
+## The plan
 
-canExportRoster(roles): any of owner|admin|manager|staff
-canEditAnyRoster(roles): owner|admin|manager
+### 1. Shared branded PDF surface
+
+- New file `supabase/functions/_shared/brandedPdf.ts` exporting:
+  - `loadEmployerBrand(supabase, branchId)` — returns `{ legalName, address, phone, email, gstin, pan, regNo, logoBytes }` from `get_employer_profile` + `organization_settings.logo_url` (downloaded server-side, cached per cold start).
+  - `drawBrandedHeader(page, pdfDoc, brand, opts)` — logo (left) + legal name + address + contact (center/left) + GSTIN/PAN block (right), matching the roster header proportions.
+  - `drawBrandedFooter(page, brand, { pageNum, totalPages, refLabel, verifyUrl })`.
+  - `drawWatermark(page, label)` — keep the diagonal `EMPLOYEE COPY` / `EMPLOYER COPY` / `ORIGINAL` / `DRAFT — NOT YET SIGNED`.
+  - Shared color tokens (`INDIGO`, `SLATE_500`, `SLATE_900`) so both PDFs use one palette.
+- New mirror in `src/utils/pdfBlob.ts`: refactor the existing jsPDF `header()` / `footer()` to consume the same tokens (purely cosmetic — same output, just shared constants in `src/lib/brand/pdfTokens.ts`).
+
+### 2. Refactor `contract-signing` PDF builder
+
+- Replace `drawHeader` / `drawFooter` in the edge function with the shared helpers above.
+- Embed the logo PNG via `pdfDoc.embedPng(logoBytes)` and draw it at 28×28 next to the legal name.
+- Move the body into a 2-column "Filled details" card matching the roster's card style (subtle slate divider lines, 10pt Helvetica, indigo section heads).
+- Keep all signature / hash / watermark logic untouched.
+
+### 3. Stop printing empty placeholder lines
+
+In the preamble (`contractTemplateV2.ts` 132–144), only emit a line if the value is present. Replace the current pattern:
+
+```text
+Email: -
+Phone: -
+S/o / D/o __________________
+Residing at: __________________
 ```
 
-UI gating in `StaffRoster.tsx`:
+with conditional rendering: missing rows are skipped entirely, and the **Filled details** section already in the PDF (lines 720–742) becomes the single source for self-filled fields. The preamble keeps only the legally-required identity line(s) that *are* known.
 
-- "Assign Sunday Duty", "Add Shift", per-row edit/delete, save buttons in `SundayAssignSheet` and shift sheets → hidden/disabled via `canEditAnyRoster` and per-row `canEditRosterRow`.
-- In the Sunday sheet checklist, the manager's **own row** renders read-only (badge: *"You — ask another manager or owner to edit"*).
-- Export / Print / Send buttons remain visible for staff and managers.
-- Read-only mode shows the same layout but inputs become `disabled`, action buttons return `null`, and pointer cursors drop.
+When a field is genuinely required but absent at draft time, render `[Pending — to be filled by employee before signing]` in muted slate, never an underscore.
 
-Defense-in-depth on the server: the existing RLS on `staff_shifts` / `staff_shift_overrides` already restricts to owner/admin/manager. Add a Postgres trigger `tg_block_manager_self_edit` on both tables — reject `INSERT/UPDATE/DELETE` when `auth.uid() = NEW.user_id` AND caller has *only* `manager` (not owner/admin). Uses existing `has_role` helper, no recursion risk.
+### 4. Close the data-gap UX in HRM
 
-## 2. Own-shift visibility + Late badge
+On the contracts list (`src/pages/HRM.tsx`):
 
-### Shared hook — `src/hooks/useMyShiftWeek.ts`
+- Before "Generate draft PDF" runs, run a one-shot guard: if `profiles.full_name / email / phone` are empty, open the Employee drawer pre-focused on the missing field instead of producing a blank-looking PDF.
+- Add a row action **"Copy Fill Link"** + **"Send Fill Link via WhatsApp"** that re-sends the existing `/contract-fill/:token` URL through `dispatchCommunication()` (uses the existing `contract_signature_requests.token_hash`).
+- Add a small status chip on each contract row: `Awaiting employee details` (cvars incomplete) → `Ready to sign` (cvars complete, signature pending) → `Signed`.
+- On the **CreateContractDrawer** success toast, replace the current generic message with two CTAs: *"Open fill link"* and *"Send fill link to employee"*.
 
-Returns, for a `userId` and date range (default = current week, Mon–Sun):
+### 5. How the user fills the blanks today (immediate workaround)
 
-```ts
-{ date, weekday, morning_start/end, evening_start/end, is_off,
-  source: 'override' | 'recurring' | 'none',
-  attendance: { first_check_in, late_minutes, is_late } | null }
-```
+Until step 4 ships, the founder can:
 
-- Reads `staff_shift_overrides` for the range first, then falls back per-date to `staff_shifts` by weekday (same merge logic as Sunday card).
-- Joins `staff_attendance` rows for the user in the date range, takes the earliest `check_in` per local date.
-- **Late rule:** `is_late = first_check_in > scheduled_start + 10 min grace` (configurable constant `LATE_GRACE_MIN = 10`). Compute against `morning_start` when present, otherwise `evening_start`.
+1. Open **Employees → that employee → Edit** and set `full_name`, `email`, `phone` on the profile.
+2. Open **HRM → Contracts → … menu → Copy fill URL** and send `/contract-fill/<token>` to the employee on WhatsApp.
+3. Employee opens link, fills S/o, address, emergency contact, PAN/Aadhaar last 4, witnesses → taps **Save**.
+4. Regenerate the draft PDF — all fields now populate.
 
-### TrainerDashboard.tsx
+### Files touched
 
-Augment the existing "My Shift" card:
-- Show today's AM/PM windows (already present) + a small `Late` chip next to today if `is_late`.
-- New **"This week"** strip: 7 day pills (Mon–Sun) each showing `06:00 AM – 12:00 PM` (12-h format via existing `fmtTime12`) and a `Late` badge for days with `is_late`. Off days show "Weekly off".
+- `supabase/functions/_shared/brandedPdf.ts` *(new)*
+- `supabase/functions/contract-signing/index.ts` *(swap header/footer, embed logo, drop empty preamble lines)*
+- `src/lib/brand/pdfTokens.ts` *(new — shared color/typography constants)*
+- `src/utils/pdfBlob.ts` *(consume shared tokens; no visual regression for roster)*
+- `src/lib/hrm/contractTemplateV2.ts` *(conditional preamble, no underscores)*
+- `src/pages/HRM.tsx` *(row chip, Copy/Send fill link, missing-profile guard)*
+- `src/components/hrm/CreateContractDrawer.tsx` *(success CTAs)*
 
-### StaffDashboard.tsx
+### Explicitly out of scope
 
-Add the same **"My shift & attendance"** card (currently missing). Same data, same Late badge. Placed above the existing "Today's check-ins" card.
-
-### Badge style
-
-`bg-red-100 text-red-700 rounded-full px-2 py-0.5 text-xs font-medium` with `Clock` icon (lucide). Tooltip: `Checked in at 06:18 AM (18 min late)`.
-
----
-
-## Files touched
-
-- `src/pages/StaffRoster.tsx` — gate buttons + sheet inputs by `canEditRosterRow` / `canEditAnyRoster`; show "You" read-only chip for manager self-row.
-- `src/lib/auth/permissions.ts` — add `canEditRosterRow`, `canEditAnyRoster`, `canExportRoster` helpers.
-- `src/hooks/useMyShiftWeek.ts` — **new** shared hook (overrides ∪ recurring + attendance merge, late computation).
-- `src/pages/TrainerDashboard.tsx` — wire weekly strip + Late badge.
-- `src/pages/StaffDashboard.tsx` — add "My shift & attendance" card.
-- **Migration**: trigger `tg_block_manager_self_edit` on `staff_shifts` and `staff_shift_overrides` (manager-only self-edit guard).
-
-## Out of scope
-
-- Changing the late grace per branch (hard-coded 10 min for now).
-- Adding shift visibility for members or owners' own card.
-- Editing the Late threshold from settings UI.
+- Moving contract PDF generation to the client.
+- Changing the legal clause text or `CONTRACT_TEMPLATE_VERSION` (would invalidate existing `terms_hash`).
+- Auto-OCRing PAN/Aadhaar to populate `pan_or_aadhaar_last4`.
