@@ -590,6 +590,9 @@ function WeekView({ trainers, onEdit }: { trainers: TrainerRosterRow[]; onEdit: 
                   </Avatar>
                   <div className="flex flex-col">
                     <span className="font-medium text-slate-900 whitespace-nowrap leading-tight">{t.full_name}</span>
+                    {t.position && t.position !== t.role && (
+                      <span className="text-[10px] text-slate-500 leading-tight">{t.position}</span>
+                    )}
                     <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium mt-0.5 ${ROLE_TONES[t.role]}`}>
                       {t.role}
                     </span>
