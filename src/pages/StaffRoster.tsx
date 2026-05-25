@@ -1686,7 +1686,7 @@ interface SundayPick {
 type SundayScope = 'one_off' | 'recurring';
 
 function SundayAssignSheet({
-  open, onClose, sundayDate, onChangeSundayDate, allStaff, existingOverrides, onAssign,
+  open, onClose, sundayDate, onChangeSundayDate, allStaff, existingOverrides, canEditFor, onAssign,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1694,6 +1694,7 @@ function SundayAssignSheet({
   onChangeSundayDate: (d: Date) => void;
   allStaff: TrainerRosterRow[];
   existingOverrides: ShiftOverrideRow[];
+  canEditFor: (uid: string) => boolean;
   onAssign: (args: {
     scope: SundayScope;
     picks: SundayPick[];
