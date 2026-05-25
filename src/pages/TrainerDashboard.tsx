@@ -330,3 +330,223 @@ export default function TrainerDashboard() {
     </AppLayout>
   );
 }
+
+// ===========================================================================
+// Duty Status widget — inline (no new files per spec)
+// ===========================================================================
+
+type ShiftBlock = { kind: 'morning' | 'evening' | 'night'; start: string; end: string };
+
+function parseTime(t: string | null | undefined): { h: number; m: number } | null {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  return { h, m };
+}
+function minutesNow(d = new Date()) { return d.getHours() * 60 + d.getMinutes(); }
+function timeToMin(t: string | null | undefined) {
+  const p = parseTime(t); return p ? p.h * 60 + p.m : null;
+}
+function fmt(t: string | null | undefined) { return t ? t.slice(0, 5) : '—'; }
+
+function pickCurrentBlock(shift: any): ShiftBlock['kind'] {
+  const now = minutesNow();
+  const ms = timeToMin(shift?.morning_start);
+  const me = timeToMin(shift?.morning_end);
+  const es = timeToMin(shift?.evening_start);
+  const ee = timeToMin(shift?.evening_end);
+
+  // Overnight morning block (e.g. 21:00 → 06:00)
+  if (ms != null && me != null && me < ms) {
+    if (now >= ms || now <= me + 60) return 'night';
+  }
+  // Within ±120 min of morning
+  if (ms != null && me != null && now >= ms - 120 && now <= me + 60) return 'morning';
+  if (es != null && ee != null && now >= es - 120 && now <= ee + 60) return 'evening';
+  // Default: closer of the two
+  if (ms != null && es != null) {
+    return Math.abs(now - ms) < Math.abs(now - es) ? 'morning' : 'evening';
+  }
+  if (ms != null) return 'morning';
+  if (es != null) return 'evening';
+  return 'morning';
+}
+
+function DutyStatusCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const weekday = new Date().getDay();
+  const todayDate = format(new Date(), 'yyyy-MM-dd');
+
+  const { data: shift, isLoading: shiftLoading } = useQuery({
+    queryKey: ['my-shift', userId, weekday],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('weekday', weekday)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: punches, isLoading: punchLoading } = useQuery({
+    queryKey: ['my-attendance', userId, todayDate],
+    enabled: !!userId,
+    queryFn: async () => {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const end = new Date(); end.setHours(23, 59, 59, 999);
+      const { data, error } = await supabase
+        .from('staff_attendance')
+        .select('id, check_in, check_out, shift_type, total_hours')
+        .eq('user_id', userId)
+        .gte('check_in', start.toISOString())
+        .lte('check_in', end.toISOString())
+        .order('check_in', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setTick((x) => x + 1), 30_000);
+    return () => clearInterval(i);
+  }, []);
+
+  const punch = useMutation({
+    mutationFn: async (shiftType: string) => {
+      const { data, error } = await supabase.rpc('punch_duty', { p_shift_type: shiftType });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Duty updated' });
+      qc.invalidateQueries({ queryKey: ['my-attendance', userId, todayDate] });
+    },
+    onError: (e: any) => toast({ title: 'Punch failed', description: e.message, variant: 'destructive' }),
+  });
+
+  if (shiftLoading || punchLoading) {
+    return (
+      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isOff = !!shift?.is_weekly_off;
+  const hasMorning = !!shift?.morning_start && !!shift?.morning_end;
+  const hasEvening = !!shift?.evening_start && !!shift?.evening_end;
+  const overnight = hasMorning && timeToMin(shift?.morning_end)! < timeToMin(shift?.morning_start)!;
+
+  const openPunch = (punches || []).find((p: any) => !p.check_out);
+  const suggested: ShiftBlock['kind'] = openPunch
+    ? (openPunch.shift_type as ShiftBlock['kind'])
+    : (isOff ? 'morning' : pickCurrentBlock(shift));
+
+  const onPunch = () => punch.mutate(suggested);
+  const elapsedMin = openPunch
+    ? Math.max(0, Math.round((Date.now() - new Date(openPunch.check_in).getTime()) / 60000))
+    : 0;
+
+  // Subtle re-render on tick
+  void tick;
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 overflow-hidden">
+      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wider opacity-80">Duty Status</p>
+            <h3 className="text-lg font-semibold">
+              {isOff ? "Today is your weekly off" :
+                openPunch ? `On duty · ${labelFor(openPunch.shift_type)} shift` : 'Off duty'}
+            </h3>
+          </div>
+          <Clock className="h-6 w-6 opacity-80" />
+        </div>
+      </div>
+      <CardContent className="py-5 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <BlockPill
+            label="Morning"
+            icon={Sun}
+            tone="emerald"
+            text={isOff ? 'Off' : hasMorning ? `${fmt(shift?.morning_start)} → ${fmt(shift?.morning_end)}${overnight ? ' (overnight)' : ''}` : 'Not scheduled'}
+          />
+          <BlockPill
+            label="Evening"
+            icon={Moon}
+            tone="indigo"
+            text={isOff ? 'Off' : hasEvening ? `${fmt(shift?.evening_start)} → ${fmt(shift?.evening_end)}` : 'Not scheduled'}
+          />
+        </div>
+
+        {openPunch && (
+          <div className="rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2.5 text-sm flex items-center justify-between">
+            <span>
+              Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
+              {' · '}{Math.floor(elapsedMin / 60)}h {elapsedMin % 60}m elapsed
+            </span>
+          </div>
+        )}
+
+        {(punches || []).filter((p: any) => p.check_out).length > 0 && (
+          <div className="text-xs text-slate-500">
+            Today's completed punches:{' '}
+            {(punches || []).filter((p: any) => p.check_out).map((p: any) => (
+              <span key={p.id} className="mr-2">
+                {labelFor(p.shift_type)} ({Number(p.total_hours || 0).toFixed(2)}h)
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 pt-1">
+          <Button
+            size="lg"
+            disabled={punch.isPending || (isOff && !openPunch)}
+            onClick={onPunch}
+            className={openPunch
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white'}
+          >
+            {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
+              openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
+            {openPunch ? `Clock Out · ${labelFor(openPunch.shift_type)}` : `Clock In · ${labelFor(suggested)} Shift`}
+          </Button>
+          {isOff && !openPunch && (
+            <p className="text-sm text-slate-500 self-center">Enjoy your rest day — no shift scheduled.</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function labelFor(t: string) {
+  return t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
+}
+
+function BlockPill({
+  label, icon: Icon, tone, text,
+}: { label: string; icon: any; tone: 'emerald' | 'indigo'; text: string }) {
+  const cls = tone === 'emerald'
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+  return (
+    <div className={`rounded-xl border p-3 ${cls}`}>
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-80">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </div>
+      <div className="text-sm font-medium mt-1">{text}</div>
+    </div>
+  );
+}
+
