@@ -1851,14 +1851,16 @@ function SundayAssignSheet({
               const pick = picks[c.user_id];
               const isOn = !!pick;
               const wasInitial = initialUserIds.has(c.user_id);
+              const rowEditable = canEditFor(c.user_id);
               return (
-                <div key={c.user_id} className={`p-3 ${isOn ? 'bg-amber-50/50' : 'bg-white'}`}>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                <div key={c.user_id} className={cn('p-3', isOn ? 'bg-amber-50/50' : 'bg-white', !rowEditable && 'opacity-60')}>
+                  <label className={cn('flex items-center gap-3', rowEditable ? 'cursor-pointer' : 'cursor-not-allowed')}>
                     <input
                       type="checkbox"
                       checked={isOn}
-                      onChange={() => toggle(c.user_id)}
-                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                      disabled={!rowEditable}
+                      onChange={() => rowEditable && toggle(c.user_id)}
+                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 disabled:opacity-50"
                     />
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={c.avatar_url || undefined} />
@@ -1867,9 +1869,14 @@ function SundayAssignSheet({
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5 flex-wrap">
                         {c.full_name}
-                        {wasInitial && !isOn && (
+                        {!rowEditable && (
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+                            You — ask another manager or owner
+                          </span>
+                        )}
+                        {wasInitial && !isOn && rowEditable && (
                           <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-600">
                             Will be removed
                           </span>
@@ -1891,9 +1898,9 @@ function SundayAssignSheet({
                           <Sun className="h-3 w-3" /> Morning
                         </Label>
                         <div className="flex items-center gap-1">
-                          <Input type="time" value={pick.morning_start} onChange={(e) => updateField(c.user_id, 'morning_start', e.target.value)} className="h-8 text-xs" />
+                          <Input type="time" disabled={!rowEditable} value={pick.morning_start} onChange={(e) => updateField(c.user_id, 'morning_start', e.target.value)} className="h-8 text-xs" />
                           <span className="text-slate-400 text-xs">→</span>
-                          <Input type="time" value={pick.morning_end} onChange={(e) => updateField(c.user_id, 'morning_end', e.target.value)} className="h-8 text-xs" />
+                          <Input type="time" disabled={!rowEditable} value={pick.morning_end} onChange={(e) => updateField(c.user_id, 'morning_end', e.target.value)} className="h-8 text-xs" />
                         </div>
                       </div>
                       <div className="space-y-1">
@@ -1901,9 +1908,9 @@ function SundayAssignSheet({
                           <Moon className="h-3 w-3" /> Evening
                         </Label>
                         <div className="flex items-center gap-1">
-                          <Input type="time" value={pick.evening_start} onChange={(e) => updateField(c.user_id, 'evening_start', e.target.value)} className="h-8 text-xs" />
+                          <Input type="time" disabled={!rowEditable} value={pick.evening_start} onChange={(e) => updateField(c.user_id, 'evening_start', e.target.value)} className="h-8 text-xs" />
                           <span className="text-slate-400 text-xs">→</span>
-                          <Input type="time" value={pick.evening_end} onChange={(e) => updateField(c.user_id, 'evening_end', e.target.value)} className="h-8 text-xs" />
+                          <Input type="time" disabled={!rowEditable} value={pick.evening_end} onChange={(e) => updateField(c.user_id, 'evening_end', e.target.value)} className="h-8 text-xs" />
                         </div>
                       </div>
                     </div>
