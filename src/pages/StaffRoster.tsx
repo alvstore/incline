@@ -651,16 +651,22 @@ function DayView({
               </TableCell>
               <TableCell className="text-right">
                 <div className="inline-flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
-                    onClick={() => onEdit({ trainer: t, weekday })} aria-label="Edit shift">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  {s?.id && (
-                    <Button size="sm" variant="ghost"
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => onDelete(t.user_id, weekday)} aria-label="Delete shift">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  {canEditFor(t.user_id) ? (
+                    <>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0"
+                        onClick={() => onEdit({ trainer: t, weekday })} aria-label="Edit shift">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {s?.id && (
+                        <Button size="sm" variant="ghost"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => onDelete(t.user_id, weekday)} aria-label="Delete shift">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">View only</span>
                   )}
                 </div>
               </TableCell>
