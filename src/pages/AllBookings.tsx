@@ -13,7 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatCard } from '@/components/ui/stat-card';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
-import { Calendar, Users, Heart, Dumbbell, Clock, Search, Check, X, Filter, Plus, ChevronLeft, ChevronRight, List, CalendarDays, ShieldAlert, ChevronDown, Activity } from 'lucide-react';
+import { Calendar, Users, Heart, Dumbbell, Clock, Search, Check, X, Filter, Plus, ChevronLeft, ChevronRight, List, CalendarDays, ShieldAlert, ChevronDown, Activity, Download, Printer } from 'lucide-react';
+import { exportToCSV } from '@/lib/csvExport';
+import { escapeHtml as e } from '@/utils/htmlEscape';
 import { ConciergeBookingDrawer } from '@/components/bookings/ConciergeBookingDrawer';
 import { SlotAvailabilityTimeline } from '@/components/bookings/SlotAvailabilityTimeline';
 import { SlotDetailDrawer } from '@/components/bookings/SlotDetailDrawer';
@@ -290,6 +292,105 @@ export default function AllBookingsPage() {
   const calEnd = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 });
   const calDays = eachDayOfInterval({ start: calStart, end: calEnd });
 
+  // Unified rows for export/print
+  const buildUnifiedRows = () => {
+    const fmtTime = (iso?: string) => (iso ? format(new Date(iso), 'hh:mm a') : '');
+    const rows: Record<string, string>[] = [];
+    filteredClassBookings.forEach((b: any) => rows.push({
+      date: b.class_time ? format(new Date(b.class_time), 'yyyy-MM-dd') : dateFilter,
+      time: fmtTime(b.class_time),
+      type: 'Class',
+      item: b.class_name || '',
+      member_code: b.member_code || '',
+      member_name: b.member_name || '',
+      status: (b.status || '').replace('_', ' '),
+      source: (b.source || 'member_portal').replace('_', ' '),
+      booked_by: '',
+    }));
+    filteredBenefitBookings.forEach((b: any) => rows.push({
+      date: b.slot_date || dateFilter,
+      time: b.slot_time || '',
+      type: 'Benefit',
+      item: b.benefit_name || '',
+      member_code: b.member_code || '',
+      member_name: b.member_name || '',
+      status: (b.status || '').replace('_', ' '),
+      source: (b.source || 'member_portal').replace('_', ' '),
+      booked_by: b.booked_by_name || '',
+    }));
+    filteredPTSessions.forEach((b: any) => rows.push({
+      date: b.scheduled_at ? format(new Date(b.scheduled_at), 'yyyy-MM-dd') : dateFilter,
+      time: fmtTime(b.scheduled_at),
+      type: 'PT',
+      item: b.trainer_name || '',
+      member_code: b.member_code || '',
+      member_name: b.member_name || '',
+      status: (b.status || '').replace('_', ' '),
+      source: (b.source || 'member_portal').replace('_', ' '),
+      booked_by: '',
+    }));
+    return rows;
+  };
+
+  const totalFiltered = filteredClassBookings.length + filteredBenefitBookings.length + filteredPTSessions.length;
+
+  const handleExportCSV = () => {
+    const rows = buildUnifiedRows();
+    if (!rows.length) return;
+    exportToCSV(rows, `bookings_${dateFilter}`, [
+      { key: 'date', label: 'Date' },
+      { key: 'time', label: 'Time' },
+      { key: 'type', label: 'Type' },
+      { key: 'item', label: 'Item / Trainer' },
+      { key: 'member_code', label: 'Member Code' },
+      { key: 'member_name', label: 'Member Name' },
+      { key: 'status', label: 'Status' },
+      { key: 'source', label: 'Source' },
+      { key: 'booked_by', label: 'Booked By' },
+    ]);
+  };
+
+  const handlePrint = () => {
+    const rows = buildUnifiedRows();
+    if (!rows.length) return;
+    const dateLabel = format(new Date(dateFilter), 'dd MMM yyyy');
+    const filters = [
+      statusFilter !== 'all' ? `Status: ${statusFilter}` : '',
+      sourceFilter !== 'all' ? `Source: ${sourceFilter}` : '',
+      searchQuery ? `Search: ${searchQuery}` : '',
+    ].filter(Boolean).join(' · ');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bookings ${e(dateLabel)}</title>
+<style>
+  body{font-family:Inter,system-ui,sans-serif;color:#0f172a;padding:24px;}
+  h1{margin:0 0 4px;font-size:20px;}
+  .meta{color:#64748b;font-size:12px;margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #e2e8f0;}
+  th{background:#f1f5f9;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em;color:#475569;}
+  tr:nth-child(even) td{background:#fafafa;}
+  @media print{button{display:none}}
+</style></head><body>
+<h1>All Bookings — ${e(dateLabel)}</h1>
+<div class="meta">${e(totalFiltered + ' rows')}${filters ? ' · ' + e(filters) : ''}</div>
+<table><thead><tr>
+<th>Date</th><th>Time</th><th>Type</th><th>Item / Trainer</th><th>Member Code</th><th>Member Name</th><th>Status</th><th>Source</th><th>Booked By</th>
+</tr></thead><tbody>
+${rows.map(r => `<tr>
+<td>${e(r.date)}</td><td>${e(r.time)}</td><td>${e(r.type)}</td><td>${e(r.item)}</td>
+<td>${e(r.member_code)}</td><td>${e(r.member_name)}</td><td>${e(r.status)}</td>
+<td>${e(r.source)}</td><td>${e(r.booked_by)}</td>
+</tr>`).join('')}
+</tbody></table>
+<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300);}<\/script>
+</body></html>`;
+    const w = window.open('', '_blank', 'width=1024,height=768');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  };
+
+
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -315,6 +416,12 @@ export default function AllBookingsPage() {
                 <CalendarDays className="h-4 w-4" /> Calendar
               </Button>
             </div>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={totalFiltered === 0} className="gap-2 rounded-xl">
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={totalFiltered === 0} className="gap-2 rounded-xl">
+              <Printer className="h-4 w-4" /> Print
+            </Button>
             <Button onClick={() => setConciergeOpen(true)} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
               <Plus className="h-4 w-4" /> New Booking
             </Button>
