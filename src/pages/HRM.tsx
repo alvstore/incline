@@ -469,6 +469,7 @@ export default function HRMPage() {
   const createContractSignLink = async (
     contract: any,
     role: 'employee' | 'witness_1' | 'witness_2' | 'hr' = 'employee',
+    options: { sendWhatsApp?: boolean } = {},
   ) => {
     try {
       const { data, error } = await supabase.functions.invoke('contract-signing', {
@@ -481,18 +482,67 @@ export default function HRMPage() {
       const link = data?.sign_url as string | undefined;
       if (!link) throw new Error('No sign URL returned');
 
-      await navigator.clipboard.writeText(link);
       const label =
-        role === 'employee' ? 'Employee signing link'
+        role === 'employee' ? 'Employee fill / signing link'
         : role === 'hr' ? 'HR override link'
         : role === 'witness_1' ? 'Witness 1 link'
         : 'Witness 2 link';
-      toast.success(`${label} copied to clipboard`);
+
+      if (options.sendWhatsApp) {
+        const recipient = contract._resolvedPhone as string | null | undefined;
+        if (!recipient) {
+          toast.error('No phone on file for this employee — link copied to clipboard instead.');
+          await navigator.clipboard.writeText(link);
+        } else {
+          const employerName = 'The Incline Life by Incline';
+          const employeeName = contract._resolvedName || 'there';
+          const dispatch = await supabase.functions.invoke('dispatch-communication', {
+            body: {
+              branch_id: contract.branch_id || null,
+              channel: 'whatsapp',
+              category: 'transactional',
+              recipient,
+              event: 'contract_fill_link',
+              payload: {
+                body: `Hi ${employeeName}, please complete your employment agreement details (S/o · D/o, residential address, emergency contact, ID) at this secure link before signing:\n\n${link}\n\nLink expires in 7 days. — ${employerName}`,
+                variables: { name: employeeName, link, employer_name: employerName },
+              },
+              dedupe_key: `contract_fill_link:${contract.id}:${role}:${Date.now()}`,
+              force: true,
+            },
+          });
+          if (dispatch.error) {
+            toast.error('WhatsApp send failed — link copied to clipboard instead.');
+            await navigator.clipboard.writeText(link);
+          } else {
+            toast.success(`${label} sent to ${recipient} on WhatsApp`);
+          }
+        }
+      } else {
+        await navigator.clipboard.writeText(link);
+        toast.success(`${label} copied to clipboard`);
+      }
 
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
     } catch (err: any) {
       toast.error(err?.message || 'Failed to generate link');
     }
+  };
+
+  // Required keys mirror the server-side REQUIRED_BEFORE_SIGN list — keep in sync.
+  const CONTRACT_REQUIRED_KEYS = [
+    'father_or_husband_name', 'residential_address',
+    'emergency_contact_name', 'emergency_contact_phone',
+    'witness_1_name', 'witness_2_name',
+  ] as const;
+  const contractFillState = (contract: any): 'awaiting_details' | 'ready_to_sign' | 'signed' => {
+    if (contract.signature_status === 'signed') return 'signed';
+    const v = (contract.contract_variables ?? {}) as Record<string, unknown>;
+    const missing = CONTRACT_REQUIRED_KEYS.some((k) => {
+      const val = v[k];
+      return val === undefined || val === null || String(val).trim() === '';
+    });
+    return missing ? 'awaiting_details' : 'ready_to_sign';
   };
 
   // Payroll processing
