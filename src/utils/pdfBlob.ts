@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DEFAULT_BRAND, type BrandContext } from '@/lib/brand/useBrandContext';
 import { supabase } from '@/integrations/supabase/client';
+import inclineLogoAsset from '@/assets/incline-logo.png';
 
 const BRAND = {
   primary: [99, 102, 241] as [number, number, number], // indigo
@@ -70,6 +71,8 @@ async function resolveBrandAsync(branchId?: string | null, branchName?: string |
     const { data: branchRow } = await supabase.from('organization_settings').select('logo_url').eq('branch_id', branchId).limit(1).maybeSingle();
     if (branchRow?.logo_url) logoUrl = branchRow.logo_url;
   }
+  // Fallback to bundled brand asset so PDFs are never wordmark-only.
+  if (!logoUrl) logoUrl = inclineLogoAsset;
   return { ...DEFAULT_BRAND, logoUrl, branch };
 }
 
