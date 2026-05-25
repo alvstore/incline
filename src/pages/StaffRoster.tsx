@@ -463,6 +463,30 @@ export default function StaffRoster() {
         monthAnchor={monthAnchor}
         trainers={trainers}
       />
+
+      <SundayAssignSheet
+        open={sundayOpen}
+        onClose={() => setSundayOpen(false)}
+        candidates={allStaff.filter((s) => {
+          const sh = s.shifts[0];
+          return !sh || sh.is_weekly_off || (!sh.morning_start && !sh.evening_start);
+        })}
+        onAssign={async (assignments) => {
+          for (const a of assignments) {
+            await upsert.mutateAsync({
+              user_id: a.user_id,
+              weekday: 0,
+              morning_start: a.morning_start || null,
+              morning_end: a.morning_end || null,
+              evening_start: a.evening_start || null,
+              evening_end: a.evening_end || null,
+              is_weekly_off: false,
+            });
+          }
+          toast({ title: `Sunday duty assigned to ${assignments.length} staff` });
+          setSundayOpen(false);
+        }}
+      />
     </AppLayout>
   );
 }
