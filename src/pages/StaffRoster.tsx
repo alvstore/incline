@@ -731,8 +731,9 @@ function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow
                 return (
                   <td key={d.idx} className="px-2 py-2 text-center align-middle">
                     <button
-                      onClick={() => onEdit({ trainer: t, weekday: d.idx })}
-                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                      onClick={() => canEditFor(t.user_id) && onEdit({ trainer: t, weekday: d.idx })}
+                      disabled={!canEditFor(t.user_id)}
+                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 enabled:hover:border-indigo-200 enabled:hover:bg-indigo-50/40 transition-colors disabled:cursor-default"
                     >
                       {s?.is_weekly_off ? (
                         <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">OFF</span>
