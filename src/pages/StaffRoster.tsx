@@ -1490,47 +1490,118 @@ function RosterSendDrawer({
 }
 
 // ---------------------------------------------------------------------------
-// Sunday Duty card + Assign sheet
+// Sunday Duty card + Assign sheet (date-aware + recurring/one-off scope)
 // ---------------------------------------------------------------------------
+interface SundayEntryPublic {
+  staff: TrainerRosterRow;
+  source: 'override' | 'recurring';
+  morning_start: string | null;
+  morning_end: string | null;
+  evening_start: string | null;
+  evening_end: string | null;
+}
+
+function SundayDatePicker({
+  date, onChange,
+}: { date: Date; onChange: (d: Date) => void }) {
+  const [open, setOpen] = useState(false);
+  const isUpcoming = isSameDay(date, nextSunday());
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        size="icon" variant="ghost"
+        onClick={() => onChange(prevSunday(date))}
+        className="h-8 w-8 text-slate-500 hover:text-amber-600"
+        aria-label="Previous Sunday"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 rounded-full border-amber-200 bg-white text-xs font-semibold text-slate-800 hover:border-amber-400 hover:bg-amber-50"
+          >
+            <CalendarDays className="h-3.5 w-3.5 text-amber-600" />
+            {format(date, 'EEE, dd MMM yyyy')}
+            {isUpcoming && (
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                Next
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(d) => { if (d) { onChange(d); setOpen(false); } }}
+            disabled={(d) => d.getDay() !== 0 || d < startOfDay(new Date())}
+            initialFocus
+            className={cn('p-3 pointer-events-auto')}
+          />
+        </PopoverContent>
+      </Popover>
+      <Button
+        size="icon" variant="ghost"
+        onClick={() => onChange(nextSundayFrom(date))}
+        className="h-8 w-8 text-slate-500 hover:text-amber-600"
+        aria-label="Next Sunday"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 function SundayDutyCard({
-  staff, onEdit, onAssign,
+  sundayDate, onChangeSundayDate, entries, allStaffCount, onEdit, onAssign,
 }: {
-  staff: TrainerRosterRow[];
+  sundayDate: Date;
+  onChangeSundayDate: (d: Date) => void;
+  entries: SundayEntryPublic[];
+  allStaffCount: number;
   onEdit: (t: TrainerRosterRow) => void;
   onAssign: () => void;
 }) {
   return (
     <Card className="rounded-2xl border-0 shadow-lg shadow-amber-100/40 bg-gradient-to-br from-amber-50/60 via-white to-white">
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Sun className="h-5 w-5 text-amber-500" />
-          Sunday Duty
-          <Badge variant="outline" className="ml-2 rounded-full text-[10px]">
-            {staff.length} assigned
+      <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sun className="h-5 w-5 text-amber-500" />
+            Sunday Duty
+          </CardTitle>
+          <Badge variant="outline" className="rounded-full text-[10px]">
+            {entries.length} assigned
           </Badge>
-        </CardTitle>
+          <SundayDatePicker date={sundayDate} onChange={onChangeSundayDate} />
+        </div>
         <Button
           size="sm"
           onClick={onAssign}
           className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+          disabled={allStaffCount === 0}
         >
           + Assign Sunday
         </Button>
       </CardHeader>
       <CardContent className="pt-0">
-        {staff.length === 0 ? (
+        {entries.length === 0 ? (
           <p className="text-xs text-slate-500 py-2">
-            No one assigned for Sunday yet. Most staff have Sunday as their weekly off — tap <b>Assign Sunday</b> to add contractual Sunday duty for selected staff.
+            No one assigned for <b>{format(sundayDate, 'EEE, dd MMM')}</b>. Most staff have Sunday as their weekly off — tap <b>Assign Sunday</b> to add duty for this Sunday or every Sunday.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {staff.map((t) => {
-              const sh = t.shifts[0]!;
+            {entries.map((e) => {
+              const t = e.staff;
               return (
                 <button
                   key={t.user_id}
                   onClick={() => onEdit(t)}
                   className="group flex items-center gap-2 rounded-full bg-white border border-amber-200 pl-1 pr-3 py-1 hover:border-amber-400 hover:shadow-sm transition-all"
+                  title={e.source === 'override' ? `One-off for ${format(sundayDate, 'dd MMM')}` : 'Recurring every Sunday'}
                 >
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={t.avatar_url || undefined} />
@@ -1539,14 +1610,22 @@ function SundayDutyCard({
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-xs font-medium text-slate-900">{t.full_name}</span>
+                  <span className={cn(
+                    'rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                    e.source === 'override'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-slate-100 text-slate-600',
+                  )}>
+                    {e.source === 'override' ? 'One-off' : 'Recurring'}
+                  </span>
                   <span className="text-[10px] text-amber-700 font-medium">
-                    {sh.morning_start && fmtTime12(sh.morning_start)}
-                    {sh.morning_start && sh.morning_end && '–'}
-                    {sh.morning_end && fmtTime12(sh.morning_end)}
-                    {sh.evening_start && (sh.morning_start ? ' · ' : '')}
-                    {sh.evening_start && fmtTime12(sh.evening_start)}
-                    {sh.evening_start && sh.evening_end && '–'}
-                    {sh.evening_end && fmtTime12(sh.evening_end)}
+                    {e.morning_start && fmtTime12(e.morning_start)}
+                    {e.morning_start && e.morning_end && '–'}
+                    {e.morning_end && fmtTime12(e.morning_end)}
+                    {e.evening_start && (e.morning_start ? ' · ' : '')}
+                    {e.evening_start && fmtTime12(e.evening_start)}
+                    {e.evening_start && e.evening_end && '–'}
+                    {e.evening_end && fmtTime12(e.evening_end)}
                   </span>
                 </button>
               );
@@ -1566,26 +1645,76 @@ interface SundayPick {
   evening_end: string;
 }
 
+type SundayScope = 'one_off' | 'recurring';
+
 function SundayAssignSheet({
-  open, onClose, candidates, onAssign,
+  open, onClose, sundayDate, onChangeSundayDate, allStaff, existingOverrides, onAssign,
 }: {
   open: boolean;
   onClose: () => void;
-  candidates: TrainerRosterRow[];
-  onAssign: (picks: SundayPick[]) => Promise<void> | void;
+  sundayDate: Date;
+  onChangeSundayDate: (d: Date) => void;
+  allStaff: TrainerRosterRow[];
+  existingOverrides: ShiftOverrideRow[];
+  onAssign: (args: {
+    scope: SundayScope;
+    picks: SundayPick[];
+    removedUserIds: string[];
+  }) => Promise<void> | void;
 }) {
+  const [scope, setScope] = useState<SundayScope>('one_off');
   const [picks, setPicks] = useState<Record<string, SundayPick>>({});
+  const [initialUserIds, setInitialUserIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Reset + prefill whenever the sheet opens, the date changes, or scope changes.
   useEffect(() => {
-    if (!open) { setPicks({}); setSearch(''); }
-  }, [open]);
+    if (!open) { setPicks({}); setSearch(''); setInitialUserIds(new Set()); return; }
+    const next: Record<string, SundayPick> = {};
+    const ids = new Set<string>();
+    if (scope === 'one_off') {
+      // Prefill from existing overrides for the selected Sunday
+      existingOverrides.forEach((o) => {
+        if (o.is_weekly_off || (!o.morning_start && !o.evening_start)) return;
+        next[o.user_id] = {
+          user_id: o.user_id,
+          morning_start: (o.morning_start || '').slice(0, 5),
+          morning_end: (o.morning_end || '').slice(0, 5),
+          evening_start: (o.evening_start || '').slice(0, 5),
+          evening_end: (o.evening_end || '').slice(0, 5),
+        };
+        ids.add(o.user_id);
+      });
+    } else {
+      // Prefill from current recurring Sunday shifts (weekday=0)
+      allStaff.forEach((s) => {
+        const sh = s.shifts[0];
+        if (sh && !sh.is_weekly_off && (sh.morning_start || sh.evening_start)) {
+          next[s.user_id] = {
+            user_id: s.user_id,
+            morning_start: (sh.morning_start || '').slice(0, 5),
+            morning_end: (sh.morning_end || '').slice(0, 5),
+            evening_start: (sh.evening_start || '').slice(0, 5),
+            evening_end: (sh.evening_end || '').slice(0, 5),
+          };
+          ids.add(s.user_id);
+        }
+      });
+    }
+    setPicks(next);
+    setInitialUserIds(ids);
+  }, [open, scope, sundayDate, existingOverrides, allStaff]);
 
-  const filtered = candidates.filter((c) =>
+  const filtered = allStaff.filter((c) =>
     !search.trim() || c.full_name.toLowerCase().includes(search.trim().toLowerCase())
   );
   const selected = Object.values(picks);
+  const removedUserIds = useMemo(
+    () => Array.from(initialUserIds).filter((id) => !picks[id]),
+    [initialUserIds, picks],
+  );
+  const hasChanges = selected.length > 0 || removedUserIds.length > 0;
 
   const toggle = (uid: string) => {
     setPicks((p) => {
@@ -1599,10 +1728,13 @@ function SundayAssignSheet({
   };
 
   const handleConfirm = async () => {
-    if (selected.length === 0) return;
+    if (!hasChanges) return;
     setSaving(true);
-    try { await onAssign(selected); } finally { setSaving(false); }
+    try { await onAssign({ scope, picks: selected, removedUserIds }); } finally { setSaving(false); }
   };
+
+  const dateLabel = format(sundayDate, 'EEE, dd MMM yyyy');
+  const isUpcoming = isSameDay(sundayDate, nextSunday());
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -1612,24 +1744,74 @@ function SundayAssignSheet({
             <Sun className="h-5 w-5 text-amber-500" /> Assign Sunday Duty
           </SheetTitle>
           <SheetDescription>
-            Pick staff who are contractually working this Sunday and override their weekly-off. Times default to 6 AM – 12 PM and are editable per person.
+            Assigning duty for <b>{dateLabel}</b>{isUpcoming ? ' (next Sunday)' : ''}. Choose whether this applies just to this Sunday or repeats every Sunday going forward. Times default to 6 AM – 12 PM and are editable per person.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="py-4 space-y-3">
+        <div className="py-4 space-y-4">
+          {/* Date picker row */}
+          <div className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-amber-50/40 p-3">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Sunday date
+            </Label>
+            <SundayDatePicker date={sundayDate} onChange={onChangeSundayDate} />
+          </div>
+
+          {/* Scope toggle */}
+          <div className="space-y-2">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Apply to
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setScope('one_off')}
+                className={cn(
+                  'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
+                  scope === 'one_off'
+                    ? 'border-amber-400 bg-amber-50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300',
+                )}
+              >
+                <CalendarDays className={cn('h-4 w-4 mt-0.5', scope === 'one_off' ? 'text-amber-600' : 'text-slate-400')} />
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">Just this Sunday</div>
+                  <div className="text-[10px] text-slate-500 leading-tight">One-off for {format(sundayDate, 'dd MMM')}. Their weekly schedule stays unchanged.</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope('recurring')}
+                className={cn(
+                  'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
+                  scope === 'recurring'
+                    ? 'border-indigo-400 bg-indigo-50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300',
+                )}
+              >
+                <Repeat className={cn('h-4 w-4 mt-0.5', scope === 'recurring' ? 'text-indigo-600' : 'text-slate-400')} />
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">Every Sunday going forward</div>
+                  <div className="text-[10px] text-slate-500 leading-tight">Overrides their weekly off permanently until changed.</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           <Input
             placeholder="Search staff…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9"
           />
-          <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+          <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
             {filtered.length === 0 && (
               <p className="p-6 text-center text-sm text-slate-500">No matching staff.</p>
             )}
             {filtered.map((c) => {
               const pick = picks[c.user_id];
               const isOn = !!pick;
+              const wasInitial = initialUserIds.has(c.user_id);
               return (
                 <div key={c.user_id} className={`p-3 ${isOn ? 'bg-amber-50/50' : 'bg-white'}`}>
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -1646,7 +1828,14 @@ function SundayAssignSheet({
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate">{c.full_name}</div>
+                      <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5">
+                        {c.full_name}
+                        {wasInitial && !isOn && (
+                          <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-600">
+                            Will be removed
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-slate-500 truncate">
                         {c.position || c.role}{c.department ? ` · ${c.department}` : ''}
                       </div>
@@ -1690,10 +1879,17 @@ function SundayAssignSheet({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleConfirm}
-            disabled={selected.length === 0 || saving}
-            className="bg-amber-500 hover:bg-amber-600 text-white"
+            disabled={!hasChanges || saving}
+            className={cn(
+              'text-white',
+              scope === 'recurring' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-500 hover:bg-amber-600',
+            )}
           >
-            {saving ? 'Assigning…' : `Assign ${selected.length || ''} staff`}
+            {saving
+              ? 'Saving…'
+              : scope === 'recurring'
+                ? `Apply to ${selected.length || ''} staff · every Sunday`
+                : `Save for ${format(sundayDate, 'dd MMM')}${selected.length ? ` (${selected.length})` : ''}`}
           </Button>
         </SheetFooter>
       </SheetContent>
