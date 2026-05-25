@@ -5,7 +5,8 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import {
   useStaffSchedules, useUpsertShift, useBulkUpsertShifts, useDeleteShift,
   useStaffAttendanceMonth,
-  type ShiftRow, type TrainerRosterRow, type StaffRoleLabel,
+  useShiftOverridesForDate, useUpsertShiftOverride, useDeleteShiftOverride,
+  type ShiftRow, type TrainerRosterRow, type StaffRoleLabel, type ShiftOverrideRow,
 } from '@/hooks/useStaffSchedules';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
