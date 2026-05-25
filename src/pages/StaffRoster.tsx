@@ -591,9 +591,10 @@ export default function StaffRoster() {
 // Day view
 // ---------------------------------------------------------------------------
 function DayView({
-  trainers, weekday, onEdit, onDelete,
+  trainers, weekday, canEditFor, onEdit, onDelete,
 }: {
   trainers: TrainerRosterRow[]; weekday: number;
+  canEditFor: (uid: string) => boolean;
   onEdit: (e: EditState) => void; onDelete: (uid: string, wd: number) => void;
 }) {
   return (
