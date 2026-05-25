@@ -1550,7 +1550,7 @@ export async function buildStaffRosterPdf(input: RosterPdfInput): Promise<Blob> 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const dayNums = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    const head = [['Trainer', ...dayNums.map(String)]];
+    const head = [['Staff', ...dayNums.map(String)]];
     const body = input.trainers.map((t) => {
       const cells: string[] = [t.full_name];
       for (const d of dayNums) {
