@@ -63,8 +63,8 @@ interface EditState {
 }
 
 export default function StaffRoster() {
-  const { selectedBranch } = useBranch();
-  const branchId = selectedBranch?.id;
+  const { effectiveBranchId, currentBranchName } = useBranchContext();
+  const branchId = effectiveBranchId;
   const { data, isLoading, isError, error } = useStaffSchedules(branchId);
   const upsert = useUpsertShift(branchId);
   const del = useDeleteShift(branchId);
