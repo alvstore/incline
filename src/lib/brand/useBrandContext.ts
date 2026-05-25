@@ -27,7 +27,7 @@ export const DEFAULT_BRAND: Omit<BrandContext, 'branch'> = {
   tagline: 'Rise. Reflect. Repeat.',
   legalName: 'The Incline Life by Incline',
   website: 'theincline.in',
-  supportEmail: 'hello@theincline.in',
+  supportEmail: 'info@theinclinelife.com',
   logoUrl: null,
 };
 

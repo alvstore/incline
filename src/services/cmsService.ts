@@ -55,7 +55,7 @@ const DEFAULT_THEME: ThemeSettings = {
   logoUrl: '/logo.png',
   gymName: 'Incline Fitness',
   gymTagline: 'Elevate Your Potential',
-  contactEmail: 'info@inclinefitness.com',
+  contactEmail: 'info@theinclinelife.com',
   contactPhone: '+91 98765 43210',
   address: '123 Fitness Street, Mumbai, India',
   socialLinks: {
