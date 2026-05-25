@@ -85,10 +85,17 @@ function getPayrollMonthLabel(payrollMonth: string): string {
 
 export default function HRMPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'employees';
+  const navigate = useNavigate();
+  const rawInitialTab = searchParams.get('tab') || 'employees';
+  // Attendance has moved to /staff-roster — redirect any deep links.
+  const initialTab = rawInitialTab === 'attendance' ? 'employees' : rawInitialTab;
   const [activeTab, setActiveTab] = useState(initialTab);
   useEffect(() => {
     const t = searchParams.get('tab');
+    if (t === 'attendance') {
+      navigate('/staff-roster?view=attendance', { replace: true });
+      return;
+    }
     if (t && t !== activeTab) setActiveTab(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
