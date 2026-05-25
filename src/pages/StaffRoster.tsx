@@ -36,7 +36,27 @@ import { downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { dispatchCommunication, buildDedupeKey } from '@/lib/comms/dispatch';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfMonth, addMonths, addWeeks, startOfWeek } from 'date-fns';
+import { format, startOfMonth, addMonths, addWeeks, startOfWeek, addDays, startOfDay, isSameDay } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+// Returns the next upcoming Sunday (today if today is Sunday)
+function nextSunday(from: Date = new Date()): Date {
+  const d = startOfDay(from);
+  const diff = (7 - d.getDay()) % 7; // 0 if Sunday
+  return addDays(d, diff);
+}
+function prevSunday(from: Date): Date {
+  return addDays(startOfDay(from), -7);
+}
+function nextSundayFrom(from: Date): Date {
+  return addDays(startOfDay(from), 7);
+}
+function toISODate(d: Date): string {
+  return format(d, 'yyyy-MM-dd');
+}
 
 const WEEKDAYS = [
   { idx: 1, short: 'Mon', full: 'Monday' },
