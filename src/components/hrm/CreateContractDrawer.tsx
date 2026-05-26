@@ -162,12 +162,7 @@ The Employee agrees to faithfully perform duties assigned by the Employer.
 
 * Fixed Salary: Rs. ${fixedSalary} per month
 * Payment cycle: Monthly
-
-### PERSONAL TRAINING (PT) COMMISSION - APPLICABLE TO TRAINERS
-
-* Commission shall be paid on Personal Training revenue (pre-GST amount only)
-* Commission %: _______%
-* Paid only after full payment is received from client
+${ptCommissionBlock}
 
 ---
 
