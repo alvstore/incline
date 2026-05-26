@@ -545,7 +545,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }),
+      }, role === 'trainer' ? 10 : 0),
       documentUrl: '',
     });
     setLegalTermsUnlocked(false);
