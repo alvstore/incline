@@ -1,4 +1,4 @@
-// v5.4.0 — PDF: strip legacy SIGNATURES/WITNESSES placeholder blocks from terms; render "Personal Details" + dedicated "Witnesses" sub-section; signatures rendered once by builder.
+// v5.5.0 — PDF sanitiser also backfills Commission % from contracts.commission_percentage and strips the legacy "see Filled details section below" stub line on page 1.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
