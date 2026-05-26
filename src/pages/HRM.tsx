@@ -1236,8 +1236,11 @@ export default function HRMPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-64">
                                   <DropdownMenuLabel className="text-xs">Send to employee</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsAppDesktop: true })}>
+                                    <ExternalLink className="h-3.5 w-3.5 mr-2" /> Open in WhatsApp Desktop (free)
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsApp: true })}>
-                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send fill link via WhatsApp
+                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send via WhatsApp API (template)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
                                     <Link className="h-3.5 w-3.5 mr-2" /> Copy employee fill / sign link
