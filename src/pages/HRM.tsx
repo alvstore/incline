@@ -41,6 +41,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { buildPayslipPdf, buildContractPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 const MONTH_VALUE_RE = /^\d{4}-\d{2}$/;
 
@@ -525,7 +526,7 @@ export default function HRMPage() {
         const recipient = contract._resolvedPhone as string | null | undefined;
         if (!recipient) {
           toast.error('No phone on file for this employee — link copied to clipboard instead.');
-          await navigator.clipboard.writeText(link);
+          await copyToClipboard(link);
         } else {
           const employerName = 'The Incline Life by Incline';
           const employeeName = contract._resolvedName || 'there';
@@ -546,14 +547,15 @@ export default function HRMPage() {
           });
           if (dispatch.error) {
             toast.error('WhatsApp send failed — link copied to clipboard instead.');
-            await navigator.clipboard.writeText(link);
+            await copyToClipboard(link);
           } else {
             toast.success(`${label} sent to ${recipient} on WhatsApp`);
           }
         }
       } else {
-        await navigator.clipboard.writeText(link);
-        toast.success(`${label} copied to clipboard`);
+        const ok = await copyToClipboard(link);
+        if (ok) toast.success(`${label} copied to clipboard`);
+        else toast.error('Could not copy automatically — please copy manually', { description: link });
       }
 
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });

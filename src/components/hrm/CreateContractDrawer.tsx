@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/lib/hrm/contractVariables';
 import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
@@ -502,9 +503,10 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           action: fillUrl
             ? {
                 label: 'Copy fill link',
-                onClick: () => {
-                  navigator.clipboard.writeText(fillUrl!);
-                  toast.success('Fill link copied to clipboard');
+                onClick: async () => {
+                  const ok = await copyToClipboard(fillUrl!);
+                  if (ok) toast.success('Fill link copied to clipboard');
+                  else toast.error('Could not copy automatically', { description: fillUrl! });
                 },
               }
             : undefined,
