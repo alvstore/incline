@@ -502,9 +502,10 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           action: fillUrl
             ? {
                 label: 'Copy fill link',
-                onClick: () => {
-                  navigator.clipboard.writeText(fillUrl!);
-                  toast.success('Fill link copied to clipboard');
+                onClick: async () => {
+                  const ok = await copyToClipboard(fillUrl!);
+                  if (ok) toast.success('Fill link copied to clipboard');
+                  else toast.error('Could not copy automatically', { description: fillUrl! });
                 },
               }
             : undefined,
