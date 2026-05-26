@@ -470,7 +470,15 @@ export default function HRMPage() {
     }
   };
 
+  const TERMINAL_CONTRACT_STATUSES = ['cancelled', 'voided', 'terminated', 'expired'];
+  const isContractTerminal = (contract: any) =>
+    TERMINAL_CONTRACT_STATUSES.includes(contract?.status);
+
   const voidContract = async (contract: any) => {
+    if (isContractTerminal(contract)) {
+      toast.info(`Contract is already ${contract.status}`);
+      return;
+    }
     try {
       await cancelContract(contract.id);
       toast.success('Contract voided');
@@ -1196,7 +1204,7 @@ export default function HRMPage() {
                             )}
 
                             {/* Void */}
-                            {contract.status !== 'cancelled' && contract.signature_status !== 'signed' && (
+                            {!isContractTerminal(contract) && contract.signature_status !== 'signed' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button size="sm" variant="ghost" className="h-8 text-destructive hover:text-destructive" title="Void contract">
