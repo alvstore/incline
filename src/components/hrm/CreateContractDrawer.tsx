@@ -292,34 +292,6 @@ Employee confirms:
 
 ---
 
-## SIGNATURES
-
-For Incline (Proprietor: Yogita Lekhari)
-Signature: ____________________
-
-Name: Yogita Lekhari
-
----
-
-Employee
-Signature: ____________________
-
-Name: ${employeeName || '____________________'}
-
----
-
-## WITNESSES
-
-Witness 1
-Name: ____________________
-Signature: ____________________
-
-Witness 2
-Name: ____________________
-Signature: ____________________
-
----
-
 ## ANNEXURE A (ROLE-SPECIFIC DETAILS)
 
 (To be attached separately if needed)
