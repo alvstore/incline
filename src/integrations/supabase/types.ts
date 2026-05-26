@@ -13288,6 +13288,19 @@ export type Database = {
         }
         Returns: Json
       }
+      create_contract_signature_request: {
+        Args: {
+          p_contract_id: string
+          p_created_by: string
+          p_expires_at: string
+          p_role: string
+          p_token_hash: string
+        }
+        Returns: {
+          branch_id: string
+          request_id: string
+        }[]
+      }
       create_manual_invoice:
         | {
             Args: {
