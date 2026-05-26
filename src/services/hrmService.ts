@@ -157,6 +157,7 @@ export async function createContract(contract: {
   baseSalary?: number;
   commissionPercentage?: number;
   terms?: any;
+  contractVariables?: Record<string, string>;
   documentUrl?: string;
 }) {
   const { data, error } = await supabase
@@ -172,6 +173,7 @@ export async function createContract(contract: {
       base_salary: contract.baseSalary || contract.salary,
       commission_percentage: contract.commissionPercentage || 0,
       terms: contract.terms,
+      contract_variables: contract.contractVariables ?? {},
       document_url: contract.documentUrl || null,
       status: 'draft',
     })
@@ -181,6 +183,7 @@ export async function createContract(contract: {
   if (error) throw error;
   return data;
 }
+
 
 export async function approveContract(contractId: string, approvedBy: string) {
   const { data, error } = await supabase

@@ -575,9 +575,9 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       salary: Number(formData.salary),
       baseSalary: Number(formData.salary),
       commissionPercentage: Number(formData.commissionPercentage),
+      contractVariables: cleanedVariables,
       terms: formData.terms ? {
         conditions: formData.terms,
-        contract_variables: cleanedVariables,
         compliance_meta: {
           template_version: 'incline-employment-v1',
           agreement_role: formData.agreementRole,
@@ -590,6 +590,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       documentUrl: formData.documentUrl || undefined,
     });
   };
+
 
   if (!employee) return null;
 
