@@ -498,7 +498,18 @@ export default function HRMPage() {
         body: { action: 'create_link', contract_id: contract.id, role },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Surface the real server message instead of "non-2xx"
+        let serverMsg: string | null = null;
+        try {
+          const ctx: any = (error as any)?.context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            serverMsg = body?.error || null;
+          }
+        } catch { /* ignore */ }
+        throw new Error(serverMsg || error.message || 'Failed to generate link');
+      }
       if (data?.error) throw new Error(data.error);
 
       const link = data?.sign_url as string | undefined;
@@ -550,6 +561,7 @@ export default function HRMPage() {
       toast.error(err?.message || 'Failed to generate link');
     }
   };
+
 
   // Required keys mirror the server-side REQUIRED_BEFORE_SIGN list — keep in sync.
   const CONTRACT_REQUIRED_KEYS = [
