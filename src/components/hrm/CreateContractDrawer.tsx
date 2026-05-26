@@ -339,7 +339,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     endDate: '',
     salary: defaultSalary,
     commissionPercentage: 0,
-    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill),
+    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0),
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
