@@ -892,7 +892,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                           const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
                           setFormData((f) => ({
                             ...f,
-                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill),
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage),
                           }));
                           await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
                           toast.success('Template reset');
