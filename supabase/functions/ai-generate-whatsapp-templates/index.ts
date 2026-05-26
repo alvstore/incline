@@ -261,6 +261,22 @@ Deno.serve(async (req) => {
       if (typeof t.body_html === 'string') t.body_html = fixBody(t.body_html);
     }
 
+    // ── Edge-variable validator ──────────────────────────────────────────
+    // Meta rejects templates whose body starts or ends with a {{variable}}.
+    // Auto-pad with safe static text so the template can be submitted.
+    const brand = body.brand || 'Incline';
+    for (const t of allTemplates) {
+      if (typeof t.body_text !== 'string') continue;
+      let txt = t.body_text.trim();
+      if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) {
+        txt = `Hi ${txt}`;
+      }
+      if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) {
+        txt = `${txt}\n\n— ${brand}`;
+      }
+      t.body_text = txt;
+    }
+
     if (allTemplates.length === 0) return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
