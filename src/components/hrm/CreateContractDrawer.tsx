@@ -85,9 +85,10 @@ function getEmploymentAgreementTemplate(
   employeeLines.push(`Position: ${position}`);
   employeeLines.push(`Department: ${department}`);
   // S/o / D/o + Residing at come from the Contract Fill page (contract_variables).
-  // The PDF builder appends them in the "Filled details" section, so we render a
-  // single muted reference line here instead of two blank-looking underscores.
-  employeeLines.push(`Personal details (S/o · D/o, residential address, emergency contact, ID): see "Filled details" section below — completed by employee via the secure fill link.`);
+  // The PDF builder renders them in the "Personal Details (provided by employee)"
+  // section appended below — point to it cleanly without the "Filled details" stub
+  // or any underscore placeholders.
+  employeeLines.push(`Personal details (parentage, residential address, emergency contact, ID) — provided by the Employee via the secure fill link and listed in the "Personal Details" section of this Agreement.`);
   employeeLines.push(`(hereinafter referred to as the "Employee")`);
 
   return `# EMPLOYMENT AGREEMENT
