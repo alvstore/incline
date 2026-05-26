@@ -41,6 +41,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { buildPayslipPdf, buildContractPdf, downloadBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { copyToClipboard } from '@/lib/utils/clipboard';
 
 const MONTH_VALUE_RE = /^\d{4}-\d{2}$/;
 
