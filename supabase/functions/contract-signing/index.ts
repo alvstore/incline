@@ -1,4 +1,4 @@
-// v5.4.0 — PDF: strip legacy SIGNATURES/WITNESSES placeholder blocks from terms; render "Personal Details" + dedicated "Witnesses" sub-section; signatures rendered once by builder.
+// v5.5.0 — PDF sanitiser also backfills Commission % from contracts.commission_percentage and strips the legacy "see Filled details section below" stub line on page 1.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -767,9 +767,20 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
 
   // Sanitise legacy placeholder blocks so they aren't rendered twice
   // (the PDF builder appends canonical "Personal Details" + "Signatures" sections below).
+  const commissionPct = Number((contract as any).commission_percentage);
+  const commissionReplacement = Number.isFinite(commissionPct) && commissionPct > 0
+    ? `Commission %: ${commissionPct}%`
+    : `Commission %: [to be agreed in Annexure A]`;
   const termsSanitised = termsRaw
     .replace(/##\s*SIGNATURES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
     .replace(/##\s*WITNESSES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
+    // Backfill the legacy hardcoded "Commission %: _______%" placeholder with the
+    // real value stored on the contract row (handles old drafts created before v5.5.0).
+    .replace(/\*\s*Commission\s*%:\s*_+\s*%/gi, `* ${commissionReplacement}`)
+    // Strip the legacy page-1 stub that pointed at a "Filled details" section that
+    // no longer exists — the renamed "Personal Details (provided by employee)" block
+    // is appended below by the builder, so the pointer is redundant and misleading.
+    .replace(/^.*see\s+"?Filled details"?\s+section below.*$/gim, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/(\n---\s*){2,}/g, "\n---\n")
     .trim();

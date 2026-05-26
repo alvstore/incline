@@ -1,62 +1,66 @@
-## Audit — why the PDF shows duplicates
+## Audit — two stale-template bugs on page 1 of the contract PDF
 
-The contract PDF has **two independent layers** writing the same fields:
+### Issue 1 — "Commission %: _______%" never gets filled
+`getEmploymentAgreementTemplate()` in `CreateContractDrawer.tsx` (line 160) hardcodes the placeholder:
+```
+* Commission %: _______%
+```
+The function doesn't accept the commission value at all, and the terms string is generated **once** at drawer-open and only re-generated when `agreementRole / employeeName / salary / startDate` change — never when the user edits the Commission % field. So even though the form captures `commissionPercentage` (default 10% for trainers) and saves it to `contracts.commission_percentage`, the rendered terms stay blank.
 
-1. **Terms body** (the markdown stored in `contracts.terms`) — currently hardcodes blank placeholder blocks:
-   - `## SIGNATURES` with `Signature: ____________________` for Employer + Employee
-   - `## WITNESSES` with `Witness 1 / Name: ____ / Signature: ____` and `Witness 2 / Name: ____ / Signature: ____`
-   - `## ANNEXURE A (ROLE-SPECIFIC DETAILS)` bullet list
+Same issue affects non-trainers: the whole "PT Commission" sub-block renders for Sales/Manager roles where it doesn't apply, with a meaningless blank %.
 
-2. **PDF builder** in `supabase/functions/contract-signing/index.ts` (lines 778–820) appends, after the terms:
-   - **"Filled details"** — pulls real values from `contract_variables` + prefill: S/o, address, emergency contact, PAN/Aadhaar, **Witness 1 (name + phone), Witness 2 (name + phone)**
-   - **"Signatures (pending)" / "Signatures"** — actual employee signature image / typed name + date
+### Issue 2 — "see 'Filled details' section below" stub line shows even after employee filled
+Lines 80–82 of the same file inject:
+```
+Personal details (S/o · D/o, residential address, emergency contact, ID):
+see "Filled details" section below — completed by employee via the secure fill link.
+```
+Two problems:
+- The pointer text says **"Filled details"**, but the PDF builder section was renamed to **"Personal Details (provided by employee)"** in the last patch — so the pointer points to a section name that no longer exists.
+- When the employee has already filled their details, the page-1 stub still reads like data is missing, even though the values appear correctly in the dedicated section appended further down.
 
-Result on the rendered PDF (your screenshot):
-- Witnesses appear **twice**: blank placeholder lines in `## WITNESSES`, then filled values under `Filled details`.
-- Signatures appear **twice**: blank line in `## SIGNATURES`, then the real "Signatures (pending)" block.
-- The "blank" copy looks like data is missing, even though it's actually captured.
+## Fix plan (template + edge-fn only, no schema changes)
 
-The template lives in **two places** (both must be fixed to stay in sync):
-- `src/components/hrm/CreateContractDrawer.tsx` — `buildDefaultTerms()` around lines 295–332 (the one currently used; matches your screenshot text "ANNEXURE A (ROLE-SPECIFIC DETAILS)").
-- `src/lib/hrm/contractTemplateV2.ts` lines 393–432 — alternate builder; also has the duplicate blocks.
+### A. CreateContractDrawer template — `getEmploymentAgreementTemplate`
 
-## Fix plan (UI/UX + PDF correctness only — no business-logic changes)
+1. **Add params** `commissionPercentage: number` and surface `isTrainer` via the existing `role` arg.
+2. Inside the PT Commission sub-section:
+   - If `role !== 'trainer'` → **omit the entire `### PERSONAL TRAINING (PT) COMMISSION` block** (don't render section 5's PT bullets at all for staff/manager).
+   - If `role === 'trainer'` and `commissionPercentage > 0` → render `* Commission %: 10%` (real value).
+   - If `role === 'trainer'` and `commissionPercentage` is 0/empty → render `* Commission %: [to be agreed in Annexure A]`.
+3. **Rewrite the page-1 personal-details stub line** so it matches the renamed downstream section and reads naturally:
+   ```
+   Personal details (parentage, residential address, emergency contact, ID) — provided by the Employee via the secure fill link and listed in the "Personal Details" section of this Agreement.
+   ```
+   No underscores, no broken "Filled details" reference.
 
-### 1. Strip the duplicate blocks from the terms template
-In **both** `CreateContractDrawer.tsx::buildDefaultTerms` and `contractTemplateV2.ts`:
+4. **Add a useEffect** that regenerates `formData.terms` whenever `formData.salary`, `formData.commissionPercentage`, `formData.agreementRole`, or `formData.startDate` change — **gated on `!legalTermsUnlocked`** so manual edits are never clobbered. This keeps the live preview and the persisted terms in sync with the form fields.
 
-- **Remove** the `## SIGNATURES` block (Employer + Employee blank signature lines).
-- **Remove** the `## WITNESSES` block (Witness 1 / Witness 2 blank lines).
-- **Keep** `## ANNEXURE A (ROLE-SPECIFIC DETAILS)` — it's informational, not duplicated.
-- End the terms body cleanly after the last legal clause + Annexure list.
+5. **Update all 6 existing call sites** of `getEmploymentAgreementTemplate(...)` to pass the new `commissionPercentage` arg (default to current `formData.commissionPercentage`, falling back to 10 for trainers / 0 otherwise as the rest of the code already does).
 
-The PDF builder already renders the canonical "Filled details" + "Signatures" sections — those become the single source of truth.
+### B. PDF builder — `supabase/functions/contract-signing/index.ts` (legacy safety net)
 
-### 2. Tighten the PDF builder's appended sections for premium look
-In `supabase/functions/contract-signing/index.ts`:
+For draft contracts already saved with the old `_______%` placeholder, add a small render-time substitution **right after the existing terms sanitiser**:
+- If `contract.commission_percentage` is a positive number and the terms contain `Commission %: _______%`, replace with `Commission %: <value>%`.
+- If `contract.commission_percentage` is 0 or null, replace with `Commission %: [to be agreed in Annexure A]`.
 
-- Rename the appended "Filled details" header to **"Personal Details (provided by employee)"** for clarity.
-- Add an explicit **"Witnesses"** sub-header right after personal details, listing Witness 1 / Witness 2 with name + phone (still pulled from `cvars`), so it reads like a proper section instead of two rows in a generic list.
-- Keep the "Signatures (pending) / Signatures" block as-is — it's already the only signature renderer.
-- When the employee has signed, replace the "(electronic — captured at signing)" placeholder (which currently only exists in `contractTemplateV2.ts`) with the real signature image already embedded below.
+Also strip the legacy `Personal details (S/o · D/o, residential address, emergency contact, ID): see "Filled details" section below …` pointer line from old terms when `cvars.father_or_husband_name` (or any personal detail) is populated — those values are already rendered in the appended "Personal Details" section, so the pointer is redundant and misleading on signed PDFs.
 
-### 3. Backfill protection
-Existing draft contracts already saved with the old terms text will still contain the duplicate blocks. To avoid editing historical legal text:
+Bump the version comment to `v5.5.0` and keep the rest of the file unchanged.
 
-- Add a one-time **sanitiser** in the PDF builder that strips `## SIGNATURES … ---` and `## WITNESSES … ---` segments from the terms string **before** rendering. This way old + new contracts both render cleanly without mutating stored data.
-
-### 4. Verify
-- Generate a fresh contract via Create Contract drawer → confirm PDF has **one** witnesses section (under Personal Details) and **one** signatures block.
-- Open an existing draft → confirm the sanitiser hides the legacy blocks too.
-- Signed PDF (final) → confirm signature image renders once, witness rows show captured values, no blank `____` lines anywhere.
+### C. Verify
+- Create a new Trainer contract with 12% commission → PDF section 5 reads `Commission %: 12%`, no `_______`.
+- Create a Sales/Manager contract → PDF section 5 has **no** PT Commission sub-block (only Fixed Salary + Payment cycle).
+- Page 1 AND block shows the new natural personal-details line — no "Filled details" wording, no blank lines.
+- Open Ritesh Sharma's existing draft and regenerate PDF → the sanitiser fills in the commission % from `contracts.commission_percentage` and removes the stub pointer line because cvars are populated.
+- Manually unlock + edit terms on a fresh contract → auto-regen does NOT overwrite the manual edits (legalTermsUnlocked gates it).
 
 ## Files to change
-
-- `src/components/hrm/CreateContractDrawer.tsx` — trim `buildDefaultTerms()` (remove SIGNATURES + WITNESSES blocks)
-- `src/lib/hrm/contractTemplateV2.ts` — same trim
-- `supabase/functions/contract-signing/index.ts` — rename "Filled details" → "Personal Details", add "Witnesses" sub-header, add legacy sanitiser before rendering terms; bump version comment
+- `src/components/hrm/CreateContractDrawer.tsx` — template fn signature + PT block conditional + personal-details line rewrite + auto-regen useEffect + 6 call-site updates.
+- `supabase/functions/contract-signing/index.ts` — extend terms sanitiser with commission-% backfill and personal-details stub stripper; version bump to v5.5.0.
 
 ## Out of scope
-- Form fields, RPC contracts, signing flow, witness data capture (already works — values are in `cvars`).
-- Branding / header / GSTIN block (unchanged).
-- Other PDF templates (invoice, payslip).
+- Schema, RLS, RPC contracts (commission_percentage already exists on contracts).
+- Annexure A salary breakdown layout (separate task if requested).
+- Signature image rendering — already correct after last patch.
+- Other PDFs (invoice, payslip, POS).

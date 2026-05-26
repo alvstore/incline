@@ -52,11 +52,19 @@ function getEmploymentAgreementTemplate(
   salary: number,
   startDate: string,
   prefill?: EmployeePrefill,
+  commissionPercentage: number = 0,
 ) {
   const trainerChecked = role === 'trainer' ? 'x' : ' ';
   const staffChecked = role === 'staff' ? 'x' : ' ';
   const managerChecked = role === 'manager' ? 'x' : ' ';
+  const isTrainer = role === 'trainer';
   const fixedSalary = Number.isFinite(salary) && salary > 0 ? Math.round(salary).toLocaleString('en-IN') : '________';
+  const commissionLine = Number.isFinite(commissionPercentage) && commissionPercentage > 0
+    ? `${commissionPercentage}%`
+    : '[to be agreed in Annexure A]';
+  const ptCommissionBlock = isTrainer
+    ? `\n### PERSONAL TRAINING (PT) COMMISSION - APPLICABLE TO TRAINERS\n\n* Commission shall be paid on Personal Training revenue (pre-GST amount only)\n* Commission %: ${commissionLine}\n* Paid only after full payment is received from client\n`
+    : '';
   const executionDate = formatExecutionDate(startDate);
   const companyAddress = 'Udaipur, Rajasthan';
   const employeeCode = prefill?.employeeCode;
@@ -77,9 +85,10 @@ function getEmploymentAgreementTemplate(
   employeeLines.push(`Position: ${position}`);
   employeeLines.push(`Department: ${department}`);
   // S/o / D/o + Residing at come from the Contract Fill page (contract_variables).
-  // The PDF builder appends them in the "Filled details" section, so we render a
-  // single muted reference line here instead of two blank-looking underscores.
-  employeeLines.push(`Personal details (S/o · D/o, residential address, emergency contact, ID): see "Filled details" section below — completed by employee via the secure fill link.`);
+  // The PDF builder renders them in the "Personal Details (provided by employee)"
+  // section appended below — point to it cleanly without the "Filled details" stub
+  // or any underscore placeholders.
+  employeeLines.push(`Personal details (parentage, residential address, emergency contact, ID) — provided by the Employee via the secure fill link and listed in the "Personal Details" section of this Agreement.`);
   employeeLines.push(`(hereinafter referred to as the "Employee")`);
 
   return `# EMPLOYMENT AGREEMENT
@@ -153,12 +162,7 @@ The Employee agrees to faithfully perform duties assigned by the Employer.
 
 * Fixed Salary: Rs. ${fixedSalary} per month
 * Payment cycle: Monthly
-
-### PERSONAL TRAINING (PT) COMMISSION - APPLICABLE TO TRAINERS
-
-* Commission shall be paid on Personal Training revenue (pre-GST amount only)
-* Commission %: _______%
-* Paid only after full payment is received from client
+${ptCommissionBlock}
 
 ---
 
@@ -335,7 +339,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     endDate: '',
     salary: defaultSalary,
     commissionPercentage: 0,
-    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill),
+    terms: getEmploymentAgreementTemplate(defaultRole, defaultEmployeeName, defaultSalary, defaultStartDate, employeePrefill, defaultRole === 'trainer' ? 10 : 0),
     documentUrl: '',
   });
   const [variables, setVariables] = useState<Record<ContractVariableKey, string>>({} as any);
@@ -415,20 +419,21 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     const startDate = new Date().toISOString().split('T')[0];
     const salary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
 
+    const initialCommission = role === 'trainer' ? 10 : 0;
     setFormData({
       agreementRole: role,
       contractType: 'full_time',
       startDate,
       endDate: '',
       salary,
-      commissionPercentage: 0, // overwritten by useEffect above for trainers
+      commissionPercentage: initialCommission,
       terms: getEmploymentAgreementTemplate(role, employeeName, salary, startDate, {
         employeeCode: employee?.employee_code,
         email: employee?.profile?.email,
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }),
+      }, initialCommission),
       documentUrl: '',
     });
     setVariables({} as any);
@@ -438,6 +443,33 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     setLegalTermsUnlocked(false);
     setLegalTermsUnlockedAt(null);
   }, [open, employee, defaultRoleProp]);
+
+  // Auto-regenerate terms when salary / commission / role / start date change,
+  // gated on legalTermsUnlocked so manual edits are preserved once unlocked.
+  useEffect(() => {
+    if (!open || !employee) return;
+    if (legalTermsUnlocked) return;
+    const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
+    setFormData((f) => ({
+      ...f,
+      terms: getEmploymentAgreementTemplate(
+        f.agreementRole,
+        employeeName,
+        Number(f.salary) || 0,
+        f.startDate,
+        {
+          employeeCode: employee?.employee_code,
+          email: employee?.profile?.email,
+          phone: employee?.profile?.phone,
+          position: employee?.position,
+          department: employee?.department,
+        },
+        Number(f.commissionPercentage) || 0,
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
+
 
   const createContractMutation = useMutation({
     mutationFn: createContract,
@@ -513,7 +545,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }),
+      }, role === 'trainer' ? 10 : 0),
       documentUrl: '',
     });
     setLegalTermsUnlocked(false);
@@ -636,7 +668,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                     phone: employee?.profile?.phone,
                     position: employee?.position,
                     department: employee?.department,
-                  }),
+                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage),
                 });
               }}
             >
@@ -695,7 +727,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         phone: employee?.profile?.phone,
                         position: employee?.position,
                         department: employee?.department,
-                      }),
+                      }, formData.commissionPercentage),
                   });
                 }}
                 required
@@ -860,7 +892,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                           const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
                           setFormData((f) => ({
                             ...f,
-                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill),
+                            terms: getEmploymentAgreementTemplate(formData.agreementRole, employeeName, formData.salary, formData.startDate, employeePrefill, formData.commissionPercentage),
                           }));
                           await logContractAudit('CONTRACT_TERMS_TEMPLATE_RESET', `Reset agreement template for ${employeeName}`, { agreement_role: formData.agreementRole });
                           toast.success('Template reset');
