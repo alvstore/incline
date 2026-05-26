@@ -390,38 +390,6 @@ The Employee confirms:
 
 ---
 
-## SIGNATURES
-
-For ${employer.legalName} (Proprietor: ${employer.proprietorName})
-
-Signature: ____________________
-Name: ${employer.proprietorName}
-Date: ${fmtDate(startDate)}
-
----
-
-Employee
-
-Signature: (electronic — captured at signing)
-Name: ${employee.fullName}
-Date: (captured at signing)
-
----
-
-## WITNESSES
-
-Witness 1
-Name: ____________________
-Phone: ____________________
-Signature: ____________________
-
-Witness 2
-Name: ____________________
-Phone: ____________________
-Signature: ____________________
-
----
-
 ## ANNEXURES
 
 * Annexure A — Salary Breakup & Incentive Plan
