@@ -388,6 +388,16 @@ serve(async (req) => {
         }
       }
 
+      // ── Edge-variable guard ─────────────────────────────────────────────
+      // Meta rejects "Variables can't be at the start or end of the template".
+      // Auto-pad with safe static text so the user never has to re-edit.
+      {
+        let txt = workingBody.trim();
+        if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) txt = `Hi ${txt}`;
+        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) txt = `${txt}\n\n— Incline`;
+        workingBody = txt;
+      }
+
       // Auto-convert named variables like {{member_name}} to numbered {{1}}, {{2}}, etc.
       let convertedBody = workingBody;
       const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
@@ -689,11 +699,15 @@ serve(async (req) => {
       // Convert {{name}} → {{1}} just like create
       let convertedBody: string | undefined = undefined;
       if (body_text) {
-        convertedBody = body_text;
+        // Edge-variable guard (same as create path).
+        let txt = String(body_text).trim();
+        if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) txt = `Hi ${txt}`;
+        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) txt = `${txt}\n\n— Incline`;
+        convertedBody = txt;
         const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
         const namedVars: string[] = [];
         let match;
-        while ((match = namedVarRegex.exec(body_text)) !== null) {
+        while ((match = namedVarRegex.exec(convertedBody)) !== null) {
           if (!namedVars.includes(match[1])) namedVars.push(match[1]);
         }
         namedVars.forEach((varName, index) => {
