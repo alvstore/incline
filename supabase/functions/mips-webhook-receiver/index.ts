@@ -332,6 +332,10 @@ async function handleImgRegCallback(supabase: any, payload: Record<string, unkno
       console.warn("ImgReg photo save failed:", e);
     }
   } else if (imgUri) {
+    if (!(await isImgUriAllowed(supabase, imgUri))) {
+      console.warn(`ImgReg: rejected imgUri (host not allowlisted) for ${personNo} → ${imgUri}`);
+      return;
+    }
     const table = person.type === "member" ? "members" : person.type === "trainer" ? "trainers" : "employees";
     await supabase.from(table).update({ biometric_photo_url: imgUri }).eq("id", person.id);
     console.log(`ImgReg: stored imgUri for ${personNo} → ${imgUri}`);
@@ -373,6 +377,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Optional shared-secret gate. When MIPS_WEBHOOK_SECRET is configured,
+  // require a matching token via `x-mips-token` header or `Authorization: Bearer <token>`.
+  // Hardware devices must be configured to send this header.
+  const webhookSecret = Deno.env.get("MIPS_WEBHOOK_SECRET") || "";
+  if (webhookSecret) {
+    const headerToken = req.headers.get("x-mips-token") || "";
+    const authHeader = req.headers.get("authorization") || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    if (headerToken !== webhookSecret && bearer !== webhookSecret) {
+      console.warn("mips-webhook-receiver: unauthorized request (missing/invalid token)");
+      return new Response(JSON.stringify({ result: 0, code: "401" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
