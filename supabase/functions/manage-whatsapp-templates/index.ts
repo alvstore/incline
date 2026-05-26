@@ -699,7 +699,11 @@ serve(async (req) => {
       // Convert {{name}} → {{1}} just like create
       let convertedBody: string | undefined = undefined;
       if (body_text) {
-        convertedBody = body_text;
+        // Edge-variable guard (same as create path).
+        let txt = String(body_text).trim();
+        if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) txt = `Hi ${txt}`;
+        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) txt = `${txt}\n\n— Incline`;
+        convertedBody = txt;
         const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
         const namedVars: string[] = [];
         let match;
