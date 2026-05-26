@@ -81,17 +81,22 @@ export default function TrainersPage() {
     (async () => {
       const { data } = await supabase
         .from('trainers')
-        .select('*, profiles:user_id(full_name, email, phone, avatar_url)')
+        .select('*')
         .eq('id', trainerId)
         .maybeSingle();
       if (cancelled || !data) return;
-      const p: any = (data as any).profiles || {};
+      const { data: p } = await supabase
+        .from('profiles')
+        .select('full_name, email, phone, avatar_url')
+        .eq('id', (data as any).user_id)
+        .maybeSingle();
+      const prof: any = p || {};
       setSelectedTrainer({
         ...data,
-        profile_name: p.full_name,
-        profile_email: p.email,
-        profile_phone: p.phone,
-        profile_avatar: p.avatar_url,
+        profile_name: prof.full_name,
+        profile_email: prof.email,
+        profile_phone: prof.phone,
+        profile_avatar: prof.avatar_url,
       });
       setProfileOpen(true);
       const u2 = new URL(window.location.href);
