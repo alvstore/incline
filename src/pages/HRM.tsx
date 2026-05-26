@@ -470,7 +470,15 @@ export default function HRMPage() {
     }
   };
 
+  const TERMINAL_CONTRACT_STATUSES = ['cancelled', 'voided', 'terminated', 'expired'];
+  const isContractTerminal = (contract: any) =>
+    TERMINAL_CONTRACT_STATUSES.includes(contract?.status);
+
   const voidContract = async (contract: any) => {
+    if (isContractTerminal(contract)) {
+      toast.info(`Contract is already ${contract.status}`);
+      return;
+    }
     try {
       await cancelContract(contract.id);
       toast.success('Contract voided');
