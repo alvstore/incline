@@ -1,3 +1,4 @@
+// v3.4.0 — Pad bodies that start/end with a variable (Meta rejects those). Auto-prefix "Hi" / suffix brand sign-off.
 // v3.3.0 — Auto-retry in JSON mode when provider skips tool_call; surface 502 (not 500) on AI failures; explicit 403/permission_denied message.
 //          (never write a literal example like "Hi Sample"). Validator strips obvious literal-name
 //          openings post-generation so Meta never receives a static-greeting template.
