@@ -707,7 +707,7 @@ serve(async (req) => {
         const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
         const namedVars: string[] = [];
         let match;
-        while ((match = namedVarRegex.exec(body_text)) !== null) {
+        while ((match = namedVarRegex.exec(convertedBody)) !== null) {
           if (!namedVars.includes(match[1])) namedVars.push(match[1]);
         }
         namedVars.forEach((varName, index) => {
