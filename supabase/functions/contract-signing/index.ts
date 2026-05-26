@@ -1,4 +1,4 @@
-// v5.2.0 — Branded PDF (logo + brand header), no underscore placeholders.
+// v5.2.1 — Branded PDF + actionable errors on create_link (returns underlying Postgres message, logs via log_error_event).
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
