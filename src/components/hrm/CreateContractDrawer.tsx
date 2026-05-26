@@ -52,11 +52,19 @@ function getEmploymentAgreementTemplate(
   salary: number,
   startDate: string,
   prefill?: EmployeePrefill,
+  commissionPercentage: number = 0,
 ) {
   const trainerChecked = role === 'trainer' ? 'x' : ' ';
   const staffChecked = role === 'staff' ? 'x' : ' ';
   const managerChecked = role === 'manager' ? 'x' : ' ';
+  const isTrainer = role === 'trainer';
   const fixedSalary = Number.isFinite(salary) && salary > 0 ? Math.round(salary).toLocaleString('en-IN') : '________';
+  const commissionLine = Number.isFinite(commissionPercentage) && commissionPercentage > 0
+    ? `${commissionPercentage}%`
+    : '[to be agreed in Annexure A]';
+  const ptCommissionBlock = isTrainer
+    ? `\n### PERSONAL TRAINING (PT) COMMISSION - APPLICABLE TO TRAINERS\n\n* Commission shall be paid on Personal Training revenue (pre-GST amount only)\n* Commission %: ${commissionLine}\n* Paid only after full payment is received from client\n`
+    : '';
   const executionDate = formatExecutionDate(startDate);
   const companyAddress = 'Udaipur, Rajasthan';
   const employeeCode = prefill?.employeeCode;
