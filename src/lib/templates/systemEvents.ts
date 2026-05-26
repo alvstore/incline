@@ -38,6 +38,7 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'unfreeze_confirmed', label: 'Membership Unfrozen', category: 'lifecycle', description: 'Membership unfreeze confirmation', channels: ALL },
   { event: 'staff_attendance_recorded', label: 'Staff Attendance Recorded (Manual)', category: 'lifecycle', description: 'Notify a staff member that someone with higher authority recorded their attendance manually (biometric-failure fallback). Vars: {{actor_name}} {{action}} {{time}} {{reason}}. Currently feature-flagged off.', channels: ['whatsapp', 'sms', 'email'] },
   { event: 'contract_signed_confirmation', label: 'Contract Signed — Confirmation', category: 'document', description: 'Sent right after a contract is electronically signed. Includes the stamped PDF link. Vars: {{name}} {{employer_name}} {{document_link}}.', channels: ['whatsapp', 'sms', 'email'], headerHint: 'document' },
+  { event: 'contract_fill_link', label: 'Contract Fill / Sign Link', category: 'lifecycle', description: 'Sent to a new hire (or witness) asking them to complete personal details (S/o · D/o, address, emergency contact, ID) and sign their employment agreement via a secure link. Text + link only (no document). Vars: {{name}} {{link}} {{employer_name}}.', channels: ['whatsapp', 'sms', 'email'] },
 
   // ── Billing & Documents ──────────────────────────────────────
   { event: 'payment_received', label: 'Payment Received', category: 'billing', description: 'A payment has been recorded', channels: ALL },

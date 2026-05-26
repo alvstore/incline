@@ -489,11 +489,26 @@ export default function HRMPage() {
     }
   };
 
+  const buildContractFillMessage = (employeeName: string, link: string, employerName: string) =>
+    `Hi ${employeeName}, please complete your employment agreement details (S/o · D/o, residential address, emergency contact, ID) at this secure link before signing:\n\n${link}\n\nLink expires in 7 days. — ${employerName}`;
+
+  const openWhatsAppDesktop = (recipient: string, message: string) => {
+    // wa.me deep link — OS routes desktop users to WhatsApp Desktop/Web and
+    // mobile users to the app. No template fees, no 24h-window restriction.
+    const digits = String(recipient).replace(/\D+/g, '');
+    if (!digits) {
+      toast.error('Phone number is missing or invalid.');
+      return;
+    }
+    const url = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const createContractSignLink = async (
     contract: any,
     role: 'employee' | 'witness_1' | 'witness_2' | 'hr' = 'employee',
-    options: { sendWhatsApp?: boolean } = {},
-  ) => {
+    options: { sendWhatsApp?: boolean; sendWhatsAppDesktop?: boolean; returnLink?: boolean } = {},
+  ): Promise<string | null> => {
     try {
       const { data, error } = await supabase.functions.invoke('contract-signing', {
         body: { action: 'create_link', contract_id: contract.id, role },
@@ -522,14 +537,24 @@ export default function HRMPage() {
         : role === 'witness_1' ? 'Witness 1 link'
         : 'Witness 2 link';
 
-      if (options.sendWhatsApp) {
-        const recipient = contract._resolvedPhone as string | null | undefined;
+      const employerName = 'The Incline Life by Incline';
+      const employeeName = contract._resolvedName || 'there';
+      const message = buildContractFillMessage(employeeName, link, employerName);
+      const recipient = contract._resolvedPhone as string | null | undefined;
+
+      if (options.sendWhatsAppDesktop) {
+        if (!recipient) {
+          toast.error('No phone on file for this employee — link copied instead.');
+          await copyToClipboard(link);
+        } else {
+          openWhatsAppDesktop(recipient, message);
+          toast.success('Opening WhatsApp Desktop — review and hit Send. No template fees.');
+        }
+      } else if (options.sendWhatsApp) {
         if (!recipient) {
           toast.error('No phone on file for this employee — link copied to clipboard instead.');
           await copyToClipboard(link);
         } else {
-          const employerName = 'The Incline Life by Incline';
-          const employeeName = contract._resolvedName || 'there';
           const dispatch = await supabase.functions.invoke('dispatch-communication', {
             body: {
               branch_id: contract.branch_id || null,
@@ -538,31 +563,47 @@ export default function HRMPage() {
               recipient,
               event: 'contract_fill_link',
               payload: {
-                body: `Hi ${employeeName}, please complete your employment agreement details (S/o · D/o, residential address, emergency contact, ID) at this secure link before signing:\n\n${link}\n\nLink expires in 7 days. — ${employerName}`,
+                body: message,
                 variables: { name: employeeName, link, employer_name: employerName },
               },
               dedupe_key: `contract_fill_link:${contract.id}:${role}:${Date.now()}`,
               force: true,
             },
           });
-          if (dispatch.error) {
-            toast.error('WhatsApp send failed — link copied to clipboard instead.');
-            await copyToClipboard(link);
+          const dispatchErrMsg: string | null =
+            (dispatch.error as any)?.message
+            || (dispatch.data as any)?.error
+            || null;
+          if (dispatchErrMsg) {
+            const outside24h = /outside\s+24h|customer-?service\s+window|approved\s+(WhatsApp\s+)?template/i.test(dispatchErrMsg);
+            toast.error(outside24h ? 'Outside the 24h window — no approved template yet.' : 'WhatsApp send failed.', {
+              description: outside24h
+                ? 'Send via WhatsApp Desktop instead (free), or submit a template in Settings → Communication Templates → AI Studio.'
+                : dispatchErrMsg,
+              duration: 10000,
+              action: {
+                label: 'Open WhatsApp Desktop',
+                onClick: () => openWhatsAppDesktop(recipient, message),
+              },
+            });
           } else {
             toast.success(`${label} sent to ${recipient} on WhatsApp`);
           }
         }
-      } else {
+      } else if (!options.returnLink) {
         const ok = await copyToClipboard(link);
         if (ok) toast.success(`${label} copied to clipboard`);
         else toast.error('Could not copy automatically — please copy manually', { description: link });
       }
 
       queryClient.invalidateQueries({ queryKey: ['all-contracts'] });
+      return link;
     } catch (err: any) {
       toast.error(err?.message || 'Failed to generate link');
+      return null;
     }
   };
+
 
 
   // Required keys mirror the server-side REQUIRED_BEFORE_SIGN list — keep in sync.
@@ -1195,8 +1236,11 @@ export default function HRMPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-64">
                                   <DropdownMenuLabel className="text-xs">Send to employee</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsAppDesktop: true })}>
+                                    <ExternalLink className="h-3.5 w-3.5 mr-2" /> Open in WhatsApp Desktop (free)
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee', { sendWhatsApp: true })}>
-                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send fill link via WhatsApp
+                                    <Mail className="h-3.5 w-3.5 mr-2" /> Send via WhatsApp API (template)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => createContractSignLink(contract, 'employee')}>
                                     <Link className="h-3.5 w-3.5 mr-2" /> Copy employee fill / sign link
