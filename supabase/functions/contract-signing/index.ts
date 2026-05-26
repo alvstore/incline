@@ -1,4 +1,4 @@
-// v5.2.1 — Branded PDF + actionable errors on create_link (returns underlying Postgres message, logs via log_error_event).
+// v5.3.0 — create_link uses atomic create_contract_signature_request RPC (race-safe, kills duplicate-key 500s).
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -185,33 +185,22 @@ async function createSignLink(req: Request, body: any) {
   const tokenHash = await sha256(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Revoke any existing open request for this (contract, role) so the unique
-  // index doesn't reject us. Audit a separate row for transparency.
-  const { error: revokeErr } = await supabase.from("contract_signature_requests")
-    .update({ revoked_at: new Date().toISOString(), status: "expired" })
-    .eq("contract_id", contract.id).eq("role", role).is("revoked_at", null)
-    .in("status", ["pending", "viewed"]);
-  if (revokeErr) {
-    await logEdgeError("contract_signing.create_link.revoke", revokeErr.message, { contract_id: contract.id, role });
-    return json({ error: `Failed to revoke previous link: ${revokeErr.message}` }, 500);
-  }
-
-  const { data: requestRow, error: requestError } = await supabase
-    .from("contract_signature_requests")
-    .insert({
-      contract_id: contract.id,
-      branch_id: contract.branch_id,
-      token_hash: tokenHash,
-      expires_at: expiresAt,
-      created_by: auth.userId,
-      status: "pending",
-      role,
-    })
-    .select("id").single();
-
-  if (requestError || !requestRow) {
-    const msg = requestError?.message || "Unknown insert failure";
-    await logEdgeError("contract_signing.create_link.insert", msg, { contract_id: contract.id, role });
+  // Atomic: locks contract, expires any open request for (contract, role),
+  // inserts fresh request — single round-trip, race-safe.
+  const { data: rpcRows, error: rpcErr } = await supabase.rpc(
+    "create_contract_signature_request",
+    {
+      p_contract_id: contract.id,
+      p_role: role,
+      p_token_hash: tokenHash,
+      p_expires_at: expiresAt,
+      p_created_by: auth.userId,
+    },
+  );
+  const requestRow = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+  if (rpcErr || !requestRow?.request_id) {
+    const msg = rpcErr?.message || "Unknown signature-request failure";
+    await logEdgeError("contract_signing.create_link.rpc", msg, { contract_id: contract.id, role });
     return json({ error: `Failed to create signature request: ${msg}` }, 500);
   }
 
