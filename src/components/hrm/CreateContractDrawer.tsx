@@ -668,7 +668,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                     phone: employee?.profile?.phone,
                     position: employee?.position,
                     department: employee?.department,
-                  }),
+                  }, value === 'trainer' ? Math.max(formData.commissionPercentage, 10) : formData.commissionPercentage),
                 });
               }}
             >
