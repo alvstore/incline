@@ -1,97 +1,71 @@
-## Why the agreement currently shows blanks
+# Fix: Filled details not saving + "Copy link" edge function error
 
-The preamble template renders `Mr./Ms. ___`, `S/o / D/o ___`, `Email: -`, `Phone: -` from `src/lib/hrm/contractTemplateV2.ts` (lines 132–144). Each blank has its own root cause:
+## What's actually broken
 
-| Field in PDF | Source | Why it's blank today |
-|---|---|---|
-| `Mr./Ms. _______________________` | `employees.profiles.full_name` (via `resolveRecipient`) | Profile row has no `full_name` — staff was created without a linked profile or name was never filled in **Employees → Edit → Personal**. |
-| `Email: -` / `Phone: -` | `profiles.email` / `profiles.phone` | Same profile is missing email/phone. |
-| `S/o / D/o ___` | `contract_variables.father_or_husband_name` | Employee never opened the **Contract Fill** link (`/contract-fill/:token`) — that page is what writes `father_or_husband_name`, `residential_address`, `emergency_contact_*`, `pan_or_aadhaar_last4`, and witnesses. |
-| `Residing at: ___` | `contract_variables.residential_address` | Same as above. |
-| `Employee Code: EMP-MOZWZUNA` | `employees.employee_code` | This one *is* correct — proves the contract is wired to the right employee row. |
+**Bug 1 — "3 pending" never clears even after HR fills the fields**
 
-So two distinct gaps need to be closed:
+`CreateContractDrawer` collects HR-entered variables (S/o name, address, emergency contact, witnesses, etc.) into local state, then on submit packs them into `terms.contract_variables` inside the `terms` JSONB column. But every other piece of the system reads from the dedicated `contracts.contract_variables` column:
 
-1. **Profile data** — `full_name`, `email`, `phone` must exist on the `profiles` row before generating a contract.
-2. **Self-fill variables** — the employee must complete the public Contract Fill link before signing. Until they do, the PDF falls back to underscores by design.
+- `contractFillState()` in `src/pages/HRM.tsx` (line 562) → reads `contract.contract_variables`
+- Edge fn `contract-signing` → `missingRequired()` reads `contract_variables`
+- PDF builder → interpolates from `contract_variables`
+- `/contract-fill` page → reads `contract_variables`
 
-## Why we don't already share the roster's branded PDF format
-
-The Staff Roster PDF is built **client-side with jsPDF** (`src/utils/pdfBlob.ts` → `buildStaffRosterPdf`) using a shared `header(doc, …)` / `footer(doc, …)` helper that reads `brand.logoUrl` from `organization_settings` and renders the Incline logo, address, GSTIN, page numbers, etc.
-
-The Employment Agreement PDF is built **server-side in the `contract-signing` edge function with pdf-lib** (`supabase/functions/contract-signing/index.ts` lines 619–789). It has its own ad-hoc `drawHeader()` / `drawFooter()` that prints the legal name as text only — **no logo, no rounded card branding**, plus a giant `EMPLOYEE COPY` watermark.
-
-We *can* and *should* reuse one brand language across both, but the contract PDF must keep running server-side, because:
-- it embeds the typed/drawn signature image from a private storage bucket,
-- it computes the `signed_pdf_hash` and persists it on `contracts.stamped_pdf_path`,
-- the SHA-256 of `terms` must match `contract_signatures.terms_hash_at_sign` for tamper-evidence under IT Act §10A.
-
-So the fix is: **extract a single branded layout module (logo, header, footer, watermark, typography) that both the roster PDF and the contract PDF call** — not move the contract PDF to the client.
-
-## The plan
-
-### 1. Shared branded PDF surface
-
-- New file `supabase/functions/_shared/brandedPdf.ts` exporting:
-  - `loadEmployerBrand(supabase, branchId)` — returns `{ legalName, address, phone, email, gstin, pan, regNo, logoBytes }` from `get_employer_profile` + `organization_settings.logo_url` (downloaded server-side, cached per cold start).
-  - `drawBrandedHeader(page, pdfDoc, brand, opts)` — logo (left) + legal name + address + contact (center/left) + GSTIN/PAN block (right), matching the roster header proportions.
-  - `drawBrandedFooter(page, brand, { pageNum, totalPages, refLabel, verifyUrl })`.
-  - `drawWatermark(page, label)` — keep the diagonal `EMPLOYEE COPY` / `EMPLOYER COPY` / `ORIGINAL` / `DRAFT — NOT YET SIGNED`.
-  - Shared color tokens (`INDIGO`, `SLATE_500`, `SLATE_900`) so both PDFs use one palette.
-- New mirror in `src/utils/pdfBlob.ts`: refactor the existing jsPDF `header()` / `footer()` to consume the same tokens (purely cosmetic — same output, just shared constants in `src/lib/brand/pdfTokens.ts`).
-
-### 2. Refactor `contract-signing` PDF builder
-
-- Replace `drawHeader` / `drawFooter` in the edge function with the shared helpers above.
-- Embed the logo PNG via `pdfDoc.embedPng(logoBytes)` and draw it at 28×28 next to the legal name.
-- Move the body into a 2-column "Filled details" card matching the roster's card style (subtle slate divider lines, 10pt Helvetica, indigo section heads).
-- Keep all signature / hash / watermark logic untouched.
-
-### 3. Stop printing empty placeholder lines
-
-In the preamble (`contractTemplateV2.ts` 132–144), only emit a line if the value is present. Replace the current pattern:
-
-```text
-Email: -
-Phone: -
-S/o / D/o __________________
-Residing at: __________________
+DB confirmation for the current contract `38869d37…`:
+```
+contract_variables: {}                 ← empty
+terms.contract_variables: { father_or_husband_name: "DINESH SHARMA", ... }  ← all data here
 ```
 
-with conditional rendering: missing rows are skipped entirely, and the **Filled details** section already in the PDF (lines 720–742) becomes the single source for self-filled fields. The preamble keeps only the legally-required identity line(s) that *are* known.
+So HR data is being written to the wrong place. That's why the chip still says "3 pending" and the PDF still shows `[Pending — to be filled by employee]`.
 
-When a field is genuinely required but absent at draft time, render `[Pending — to be filled by employee before signing]` in muted slate, never an underscore.
+**Bug 2 — "Edge Function returned a non-2xx status code" when copying link**
 
-### 4. Close the data-gap UX in HRM
+The HRM page action menu calls `contract-signing` → `create_link`. The most recent contract has only an open->expired link history, so the function path itself works. The non-2xx is almost certainly thrown by `createSignLink` returning 500 from a downstream insert/update, but the client toast currently shows a generic Supabase functions error instead of the server's actual message because `supabase.functions.invoke` only surfaces `error.message = "non-2xx"` and we never read `data.error` on the throw path.
 
-On the contracts list (`src/pages/HRM.tsx`):
+Two fixes needed:
+1. Edge fn currently returns 500 with a JSON body for downstream failures, but the body isn't surfaced. We'll read it client-side and show the real reason.
+2. Add `log_error_event` inside `createSignLink` catch path so future failures show up in System Health.
 
-- Before "Generate draft PDF" runs, run a one-shot guard: if `profiles.full_name / email / phone` are empty, open the Employee drawer pre-focused on the missing field instead of producing a blank-looking PDF.
-- Add a row action **"Copy Fill Link"** + **"Send Fill Link via WhatsApp"** that re-sends the existing `/contract-fill/:token` URL through `dispatchCommunication()` (uses the existing `contract_signature_requests.token_hash`).
-- Add a small status chip on each contract row: `Awaiting employee details` (cvars incomplete) → `Ready to sign` (cvars complete, signature pending) → `Signed`.
-- On the **CreateContractDrawer** success toast, replace the current generic message with two CTAs: *"Open fill link"* and *"Send fill link to employee"*.
+## Plan
 
-### 5. How the user fills the blanks today (immediate workaround)
+### 1. Persist variables into the correct column (root cause of Bug 1)
 
-Until step 4 ships, the founder can:
+**`src/services/hrmService.ts` → `createContract`**
+- Accept a new optional `contractVariables: Record<string, string>` parameter.
+- Insert it into the top-level `contract_variables` column (default `{}`).
+- Keep writing the legal text into `terms.conditions` and the compliance metadata into `terms.compliance_meta`, but **remove** `contract_variables` from inside `terms`.
 
-1. Open **Employees → that employee → Edit** and set `full_name`, `email`, `phone` on the profile.
-2. Open **HRM → Contracts → … menu → Copy fill URL** and send `/contract-fill/<token>` to the employee on WhatsApp.
-3. Employee opens link, fills S/o, address, emergency contact, PAN/Aadhaar last 4, witnesses → taps **Save**.
-4. Regenerate the draft PDF — all fields now populate.
+**`src/components/hrm/CreateContractDrawer.tsx` → `handleSubmit`**
+- Pass `cleanedVariables` as the new top-level `contractVariables` field instead of nesting it inside `terms`.
 
-### Files touched
+### 2. One-time backfill migration
 
-- `supabase/functions/_shared/brandedPdf.ts` *(new)*
-- `supabase/functions/contract-signing/index.ts` *(swap header/footer, embed logo, drop empty preamble lines)*
-- `src/lib/brand/pdfTokens.ts` *(new — shared color/typography constants)*
-- `src/utils/pdfBlob.ts` *(consume shared tokens; no visual regression for roster)*
-- `src/lib/hrm/contractTemplateV2.ts` *(conditional preamble, no underscores)*
-- `src/pages/HRM.tsx` *(row chip, Copy/Send fill link, missing-profile guard)*
-- `src/components/hrm/CreateContractDrawer.tsx` *(success CTAs)*
+New migration: for every contract where `contract_variables = '{}'::jsonb` AND `terms ? 'contract_variables'`, copy `terms->'contract_variables'` into `contract_variables` and then drop the nested key from `terms` to keep a single source of truth. This unblocks Ritesh's existing draft contract (`38869d37…`) immediately.
 
-### Explicitly out of scope
+### 3. Better error surfacing for create_link (Bug 2)
 
-- Moving contract PDF generation to the client.
-- Changing the legal clause text or `CONTRACT_TEMPLATE_VERSION` (would invalidate existing `terms_hash`).
-- Auto-OCRing PAN/Aadhaar to populate `pan_or_aadhaar_last4`.
+**`src/pages/HRM.tsx` → `createContractSignLink`**
+- After `supabase.functions.invoke`, when `error` is set, attempt `await error.context?.json()` (Supabase v2 attaches the response on `FunctionsHttpError`). Show the real `data.error` string in the toast instead of "non-2xx".
+
+**`supabase/functions/contract-signing/index.ts` → `createSignLink`**
+- Wrap the `contract_signature_requests` insert/update in try/catch; on failure, call `log_error_event` via service-role RPC with the contract id and a fingerprint of `contract_signing.create_link`, and return the underlying Postgres message in the JSON response so the client toast is actionable.
+- Bump version comment to `v5.2.1`.
+
+### 4. Verification
+
+1. After deploy, open the existing draft contract → status chip should flip from "Awaiting employee details" to "Ready to sign" (because backfill moved the values).
+2. Open Create Contract for any staff → fill the fields → submit → query DB: `contract_variables` column should be populated, `terms->'contract_variables'` should not exist.
+3. From the contract row menu → "Copy employee fill / sign link" → should copy the URL and show success toast. If it ever fails again, the toast now shows the real reason.
+
+## Out of scope
+
+- Changing the PDF layout, branding, or template wording (already done in v5.2.0).
+- Touching the Void / terminal status logic (already fixed in the previous turn).
+- Adding new fields to the fill form.
+
+## Technical notes
+
+- The `terms` column will keep `{ conditions, compliance_meta }`. The PDF builder currently reads `contract_variables` directly (top-level), so no PDF code change is required after the backfill.
+- The migration is data-only (no schema change). `contract_variables` column already exists with `jsonb default '{}'`.
+- `log_error_event` is already available as an RPC; the edge fn calls it via the existing service-role client.
