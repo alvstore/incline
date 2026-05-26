@@ -175,10 +175,14 @@ async function createSignLink(req: Request, body: any) {
 
   // Revoke any existing open request for this (contract, role) so the unique
   // index doesn't reject us. Audit a separate row for transparency.
-  await supabase.from("contract_signature_requests")
+  const { error: revokeErr } = await supabase.from("contract_signature_requests")
     .update({ revoked_at: new Date().toISOString(), status: "expired" })
     .eq("contract_id", contract.id).eq("role", role).is("revoked_at", null)
     .in("status", ["pending", "viewed"]);
+  if (revokeErr) {
+    await logEdgeError("contract_signing.create_link.revoke", revokeErr.message, { contract_id: contract.id, role });
+    return json({ error: `Failed to revoke previous link: ${revokeErr.message}` }, 500);
+  }
 
   const { data: requestRow, error: requestError } = await supabase
     .from("contract_signature_requests")
@@ -193,13 +197,18 @@ async function createSignLink(req: Request, body: any) {
     })
     .select("id").single();
 
-  if (requestError || !requestRow) return json({ error: "Failed to create signature request" }, 500);
+  if (requestError || !requestRow) {
+    const msg = requestError?.message || "Unknown insert failure";
+    await logEdgeError("contract_signing.create_link.insert", msg, { contract_id: contract.id, role });
+    return json({ error: `Failed to create signature request: ${msg}` }, 500);
+  }
 
   if (role === "employee") {
     await supabase.from("contracts")
       .update({ signature_status: "sent", signature_requested_at: new Date().toISOString() })
       .eq("id", contract.id);
   }
+
 
   await supabase.from("audit_logs").insert({
     action: "CONTRACT_SIGN_LINK_CREATED",
