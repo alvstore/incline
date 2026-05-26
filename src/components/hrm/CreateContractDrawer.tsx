@@ -727,7 +727,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         phone: employee?.profile?.phone,
                         position: employee?.position,
                         department: employee?.department,
-                      }),
+                      }, formData.commissionPercentage),
                   });
                 }}
                 required
