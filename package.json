@@ -66,6 +66,7 @@
     "framer-motion": "^12.38.0",
     "howler": "^2.2.4",
     "input-otp": "^1.4.2",
+    "isomorphic-dompurify": "^3.14.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.462.0",
