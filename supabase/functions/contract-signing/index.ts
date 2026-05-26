@@ -1,4 +1,4 @@
-// v5.3.0 — create_link uses atomic create_contract_signature_request RPC (race-safe, kills duplicate-key 500s).
+// v5.4.0 — PDF: strip legacy SIGNATURES/WITNESSES placeholder blocks from terms; render "Personal Details" + dedicated "Witnesses" sub-section; signatures rendered once by builder.
 //   create_link · get_contract · request_otp · fill_fields · sign_contract · get_pdf · regenerate_pdf
 // Fields needed to render the full agreement (S/o-D/o, address, witnesses, …)
 // are collected through the public /contract-fill page via `fill_fields` and
@@ -765,7 +765,16 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     ? contract.terms
     : (contract.terms as any)?.conditions ?? JSON.stringify(contract.terms ?? {}, null, 2);
 
-  for (const ln of termsRaw.split("\n")) {
+  // Sanitise legacy placeholder blocks so they aren't rendered twice
+  // (the PDF builder appends canonical "Personal Details" + "Signatures" sections below).
+  const termsSanitised = termsRaw
+    .replace(/##\s*SIGNATURES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
+    .replace(/##\s*WITNESSES[\s\S]*?(?=\n##\s|\n---\s*\n##\s|\n---\s*$|$)/i, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/(\n---\s*){2,}/g, "\n---\n")
+    .trim();
+
+  for (const ln of termsSanitised.split("\n")) {
     const trimmed = ln.replace(/^#+\s*/, "");
     const isHeading = /^#{1,3}\s/.test(ln);
     writeLine(trimmed || " ", { bold: isHeading });
@@ -775,29 +784,44 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   spacer(14);
   newPageIfNeeded(160);
 
-  // ── Filled details (prefill from profile/staff merged with contract_variables) ──
+  // ── Personal Details (prefill from profile/staff merged with contract_variables) ──
   const prefillForPdf = await loadPrefillForContract(contract);
   const cvars = mergeVarsWithPrefill((contract as any).contract_variables, prefillForPdf) as Record<string, any>;
-  const detailRows: [string, any][] = [
+  const personalRows: [string, any][] = [
     ["S/o · D/o · W/o",        cvars.father_or_husband_name],
     ["Residential address",    cvars.residential_address],
     ["Emergency contact",      cvars.emergency_contact_name && cvars.emergency_contact_phone
                                   ? `${cvars.emergency_contact_name} — ${cvars.emergency_contact_phone}`
                                   : (cvars.emergency_contact_name || cvars.emergency_contact_phone)],
     ["PAN / Aadhaar (last 4)", cvars.pan_or_aadhaar_last4],
-    ["Witness 1",              cvars.witness_1_name && cvars.witness_1_phone
-                                  ? `${cvars.witness_1_name} — ${cvars.witness_1_phone}` : cvars.witness_1_name],
-    ["Witness 2",              cvars.witness_2_name && cvars.witness_2_phone
-                                  ? `${cvars.witness_2_name} — ${cvars.witness_2_phone}` : cvars.witness_2_name],
   ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
 
-  if (detailRows.length > 0) {
-    writeLine("Filled details", { bold: true, size: 12 });
+  const witnessRows: [string, any][] = [
+    ["Witness 1", cvars.witness_1_name && cvars.witness_1_phone
+                    ? `${cvars.witness_1_name} — ${cvars.witness_1_phone}` : cvars.witness_1_name],
+    ["Witness 2", cvars.witness_2_name && cvars.witness_2_phone
+                    ? `${cvars.witness_2_name} — ${cvars.witness_2_phone}` : cvars.witness_2_name],
+  ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
+
+  if (personalRows.length > 0) {
+    writeLine("Personal Details (provided by employee)", { bold: true, size: 12 });
     spacer(4);
-    for (const [label, value] of detailRows) writeLine(`${label}: ${value}`);
+    for (const [label, value] of personalRows) writeLine(`${label}: ${value}`);
+    spacer(10);
+  }
+
+  if (witnessRows.length > 0) {
+    newPageIfNeeded(80);
+    writeLine("Witnesses", { bold: true, size: 12 });
+    spacer(4);
+    for (const [label, value] of witnessRows) writeLine(`${label}: ${value}`);
     spacer(14);
     newPageIfNeeded(120);
+  } else if (personalRows.length > 0) {
+    spacer(4);
+    newPageIfNeeded(120);
   }
+
 
   writeLine(isDraft ? "Signatures (pending)" : "Signatures", { bold: true, size: 12 });
   spacer(4);
