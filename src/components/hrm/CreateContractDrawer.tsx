@@ -419,20 +419,21 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     const startDate = new Date().toISOString().split('T')[0];
     const salary = Number(employee?.salary ?? employee?.fixed_salary ?? 0);
 
+    const initialCommission = role === 'trainer' ? 10 : 0;
     setFormData({
       agreementRole: role,
       contractType: 'full_time',
       startDate,
       endDate: '',
       salary,
-      commissionPercentage: 0, // overwritten by useEffect above for trainers
+      commissionPercentage: initialCommission,
       terms: getEmploymentAgreementTemplate(role, employeeName, salary, startDate, {
         employeeCode: employee?.employee_code,
         email: employee?.profile?.email,
         phone: employee?.profile?.phone,
         position: employee?.position,
         department: employee?.department,
-      }),
+      }, initialCommission),
       documentUrl: '',
     });
     setVariables({} as any);
@@ -442,6 +443,33 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
     setLegalTermsUnlocked(false);
     setLegalTermsUnlockedAt(null);
   }, [open, employee, defaultRoleProp]);
+
+  // Auto-regenerate terms when salary / commission / role / start date change,
+  // gated on legalTermsUnlocked so manual edits are preserved once unlocked.
+  useEffect(() => {
+    if (!open || !employee) return;
+    if (legalTermsUnlocked) return;
+    const employeeName = employee?.profile?.full_name || employee?.full_name || '__________________________';
+    setFormData((f) => ({
+      ...f,
+      terms: getEmploymentAgreementTemplate(
+        f.agreementRole,
+        employeeName,
+        Number(f.salary) || 0,
+        f.startDate,
+        {
+          employeeCode: employee?.employee_code,
+          email: employee?.profile?.email,
+          phone: employee?.profile?.phone,
+          position: employee?.position,
+          department: employee?.department,
+        },
+        Number(f.commissionPercentage) || 0,
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
+
 
   const createContractMutation = useMutation({
     mutationFn: createContract,
