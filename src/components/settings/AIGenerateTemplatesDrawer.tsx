@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles, Send, CheckCircle2, AlertCircle, MessageSquare, Mail, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEventsForChannel, type EventChannel } from '@/lib/templates/systemEvents';
+import DOMPurify from 'isomorphic-dompurify';
 
 type Channel = EventChannel;
 
