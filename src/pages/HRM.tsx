@@ -1204,7 +1204,7 @@ export default function HRMPage() {
                             )}
 
                             {/* Void */}
-                            {contract.status !== 'cancelled' && contract.signature_status !== 'signed' && (
+                            {!isContractTerminal(contract) && contract.signature_status !== 'signed' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button size="sm" variant="ghost" className="h-8 text-destructive hover:text-destructive" title="Void contract">
