@@ -1,66 +1,46 @@
-## Audit — two stale-template bugs on page 1 of the contract PDF
+## Why the WhatsApp send failed
+`HRM.tsx` calls `dispatch-communication` for event `contract_fill_link` with a free-text `body`. WhatsApp Cloud API only accepts free text inside the 24-hour customer-service window; Ritesh is outside that window so Meta rejects the send. No approved template exists for this event yet — `contract_fill_link` is referenced **only** in `HRM.tsx` and is not in the system events catalog (`src/lib/templates/systemEvents.ts`), so the AI template generator never created a Meta template for it.
 
-### Issue 1 — "Commission %: _______%" never gets filled
-`getEmploymentAgreementTemplate()` in `CreateContractDrawer.tsx` (line 160) hardcodes the placeholder:
-```
-* Commission %: _______%
-```
-The function doesn't accept the commission value at all, and the terms string is generated **once** at drawer-open and only re-generated when `agreementRole / employeeName / salary / startDate` change — never when the user edits the Commission % field. So even though the form captures `commissionPercentage` (default 10% for trainers) and saves it to `contracts.commission_percentage`, the rendered terms stay blank.
+## Fix plan — two additions
 
-Same issue affects non-trainers: the whole "PT Commission" sub-block renders for Sales/Manager roles where it doesn't apply, with a meaningless blank %.
+### 1. Register `contract_fill_link` in the system events catalog
+Add an entry to `src/lib/templates/systemEvents.ts` so it appears in:
+- Settings → Communication Templates → WhatsApp → Coverage & AI (lets the user submit a Meta template for approval via the existing AI Studio flow)
+- Settings → Communication Templates → WhatsApp → Automations
+- The diff used by `AIGenerateTemplatesDrawer` so a one-click "Generate missing templates" run creates this one too
 
-### Issue 2 — "see 'Filled details' section below" stub line shows even after employee filled
-Lines 80–82 of the same file inject:
-```
-Personal details (S/o · D/o, residential address, emergency contact, ID):
-see "Filled details" section below — completed by employee via the secure fill link.
-```
-Two problems:
-- The pointer text says **"Filled details"**, but the PDF builder section was renamed to **"Personal Details (provided by employee)"** in the last patch — so the pointer points to a section name that no longer exists.
-- When the employee has already filled their details, the page-1 stub still reads like data is missing, even though the values appear correctly in the dedicated section appended further down.
+Event shape:
+- key: `contract_fill_link`
+- category: `transactional` (HRM)
+- channels: `whatsapp`, `sms`, `email`
+- body vars: `{{name}}`, `{{link}}`, `{{employer_name}}`
+- header_type: `none` (it's a text+link message, not a document — so the document-event rule does **not** apply here)
+- Default body copy that matches what HRM.tsx already sends, so an approved Meta template renders identically.
 
-## Fix plan (template + edge-fn only, no schema changes)
+Dispatcher behaviour is already correct: when a Meta-approved template is mapped for the event, it sends as a template (works outside the 24h window). No edge-fn change needed — only the catalog registration so the user can mint the template.
 
-### A. CreateContractDrawer template — `getEmploymentAgreementTemplate`
+### 2. Add a "Send via WhatsApp Desktop" (wa.me) option to the Share dropdown
+In `src/pages/HRM.tsx`:
 
-1. **Add params** `commissionPercentage: number` and surface `isTrainer` via the existing `role` arg.
-2. Inside the PT Commission sub-section:
-   - If `role !== 'trainer'` → **omit the entire `### PERSONAL TRAINING (PT) COMMISSION` block** (don't render section 5's PT bullets at all for staff/manager).
-   - If `role === 'trainer'` and `commissionPercentage > 0` → render `* Commission %: 10%` (real value).
-   - If `role === 'trainer'` and `commissionPercentage` is 0/empty → render `* Commission %: [to be agreed in Annexure A]`.
-3. **Rewrite the page-1 personal-details stub line** so it matches the renamed downstream section and reads naturally:
-   ```
-   Personal details (parentage, residential address, emergency contact, ID) — provided by the Employee via the secure fill link and listed in the "Personal Details" section of this Agreement.
-   ```
-   No underscores, no broken "Filled details" reference.
+- Rename the existing item to **"Send via WhatsApp (API · uses approved template)"**.
+- Add a new item **"Open in WhatsApp Desktop / Web (free)"** that:
+  - Generates the fill link via `createContractSignLink(contract, 'employee', { sendWhatsApp: false, returnLink: true })` (refactor to optionally return the link instead of copying).
+  - Normalises `contract._resolvedPhone` to bare digits (strip `+`, spaces, dashes — keep country code).
+  - Opens `https://wa.me/<digits>?text=<encodeURIComponent(message)>` in a new tab via `window.open(url, '_blank', 'noopener')`.
+  - The wa.me deep link is OS-aware — desktop users land on WhatsApp Desktop, mobile users on the mobile app.
+  - Toast: "Opening WhatsApp Desktop — review and hit Send. No template fees."
+- Also add **"Copy WhatsApp Desktop link"** so the user can paste it into a chat platform of their choice (Slack/email/etc.).
 
-4. **Add a useEffect** that regenerates `formData.terms` whenever `formData.salary`, `formData.commissionPercentage`, `formData.agreementRole`, or `formData.startDate` change — **gated on `!legalTermsUnlocked`** so manual edits are never clobbered. This keeps the live preview and the persisted terms in sync with the form fields.
-
-5. **Update all 6 existing call sites** of `getEmploymentAgreementTemplate(...)` to pass the new `commissionPercentage` arg (default to current `formData.commissionPercentage`, falling back to 10 for trainers / 0 otherwise as the rest of the code already does).
-
-### B. PDF builder — `supabase/functions/contract-signing/index.ts` (legacy safety net)
-
-For draft contracts already saved with the old `_______%` placeholder, add a small render-time substitution **right after the existing terms sanitiser**:
-- If `contract.commission_percentage` is a positive number and the terms contain `Commission %: _______%`, replace with `Commission %: <value>%`.
-- If `contract.commission_percentage` is 0 or null, replace with `Commission %: [to be agreed in Annexure A]`.
-
-Also strip the legacy `Personal details (S/o · D/o, residential address, emergency contact, ID): see "Filled details" section below …` pointer line from old terms when `cvars.father_or_husband_name` (or any personal detail) is populated — those values are already rendered in the appended "Personal Details" section, so the pointer is redundant and misleading on signed PDFs.
-
-Bump the version comment to `v5.5.0` and keep the rest of the file unchanged.
-
-### C. Verify
-- Create a new Trainer contract with 12% commission → PDF section 5 reads `Commission %: 12%`, no `_______`.
-- Create a Sales/Manager contract → PDF section 5 has **no** PT Commission sub-block (only Fixed Salary + Payment cycle).
-- Page 1 AND block shows the new natural personal-details line — no "Filled details" wording, no blank lines.
-- Open Ritesh Sharma's existing draft and regenerate PDF → the sanitiser fills in the commission % from `contracts.commission_percentage` and removes the stub pointer line because cvars are populated.
-- Manually unlock + edit terms on a fresh contract → auto-regen does NOT overwrite the manual edits (legalTermsUnlocked gates it).
+### 3. Smarter failure UX for the API path
+Inside `createContractSignLink` when `dispatch.error` (or `dispatch.data?.error`) fires:
+- Detect the `Outside 24h customer-service window` substring.
+- Show a more helpful toast with two actions: **"Open WhatsApp Desktop"** (uses the wa.me deep link above) and **"Copy link"**. No silent clipboard fallback when the user clearly meant to send.
 
 ## Files to change
-- `src/components/hrm/CreateContractDrawer.tsx` — template fn signature + PT block conditional + personal-details line rewrite + auto-regen useEffect + 6 call-site updates.
-- `supabase/functions/contract-signing/index.ts` — extend terms sanitiser with commission-% backfill and personal-details stub stripper; version bump to v5.5.0.
+- `src/lib/templates/systemEvents.ts` — add `contract_fill_link` event entry (HRM / transactional / wa+sms+email / vars name·link·employer_name).
+- `src/pages/HRM.tsx` — extend `createContractSignLink` with `returnLink` mode; refactor dropdown to two send options (API + Desktop) plus copy variants; fold 24h-window detection into the error toast.
 
 ## Out of scope
-- Schema, RLS, RPC contracts (commission_percentage already exists on contracts).
-- Annexure A salary breakdown layout (separate task if requested).
-- Signature image rendering — already correct after last patch.
-- Other PDFs (invoice, payslip, POS).
+- Edge function logic (dispatcher already does template-first routing).
+- Auto-generating/approving the Meta template — the user submits it from AI Studio after the catalog entry exists. The wa.me path keeps the feature usable while approval is pending.
+- Witness / HR link sends (same pattern applies but the user didn't ask).
