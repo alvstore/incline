@@ -1,10 +1,44 @@
+// v2.0.0 - Optional MIPS_WEBHOOK_SECRET gate + imgUri hostname allowlist
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-mips-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Allowlist hostnames for imgUri values written to biometric_photo_url.
+// Includes Supabase Storage, our own custom domains, and configured MIPS server hosts.
+const STATIC_IMG_HOST_ALLOWLIST = [
+  ".supabase.co",
+  ".supabase.in",
+  "theincline.in",
+];
+
+async function isImgUriAllowed(supabase: any, imgUri: string): Promise<boolean> {
+  if (!imgUri) return false;
+  let host: string;
+  try {
+    host = new URL(imgUri).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (STATIC_IMG_HOST_ALLOWLIST.some((h) => host === h.replace(/^\./, "") || host.endsWith(h))) {
+    return true;
+  }
+  // Also allow hostnames of configured MIPS server URLs.
+  try {
+    const { data } = await supabase.from("mips_connections").select("server_url").eq("is_active", true);
+    for (const row of data ?? []) {
+      try {
+        const allowed = new URL(row.server_url).hostname.toLowerCase();
+        if (host === allowed) return true;
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
 
 const DEVICE_ACK = JSON.stringify({ result: 1, code: "000" });
 
@@ -298,6 +332,10 @@ async function handleImgRegCallback(supabase: any, payload: Record<string, unkno
       console.warn("ImgReg photo save failed:", e);
     }
   } else if (imgUri) {
+    if (!(await isImgUriAllowed(supabase, imgUri))) {
+      console.warn(`ImgReg: rejected imgUri (host not allowlisted) for ${personNo} → ${imgUri}`);
+      return;
+    }
     const table = person.type === "member" ? "members" : person.type === "trainer" ? "trainers" : "employees";
     await supabase.from(table).update({ biometric_photo_url: imgUri }).eq("id", person.id);
     console.log(`ImgReg: stored imgUri for ${personNo} → ${imgUri}`);
@@ -339,6 +377,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Optional shared-secret gate. When MIPS_WEBHOOK_SECRET is configured,
+  // require a matching token via `x-mips-token` header or `Authorization: Bearer <token>`.
+  // Hardware devices must be configured to send this header.
+  const webhookSecret = Deno.env.get("MIPS_WEBHOOK_SECRET") || "";
+  if (webhookSecret) {
+    const headerToken = req.headers.get("x-mips-token") || "";
+    const authHeader = req.headers.get("authorization") || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    if (headerToken !== webhookSecret && bearer !== webhookSecret) {
+      console.warn("mips-webhook-receiver: unauthorized request (missing/invalid token)");
+      return new Response(JSON.stringify({ result: 0, code: "401" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
