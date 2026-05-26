@@ -20,7 +20,19 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+async function logEdgeError(fingerprint: string, message: string, context: Record<string, unknown> = {}) {
+  try {
+    await supabase.rpc("log_error_event", {
+      _source: "edge",
+      _fingerprint: fingerprint,
+      _message: message,
+      _context: context as any,
+    });
+  } catch { /* best-effort */ }
+}
+
 type CopyKind = "original" | "employee_copy" | "employer_copy" | "draft";
+
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
