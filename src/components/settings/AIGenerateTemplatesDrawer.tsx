@@ -421,7 +421,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 {channel === 'email' && p.body_html && (
                   <details className="text-xs">
                     <summary className="cursor-pointer text-muted-foreground">HTML preview</summary>
-                    <div className="mt-2 rounded border bg-white p-2 max-h-60 overflow-auto" dangerouslySetInnerHTML={{ __html: p.body_html }} />
+                    <div className="mt-2 rounded border bg-white p-2 max-h-60 overflow-auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
                   </details>
                 )}
                 {p.rationale && <p className="text-xs text-muted-foreground italic">{p.rationale}</p>}

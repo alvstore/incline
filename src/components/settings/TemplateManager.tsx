@@ -1356,7 +1356,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                       <div className="text-[#EAB308] text-2xl font-extrabold tracking-[2px]">INCLINE</div>
                       <div className="text-white/60 text-[10px] tracking-[4px] uppercase mt-1">Rise. Reflect. Repeat.</div>
                     </div>
-                    <div className="bg-[#111111] p-6 text-white/90 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: rendered.replace(/\n/g, '<br/>') }} />
+                    <div className="bg-[#111111] p-6 text-white/90 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(rendered.replace(/\n/g, '<br/>')) }} />
                     <div className="bg-[#0a0a0a] px-6 py-4 text-center border-t border-white/10">
                       <div className="text-[#EAB308] text-xs font-semibold">The Incline Life by Incline</div>
                       <div className="text-white/40 text-[11px] mt-1">theincline.in</div>
