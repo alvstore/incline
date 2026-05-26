@@ -1,10 +1,44 @@
+// v2.0.0 - Optional MIPS_WEBHOOK_SECRET gate + imgUri hostname allowlist
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-mips-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Allowlist hostnames for imgUri values written to biometric_photo_url.
+// Includes Supabase Storage, our own custom domains, and configured MIPS server hosts.
+const STATIC_IMG_HOST_ALLOWLIST = [
+  ".supabase.co",
+  ".supabase.in",
+  "theincline.in",
+];
+
+async function isImgUriAllowed(supabase: any, imgUri: string): Promise<boolean> {
+  if (!imgUri) return false;
+  let host: string;
+  try {
+    host = new URL(imgUri).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (STATIC_IMG_HOST_ALLOWLIST.some((h) => host === h.replace(/^\./, "") || host.endsWith(h))) {
+    return true;
+  }
+  // Also allow hostnames of configured MIPS server URLs.
+  try {
+    const { data } = await supabase.from("mips_connections").select("server_url").eq("is_active", true);
+    for (const row of data ?? []) {
+      try {
+        const allowed = new URL(row.server_url).hostname.toLowerCase();
+        if (host === allowed) return true;
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
 
 const DEVICE_ACK = JSON.stringify({ result: 1, code: "000" });
 
