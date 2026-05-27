@@ -427,10 +427,40 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
+  const supabase = createClient(SUPA_URL, SERVICE_KEY);
+
+  // ---- AUTH GATE (v2.1.0) ----
+  // Allow internal service-role callers OR authenticated manager/admin/owner JWTs.
+  const authHeader = req.headers.get("Authorization") || "";
+  const bearer = authHeader.replace(/^Bearer\s+/i, "");
+  const isService = bearer && bearer === SERVICE_KEY;
+  if (!isService) {
+    if (!bearer) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: userRes } = await supabase.auth.getUser(bearer);
+    const uid = userRes?.user?.id;
+    if (!uid) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: roles } = await supabase
+      .from("user_roles").select("role").eq("user_id", uid);
+    const allowed = new Set(["owner", "admin", "manager"]);
+    const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
+    if (!hasRole) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
+
 
   try {
     const body = await req.json().catch(() => ({}));
