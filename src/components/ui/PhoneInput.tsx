@@ -9,11 +9,14 @@ interface PhoneInputProps extends Omit<React.ComponentProps<"input">, "onChange"
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
   ({ className, value = "", onChange, countryCode = "+91", ...props }, ref) => {
-    // Strip the +91 country code prefix and any leading zeros for display
+    // Strip the +91 / 91 / 091 / 0 country-prefix and return the bare 10-digit form
     const ccDigits = countryCode.replace(/\D/g, "");
     const stripPrefix = (val: string) => {
       let cleaned = (val || "").replace(/\D/g, "");
-      if (ccDigits && cleaned.startsWith(ccDigits)) {
+      // 091XXXXXXXXXX → XXXXXXXXXX
+      if (cleaned.length === 13 && cleaned.startsWith("0" + ccDigits)) {
+        cleaned = cleaned.slice(1 + ccDigits.length);
+      } else if (ccDigits && cleaned.startsWith(ccDigits) && cleaned.length > 10) {
         cleaned = cleaned.slice(ccDigits.length);
       }
       while (cleaned.startsWith("0")) cleaned = cleaned.slice(1);

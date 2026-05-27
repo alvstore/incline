@@ -1,46 +1,87 @@
-## Why the WhatsApp send failed
-`HRM.tsx` calls `dispatch-communication` for event `contract_fill_link` with a free-text `body`. WhatsApp Cloud API only accepts free text inside the 24-hour customer-service window; Ritesh is outside that window so Meta rejects the send. No approved template exists for this event yet — `contract_fill_link` is referenced **only** in `HRM.tsx` and is not in the system events catalog (`src/lib/templates/systemEvents.ts`), so the AI template generator never created a Meta template for it.
+# Plan: Phone Normalization Audit + Email-or-Phone Login
 
-## Fix plan — two additions
+## Part 1 — Phone Normalization Audit (+91 / 091 / 91 / 10-digit)
 
-### 1. Register `contract_fill_link` in the system events catalog
-Add an entry to `src/lib/templates/systemEvents.ts` so it appears in:
-- Settings → Communication Templates → WhatsApp → Coverage & AI (lets the user submit a Meta template for approval via the existing AI Studio flow)
-- Settings → Communication Templates → WhatsApp → Automations
-- The diff used by `AIGenerateTemplatesDrawer` so a one-click "Generate missing templates" run creates this one too
+**Goal:** Every write of a phone number anywhere in the platform passes through one canonical normalizer that:
+- Strips spaces, dashes, brackets
+- Strips leading `0`, `091`, `91` (when 10-digit Indian mobile follows)
+- Stores as canonical `+91XXXXXXXXXX` (E.164)
+- Rejects invalid (must be 10-digit starting 6/7/8/9 once Indian)
+- Allows non-IN numbers if already `+<cc>...`
 
-Event shape:
-- key: `contract_fill_link`
-- category: `transactional` (HRM)
-- channels: `whatsapp`, `sms`, `email`
-- body vars: `{{name}}`, `{{link}}`, `{{employer_name}}`
-- header_type: `none` (it's a text+link message, not a document — so the document-event rule does **not** apply here)
-- Default body copy that matches what HRM.tsx already sends, so an approved Meta template renders identically.
+### 1.1 Canonicalize the helpers (single source of truth)
+- `src/lib/contacts/phone.ts` — extend `normalizePhone()`:
+  - Handle `091XXXXXXXXXX` (13 chars, leading `0`) → `+91XXXXXXXXXX`
+  - Handle bare `0XXXXXXXXXX` (11 digits, leading 0 + 10-digit IN mobile) → `+91XXXXXXXXXX`
+  - Reject obviously invalid (return `''`) so callers can decide
+- `supabase/functions/_shared/phone.ts` — mirror the exact same rules server-side
+- Add `isValidIndianMobile(input)` helper used by Zod schemas
 
-Dispatcher behaviour is already correct: when a Meta-approved template is mapped for the event, it sends as a template (works outside the 24h window). No edge-fn change needed — only the catalog registration so the user can mint the template.
+### 1.2 Database trigger (defense in depth)
+- New migration: `BEFORE INSERT OR UPDATE` trigger on `profiles`, `leads`, `contacts`, `whatsapp_chat_settings`, `staff` (any table with a `phone` column) that calls existing `normalize_phone_in()` SQL function
+- Verify `normalize_phone_in()` itself handles the `0` / `091` cases; patch it if not
+- This guarantees that *no matter how the row got written* (UI, edge fn, raw SQL, migration), the stored value is canonical
 
-### 2. Add a "Send via WhatsApp Desktop" (wa.me) option to the Share dropdown
-In `src/pages/HRM.tsx`:
+### 1.3 Frontend audit — every form that captures a phone
+Sweep these files and ensure they use `<PhoneInput>` (which enforces +91 prefix) or call `normalizePhone()` before `.insert()` / `.update()`:
+- Member create/edit drawer
+- Lead create/edit drawer
+- Staff/Trainer create/edit (HRM)
+- Public self-registration (`/register`)
+- Public lead capture (`EmbedLeadForm`)
+- Contact Book add-contact
+- WhatsApp manual-send "to" field
+- Profile edit (member portal)
 
-- Rename the existing item to **"Send via WhatsApp (API · uses approved template)"**.
-- Add a new item **"Open in WhatsApp Desktop / Web (free)"** that:
-  - Generates the fill link via `createContractSignLink(contract, 'employee', { sendWhatsApp: false, returnLink: true })` (refactor to optionally return the link instead of copying).
-  - Normalises `contract._resolvedPhone` to bare digits (strip `+`, spaces, dashes — keep country code).
-  - Opens `https://wa.me/<digits>?text=<encodeURIComponent(message)>` in a new tab via `window.open(url, '_blank', 'noopener')`.
-  - The wa.me deep link is OS-aware — desktop users land on WhatsApp Desktop, mobile users on the mobile app.
-  - Toast: "Opening WhatsApp Desktop — review and hit Send. No template fees."
-- Also add **"Copy WhatsApp Desktop link"** so the user can paste it into a chat platform of their choice (Slack/email/etc.).
+For each, add Zod validator: `z.string().refine(isValidIndianMobile, 'Enter a valid 10-digit Indian mobile')` and run `normalizePhone()` in the submit handler before write.
 
-### 3. Smarter failure UX for the API path
-Inside `createContractSignLink` when `dispatch.error` (or `dispatch.data?.error`) fires:
-- Detect the `Outside 24h customer-service window` substring.
-- Show a more helpful toast with two actions: **"Open WhatsApp Desktop"** (uses the wa.me deep link above) and **"Copy link"**. No silent clipboard fallback when the user clearly meant to send.
+### 1.4 Edge function audit
+Sweep edge functions that accept phone input and ensure they normalize before DB write or external API call (WhatsApp Graph API requires E.164 without `+`):
+- `register-member`, `capture-lead`, `webhook-lead-capture`, `create-staff-user`, `create-member-user`, `send-whatsapp`, `send-sms`, `send-broadcast`, `dispatch-communication`
 
-## Files to change
-- `src/lib/templates/systemEvents.ts` — add `contract_fill_link` event entry (HRM / transactional / wa+sms+email / vars name·link·employer_name).
-- `src/pages/HRM.tsx` — extend `createContractSignLink` with `returnLink` mode; refactor dropdown to two send options (API + Desktop) plus copy variants; fold 24h-window detection into the error toast.
+### 1.5 One-time backfill migration
+Run an `UPDATE` across all phone-bearing tables to normalize existing rows. Report count of changed rows. Idempotent — re-running is a no-op.
 
-## Out of scope
-- Edge function logic (dispatcher already does template-first routing).
-- Auto-generating/approving the Meta template — the user submits it from AI Studio after the catalog entry exists. The wa.me path keeps the feature usable while approval is pending.
-- Witness / HR link sends (same pattern applies but the user didn't ask).
+---
+
+## Part 2 — Email OR Phone Login (with password)
+
+### 2.1 UX
+Single "Email or phone" input on `LoginForm`. Auto-detect:
+- Contains `@` → treat as email
+- Otherwise → normalize as phone (`normalizePhone()`), reject if invalid
+
+No tabs, no toggle — one input field, one password field. Same look as today.
+
+### 2.2 Mechanism
+Supabase auth is keyed on `email`. Two options — recommend **Option A** (simpler, no SMS cost):
+
+**Option A (recommended): Phone-as-alias via lookup**
+- On submit, if input is phone:
+  1. Normalize to `+91...`
+  2. Call new edge fn `resolve-login-identifier` (service-role) → looks up `profiles.phone = $1` and returns the associated `auth.users.email`
+  3. Call `signInWithPassword({ email: resolvedEmail, password })`
+- If input is email → call `signInWithPassword` directly (current behavior)
+- Edge fn returns generic "Invalid credentials" if phone not found (no user enumeration)
+
+**Option B: Native Supabase phone auth**
+- Requires enabling Phone provider + SMS credits (Twilio/MSG91) — incurs cost, requires OTP flow
+- User asked for **password** login, not OTP, so this isn't a fit
+
+Going with **Option A**.
+
+### 2.3 Files to change
+- `src/components/auth/LoginForm.tsx` — change label to "Email or phone", update Zod schema to accept either, branch in submit handler
+- `supabase/functions/resolve-login-identifier/index.ts` — new edge fn, JWT-not-required (public), rate-limited by IP, returns `{ email }` or 404
+- `src/lib/auth/identifier.ts` — small helper `isEmail()` / `resolveIdentifier()`
+
+### 2.4 Signup / password reset
+- Out of scope unless you want them too — confirm if you also want signup + "forgot password" to accept phone
+
+---
+
+## Open questions
+1. For the one-time backfill — OK to run during the same migration, or schedule for off-hours?
+2. Should signup & forgot-password also accept phone, or only login for now?
+3. Any non-India branches/members? (If yes, we keep the "already +CC" passthrough; if no, we hard-reject non-IN.)
+
