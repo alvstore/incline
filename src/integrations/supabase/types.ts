@@ -14021,6 +14021,7 @@ export type Database = {
           source_type: string
         }[]
       }
+      resolve_email_by_phone: { Args: { p_phone: string }; Returns: string }
       resolve_gst_rate: {
         Args: { p_branch_id?: string; p_item_id?: string; p_item_type: string }
         Returns: number
