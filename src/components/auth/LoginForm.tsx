@@ -7,11 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AtSign, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { classifyIdentifier } from '@/lib/auth/identifier';
 
 const passwordLoginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  identifier: z
+    .string()
+    .min(1, 'Enter your email or mobile number')
+    .refine((v) => classifyIdentifier(v).kind !== 'invalid', {
+      message: 'Enter a valid email or 10-digit Indian mobile number',
+    }),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -28,17 +34,36 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   const form = useForm<PasswordLoginData>({
     resolver: zodResolver(passwordLoginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { identifier: '', password: '' },
   });
 
   const handlePasswordSubmit = async (data: PasswordLoginData) => {
     setIsLoading(true);
     try {
+      const id = classifyIdentifier(data.identifier);
+      let email: string;
+
+      if (id.kind === 'email') {
+        email = id.value;
+      } else if (id.kind === 'phone') {
+        // Resolve phone → email via edge function
+        const { data: resolved, error: resolveErr } = await supabase.functions.invoke(
+          'resolve-login-identifier',
+          { body: { phone: id.value } },
+        );
+        if (resolveErr || !resolved?.email) {
+          throw new Error('Invalid credentials');
+        }
+        email = resolved.email as string;
+      } else {
+        throw new Error('Enter a valid email or mobile number');
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
+        email,
         password: data.password,
       });
-      if (error) throw error;
+      if (error) throw new Error('Invalid credentials');
       shadToast({ title: 'Welcome back!', description: 'Successfully signed in.' });
       onSuccess?.();
     } catch (error) {
@@ -63,18 +88,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <form onSubmit={form.handleSubmit(handlePasswordSubmit)} className="space-y-3.5">
           <FormField
             control={form.control}
-            name="email"
+            name="identifier"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-slate-700 font-medium text-sm">Email</FormLabel>
+                <FormLabel className="text-slate-700 font-medium text-sm">Email or mobile</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                     <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      autoComplete="email"
-                      data-testid="input-email"
+                      type="text"
+                      placeholder="you@example.com  or  9876543210"
+                      autoComplete="username"
+                      data-testid="input-identifier"
                       className="h-12 pl-10 text-base rounded-xl bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
                       {...field}
                     />
@@ -84,6 +109,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               </FormItem>
             )}
           />
+
           <FormField
             control={form.control}
             name="password"
