@@ -17,10 +17,31 @@ serve(async (req: Request) => {
   }
 
   try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ---- AUTH GATE (v2.1.0) ----
+    // Allow internal service-role callers (dispatch-communication, send-broadcast, etc.)
+    // OR authenticated staff/manager/admin/owner JWTs.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const isService = bearer && bearer === SUPABASE_SERVICE_ROLE_KEY;
+    if (!isService) {
+      if (!bearer) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+      const { data: userRes } = await supabase.auth.getUser(bearer);
+      const uid = userRes?.user?.id;
+      if (!uid) return json({ error: "Unauthorized" }, 401);
+      const { data: roles } = await supabase
+        .from("user_roles").select("role").eq("user_id", uid);
+      const allowed = new Set(["owner", "admin", "manager", "staff"]);
+      const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
+      if (!hasRole) return json({ error: "Forbidden" }, 403);
+    }
+
     const body = await req.json();
     const { action = "send", phone, message, branch_id, provider: providerOverride } = body;
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Get active SMS integration
     let query = supabase
