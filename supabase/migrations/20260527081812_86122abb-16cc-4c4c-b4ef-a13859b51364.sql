@@ -1,0 +1,1 @@
+UPDATE public.error_logs SET status='resolved', resolved_at=now() WHERE id IN ('9ef309f3-33b5-45d7-9846-cf70b6708c8e','4d779aaf-2604-4fe7-afc9-76e020f4566f');
