@@ -50,7 +50,39 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ---- AUTH GATE (v1.1.0) ----
+    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const isService = bearer && bearer === SERVICE_KEY;
+    if (!isService) {
+      if (!bearer) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const authClient = createClient(SUPA_URL, SERVICE_KEY);
+      const { data: userRes } = await authClient.auth.getUser(bearer);
+      const uid = userRes?.user?.id;
+      if (!uid) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: roles } = await authClient
+        .from("user_roles").select("role").eq("user_id", uid);
+      const allowed = new Set(["owner", "admin", "manager", "staff"]);
+      const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
+      if (!hasRole) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const body = await req.json();
+
     const { endpoint, method = "GET", params, data, branch_id } = body as {
       endpoint: string;
       method?: string;

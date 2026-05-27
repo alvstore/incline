@@ -17,6 +17,25 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
 
+    // ---- AUTH GATE (v1.1.0) ----
+    // Internal-only: only callable by automation-brain via service-role bearer or by an admin/owner JWT.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const isService = bearer && bearer === serviceKey;
+    if (!isService) {
+      if (!bearer) return json({ ok: false, error: "Unauthorized" }, 401);
+      const { data: userRes } = await admin.auth.getUser(bearer);
+      const uid = userRes?.user?.id;
+      if (!uid) return json({ ok: false, error: "Unauthorized" }, 401);
+      const { data: roles } = await admin
+        .from("user_roles").select("role").eq("user_id", uid);
+      const allowed = new Set(["owner", "admin", "manager"]);
+      const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
+      if (!hasRole) return json({ ok: false, error: "Forbidden" }, 403);
+    }
+
+
+
     const payload = await req.json().catch(() => ({}));
     const campaignId = payload?.campaign_id as string | undefined;
     if (!campaignId) {
