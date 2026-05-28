@@ -138,7 +138,7 @@ export default function StaffRoster() {
   const upsertOverride = useUpsertShiftOverride(branchId);
   const deleteOverride = useDeleteShiftOverride(branchId);
 
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const [weekday, setWeekday] = useState<number>(today.getDay());
   const [weekAnchor, setWeekAnchor] = useState<Date>(startOfWeek(today, { weekStartsOn: 1 }));
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
