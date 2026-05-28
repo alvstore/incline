@@ -1,6 +1,9 @@
 import {
-  ChevronDown, Instagram, Dumbbell, Snowflake, Flame, Target, Wind, Car, Clock, Award, Layers, Lock, Coffee
+  ChevronDown, Instagram, Youtube, Dumbbell, Snowflake, Flame, Target, Wind, Car, Clock, Award, Layers, Lock, Coffee
 } from "lucide-react";
+import { PUBLIC_SOCIALS } from "@/config/publicSite";
+import { LaunchCountdownPill, LaunchCountdownBlock } from "@/components/ui/LaunchCountdown";
+
 
 // NOTE: The logo + hero copy were lifted out of this overlay into
 // <InclineAscent> so they paint immediately, before the lazy Three.js
