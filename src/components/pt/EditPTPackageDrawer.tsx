@@ -75,6 +75,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
       if (isDurationBased) {
         payload.total_sessions = 0;
         payload.validity_days = formData.duration_months * 30;
+        payload.session_type = 'monthly';
       } else {
         payload.duration_months = null;
       }
