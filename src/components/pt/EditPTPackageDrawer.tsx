@@ -29,7 +29,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
     name: '', description: '', total_sessions: 10, price: 0, validity_days: 90,
     session_type: 'per_session',
     gst_enabled: false, gst_inclusive: false, gst_percentage: 18, is_active: true,
-    package_type: 'session_based' as 'session_based' | 'duration_based',
+    package_type: 'session_based' as 'session_based' | 'monthly',
     duration_months: 3,
   });
 
@@ -44,13 +44,13 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
         gst_inclusive: pkg.gst_inclusive || false,
         gst_percentage: pct > 0 ? pct : 18,
         is_active: pkg.is_active !== false,
-        package_type: pkg.package_type || 'session_based',
+        package_type: (pkg.package_type as 'session_based' | 'monthly') || 'session_based',
         duration_months: pkg.duration_months || 3,
       });
     }
   }, [pkg]);
 
-  const isDurationBased = formData.package_type === 'duration_based';
+  const isDurationBased = formData.package_type === 'monthly';
 
   const calculateGSTAmount = (price: number, gstPercentage: number, isInclusive: boolean) => {
     if (isInclusive) return price - (price / (1 + gstPercentage / 100));
@@ -75,6 +75,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
       if (isDurationBased) {
         payload.total_sessions = 0;
         payload.validity_days = formData.duration_months * 30;
+        payload.session_type = 'monthly';
       } else {
         payload.duration_months = null;
       }
@@ -119,7 +120,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
               <Label htmlFor="edit-duration"
                 className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${
                   isDurationBased ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                <RadioGroupItem value="duration_based" id="edit-duration" className="sr-only" />
+                <RadioGroupItem value="monthly" id="edit-duration" className="sr-only" />
                 <Calendar className="h-5 w-5 text-accent" />
                 <span className="text-xs font-medium">Monthly Duration</span>
               </Label>
