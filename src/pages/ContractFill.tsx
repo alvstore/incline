@@ -52,8 +52,14 @@ export default function ContractFillPage() {
   const contract = data?.contract;
   const role: FillRole = (contract?.request_role as FillRole) || 'employee';
   const employer = contract?.employer;
-  const existingVars = (contract?.contract_variables ?? {}) as Record<string, string>;
-  const prefill = (contract?.prefill ?? {}) as Record<string, string>;
+  const existingVars = useMemo(
+    () => (contract?.contract_variables ?? {}) as Record<string, string>,
+    [contract?.contract_variables],
+  );
+  const prefill = useMemo(
+    () => (contract?.prefill ?? {}) as Record<string, string>,
+    [contract?.prefill],
+  );
   // Prefill (auto from staff/profile) → existing (saved on contract) → user edits
   const seeded = useMemo(() => ({ ...prefill, ...existingVars }), [prefill, existingVars]);
 

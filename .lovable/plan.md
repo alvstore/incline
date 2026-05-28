@@ -1,87 +1,60 @@
-# Plan: Phone Normalization Audit + Email-or-Phone Login
+# Plan: Fix ESLint warnings for clean build
 
-## Part 1 — Phone Normalization Audit (+91 / 091 / 91 / 10-digit)
+Targeted, surgical fixes only. No behavior changes. After edits, run `bun run build` + `bunx eslint` on the touched files to verify.
 
-**Goal:** Every write of a phone number anywhere in the platform passes through one canonical normalizer that:
-- Strips spaces, dashes, brackets
-- Strips leading `0`, `091`, `91` (when 10-digit Indian mobile follows)
-- Stores as canonical `+91XXXXXXXXXX` (E.164)
-- Rejects invalid (must be 10-digit starting 6/7/8/9 once Indian)
-- Allows non-IN numbers if already `+<cc>...`
+## Fixes
 
-### 1.1 Canonicalize the helpers (single source of truth)
-- `src/lib/contacts/phone.ts` — extend `normalizePhone()`:
-  - Handle `091XXXXXXXXXX` (13 chars, leading `0`) → `+91XXXXXXXXXX`
-  - Handle bare `0XXXXXXXXXX` (11 digits, leading 0 + 10-digit IN mobile) → `+91XXXXXXXXXX`
-  - Reject obviously invalid (return `''`) so callers can decide
-- `supabase/functions/_shared/phone.ts` — mirror the exact same rules server-side
-- Add `isValidIndianMobile(input)` helper used by Zod schemas
+### 1. `src/components/communications/LiveFeed.tsx` (line 386)
+`useMemo` deps missing `GROUP_WINDOW_MS` and `resolveName`.
+- `GROUP_WINDOW_MS` is a module-level constant → safe to add to deps (stable).
+- `resolveName` likely a function defined in component body → wrap it in `useCallback` with its real deps (probably `nameMap`), then add to the deps array. Verify by reading the surrounding `resolveName` definition before editing.
 
-### 1.2 Database trigger (defense in depth)
-- New migration: `BEFORE INSERT OR UPDATE` trigger on `profiles`, `leads`, `contacts`, `whatsapp_chat_settings`, `staff` (any table with a `phone` column) that calls existing `normalize_phone_in()` SQL function
-- Verify `normalize_phone_in()` itself handles the `0` / `091` cases; patch it if not
-- This guarantees that *no matter how the row got written* (UI, edge fn, raw SQL, migration), the stored value is canonical
+### 2. `src/components/hrm/CreateContractDrawer.tsx` (line 470)
+Remove the `// eslint-disable-next-line react-hooks/exhaustive-deps` comment. Deps array on line 471 already lists everything; the disable is dead.
 
-### 1.3 Frontend audit — every form that captures a phone
-Sweep these files and ensure they use `<PhoneInput>` (which enforces +91 prefix) or call `normalizePhone()` before `.insert()` / `.update()`:
-- Member create/edit drawer
-- Lead create/edit drawer
-- Staff/Trainer create/edit (HRM)
-- Public self-registration (`/register`)
-- Public lead capture (`EmbedLeadForm`)
-- Contact Book add-contact
-- WhatsApp manual-send "to" field
-- Profile edit (member portal)
+### 3. `src/components/settings/ai/AILogsTab.tsx` (line 114)
+`const logs = (active.data ?? []) as any[];` recreates array each render, destabilizing the `visibleLogs` useMemo deps.
+Fix: wrap in its own memo:
+```ts
+const logs = useMemo(() => (active.data ?? []) as any[], [active.data]);
+```
 
-For each, add Zod validator: `z.string().refine(isValidIndianMobile, 'Enter a valid 10-digit Indian mobile')` and run `normalizePhone()` in the submit handler before write.
+### 4. `src/components/settings/ai/HandleCard.tsx` (line 94)
+`useEffect` re-syncs local state on `[row.id, row.updated_at]` but reads `row.enabled/model/provider_id/system_prompt/temperature`.
+Fix: change deps to `[row]` (or list all the fields). Cleanest: `[row.id, row.updated_at, row.enabled, row.model, row.provider_id, row.system_prompt, row.temperature]` — keeps "sync only when row changes" semantics without lint suppression.
 
-### 1.4 Edge function audit
-Sweep edge functions that accept phone input and ensure they normalize before DB write or external API call (WhatsApp Graph API requires E.164 without `+`):
-- `register-member`, `capture-lead`, `webhook-lead-capture`, `create-staff-user`, `create-member-user`, `send-whatsapp`, `send-sms`, `send-broadcast`, `dispatch-communication`
+### 5. `src/components/settings/automations/AutomationEditSheet.tsx` (line 38)
+`useEffect` deps `[rule?.id]` but reads `rule.*` fields.
+Fix: change deps to `[rule]`. Keep `if (!rule) return;` guard so behavior is identical.
 
-### 1.5 One-time backfill migration
-Run an `UPDATE` across all phone-bearing tables to normalize existing rows. Report count of changed rows. Idempotent — re-running is a no-op.
+### 6. `src/pages/AllBookings.tsx` (line 384)
+Inside a template literal building HTML written via `document.write`. `<\/script>` escape is unnecessary because the string is not embedded in a `<script>` parser context at runtime — it's `document.write`'d. But removing the backslash changes the literal contents (string would contain `</script>` which still parses identically when document.write'd). User says "keep displayed string the same" — `</script>` and `<\/script>` produce identical JS string values (`</script>`), so simply remove the backslash: `<\/script>` → `</script>`.
 
----
+### 7. `src/pages/ContractFill.tsx` (lines 55–56)
+`existingVars` and `prefill` are recreated each render and feed `useMemo(seeded, [prefill, existingVars])`.
+Fix: wrap each in its own `useMemo`:
+```ts
+const existingVars = useMemo(
+  () => (contract?.contract_variables ?? {}) as Record<string, string>,
+  [contract?.contract_variables],
+);
+const prefill = useMemo(
+  () => (contract?.prefill ?? {}) as Record<string, string>,
+  [contract?.prefill],
+);
+```
 
-## Part 2 — Email OR Phone Login (with password)
+### 8. `src/pages/StaffRoster.tsx` (line 141)
+`const today = new Date();` at component top — new object each render, destabilizing any memo/effect depending on it.
+Fix: `const today = useMemo(() => new Date(), []);` (stable for component lifetime — matches current behavior since `today` was only used to seed initial state).
 
-### 2.1 UX
-Single "Email or phone" input on `LoginForm`. Auto-detect:
-- Contains `@` → treat as email
-- Otherwise → normalize as phone (`normalizePhone()`), reject if invalid
+### 9. `src/pages/StaffRoster.tsx` (line 1169)
+Remove `edit?.trainer.user_id` from the deps array — `edit?.weekday` already changes together with the trainer selection in practice, and the lint rule flags it as unnecessary. Keep `edit?.weekday` and `existing`.
 
-No tabs, no toggle — one input field, one password field. Same look as today.
+## Verification
+After edits:
+1. `bunx eslint src/components/communications/LiveFeed.tsx src/components/hrm/CreateContractDrawer.tsx src/components/settings/ai/AILogsTab.tsx src/components/settings/ai/HandleCard.tsx src/components/settings/automations/AutomationEditSheet.tsx src/pages/AllBookings.tsx src/pages/ContractFill.tsx src/pages/StaffRoster.tsx` — expect zero warnings on the targeted lines.
+2. Harness runs the production build automatically — confirm green.
 
-### 2.2 Mechanism
-Supabase auth is keyed on `email`. Two options — recommend **Option A** (simpler, no SMS cost):
-
-**Option A (recommended): Phone-as-alias via lookup**
-- On submit, if input is phone:
-  1. Normalize to `+91...`
-  2. Call new edge fn `resolve-login-identifier` (service-role) → looks up `profiles.phone = $1` and returns the associated `auth.users.email`
-  3. Call `signInWithPassword({ email: resolvedEmail, password })`
-- If input is email → call `signInWithPassword` directly (current behavior)
-- Edge fn returns generic "Invalid credentials" if phone not found (no user enumeration)
-
-**Option B: Native Supabase phone auth**
-- Requires enabling Phone provider + SMS credits (Twilio/MSG91) — incurs cost, requires OTP flow
-- User asked for **password** login, not OTP, so this isn't a fit
-
-Going with **Option A**.
-
-### 2.3 Files to change
-- `src/components/auth/LoginForm.tsx` — change label to "Email or phone", update Zod schema to accept either, branch in submit handler
-- `supabase/functions/resolve-login-identifier/index.ts` — new edge fn, JWT-not-required (public), rate-limited by IP, returns `{ email }` or 404
-- `src/lib/auth/identifier.ts` — small helper `isEmail()` / `resolveIdentifier()`
-
-### 2.4 Signup / password reset
-- Out of scope unless you want them too — confirm if you also want signup + "forgot password" to accept phone
-
----
-
-## Open questions
-1. For the one-time backfill — OK to run during the same migration, or schedule for off-hours?
-2. Should signup & forgot-password also accept phone, or only login for now?
-3. Any non-India branches/members? (If yes, we keep the "already +CC" passthrough; if no, we hard-reject non-IN.)
-
+## Broader audit (follow-up, not in this pass)
+After this batch lands cleanly, run `bunx eslint . --max-warnings=0` once to surface any remaining warnings project-wide, then propose a second small batch if needed. We won't touch unrelated files in this pass to keep the diff reviewable.

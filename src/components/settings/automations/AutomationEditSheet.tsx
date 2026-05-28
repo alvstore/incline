@@ -35,7 +35,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
     setCron(rule.cron_expression);
     setUseAi(rule.use_ai);
     setTone(rule.ai_tone ?? 'friendly');
-  }, [rule?.id]);
+  }, [rule]);
 
   if (!rule) return null;
 

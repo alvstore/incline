@@ -66,6 +66,7 @@ const normalizeStatus = (log: any): string => {
 const PAGE_SIZE_KEY = 'comm-live-feed-page-size';
 const PAGE_SIZES = [50, 100, 200] as const;
 type PageSize = typeof PAGE_SIZES[number];
+const GROUP_WINDOW_MS = 10 * 60 * 1000;
 
 export function LiveFeed({ branchId }: { branchId?: string }) {
   const qc = useQueryClient();
@@ -237,7 +238,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     },
   });
 
-  function resolveName(log: any): string | null {
+  const resolveName = useCallback((log: any): string | null => {
     if (log.member_id) {
       const n = nameMap[String(log.member_id).toLowerCase()];
       if (n) return n;
@@ -253,7 +254,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       if (n) return n;
     }
     return null;
-  }
+  }, [nameMap]);
 
   useEffect(() => {
     const invalidate = () => {
@@ -324,7 +325,6 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     content: string;
   };
 
-  const GROUP_WINDOW_MS = 10 * 60 * 1000;
 
   const groups = useMemo<Group[]>(() => {
     const fingerprint = (s: string) =>
@@ -383,7 +383,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       if (!g.name) g.name = resolveName(l);
     }
     return out;
-  }, [filtered, nameMap]);
+  }, [filtered, resolveName]);
 
   const groupRollup = (g: Group) => {
     const ss = g.logs.map(normalizeStatus);

@@ -467,7 +467,6 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         Number(f.commissionPercentage) || 0,
       ),
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, employee, legalTermsUnlocked, formData.agreementRole, formData.salary, formData.commissionPercentage, formData.startDate]);
 
 
