@@ -111,7 +111,7 @@ export function AILogsTab() {
   });
 
   const active = stream === "llm" ? llmQuery : toolQuery;
-  const logs = (active.data ?? []) as any[];
+  const logs = useMemo(() => (active.data ?? []) as any[], [active.data]);
 
   const visibleLogs = useMemo(() => {
     if (stream === "tools") {
