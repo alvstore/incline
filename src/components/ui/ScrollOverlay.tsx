@@ -175,32 +175,48 @@ const ScrollOverlay = () => {
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-7xl mx-auto flex justify-end">
             <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
-              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Exclusive Access</span>
+              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Founding Memberships</span>
               <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
                 JOIN THE<br /><span className="text-primary">WAITLIST</span>
               </h2>
-              <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+              <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
                 Be among the first to experience INCLINE. Limited founding memberships with exclusive benefits.
               </p>
+              <div className="mt-6">
+                <LaunchCountdownBlock />
+              </div>
               <button
-                className="mt-8 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                className="mt-6 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
                 onClick={() => window.dispatchEvent(new CustomEvent("open-register-modal"))}
               >
-                Join Waitlist
+                Reserve My Spot
               </button>
             </div>
           </div>
         </div>
         <footer className="flex flex-col items-center gap-4 pb-2">
-          <a
-            href="https://www.instagram.com/theinclinelife/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
-          >
-            <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-sm tracking-wider font-medium">@theinclinelife</span>
-          </a>
+          <div className="flex items-center gap-5">
+            <a
+              href={PUBLIC_SOCIALS.instagram.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Instagram ${PUBLIC_SOCIALS.instagram.handle}`}
+              className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
+            >
+              <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm tracking-wider font-medium">{PUBLIC_SOCIALS.instagram.handle}</span>
+            </a>
+            <a
+              href={PUBLIC_SOCIALS.youtube.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`YouTube ${PUBLIC_SOCIALS.youtube.handle}`}
+              className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
+            >
+              <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm tracking-wider font-medium hidden sm:inline">YouTube</span>
+            </a>
+          </div>
 
           <nav
             aria-label="Legal"
