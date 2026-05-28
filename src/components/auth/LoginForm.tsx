@@ -41,29 +41,31 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setIsLoading(true);
     try {
       const id = classifyIdentifier(data.identifier);
-      let email: string;
 
       if (id.kind === 'email') {
-        email = id.value;
+        const { error } = await supabase.auth.signInWithPassword({
+          email: id.value,
+          password: data.password,
+        });
+        if (error) throw new Error('Invalid credentials');
       } else if (id.kind === 'phone') {
-        // Resolve phone → email via edge function
+        // Server-side phone+password sign-in (never exposes email)
         const { data: resolved, error: resolveErr } = await supabase.functions.invoke(
           'resolve-login-identifier',
-          { body: { phone: id.value } },
+          { body: { phone: id.value, password: data.password } },
         );
-        if (resolveErr || !resolved?.email) {
+        if (resolveErr || !resolved?.session) {
           throw new Error('Invalid credentials');
         }
-        email = resolved.email as string;
+        const { error: setErr } = await supabase.auth.setSession({
+          access_token: resolved.session.access_token,
+          refresh_token: resolved.session.refresh_token,
+        });
+        if (setErr) throw new Error('Invalid credentials');
       } else {
         throw new Error('Enter a valid email or mobile number');
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password: data.password,
-      });
-      if (error) throw new Error('Invalid credentials');
       shadToast({ title: 'Welcome back!', description: 'Successfully signed in.' });
       onSuccess?.();
     } catch (error) {
@@ -76,6 +78,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="space-y-5">
