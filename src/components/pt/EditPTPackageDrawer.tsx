@@ -119,7 +119,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
               <Label htmlFor="edit-duration"
                 className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${
                   isDurationBased ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                <RadioGroupItem value="duration_based" id="edit-duration" className="sr-only" />
+                <RadioGroupItem value="monthly" id="edit-duration" className="sr-only" />
                 <Calendar className="h-5 w-5 text-accent" />
                 <span className="text-xs font-medium">Monthly Duration</span>
               </Label>
