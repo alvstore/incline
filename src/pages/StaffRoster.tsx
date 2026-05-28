@@ -1166,7 +1166,7 @@ function ShiftEditSheet({
     setApplyMode('this');
     setCustomDays(new Set([edit?.weekday ?? 0]));
     setOverwriteOff(false);
-  }, [edit?.trainer.user_id, edit?.weekday, existing]);
+  }, [edit?.weekday, existing]);
 
   const otherOffDay = useMemo(() => {
     if (!edit || !off) return null;
