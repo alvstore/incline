@@ -325,7 +325,6 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     content: string;
   };
 
-  const GROUP_WINDOW_MS = 10 * 60 * 1000;
 
   const groups = useMemo<Group[]>(() => {
     const fingerprint = (s: string) =>
