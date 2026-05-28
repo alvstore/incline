@@ -381,7 +381,7 @@ ${rows.map(r => `<tr>
 <td>${e(r.source)}</td><td>${e(r.booked_by)}</td>
 </tr>`).join('')}
 </tbody></table>
-<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300);}<\/script>
+<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300);}</script>
 </body></html>`;
     const w = window.open('', '_blank', 'width=1024,height=768');
     if (!w) return;
