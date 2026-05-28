@@ -91,7 +91,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
     setTemperature(
       row.temperature !== null && row.temperature !== undefined ? String(row.temperature) : '0.6',
     );
-  }, [row.id, row.updated_at]);
+  }, [row.id, row.updated_at, row.enabled, row.model, row.provider_id, row.system_prompt, row.temperature]);
 
   const { data: providers = [] } = useQuery({
     queryKey: ['ai_provider_configs', 'active'],
