@@ -66,6 +66,7 @@ const normalizeStatus = (log: any): string => {
 const PAGE_SIZE_KEY = 'comm-live-feed-page-size';
 const PAGE_SIZES = [50, 100, 200] as const;
 type PageSize = typeof PAGE_SIZES[number];
+const GROUP_WINDOW_MS = 10 * 60 * 1000;
 
 export function LiveFeed({ branchId }: { branchId?: string }) {
   const qc = useQueryClient();
