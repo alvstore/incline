@@ -29,7 +29,7 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
     name: '', description: '', total_sessions: 10, price: 0, validity_days: 90,
     session_type: 'per_session',
     gst_enabled: false, gst_inclusive: false, gst_percentage: 18, is_active: true,
-    package_type: 'session_based' as 'session_based' | 'duration_based',
+    package_type: 'session_based' as 'session_based' | 'monthly',
     duration_months: 3,
   });
 
@@ -44,13 +44,13 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
         gst_inclusive: pkg.gst_inclusive || false,
         gst_percentage: pct > 0 ? pct : 18,
         is_active: pkg.is_active !== false,
-        package_type: pkg.package_type || 'session_based',
+        package_type: (pkg.package_type as 'session_based' | 'monthly') || 'session_based',
         duration_months: pkg.duration_months || 3,
       });
     }
   }, [pkg]);
 
-  const isDurationBased = formData.package_type === 'duration_based';
+  const isDurationBased = formData.package_type === 'monthly';
 
   const calculateGSTAmount = (price: number, gstPercentage: number, isInclusive: boolean) => {
     if (isInclusive) return price - (price / (1 + gstPercentage / 100));
