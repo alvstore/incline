@@ -1,5 +1,17 @@
 import {
-  ChevronDown, Instagram, Dumbbell, Snowflake, Flame, Target, Wind, Car, Clock, Award, Layers, Lock, Coffee
+  ChevronDown,
+  Instagram,
+  Dumbbell,
+  Snowflake,
+  Flame,
+  Target,
+  Wind,
+  Car,
+  Clock,
+  Award,
+  Layers,
+  Lock,
+  Coffee,
 } from "lucide-react";
 
 // NOTE: The logo + hero copy were lifted out of this overlay into
@@ -9,7 +21,6 @@ import {
 const ScrollOverlay = () => {
   return (
     <div className="w-full">
-
       {/* Section 1: Hero */}
       <section className="h-[100dvh] flex items-center relative px-4">
         <div className="w-full max-w-7xl mx-auto flex justify-end">
@@ -42,7 +53,9 @@ const ScrollOverlay = () => {
               <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">The Strength Arsenal</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-foreground tracking-tight">
-              BIO-MECHANICAL<br /><span className="text-primary">DOMINANCE.</span>
+              BIO-MECHANICAL
+              <br />
+              <span className="text-primary">DOMINANCE.</span>
             </h2>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed text-justify">
               A curated fleet of 50+ Machines. Experience the Italian precision of{" "}
@@ -59,7 +72,9 @@ const ScrollOverlay = () => {
               </div>
               <div className="glass p-3 rounded-xl text-center hover:scale-105 transition-transform duration-300">
                 <Clock className="w-5 h-5 text-primary mx-auto mb-2" />
-                <div className="text-lg font-black text-primary drop-shadow-[0_0_8px_hsl(var(--primary)/0.8)]">Full Day Access</div>
+                <div className="text-lg font-black text-primary drop-shadow-[0_0_8px_hsl(var(--primary)/0.8)]">
+                  Full Day Access
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">24-Hour Daily Access</div>
               </div>
               <div className="glass p-3 rounded-xl text-center hover:scale-105 transition-transform duration-300">
@@ -81,7 +96,9 @@ const ScrollOverlay = () => {
               <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Recovery Science</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-foreground tracking-tight">
-              CLINICAL RECOVERY<br /><span className="text-primary">& MOVEMENT.</span>
+              CLINICAL RECOVERY
+              <br />
+              <span className="text-primary">& MOVEMENT.</span>
             </h2>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed">
               The complete restoration ecosystem. From{" "}
@@ -131,7 +148,9 @@ const ScrollOverlay = () => {
               <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">The Lifestyle</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-foreground tracking-tight">
-              UDAIPUR'S FIRST<br /><span className="text-primary">FITNESS-CLUB.</span>
+              UDAIPUR'S FIRST
+              <br />
+              <span className="text-primary">FITNESS-CLUB.</span>
             </h2>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed text-justify">
               The city's largest training facility spanning{" "}
@@ -171,7 +190,9 @@ const ScrollOverlay = () => {
             <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
               <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Exclusive Access</span>
               <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
-                JOIN THE<br /><span className="text-primary">WAITLIST</span>
+                JOIN THE
+                <br />
+                <span className="text-primary">WAITLIST</span>
               </h2>
               <p className="text-muted-foreground mt-4 text-base leading-relaxed">
                 Be among the first to experience INCLINE. Limited founding memberships with exclusive benefits.
@@ -187,7 +208,7 @@ const ScrollOverlay = () => {
         </div>
         <footer className="flex flex-col items-center gap-4 pb-2">
           <a
-            href="https://www.instagram.com/theinclinelife/"
+            href="https://www.instagram.com/inclineudaipur/"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
@@ -201,24 +222,22 @@ const ScrollOverlay = () => {
             className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-primary/20 bg-card/40 backdrop-blur-md px-2 py-1.5 shadow-lg shadow-primary/5"
           >
             {[
-              { key: "privacy",  label: "Privacy" },
-              { key: "terms",    label: "Terms" },
+              { key: "privacy", label: "Privacy" },
+              { key: "terms", label: "Terms" },
               { key: "deletion", label: "Data Deletion" },
             ].map((item, i, arr) => (
               <span key={item.key} className="flex items-center">
                 <button
                   type="button"
-                  onClick={() =>
-                    window.dispatchEvent(
-                      new CustomEvent("open-legal-modal", { detail: item.key })
-                    )
-                  }
+                  onClick={() => window.dispatchEvent(new CustomEvent("open-legal-modal", { detail: item.key }))}
                   className="px-3 py-1 rounded-full text-xs font-semibold tracking-wide text-muted-foreground hover:text-primary-foreground hover:bg-primary transition-all duration-200 cursor-pointer"
                 >
                   {item.label}
                 </button>
                 {i < arr.length - 1 && (
-                  <span aria-hidden="true" className="text-primary/30 select-none">·</span>
+                  <span aria-hidden="true" className="text-primary/30 select-none">
+                    ·
+                  </span>
                 )}
               </span>
             ))}
