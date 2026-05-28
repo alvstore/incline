@@ -237,7 +237,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
     },
   });
 
-  function resolveName(log: any): string | null {
+  const resolveName = useCallback((log: any): string | null => {
     if (log.member_id) {
       const n = nameMap[String(log.member_id).toLowerCase()];
       if (n) return n;
@@ -253,7 +253,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       if (n) return n;
     }
     return null;
-  }
+  }, [nameMap]);
 
   useEffect(() => {
     const invalidate = () => {
