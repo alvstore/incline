@@ -67,7 +67,9 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
         name: formData.name,
         description: formData.description,
         price: formData.price,
-        session_type: formData.session_type,
+        // For duration-based packages, force session_type='monthly' so the
+        // listing badge displays "Monthly Plan" instead of "Per Session".
+        session_type: isDurationBased ? 'monthly' : formData.session_type,
         gst_inclusive: formData.gst_enabled ? formData.gst_inclusive : false,
         gst_percentage: effectiveGstPct,
         package_type: formData.package_type,
