@@ -383,7 +383,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       if (!g.name) g.name = resolveName(l);
     }
     return out;
-  }, [filtered, nameMap]);
+  }, [filtered, nameMap, resolveName]);
 
   const groupRollup = (g: Group) => {
     const ss = g.logs.map(normalizeStatus);
