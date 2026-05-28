@@ -155,8 +155,8 @@ const InclineAscent = () => {
       style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%)' }}
     >
       <SEO
-        title="The Incline Life | Launching July 2026 · Luxury Gym & Recovery Club in Udaipur"
-        description="Founding memberships open. Udaipur's most luxurious fitness destination opens July 2026 — Panatta equipment, elite PT, group classes, sauna, ice bath & recovery suite."
+        title="The Incline Life | Luxury Gym & Recovery Club in Udaipur"
+        description="Udaipur's most luxurious fitness destination. Panatta equipment, elite personal training, group classes, sauna, ice bath & recovery suite. Join Incline today."
         path="/"
         jsonLd={[...branchJsonLd, faqJsonLd]}
       />

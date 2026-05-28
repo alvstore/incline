@@ -1,67 +1,87 @@
-## 1. Audit findings — current public site (`/` → `InclineAscent.tsx`)
+# Plan: Phone Normalization Audit + Email-or-Phone Login
 
-**What's working**
-- Static SEO hero paints instantly (good LCP), Three.js `Scene3D` lazy-loads on idle/intersection, low-end mobiles defer further. Honors `prefers-reduced-motion`.
-- Crawlable `<sr-only>` branches + FAQ JSON-LD, `SEO` component, scroll progress bar, scroll sound FX.
-- Modal infra already in place: `RegisterModal`, `LegalModal`, custom-event open pattern.
+## Part 1 — Phone Normalization Audit (+91 / 091 / 91 / 10-digit)
 
-**Gaps to fix**
-1. **Wrong socials.** Footer + JSON-LD point to `instagram.com/theinclinelife`. No YouTube anywhere.
-   - `src/components/ui/ScrollOverlay.tsx` line 190 — Instagram link
-   - `index.html` lines 91, 109, 203 — `sameAs` arrays in 3 JSON-LD blocks
-   - `public/llms.txt` line 48
-2. **No launch date / countdown.** "Launching July 2026" is nowhere on the page; the CTA just says "Join Waitlist" with no urgency anchor.
-3. **3D scene is single-act.** `Scene3D` = one dumbbell + floating words. No section-to-section cinematic story, no parallax depth stack, no scroll-scrubbed reveals on the overlay panels, no inter-section transitions. Feels static after the first 2 scrolls.
-4. **Overlay panels (`ScrollOverlay`)** use plain fades — no split-text, no clip-path birth, no depth layering, no companion accents to the hero.
-5. **No "Founding Member" social proof rail** (Instagram reel strip / YouTube teaser) — wasted opportunity given active IG + YT channels.
+**Goal:** Every write of a phone number anywhere in the platform passes through one canonical normalizer that:
+- Strips spaces, dashes, brackets
+- Strips leading `0`, `091`, `91` (when 10-digit Indian mobile follows)
+- Stores as canonical `+91XXXXXXXXXX` (E.164)
+- Rejects invalid (must be 10-digit starting 6/7/8/9 once Indian)
+- Allows non-IN numbers if already `+<cc>...`
 
----
+### 1.1 Canonicalize the helpers (single source of truth)
+- `src/lib/contacts/phone.ts` — extend `normalizePhone()`:
+  - Handle `091XXXXXXXXXX` (13 chars, leading `0`) → `+91XXXXXXXXXX`
+  - Handle bare `0XXXXXXXXXX` (11 digits, leading 0 + 10-digit IN mobile) → `+91XXXXXXXXXX`
+  - Reject obviously invalid (return `''`) so callers can decide
+- `supabase/functions/_shared/phone.ts` — mirror the exact same rules server-side
+- Add `isValidIndianMobile(input)` helper used by Zod schemas
 
-## 2. Quick wins (apply directly, no preview needed)
+### 1.2 Database trigger (defense in depth)
+- New migration: `BEFORE INSERT OR UPDATE` trigger on `profiles`, `leads`, `contacts`, `whatsapp_chat_settings`, `staff` (any table with a `phone` column) that calls existing `normalize_phone_in()` SQL function
+- Verify `normalize_phone_in()` itself handles the `0` / `091` cases; patch it if not
+- This guarantees that *no matter how the row got written* (UI, edge fn, raw SQL, migration), the stored value is canonical
 
-- Replace **all** Instagram URLs → `https://www.instagram.com/inclineudaipur/` (handle `@inclineudaipur`) in: `ScrollOverlay.tsx`, `index.html` (×3 JSON-LD `sameAs`), `public/llms.txt`.
-- Add **YouTube** → `https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg` to the same locations + add a YouTube icon next to the IG icon in the footer.
-- Add a `LAUNCH_DATE` constant (`2026-07-01T00:00:00+05:30`) in `src/config/publicSite.ts` so it's the single source of truth.
+### 1.3 Frontend audit — every form that captures a phone
+Sweep these files and ensure they use `<PhoneInput>` (which enforces +91 prefix) or call `normalizePhone()` before `.insert()` / `.update()`:
+- Member create/edit drawer
+- Lead create/edit drawer
+- Staff/Trainer create/edit (HRM)
+- Public self-registration (`/register`)
+- Public lead capture (`EmbedLeadForm`)
+- Contact Book add-contact
+- WhatsApp manual-send "to" field
+- Profile edit (member portal)
 
----
+For each, add Zod validator: `z.string().refine(isValidIndianMobile, 'Enter a valid 10-digit Indian mobile')` and run `normalizePhone()` in the submit handler before write.
 
-## 3. Launch countdown — what + where
+### 1.4 Edge function audit
+Sweep edge functions that accept phone input and ensure they normalize before DB write or external API call (WhatsApp Graph API requires E.164 without `+`):
+- `register-member`, `capture-lead`, `webhook-lead-capture`, `create-staff-user`, `create-member-user`, `send-whatsapp`, `send-sms`, `send-broadcast`, `dispatch-communication`
 
-A new `<LaunchCountdown />` component (days · hours · minutes · seconds, IST) appears in **two places**:
-
-- **Hero overlay (top-right, under headline)** — slim glass pill: "Doors open · 1 Jul 2026 · 34d 12h 08m". Quietly always-on so it's the first thing eyes catch.
-- **Waitlist panel (final scroll section)** — large cinematic version inside the existing glass card, above "JOIN THE WAITLIST". Numbers animate with a slot-machine tick. Adds urgency to the only CTA.
-
-Also append "Launching July 2026 · Founding Memberships Open" to the SEO meta description and to the hero `<h1>` subline.
-
----
-
-## 4. 3D immersive enhancement — 3 directions to preview
-
-Per request ("we need to see the preview before applying"), I'll use the design-directions flow to render 3 cinematic concepts you can pick from. All three keep the existing `Scene3D` lazy-load + reduced-motion guards. Concept seeds:
-
-- **A. "Vault Opening"** — pinned hero, scroll-scrubbed camera dolly through a Panatta strength floor → ice bath → recovery lounge. Headline splits and converges word-by-word. Countdown lives inside a brushed-metal vault dial that ticks.
-- **B. "Ascent Layers"** — 6-depth parallax stack (mountain silhouette, fog, dumbbell hero, particle dust, glass UI). Sections drop in via top-down clip-path birth. Floating accent reels (IG thumbnails) orbit the hero.
-- **C. "Mirror Club"** — dark mirrored marble scene, hero dumbbell reflects on wet floor, sections transition via curtain panel roll-up. Countdown is a thin gold serif ticker across the bottom edge; YouTube teaser embedded as a magnetic-hover card in the closing section.
-
-Flow: after this plan is approved, I'll capture the current `/` screenshot, run `design--create_directions` with the three concepts, then ask you to pick one via the prototype question. Only the chosen one gets built.
+### 1.5 One-time backfill migration
+Run an `UPDATE` across all phone-bearing tables to normalize existing rows. Report count of changed rows. Idempotent — re-running is a no-op.
 
 ---
 
-## 5. Build order (after you approve)
+## Part 2 — Email OR Phone Login (with password)
 
-1. Quick wins (sec. 2) + `LaunchCountdown` component (sec. 3) — apply immediately, you see them on preview.
-2. Capture screenshot of `/` + generate the 3 cinematic prototypes (sec. 4).
-3. Ask you to pick a direction.
-4. Implement the selected direction inside `Scene3D` + `ScrollOverlay` (and a new `SocialRail` for IG/YT proof).
-5. Re-run accessibility check (`prefers-reduced-motion`, GPU-only animations, `aria-hidden` on decorative layers).
+### 2.1 UX
+Single "Email or phone" input on `LoginForm`. Auto-detect:
+- Contains `@` → treat as email
+- Otherwise → normalize as phone (`normalizePhone()`), reject if invalid
 
-### Technical details
+No tabs, no toggle — one input field, one password field. Same look as today.
 
-- Countdown: pure React `useEffect` interval (1s), pauses when `document.hidden`, snaps to "We're open" state after launch.
-- Socials moved into `src/config/publicSite.ts` as `PUBLIC_SOCIALS = { instagram, youtube }` — no more hardcoded URLs scattered across files.
-- 3D enhancements stay inside the existing `lazy(() => import('@/components/3d/Scene3D'))` boundary — no first-paint regression.
-- Mobile: companion accent assets + magnetic hover disabled via `window.matchMedia('(pointer: coarse)')`.
-- No backend changes. No new routes. SEO `sameAs` arrays get the new IG + YouTube URLs so Google links the channels to the brand.
+### 2.2 Mechanism
+Supabase auth is keyed on `email`. Two options — recommend **Option A** (simpler, no SMS cost):
 
-Used the **epic-design** and **ui-ux-pro-max** skills to shape the cinematic directions and depth/composition rules.
+**Option A (recommended): Phone-as-alias via lookup**
+- On submit, if input is phone:
+  1. Normalize to `+91...`
+  2. Call new edge fn `resolve-login-identifier` (service-role) → looks up `profiles.phone = $1` and returns the associated `auth.users.email`
+  3. Call `signInWithPassword({ email: resolvedEmail, password })`
+- If input is email → call `signInWithPassword` directly (current behavior)
+- Edge fn returns generic "Invalid credentials" if phone not found (no user enumeration)
+
+**Option B: Native Supabase phone auth**
+- Requires enabling Phone provider + SMS credits (Twilio/MSG91) — incurs cost, requires OTP flow
+- User asked for **password** login, not OTP, so this isn't a fit
+
+Going with **Option A**.
+
+### 2.3 Files to change
+- `src/components/auth/LoginForm.tsx` — change label to "Email or phone", update Zod schema to accept either, branch in submit handler
+- `supabase/functions/resolve-login-identifier/index.ts` — new edge fn, JWT-not-required (public), rate-limited by IP, returns `{ email }` or 404
+- `src/lib/auth/identifier.ts` — small helper `isEmail()` / `resolveIdentifier()`
+
+### 2.4 Signup / password reset
+- Out of scope unless you want them too — confirm if you also want signup + "forgot password" to accept phone
+
+---
+
+## Open questions
+1. For the one-time backfill — OK to run during the same migration, or schedule for off-hours?
+2. Should signup & forgot-password also accept phone, or only login for now?
+3. Any non-India branches/members? (If yes, we keep the "already +CC" passthrough; if no, we hard-reject non-IN.)
+

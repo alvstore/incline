@@ -1,9 +1,6 @@
 import {
-  ChevronDown, Instagram, Youtube, Dumbbell, Snowflake, Flame, Target, Wind, Car, Clock, Award, Layers, Lock, Coffee
+  ChevronDown, Instagram, Dumbbell, Snowflake, Flame, Target, Wind, Car, Clock, Award, Layers, Lock, Coffee
 } from "lucide-react";
-import { PUBLIC_SOCIALS } from "@/config/publicSite";
-import { LaunchCountdownPill, LaunchCountdownBlock } from "@/components/ui/LaunchCountdown";
-
 
 // NOTE: The logo + hero copy were lifted out of this overlay into
 // <InclineAscent> so they paint immediately, before the lazy Three.js
@@ -26,14 +23,11 @@ const ScrollOverlay = () => {
               Rajasthan's new benchmark for excellence. An elevated sanctuary designed for the driven—delivering Italian
               biomechanics in every rep, and advanced restoration in every recovery.
             </p>
-            <div className="mt-6 flex justify-end">
-              <LaunchCountdownPill />
-            </div>
           </div>
         </div>
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
           <span className="text-sm tracking-widest uppercase font-bold text-primary animate-pulse text-center">
-            BEGIN YOUR ASCENT • JULY 2026
+            BEGIN YOUR ASCENT • 2026
           </span>
           <ChevronDown className="w-6 h-6 scroll-indicator text-primary animate-bounce" />
         </div>
@@ -175,48 +169,32 @@ const ScrollOverlay = () => {
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-7xl mx-auto flex justify-end">
             <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
-              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Founding Memberships</span>
+              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Exclusive Access</span>
               <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
                 JOIN THE<br /><span className="text-primary">WAITLIST</span>
               </h2>
-              <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
+              <p className="text-muted-foreground mt-4 text-base leading-relaxed">
                 Be among the first to experience INCLINE. Limited founding memberships with exclusive benefits.
               </p>
-              <div className="mt-6">
-                <LaunchCountdownBlock />
-              </div>
               <button
-                className="mt-6 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                className="mt-8 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
                 onClick={() => window.dispatchEvent(new CustomEvent("open-register-modal"))}
               >
-                Reserve My Spot
+                Join Waitlist
               </button>
             </div>
           </div>
         </div>
         <footer className="flex flex-col items-center gap-4 pb-2">
-          <div className="flex items-center gap-5">
-            <a
-              href={PUBLIC_SOCIALS.instagram.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Instagram ${PUBLIC_SOCIALS.instagram.handle}`}
-              className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
-            >
-              <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm tracking-wider font-medium">{PUBLIC_SOCIALS.instagram.handle}</span>
-            </a>
-            <a
-              href={PUBLIC_SOCIALS.youtube.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`YouTube ${PUBLIC_SOCIALS.youtube.handle}`}
-              className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
-            >
-              <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm tracking-wider font-medium hidden sm:inline">YouTube</span>
-            </a>
-          </div>
+          <a
+            href="https://www.instagram.com/theinclinelife/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
+          >
+            <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span className="text-sm tracking-wider font-medium">@theinclinelife</span>
+          </a>
 
           <nav
             aria-label="Legal"
