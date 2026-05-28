@@ -26,11 +26,14 @@ const ScrollOverlay = () => {
               Rajasthan's new benchmark for excellence. An elevated sanctuary designed for the driven—delivering Italian
               biomechanics in every rep, and advanced restoration in every recovery.
             </p>
+            <div className="mt-6 flex justify-end">
+              <LaunchCountdownPill />
+            </div>
           </div>
         </div>
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
           <span className="text-sm tracking-widest uppercase font-bold text-primary animate-pulse text-center">
-            BEGIN YOUR ASCENT • 2026
+            BEGIN YOUR ASCENT • JULY 2026
           </span>
           <ChevronDown className="w-6 h-6 scroll-indicator text-primary animate-bounce" />
         </div>
