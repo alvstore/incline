@@ -4,6 +4,23 @@
  * content lives here so pages render instantly and remain crawlable.
  */
 
+/** Public launch date — single source of truth for the countdown UI. */
+export const LAUNCH_DATE = new Date('2026-07-01T00:00:00+05:30');
+export const LAUNCH_DATE_LABEL = '1 July 2026';
+
+/** Public social handles — change here, propagates everywhere. */
+export const PUBLIC_SOCIALS = {
+  instagram: {
+    handle: '@inclineudaipur',
+    url: 'https://www.instagram.com/inclineudaipur/',
+  },
+  youtube: {
+    handle: 'Incline Udaipur',
+    url: 'https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg',
+  },
+} as const;
+
+
 export interface PublicBranch {
   slug: string;
   name: string;
