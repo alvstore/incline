@@ -1,7 +1,9 @@
-// v1.0.0 — Unified backup endpoint (export + import).
-// Replaces former `backup-export` and `backup-import` edge functions.
-// Dispatch by body { action: "export" | "import", ... }.
+// v1.1.0 — Unified backup endpoint (export + import).
+// Table list now comes from public.dr_get_replication_tables() (single source
+// of truth shared with the dr-replicate edge fn), so adding a new table in a
+// migration doesn't require redeploying this function.
 //
+// Dispatch by body { action: "export" | "import", ... }.
 // export → returns JSON file with Content-Disposition: attachment.
 // import → accepts { data, dry_run?, conflict_strategy? } → returns { success, dry_run, summary }.
 //
@@ -14,70 +16,12 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Tables included in a full export (all CRM tables, skip auth.* / storage.*).
-const EXPORT_TABLES = [
-  "branches", "branch_settings", "branch_managers", "staff_branches",
-  "profiles", "user_roles",
-  "members", "memberships", "membership_plans", "plan_benefits",
-  "benefit_types", "benefit_packages", "benefit_settings", "benefit_slots",
-  "benefit_bookings", "benefit_usage",
-  "employees", "trainers", "trainer_availability", "trainer_commissions",
-  "contracts", "contract_templates",
-  "leads", "follow_ups",
-  "classes", "class_bookings", "class_waitlist",
-  "pt_packages", "member_pt_packages", "pt_sessions",
-  "diet_plans",
-  "invoices", "invoice_items", "payments", "wallets", "wallet_transactions",
-  "expenses", "expense_categories", "income_categories",
-  "discount_codes",
-  "products", "product_categories",
-  "ecommerce_orders",
-  "lockers",
-  "equipment", "equipment_maintenance",
-  "facilities",
-  "announcements", "ad_banners",
-  "feedback",
-  "tasks",
-  "communication_logs", "templates", "whatsapp_triggers",
-  "notifications",
-  "referrals",
-  "rewards_ledger",
-  "approval_requests",
-  "ai_tool_logs",
-  "audit_logs",
-];
+async function getTableOrder(service: SupabaseClient): Promise<string[]> {
+  const { data, error } = await service.rpc("dr_get_replication_tables");
+  if (error) throw new Error(`dr_get_replication_tables: ${error.message}`);
+  return (data as Array<{ table_name: string }>).map((r) => r.table_name);
+}
 
-// Restore order: parents before children to satisfy FKs.
-const RESTORE_ORDER = [
-  "branches", "branch_settings", "branch_managers", "staff_branches",
-  "profiles", "user_roles",
-  "membership_plans", "plan_benefits",
-  "benefit_types", "benefit_packages", "benefit_settings",
-  "members", "memberships",
-  "employees", "trainers", "trainer_availability",
-  "contract_templates", "contracts",
-  "leads", "follow_ups",
-  "classes",
-  "pt_packages", "member_pt_packages", "pt_sessions", "trainer_commissions",
-  "diet_plans",
-  "income_categories", "expense_categories",
-  "discount_codes",
-  "invoices", "invoice_items", "wallets", "wallet_transactions", "payments", "expenses",
-  "product_categories", "products", "ecommerce_orders",
-  "lockers",
-  "equipment", "equipment_maintenance",
-  "facilities", "benefit_slots", "benefit_bookings", "benefit_usage",
-  "class_bookings", "class_waitlist",
-  "announcements", "ad_banners",
-  "feedback", "tasks",
-  "templates", "whatsapp_triggers", "communication_logs",
-  "notifications",
-  "referrals",
-  "rewards_ledger",
-  "approval_requests",
-  "ai_tool_logs",
-  "audit_logs",
-];
 
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -112,17 +56,18 @@ async function requireOwnerOrAdmin(authHeader: string | null): Promise<AdminCtx 
 }
 
 async function handleExport(ctx: AdminCtx): Promise<Response> {
+  const tables = await getTableOrder(ctx.service);
   const backup: Record<string, any> = {
     meta: {
-      version: 1,
+      version: 2,
       generated_at: new Date().toISOString(),
       generated_by: ctx.user.id,
-      tables: EXPORT_TABLES,
+      tables,
     },
     data: {} as Record<string, unknown>,
   };
 
-  for (const table of EXPORT_TABLES) {
+  for (const table of tables) {
     try {
       const { data, error } = await ctx.service.from(table).select("*");
       if (error) {
@@ -148,6 +93,7 @@ async function handleExport(ctx: AdminCtx): Promise<Response> {
   });
 }
 
+
 async function handleImport(ctx: AdminCtx, payload: any): Promise<Response> {
   if (!payload?.data || typeof payload.data !== "object") {
     return jsonResponse({ error: "Invalid backup file (missing 'data' object)" }, 400);
@@ -157,7 +103,9 @@ async function handleImport(ctx: AdminCtx, payload: any): Promise<Response> {
   const conflictStrategy: "skip" | "overwrite" = payload.conflict_strategy === "overwrite" ? "overwrite" : "skip";
   const summary: Record<string, { inserted: number; updated: number; skipped: number; errors: string[] }> = {};
 
-  for (const table of RESTORE_ORDER) {
+  const restoreOrder = await getTableOrder(ctx.service);
+  for (const table of restoreOrder) {
+
     const entry = payload.data[table];
     if (!entry?.rows || !Array.isArray(entry.rows)) continue;
     const rows = entry.rows;

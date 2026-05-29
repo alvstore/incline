@@ -1,6 +1,7 @@
 # Disaster Recovery Runbook
 
-_Last updated: May 2026 — simplified setup, no GitHub Actions._
+_Last updated: May 2026 — extended to full 1:1 mirror (schema + rows + auth + storage)._
+
 
 ## Overview
 
@@ -123,23 +124,29 @@ Once primary is healthy:
 4. Repoint DNS to primary.
 5. Trigger a fresh `Sync to fallback now` to re-establish the mirror.
 
-## What the standby does NOT mirror
+## What is mirrored as of v1.2.0
 
-- Edge function code (~70 functions). If primary is permanently lost, the
-  functions need to be redeployed to the standby project from this repo.
-- Cron jobs / pg_cron schedules — must be recreated on the standby.
-- Project-level secrets (Razorpay, Meta, etc.) — must be re-added to the standby.
-- Custom roles / extensions — generally identical because both projects were
-  provisioned from the same template, but verify before failover.
+The nightly job runs `mode: "all"` which now covers **four** passes (in order):
 
-## Troubleshooting
+1. **Schema snapshot** — primary → `dr-snapshots/<UTC-date>.sql` in standby Storage.
+   Apply with `psql "<STANDBY_CONN>" -v ON_ERROR_STOP=1 -f <file>` before
+   restoring rows after a schema change. The repo's hand-written
+   `incline_full_schema.sql` (regenerated via the audit workflow) is the
+   authoritative seed for a fresh standby.
+2. **`auth.users`** — mirrored.
+3. **`public.*` table rows** — uses `public.dr_get_replication_tables()` to
+   discover ~180 tables in FK-safe order, two passes per run so cyclic FK
+   tables settle. Upserts by `id` when present.
+4. **Storage** — buckets ensured, object bytes copied (upsert).
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| "unauthorized" from dr-replicate | Token not generated yet | Click **Sync to fallback now** once — first call creates the token |
-| Cron runs but nothing mirrored | `DR_SERVICE_ROLE_KEY` missing or wrong | Update the secret in Lovable Cloud → Backend → Secrets |
-| Sync succeeds but storage bytes = 0 | New buckets not yet ensured on standby | Re-run sync; `mode: "all"` ensures buckets first then objects |
-| `private.dr_config` table missing | Migration not applied | Re-apply the DR migrations (search for `dr_get_or_create_token`) |
+## What is NOT mirrored (manual only)
+
+| Layer | Where to handle it |
+|---|---|
+| Edge function code | `./scripts/dr/sync-edge-functions.sh` (run on demand after any function change) |
+| `pg_cron` schedules | snapshot via `SELECT public.dr_get_cron_manifest();` on primary, then apply on standby |
+| Project secrets | `docs/dr-secrets-checklist.md` |
+| Custom roles / extensions | Verify before failover — should match because both projects were provisioned from the same template |
 
 ## Removed in May 2026
 
@@ -147,3 +154,5 @@ Once primary is healthy:
 - `.github/workflows/dr-backup.yml` — replaced by Supabase pg_cron
 - `vite-plugins/dr-assets.ts` — emitted `/healthz.json` and `/app-config.json` static files at build time; nothing in the app actually read them, the live `healthz` edge function makes them redundant
 - `DR_REPLICATE_SECRET` runtime secret — replaced by self-managing `private.dr_config` token
+- Hardcoded `EXPORT_TABLES` array in `backup/index.ts` — replaced by the `dr_get_replication_tables()` RPC
+

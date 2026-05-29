@@ -13378,7 +13378,16 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      dr_get_cron_manifest: { Args: never; Returns: Json }
       dr_get_or_create_token: { Args: never; Returns: string }
+      dr_get_replication_tables: {
+        Args: never
+        Returns: {
+          depth: number
+          has_id_pk: boolean
+          table_name: string
+        }[]
+      }
       dr_is_operational: { Args: never; Returns: boolean }
       enforce_branch_match: {
         Args: { p_branch_id: string }
