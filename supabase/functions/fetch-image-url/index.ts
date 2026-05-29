@@ -1,4 +1,4 @@
-// v1.0.0 — Server-side image fetcher: download URL → upload to product-images bucket → return public URL
+// v1.1.0 — Server-side image fetcher: staff-only, SSRF-hardened, bucket hardcoded
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -8,6 +8,36 @@ const corsHeaders = {
 };
 
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_BUCKET = "product-images"; // hardcoded — never trust client
+const STAFF_ROLES = ["owner", "admin", "manager", "staff"];
+
+// Block private/internal/metadata addresses (SSRF defense)
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h === "metadata.google.internal" ||
+    h === "metadata" ||
+    h.endsWith(".internal") ||
+    h.endsWith(".local")
+  ) return true;
+
+  // IPv4 literal
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [parseInt(m[1]), parseInt(m[2])];
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true; // link-local + AWS/GCP metadata 169.254.169.254
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true; // multicast/reserved
+  }
+  // IPv6 literal — block all literals to be safe
+  if (h.includes(":")) return true;
+  return false;
+}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -31,16 +61,28 @@ Deno.serve(async (req) => {
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const { imageUrl, bucket = "product-images" } = await req.json();
+    // Staff-only authorization
+    const admin = createClient(url, svcKey);
+    const { data: roles } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .in("role", STAFF_ROLES);
+    if (!roles?.length) return json({ error: "Insufficient permissions" }, 403);
+
+    const { imageUrl } = await req.json();
     if (!imageUrl || typeof imageUrl !== "string") return json({ error: "imageUrl is required" }, 400);
 
     let parsed: URL;
     try { parsed = new URL(imageUrl); } catch { return json({ error: "Invalid URL" }, 400); }
     if (!["http:", "https:"].includes(parsed.protocol)) return json({ error: "Only http/https URLs allowed" }, 400);
+    if (isBlockedHost(parsed.hostname)) return json({ error: "Host not allowed" }, 400);
 
-    // Fetch with size cap
-    const resp = await fetch(imageUrl, { redirect: "follow" });
-    if (!resp.ok) return json({ error: `Fetch failed: ${resp.status} ${resp.statusText}` }, 400);
+    // Fetch (no redirect-following so the destination can't bounce to an internal host)
+    const resp = await fetch(parsed.toString(), { redirect: "manual" });
+    if (!resp.ok || resp.status >= 300) {
+      return json({ error: `Fetch failed: ${resp.status} ${resp.statusText}` }, 400);
+    }
 
     const ct = (resp.headers.get("content-type") || "").toLowerCase().split(";")[0].trim();
     if (!ALLOWED.includes(ct)) {
@@ -53,17 +95,17 @@ Deno.serve(async (req) => {
     const ext = ct.split("/")[1].replace("jpeg", "jpg");
     const filename = `${crypto.randomUUID()}.${ext}`;
 
-    const admin = createClient(url, svcKey);
-    const { error: upErr } = await admin.storage.from(bucket).upload(filename, buf, {
+    const { error: upErr } = await admin.storage.from(ALLOWED_BUCKET).upload(filename, buf, {
       contentType: ct,
       upsert: false,
     });
     if (upErr) return json({ error: `Upload failed: ${upErr.message}` }, 500);
 
-    const { data: pub } = admin.storage.from(bucket).getPublicUrl(filename);
+    const { data: pub } = admin.storage.from(ALLOWED_BUCKET).getPublicUrl(filename);
     return json({ success: true, url: pub.publicUrl, path: filename, contentType: ct, bytes: buf.byteLength });
-  } catch (e: any) {
-    console.error("fetch-image-url error:", e);
-    return json({ error: e.message || "Unknown error" }, 500);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error("fetch-image-url error:", msg);
+    return json({ error: msg }, 500);
   }
 });
