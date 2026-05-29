@@ -147,7 +147,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    const body = await req.json()
+    // body already parsed above for role-hierarchy check
+
     
     // Sanitize and extract inputs
     const email = sanitizeString(body.email, MAX_EMAIL_LENGTH);
