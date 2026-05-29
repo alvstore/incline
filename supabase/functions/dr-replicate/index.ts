@@ -291,7 +291,7 @@ async function syncRows(
     tables: 0,
     rowsUpserted: 0,
     tablesFailed: 0,
-    perTable: [] as Array<{ table: string; rows: number; failed: number; error?: string }>,
+    perTable: [] as Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>,
   };
 
   const { data: tables, error: tErr } = await primary.rpc("dr_get_replication_tables");
@@ -301,7 +301,25 @@ async function syncRows(
     return;
   }
 
-  const PAGE = 1000;
+  const PAGE = 500;
+
+  const countRows = async (client: SupabaseClient, table: string): Promise<number> => {
+    const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  };
+
+  const withRetry = async <T,>(label: string, work: () => Promise<T>): Promise<T> => {
+    let last: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try { return await work(); }
+      catch (e) {
+        last = e;
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
+    throw new Error(`${label}: ${(last as Error)?.message ?? String(last)}`);
+  };
 
   for (let pass = 1; pass <= 2; pass++) {
     for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
@@ -311,29 +329,39 @@ async function syncRows(
       let perTableFailed = 0;
       let lastErr: string | undefined;
 
-      let offset = 0;
-      while (true) {
-        const { data, error } = await primary
-          .from(table)
-          .select("*")
-          .range(offset, offset + PAGE - 1);
-        if (error) { lastErr = error.message; perTableFailed++; break; }
-        const rows = data ?? [];
-        if (rows.length === 0) break;
+      try {
+        const primaryCount = await countRows(primary, table);
+        if (primaryCount === 0) {
+          const standbyCount = await countRows(dr, table).catch(() => undefined);
+          if (pass === 2) stat.perTable.push({ table, rows: 0, failed: 0, primaryCount, standbyCount });
+          continue;
+        }
 
-        const upsertOpts = hasId
-          ? { onConflict: "id" as const }
-          : { onConflict: undefined as unknown as string, ignoreDuplicates: true };
-        const { error: upErr } = await dr.from(table).upsert(rows, upsertOpts);
-        if (upErr) {
-          lastErr = upErr.message;
-          perTableFailed += rows.length;
-        } else {
+        for (let offset = 0; offset < primaryCount; offset += PAGE) {
+          const { data, error } = await withRetry(`read ${table} ${offset}`, () =>
+            primary.from(table).select("*").order("id", { ascending: true }).range(offset, offset + PAGE - 1),
+          );
+          if (error) throw new Error(error.message);
+          const rows = data ?? [];
+          if (rows.length === 0) break;
+
+          const upsertOpts = hasId
+            ? { onConflict: "id" as const }
+            : { ignoreDuplicates: true };
+          const { error: upErr } = await withRetry(`upsert ${table} ${offset}`, () =>
+            dr.from(table).upsert(rows, upsertOpts),
+          );
+          if (upErr) throw new Error(upErr.message);
           perTableRows += rows.length;
         }
 
-        if (rows.length < PAGE) break;
-        offset += PAGE;
+        const standbyCount = await countRows(dr, table);
+        if (primaryCount !== standbyCount) {
+          throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
+        }
+      } catch (e) {
+        lastErr = (e as Error).message;
+        perTableFailed++;
       }
 
       if (pass === 2) {
