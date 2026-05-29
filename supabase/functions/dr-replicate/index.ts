@@ -321,6 +321,36 @@ async function syncRows(
     throw new Error(`${label}: ${(last as Error)?.message ?? String(last)}`);
   };
 
+  const copyRows = async (
+    source: SupabaseClient,
+    target: SupabaseClient,
+    table: string,
+    hasId: boolean,
+    overwriteExisting: boolean,
+  ): Promise<number> => {
+    const sourceCount = await countRows(source, table);
+    let copied = 0;
+    for (let offset = 0; offset < sourceCount; offset += PAGE) {
+      const { data, error } = await withRetry(`read ${table} ${offset}`, () => {
+        const query = source.from(table).select("*").range(offset, offset + PAGE - 1);
+        return hasId ? query.order("id", { ascending: true }) : query;
+      });
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
+
+      const upsertOpts = hasId
+        ? { onConflict: "id" as const, ignoreDuplicates: !overwriteExisting }
+        : { ignoreDuplicates: !overwriteExisting };
+      const { error: upErr } = await withRetry(`upsert ${table} ${offset}`, () =>
+        target.from(table).upsert(rows, upsertOpts),
+      );
+      if (upErr) throw new Error(upErr.message);
+      copied += rows.length;
+    }
+    return copied;
+  };
+
   for (let pass = 1; pass <= 2; pass++) {
     for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
       const table = row.table_name;
@@ -330,63 +360,11 @@ async function syncRows(
       let lastErr: string | undefined;
 
       try {
+        perTableRows += await copyRows(primary, dr, table, hasId, true);
+        perTableRows += await copyRows(dr, primary, table, hasId, false);
+        if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, true);
+
         const primaryCount = await countRows(primary, table);
-        if (primaryCount === 0) {
-          const standbyCount = await countRows(dr, table).catch(() => undefined);
-          if (hasId && standbyCount && standbyCount > 0) {
-            const { data: drRows, error: drErr } = await dr.from(table).select("id").range(0, PAGE - 1);
-            if (drErr) throw new Error(drErr.message);
-            const staleIds = (drRows ?? []).map((r) => (r as { id: string }).id).filter(Boolean);
-            if (staleIds.length > 0) {
-              const { error: delErr } = await dr.from(table).delete().in("id", staleIds);
-              if (delErr) throw new Error(delErr.message);
-            }
-          }
-          if (pass === 2) stat.perTable.push({ table, rows: 0, failed: 0, primaryCount, standbyCount });
-          continue;
-        }
-
-        for (let offset = 0; offset < primaryCount; offset += PAGE) {
-          const { data, error } = await withRetry(`read ${table} ${offset}`, () => {
-            const query = primary.from(table).select("*").range(offset, offset + PAGE - 1);
-            return hasId ? query.order("id", { ascending: true }) : query;
-          });
-          if (error) throw new Error(error.message);
-          const rows = data ?? [];
-          if (rows.length === 0) break;
-
-          const upsertOpts = hasId
-            ? { onConflict: "id" as const }
-            : { ignoreDuplicates: true };
-          const { error: upErr } = await withRetry(`upsert ${table} ${offset}`, () =>
-            dr.from(table).upsert(rows, upsertOpts),
-          );
-          if (upErr) throw new Error(upErr.message);
-          perTableRows += rows.length;
-        }
-
-        if (hasId) {
-          const primaryIds = new Set<string>();
-          for (let offset = 0; offset < primaryCount; offset += PAGE) {
-            const { data, error } = await primary.from(table).select("id").order("id", { ascending: true }).range(offset, offset + PAGE - 1);
-            if (error) throw new Error(error.message);
-            for (const row of data ?? []) primaryIds.add((row as { id: string }).id);
-          }
-
-          const standbyCountBeforeDelete = await countRows(dr, table);
-          const standbyIds: string[] = [];
-          for (let offset = 0; offset < standbyCountBeforeDelete; offset += PAGE) {
-            const { data, error } = await dr.from(table).select("id").order("id", { ascending: true }).range(offset, offset + PAGE - 1);
-            if (error) throw new Error(error.message);
-            standbyIds.push(...(data ?? []).map((row) => (row as { id: string }).id).filter(Boolean));
-          }
-          const staleIds = standbyIds.filter((id) => !primaryIds.has(id));
-          for (let i = 0; i < staleIds.length; i += PAGE) {
-            const { error: delErr } = await dr.from(table).delete().in("id", staleIds.slice(i, i + PAGE));
-            if (delErr) throw new Error(delErr.message);
-          }
-        }
-
         const standbyCount = await countRows(dr, table);
         if (primaryCount !== standbyCount) {
           throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
