@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, Calendar, Check, X, Edit, TrendingUp, Users, Dumbbell,
   Eye, EyeOff, Crown, IndianRupee, Download, Sparkles, CalendarDays, Clock,
+  Utensils, Heart, Moon, Activity, Target, Zap,
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
@@ -874,6 +875,45 @@ function EmptyMini({ icon, title, hint }: { icon: React.ReactNode; title: string
   );
 }
 
+// Parse a free-text description into "Label: value" feature rows.
+// Splits on sentence boundaries that precede a capitalized label-with-colon.
+function parseFeatureRows(text: string): Array<{ label: string; value: string }> {
+  if (!text) return [];
+  // Split on ". " preceding a Label: pattern, OR newlines preceding same.
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  const segments = normalized
+    .split(/(?:\.\s+|\n+)(?=[A-Z][A-Za-z0-9 /&-]{1,40}:)/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const seg of segments) {
+    const m = seg.match(/^([A-Z][A-Za-z0-9 /&-]{1,40}):\s*(.+?)\.?$/s);
+    if (m) {
+      rows.push({ label: m[1].trim(), value: m[2].trim() });
+    }
+  }
+  return rows;
+}
+
+const FEATURE_ICON_MAP: Array<{ test: RegExp; Icon: typeof Dumbbell }> = [
+  { test: /coaching|training|session|workout|gym/i, Icon: Dumbbell },
+  { test: /nutrition|diet|meal|caloric/i, Icon: Utensils },
+  { test: /recovery|sauna|ice|massage|rest/i, Icon: Heart },
+  { test: /sleep|rest/i, Icon: Moon },
+  { test: /frequency|schedule|day|week/i, Icon: CalendarDays },
+  { test: /goal|target|focus/i, Icon: Target },
+  { test: /assessment|scan|measure|tracking/i, Icon: Activity },
+  { test: /support|access|premium|priority/i, Icon: Zap },
+];
+
+function iconForLabel(label: string): typeof Dumbbell {
+  for (const { test, Icon } of FEATURE_ICON_MAP) {
+    if (test.test(label)) return Icon;
+  }
+  return Sparkles;
+}
+
 function PackageCard({
   pkg, canManage, onEdit, onToggle,
 }: {
@@ -890,10 +930,13 @@ function PackageCard({
     ? (pkg.session_type === 'quarterly' ? 'Quarterly' : 'Monthly Plan')
     : (SESSION_TYPES.find((t) => t.value === pkg.session_type)?.label || 'Per Session');
 
+  const featureRows = useMemo(() => parseFeatureRows(pkg.description || ''), [pkg.description]);
+  const hasParsedFeatures = featureRows.length > 0;
+
   return (
     <Card
       className={cn(
-        'rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden relative group',
+        'rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden relative group flex flex-col',
         inactive && 'opacity-70',
       )}
     >
@@ -940,38 +983,52 @@ function PackageCard({
         )}
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="flex flex-col flex-1 gap-4">
         {pkg.description && (
-          <UITooltip>
-            <TooltipTrigger asChild>
-              <p className="text-sm text-slate-600 leading-relaxed line-clamp-3 cursor-help">
-                {pkg.description}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="text-xs leading-relaxed">{pkg.description}</p>
-            </TooltipContent>
-          </UITooltip>
+          hasParsedFeatures ? (
+            <ul className="space-y-2.5">
+              {featureRows.map((row, idx) => {
+                const Icon = iconForLabel(row.label);
+                return (
+                  <li key={`${row.label}-${idx}`} className="flex items-start gap-2.5">
+                    <span className={cn('mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0', TIER_ICON_BG[tier])}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{row.label}</p>
+                      <p className="text-sm text-slate-700 leading-snug">{row.value}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+              {pkg.description}
+            </p>
+          )
         )}
 
-        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl bg-slate-50/60 py-3">
-          <div className="text-center px-2">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-              {isMonthly ? 'Months' : 'Sessions'}
-            </p>
-            <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">
-              {isMonthly ? months : (pkg.total_sessions || 0)}
-            </p>
-          </div>
-          <div className="text-center px-2">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Price</p>
-            <p className="text-base font-bold text-slate-900 mt-0.5 flex items-center justify-center tabular-nums">
-              <IndianRupee className="h-3.5 w-3.5" />{(pkg.price || 0).toLocaleString('en-IN')}
-            </p>
-          </div>
-          <div className="text-center px-2">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Validity</p>
-            <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">{pkg.validity_days || 0}d</p>
+        <div className="mt-auto pt-2">
+          <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl bg-slate-50/60 py-3">
+            <div className="text-center px-2">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                {isMonthly ? 'Months' : 'Sessions'}
+              </p>
+              <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">
+                {isMonthly ? months : (pkg.total_sessions || 0)}
+              </p>
+            </div>
+            <div className="text-center px-2">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Price</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5 flex items-center justify-center tabular-nums">
+                <IndianRupee className="h-3.5 w-3.5" />{(pkg.price || 0).toLocaleString('en-IN')}
+              </p>
+            </div>
+            <div className="text-center px-2">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Validity</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">{pkg.validity_days || 0}d</p>
+            </div>
           </div>
         </div>
       </CardContent>
