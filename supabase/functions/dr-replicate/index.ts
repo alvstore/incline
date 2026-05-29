@@ -374,16 +374,16 @@ async function syncRows(
           }
 
           const standbyCountBeforeDelete = await countRows(dr, table);
+          const standbyIds: string[] = [];
           for (let offset = 0; offset < standbyCountBeforeDelete; offset += PAGE) {
             const { data, error } = await dr.from(table).select("id").order("id", { ascending: true }).range(offset, offset + PAGE - 1);
             if (error) throw new Error(error.message);
-            const staleIds = (data ?? [])
-              .map((row) => (row as { id: string }).id)
-              .filter((id) => id && !primaryIds.has(id));
-            if (staleIds.length > 0) {
-              const { error: delErr } = await dr.from(table).delete().in("id", staleIds);
-              if (delErr) throw new Error(delErr.message);
-            }
+            standbyIds.push(...(data ?? []).map((row) => (row as { id: string }).id).filter(Boolean));
+          }
+          const staleIds = standbyIds.filter((id) => !primaryIds.has(id));
+          for (let i = 0; i < staleIds.length; i += PAGE) {
+            const { error: delErr } = await dr.from(table).delete().in("id", staleIds.slice(i, i + PAGE));
+            if (delErr) throw new Error(delErr.message);
           }
         }
 
