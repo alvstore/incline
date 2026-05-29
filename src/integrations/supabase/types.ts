@@ -13386,6 +13386,7 @@ export type Database = {
         Returns: {
           depth: number
           has_id_pk: boolean
+          pk_columns: string
           table_name: string
         }[]
       }

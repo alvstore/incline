@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v1.3.0 — Full 1:1 mirror PRIMARY → DR.
+// v1.4.0 — Full 1:1 mirror PRIMARY → DR with chunk-safe row sync.
 //
 // Passes (controlled via body.mode):
 //   "all"      → schema-snapshot + auth + storage + rows  (default; nightly cron)
@@ -25,7 +25,7 @@ type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
 interface MirrorReport {
   ok: boolean;
-  version: "1.3.0";
+  version: "1.4.0";
   mode: Mode;
   startedAt: string;
   finishedAt?: string;
@@ -41,7 +41,7 @@ interface MirrorReport {
       tables: number;
       rowsUpserted: number;
       tablesFailed: number;
-      perTable: Array<{ table: string; rows: number; failed: number; error?: string }>;
+      perTable: Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>;
     };
     verify?: {
       tables: Array<{ table: string; primary: number; standby: number; delta: number }>;
@@ -291,7 +291,7 @@ async function syncRows(
     tables: 0,
     rowsUpserted: 0,
     tablesFailed: 0,
-    perTable: [] as Array<{ table: string; rows: number; failed: number; error?: string }>,
+    perTable: [] as Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>,
   };
 
   const { data: tables, error: tErr } = await primary.rpc("dr_get_replication_tables");
@@ -301,7 +301,55 @@ async function syncRows(
     return;
   }
 
-  const PAGE = 1000;
+  const PAGE = 500;
+
+  const countRows = async (client: SupabaseClient, table: string): Promise<number> => {
+    const { count, error } = await client.from(table).select("*", { count: "exact", head: true });
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  };
+
+  const withRetry = async <T,>(label: string, work: () => Promise<T>): Promise<T> => {
+    let last: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try { return await work(); }
+      catch (e) {
+        last = e;
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
+    throw new Error(`${label}: ${(last as Error)?.message ?? String(last)}`);
+  };
+
+  const copyRows = async (
+    source: SupabaseClient,
+    target: SupabaseClient,
+    table: string,
+    hasId: boolean,
+    overwriteExisting: boolean,
+  ): Promise<number> => {
+    const sourceCount = await countRows(source, table);
+    let copied = 0;
+    for (let offset = 0; offset < sourceCount; offset += PAGE) {
+      const { data, error } = await withRetry(`read ${table} ${offset}`, () => {
+        const query = source.from(table).select("*").range(offset, offset + PAGE - 1);
+        return hasId ? query.order("id", { ascending: true }) : query;
+      });
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
+
+      const upsertOpts = hasId
+        ? { onConflict: "id" as const, ignoreDuplicates: !overwriteExisting }
+        : { ignoreDuplicates: !overwriteExisting };
+      const { error: upErr } = await withRetry(`upsert ${table} ${offset}`, () =>
+        target.from(table).upsert(rows, upsertOpts),
+      );
+      if (upErr) throw new Error(upErr.message);
+      copied += rows.length;
+    }
+    return copied;
+  };
 
   for (let pass = 1; pass <= 2; pass++) {
     for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
@@ -311,29 +359,19 @@ async function syncRows(
       let perTableFailed = 0;
       let lastErr: string | undefined;
 
-      let offset = 0;
-      while (true) {
-        const { data, error } = await primary
-          .from(table)
-          .select("*")
-          .range(offset, offset + PAGE - 1);
-        if (error) { lastErr = error.message; perTableFailed++; break; }
-        const rows = data ?? [];
-        if (rows.length === 0) break;
+      try {
+        perTableRows += await copyRows(dr, primary, table, hasId, false);
+        perTableRows += await copyRows(primary, dr, table, hasId, false);
+        if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, false);
 
-        const upsertOpts = hasId
-          ? { onConflict: "id" as const }
-          : { onConflict: undefined as unknown as string, ignoreDuplicates: true };
-        const { error: upErr } = await dr.from(table).upsert(rows, upsertOpts);
-        if (upErr) {
-          lastErr = upErr.message;
-          perTableFailed += rows.length;
-        } else {
-          perTableRows += rows.length;
+        const primaryCount = await countRows(primary, table);
+        const standbyCount = await countRows(dr, table);
+        if (primaryCount !== standbyCount) {
+          throw new Error(`count mismatch primary=${primaryCount} standby=${standbyCount}`);
         }
-
-        if (rows.length < PAGE) break;
-        offset += PAGE;
+      } catch (e) {
+        lastErr = (e as Error).message;
+        perTableFailed++;
       }
 
       if (pass === 2) {
@@ -496,7 +534,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.3.0",
+      version: "1.4.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
