@@ -126,7 +126,29 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Body parsed once below; pre-parse here for role-hierarchy check
     const body = await req.json()
+
+    // Role hierarchy: prevent privilege escalation.
+    // A caller can only assign roles strictly LOWER than their highest role.
+    const ROLE_HIERARCHY: Record<string, number> = {
+      owner: 4, admin: 3, manager: 2, staff: 1, trainer: 1,
+    };
+    const callerHighest = Math.max(
+      ...callerRoles.map((r: { role: string }) => ROLE_HIERARCHY[r.role] ?? 0)
+    );
+    const requestedRole = String(body?.role ?? '').toLowerCase();
+    const requestedRank = ROLE_HIERARCHY[requestedRole] ?? 0;
+    if (requestedRank === 0 || requestedRank >= callerHighest) {
+      console.log(`Privilege escalation blocked: caller rank ${callerHighest} tried to assign ${requestedRole}`);
+      return new Response(
+        JSON.stringify({ error: 'You cannot assign a role equal to or higher than your own.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // body already parsed above for role-hierarchy check
+
     
     // Sanitize and extract inputs
     const email = sanitizeString(body.email, MAX_EMAIL_LENGTH);
