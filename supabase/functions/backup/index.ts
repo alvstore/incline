@@ -56,17 +56,18 @@ async function requireOwnerOrAdmin(authHeader: string | null): Promise<AdminCtx 
 }
 
 async function handleExport(ctx: AdminCtx): Promise<Response> {
+  const tables = await getTableOrder(ctx.service);
   const backup: Record<string, any> = {
     meta: {
-      version: 1,
+      version: 2,
       generated_at: new Date().toISOString(),
       generated_by: ctx.user.id,
-      tables: EXPORT_TABLES,
+      tables,
     },
     data: {} as Record<string, unknown>,
   };
 
-  for (const table of EXPORT_TABLES) {
+  for (const table of tables) {
     try {
       const { data, error } = await ctx.service.from(table).select("*");
       if (error) {
@@ -91,6 +92,7 @@ async function handleExport(ctx: AdminCtx): Promise<Response> {
     },
   });
 }
+
 
 async function handleImport(ctx: AdminCtx, payload: any): Promise<Response> {
   if (!payload?.data || typeof payload.data !== "object") {
