@@ -22,12 +22,18 @@ export interface PTSessionWithDetails extends PTSession {
 }
 
 // Fetch PT packages for a branch (optional branchId = all branches)
-export async function fetchPTPackages(branchId?: string): Promise<PTPackage[]> {
+export async function fetchPTPackages(
+  branchId?: string,
+  opts?: { includeInactive?: boolean },
+): Promise<PTPackage[]> {
   let query = supabase
     .from("pt_packages")
     .select("*")
-    .eq("is_active", true)
     .order("created_at", { ascending: false });
+
+  if (!opts?.includeInactive) {
+    query = query.eq("is_active", true);
+  }
 
   if (branchId) {
     query = query.eq("branch_id", branchId);

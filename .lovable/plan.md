@@ -1,96 +1,125 @@
-# PT Sessions Page Redesign — 2026 Premium
+## 1. Bug: "Show Inactive" toggle does nothing
 
-## Audit (current issues)
+**Root cause:** `src/services/ptService.ts` (line 29) hardcodes `.eq("is_active", true)` in `fetchPTPackages`. The client-side filter in `PTSessions.tsx` is meaningless because inactive packages never arrive from the server.
 
-1. **Title**: "PT Sessions" — feels operational, user wants "Personal Training Packages".
-2. **Package cards**: Description text is wall-of-text grey; "Per Session" badge is misleading for monthly packages (only fixed in edit drawer, badge still maps wrong on listing); Sessions row shows `0` for monthly which looks broken; no visual hierarchy between price / validity / sessions.
-3. **Top Performer card**: Decoration blob is weak, layout is cramped, revenue and clients sit awkwardly side by side, no trendline / sparkline, empty state is bare grey text.
-4. **Package Type Split**: Pie chart with default recharts labels overflows on narrow widths, low data-ink ratio, no center total, empty state plain.
-5. **Revenue by Trainer**: Single flat primary bar, no avatars, no rank, no totals, no comparison context.
-6. **Session Status Distribution**: Redundant card taking full row — same chart pattern as type split, low value.
-7. **Stats KPIs**: 4 tinted cards are fine but flat — no deltas, no spark, no micro-context.
-8. **Empty states**: "No packages", "No active packages", "No revenue data" — all plain grey strings, no illustration / CTA / icon.
+**Fix:**
+- Update `fetchPTPackages(branchId?, opts?: { includeInactive?: boolean })` to drop the `is_active=true` filter when `includeInactive` is true.
+- Update `usePTPackages(branchId, includeInactive)` to pass the flag and include it in the query key (`['pt-packages', branchId, includeInactive]`) so toggling refetches.
+- In `PTSessions.tsx`, pass `showInactive` to the hook. Keep the client-side filter as a safety net.
 
-## Scope
+## 2. Redesign package cards (description + layout)
 
-Frontend / presentation only. No business-logic, hook, or DB changes. Two files touched.
+Scope: the `PTPackageCard` block inside `src/pages/PTSessions.tsx` (currently a tall card with wall-of-text description and a 3-cell mini grid at the bottom).
 
-## Changes
+**Problems in the screenshot:**
+- Description is a flat 3-line clamp ending in "…" — users can't see Coaching Frequency, Nutrition, Recovery, etc.
+- The text is one paragraph stored in `description` containing pseudo-headings like "Coaching Frequency:", "Nutrition:", "Recovery:" separated by ". " — natural breakpoints exist but aren't parsed.
+- 3-column "MONTHS / PRICE / VALIDITY" footer reads like a spec sheet, not a product card.
 
-### `src/pages/PTSessions.tsx`
+**Redesign (no schema changes):**
+- Parse description into feature bullets at runtime: split on `/\.\s+(?=[A-Z][a-zA-Z ]{2,30}:)/` then render each "Label: value" segment as a row with a small lucide icon (Dumbbell / Utensils / Heart / Moon / Calendar). Fall back to a clamped paragraph if no labeled segments are found.
+- Card body becomes: gradient ribbon (tier color), tier+type badge row, title, 3–5 feature rows (icon + label + value, `text-sm`, full text, no clamp), divider, then a single horizontal stat row: price (large `text-2xl`), duration pill, validity pill.
+- Card actions (Edit, Toggle active/inactive) stay top-right, visible on hover for desktop, always visible on mobile.
+- Inactive packages get a `opacity-60` overlay + an "Inactive" badge in the ribbon.
+- Grid stays `md:grid-cols-2 xl:grid-cols-3`, cards become equal-height via `flex flex-col` with stats pinned to bottom (`mt-auto`).
+- Vuexy tokens: `rounded-2xl border-0 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all`.
 
-**Header**
-- Rename H1 → "Personal Training Packages".
-- Subhead → "Design, sell and track every 1-on-1 coaching package across your branches."
-- Add a soft branded eyebrow chip ("Coaching Studio") above the H1 for the 2026 editorial vibe.
+Out of scope: editing the `description` field itself or adding a structured features column to the DB. Parsing handles existing data; new packages can continue using the same free-text format.
 
-**KPI row (4 cards)** — keep grid, upgrade visuals
-- Move to true Vuexy cards: `rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0`.
-- Tinted icon badge top-left in a soft circle (indigo / emerald / amber / sky), value `text-3xl font-bold text-slate-900`, label `text-xs uppercase tracking-wider text-slate-500`, micro-context line at the bottom (e.g. "Across {n} trainers", "Today", "Last 7 days").
-- Subtle hover lift (`hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200`).
+## 3. Rename sidebar entry
 
-**Analytics row** — redesigned
-1. **Top Performer** (col-span 1)
-   - Hero gradient card `bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600` white text, rounded-2xl, soft inner ring.
-   - Avatar circle with initials (right side, semi-transparent ring), `Crown` badge floating top-right.
-   - Big trainer name, "Top performer this period" eyebrow, then two stat pills inline: Revenue (₹ formatted) + Clients, both on translucent white chips.
-   - Mini sparkline-ish bar row (3 thin bars representing share vs #2 and #3 trainers) so it never looks empty even with 1 trainer.
-   - Empty state: Crown icon in soft circle + "No active packages yet" + small "Create your first package" link button.
+Rename `"PT Sessions"` → `"PT Packages"` (concise; matches the actual content of the page, which is package management + sessions). Update in `src/config/menu.ts` at lines 77, 127, 190, 268 (owner/admin/manager/staff/trainer entries that link to `/pt-sessions`). Leave the member-facing label at line 42 (`/my-pt-sessions`) as **"My PT Sessions"** since for members it really is the sessions view.
 
-2. **Package Type Split** (col-span 1)
-   - Keep donut. Replace overflowing pie labels with a clean centered total (`{total} packages` inside the ring).
-   - Below the donut: two legend rows with colored square + label + count + % bar — more like a 2026 dashboard cell than a chart toy.
-   - Colors: Session-Based `hsl(var(--primary))` (indigo), Duration-Based `hsl(258 90% 66%)` (violet) — keep the split distinguishable.
-   - Empty state: small package icon, "No packages yet", subtle.
+Route path `/pt-sessions` stays unchanged (no broken links, no SEO churn). Page H1 stays "Personal Training Packages" as set in the previous redesign.
 
-3. **Revenue by Trainer** (col-span 1)
-   - Replace recharts BarChart with a **ranked list** (top 5): rank chip (#1 gold, #2 silver, #3 bronze, rest slate), avatar/initials circle, trainer name, client count subline, right-aligned revenue ₹ value + thin proportional progress bar underneath using indigo→violet gradient.
-   - Footer micro-row: "Total revenue: ₹X" small text.
-   - Empty state: TrendingUp icon + "Revenue will appear once packages are sold".
+## 4. Audit: per-session vs monthly handling
 
-**Session Status Distribution**
-- Demote from full-width card to a compact strip: 3 inline status pills (Completed / Scheduled / Cancelled) with count and a single stacked horizontal bar showing the split. Cuts visual weight; data is preserved.
+This is a read-only audit deliverable. I'll inspect the following and write findings into `.lovable/plan.md` under a new "PT Package Model Audit" section:
 
-**Packages tab**
-- Toolbar row gets the Vuexy treatment: rounded-xl surface, switch + label on left, Create button on right (keep gradient indigo→violet, already in design system).
-- **Package card** redesign (the main complaint):
-  - Card: `rounded-2xl border-0 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden relative`.
-  - Top ribbon strip (`h-1.5`) with package-tier-inferred gradient (Silver = slate→zinc, Gold = amber→yellow, Platinum = violet→indigo, default = indigo→violet — inferred from `pkg.name` keywords, falls back to default).
-  - Header: tier badge (Per Session / Monthly / Quarterly / Custom) as a soft pill on the left; action icons (Edit + activate/deactivate) move into a single right-aligned cluster with hover-only reveal on desktop, always visible on mobile.
-  - Title row: `Package` icon in a tinted circle + package name `text-lg font-bold text-slate-900`.
-  - Description: clamp to 3 lines with `line-clamp-3 text-sm text-slate-600 leading-relaxed`, fade-out gradient at bottom; full text on hover via tooltip.
-  - **Fix monthly vs session display**:
-    - If `session_type === 'monthly' || total_sessions === 0` → hide the "Sessions: 0" row and show "Duration: {validity_days/30} months" instead.
-    - Tier badge text uses the same logic (Monthly → "Monthly Plan", session_based → "Session Pack").
-  - Stats footer: 3 mini-stat cells in a `grid-cols-3` with thin dividers — Sessions (or Months) · Price · Validity. Price uses `text-xl font-bold` with `IndianRupee` icon.
-  - Inactive state: soft slate overlay + "Inactive" pill badge top-right.
-- Empty state: replace plain card with friendly empty state — `Package` icon in tinted circle, headline, subtext, primary CTA.
+- **Schema:** `pt_packages.package_type` enum values (`session_based` vs `monthly`), `session_type`, `total_sessions`, `duration_months`, `validity_days` — confirm which fields are authoritative for each type and where they diverge.
+- **Selling / purchase:** `purchase-pt-package` flow + `record_payment` RPC — how `member_pt_packages` is seeded for each type (sessions_total, expiry_date math).
+- **Attendance / consumption:** how `pt_sessions` decrement `sessions_remaining` for session-based vs how monthly packages handle session count (do they cap? log only?). Cross-check `useCompletePTSession` and trainer earnings calc.
+- **Expiry & renewal:** monthly = `expiry_date` driven; session-based = `sessions_remaining == 0` driven. Confirm both paths exist and which UI surfaces them (MyPTSessions, TrainerDashboard, retention nudges).
+- **Reporting:** `package_type === 'monthly'` vs `sessions_total > 0` checks in analytics — current code mixes both heuristics; flag inconsistencies.
+- **UI mismatches:** badges, validity display, edit drawer field mapping (already partially fixed earlier).
 
-**Active Packages tab**
-- Wrap the table in a `rounded-2xl bg-white shadow-lg shadow-slate-200/50 overflow-hidden` card.
-- Sticky header `bg-slate-50/80 backdrop-blur`, member name with avatar initials chip, progress bar already exists — keep.
-- Empty state: Users icon + headline + subtext + "Schedule Session" CTA.
+Output is a written audit with file:line citations and a numbered list of any inconsistencies found, plus recommended follow-up tickets. **No code changes from the audit in this loop** — fixes go in a follow-up after you review.
 
-**Sessions tab**
-- Same card wrap + empty state polish.
-- Action buttons get tinted hover (`hover:bg-emerald-50 text-emerald-600` for complete, `hover:bg-red-50 text-red-600` for cancel) and `aria-label`s.
+## Files to change
 
-### `src/components/pt/AddPTPackageDrawer.tsx` & `EditPTPackageDrawer.tsx`
-- No behavior change. Only minor: ensure the badge written to listing is consistent. Already fixed `session_type='monthly'` in edit drawer in prior turn. Verify Add drawer does the same (read first, only patch if needed).
-
-## Technical notes
-
-- All colors via Tailwind tokens / `hsl(var(--...))` — no raw hex outside the gradient ribbons (which are direct Tailwind utility classes, brand-safe).
-- Tier inference helper: `function inferTier(name: string): 'silver'|'gold'|'platinum'|'default'` — pure string match on lowercased name.
-- Avatar initials helper: 2-char from name, deterministic bg color from a tiny palette hash.
-- No new dependencies; reuse `recharts` for the donut, drop BarChart for the ranked list.
-- All clickable elements keep `cursor-pointer`, `focus:ring-2 focus:ring-indigo-500`, 44px min touch targets.
-- Responsive: KPI grid `md:grid-cols-2 lg:grid-cols-4`, analytics row `md:grid-cols-1 lg:grid-cols-3`, package grid `md:grid-cols-2 xl:grid-cols-3`.
+- `src/services/ptService.ts` — `fetchPTPackages` signature
+- `src/hooks/usePTPackages.ts` — pass `includeInactive`, expand query key
+- `src/pages/PTSessions.tsx` — pass flag to hook, redesign card block, parse description into feature rows
+- `src/config/menu.ts` — relabel 4 entries
+- `.lovable/plan.md` — append PT Package Model Audit section
 
 ## Out of scope
-- Hooks, queries, DB schema, drawer logic, routing.
-- The route URL `/pt-sessions` stays (only H1/page title changes) to avoid breaking links/menus.
 
-## Files touched
-- `src/pages/PTSessions.tsx` (major)
-- `src/components/pt/AddPTPackageDrawer.tsx` (verify session_type write — patch only if it sends `per_session` for monthly)
+- Backend schema changes
+- Editing existing package descriptions
+- Member-facing PT pages (`/my-pt-sessions`)
+- Route renames
+
+---
+
+## PT Package Model Audit — per-session vs monthly (2026-05-29)
+
+Read-only audit of how the two plan types are defined, sold, consumed, and reported. No fixes applied; this section is the deliverable.
+
+### Schema sources of truth
+
+- **`pt_packages.package_type`** — catalog enum. Per migration history, valid values are `'session_based'` and `'monthly'` (the older `'duration_based'` literal still appears in some legacy RPCs — see Bug #1 below).
+- **`pt_packages.session_type`** — UI-facing label only: `'per_session' | 'monthly' | 'quarterly' | 'custom'` (see `src/pages/PTSessions.tsx:34`). Drives the badge text. Not used by the purchase RPC.
+- **`pt_packages.total_sessions`** — used for session-based; should be `0` for monthly.
+- **`pt_packages.duration_months`** + **`validity_days`** — used for monthly expiry math. Both exist; only one is read at purchase time (see Bug #1).
+- **`member_pt_packages.package_type`** — copied from catalog at purchase. This is what `complete_pt_session` reads (`supabase/migrations/20260517153957_…sql:66,70,84`).
+
+### Selling / purchase flow
+
+- Edge: `purchase_pt_package` RPC (`supabase/migrations/20260518143238_…sql:96-118`).
+- For each row in `member_pt_packages` it sets:
+  - `sessions_total` / `sessions_remaining` → `0` if `_package.package_type = 'duration_based'`, else `_package.total_sessions`.
+  - `expiry_date` → `CURRENT_DATE + duration_months*30` if `'duration_based'`, else `CURRENT_DATE + validity_days`.
+  - `package_type` copied verbatim from `_package.package_type`.
+
+### Attendance / consumption
+
+- `complete_pt_session` (`20260517153957_…sql:66-95`):
+  - `'session_based'` + status in (`completed`,`late`,`absent`) → guard `sessions_remaining > 0`, decrement, auto-close package when reaches 0.
+  - `'monthly'` + same statuses → guard `CURRENT_DATE <= expiry_date`. **Never decrements** — monthly is unlimited within window.
+- Trainer earnings calc uses `price_paid` flat (see `src/services/ptService.ts:140-180`), agnostic to type. OK.
+
+### Expiry & renewal surfaces
+
+- Member portal `MyPTSessions` and `useMemberHasPtPackage` discriminate via `package_type` field on `member_pt_packages` (`src/services/ptService.ts:419-476`).
+- Admin "Active Packages" table (`PTSessions.tsx:700-720`) discriminates via `pkg.sessions_total > 0` → progress bar; else date-based progress. Heuristic-correct but doesn't read `package_type` — relies on the RPC having correctly set `sessions_total=0` for monthly.
+
+### Reporting heuristics (UI)
+
+- `PTSessions.tsx:158-160`: `packageTypeSplit` uses `sessions_total > 0` (session) vs `=== 0` (duration).
+- `PTSessions.tsx:886`: card badge uses `session_type === 'monthly' | 'quarterly' || total_sessions === 0`.
+- These three heuristics (`package_type`, `session_type`, `sessions_total === 0`) are mostly consistent but not centralized.
+
+### Issues found
+
+1. **CRITICAL — purchase RPC checks a stale enum literal.**
+   `purchase_pt_package` (`20260518143238_…sql:105,110`) branches on `_package.package_type = 'duration_based'`. After the recent fix, `AddPTPackageDrawer` and `EditPTPackageDrawer` write `package_type='monthly'` (the actual enum value). Result: monthly packages purchased today take the `ELSE` branches —
+   - `sessions_total` / `sessions_remaining` set to `_package.total_sessions` (likely `0`, but if anyone enters >0 it will leak through),
+   - `expiry_date` computed from `validity_days` (currently 30 because drawer derives `validity_days = duration_months*30`, so the visible result is correct **only by coincidence**).
+   - `member_pt_packages.package_type` then stores `'monthly'`, which `complete_pt_session` handles correctly — but the purchase math is using the wrong branch and is one drawer change away from breaking.
+   - **Recommended fix (follow-up):** update the RPC to test `_package.package_type IN ('monthly','duration_based')` (or just `<> 'session_based'`) and prefer `duration_months * 30` when present, falling back to `validity_days`.
+
+2. **Heuristic sprawl.** Three independent discriminators (`package_type`, `session_type`, `sessions_total`) coexist in the UI. Recommend a single helper `isMonthlyPackage(pkg)` exported from `src/services/ptService.ts` and adopted by `PTSessions.tsx`, `MyPTSessions`, and `PtPackageBadge` to eliminate drift.
+
+3. **`session_type` is purely cosmetic** but the EditPTPackageDrawer forces it to `'monthly'` whenever `isDurationBased`, hiding `'quarterly'` and `'custom'`. If quarterly is meant to be sellable, the drawer needs to expose it as a duration preset; otherwise drop `'quarterly'` from `SESSION_TYPES`.
+
+4. **`duration_months` vs `validity_days` redundancy.** Catalog stores both; only one is used at purchase time. Consider deprecating `validity_days` for monthly packages or making it a generated column = `duration_months * 30`.
+
+5. **No-show / cancellation accounting.** `complete_pt_session` decrements on `absent` for session_based — that's intentional but worth surfacing in the cancel UX so trainers know cancelling-as-absent consumes a session.
+
+### Recommended follow-up tickets (not implemented in this loop)
+
+- PT-AUDIT-1: Fix `purchase_pt_package` enum check (Critical).
+- PT-AUDIT-2: Centralize `isMonthlyPackage()` helper + replace 3 heuristics.
+- PT-AUDIT-3: Decide on `quarterly` / `custom` `session_type` — keep with full UI support, or remove.
+- PT-AUDIT-4: Schema cleanup of `duration_months` vs `validity_days`.
