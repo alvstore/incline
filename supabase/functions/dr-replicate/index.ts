@@ -333,6 +333,15 @@ async function syncRows(
         const primaryCount = await countRows(primary, table);
         if (primaryCount === 0) {
           const standbyCount = await countRows(dr, table).catch(() => undefined);
+          if (hasId && standbyCount && standbyCount > 0) {
+            const { data: drRows, error: drErr } = await dr.from(table).select("id").range(0, PAGE - 1);
+            if (drErr) throw new Error(drErr.message);
+            const staleIds = (drRows ?? []).map((r) => (r as { id: string }).id).filter(Boolean);
+            if (staleIds.length > 0) {
+              const { error: delErr } = await dr.from(table).delete().in("id", staleIds);
+              if (delErr) throw new Error(delErr.message);
+            }
+          }
           if (pass === 2) stat.perTable.push({ table, rows: 0, failed: 0, primaryCount, standbyCount });
           continue;
         }
@@ -354,6 +363,28 @@ async function syncRows(
           );
           if (upErr) throw new Error(upErr.message);
           perTableRows += rows.length;
+        }
+
+        if (hasId) {
+          const primaryIds = new Set<string>();
+          for (let offset = 0; offset < primaryCount; offset += PAGE) {
+            const { data, error } = await primary.from(table).select("id").order("id", { ascending: true }).range(offset, offset + PAGE - 1);
+            if (error) throw new Error(error.message);
+            for (const row of data ?? []) primaryIds.add((row as { id: string }).id);
+          }
+
+          const standbyCountBeforeDelete = await countRows(dr, table);
+          for (let offset = 0; offset < standbyCountBeforeDelete; offset += PAGE) {
+            const { data, error } = await dr.from(table).select("id").order("id", { ascending: true }).range(offset, offset + PAGE - 1);
+            if (error) throw new Error(error.message);
+            const staleIds = (data ?? [])
+              .map((row) => (row as { id: string }).id)
+              .filter((id) => id && !primaryIds.has(id));
+            if (staleIds.length > 0) {
+              const { error: delErr } = await dr.from(table).delete().in("id", staleIds);
+              if (delErr) throw new Error(delErr.message);
+            }
+          }
         }
 
         const standbyCount = await countRows(dr, table);
