@@ -360,9 +360,9 @@ async function syncRows(
       let lastErr: string | undefined;
 
       try {
-        perTableRows += await copyRows(primary, dr, table, hasId, true);
         perTableRows += await copyRows(dr, primary, table, hasId, false);
-        if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, true);
+        perTableRows += await copyRows(primary, dr, table, hasId, false);
+        if (pass === 2) perTableRows += await copyRows(primary, dr, table, hasId, false);
 
         const primaryCount = await countRows(primary, table);
         const standbyCount = await countRows(dr, table);
