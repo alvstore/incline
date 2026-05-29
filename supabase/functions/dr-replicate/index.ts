@@ -1,5 +1,5 @@
 // supabase/functions/dr-replicate/index.ts
-// v1.3.0 — Full 1:1 mirror PRIMARY → DR.
+// v1.4.0 — Full 1:1 mirror PRIMARY → DR with chunk-safe row sync.
 //
 // Passes (controlled via body.mode):
 //   "all"      → schema-snapshot + auth + storage + rows  (default; nightly cron)
@@ -25,7 +25,7 @@ type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
 interface MirrorReport {
   ok: boolean;
-  version: "1.3.0";
+  version: "1.4.0";
   mode: Mode;
   startedAt: string;
   finishedAt?: string;
@@ -41,7 +41,7 @@ interface MirrorReport {
       tables: number;
       rowsUpserted: number;
       tablesFailed: number;
-      perTable: Array<{ table: string; rows: number; failed: number; error?: string }>;
+      perTable: Array<{ table: string; rows: number; failed: number; primaryCount?: number; standbyCount?: number; error?: string }>;
     };
     verify?: {
       tables: Array<{ table: string; primary: number; standby: number; delta: number }>;
