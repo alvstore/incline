@@ -59,3 +59,67 @@ Output is a written audit with file:line citations and a numbered list of any in
 - Editing existing package descriptions
 - Member-facing PT pages (`/my-pt-sessions`)
 - Route renames
+
+---
+
+## PT Package Model Audit — per-session vs monthly (2026-05-29)
+
+Read-only audit of how the two plan types are defined, sold, consumed, and reported. No fixes applied; this section is the deliverable.
+
+### Schema sources of truth
+
+- **`pt_packages.package_type`** — catalog enum. Per migration history, valid values are `'session_based'` and `'monthly'` (the older `'duration_based'` literal still appears in some legacy RPCs — see Bug #1 below).
+- **`pt_packages.session_type`** — UI-facing label only: `'per_session' | 'monthly' | 'quarterly' | 'custom'` (see `src/pages/PTSessions.tsx:34`). Drives the badge text. Not used by the purchase RPC.
+- **`pt_packages.total_sessions`** — used for session-based; should be `0` for monthly.
+- **`pt_packages.duration_months`** + **`validity_days`** — used for monthly expiry math. Both exist; only one is read at purchase time (see Bug #1).
+- **`member_pt_packages.package_type`** — copied from catalog at purchase. This is what `complete_pt_session` reads (`supabase/migrations/20260517153957_…sql:66,70,84`).
+
+### Selling / purchase flow
+
+- Edge: `purchase_pt_package` RPC (`supabase/migrations/20260518143238_…sql:96-118`).
+- For each row in `member_pt_packages` it sets:
+  - `sessions_total` / `sessions_remaining` → `0` if `_package.package_type = 'duration_based'`, else `_package.total_sessions`.
+  - `expiry_date` → `CURRENT_DATE + duration_months*30` if `'duration_based'`, else `CURRENT_DATE + validity_days`.
+  - `package_type` copied verbatim from `_package.package_type`.
+
+### Attendance / consumption
+
+- `complete_pt_session` (`20260517153957_…sql:66-95`):
+  - `'session_based'` + status in (`completed`,`late`,`absent`) → guard `sessions_remaining > 0`, decrement, auto-close package when reaches 0.
+  - `'monthly'` + same statuses → guard `CURRENT_DATE <= expiry_date`. **Never decrements** — monthly is unlimited within window.
+- Trainer earnings calc uses `price_paid` flat (see `src/services/ptService.ts:140-180`), agnostic to type. OK.
+
+### Expiry & renewal surfaces
+
+- Member portal `MyPTSessions` and `useMemberHasPtPackage` discriminate via `package_type` field on `member_pt_packages` (`src/services/ptService.ts:419-476`).
+- Admin "Active Packages" table (`PTSessions.tsx:700-720`) discriminates via `pkg.sessions_total > 0` → progress bar; else date-based progress. Heuristic-correct but doesn't read `package_type` — relies on the RPC having correctly set `sessions_total=0` for monthly.
+
+### Reporting heuristics (UI)
+
+- `PTSessions.tsx:158-160`: `packageTypeSplit` uses `sessions_total > 0` (session) vs `=== 0` (duration).
+- `PTSessions.tsx:886`: card badge uses `session_type === 'monthly' | 'quarterly' || total_sessions === 0`.
+- These three heuristics (`package_type`, `session_type`, `sessions_total === 0`) are mostly consistent but not centralized.
+
+### Issues found
+
+1. **CRITICAL — purchase RPC checks a stale enum literal.**
+   `purchase_pt_package` (`20260518143238_…sql:105,110`) branches on `_package.package_type = 'duration_based'`. After the recent fix, `AddPTPackageDrawer` and `EditPTPackageDrawer` write `package_type='monthly'` (the actual enum value). Result: monthly packages purchased today take the `ELSE` branches —
+   - `sessions_total` / `sessions_remaining` set to `_package.total_sessions` (likely `0`, but if anyone enters >0 it will leak through),
+   - `expiry_date` computed from `validity_days` (currently 30 because drawer derives `validity_days = duration_months*30`, so the visible result is correct **only by coincidence**).
+   - `member_pt_packages.package_type` then stores `'monthly'`, which `complete_pt_session` handles correctly — but the purchase math is using the wrong branch and is one drawer change away from breaking.
+   - **Recommended fix (follow-up):** update the RPC to test `_package.package_type IN ('monthly','duration_based')` (or just `<> 'session_based'`) and prefer `duration_months * 30` when present, falling back to `validity_days`.
+
+2. **Heuristic sprawl.** Three independent discriminators (`package_type`, `session_type`, `sessions_total`) coexist in the UI. Recommend a single helper `isMonthlyPackage(pkg)` exported from `src/services/ptService.ts` and adopted by `PTSessions.tsx`, `MyPTSessions`, and `PtPackageBadge` to eliminate drift.
+
+3. **`session_type` is purely cosmetic** but the EditPTPackageDrawer forces it to `'monthly'` whenever `isDurationBased`, hiding `'quarterly'` and `'custom'`. If quarterly is meant to be sellable, the drawer needs to expose it as a duration preset; otherwise drop `'quarterly'` from `SESSION_TYPES`.
+
+4. **`duration_months` vs `validity_days` redundancy.** Catalog stores both; only one is used at purchase time. Consider deprecating `validity_days` for monthly packages or making it a generated column = `duration_months * 30`.
+
+5. **No-show / cancellation accounting.** `complete_pt_session` decrements on `absent` for session_based — that's intentional but worth surfacing in the cancel UX so trainers know cancelling-as-absent consumes a session.
+
+### Recommended follow-up tickets (not implemented in this loop)
+
+- PT-AUDIT-1: Fix `purchase_pt_package` enum check (Critical).
+- PT-AUDIT-2: Centralize `isMonthlyPackage()` helper + replace 3 heuristics.
+- PT-AUDIT-3: Decide on `quarterly` / `custom` `session_type` — keep with full UI support, or remove.
+- PT-AUDIT-4: Schema cleanup of `duration_months` vs `validity_days`.
