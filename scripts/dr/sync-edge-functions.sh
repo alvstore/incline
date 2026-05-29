@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # scripts/dr/sync-edge-functions.sh
-# v1.0.0 — Deploy every edge function under supabase/functions/ to the DR project.
+# v1.1.0 — Deploy every edge function under supabase/functions/ to the DR project.
 #
 # Prereqs:
-#   - supabase CLI installed and logged in (`supabase login`)
+#   - supabase CLI installed/logged in OR $DR_SUPABASE_ACCESS_TOKEN available
 #   - $SUPABASE_DR_PROJECT_REF set to the standby project ref
 #     (default: pmznpbsahetwmogezhff)
 #
@@ -17,6 +17,16 @@ DR_REF="${SUPABASE_DR_PROJECT_REF:-pmznpbsahetwmogezhff}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FUNCTIONS_DIR="$ROOT/supabase/functions"
 
+if [ -n "${DR_SUPABASE_ACCESS_TOKEN:-}" ] && [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  export SUPABASE_ACCESS_TOKEN="$DR_SUPABASE_ACCESS_TOKEN"
+fi
+
+if command -v supabase >/dev/null 2>&1; then
+  CLI=(supabase)
+else
+  CLI=(bunx supabase)
+fi
+
 if [ ! -d "$FUNCTIONS_DIR" ]; then
   echo "No supabase/functions directory at $FUNCTIONS_DIR" >&2
   exit 1
@@ -27,33 +37,28 @@ cd "$ROOT"
 echo "Syncing edge functions to standby project: $DR_REF"
 echo
 
-failed=()
-ok=()
+mapfile -t local_functions < <(find "$FUNCTIONS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sed '/^_shared$/d;/^_/d' | sort)
 
-for dir in "$FUNCTIONS_DIR"/*/; do
-  name="$(basename "$dir")"
-  case "$name" in
-    _shared|_*) echo "skip $name"; continue ;;
-  esac
-  if [ ! -f "$dir/index.ts" ]; then
-    echo "skip $name (no index.ts)"
-    continue
-  fi
+"${CLI[@]}" functions deploy --project-ref "$DR_REF" --use-api --jobs 4 --prune
+"${CLI[@]}" functions list --project-ref "$DR_REF" -o json > /tmp/dr-edge-functions.json
 
-  printf "deploy %-40s ... " "$name"
-  if supabase functions deploy "$name" --project-ref "$DR_REF" --no-verify-jwt >/tmp/dr-deploy.log 2>&1; then
-    echo "ok"
-    ok+=("$name")
-  else
-    echo "FAIL"
-    failed+=("$name")
-    tail -5 /tmp/dr-deploy.log | sed 's/^/    /'
-  fi
-done
+python3 - <<'PY' "${local_functions[@]}"
+import json
+import sys
+from pathlib import Path
 
-echo
-echo "Summary: ${#ok[@]} deployed, ${#failed[@]} failed"
-if [ "${#failed[@]}" -gt 0 ]; then
-  printf 'Failed: %s\n' "${failed[@]}"
-  exit 1
-fi
+local = sorted(sys.argv[1:])
+remote_data = json.loads(Path('/tmp/dr-edge-functions.json').read_text())
+remote = sorted({row.get('slug') or row.get('name') for row in remote_data if row.get('slug') or row.get('name')})
+missing = sorted(set(local) - set(remote))
+extra = sorted(set(remote) - set(local))
+
+print()
+print(f"Local functions: {len(local)}")
+print(f"Standby functions: {len(remote)}")
+print("Missing on standby: " + (", ".join(missing) if missing else "none"))
+print("Extra on standby: " + (", ".join(extra) if extra else "none"))
+
+if missing or extra:
+    raise SystemExit(1)
+PY
