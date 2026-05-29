@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle, ScanSearch } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
@@ -11,13 +11,35 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface SyncReport {
   ok: boolean;
+  version?: string;
+  mode?: string;
   startedAt: string;
   finishedAt?: string;
   mirrored: {
-    authUsers: { listed: number; created: number; updated: number; failed: number };
-    storage: {
+    schema?: { dumpedBytes: number; uploadedPath: string | null };
+    authUsers?: { listed: number; created: number; updated: number; failed: number };
+    storage?: {
       buckets: { ensured: number; failed: number };
       objects: { copied: number; skipped: number; failed: number; bytes: number };
+      perBucket?: Array<{ bucket: string; objects: number; bytes: number; failed: number }>;
+    };
+    rows?: {
+      tables: number;
+      rowsUpserted: number;
+      tablesFailed: number;
+    };
+    verify?: {
+      tables: Array<{ table: string; primary: number; standby: number; delta: number }>;
+      storage: Array<{
+        bucket: string;
+        primaryObjects: number;
+        standbyObjects: number;
+        primaryBytes: number;
+        standbyBytes: number;
+        deltaObjects: number;
+        deltaBytes: number;
+      }>;
+      allInSync: boolean;
     };
   };
   errors: string[];
@@ -31,11 +53,11 @@ const formatBytes = (n: number) => {
 
 const PHASES: Array<{ pct: number; label: string }> = [
   { pct: 5, label: "Connecting to fallback database…" },
-  { pct: 20, label: "Mirroring auth users…" },
-  { pct: 40, label: "Ensuring storage buckets…" },
-  { pct: 65, label: "Copying files…" },
-  { pct: 85, label: "Verifying mirror…" },
-  { pct: 95, label: "Finalising…" },
+  { pct: 15, label: "Dumping schema…" },
+  { pct: 30, label: "Mirroring auth users…" },
+  { pct: 55, label: "Mirroring rows…" },
+  { pct: 75, label: "Copying storage files…" },
+  { pct: 92, label: "Finalising…" },
 ];
 
 export function DisasterRecoveryCard() {
@@ -67,14 +89,18 @@ export function DisasterRecoveryCard() {
 
   useEffect(() => () => stopTicker(), []);
 
+  const invokeReplicate = async (mode: "all" | "verify") => {
+    const { data, error } = await supabase.functions.invoke("dr-replicate", {
+      body: { mode },
+    });
+    if (error) throw error;
+    return data as SyncReport;
+  };
+
   const sync = useMutation({
     mutationFn: async () => {
       startTicker();
-      const { data, error } = await supabase.functions.invoke("dr-replicate", {
-        body: { mode: "all" },
-      });
-      if (error) throw error;
-      return data as SyncReport;
+      return invokeReplicate("all");
     },
     onSuccess: (report) => {
       stopTicker();
@@ -82,9 +108,10 @@ export function DisasterRecoveryCard() {
       setPhaseLabel("Sync complete");
       setLastReport(report);
       if (report.ok) {
-        toast.success(
-          `Sync complete: ${report.mirrored.authUsers.listed} users, ${report.mirrored.storage.objects.copied} files (${formatBytes(report.mirrored.storage.objects.bytes)})`,
-        );
+        const u = report.mirrored.authUsers?.listed ?? 0;
+        const f = report.mirrored.storage?.objects.copied ?? 0;
+        const b = report.mirrored.storage?.objects.bytes ?? 0;
+        toast.success(`Sync complete: ${u} users, ${f} files (${formatBytes(b)})`);
       } else {
         toast.warning(`Sync finished with ${report.errors.length} error(s)`);
       }
@@ -101,9 +128,27 @@ export function DisasterRecoveryCard() {
     },
   });
 
+  const verify = useMutation({
+    mutationFn: () => invokeReplicate("verify"),
+    onSuccess: (report) => {
+      setLastReport(report);
+      const v = report.mirrored.verify;
+      if (v?.allInSync) toast.success("Parity OK — primary and fallback are 1:1");
+      else {
+        const tDrift = v?.tables.filter((t) => t.delta !== 0).length ?? 0;
+        const sDrift = v?.storage.filter((s) => s.deltaObjects !== 0 || s.deltaBytes !== 0).length ?? 0;
+        toast.warning(`Drift detected: ${tDrift} tables, ${sDrift} buckets`);
+      }
+    },
+    onError: (e: Error) => toast.error(`Verify failed: ${e.message}`),
+  });
+
   if (!isOwner) return null;
 
-  const isRunning = sync.isPending;
+  const isRunning = sync.isPending || verify.isPending;
+  const v = lastReport?.mirrored.verify;
+  const tableDrift = v?.tables.filter((t) => t.delta !== 0) ?? [];
+  const storageDrift = v?.storage.filter((s) => s.deltaObjects !== 0 || s.deltaBytes !== 0) ?? [];
 
   return (
     <Card className="rounded-2xl border-border/50 shadow-lg">
@@ -118,20 +163,27 @@ export function DisasterRecoveryCard() {
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground leading-relaxed">
           The fallback database is mirrored automatically every night at{" "}
-          <span className="font-medium text-foreground">02:30 IST</span>. You can
-          trigger a manual sync now — useful before risky migrations.
+          <span className="font-medium text-foreground">02:30 IST</span>. Trigger
+          a manual sync before risky migrations, or verify 1:1 parity any time.
         </div>
 
-        <Button
-          onClick={() => sync.mutate()}
-          disabled={isRunning}
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRunning ? "animate-spin" : ""}`} />
-          {isRunning ? "Syncing…" : "Sync to fallback now"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => sync.mutate()} disabled={isRunning} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
+            {sync.isPending ? "Syncing…" : "Sync to fallback now"}
+          </Button>
+          <Button
+            onClick={() => verify.mutate()}
+            disabled={isRunning}
+            variant="outline"
+            className="gap-2"
+          >
+            <ScanSearch className={`h-4 w-4 ${verify.isPending ? "animate-spin" : ""}`} />
+            {verify.isPending ? "Verifying…" : "Verify parity"}
+          </Button>
+        </div>
 
-        {(isRunning || progress > 0) && (
+        {(sync.isPending || progress > 0) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{phaseLabel || "Working…"}</span>
@@ -147,29 +199,103 @@ export function DisasterRecoveryCard() {
               {lastReport.ok ? (
                 <>
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  Last sync succeeded
+                  Last {lastReport.mode ?? "sync"} succeeded
                 </>
               ) : (
                 <>
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  Last sync had {lastReport.errors.length} issue(s)
+                  Last {lastReport.mode ?? "sync"} had {lastReport.errors.length} issue(s)
                 </>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-              <div>
-                Auth users: <Badge variant="secondary">{lastReport.mirrored.authUsers.listed}</Badge>
+
+            {lastReport.mirrored.authUsers && (
+              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                <div>
+                  Auth users:{" "}
+                  <Badge variant="secondary">{lastReport.mirrored.authUsers.listed}</Badge>
+                </div>
+                <div>
+                  Buckets:{" "}
+                  <Badge variant="secondary">
+                    {lastReport.mirrored.storage?.buckets.ensured ?? 0}
+                  </Badge>
+                </div>
+                <div>
+                  Files copied:{" "}
+                  <Badge variant="secondary">
+                    {lastReport.mirrored.storage?.objects.copied ?? 0}
+                  </Badge>
+                </div>
+                <div>
+                  Size:{" "}
+                  <Badge variant="secondary">
+                    {formatBytes(lastReport.mirrored.storage?.objects.bytes ?? 0)}
+                  </Badge>
+                </div>
+                {lastReport.mirrored.rows && (
+                  <>
+                    <div>
+                      Tables:{" "}
+                      <Badge variant="secondary">{lastReport.mirrored.rows.tables}</Badge>
+                    </div>
+                    <div>
+                      Rows upserted:{" "}
+                      <Badge variant="secondary">{lastReport.mirrored.rows.rowsUpserted}</Badge>
+                    </div>
+                  </>
+                )}
+                {lastReport.mirrored.schema && (
+                  <div className="col-span-2">
+                    Schema dump:{" "}
+                    <Badge variant="secondary">
+                      {formatBytes(lastReport.mirrored.schema.dumpedBytes)}
+                    </Badge>
+                  </div>
+                )}
               </div>
-              <div>
-                Buckets: <Badge variant="secondary">{lastReport.mirrored.storage.buckets.ensured}</Badge>
+            )}
+
+            {v && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  {v.allInSync ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span className="text-emerald-700 font-medium">
+                        Primary and fallback are 1:1
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <span className="text-amber-700 font-medium">
+                        {tableDrift.length} table(s) + {storageDrift.length} bucket(s) drifting
+                      </span>
+                    </>
+                  )}
+                </div>
+                {(tableDrift.length > 0 || storageDrift.length > 0) && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer">View drift</summary>
+                    <ul className="mt-2 space-y-1 list-disc pl-4 text-amber-800">
+                      {tableDrift.slice(0, 20).map((t) => (
+                        <li key={t.table}>
+                          {t.table}: primary {t.primary} vs fallback {t.standby} (Δ {t.delta})
+                        </li>
+                      ))}
+                      {storageDrift.map((s) => (
+                        <li key={s.bucket}>
+                          {s.bucket}: primary {s.primaryObjects} obj / {formatBytes(s.primaryBytes)} vs
+                          fallback {s.standbyObjects} obj / {formatBytes(s.standbyBytes)}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
-              <div>
-                Files copied: <Badge variant="secondary">{lastReport.mirrored.storage.objects.copied}</Badge>
-              </div>
-              <div>
-                Size: <Badge variant="secondary">{formatBytes(lastReport.mirrored.storage.objects.bytes)}</Badge>
-              </div>
-            </div>
+            )}
+
             {lastReport.errors.length > 0 && (
               <details className="text-xs text-amber-700">
                 <summary className="cursor-pointer">View errors</summary>
