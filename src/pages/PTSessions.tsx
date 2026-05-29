@@ -118,7 +118,7 @@ export default function PTSessionsPage() {
 
   const branchId = effectiveBranchId || "";
   const queryBranchId = branchFilter || undefined;
-  const { data: packages, isLoading: packagesLoading } = usePTPackages(queryBranchId);
+  const { data: packages, isLoading: packagesLoading } = usePTPackages(queryBranchId, showInactive);
   const { data: trainers } = useTrainers(queryBranchId || branchId);
   const { data: activePackages } = useActiveMemberPackages(queryBranchId);
   const scheduleSession = useSchedulePTSession();

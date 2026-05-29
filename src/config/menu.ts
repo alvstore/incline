@@ -74,7 +74,7 @@ export const trainerMenuConfig: MenuSection[] = [
     title: 'Training',
     items: [
       { label: 'My Clients', href: '/my-clients', icon: Users, roles: ['trainer'] },
-      { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['trainer'] },
+      { label: 'PT Packages', href: '/pt-sessions', icon: Dumbbell, roles: ['trainer'] },
       
       { label: 'Schedule Session', href: '/schedule-session', icon: Calendar, roles: ['trainer'] },
       { label: 'My Classes', href: '/classes', icon: Calendar, roles: ['trainer'] },
@@ -124,7 +124,7 @@ export const staffMenuConfig: MenuSection[] = [
     title: 'Training & Bookings',
     items: [
       { label: 'Classes', href: '/classes', icon: Calendar, roles: ['staff'] },
-      { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['staff'] },
+      { label: 'PT Packages', href: '/pt-sessions', icon: Dumbbell, roles: ['staff'] },
       
       { label: 'All Bookings', href: '/all-bookings', icon: Calendar, roles: ['staff'] },
       { label: 'Benefit Tracking', href: '/benefit-tracking', icon: Heart, roles: ['staff'] },
@@ -187,7 +187,7 @@ export const adminMenuConfig: MenuSection[] = [
     title: 'Training & Bookings',
     items: [
       { label: 'Classes', href: '/classes', icon: Calendar, roles: ['owner', 'admin', 'manager'] },
-      { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
+      { label: 'PT Packages', href: '/pt-sessions', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
       
       { label: 'Trainers', href: '/trainers', icon: Dumbbell, roles: ['owner', 'admin', 'manager'] },
       { label: 'All Bookings', href: '/all-bookings', icon: Calendar, roles: ['owner', 'admin', 'manager'] },
@@ -265,7 +265,7 @@ export const managerMenuConfig: MenuSection[] = [
     title: 'Training & Bookings',
     items: [
       { label: 'Classes', href: '/classes', icon: Calendar, roles: ['manager'] },
-      { label: 'PT Sessions', href: '/pt-sessions', icon: Dumbbell, roles: ['manager'] },
+      { label: 'PT Packages', href: '/pt-sessions', icon: Dumbbell, roles: ['manager'] },
       
       { label: 'Trainers', href: '/trainers', icon: Dumbbell, roles: ['manager'] },
 
