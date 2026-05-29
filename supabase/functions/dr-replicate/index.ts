@@ -534,7 +534,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.3.0",
+      version: "1.4.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
