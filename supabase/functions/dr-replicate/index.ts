@@ -338,8 +338,9 @@ async function syncRows(
         }
 
         for (let offset = 0; offset < primaryCount; offset += PAGE) {
+          const query = primary.from(table).select("*").range(offset, offset + PAGE - 1);
           const { data, error } = await withRetry(`read ${table} ${offset}`, () =>
-            primary.from(table).select("*").order("id", { ascending: true }).range(offset, offset + PAGE - 1),
+            (hasId ? query.order("id", { ascending: true }) : query),
           );
           if (error) throw new Error(error.message);
           const rows = data ?? [];
