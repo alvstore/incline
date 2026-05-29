@@ -1,17 +1,15 @@
 // supabase/functions/dr-replicate/index.ts
-// v1.2.0 — Full 1:1 mirror PRIMARY → DR.
+// v1.3.0 — Full 1:1 mirror PRIMARY → DR.
 //
 // Passes (controlled via body.mode):
 //   "all"      → schema-snapshot + auth + storage + rows  (default; nightly cron)
 //   "auth"     → auth.users only
-//   "storage"  → storage buckets + object bytes only
+//   "storage"  → storage buckets + object bytes only (BFS, arbitrary depth)
 //   "rows"     → public.* table rows only (uses public.dr_get_replication_tables())
-//   "schema"   → introspect primary schema and upload SQL dump to standby Storage
+//   "schema"   → real DDL dump via public.dr_dump_schema() → standby Storage
+//   "verify"   → parity diff: per-table counts + per-bucket counts/bytes
 //
-// Auth: service-role JWT, owner user JWT, OR shared secret in x-dr-secret
-//       (token lives in private.dr_config, accessed via public.dr_get_or_create_token()).
-//
-// Returns JSON { ok, mirrored: {...}, errors: [...] }.
+// Auth: service-role JWT, owner user JWT, OR shared secret in x-dr-secret.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -23,11 +21,11 @@ const corsHeaders = {
 
 const DR_URL = "https://pmznpbsahetwmogezhff.supabase.co";
 
-type Mode = "all" | "auth" | "storage" | "rows" | "schema";
+type Mode = "all" | "auth" | "storage" | "rows" | "schema" | "verify";
 
 interface MirrorReport {
   ok: boolean;
-  version: "1.2.0";
+  version: "1.3.0";
   mode: Mode;
   startedAt: string;
   finishedAt?: string;
@@ -37,12 +35,26 @@ interface MirrorReport {
     storage?: {
       buckets: { ensured: number; failed: number };
       objects: { copied: number; skipped: number; failed: number; bytes: number };
+      perBucket: Array<{ bucket: string; objects: number; bytes: number; failed: number }>;
     };
     rows?: {
       tables: number;
       rowsUpserted: number;
       tablesFailed: number;
       perTable: Array<{ table: string; rows: number; failed: number; error?: string }>;
+    };
+    verify?: {
+      tables: Array<{ table: string; primary: number; standby: number; delta: number }>;
+      storage: Array<{
+        bucket: string;
+        primaryObjects: number;
+        standbyObjects: number;
+        primaryBytes: number;
+        standbyBytes: number;
+        deltaObjects: number;
+        deltaBytes: number;
+      }>;
+      allInSync: boolean;
     };
   };
   errors: string[];
@@ -55,7 +67,7 @@ async function getOrCreateToken(primary: SupabaseClient): Promise<string> {
   return data;
 }
 
-// ── Pass implementations ──────────────────────────────────────────────────────
+// ── Auth users ────────────────────────────────────────────────────────────────
 
 async function syncAuthUsers(
   primary: SupabaseClient,
@@ -115,6 +127,82 @@ async function syncAuthUsers(
   report.mirrored.authUsers = stat;
 }
 
+// ── Storage: BFS walker of arbitrary depth ────────────────────────────────────
+
+interface StorageItem {
+  name: string;
+  id: string | null;
+  metadata: { size?: number; mimetype?: string } | null;
+}
+
+async function listPrefix(
+  primaryUrl: string,
+  serviceRoleKey: string,
+  bucket: string,
+  prefix: string,
+): Promise<StorageItem[]> {
+  // Paginate. Storage REST default returns up to 1000 items.
+  const PAGE = 1000;
+  let offset = 0;
+  const out: StorageItem[] = [];
+  while (true) {
+    const r = await fetch(`${primaryUrl}/storage/v1/object/list/${bucket}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        limit: PAGE,
+        offset,
+        prefix,
+        sortBy: { column: "name", order: "asc" },
+      }),
+    });
+    if (!r.ok) break;
+    const items = (await r.json()) as StorageItem[];
+    out.push(...items);
+    if (items.length < PAGE) break;
+    offset += PAGE;
+  }
+  return out;
+}
+
+async function walkBucket(
+  primaryUrl: string,
+  serviceRoleKey: string,
+  bucket: string,
+): Promise<Array<{ path: string; size: number; mimetype?: string }>> {
+  const files: Array<{ path: string; size: number; mimetype?: string }> = [];
+  const queue: string[] = [""]; // BFS over prefixes
+  const seenPrefix = new Set<string>([""]);
+
+  while (queue.length > 0) {
+    const prefix = queue.shift()!;
+    const items = await listPrefix(primaryUrl, serviceRoleKey, bucket, prefix);
+    for (const item of items) {
+      // Folders: id is null AND metadata is null
+      const isFolder = item.id === null && item.metadata === null;
+      if (isFolder) {
+        const childPrefix = prefix ? `${prefix}${item.name}/` : `${item.name}/`;
+        if (!seenPrefix.has(childPrefix)) {
+          seenPrefix.add(childPrefix);
+          queue.push(childPrefix);
+        }
+      } else if (item.metadata?.size != null) {
+        const fullPath = prefix ? `${prefix}${item.name}` : item.name;
+        files.push({
+          path: fullPath,
+          size: item.metadata.size,
+          mimetype: item.metadata.mimetype,
+        });
+      }
+    }
+  }
+  return files;
+}
+
 async function syncStorage(
   primary: SupabaseClient,
   dr: SupabaseClient,
@@ -125,6 +213,7 @@ async function syncStorage(
   const stat = {
     buckets: { ensured: 0, failed: 0 },
     objects: { copied: 0, skipped: 0, failed: 0, bytes: 0 },
+    perBucket: [] as Array<{ bucket: string; objects: number; bytes: number; failed: number }>,
   };
 
   const { data: buckets, error: bErr } = await primary.storage.listBuckets();
@@ -152,69 +241,46 @@ async function syncStorage(
     }
     stat.buckets.ensured++;
 
-    // List top-level objects in bucket via REST.
-    const listObjects = async (prefix: string) => {
-      const res = await fetch(`${primaryUrl}/storage/v1/object/list/${b.name}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ limit: 10000, offset: 0, prefix }),
-      });
-      return res.ok
-        ? (await res.json()) as Array<{ name: string; metadata?: { size?: number; mimetype?: string } }>
-        : [];
-    };
+    const files = await walkBucket(primaryUrl, serviceRoleKey, b.name);
+    let bucketObjs = 0;
+    let bucketBytes = 0;
+    let bucketFailed = 0;
 
-    const root = await listObjects("");
-    const allObjs: Array<{ path: string; size?: number; mimetype?: string }> = [];
-
-    for (const o of root) {
-      if (o.metadata?.size != null) {
-        allObjs.push({ path: o.name, size: o.metadata.size, mimetype: o.metadata.mimetype });
-      } else {
-        // It's a folder → one level recurse.
-        for (const s of await listObjects(o.name)) {
-          if (s.metadata?.size != null) {
-            allObjs.push({
-              path: `${o.name}/${s.name}`,
-              size: s.metadata.size,
-              mimetype: s.metadata.mimetype,
-            });
-          }
-        }
-      }
-    }
-
-    for (const obj of allObjs) {
+    for (const f of files) {
       try {
-        const dl = await primary.storage.from(b.name).download(obj.path);
+        const dl = await primary.storage.from(b.name).download(f.path);
         if (dl.error || !dl.data) {
           stat.objects.failed++;
-          report.errors.push(`dl ${b.name}/${obj.path}: ${dl.error?.message ?? "no body"}`);
+          bucketFailed++;
+          report.errors.push(`dl ${b.name}/${f.path}: ${dl.error?.message ?? "no body"}`);
           continue;
         }
-        const up = await dr.storage.from(b.name).upload(obj.path, dl.data, {
+        const up = await dr.storage.from(b.name).upload(f.path, dl.data, {
           upsert: true,
-          contentType: obj.mimetype ?? dl.data.type,
+          contentType: f.mimetype ?? dl.data.type,
         });
         if (up.error) {
           stat.objects.failed++;
-          report.errors.push(`up ${b.name}/${obj.path}: ${up.error.message}`);
+          bucketFailed++;
+          report.errors.push(`up ${b.name}/${f.path}: ${up.error.message}`);
         } else {
           stat.objects.copied++;
-          stat.objects.bytes += obj.size ?? 0;
+          stat.objects.bytes += f.size;
+          bucketObjs++;
+          bucketBytes += f.size;
         }
       } catch (e) {
         stat.objects.failed++;
-        report.errors.push(`${b.name}/${obj.path}: ${(e as Error).message}`);
+        bucketFailed++;
+        report.errors.push(`${b.name}/${f.path}: ${(e as Error).message}`);
       }
     }
+    stat.perBucket.push({ bucket: b.name, objects: bucketObjs, bytes: bucketBytes, failed: bucketFailed });
   }
   report.mirrored.storage = stat;
 }
+
+// ── Row mirror ────────────────────────────────────────────────────────────────
 
 async function syncRows(
   primary: SupabaseClient,
@@ -237,7 +303,6 @@ async function syncRows(
 
   const PAGE = 1000;
 
-  // Two passes so cyclic FK tables settle on the second iteration.
   for (let pass = 1; pass <= 2; pass++) {
     for (const row of tables as Array<{ table_name: string; has_id_pk: boolean }>) {
       const table = row.table_name;
@@ -246,7 +311,6 @@ async function syncRows(
       let perTableFailed = 0;
       let lastErr: string | undefined;
 
-      // Page through primary using offset/limit.
       let offset = 0;
       while (true) {
         const { data, error } = await primary
@@ -287,67 +351,30 @@ async function syncRows(
   report.mirrored.rows = stat;
 }
 
+// ── Schema snapshot via real RPC ──────────────────────────────────────────────
+
 async function syncSchemaSnapshot(
   primary: SupabaseClient,
   dr: SupabaseClient,
-  primaryUrl: string,
-  serviceRoleKey: string,
   report: MirrorReport,
 ): Promise<void> {
-  // Use Supabase's pg-meta REST to dump types/tables/functions/policies/triggers.
-  // We can't execute arbitrary SQL on standby via API, so we snapshot to standby
-  // Storage at dr-snapshots/<utc-date>.sql for the runbook's `psql -f` step.
-
-  const headers = {
-    Authorization: `Bearer ${serviceRoleKey}`,
-    apikey: serviceRoleKey,
-    "Content-Type": "application/json",
-  };
-
-  const fetchMeta = async (path: string) => {
-    const r = await fetch(`${primaryUrl}/pg-meta/default${path}`, { headers });
-    return r.ok ? await r.json() : [];
-  };
-
-  const sections: string[] = [];
-  sections.push(`-- DR schema snapshot generated ${new Date().toISOString()}`);
-  sections.push(`-- Source: ${primaryUrl}`);
-  sections.push(`-- Apply with: psql "<STANDBY_CONN>" -v ON_ERROR_STOP=1 -f <this-file>`);
-  sections.push("");
-
-  try {
-    // Tables (DDL)
-    const tables = await fetchMeta("/tables?included_schemas=public");
-    for (const t of tables as Array<{ name: string }>) {
-      const ddl = await fetchMeta(`/query?` + new URLSearchParams({
-        query: `SELECT pg_get_tabledef('public', '${t.name}'::text);`,
-      }));
-      void ddl;
-    }
-    // pg-meta /query is not exposed publicly, fall back: write a placeholder
-    // referencing the live introspection script in the repo.
-    sections.push("-- pg-meta dump endpoint not directly accessible.");
-    sections.push("-- Use scripts/dr/sync-edge-functions.sh + the repo's");
-    sections.push("-- incline_full_schema.sql artifact to seed the standby.");
-  } catch (e) {
-    sections.push(`-- schema introspection failed: ${(e as Error).message}`);
+  const { data, error } = await primary.rpc("dr_dump_schema");
+  if (error || typeof data !== "string") {
+    report.errors.push(`dr_dump_schema: ${error?.message ?? "no data"}`);
+    report.mirrored.schema = { dumpedBytes: 0, uploadedPath: null };
+    return;
   }
+  const dump = data;
 
-  const dump = sections.join("\n") + "\n";
-
-  // Ensure 'dr-snapshots' bucket exists on STANDBY, then upload.
-  const dateKey = new Date().toISOString().slice(0, 10);
-  const objectPath = `${dateKey}.sql`;
   const bucketId = "dr-snapshots";
-
   const { data: bks } = await dr.storage.listBuckets();
   if (!(bks ?? []).some((b) => b.name === bucketId)) {
     const { error: cErr } = await dr.storage.createBucket(bucketId, { public: false });
-    if (cErr) {
-      report.errors.push(`create bucket ${bucketId}: ${cErr.message}`);
-    }
+    if (cErr) report.errors.push(`create bucket ${bucketId}: ${cErr.message}`);
   }
 
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const objectPath = `${dateKey}.sql`;
   const blob = new Blob([dump], { type: "text/plain" });
   const { error: upErr } = await dr.storage.from(bucketId).upload(objectPath, blob, {
     upsert: true,
@@ -361,6 +388,63 @@ async function syncSchemaSnapshot(
   if (upErr) report.errors.push(`schema upload: ${upErr.message}`);
 }
 
+// ── Verify: parity diff ───────────────────────────────────────────────────────
+
+async function verifyParity(
+  primary: SupabaseClient,
+  dr: SupabaseClient,
+  primaryUrl: string,
+  serviceRoleKey: string,
+  drServiceKey: string,
+  report: MirrorReport,
+): Promise<void> {
+  const tables: Array<{ table: string; primary: number; standby: number; delta: number }> = [];
+  const storage: Array<{
+    bucket: string; primaryObjects: number; standbyObjects: number;
+    primaryBytes: number; standbyBytes: number; deltaObjects: number; deltaBytes: number;
+  }> = [];
+
+  // Table counts
+  const { data: pCounts, error: pErr } = await primary.rpc("dr_table_counts");
+  const { data: sCounts, error: sErr } = await dr.rpc("dr_table_counts");
+  if (pErr) report.errors.push(`primary dr_table_counts: ${pErr.message}`);
+  if (sErr) report.errors.push(`standby dr_table_counts: ${sErr.message}`);
+
+  const sMap = new Map<string, number>();
+  for (const r of (sCounts ?? []) as Array<{ table_name: string; row_count: number }>) {
+    sMap.set(r.table_name, Number(r.row_count));
+  }
+  for (const r of (pCounts ?? []) as Array<{ table_name: string; row_count: number }>) {
+    const p = Number(r.row_count);
+    const s = sMap.get(r.table_name) ?? 0;
+    tables.push({ table: r.table_name, primary: p, standby: s, delta: p - s });
+  }
+
+  // Storage: walk both sides
+  const { data: pBuckets } = await primary.storage.listBuckets();
+  for (const b of pBuckets ?? []) {
+    const pFiles = await walkBucket(primaryUrl, serviceRoleKey, b.name);
+    const sFiles = await walkBucket(DR_URL, drServiceKey, b.name);
+    const pBytes = pFiles.reduce((a, f) => a + f.size, 0);
+    const sBytes = sFiles.reduce((a, f) => a + f.size, 0);
+    storage.push({
+      bucket: b.name,
+      primaryObjects: pFiles.length,
+      standbyObjects: sFiles.length,
+      primaryBytes: pBytes,
+      standbyBytes: sBytes,
+      deltaObjects: pFiles.length - sFiles.length,
+      deltaBytes: pBytes - sBytes,
+    });
+  }
+
+  const allInSync =
+    tables.every((t) => t.delta === 0) &&
+    storage.every((s) => s.deltaObjects === 0 && s.deltaBytes === 0);
+
+  report.mirrored.verify = { tables, storage, allInSync };
+}
+
 // ── HTTP handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -371,7 +455,6 @@ Deno.serve(async (req) => {
     const primaryUrl = Deno.env.get("SUPABASE_URL")!;
     const primary = createClient(primaryUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-    // ── Authorize ──
     const auth = req.headers.get("authorization") ?? "";
     const sharedSecret = req.headers.get("x-dr-secret") ?? "";
     const isServiceJwt = auth === `Bearer ${serviceRoleKey}`;
@@ -413,7 +496,7 @@ Deno.serve(async (req) => {
 
     const report: MirrorReport = {
       ok: true,
-      version: "1.2.0",
+      version: "1.3.0",
       mode,
       startedAt: new Date().toISOString(),
       mirrored: {},
@@ -421,7 +504,7 @@ Deno.serve(async (req) => {
     };
 
     if (mode === "schema" || mode === "all") {
-      await syncSchemaSnapshot(primary, dr, primaryUrl, serviceRoleKey, report);
+      await syncSchemaSnapshot(primary, dr, report);
     }
     if (mode === "auth" || mode === "all") {
       await syncAuthUsers(primary, dr, report);
@@ -431,6 +514,9 @@ Deno.serve(async (req) => {
     }
     if (mode === "storage" || mode === "all") {
       await syncStorage(primary, dr, primaryUrl, serviceRoleKey, report);
+    }
+    if (mode === "verify") {
+      await verifyParity(primary, dr, primaryUrl, serviceRoleKey, drServiceKey, report);
     }
 
     report.finishedAt = new Date().toISOString();
