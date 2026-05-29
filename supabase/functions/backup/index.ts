@@ -103,7 +103,9 @@ async function handleImport(ctx: AdminCtx, payload: any): Promise<Response> {
   const conflictStrategy: "skip" | "overwrite" = payload.conflict_strategy === "overwrite" ? "overwrite" : "skip";
   const summary: Record<string, { inserted: number; updated: number; skipped: number; errors: string[] }> = {};
 
-  for (const table of RESTORE_ORDER) {
+  const restoreOrder = await getTableOrder(ctx.service);
+  for (const table of restoreOrder) {
+
     const entry = payload.data[table];
     if (!entry?.rows || !Array.isArray(entry.rows)) continue;
     const rows = entry.rows;
