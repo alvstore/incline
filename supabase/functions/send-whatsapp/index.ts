@@ -315,7 +315,16 @@ serve(async (req) => {
 
       console.error("Meta API error:", JSON.stringify(metaData));
       await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", message_id);
-      await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status}`, metaErrorMsg);
+      await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status} (${metaCode ?? '?'})`, metaErrorMsg, {
+        template_name: template_name ?? null,
+        recipient_last4: String(phone_number || '').slice(-4),
+        meta_code: metaCode,
+        meta_subcode: metaSubcode,
+        fbtrace_id: metaErr.fbtrace_id ?? null,
+        message_type,
+        source_caller: body.source_caller ?? null,
+        source_log_id: body.source_log_id ?? null,
+      });
       return new Response(
         JSON.stringify({
           error: "Failed to send WhatsApp message",
