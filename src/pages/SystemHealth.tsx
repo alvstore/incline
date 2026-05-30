@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Activity, AlertTriangle, CheckCircle, Copy, Sparkles, Clock, Eye, Monitor, Server, Database, Zap, Trash2, CheckCheck, Download, RotateCcw, Layers } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { exportToCSV } from '@/lib/csvExport';
@@ -20,6 +21,7 @@ import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFi
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
 import { SystemAuditTab } from '@/components/system/SystemAuditTab';
+import { BulkAIPromptDialog } from '@/components/system/BulkAIPromptDialog';
 
 
 interface ErrorLog {
@@ -148,6 +150,10 @@ export default function SystemHealth() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [clearResolvedDialog, setClearResolvedDialog] = useState(false);
   const [resolveAllDialog, setResolveAllDialog] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPromptOpen, setBulkPromptOpen] = useState(false);
+  const [bulkPromptErrors, setBulkPromptErrors] = useState<ErrorLog[]>([]);
+  const [bulkPromptMode, setBulkPromptMode] = useState<'fingerprint' | 'selection'>('selection');
   const queryClient = useQueryClient();
 
   const { data: errors = [], isLoading } = useQuery({
@@ -389,18 +395,48 @@ export default function SystemHealth() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="text-lg">Error Logs</CardTitle>
-                  <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                    <SelectTrigger className="w-[180px] rounded-xl">
-                      <SelectValue placeholder="Filter by source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Sources</SelectItem>
-                      <SelectItem value="frontend">Frontend</SelectItem>
-                      <SelectItem value="edge_function">Backend Functions</SelectItem>
-                      <SelectItem value="database">Database</SelectItem>
-                      <SelectItem value="trigger">Triggers</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedIds.size > 0 && (
+                      <Button
+                        size="sm"
+                        className="rounded-xl gap-1.5"
+                        onClick={() => {
+                          setBulkPromptErrors(errors.filter((e) => selectedIds.has(e.id)));
+                          setBulkPromptMode('selection');
+                          setBulkPromptOpen(true);
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4" /> Generate AI Fix Prompt ({selectedIds.size})
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl gap-1.5"
+                      onClick={() => {
+                        const open = errors.filter((e) => e.status === 'open');
+                        if (open.length === 0) { toast.error('No open errors to group'); return; }
+                        setBulkPromptErrors(open);
+                        setBulkPromptMode('fingerprint');
+                        setBulkPromptOpen(true);
+                      }}
+                      title="Group all open errors by fingerprint into one prompt"
+                    >
+                      <Layers className="h-4 w-4" /> Group prompt (all open)
+                    </Button>
+                    <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                      <SelectTrigger className="w-[180px] rounded-xl">
+                        <SelectValue placeholder="Filter by source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="frontend">Frontend</SelectItem>
+                        <SelectItem value="edge_function">Backend Functions</SelectItem>
+                        <SelectItem value="database">Database</SelectItem>
+                        <SelectItem value="trigger">Triggers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -424,10 +460,24 @@ export default function SystemHealth() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-8">
+                                <Checkbox
+                                  aria-label="Select all on page"
+                                  checked={errors.length > 0 && errors.every((e) => selectedIds.has(e.id))}
+                                  onCheckedChange={(v) => {
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (v) errors.forEach((e) => next.add(e.id));
+                                      else errors.forEach((e) => next.delete(e.id));
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              </TableHead>
                               <TableHead>Last Seen</TableHead>
                               <TableHead>Severity</TableHead>
                               <TableHead>Source</TableHead>
-                              <TableHead>Function / Route</TableHead>
+                              <TableHead>Caller / Route</TableHead>
                               <TableHead>Message</TableHead>
                               <TableHead className="text-right">Count</TableHead>
                               <TableHead>Status</TableHead>
@@ -445,7 +495,20 @@ export default function SystemHealth() {
                                 'bg-slate-100 text-slate-700';
                               const lastTime = err.last_seen || err.created_at;
                               return (
-                                <TableRow key={err.id}>
+                                <TableRow key={err.id} data-state={selectedIds.has(err.id) ? 'selected' : undefined}>
+                                  <TableCell>
+                                    <Checkbox
+                                      aria-label={`Select error ${err.id}`}
+                                      checked={selectedIds.has(err.id)}
+                                      onCheckedChange={(v) => {
+                                        setSelectedIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (v) next.add(err.id); else next.delete(err.id);
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                  </TableCell>
                                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                     {format(new Date(lastTime), 'MMM d, HH:mm')}
                                   </TableCell>
@@ -458,7 +521,9 @@ export default function SystemHealth() {
                                       {src.label}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell className="font-mono text-xs max-w-[180px] truncate">{err.function_name || err.route || '—'}</TableCell>
+                                  <TableCell className="font-mono text-xs max-w-[200px] truncate" title={err.function_name || err.route || ''}>
+                                    {(err.context as any)?.source_caller || (err.context as any)?.template_name || err.function_name || err.route || '—'}
+                                  </TableCell>
                                   <TableCell className="max-w-[280px] truncate text-sm">{err.error_message}</TableCell>
                                   <TableCell className="text-right text-xs font-semibold">{err.occurrence_count ?? 1}</TableCell>
                                   <TableCell>
@@ -600,6 +665,13 @@ export default function SystemHealth() {
           )}
         </SheetContent>
       </Sheet>
+
+      <BulkAIPromptDialog
+        open={bulkPromptOpen}
+        onOpenChange={setBulkPromptOpen}
+        errors={bulkPromptErrors as any}
+        groupedBy={bulkPromptMode}
+      />
     </AppLayout>
   );
 }

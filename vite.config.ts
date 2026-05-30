@@ -36,12 +36,13 @@ export default defineConfig(() => ({
   build: {
     // Modern browsers — skip needless transpile, smaller/faster bundle.
     target: "es2022",
-    // Raised after vendor split lands. Charts/data vendors legitimately
-    // approach 600 KB; anything above that is a regression worth investigating.
+    // Hidden sourcemaps: emitted alongside chunks but NOT linked via
+    // //# sourceMappingURL, so browsers don't auto-fetch them. This keeps
+    // production payloads lean while still letting us symbolicate
+    // minified stacks (e.g. "index-CrIbZcPK.js:183:53850") server-side or
+    // via DevTools "Add source map" when triaging hard bugs.
+    sourcemap: 'hidden',
     chunkSizeWarningLimit: 700,
-    // Force esbuild minification on every emitted chunk. Some vendor chunks
-    // (notably lucide-react) were shipping unminified; this guarantees they
-    // pass through the minifier even when their source ESM is already "minified-ish".
     minify: 'esbuild',
     cssMinify: true,
     // Don't auto-preload every imported chunk on first load. With our manual
