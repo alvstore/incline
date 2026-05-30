@@ -670,9 +670,9 @@ Deno.serve(async (req) => {
 
           // ── 24h-window pre-flight guard ──
           // If we won't be sending an approved Meta template, the recipient
-          // must have messaged us within the last 24 hours (Meta customer
-          // service window). Otherwise Meta rejects with error 131047
-          // ("Re-engagement message"). Fail fast with a clear reason instead.
+          // must have messaged us within the last 24 hours. We already tried
+          // to auto-resolve a template above; reaching here means no template
+          // is available — SUPPRESS terminally so the retry queue doesn't loop.
           if (!templateName) {
             const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
             const recipientDigits = input.recipient.replace(/\D/g, '');
@@ -688,18 +688,24 @@ Deno.serve(async (req) => {
               await supabase
                 .from('communication_logs')
                 .update({
-                  status: 'failed',
-                  delivery_status: 'failed',
-                  error_message: 'Outside 24h customer-service window — an approved WhatsApp template is required. Submit one in Settings → Communication Templates.',
+                  status: 'suppressed',
+                  delivery_status: 'suppressed',
+                  error_message: 'no_template_for_closed_session — no approved WhatsApp template found for category ' + input.category + '. Configure one in Settings → Communication Templates.',
+                  delivery_metadata: {
+                    source_caller: input.source_caller ?? null,
+                    category: input.category,
+                    reason: 'no_template_for_closed_session',
+                  },
                 })
                 .eq('id', log!.id);
               return ok({
-                status: 'failed',
+                status: 'suppressed',
                 log_id: log!.id,
-                reason: 'no_active_session_no_template',
+                reason: 'no_template_for_closed_session',
               });
             }
           }
+
 
           // When we have an approved template with a media header, send as
           // template (HEADER component carries the link → native PDF/image/video).
