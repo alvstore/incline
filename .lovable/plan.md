@@ -1,84 +1,91 @@
-## DR sync audit — findings
+# System Health, WhatsApp Window & Retry Storm — Fix Plan
 
-I audited `dr-replicate` v1.2.0 against the live primary. Two real gaps confirmed, one verification gap.
+## 1. System Health: bulk AI fix prompts + readable production errors
 
-### 1. Storage: deep folders are silently skipped (CRITICAL)
+**Problem today**
+- Each error must be opened individually to copy a fix prompt. Painful for 64 open rows.
+- Frontend rows show only minified stack (`index-CrIbZcPK.js:183:53850`) — useless after build.
+- Backend rows show `Meta API 404: (#132001) Template name does not exist…` with empty `function_name`, `route`, and `context` → impossible to tell *which* template / *which* member / *which* caller.
 
-`syncStorage()` only recurses **one level** into each bucket. Live data:
+**Fix**
+- **Bulk + group prompts on Errors tab**
+  - Row checkboxes + a "Select all on page" header checkbox.
+  - New `Generate AI Fix Prompt (N)` button in the toolbar → single combined prompt covering all selected rows (grouped by fingerprint, with counts, last-seen, route, source, top stack frame).
+  - New "Group" view that automatically clusters by `fingerprint`; each group gets one "Generate group prompt" + "Mark all resolved" button.
+  - Keep existing per-row prompt as a fallback.
+- **Readable production errors (sourcemaps)**
+  - Enable hidden source maps in `vite.config.ts` (`build.sourcemap: 'hidden'`) so generated `.map` files ship to the bundle output but are not linked from JS. Cloudflare keeps serving the site as-is.
+  - In `errorReporter.ts`, before sending the stack to `log_error_event`, run it through `stacktrace-js` (`StackTrace.fromError`) when sourcemaps are reachable; persist the symbolicated frames in the new `context.symbolicated_stack` JSON.
+  - System Health UI shows symbolicated stack first, raw stack collapsed below.
+- **Enrich backend error context (fixes "where is 132001 coming from")**
+  - `send-whatsapp/index.ts`: when Meta returns an error, call `log_error_event` (or pass through to dispatcher) with `context = { template_name, recipient_hash, member_id, branch_id, caller_function, source_log_id, meta_code, meta_subcode, fbtrace_id }` and `function_name = 'send-whatsapp'`.
+  - `dispatch-communication`: propagate `source_caller` (e.g. `automation-brain:birthday_wish`, `send-broadcast`, `notify-booking-event`) into the same context.
+  - Add a "Caller / Template" column to the System Health table when `source = edge_function` so the table itself answers "where is it coming from".
 
-| bucket | objects | max folder depth |
-|---|---|---|
-| attachments | 26 | **3** ← truncated today |
-| member-photos | 17 | 2 ✓ |
-| avatars | 6 | 2 ✓ |
-| contract-pdfs | 2 | 2 ✓ |
-| products | 2 | 2 ✓ |
-| documents | 1 | 2 ✓ |
-| org-assets | 1 | 1 ✓ |
+## 2. WhatsApp: unify 24h-window vs template decision (no more confusing 24h errors)
 
-Every file under `attachments/<a>/<b>/<c>` (chat media, etc.) is currently NOT being mirrored. The function lists a folder, opens it one level, and stops — depth-3 paths fall through.
+**Problem today**
+- The dispatcher only inserts the template when the caller passes `template_id`. Direct sends (and several callers that forget `template_id`) hit the 24h pre-flight, fail with `Outside 24h customer-service window`, get queued for retry, and confuse users.
 
-### 2. Schema snapshot is a stub (HIGH)
+**Fix — single decision tree in `dispatch-communication`**
+1. Look up the inbound 24h session (existing query, but extract into a helper `hasOpenSession(branch_id, recipient)`).
+2. If session is OPEN → send freeform (current behavior).
+3. If session is CLOSED:
+   - If caller passed `template_id` → send that template (existing path).
+   - Else → resolve a fallback template:
+     - Use `category` + `branch_id` to look up the canonical template via existing `templates`/`whatsapp_triggers` mapping.
+     - Fall back to a single, always-present "operational fallback" template (configured in Settings → Communication Templates) when no category match exists.
+   - Only after both lookups fail, suppress with reason `no_template_for_closed_session` (no retry — terminal).
+4. Never fire 131047 anymore: if a chosen template's `whatsapp_templates.status != APPROVED`, suppress immediately instead of attempting the send.
+- Add a single helper `resolveWhatsAppDelivery({branch_id, recipient, category, template_id?})` returning `{ mode: 'freeform' | 'template' | 'suppress', templateName?, reason? }` and call it from one place. Removes the dual-path 24h logic that currently lives both in the dispatcher and (partially) in callers.
 
-`syncSchemaSnapshot()` calls a `pg-meta` URL that isn't reachable that way, catches the failure silently, and uploads a placeholder `.sql` that just says "use the repo dump." So nightly schema parity is effectively not happening.
+## 3. Stop the runaway retry loop ("Ritesh" case → DB bloat)
 
-### 3. No parity verification (MEDIUM)
+**Problem today**
+- `process-comm-retry-queue` reschedules indefinitely whenever `dispatch-communication` returns `failed` (only `suppressed` is terminal). A recipient that permanently fails (invalid number, opted-out, closed session w/o template) keeps cycling 5min → 30min → 2h → repeat, and each attempt writes new `communication_logs` + `error_logs` + `whatsapp_messages` rows.
+- `max_retries` defaults to 3 but new rows are being created by other code paths instead of incrementing the existing one.
 
-After a sync we have no automated answer to "are primary and standby 1:1 right now?" — we rely on the per-table counter in the report, which can show "0 rows" for an empty table just as easily as for a sync failure.
+**Fix**
+- In `process-comm-retry-queue` (bump to v2.2.0):
+  - Treat these dispatcher reasons as **terminal** (mark `exhausted`, no reschedule): `no_active_session_no_template`, `no_template_for_closed_session`, `template_not_approved`, `template_stale_in_meta`, `do_not_contact`, `member_pref_opt_out`, `invalid_recipient`, `recipient_unreachable`.
+  - Treat Meta error codes `131026`, `131047`, `131051`, `132001`, `132012`, `133010` (recipient/template permanent) as terminal even when wrapped in `failed`.
+  - Hard cap: `retry_count >= 3` → `exhausted`, regardless of reason (already in code, but enforce before re-insert paths).
+- Add a Postgres trigger `tg_comm_retry_queue_dedupe` on `communication_retry_queue` insert that, when an active (`pending|processing`) row already exists for `(branch_id, recipient, type, original_log_id)`, updates the existing row's `next_retry_at`/`metadata` instead of inserting a new one. Prevents the "many rows per member" amplification.
+- Add `do_not_contact` auto-flag: when a recipient hits 3 terminal failures in 24h, call existing `mark_do_not_contact` RPC so future automation skips them entirely.
+- One-time cleanup migration:
+  - `UPDATE communication_retry_queue SET status='exhausted' WHERE status='pending' AND retry_count >= 3;`
+  - `UPDATE communication_retry_queue SET status='exhausted' WHERE status='pending' AND last_error ~* '131047|132001|132012|131051|do_not_contact';`
 
-### Out of scope (already correct)
+## Technical details
 
-- Row mirror via `dr_get_replication_tables()` — verified, OK.
-- `auth.users` mirror — OK.
-- Bucket creation on standby — OK.
+**Files**
+- `src/pages/SystemHealth.tsx` — multi-select, group view, bulk prompt builder, symbolicated stack panel, "Caller / Template" column.
+- `src/lib/errorReporter.ts` — symbolicate stack with `stacktrace-js`, persist into `context.symbolicated_stack`.
+- `vite.config.ts` — `build.sourcemap: 'hidden'`.
+- `supabase/functions/_shared/whatsappDelivery.ts` (new) — `resolveWhatsAppDelivery` helper.
+- `supabase/functions/dispatch-communication/index.ts` — use the helper; emit richer `delivery_metadata` + `source_caller`; suppress (not fail) when no template available.
+- `supabase/functions/send-whatsapp/index.ts` — call `log_error_event` with enriched context on Meta errors.
+- `supabase/functions/process-comm-retry-queue/index.ts` → v2.2.0 terminal-reason table.
+- New migration: dedupe trigger on `communication_retry_queue` + cleanup of stuck rows.
 
----
-
-## Plan
-
-### Step 1 — Fix storage deep recursion
-Edit `supabase/functions/dr-replicate/index.ts` → rewrite the inner listing inside `syncStorage()` to walk arbitrary depth:
-
-- Replace the one-level loop with a BFS queue of prefixes.
-- For each prefix, call `POST /storage/v1/object/list/<bucket>` with `{ prefix, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }`, paginate until `< limit` returned.
-- Items where `metadata.size != null` → file (queue for copy). Items where `metadata == null` AND `id == null` → folder (push `${prefix}${name}/` to queue).
-- Keep the existing download/upload + upsert logic; add per-bucket counters.
-
-### Step 2 — Real schema dump
-Replace the stub `syncSchemaSnapshot()` with a working introspector that runs against primary via `service_role` and uploads a real DDL `.sql` to standby `dr-snapshots/<utc-date>.sql`. Use `pg_catalog` queries through a new SECURITY DEFINER RPC `public.dr_dump_schema()` returning the full DDL as `text` (we already use the same pattern for `dr_get_replication_tables` and `dr_get_cron_manifest`). The RPC concatenates:
-1. enums, sequences, tables (`pg_get_tabledef` via pg_dump-style construction)
-2. FKs/uniques/checks (`pg_get_constraintdef`)
-3. indexes (`pg_get_indexdef`)
-4. views (`pg_get_viewdef`)
-5. functions (`pg_get_functiondef`)
-6. triggers (`pg_get_triggerdef`)
-7. RLS policies (`pg_policies`)
-8. grants (`information_schema.role_table_grants`)
-
-Edge function reads the RPC output, writes it as a single blob to standby Storage. No client-side concatenation, no fake placeholder.
-
-### Step 3 — Parity verification endpoint
-Add a 5th mode `"verify"` to `dr-replicate` that:
-- For each table in `dr_get_replication_tables()`: `count(*)` on primary vs standby.
-- For each storage bucket: object count + total bytes on primary vs standby.
-- Returns a diff JSON `{ tables: [{name, primary, standby, delta}], storage: [...], ok: boolean }`.
-
-User can run this after the nightly job and immediately see drift.
-
-### Step 4 — Run, test, report
-After deploy:
-1. Invoke `dr-replicate` with `{ mode: "storage" }` → expect all 55 objects copied (currently fewer due to bug).
-2. Invoke with `{ mode: "schema" }` → expect a real multi-KB SQL dump uploaded.
-3. Invoke with `{ mode: "verify" }` → expect `ok: true` with zero deltas.
-4. Paste the verify JSON into the response so you can confirm 1:1.
-
-### Files touched
-
-```text
-supabase/functions/dr-replicate/index.ts        (rewrite syncStorage + syncSchemaSnapshot + add verify)
-supabase/migrations/<ts>_dr_dump_schema.sql     (new RPC: public.dr_dump_schema())
-supabase/migrations/<ts>_dr_verify_helpers.sql  (new RPC: public.dr_table_counts())
-docs/dr-runbook.md                              (document verify mode + new behavior)
+**Group prompt format (single textarea, copy-once)**
+```
+You are auditing N production errors on Incline Fitness.
+Group A (fingerprint=xxx, 23 occurrences, source=edge_function):
+  message: Meta API 404 (#132001) Template name does not exist
+  function: send-whatsapp
+  callers: automation-brain:birthday_wish, send-broadcast
+  template_name: birthday_wish_v3
+  ...
+Group B (fingerprint=yyy, 5 occurrences, source=frontend, route=/system-health):
+  message: TypeError: Failed to fetch
+  symbolicated stack:
+    at fetchErrorLogs (src/pages/SystemHealth.tsx:142)
+    ...
+For each group, return: root cause, file(s) to edit, exact fix.
 ```
 
-No frontend changes. No schema changes to business tables. Bumps `dr-replicate` to **v1.3.0**.
+## Out of scope
+- Rewriting the Templates Hub itself.
+- Migrating off Meta Cloud API.
+- Any UI redesign beyond the bulk/group controls and symbolicated stack panel.
