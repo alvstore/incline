@@ -912,6 +912,8 @@ Deno.serve(async (req) => {
     if (input.attachment) finalMeta.attachment = input.attachment;
     if (providerMessageId) finalMeta.provider_message_id = providerMessageId;
     if ((input as any).__category_drift) finalMeta.category_drift = true;
+    if ((input as any).__auto_resolved_template) finalMeta.auto_resolved_template = (input as any).__auto_resolved_template;
+    if (input.source_caller) finalMeta.source_caller = input.source_caller;
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
     await supabase
