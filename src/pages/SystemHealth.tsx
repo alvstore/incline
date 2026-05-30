@@ -665,6 +665,13 @@ export default function SystemHealth() {
           )}
         </SheetContent>
       </Sheet>
+
+      <BulkAIPromptDialog
+        open={bulkPromptOpen}
+        onOpenChange={setBulkPromptOpen}
+        errors={bulkPromptErrors as any}
+        groupedBy={bulkPromptMode}
+      />
     </AppLayout>
   );
 }
