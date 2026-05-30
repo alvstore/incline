@@ -395,18 +395,48 @@ export default function SystemHealth() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="text-lg">Error Logs</CardTitle>
-                  <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                    <SelectTrigger className="w-[180px] rounded-xl">
-                      <SelectValue placeholder="Filter by source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Sources</SelectItem>
-                      <SelectItem value="frontend">Frontend</SelectItem>
-                      <SelectItem value="edge_function">Backend Functions</SelectItem>
-                      <SelectItem value="database">Database</SelectItem>
-                      <SelectItem value="trigger">Triggers</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedIds.size > 0 && (
+                      <Button
+                        size="sm"
+                        className="rounded-xl gap-1.5"
+                        onClick={() => {
+                          setBulkPromptErrors(errors.filter((e) => selectedIds.has(e.id)));
+                          setBulkPromptMode('selection');
+                          setBulkPromptOpen(true);
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4" /> Generate AI Fix Prompt ({selectedIds.size})
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-xl gap-1.5"
+                      onClick={() => {
+                        const open = errors.filter((e) => e.status === 'open');
+                        if (open.length === 0) { toast.error('No open errors to group'); return; }
+                        setBulkPromptErrors(open);
+                        setBulkPromptMode('fingerprint');
+                        setBulkPromptOpen(true);
+                      }}
+                      title="Group all open errors by fingerprint into one prompt"
+                    >
+                      <Layers className="h-4 w-4" /> Group prompt (all open)
+                    </Button>
+                    <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                      <SelectTrigger className="w-[180px] rounded-xl">
+                        <SelectValue placeholder="Filter by source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="frontend">Frontend</SelectItem>
+                        <SelectItem value="edge_function">Backend Functions</SelectItem>
+                        <SelectItem value="database">Database</SelectItem>
+                        <SelectItem value="trigger">Triggers</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
