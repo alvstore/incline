@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Activity, AlertTriangle, CheckCircle, Copy, Sparkles, Clock, Eye, Monitor, Server, Database, Zap, Trash2, CheckCheck, Download, RotateCcw, Layers } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { exportToCSV } from '@/lib/csvExport';
@@ -20,6 +21,7 @@ import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFi
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
 import { SystemAuditTab } from '@/components/system/SystemAuditTab';
+import { BulkAIPromptDialog } from '@/components/system/BulkAIPromptDialog';
 
 
 interface ErrorLog {
@@ -148,6 +150,10 @@ export default function SystemHealth() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [clearResolvedDialog, setClearResolvedDialog] = useState(false);
   const [resolveAllDialog, setResolveAllDialog] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPromptOpen, setBulkPromptOpen] = useState(false);
+  const [bulkPromptErrors, setBulkPromptErrors] = useState<ErrorLog[]>([]);
+  const [bulkPromptMode, setBulkPromptMode] = useState<'fingerprint' | 'selection'>('selection');
   const queryClient = useQueryClient();
 
   const { data: errors = [], isLoading } = useQuery({
