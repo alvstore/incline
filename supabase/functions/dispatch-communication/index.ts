@@ -104,6 +104,13 @@ interface DispatchInput {
     content_type?: string;       // e.g. application/pdf
     kind?: 'document' | 'image' | 'video';
   };
+  /**
+   * Optional identifier of the calling edge function / automation rule.
+   * Persisted into communication_logs.delivery_metadata.source_caller and
+   * forwarded to send-whatsapp for error_logs context so System Health can
+   * answer "where is this Meta error coming from?" without manual digging.
+   */
+  source_caller?: string;
 }
 
 interface DispatchResult {
