@@ -503,6 +503,59 @@ Deno.serve(async (req) => {
           let templateName: string | null = null;
           let components: Array<Record<string, unknown>> | null | undefined;
           let templateHeaderType: string | null = null;
+
+          // ── Unified WhatsApp delivery resolver (v1.16.0) ──
+          // If the caller did not supply a template_id, try to auto-resolve one
+          // from the category. This stops the dispatcher from emitting opaque
+          // "Outside 24h customer-service window" failures whenever a caller
+          // forgets to pass template_id but an approved template exists.
+          if (!input.template_id) {
+            const CATEGORY_TO_TRIGGER_EVENTS: Partial<Record<Category, string[]>> = {
+              membership_reminder: ['membership_expiring', 'membership_expired', 'membership_renewal'],
+              payment_receipt: ['payment_received', 'invoice_generated', 'invoice_paid'],
+              payment_alert: ['payment_overdue', 'payment_failed', 'payment_reminder'],
+              class_notification: ['class_booked', 'class_reminder', 'class_cancelled'],
+              new_lead: ['lead_created', 'lead_welcome'],
+              task_reminder: ['task_assigned', 'task_reminder'],
+              retention_nudge: ['retention_nudge', 'inactive_member', 'comeback'],
+              review_request: ['review_request', 'feedback_request'],
+              low_stock: ['low_stock_alert'],
+              announcement: ['announcement', 'broadcast'],
+            };
+            const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
+            if (events.length > 0) {
+              const { data: fallbackTpl } = await supabase
+                .from('templates')
+                .select('id, branch_id')
+                .in('trigger_event', events)
+                .not('meta_template_name', 'is', null)
+                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                .order('branch_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              if (fallbackTpl?.id) {
+                input.template_id = fallbackTpl.id;
+                (input as any).__auto_resolved_template = true;
+              }
+            }
+            // Settings-level global fallback (last resort, admin-configured).
+            if (!input.template_id) {
+              const { data: fb } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('key', 'whatsapp_fallback_template_id')
+                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                .order('branch_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              const fbId = (fb?.value as any)?.template_id ?? fb?.value;
+              if (fbId && typeof fbId === 'string') {
+                input.template_id = fbId;
+                (input as any).__auto_resolved_template = 'settings_fallback';
+              }
+            }
+          }
+
           if (input.template_id) {
             const { data: tpl, error: tplError } = await supabase
               .from('templates')
