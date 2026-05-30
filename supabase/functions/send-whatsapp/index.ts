@@ -371,13 +371,41 @@ serve(async (req) => {
   }
 });
 
-async function logError(supabase: any, branchId: string, component: string, title: string, details: string) {
+async function logError(
+  supabase: any,
+  branchId: string,
+  component: string,
+  title: string,
+  details: string,
+  ctx: Record<string, unknown> = {},
+) {
+  // Try the unified RPC first (fingerprint dedup + structured context).
+  try {
+    await supabase.rpc("log_error_event", {
+      p_severity: "error",
+      p_source: "edge_function",
+      p_message: `${title}: ${details}`,
+      p_function_name: component,
+      p_route: null,
+      p_table_name: null,
+      p_branch_id: branchId,
+      p_user_id: null,
+      p_request_id: null,
+      p_release_sha: null,
+      p_stack: null,
+      p_context: ctx,
+    });
+    return;
+  } catch (_) { /* fall through */ }
+  // Fallback to direct insert (legacy).
   try {
     await supabase.from("error_logs").insert({
       source: "edge_function",
       component_name: component,
+      function_name: component,
       error_message: `${title}: ${details}`,
       branch_id: branchId,
+      context: ctx,
     });
   } catch (e) {
     console.error("Failed to log error:", e);
