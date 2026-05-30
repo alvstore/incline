@@ -1,4 +1,16 @@
-// dispatch-communication v1.15.0
+// dispatch-communication v1.16.0
+// v1.16.0: Unified WhatsApp delivery decision — single resolver replaces the
+//          confusing "Outside 24h customer-service window" failure path.
+//          Order of resolution for WhatsApp sends:
+//            1. inbound session OPEN (last 24h) → send freeform
+//            2. caller passed template_id        → send that approved template
+//            3. category → template fallback     → templates.trigger_event match
+//            4. global fallback template         → settings.whatsapp_fallback_template_id
+//            5. none available                   → SUPPRESS (terminal, no retry)
+//          Also: every WhatsApp/SMS/Email log now carries source_caller in
+//          delivery_metadata so System Health can show "Caller / Template"
+//          instead of an anonymous Meta API error. New optional DispatchInput
+//          field `source_caller` is propagated end-to-end.
 // v1.15.0: WhatsApp template pre-flight guard — before invoking send-whatsapp with a
 //          template_id we check live whatsapp_templates.status/category/is_stale.
 //          - Not APPROVED OR stale → suppressed (template_not_approved / template_stale)
