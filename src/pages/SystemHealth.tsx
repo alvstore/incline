@@ -460,10 +460,24 @@ export default function SystemHealth() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-8">
+                                <Checkbox
+                                  aria-label="Select all on page"
+                                  checked={errors.length > 0 && errors.every((e) => selectedIds.has(e.id))}
+                                  onCheckedChange={(v) => {
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (v) errors.forEach((e) => next.add(e.id));
+                                      else errors.forEach((e) => next.delete(e.id));
+                                      return next;
+                                    });
+                                  }}
+                                />
+                              </TableHead>
                               <TableHead>Last Seen</TableHead>
                               <TableHead>Severity</TableHead>
                               <TableHead>Source</TableHead>
-                              <TableHead>Function / Route</TableHead>
+                              <TableHead>Caller / Route</TableHead>
                               <TableHead>Message</TableHead>
                               <TableHead className="text-right">Count</TableHead>
                               <TableHead>Status</TableHead>
@@ -481,7 +495,20 @@ export default function SystemHealth() {
                                 'bg-slate-100 text-slate-700';
                               const lastTime = err.last_seen || err.created_at;
                               return (
-                                <TableRow key={err.id}>
+                                <TableRow key={err.id} data-state={selectedIds.has(err.id) ? 'selected' : undefined}>
+                                  <TableCell>
+                                    <Checkbox
+                                      aria-label={`Select error ${err.id}`}
+                                      checked={selectedIds.has(err.id)}
+                                      onCheckedChange={(v) => {
+                                        setSelectedIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (v) next.add(err.id); else next.delete(err.id);
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                  </TableCell>
                                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                     {format(new Date(lastTime), 'MMM d, HH:mm')}
                                   </TableCell>
@@ -494,7 +521,9 @@ export default function SystemHealth() {
                                       {src.label}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell className="font-mono text-xs max-w-[180px] truncate">{err.function_name || err.route || '—'}</TableCell>
+                                  <TableCell className="font-mono text-xs max-w-[200px] truncate" title={err.function_name || err.route || ''}>
+                                    {(err.context as any)?.source_caller || (err.context as any)?.template_name || err.function_name || err.route || '—'}
+                                  </TableCell>
                                   <TableCell className="max-w-[280px] truncate text-sm">{err.error_message}</TableCell>
                                   <TableCell className="text-right text-xs font-semibold">{err.occurrence_count ?? 1}</TableCell>
                                   <TableCell>
