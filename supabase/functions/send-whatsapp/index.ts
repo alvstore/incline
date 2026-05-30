@@ -315,7 +315,16 @@ serve(async (req) => {
 
       console.error("Meta API error:", JSON.stringify(metaData));
       await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", message_id);
-      await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status}`, metaErrorMsg);
+      await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status} (${metaCode ?? '?'})`, metaErrorMsg, {
+        template_name: template_name ?? null,
+        recipient_last4: String(phone_number || '').slice(-4),
+        meta_code: metaCode,
+        meta_subcode: metaSubcode,
+        fbtrace_id: metaErr.fbtrace_id ?? null,
+        message_type,
+        source_caller: body.source_caller ?? null,
+        source_log_id: body.source_log_id ?? null,
+      });
       return new Response(
         JSON.stringify({
           error: "Failed to send WhatsApp message",
@@ -371,13 +380,41 @@ serve(async (req) => {
   }
 });
 
-async function logError(supabase: any, branchId: string, component: string, title: string, details: string) {
+async function logError(
+  supabase: any,
+  branchId: string,
+  component: string,
+  title: string,
+  details: string,
+  ctx: Record<string, unknown> = {},
+) {
+  // Try the unified RPC first (fingerprint dedup + structured context).
+  try {
+    await supabase.rpc("log_error_event", {
+      p_severity: "error",
+      p_source: "edge_function",
+      p_message: `${title}: ${details}`,
+      p_function_name: component,
+      p_route: null,
+      p_table_name: null,
+      p_branch_id: branchId,
+      p_user_id: null,
+      p_request_id: null,
+      p_release_sha: null,
+      p_stack: null,
+      p_context: ctx,
+    });
+    return;
+  } catch (_) { /* fall through */ }
+  // Fallback to direct insert (legacy).
   try {
     await supabase.from("error_logs").insert({
       source: "edge_function",
       component_name: component,
+      function_name: component,
       error_message: `${title}: ${details}`,
       branch_id: branchId,
+      context: ctx,
     });
   } catch (e) {
     console.error("Failed to log error:", e);

@@ -1,4 +1,16 @@
-// dispatch-communication v1.15.0
+// dispatch-communication v1.16.0
+// v1.16.0: Unified WhatsApp delivery decision — single resolver replaces the
+//          confusing "Outside 24h customer-service window" failure path.
+//          Order of resolution for WhatsApp sends:
+//            1. inbound session OPEN (last 24h) → send freeform
+//            2. caller passed template_id        → send that approved template
+//            3. category → template fallback     → templates.trigger_event match
+//            4. global fallback template         → settings.whatsapp_fallback_template_id
+//            5. none available                   → SUPPRESS (terminal, no retry)
+//          Also: every WhatsApp/SMS/Email log now carries source_caller in
+//          delivery_metadata so System Health can show "Caller / Template"
+//          instead of an anonymous Meta API error. New optional DispatchInput
+//          field `source_caller` is propagated end-to-end.
 // v1.15.0: WhatsApp template pre-flight guard — before invoking send-whatsapp with a
 //          template_id we check live whatsapp_templates.status/category/is_stale.
 //          - Not APPROVED OR stale → suppressed (template_not_approved / template_stale)
@@ -92,6 +104,13 @@ interface DispatchInput {
     content_type?: string;       // e.g. application/pdf
     kind?: 'document' | 'image' | 'video';
   };
+  /**
+   * Optional identifier of the calling edge function / automation rule.
+   * Persisted into communication_logs.delivery_metadata.source_caller and
+   * forwarded to send-whatsapp for error_logs context so System Health can
+   * answer "where is this Meta error coming from?" without manual digging.
+   */
+  source_caller?: string;
 }
 
 interface DispatchResult {
@@ -484,6 +503,59 @@ Deno.serve(async (req) => {
           let templateName: string | null = null;
           let components: Array<Record<string, unknown>> | null | undefined;
           let templateHeaderType: string | null = null;
+
+          // ── Unified WhatsApp delivery resolver (v1.16.0) ──
+          // If the caller did not supply a template_id, try to auto-resolve one
+          // from the category. This stops the dispatcher from emitting opaque
+          // "Outside 24h customer-service window" failures whenever a caller
+          // forgets to pass template_id but an approved template exists.
+          if (!input.template_id) {
+            const CATEGORY_TO_TRIGGER_EVENTS: Partial<Record<Category, string[]>> = {
+              membership_reminder: ['membership_expiring', 'membership_expired', 'membership_renewal'],
+              payment_receipt: ['payment_received', 'invoice_generated', 'invoice_paid'],
+              payment_alert: ['payment_overdue', 'payment_failed', 'payment_reminder'],
+              class_notification: ['class_booked', 'class_reminder', 'class_cancelled'],
+              new_lead: ['lead_created', 'lead_welcome'],
+              task_reminder: ['task_assigned', 'task_reminder'],
+              retention_nudge: ['retention_nudge', 'inactive_member', 'comeback'],
+              review_request: ['review_request', 'feedback_request'],
+              low_stock: ['low_stock_alert'],
+              announcement: ['announcement', 'broadcast'],
+            };
+            const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
+            if (events.length > 0) {
+              const { data: fallbackTpl } = await supabase
+                .from('templates')
+                .select('id, branch_id')
+                .in('trigger_event', events)
+                .not('meta_template_name', 'is', null)
+                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                .order('branch_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              if (fallbackTpl?.id) {
+                input.template_id = fallbackTpl.id;
+                (input as any).__auto_resolved_template = true;
+              }
+            }
+            // Settings-level global fallback (last resort, admin-configured).
+            if (!input.template_id) {
+              const { data: fb } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('key', 'whatsapp_fallback_template_id')
+                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                .order('branch_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              const fbId = (fb?.value as any)?.template_id ?? fb?.value;
+              if (fbId && typeof fbId === 'string') {
+                input.template_id = fbId;
+                (input as any).__auto_resolved_template = 'settings_fallback';
+              }
+            }
+          }
+
           if (input.template_id) {
             const { data: tpl, error: tplError } = await supabase
               .from('templates')
@@ -598,9 +670,9 @@ Deno.serve(async (req) => {
 
           // ── 24h-window pre-flight guard ──
           // If we won't be sending an approved Meta template, the recipient
-          // must have messaged us within the last 24 hours (Meta customer
-          // service window). Otherwise Meta rejects with error 131047
-          // ("Re-engagement message"). Fail fast with a clear reason instead.
+          // must have messaged us within the last 24 hours. We already tried
+          // to auto-resolve a template above; reaching here means no template
+          // is available — SUPPRESS terminally so the retry queue doesn't loop.
           if (!templateName) {
             const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
             const recipientDigits = input.recipient.replace(/\D/g, '');
@@ -616,18 +688,24 @@ Deno.serve(async (req) => {
               await supabase
                 .from('communication_logs')
                 .update({
-                  status: 'failed',
-                  delivery_status: 'failed',
-                  error_message: 'Outside 24h customer-service window — an approved WhatsApp template is required. Submit one in Settings → Communication Templates.',
+                  status: 'suppressed',
+                  delivery_status: 'suppressed',
+                  error_message: 'no_template_for_closed_session — no approved WhatsApp template found for category ' + input.category + '. Configure one in Settings → Communication Templates.',
+                  delivery_metadata: {
+                    source_caller: input.source_caller ?? null,
+                    category: input.category,
+                    reason: 'no_template_for_closed_session',
+                  },
                 })
                 .eq('id', log!.id);
               return ok({
-                status: 'failed',
+                status: 'suppressed',
                 log_id: log!.id,
-                reason: 'no_active_session_no_template',
+                reason: 'no_template_for_closed_session',
               });
             }
           }
+
 
           // When we have an approved template with a media header, send as
           // template (HEADER component carries the link → native PDF/image/video).
@@ -711,6 +789,7 @@ Deno.serve(async (req) => {
               member_id: input.member_id,
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
+              source_caller: input.source_caller ?? null,
             },
           });
           captureMetaErrorFields(r);
@@ -834,6 +913,8 @@ Deno.serve(async (req) => {
     if (input.attachment) finalMeta.attachment = input.attachment;
     if (providerMessageId) finalMeta.provider_message_id = providerMessageId;
     if ((input as any).__category_drift) finalMeta.category_drift = true;
+    if ((input as any).__auto_resolved_template) finalMeta.auto_resolved_template = (input as any).__auto_resolved_template;
+    if (input.source_caller) finalMeta.source_caller = input.source_caller;
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
     await supabase

@@ -1,16 +1,18 @@
-// process-comm-retry-queue v2.1.0
-// v2.1.0: Treat dispatcher `suppressed` (channel toggled off in Settings →
-//          Integrations) as TERMINAL — abandon the queue row instead of
-//          consuming retry attempts and producing endless 4xx loops.
-// v2.0.0: ALWAYS retry through `dispatch-communication` (was calling
-//          send-whatsapp/send-sms/send-email directly with the wrong contract,
-//          which produced `Missing required fields: message_id, phone_number,
-//          branch_id` 400s on every WhatsApp retry). Reconstructs the dispatcher
-//          payload from the original communication_logs row, including any PDF
-//          attachment carried in delivery_metadata, so PDFs are resent natively.
-// Picks up failed messages from communication_retry_queue and re-dispatches them
-// via the canonical dispatch-communication edge function.
-// Backoff: 5min -> 30min -> 2h, then marks as exhausted.
+// process-comm-retry-queue v2.2.0
+// v2.2.0: Hardened terminal-reason table — any of these dispatcher reasons OR
+//          Meta error codes immediately abandons the queue row (status='exhausted')
+//          with no further retries:
+//            • no_active_session_no_template
+//            • no_template_for_closed_session
+//            • template_not_approved / template_stale_in_meta
+//            • do_not_contact / member_pref_opt_out / preference_block
+//            • invalid_recipient_phone / recipient_unreachable
+//            • Meta codes: 131026, 131047, 131051, 132000, 132001, 132012, 133010
+//          Also: hard cap at row.max_retries (default 3); enforce before reschedule.
+//          When a recipient hits 3 terminal failures in 24h, auto-mark
+//          do_not_contact via mark_do_not_contact RPC so future automation skips.
+// v2.1.0: Treat dispatcher `suppressed` as TERMINAL.
+// v2.0.0: Always retry through dispatch-communication.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -20,6 +22,42 @@ const corsHeaders = {
 };
 
 const BACKOFF_MINUTES = [5, 30, 120]; // 5min, 30min, 2h
+
+// Reason substrings that should abandon the retry row immediately.
+const TERMINAL_REASON_PATTERNS: RegExp[] = [
+  /no_active_session_no_template/i,
+  /no_template_for_closed_session/i,
+  /template_not_approved/i,
+  /template_stale/i,
+  /do_not_contact/i,
+  /member_pref_opt_out/i,
+  /preference_block/i,
+  /channel_disabled_in_settings/i,
+  /invalid_recipient/i,
+  /recipient_unreachable/i,
+];
+
+// Meta WhatsApp Cloud API error codes that are permanent for THIS message
+// (recipient/template/policy problems — retrying won't change the outcome).
+const TERMINAL_META_CODES = new Set([
+  131026, // recipient cannot receive
+  131047, // outside 24h window (we already prefer the template path; if we still
+          //                     hit this, the template wasn't usable — terminal)
+  131051, // unsupported message type for template
+  132000, // template param count mismatch
+  132001, // template not found in WABA
+  132012, // template param format invalid
+  133010, // phone not registered with WhatsApp
+]);
+
+function isTerminalReason(reason: string | null | undefined): boolean {
+  if (!reason) return false;
+  const s = String(reason);
+  if (TERMINAL_REASON_PATTERNS.some((re) => re.test(s))) return true;
+  const codeMatch = s.match(/\b(13\d{4})\b/);
+  if (codeMatch && TERMINAL_META_CODES.has(Number(codeMatch[1]))) return true;
+  return false;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -61,6 +99,27 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const row of rows) {
+      // ── Pre-flight: hard cap on retries (defends against rows that already
+      //              exceed max_retries due to legacy data).
+      if ((row.retry_count || 0) >= (row.max_retries || 3)) {
+        await supabase
+          .from("communication_retry_queue")
+          .update({ status: "exhausted", last_error: row.last_error || "max_retries_reached" })
+          .eq("id", row.id);
+        results.push({ id: row.id, status: "exhausted", reason: "max_retries_reached" });
+        continue;
+      }
+
+      // ── Pre-flight: if the previous error reason is terminal, abandon now.
+      if (isTerminalReason(row.last_error)) {
+        await supabase
+          .from("communication_retry_queue")
+          .update({ status: "exhausted" })
+          .eq("id", row.id);
+        results.push({ id: row.id, status: "exhausted", reason: "terminal_previous_error" });
+        continue;
+      }
+
       await supabase
         .from("communication_retry_queue")
         .update({ status: "processing" })
@@ -70,8 +129,8 @@ Deno.serve(async (req) => {
       // Resolve original log to recover category/attachment when present
       let category: string | null = null;
       let attachment: any = null;
-      let payloadVariables: Record<string, unknown> | undefined;
-      let useBranded = true;
+      const payloadVariables: Record<string, unknown> | undefined = undefined;
+      const useBranded = true;
 
       if (row.original_log_id) {
         const { data: log } = await supabase
@@ -91,7 +150,7 @@ Deno.serve(async (req) => {
       if (!attachment && meta.attachment) attachment = meta.attachment;
 
       if (!category) {
-        category = row.type === "email" ? "transactional" : "transactional";
+        category = "transactional";
       }
 
       const dispatchPayload: Record<string, unknown> = {
@@ -111,10 +170,12 @@ Deno.serve(async (req) => {
         dedupe_key: `retry:${row.id}:${row.retry_count + 1}`,
         force: true,
         attachment: attachment ?? undefined,
+        source_caller: "process-comm-retry-queue",
       };
 
       let success = false;
       let errorMsg = "";
+      let dispatchReason: string | undefined;
       let dispatchStatus: string | undefined;
       try {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/dispatch-communication`, {
@@ -129,22 +190,23 @@ Deno.serve(async (req) => {
         let parsed: any = null;
         try { parsed = JSON.parse(text); } catch { /* keep raw */ }
         dispatchStatus = parsed?.status;
+        dispatchReason = parsed?.reason;
         if (resp.ok && (dispatchStatus === "sent" || dispatchStatus === "queued" || dispatchStatus === "deduped")) {
           success = true;
         } else if (resp.ok && dispatchStatus === "suppressed") {
-          // Channel kill-switch (or member preference) — terminal, no retry.
+          // Channel kill-switch, preference block, or no-template-for-closed-session.
           await supabase
             .from("communication_retry_queue")
             .update({
               status: "exhausted",
               retry_count: (row.retry_count || 0) + 1,
-              last_error: parsed?.reason || "suppressed",
+              last_error: dispatchReason || "suppressed",
             })
             .eq("id", row.id);
-          results.push({ id: row.id, status: "suppressed", reason: parsed?.reason });
+          results.push({ id: row.id, status: "suppressed", reason: dispatchReason });
           continue;
         } else {
-          errorMsg = `dispatch ${resp.status}: ${parsed?.reason || parsed?.error || text.slice(0, 300)}`;
+          errorMsg = `dispatch ${resp.status}: ${dispatchReason || parsed?.error || text.slice(0, 300)}`;
         }
       } catch (e) {
         errorMsg = `dispatch error: ${e instanceof Error ? e.message : String(e)}`;
@@ -170,11 +232,39 @@ Deno.serve(async (req) => {
         }
         results.push({ id: row.id, status: "succeeded", attempts: newRetryCount });
       } else {
-        if (newRetryCount >= (row.max_retries || 3)) {
+        // Terminal reason in the fresh error → abandon now (no reschedule).
+        const terminal = isTerminalReason(errorMsg) || newRetryCount >= (row.max_retries || 3);
+        if (terminal) {
           await supabase
             .from("communication_retry_queue")
             .update({ status: "exhausted", retry_count: newRetryCount, last_error: errorMsg })
             .eq("id", row.id);
+
+          // Auto-flag recipient as do_not_contact when they accumulate 3+ terminal
+          // failures in 24h. This stops automation from filling the queue again.
+          if (row.recipient && (row.type === "whatsapp" || row.type === "sms")) {
+            try {
+              const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+              const { count } = await supabase
+                .from("communication_retry_queue")
+                .select("id", { count: "exact", head: true })
+                .eq("recipient", row.recipient)
+                .eq("status", "exhausted")
+                .gte("updated_at", since);
+              if ((count ?? 0) >= 3) {
+                await supabase.rpc("mark_do_not_contact" as any, {
+                  p_phone: row.recipient,
+                  p_reason: "auto_3_terminal_failures_24h",
+                } as any).then(
+                  () => {},
+                  (e: unknown) => console.warn("mark_do_not_contact failed:", e),
+                );
+              }
+            } catch (e) {
+              console.warn("do_not_contact auto-flag check failed:", e);
+            }
+          }
+
           results.push({ id: row.id, status: "exhausted", error: errorMsg });
         } else {
           const backoffMin = BACKOFF_MINUTES[Math.min(newRetryCount, BACKOFF_MINUTES.length - 1)];
