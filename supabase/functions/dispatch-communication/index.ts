@@ -789,6 +789,7 @@ Deno.serve(async (req) => {
               member_id: input.member_id,
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
+              source_caller: input.source_caller ?? null,
             },
           });
           captureMetaErrorFields(r);
