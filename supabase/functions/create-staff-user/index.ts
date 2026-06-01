@@ -90,7 +90,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    const supabaseAdmin = createClient(
+    // Build a bootstrap admin client to verify caller; we'll re-wrap it with
+    // actor headers AFTER we know who is calling so audit_logs reflects the user.
+    let supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
@@ -126,23 +128,25 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Re-build the admin client so all subsequent writes carry x-actor-* headers.
-    // This is what makes audit_logs.actor_name show the real user instead of "System".
+    // Re-bind supabaseAdmin so every subsequent write forwards x-actor-* headers.
+    // The audit trigger reads request.headers and records actor_name as the real user.
     {
       const { data: prof } = await supabaseAdmin
         .from('profiles').select('full_name').eq('id', callingUser.id).maybeSingle();
-      const actorHeaders: Record<string, string> = {
+      const actorName = (prof?.full_name as string | undefined) || callingUser.email || '';
+      const headers: Record<string, string> = {
         'x-actor-id': callingUser.id,
         'x-actor-source': 'create-staff-user',
       };
-      const actorName = (prof?.full_name as string | undefined) || callingUser.email;
-      if (actorName) actorHeaders['x-actor-name'] = actorName;
-      // Re-assign the const via Object.assign on the underlying rest client is messy;
-      // create a new client and shadow the variable inline below by reassignment.
-      // We use `let` re-binding by leveraging the fact that supabaseAdmin was declared with const;
-      // so wrap subsequent calls with a fresh client.
-      (globalThis as any).__staffActorHeaders = actorHeaders;
+      if (actorName) headers['x-actor-name'] = actorName;
+      supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { global: { headers } },
+      );
     }
+
+
 
 
 
