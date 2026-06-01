@@ -315,6 +315,23 @@ serve(async (req) => {
 
       console.error("Meta API error:", JSON.stringify(metaData));
       await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", message_id);
+
+      // Auto-heal: if Meta says the template name does not exist in this WABA,
+      // mark the local mirror as stale so the dispatcher suppresses subsequent
+      // sends until the user re-syncs from the Templates Hub.
+      if (Number(metaCode) === 132001 && template_name) {
+        try {
+          await supabase
+            .from("whatsapp_templates")
+            .update({
+              is_stale: true,
+              meta_last_error: `132001: ${metaErrorMsg}`,
+              meta_last_verified_at: new Date().toISOString(),
+            })
+            .eq("name", template_name);
+        } catch (_) { /* best-effort */ }
+      }
+
       await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status} (${metaCode ?? '?'})`, metaErrorMsg, {
         template_name: template_name ?? null,
         recipient_last4: String(phone_number || '').slice(-4),
@@ -325,6 +342,7 @@ serve(async (req) => {
         source_caller: body.source_caller ?? null,
         source_log_id: body.source_log_id ?? null,
       });
+
       return new Response(
         JSON.stringify({
           error: "Failed to send WhatsApp message",
