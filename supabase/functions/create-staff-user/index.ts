@@ -126,6 +126,19 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Stamp audit trail with the real calling user (otherwise rows show "System").
+    try {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles').select('full_name').eq('id', callingUser.id).maybeSingle();
+      await supabaseAdmin.rpc('audit_set_actor', {
+        p_actor_id: callingUser.id,
+        p_actor_name: (prof?.full_name as string | undefined) || callingUser.email || null,
+        p_source: 'create-staff-user',
+      });
+    } catch (_) { /* best-effort */ }
+
+
+
     // Body parsed once below; pre-parse here for role-hierarchy check
     const body = await req.json()
 
