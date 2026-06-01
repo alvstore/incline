@@ -1,91 +1,84 @@
-# System Health, WhatsApp Window & Retry Storm — Fix Plan
+# Plan: Audit-log actor names + WhatsApp 132001 self-healing
 
-## 1. System Health: bulk AI fix prompts + readable production errors
+## Part A — Audit shows "System" for every staff/contract/trainer creation
 
-**Problem today**
-- Each error must be opened individually to copy a fix prompt. Painful for 64 open rows.
-- Frontend rows show only minified stack (`index-CrIbZcPK.js:183:53850`) — useless after build.
-- Backend rows show `Meta API 404: (#132001) Template name does not exist…` with empty `function_name`, `route`, and `context` → impossible to tell *which* template / *which* member / *which* caller.
+### Root cause
+`audit_log_trigger_function` resolves actor via `auth.uid()` → `profiles.full_name` → `auth.users.email`. When writes happen through edge functions using the **service-role key** (e.g. `create-staff-user`, `create-member-user`, `restore-staff`, `offboard-staff`, `purchase_membership` RPC called from server), `auth.uid()` is `NULL`, so the trigger falls back and the row is stored with `actor_name = NULL` → UI shows "System".
 
-**Fix**
-- **Bulk + group prompts on Errors tab**
-  - Row checkboxes + a "Select all on page" header checkbox.
-  - New `Generate AI Fix Prompt (N)` button in the toolbar → single combined prompt covering all selected rows (grouped by fingerprint, with counts, last-seen, route, source, top stack frame).
-  - New "Group" view that automatically clusters by `fingerprint`; each group gets one "Generate group prompt" + "Mark all resolved" button.
-  - Keep existing per-row prompt as a fallback.
-- **Readable production errors (sourcemaps)**
-  - Enable hidden source maps in `vite.config.ts` (`build.sourcemap: 'hidden'`) so generated `.map` files ship to the bundle output but are not linked from JS. Cloudflare keeps serving the site as-is.
-  - In `errorReporter.ts`, before sending the stack to `log_error_event`, run it through `stacktrace-js` (`StackTrace.fromError`) when sourcemaps are reachable; persist the symbolicated frames in the new `context.symbolicated_stack` JSON.
-  - System Health UI shows symbolicated stack first, raw stack collapsed below.
-- **Enrich backend error context (fixes "where is 132001 coming from")**
-  - `send-whatsapp/index.ts`: when Meta returns an error, call `log_error_event` (or pass through to dispatcher) with `context = { template_name, recipient_hash, member_id, branch_id, caller_function, source_log_id, meta_code, meta_subcode, fbtrace_id }` and `function_name = 'send-whatsapp'`.
-  - `dispatch-communication`: propagate `source_caller` (e.g. `automation-brain:birthday_wish`, `send-broadcast`, `notify-booking-event`) into the same context.
-  - Add a "Caller / Template" column to the System Health table when `source = edge_function` so the table itself answers "where is it coming from".
+### Fix
 
-## 2. WhatsApp: unify 24h-window vs template decision (no more confusing 24h errors)
+1. **New shared helper** `supabase/functions/_shared/with-actor.ts`
+   - Decodes the incoming user JWT (when present), resolves `{ actor_id, actor_name }` from `profiles`.
+   - Exposes `async withActorContext(supabase, ctx, fn)` that runs `SELECT set_config('app.actor_id', $1, true); SELECT set_config('app.actor_name', $2, true);` then executes `fn()` inside the same connection (uses a single transaction via `rpc('exec_with_actor', …)` since pgrest service-role sessions are pooled — implemented as a SECURITY DEFINER RPC `audit_set_actor(p_id uuid, p_name text)` that pins both GUCs for the txn).
+   - Plus a tiny RPC wrapper so the per-statement insert path also works: `audit_run_with_actor(p_id uuid, p_name text, p_sql_tag text)`.
 
-**Problem today**
-- The dispatcher only inserts the template when the caller passes `template_id`. Direct sends (and several callers that forget `template_id`) hit the 24h pre-flight, fail with `Outside 24h customer-service window`, get queued for retry, and confuse users.
+2. **Migration**
+   - Extend `audit_log_trigger_function`:
+     - Read `app.actor_id` GUC; if set and `v_uid IS NULL` → use it as `user_id`.
+     - Read `app.actor_name` GUC (already present) — keep priority above profile lookup.
+     - When both still null, set `actor_name = 'System (' || COALESCE(current_setting('app.actor_source', true), 'automation') || ')'` so we can tell automation from genuine system jobs (cron, triggers).
+   - **Backfill**: update last 90 days where `actor_name IS NULL AND user_id IS NOT NULL` by joining `profiles`.
 
-**Fix — single decision tree in `dispatch-communication`**
-1. Look up the inbound 24h session (existing query, but extract into a helper `hasOpenSession(branch_id, recipient)`).
-2. If session is OPEN → send freeform (current behavior).
-3. If session is CLOSED:
-   - If caller passed `template_id` → send that template (existing path).
-   - Else → resolve a fallback template:
-     - Use `category` + `branch_id` to look up the canonical template via existing `templates`/`whatsapp_triggers` mapping.
-     - Fall back to a single, always-present "operational fallback" template (configured in Settings → Communication Templates) when no category match exists.
-   - Only after both lookups fail, suppress with reason `no_template_for_closed_session` (no retry — terminal).
-4. Never fire 131047 anymore: if a chosen template's `whatsapp_templates.status != APPROVED`, suppress immediately instead of attempting the send.
-- Add a single helper `resolveWhatsAppDelivery({branch_id, recipient, category, template_id?})` returning `{ mode: 'freeform' | 'template' | 'suppress', templateName?, reason? }` and call it from one place. Removes the dual-path 24h logic that currently lives both in the dispatcher and (partially) in callers.
+3. **Edge functions to retrofit** (forward caller identity):
+   - `create-staff-user`, `create-member-user`, `create-owner`, `restore-staff`, `offboard-staff`, `register-member`, `purchase_membership` callers, contract creation paths.
+   - Each function: read `Authorization` header → `getUser()` → resolve full_name → call `audit_set_actor(uid, name)` once at start of request.
 
-## 3. Stop the runaway retry loop ("Ritesh" case → DB bloat)
+4. **AuditLogs UI** (`src/pages/AuditLogs.tsx`)
+   - Join logs to `profiles` via `user_id` and prefer `profile.full_name` over `actor_name` when the latter is null/"System". Render "System" with an info icon + tooltip showing the source function (parsed from `action_description` / `record_id`) only when there is genuinely no user.
+   - Avatar initials now come from the resolved name.
 
-**Problem today**
-- `process-comm-retry-queue` reschedules indefinitely whenever `dispatch-communication` returns `failed` (only `suppressed` is terminal). A recipient that permanently fails (invalid number, opted-out, closed session w/o template) keeps cycling 5min → 30min → 2h → repeat, and each attempt writes new `communication_logs` + `error_logs` + `whatsapp_messages` rows.
-- `max_retries` defaults to 3 but new rows are being created by other code paths instead of incrementing the existing one.
+---
 
-**Fix**
-- In `process-comm-retry-queue` (bump to v2.2.0):
-  - Treat these dispatcher reasons as **terminal** (mark `exhausted`, no reschedule): `no_active_session_no_template`, `no_template_for_closed_session`, `template_not_approved`, `template_stale_in_meta`, `do_not_contact`, `member_pref_opt_out`, `invalid_recipient`, `recipient_unreachable`.
-  - Treat Meta error codes `131026`, `131047`, `131051`, `132001`, `132012`, `133010` (recipient/template permanent) as terminal even when wrapped in `failed`.
-  - Hard cap: `retry_count >= 3` → `exhausted`, regardless of reason (already in code, but enforce before re-insert paths).
-- Add a Postgres trigger `tg_comm_retry_queue_dedupe` on `communication_retry_queue` insert that, when an active (`pending|processing`) row already exists for `(branch_id, recipient, type, original_log_id)`, updates the existing row's `next_retry_at`/`metadata` instead of inserting a new one. Prevents the "many rows per member" amplification.
-- Add `do_not_contact` auto-flag: when a recipient hits 3 terminal failures in 24h, call existing `mark_do_not_contact` RPC so future automation skips them entirely.
-- One-time cleanup migration:
-  - `UPDATE communication_retry_queue SET status='exhausted' WHERE status='pending' AND retry_count >= 3;`
-  - `UPDATE communication_retry_queue SET status='exhausted' WHERE status='pending' AND last_error ~* '131047|132001|132012|131051|do_not_contact';`
+## Part B — WhatsApp 132001 (template missing in WABA) auto-healing
 
-## Technical details
+### Root cause
+A template exists in our DB (`whatsapp_templates`) but no longer exists in the connected Meta WABA (deleted from Business Manager, renamed, or wrong language code). Dispatcher sends → Meta returns 132001 → user sees a raw error with no context and no recovery path.
 
-**Files**
-- `src/pages/SystemHealth.tsx` — multi-select, group view, bulk prompt builder, symbolicated stack panel, "Caller / Template" column.
-- `src/lib/errorReporter.ts` — symbolicate stack with `stacktrace-js`, persist into `context.symbolicated_stack`.
-- `vite.config.ts` — `build.sourcemap: 'hidden'`.
-- `supabase/functions/_shared/whatsappDelivery.ts` (new) — `resolveWhatsAppDelivery` helper.
-- `supabase/functions/dispatch-communication/index.ts` — use the helper; emit richer `delivery_metadata` + `source_caller`; suppress (not fail) when no template available.
-- `supabase/functions/send-whatsapp/index.ts` — call `log_error_event` with enriched context on Meta errors.
-- `supabase/functions/process-comm-retry-queue/index.ts` → v2.2.0 terminal-reason table.
-- New migration: dedupe trigger on `communication_retry_queue` + cleanup of stuck rows.
+### Fix
 
-**Group prompt format (single textarea, copy-once)**
-```
-You are auditing N production errors on Incline Fitness.
-Group A (fingerprint=xxx, 23 occurrences, source=edge_function):
-  message: Meta API 404 (#132001) Template name does not exist
-  function: send-whatsapp
-  callers: automation-brain:birthday_wish, send-broadcast
-  template_name: birthday_wish_v3
-  ...
-Group B (fingerprint=yyy, 5 occurrences, source=frontend, route=/system-health):
-  message: TypeError: Failed to fetch
-  symbolicated stack:
-    at fetchErrorLogs (src/pages/SystemHealth.tsx:142)
-    ...
-For each group, return: root cause, file(s) to edit, exact fix.
-```
+1. **Schema** — add columns to `whatsapp_templates`:
+   - `meta_present boolean default true`
+   - `last_meta_verified_at timestamptz`
+   - `meta_last_error text`
+   - Index on `(meta_present, status)`.
 
-## Out of scope
-- Rewriting the Templates Hub itself.
-- Migrating off Meta Cloud API.
-- Any UI redesign beyond the bulk/group controls and symbolicated stack panel.
+2. **New edge function `sync-whatsapp-templates`**
+   - Pulls `GET /{waba_id}/message_templates?fields=name,status,language,category,components&limit=1000` (paginated).
+   - Upserts into `whatsapp_templates` keyed on `(name, language)`; sets `status`, `category`, `meta_present=true`, `last_meta_verified_at=now()`.
+   - Any local row not seen in Meta response → `meta_present=false`, `meta_last_error='not_in_waba'`.
+   - Cron: every 6h via `automation-brain-tick` (add as a rule, not a new cron).
+   - Manual trigger from Templates Hub button **"Re-sync from Meta"**.
+
+3. **Dispatcher (`dispatch-communication`) update**
+   - Template resolution query now requires `meta_present = true AND status = 'APPROVED'`.
+   - If selected `template_id` from caller is `meta_present=false`, attempt fallback resolution; if none, suppress with reason `template_missing_in_waba` and return a friendly error pointing to the Templates Hub.
+
+4. **`send-whatsapp` pre-flight (cheap, no extra API call in hot path)**
+   - Before POSTing to Meta, look up the template's `meta_present` flag from DB. If false → return suppression error without burning a Meta call. (Already logs enriched context.)
+   - On 132001 response: immediately `UPDATE whatsapp_templates SET meta_present=false, meta_last_error=$1, last_meta_verified_at=now() WHERE id=$2` and enqueue a one-shot `sync-whatsapp-templates` invocation so the next send has fresh data.
+
+5. **Retry queue (`process-comm-retry-queue`)**
+   - 132001 is already terminal. Add: 132001 **does NOT count** toward the 3-strike `do_not_contact` rule (it's a config bug, not a recipient issue).
+
+6. **Templates Hub UI** (`Settings → Communication Templates → WhatsApp`)
+   - Top banner if `count(meta_present=false) > 0`: "N templates not found in Meta — [Re-sync from Meta]".
+   - Per-row badge: red "Missing in Meta" with tooltip showing `meta_last_error` and `last_meta_verified_at`.
+   - "Re-sync from Meta" primary button on the CRM Templates and Meta Approved sub-tabs invokes `sync-whatsapp-templates` and refreshes the list.
+
+7. **System Health link-through**
+   - Errors with `context.meta_code = 132001` get a "Fix template" action button that deep-links to `Settings → Communication Templates → WhatsApp?template=<name>`.
+
+---
+
+## Technical notes
+
+- `audit_set_actor` is `SECURITY DEFINER` so service-role can pin the GUC; uses `set_config(key, val, true)` (transaction-local) — safe across PgBouncer.
+- Meta sync uses Graph API `v21.0` consistent with existing send code.
+- All new edge functions follow standards: try/catch wrapper, `captureEdgeError`, version comment, strict CORS.
+- No client `.eq()` on `meta_present` needed — dispatcher is server-side.
+
+## Files
+
+- **New**: `supabase/functions/_shared/with-actor.ts`, `supabase/functions/sync-whatsapp-templates/index.ts`, migration `2026xxxx_audit_actor_and_wa_meta_sync.sql`
+- **Edit**: `audit_log_trigger_function` (migration), `create-staff-user`, `create-member-user`, `create-owner`, `restore-staff`, `offboard-staff`, `register-member`, `dispatch-communication`, `send-whatsapp`, `process-comm-retry-queue`, `src/pages/AuditLogs.tsx`, Templates Hub WhatsApp tab components
+- **Schema**: `whatsapp_templates` (+3 cols), `audit_logs` backfill (90d)
