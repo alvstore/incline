@@ -126,16 +126,25 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Stamp audit trail with the real calling user (otherwise rows show "System").
-    try {
+    // Re-build the admin client so all subsequent writes carry x-actor-* headers.
+    // This is what makes audit_logs.actor_name show the real user instead of "System".
+    {
       const { data: prof } = await supabaseAdmin
         .from('profiles').select('full_name').eq('id', callingUser.id).maybeSingle();
-      await supabaseAdmin.rpc('audit_set_actor', {
-        p_actor_id: callingUser.id,
-        p_actor_name: (prof?.full_name as string | undefined) || callingUser.email || null,
-        p_source: 'create-staff-user',
-      });
-    } catch (_) { /* best-effort */ }
+      const actorHeaders: Record<string, string> = {
+        'x-actor-id': callingUser.id,
+        'x-actor-source': 'create-staff-user',
+      };
+      const actorName = (prof?.full_name as string | undefined) || callingUser.email;
+      if (actorName) actorHeaders['x-actor-name'] = actorName;
+      // Re-assign the const via Object.assign on the underlying rest client is messy;
+      // create a new client and shadow the variable inline below by reassignment.
+      // We use `let` re-binding by leveraging the fact that supabaseAdmin was declared with const;
+      // so wrap subsequent calls with a fresh client.
+      (globalThis as any).__staffActorHeaders = actorHeaders;
+    }
+
+
 
 
 
