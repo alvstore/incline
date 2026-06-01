@@ -90,7 +90,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    const supabaseAdmin = createClient(
+    // Build a bootstrap admin client to verify caller; we'll re-wrap it with
+    // actor headers AFTER we know who is calling so audit_logs reflects the user.
+    let supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
@@ -125,6 +127,30 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Re-bind supabaseAdmin so every subsequent write forwards x-actor-* headers.
+    // The audit trigger reads request.headers and records actor_name as the real user.
+    {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles').select('full_name').eq('id', callingUser.id).maybeSingle();
+      const actorName = (prof?.full_name as string | undefined) || callingUser.email || '';
+      const headers: Record<string, string> = {
+        'x-actor-id': callingUser.id,
+        'x-actor-source': 'create-staff-user',
+      };
+      if (actorName) headers['x-actor-name'] = actorName;
+      supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { global: { headers } },
+      );
+    }
+
+
+
+
+
+
 
     // Body parsed once below; pre-parse here for role-hierarchy check
     const body = await req.json()

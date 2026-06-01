@@ -12429,6 +12429,8 @@ export type Database = {
           id: string
           is_stale: boolean
           language: string | null
+          meta_last_error: string | null
+          meta_last_verified_at: string | null
           meta_template_id: string | null
           name: string
           quality_score: string | null
@@ -12445,6 +12447,8 @@ export type Database = {
           id?: string
           is_stale?: boolean
           language?: string | null
+          meta_last_error?: string | null
+          meta_last_verified_at?: string | null
           meta_template_id?: string | null
           name: string
           quality_score?: string | null
@@ -12461,6 +12465,8 @@ export type Database = {
           id?: string
           is_stale?: boolean
           language?: string | null
+          meta_last_error?: string | null
+          meta_last_verified_at?: string | null
           meta_template_id?: string | null
           name?: string
           quality_score?: string | null
@@ -13029,6 +13035,10 @@ export type Database = {
           p_target_user_id: string
         }
         Returns: Json
+      }
+      audit_set_actor: {
+        Args: { p_actor_id: string; p_actor_name?: string; p_source?: string }
+        Returns: undefined
       }
       auto_close_stale_attendance: { Args: never; Returns: number }
       auto_expire_memberships: { Args: never; Returns: undefined }
