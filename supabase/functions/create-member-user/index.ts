@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const supabaseAdmin = createClient(
+    let supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
@@ -52,6 +52,20 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Tag admin client with actor identity so audit trigger records real user
+    const { data: actorProf } = await supabaseAdmin
+      .from('profiles').select('full_name').eq('id', callingUser.id).maybeSingle()
+    const actorName = (actorProf?.full_name as string | undefined) || callingUser.email || null
+    supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { global: { headers: {
+        'x-actor-id': callingUser.id,
+        ...(actorName ? { 'x-actor-name': actorName } : {}),
+        'x-actor-source': 'create-member-user',
+      } } }
+    )
 
     const body = await req.json();
     const { 
