@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  let admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
@@ -30,6 +30,19 @@ Deno.serve(async (req) => {
     if (!actorRoles.includes("owner") && !actorRoles.includes("admin")) {
       return json({ error: "Forbidden" }, 403);
     }
+
+    // Tag admin client with actor identity so audit trigger records real user
+    const { data: actorProf } = await admin.from("profiles").select("full_name").eq("id", actorId).maybeSingle();
+    const actorName = (actorProf?.full_name as string | undefined) || userRes.user.email || null;
+    admin = createClient(SUPABASE_URL, SERVICE_KEY, {
+      global: {
+        headers: {
+          "x-actor-id": actorId,
+          ...(actorName ? { "x-actor-name": actorName } : {}),
+          "x-actor-source": "restore-staff",
+        },
+      },
+    });
 
     const body = await req.json().catch(() => ({}));
     const { person_id, user_id, roles, unban_auth } = body as {

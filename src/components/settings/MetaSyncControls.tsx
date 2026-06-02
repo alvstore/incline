@@ -5,7 +5,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { RefreshCw, CheckCircle, Settings2 } from 'lucide-react';
+import { RefreshCw, CheckCircle, Settings2, AlertTriangle } from 'lucide-react';
 
 /**
  * Compact inline replacement for the standalone "Meta Approved" tab.
@@ -37,6 +37,24 @@ export function MetaSyncControls() {
       if (error) throw error;
       return data || [];
     },
+  });
+
+  // Templates flagged as missing in Meta (auto-marked by send-whatsapp on error 132001)
+  const { data: staleTemplates = [] } = useQuery({
+    queryKey: ['whatsapp-templates-stale', selectedBranch],
+    queryFn: async () => {
+      let q = supabase
+        .from('whatsapp_templates')
+        .select('id, name, meta_last_error')
+        .eq('is_stale', true);
+      if (selectedBranch !== 'all') {
+        q = q.or(`branch_id.eq.${selectedBranch},branch_id.is.null`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 60_000,
   });
 
   const hasConfig = integrations.length > 0;
@@ -94,6 +112,42 @@ export function MetaSyncControls() {
 
   return (
     <div className="flex items-center gap-1.5 ml-auto">
+      {staleTemplates.length > 0 && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 rounded-full text-xs border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              aria-label={`${staleTemplates.length} template(s) missing in Meta`}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {staleTemplates.length} missing in Meta
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 text-xs space-y-2">
+            <div className="font-semibold text-sm flex items-center gap-1.5 text-amber-700">
+              <AlertTriangle className="h-4 w-4" /> Templates missing in Meta
+            </div>
+            <p className="text-muted-foreground">
+              These templates were rejected by Meta (error 132001). Re-sync from Meta to refresh, or
+              recreate them in Meta Business Manager.
+            </p>
+            <ul className="max-h-48 overflow-y-auto space-y-1 border-t pt-2">
+              {staleTemplates.map((t) => (
+                <li key={t.id} className="rounded-md bg-amber-50 p-1.5">
+                  <div className="font-medium text-amber-900">{t.name}</div>
+                  {t.meta_last_error && (
+                    <div className="text-[10px] text-amber-700 truncate" title={t.meta_last_error}>
+                      {t.meta_last_error}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      )}
       {lastSynced && (
         <span className="text-[11px] text-muted-foreground hidden md:inline">
           Last synced {lastSynced}
