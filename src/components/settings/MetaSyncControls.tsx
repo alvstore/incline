@@ -39,6 +39,24 @@ export function MetaSyncControls() {
     },
   });
 
+  // Templates flagged as missing in Meta (auto-marked by send-whatsapp on error 132001)
+  const { data: staleTemplates = [] } = useQuery({
+    queryKey: ['whatsapp-templates-stale', selectedBranch],
+    queryFn: async () => {
+      let q = supabase
+        .from('whatsapp_templates')
+        .select('id, name, meta_last_error')
+        .eq('is_stale', true);
+      if (selectedBranch !== 'all') {
+        q = q.or(`branch_id.eq.${selectedBranch},branch_id.is.null`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 60_000,
+  });
+
   const hasConfig = integrations.length > 0;
   const branchForCall = effectiveBranchId;
   const disabled = !hasConfig || !branchForCall;
