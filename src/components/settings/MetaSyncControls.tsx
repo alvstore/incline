@@ -5,7 +5,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { RefreshCw, CheckCircle, Settings2 } from 'lucide-react';
+import { RefreshCw, CheckCircle, Settings2, AlertTriangle } from 'lucide-react';
 
 /**
  * Compact inline replacement for the standalone "Meta Approved" tab.
