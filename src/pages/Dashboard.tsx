@@ -412,10 +412,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Row — lazy loaded */}
-        <div ref={bottomRef} className="grid gap-6 md:grid-cols-3">
+        <div ref={bottomRef} className="grid gap-6 md:grid-cols-4">
           {bottomInView ? (
             <>
               <MembershipDistribution data={membershipData} />
+              <Suspense fallback={<ChartSkeleton />}>
+                <LazyBirthdayWidget branchId={branchFilter} />
+              </Suspense>
               <Card className="shadow-lg rounded-2xl border-0 md:col-span-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -433,10 +436,12 @@ export default function DashboardPage() {
           ) : (
             <>
               <ChartSkeleton />
+              <ChartSkeleton />
               <Skeleton className="h-64 rounded-2xl md:col-span-2" />
             </>
           )}
         </div>
+
 
         {/* AI Insights + Member Voice — lazy loaded */}
         <div ref={insightsRef} className="grid gap-6 md:grid-cols-2">
