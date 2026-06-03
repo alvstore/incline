@@ -28,8 +28,10 @@ const LazyLiveAccessLog = lazy(() => import('@/components/devices/LiveAccessLog'
 const LazyAIInsightsWidget = lazy(() => import('@/components/dashboard/AIInsightsWidget').then(m => ({ default: m.AIInsightsWidget })));
 const LazyMemberVoiceWidget = lazy(() => import('@/components/dashboard/MemberVoiceWidget').then(m => ({ default: m.MemberVoiceWidget })));
 const LazyMembersCountingChart = lazy(() => import('@/components/dashboard/MembersCountingChart'));
+const LazyBirthdayWidget = lazy(() => import('@/components/dashboard/BirthdayWidget'));
 import { MemberGrowthCards } from '@/components/dashboard/MemberGrowthCards';
 import { JoinedSummaryStrip } from '@/components/dashboard/JoinedSummaryStrip';
+import { DASHBOARD_QUERY_OPTIONS } from '@/hooks/useDashboardData';
 
 function ChartSkeleton() {
   return <Skeleton className="h-64 rounded-2xl" />;
