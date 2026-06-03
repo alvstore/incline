@@ -42,10 +42,13 @@ export function useUpcomingBirthdays(
         p_branch_id: branchId ?? null,
       });
       if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | { today?: unknown; upcoming?: unknown }
+        | null
+        | undefined;
       return {
-        today: (row?.today ?? []) as BirthdayMember[],
-        upcoming: (row?.upcoming ?? []) as BirthdayMember[],
+        today: (Array.isArray(row?.today) ? row!.today : []) as BirthdayMember[],
+        upcoming: (Array.isArray(row?.upcoming) ? row!.upcoming : []) as BirthdayMember[],
       };
     },
   });
