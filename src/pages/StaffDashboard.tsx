@@ -20,6 +20,8 @@ import { communicationService } from '@/services/communicationService';
 import { SmartAssistDrawer } from '@/components/retention/SmartAssistDrawer';
 import { ConvertMemberDrawer } from '@/components/leads/ConvertMemberDrawer';
 import { MyShiftWeekCard } from '@/components/staff/MyShiftWeekCard';
+import BirthdayWidget from '@/components/dashboard/BirthdayWidget';
+import { DASHBOARD_QUERY_OPTIONS } from '@/hooks/useDashboardData';
 
 export default function StaffDashboard() {
   const { profile, user } = useAuth();
