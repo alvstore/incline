@@ -1,84 +1,57 @@
-# Plan: Audit-log actor names + WhatsApp 132001 self-healing
+## Audit findings
 
-## Part A — Audit shows "System" for every staff/contract/trainer creation
+- **Dashboard files**: `src/pages/Dashboard.tsx` (used for Admin + Manager — single file gated by `AppLayout`/roles), `src/pages/StaffDashboard.tsx`. No separate `admin/` or `staff/` subfolders; no `ManagerDashboard.tsx`.
+- **DOB column**: Not on `members`. It lives on `public.profiles.date_of_birth` (with `full_name`, `avatar_url`). Members link via `members.user_id → profiles.id`.
+- **Existing dashboard hooks**: All data is fetched inline in `Dashboard.tsx` / `StaffDashboard.tsx` with `useQuery`, but with default TanStack settings (no `refetchInterval`, no shared `staleTime`). There is no `useDashboardData.ts` hook yet.
+- **Branch scoping**: Admin/Manager uses `useBranchContext().branchFilter`; Staff derives `branchId` from `employees.branch_id`. Birthday RPC must accept an optional branch filter.
+- **Design tokens**: Project enforces semantic Tailwind tokens + Vuexy rounded-2xl/shadow-lg cards. "Glassmorphic" widget will be built using existing tokens (`bg-card/60 backdrop-blur-xl ring-1 ring-border/50`) — no raw hex colors.
 
-### Root cause
-`audit_log_trigger_function` resolves actor via `auth.uid()` → `profiles.full_name` → `auth.users.email`. When writes happen through edge functions using the **service-role key** (e.g. `create-staff-user`, `create-member-user`, `restore-staff`, `offboard-staff`, `purchase_membership` RPC called from server), `auth.uid()` is `NULL`, so the trigger falls back and the row is stored with `actor_name = NULL` → UI shows "System".
+## Epic 1 — Birthday SQL Engine (migration)
 
-### Fix
+Create RPC `public.get_upcoming_birthdays(p_days_ahead int default 7, p_branch_id uuid default null)`:
 
-1. **New shared helper** `supabase/functions/_shared/with-actor.ts`
-   - Decodes the incoming user JWT (when present), resolves `{ actor_id, actor_name }` from `profiles`.
-   - Exposes `async withActorContext(supabase, ctx, fn)` that runs `SELECT set_config('app.actor_id', $1, true); SELECT set_config('app.actor_name', $2, true);` then executes `fn()` inside the same connection (uses a single transaction via `rpc('exec_with_actor', …)` since pgrest service-role sessions are pooled — implemented as a SECURITY DEFINER RPC `audit_set_actor(p_id uuid, p_name text)` that pins both GUCs for the txn).
-   - Plus a tiny RPC wrapper so the per-statement insert path also works: `audit_run_with_actor(p_id uuid, p_name text, p_sql_tag text)`.
+- Returns `today` and `upcoming` as two JSON arrays in a single row (one round-trip).
+- Year-agnostic match via `to_char(date_of_birth, 'MMDD')` compared against today and the next N days (handles year wrap Dec→Jan).
+- Each row: `member_id`, `user_id`, `full_name`, `avatar_url`, `member_code`, `dob` (date), `turning_age` (int), `birthday_date` (next occurrence), `days_until` (0 for today).
+- Joins `members m → profiles p on p.id = m.user_id`; filters `m.status='active'`, `p.date_of_birth IS NOT NULL`, optional `m.branch_id = p_branch_id`.
+- `SECURITY DEFINER`, `SET search_path = public`, `STABLE`. `GRANT EXECUTE … TO authenticated`.
+- Index: `CREATE INDEX IF NOT EXISTS idx_profiles_dob_mmdd ON public.profiles ((to_char(date_of_birth,'MMDD'))) WHERE date_of_birth IS NOT NULL;` for fast lookup.
 
-2. **Migration**
-   - Extend `audit_log_trigger_function`:
-     - Read `app.actor_id` GUC; if set and `v_uid IS NULL` → use it as `user_id`.
-     - Read `app.actor_name` GUC (already present) — keep priority above profile lookup.
-     - When both still null, set `actor_name = 'System (' || COALESCE(current_setting('app.actor_source', true), 'automation') || ')'` so we can tell automation from genuine system jobs (cron, triggers).
-   - **Backfill**: update last 90 days where `actor_name IS NULL AND user_id IS NOT NULL` by joining `profiles`.
+## Epic 2 — TanStack Query engine upgrade
 
-3. **Edge functions to retrofit** (forward caller identity):
-   - `create-staff-user`, `create-member-user`, `create-owner`, `restore-staff`, `offboard-staff`, `register-member`, `purchase_membership` callers, contract creation paths.
-   - Each function: read `Authorization` header → `getUser()` → resolve full_name → call `audit_set_actor(uid, name)` once at start of request.
+New file `src/hooks/useDashboardData.ts`:
 
-4. **AuditLogs UI** (`src/pages/AuditLogs.tsx`)
-   - Join logs to `profiles` via `user_id` and prefer `profile.full_name` over `actor_name` when the latter is null/"System". Render "System" with an info icon + tooltip showing the source function (parsed from `action_description` / `record_id`) only when there is genuinely no user.
-   - Avatar initials now come from the resolved name.
+- Export `DASHBOARD_QUERY_OPTIONS = { refetchOnWindowFocus: true, refetchInterval: 300_000, staleTime: 60_000, refetchIntervalInBackground: false }` — single source of truth.
+- Export `useUpcomingBirthdays(branchId?: string | null, daysAhead = 7)` → calls `supabase.rpc('get_upcoming_birthdays', …)`, parses `today` + `upcoming` arrays, returns typed `{ today: BirthdayMember[]; upcoming: BirthdayMember[] }`.
+- Export a small helper `useDashboardQuery(key, fn)` that spreads `DASHBOARD_QUERY_OPTIONS` so existing widgets adopt the same cadence without rewriting every block.
+- In `Dashboard.tsx` and `StaffDashboard.tsx`: spread `...DASHBOARD_QUERY_OPTIONS` onto the existing `useQuery` calls (stats, revenue, attendance, hourly, receivables, expiring, classes lists). No behavioural rewrites — purely additive options.
 
----
+## Epic 3 — Birthday Widget UI
 
-## Part B — WhatsApp 132001 (template missing in WABA) auto-healing
+`src/components/dashboard/BirthdayWidget.tsx`:
 
-### Root cause
-A template exists in our DB (`whatsapp_templates`) but no longer exists in the connected Meta WABA (deleted from Business Manager, renamed, or wrong language code). Dispatcher sends → Meta returns 132001 → user sees a raw error with no context and no recovery path.
+- Glassmorphic card using design tokens: `rounded-2xl bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-xl ring-1 ring-border/50 shadow-lg shadow-primary/5`.
+- Header: `Cake` icon in primary-tinted badge, title "Birthdays", subtitle "Today & next 7 days", live dot when `isFetching`.
+- **Today section** (only when `today.length > 0`): highlighted block (`bg-primary/10 ring-1 ring-primary/30`), each row shows avatar (with fallback initials), name, "Turning {age}", and a `Send Greeting` button (placeholder `onClick` → `toast.success("Greeting queued")`; wiring to `dispatch-communication` is out of scope for this widget).
+- **Upcoming section**: compact list, avatar + name + `{Month Day} · in {n}d` + turning age chip. Caps at 8 rows with a "View all" link to `/members?filter=birthdays-week` (route may not exist; link is non-blocking).
+- Empty state: small `Cake` illustration + "No birthdays in the next 7 days".
+- Loading state: 1 today-row skeleton + 4 upcoming-row skeletons.
+- Accessibility: `aria-label` on Send Greeting buttons including member name, 4.5:1 contrast via semantic tokens, focusable rows.
 
-### Fix
+## Epic 4 — Dashboard injection
 
-1. **Schema** — add columns to `whatsapp_templates`:
-   - `meta_present boolean default true`
-   - `last_meta_verified_at timestamptz`
-   - `meta_last_error text`
-   - Index on `(meta_present, status)`.
+- `Dashboard.tsx`: insert `<BirthdayWidget branchId={branchFilter} />` into the existing "Bottom Row" grid (replacing/sharing space with the 2-col Live Access section → change grid to `md:grid-cols-3` with widget taking 1 col, Live Access keeping 2 cols, MembershipDistribution moves up one row). Lazy-load to stay consistent with the existing `LazyLiveAccessLog` pattern.
+- `StaffDashboard.tsx`: insert `<BirthdayWidget branchId={branchId} />` near the top of the right column so front-desk sees it without scrolling.
+- Apply `...DASHBOARD_QUERY_OPTIONS` to all existing `useQuery` calls in both files (Epic 2 follow-through).
+- Verify no new `any` types; widget typed end-to-end.
 
-2. **New edge function `sync-whatsapp-templates`**
-   - Pulls `GET /{waba_id}/message_templates?fields=name,status,language,category,components&limit=1000` (paginated).
-   - Upserts into `whatsapp_templates` keyed on `(name, language)`; sets `status`, `category`, `meta_present=true`, `last_meta_verified_at=now()`.
-   - Any local row not seen in Meta response → `meta_present=false`, `meta_last_error='not_in_waba'`.
-   - Cron: every 6h via `automation-brain-tick` (add as a rule, not a new cron).
-   - Manual trigger from Templates Hub button **"Re-sync from Meta"**.
+## Out of scope (explicit)
 
-3. **Dispatcher (`dispatch-communication`) update**
-   - Template resolution query now requires `meta_present = true AND status = 'APPROVED'`.
-   - If selected `template_id` from caller is `meta_present=false`, attempt fallback resolution; if none, suppress with reason `template_missing_in_waba` and return a friendly error pointing to the Templates Hub.
+- Actually sending the birthday greeting (button is a placeholder; can be wired to `dispatchCommunication` in a follow-up).
+- New `/members?filter=birthdays-week` route.
+- TrainerDashboard / MemberDashboard injection (not requested).
 
-4. **`send-whatsapp` pre-flight (cheap, no extra API call in hot path)**
-   - Before POSTing to Meta, look up the template's `meta_present` flag from DB. If false → return suppression error without burning a Meta call. (Already logs enriched context.)
-   - On 132001 response: immediately `UPDATE whatsapp_templates SET meta_present=false, meta_last_error=$1, last_meta_verified_at=now() WHERE id=$2` and enqueue a one-shot `sync-whatsapp-templates` invocation so the next send has fresh data.
+## Files touched
 
-5. **Retry queue (`process-comm-retry-queue`)**
-   - 132001 is already terminal. Add: 132001 **does NOT count** toward the 3-strike `do_not_contact` rule (it's a config bug, not a recipient issue).
-
-6. **Templates Hub UI** (`Settings → Communication Templates → WhatsApp`)
-   - Top banner if `count(meta_present=false) > 0`: "N templates not found in Meta — [Re-sync from Meta]".
-   - Per-row badge: red "Missing in Meta" with tooltip showing `meta_last_error` and `last_meta_verified_at`.
-   - "Re-sync from Meta" primary button on the CRM Templates and Meta Approved sub-tabs invokes `sync-whatsapp-templates` and refreshes the list.
-
-7. **System Health link-through**
-   - Errors with `context.meta_code = 132001` get a "Fix template" action button that deep-links to `Settings → Communication Templates → WhatsApp?template=<name>`.
-
----
-
-## Technical notes
-
-- `audit_set_actor` is `SECURITY DEFINER` so service-role can pin the GUC; uses `set_config(key, val, true)` (transaction-local) — safe across PgBouncer.
-- Meta sync uses Graph API `v21.0` consistent with existing send code.
-- All new edge functions follow standards: try/catch wrapper, `captureEdgeError`, version comment, strict CORS.
-- No client `.eq()` on `meta_present` needed — dispatcher is server-side.
-
-## Files
-
-- **New**: `supabase/functions/_shared/with-actor.ts`, `supabase/functions/sync-whatsapp-templates/index.ts`, migration `2026xxxx_audit_actor_and_wa_meta_sync.sql`
-- **Edit**: `audit_log_trigger_function` (migration), `create-staff-user`, `create-member-user`, `create-owner`, `restore-staff`, `offboard-staff`, `register-member`, `dispatch-communication`, `send-whatsapp`, `process-comm-retry-queue`, `src/pages/AuditLogs.tsx`, Templates Hub WhatsApp tab components
-- **Schema**: `whatsapp_templates` (+3 cols), `audit_logs` backfill (90d)
+- **New**: `supabase/migrations/<ts>_birthday_rpc.sql`, `src/hooks/useDashboardData.ts`, `src/components/dashboard/BirthdayWidget.tsx`.
+- **Edited**: `src/pages/Dashboard.tsx`, `src/pages/StaffDashboard.tsx`.

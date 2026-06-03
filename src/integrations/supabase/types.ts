@@ -13562,6 +13562,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_upcoming_birthdays: {
+        Args: { p_branch_id?: string; p_days_ahead?: number }
+        Returns: {
+          today: Json
+          upcoming: Json
+        }[]
+      }
       get_user_branch: { Args: { _user_id: string }; Returns: string }
       has_active_benefit: {
         Args: {

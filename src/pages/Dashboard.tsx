@@ -28,8 +28,10 @@ const LazyLiveAccessLog = lazy(() => import('@/components/devices/LiveAccessLog'
 const LazyAIInsightsWidget = lazy(() => import('@/components/dashboard/AIInsightsWidget').then(m => ({ default: m.AIInsightsWidget })));
 const LazyMemberVoiceWidget = lazy(() => import('@/components/dashboard/MemberVoiceWidget').then(m => ({ default: m.MemberVoiceWidget })));
 const LazyMembersCountingChart = lazy(() => import('@/components/dashboard/MembersCountingChart'));
+const LazyBirthdayWidget = lazy(() => import('@/components/dashboard/BirthdayWidget'));
 import { MemberGrowthCards } from '@/components/dashboard/MemberGrowthCards';
 import { JoinedSummaryStrip } from '@/components/dashboard/JoinedSummaryStrip';
+import { DASHBOARD_QUERY_OPTIONS } from '@/hooks/useDashboardData';
 
 function ChartSkeleton() {
   return <Skeleton className="h-64 rounded-2xl" />;
@@ -48,6 +50,7 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ['dashboard-stats', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
       const monthStart = startOfMonth(new Date()).toISOString();
@@ -129,6 +132,7 @@ export default function DashboardPage() {
   const { data: revenueData = [] } = useQuery({
     queryKey: ['revenue-chart', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const months = [];
       for (let i = 5; i >= 0; i--) {
@@ -153,6 +157,7 @@ export default function DashboardPage() {
   const { data: attendanceData = [] } = useQuery({
     queryKey: ['attendance-chart', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const days = [];
       for (let i = 6; i >= 0; i--) {
@@ -177,6 +182,7 @@ export default function DashboardPage() {
   const { data: membershipData = [] } = useQuery({
     queryKey: ['membership-distribution', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       let query = supabase.from('memberships').select('membership_plans(name)').eq('status', 'active');
       if (branchFilter) query = query.eq('branch_id', branchFilter);
@@ -196,6 +202,7 @@ export default function DashboardPage() {
   const { data: hourlyAttendanceData = [] } = useQuery({
     queryKey: ['hourly-attendance', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
       let query = supabase.from('member_attendance').select('check_in').gte('check_in', today);
@@ -223,6 +230,7 @@ export default function DashboardPage() {
   const { data: receivablesData } = useQuery({
     queryKey: ['accounts-receivable', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       // Include 'partial' (most common dues state) + 'sent' which is the
       // dispatched-but-unpaid state used by the billing engine. The owed>0
@@ -254,6 +262,7 @@ export default function DashboardPage() {
   const { data: expiringMembers = [] } = useQuery({
     queryKey: ['expiring-48h', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const now = new Date();
       const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -403,10 +412,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Bottom Row — lazy loaded */}
-        <div ref={bottomRef} className="grid gap-6 md:grid-cols-3">
+        <div ref={bottomRef} className="grid gap-6 md:grid-cols-4">
           {bottomInView ? (
             <>
               <MembershipDistribution data={membershipData} />
+              <Suspense fallback={<ChartSkeleton />}>
+                <LazyBirthdayWidget branchId={branchFilter} />
+              </Suspense>
               <Card className="shadow-lg rounded-2xl border-0 md:col-span-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -424,10 +436,12 @@ export default function DashboardPage() {
           ) : (
             <>
               <ChartSkeleton />
+              <ChartSkeleton />
               <Skeleton className="h-64 rounded-2xl md:col-span-2" />
             </>
           )}
         </div>
+
 
         {/* AI Insights + Member Voice — lazy loaded */}
         <div ref={insightsRef} className="grid gap-6 md:grid-cols-2">
