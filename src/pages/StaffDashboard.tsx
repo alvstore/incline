@@ -34,6 +34,7 @@ export default function StaffDashboard() {
   const { data: staffBranch } = useQuery({
     queryKey: ['staff-branch', user?.id],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { data: employee } = await supabase
         .from('employees')
@@ -53,6 +54,7 @@ export default function StaffDashboard() {
   const { data: stats } = useQuery({
     queryKey: ['staff-dashboard-stats', branchId],
     enabled: !!branchId,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { count: todayCheckins } = await supabase.from('member_attendance').select('id', { count: 'exact' }).eq('branch_id', branchId!).gte('check_in', todayStart).lte('check_in', todayEnd);
       const { count: currentlyIn } = await supabase.from('member_attendance').select('id', { count: 'exact' }).eq('branch_id', branchId!).gte('check_in', todayStart).is('check_out', null);
@@ -69,6 +71,7 @@ export default function StaffDashboard() {
   const { data: inactiveMembers = [] } = useQuery({
     queryKey: ['inactive-members', branchId],
     enabled: !!branchId,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_inactive_members', {
         p_branch_id: branchId!,
@@ -84,6 +87,7 @@ export default function StaffDashboard() {
   const { data: nudgeCounts = {} } = useQuery({
     queryKey: ['nudge-counts', branchId],
     enabled: !!branchId && inactiveMembers.length > 0,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const memberIds = inactiveMembers.map((m: any) => m.member_id);
       const { data, error } = await supabase
@@ -107,6 +111,7 @@ export default function StaffDashboard() {
   const { data: pendingTasks = [] } = useQuery({
     queryKey: ['staff-tasks', user?.id],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { data, error } = await supabase.from('tasks').select('*').eq('assigned_to', user!.id).in('status', ['pending', 'in_progress']).order('due_date', { ascending: true }).limit(5);
       if (error) throw error;
@@ -118,6 +123,7 @@ export default function StaffDashboard() {
   const { data: followUpLeads = [] } = useQuery({
     queryKey: ['staff-followup-leads', branchId],
     enabled: !!branchId,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { data, error } = await supabase.from('leads').select('id, full_name, phone, source, status, notes, created_at').eq('branch_id', branchId!).in('status', ['new', 'contacted']).order('created_at', { ascending: false }).limit(5);
       if (error) throw error;
@@ -129,6 +135,7 @@ export default function StaffDashboard() {
   const { data: recentCheckins = [] } = useQuery({
     queryKey: ['recent-checkins', branchId],
     enabled: !!branchId,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const { data, error } = await supabase.from('member_attendance').select(`id, check_in, member:members(member_code, user_id, profiles:user_id(full_name, avatar_url))`).eq('branch_id', branchId!).gte('check_in', todayStart).order('check_in', { ascending: false }).limit(5);
       if (error) throw error;
@@ -140,6 +147,7 @@ export default function StaffDashboard() {
   const { data: expiringMemberships = [] } = useQuery({
     queryKey: ['expiring-memberships', branchId],
     enabled: !!branchId,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const next3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const { data, error } = await supabase.from('memberships').select(`id, end_date, member:members(member_code, user_id, profiles:user_id(full_name, phone, avatar_url))`).eq('branch_id', branchId!).eq('status', 'active').lte('end_date', next3Days).gte('end_date', today.toISOString().split('T')[0]).order('end_date', { ascending: true }).limit(5);
@@ -429,6 +437,7 @@ function PricingDrawer({ open, onOpenChange, branchId }: { open: boolean; onOpen
       return data || [];
     },
     enabled: open,
+    ...DASHBOARD_QUERY_OPTIONS,
   });
 
   const formatFrequency = (f: string | null) => {
