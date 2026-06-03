@@ -50,6 +50,7 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ['dashboard-stats', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
       const monthStart = startOfMonth(new Date()).toISOString();
@@ -131,6 +132,7 @@ export default function DashboardPage() {
   const { data: revenueData = [] } = useQuery({
     queryKey: ['revenue-chart', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const months = [];
       for (let i = 5; i >= 0; i--) {
@@ -155,6 +157,7 @@ export default function DashboardPage() {
   const { data: attendanceData = [] } = useQuery({
     queryKey: ['attendance-chart', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const days = [];
       for (let i = 6; i >= 0; i--) {
@@ -179,6 +182,7 @@ export default function DashboardPage() {
   const { data: membershipData = [] } = useQuery({
     queryKey: ['membership-distribution', branchFilter],
     enabled: !!user,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       let query = supabase.from('memberships').select('membership_plans(name)').eq('status', 'active');
       if (branchFilter) query = query.eq('branch_id', branchFilter);
@@ -198,6 +202,7 @@ export default function DashboardPage() {
   const { data: hourlyAttendanceData = [] } = useQuery({
     queryKey: ['hourly-attendance', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
       let query = supabase.from('member_attendance').select('check_in').gte('check_in', today);
@@ -225,6 +230,7 @@ export default function DashboardPage() {
   const { data: receivablesData } = useQuery({
     queryKey: ['accounts-receivable', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       // Include 'partial' (most common dues state) + 'sent' which is the
       // dispatched-but-unpaid state used by the billing engine. The owed>0
@@ -256,6 +262,7 @@ export default function DashboardPage() {
   const { data: expiringMembers = [] } = useQuery({
     queryKey: ['expiring-48h', branchFilter],
     enabled: !!user && crmInView,
+    ...DASHBOARD_QUERY_OPTIONS,
     queryFn: async () => {
       const now = new Date();
       const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
