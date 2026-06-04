@@ -105,6 +105,30 @@ Deno.serve(async (req) => {
 
     console.log('Lead captured:', lead.id, 'source:', source, 'branch:', branchId);
 
+    // Record opt-in consent (RCS/SMS/Email/WhatsApp) — MSG91 / TRAI audit evidence.
+    try {
+      const consent = body.consent ?? null;
+      if (consent && consent.granted === true) {
+        const ip = req.headers.get('cf-connecting-ip')
+          || (req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+          || null;
+        const ua = req.headers.get('user-agent') || null;
+        await supabase.rpc('record_consent', {
+          p_subject_type: 'lead',
+          p_subject_id: lead.id,
+          p_channels: Array.isArray(consent.channels) ? consent.channels : ['sms','email','rcs','whatsapp'],
+          p_source: consent.source || source || 'capture_lead',
+          p_consent_text: consent.text || null,
+          p_ip: ip,
+          p_user_agent: ua,
+          p_action: 'grant',
+        });
+      }
+    } catch (e) {
+      console.error('record_consent failed (non-fatal):', e);
+    }
+
+
     // Fire-and-forget: trigger lead notifications via unified dispatcher
     try {
       const notifyUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-lead-created`;
