@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { CommConsentCheckbox, buildConsentPayload } from '@/components/consent/CommConsentCheckbox';
 
 import { useNoindex } from '@/lib/seo/useNoindex';
 export default function EmbedLeadForm() {
@@ -12,6 +13,7 @@ export default function EmbedLeadForm() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [consent, setConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -37,6 +39,7 @@ export default function EmbedLeadForm() {
           utm_source: utmSource,
           utm_medium: utmMedium,
           utm_campaign: utmCampaign,
+          consent: { ...buildConsentPayload(consent), source: 'embed_form' },
         },
       });
 
@@ -106,7 +109,8 @@ export default function EmbedLeadForm() {
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <CommConsentCheckbox checked={consent} onCheckedChange={setConsent} required />
+            <Button type="submit" className="w-full" disabled={isSubmitting || !consent}>
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isSubmitting ? 'Submitting...' : 'Submit'}
             </Button>
