@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
+import { CommConsentCheckbox, buildConsentPayload } from "@/components/consent/CommConsentCheckbox";
 
 const leadSchema = z.object({
   full_name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
@@ -79,6 +80,7 @@ const RegisterModal = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1);
+  const [consent, setConsent] = useState(false);
 
   const {
     register,
@@ -134,6 +136,7 @@ const RegisterModal = () => {
         source: getSource(),
         notes: buildNotes(data),
         ...getAttribution(),
+        consent: { ...buildConsentPayload(consent), source: 'register_modal' },
       };
 
       const res = await fetch(WEBHOOK_URL, {
@@ -396,6 +399,15 @@ const RegisterModal = () => {
                     {errors.frequency && <p className="text-destructive text-xs">{errors.frequency.message}</p>}
                   </div>
 
+                  <div className="pt-1">
+                    <CommConsentCheckbox
+                      checked={consent}
+                      onCheckedChange={setConsent}
+                      id="register-modal-consent"
+                      required
+                    />
+                  </div>
+
                   <div className="flex flex-col sm:flex-row gap-3 pt-1">
                     <button
                       type="button"
@@ -406,7 +418,7 @@ const RegisterModal = () => {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !consent}
                       className="w-full px-6 py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isSubmitting ? (
