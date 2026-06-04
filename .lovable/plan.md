@@ -1,81 +1,72 @@
-## Goal
-MSG91's RCS opt-in rules (and most carrier/operator policies) require an explicit, auditable user consent statement covering SMS / Email / RCS / WhatsApp **before** sending promotional or notification traffic. Today the project captures leads/registrations with **no consent field at all** (verified: no `consent`, `opt_in`, or `rcs` references anywhere in `src/` or `supabase/`). We will add a checkbox + persistent audit columns, and lay the integration groundwork for the Telinfy/GreenAds RCS API behind the existing universal dispatcher.
+# Audit findings + fix plan
 
-## Audit findings
+## 1. Lead source always shows "Website"
 
-Lead-capture surfaces that currently have **no consent capture**:
-1. `src/pages/EmbedLeadForm.tsx` — public embeddable form (`/embed/lead`) → `capture-lead` edge fn
-2. `supabase/functions/capture-lead/index.ts` — public REST entry used by website / ad landing pages
-3. `src/components/leads/AddLeadDrawer.tsx` — internal staff "Add Lead" drawer
-4. `src/pages/PublicRegistration.tsx` — `/register` self-onboarding (verified in memory)
-5. `supabase/functions/register-member/index.ts` — backing edge fn
-6. `src/components/ui/RegisterModal.tsx` — modal variant
+**Root cause**
+- `src/pages/EmbedLeadForm.tsx` line 38 hard-codes `source: 'website'` regardless of how the visitor arrived.
+- `supabase/functions/capture-lead/index.ts` line 75 falls back to `'website'` and does NOT inspect the referrer/landing-page it already receives (lines 81-82).
+- Linktree, Instagram, FB Ads, WhatsApp click-to-chat, QR codes, and embed widgets therefore all collapse to `website`.
 
-Schema gap: `public.leads` has no consent columns. Same for `members`/`profiles` (consent should travel with the contact, since dispatcher gates outbound by member/lead).
+**Fix**
+1. In `EmbedLeadForm.tsx`, derive `source` from a precedence chain:
+   `?utm_source=` → referrer host map → fallback `'website'`.
+   Referrer host map: `linktr.ee→linktree`, `instagram.com|ig.me→instagram`, `facebook.com|fb.me→facebook`, `wa.me|whatsapp.com→whatsapp`, `google.*→google`, `youtube.*→youtube`, `t.co|twitter.com|x.com→twitter`.
+2. Send `landing_page = window.location.href` and `referrer_url = document.referrer` (currently missing — that's why backend gets empty strings).
+3. In `capture-lead/index.ts`, when caller did not supply an explicit `source`, run the same referrer-host map server-side as a safety net before falling back to `website`.
+4. Add a small `src/lib/leads/sourceFromReferrer.ts` shared by the embed form and `AddLeadDrawer` (so staff-typed walk-ins can auto-suggest source from a pasted link).
+5. Backfill SQL (one-shot migration): re-classify existing `leads` rows where `source='website'` AND `referrer_url ILIKE '%linktr.ee%'` (etc.) using the same map. Cap to last 90 days.
 
-Existing groundwork we'll reuse:
-- `dispatchCommunication()` is the single comms funnel (per memory).
-- `do_not_contact` flag exists and is already honored by dispatcher → consent withdrawal already works; we only need to add **positive opt-in capture**.
-- `integration_settings(provider, integration_type)` pattern already used for WhatsApp/SMS providers → RCS plugs in cleanly.
+## 2. Instagram chat shows raw IGSID `+17085697668...`
 
-## Plan
+**Root cause**
+- `meta-webhook/index.ts` `resolveInstagramSenderProfile` (line 764) calls Graph `/{igsid}?fields=name,username,profile_pic_url`. When the integration uses **Instagram Login** without `instagram_business_basic` consent, Meta returns the `consent_blocked` error and we cache `name=null` for 24h.
+- Webhook fallback never tries the cheaper, consent-free **`/me/conversations?user_id={igsid}&fields=participants`** lookup, which usually returns username for users who DM'd us.
+- UI (`whatsapp_chat_settings.contact_name` is null) → component renders `phone_number` (the IGSID).
 
-### Epic 1 — Consent schema (1 migration)
-Add to `public.leads` and `public.profiles`:
-- `comm_consent_granted boolean not null default false`
-- `comm_consent_at timestamptz`
-- `comm_consent_channels text[] not null default '{}'` (subset of `sms,email,rcs,whatsapp`)
-- `comm_consent_source text` (e.g. `embed_form`, `public_register`, `staff_drawer`, `import`)
-- `comm_consent_ip inet`, `comm_consent_user_agent text` (audit evidence MSG91/TRAI require)
-- `comm_consent_text text` (verbatim copy of the checkbox label at time of consent — required for DLT/operator audits)
+**Fix**
+1. Add a second resolution step in `resolveInstagramSenderProfile`: if primary `/igsid` returns empty/consent-blocked, query `/me/conversations?user_id={igsid}&fields=participants{username,name,profile_pic}` and extract the non-business participant. Cache result the same way.
+2. Persist `ig_username` separately on `whatsapp_chat_settings` (new column `external_username text`) so the chat list can show `@username` even when display name is blocked. Migration adds the column + updates `upsert_meta_contact_profile` RPC signature.
+3. Chat list / header components (`ChatList`, `ChatHeader`) — fall back to display order: `contact_name` → `@external_username` → `Instagram User · …4567` (last 4 of IGSID) instead of the full numeric ID.
+4. Add a one-shot "Re-resolve IG profiles" admin action in `meta-admin` (already exported `resolveInstagramSenderProfile`) that loops over the last 60 days of `whatsapp_chat_settings` rows with platform=instagram and missing name.
 
-Create `public.consent_events` (append-only audit log: subject_type lead/member, subject_id, action grant/revoke, channels[], source, ip, ua, text, actor_id, created_at) + RLS (owner/admin/manager read; insert via RPC).
+## 3. Duplicate AI replies on Instagram
 
-`record_consent(subject_type, subject_id, channels, source, text, ip, ua)` RPC — fills both the parent row and the audit log atomically. `SECURITY DEFINER`, `search_path=public`.
+**Root cause**
+- Meta delivers some Instagram Login DMs on BOTH `entry.messaging[]` AND `entry.changes[].value` (`field=messages`). The inbound message dedupe in `ingestMessagingEvent` only works when `message.mid` is present — IG Login `messages` change events often omit `mid`.
+- Two inserts → two `triggerAiReply` calls → two outbound copies (visible in screenshot: every bot reply appears twice).
+- Meta also retries webhooks on 5xx, and our function returns 200 only after AI runs (long path), so duplicates are likely from genuine retries too.
 
-GRANT + RLS per project standards.
+**Fix**
+1. **Synchronous dedupe at insert**: change `ingestMessagingEvent` to do an early `upsert` on `whatsapp_messages` keyed by a deterministic hash `(branch_id, phone_number, direction, content_hash, ts_minute)` when `mid` is missing, returning early on conflict. Add partial unique index on that hash.
+2. **AI-trigger guard**: before `triggerAiReply`, take a Postgres advisory lock `pg_try_advisory_xact_lock(hashtextextended(branch_id||sender_id||content, 0))` inside a short RPC; skip if not acquired. Also check no outbound message exists for same conversation in the last 30s.
+3. **Return 200 earlier**: respond to Meta immediately after the message insert; move AI reply onto `EdgeRuntime.waitUntil(...)` so retries on slow responses stop firing.
+4. The double "Welcome to Incline" + double "What's your name?" on the +15168… chat is the same bug — fix here covers it.
 
-### Epic 2 — UI: add consent checkbox to all 4 lead-creation surfaces
-Reusable component `src/components/consent/CommConsentCheckbox.tsx`:
-- Single checkbox, label **"I authorise Incline Fitness to send me notifications via SMS, Email, RCS and WhatsApp as per the [Terms of Service](/terms) and [Privacy Policy](/privacy)."**
-- Returns `{ granted, channels: ['sms','email','rcs','whatsapp'], text }` — channels stored as array so we can later split into granular toggles without another migration.
-- Vuexy style: `rounded-md` checkbox + `text-sm text-slate-600`, links in `text-indigo-600 hover:underline`, focus ring per design system.
-- Accessibility: associated `<label htmlFor>`, `aria-describedby` for the policy links, 44px touch target.
+## 4. Telinfy / GreenAds RCS — go live
 
-Inject into:
-- `EmbedLeadForm.tsx` — **required** before submit (disable button until checked, since this is public/promotional traffic).
-- `PublicRegistration.tsx` / `RegisterModal.tsx` — required.
-- `AddLeadDrawer.tsx` — **optional** + visible default-off (staff is recording on behalf of a walk-in; staff confirms verbal consent). Show small "Walk-in verbal consent confirmed" helper text.
+**Steps**
+1. `secrets--add_secret` for `TELINFY_API_KEY`, `TELINFY_SENDER_ID`, `TELINFY_BASE_URL` (user enters in secure form).
+2. Implement real `POST {base_url}/rcs/send/text` (+ `/rcs/send/card` when `payload.kind='card'`) in `supabase/functions/send-rcs/index.ts` v0.2.0 — Bearer auth, JSON body `{ sender, to, message, dlt_template_id }`, map response to dispatcher contract (`status: sent|failed`, `provider_message_id`).
+3. Wire into `dispatch-communication` channel router (already accepts `rcs`).
+4. New edge fn `rcs-webhook/index.ts` for DLR callbacks → updates `communication_logs.delivery_status` by `provider_message_id`. Public URL noted for user to paste into Telinfy dashboard.
+5. Settings → Integrations: add an "RCS (Telinfy)" card (provider already in `providerSchemas.ts`) showing sender ID + DLR webhook URL + a "Send test" button.
 
-All four send the consent payload (channels, text, source) to their respective backend.
+## Files touched (build phase)
 
-### Epic 3 — Backend wiring
-- `capture-lead/index.ts`: accept `consent: { granted, channels, text }`, capture `req.headers` IP + UA, persist on insert, write `consent_events` row.
-- `register-member/index.ts`: same.
-- Internal `AddLeadDrawer` write path: call new `record_consent` RPC after lead insert (no edge fn needed).
-- Update `dispatchCommunication`: add a soft gate — if channel is `rcs` or `sms` and target is a lead/member with `comm_consent_granted=false` AND category is promotional/marketing, return `suppressed: 'no_consent'`. Transactional categories (receipts, OTP) remain exempt, matching existing `force` semantics.
+**New**
+- `src/lib/leads/sourceFromReferrer.ts`
+- `supabase/functions/rcs-webhook/index.ts`
+- 2 SQL migrations (column + index + backfill + RPC signature update)
 
-### Epic 4 — RCS provider scaffold (no live sends yet)
-Looked up the Postman link target (Telinfy/GreenAds RCS API). Endpoints we'll wire later:
-- Auth: bearer / API key in `integration_settings.config`
-- Send text: `POST /rcs/send/text`
-- Send rich card / carousel: `POST /rcs/send/card`
-- DLR webhook ingest
+**Edited**
+- `src/pages/EmbedLeadForm.tsx`, `src/components/leads/AddLeadDrawer.tsx`
+- `supabase/functions/capture-lead/index.ts`, `webhook-lead-capture/index.ts`
+- `supabase/functions/meta-webhook/index.ts` (3 fixes: profile resolver, dedupe, waitUntil)
+- `supabase/functions/send-rcs/index.ts` → v0.2.0
+- `supabase/functions/meta-admin/index.ts` (backfill action)
+- WhatsApp chat list + header components (display fallback)
+- `src/integrations/supabase/types.ts` (regen after migration)
 
-This PR does **only** the scaffolding so no business logic depends on credentials being present:
-- Add `'rcs'` to `CommChannel` union in `src/services/preferencesService.ts` + matching `member_communication_preferences.rcs_enabled` column.
-- Add an `'rcs'` provider type to `integration_settings` provider catalog (`src/config/providerSchemas.ts`) with empty field defs `{ api_key, sender_id, base_url, webhook_secret }`.
-- New edge fn stub `supabase/functions/send-rcs/index.ts` returning `not_configured` until creds are saved — fully isolated, called only by `dispatch-communication` when channel=rcs.
-- Settings page entry will be auto-rendered from the provider catalog (existing pattern), so no new settings UI work.
-
-**Not in scope this PR**: actually integrating the Telinfy/GreenAds API calls, template management, DLR webhook receiver. Those land in a follow-up once the API key + sender ID are provisioned (the user will need to add `RCS_TELINFY_API_KEY` via secrets).
-
-### Files (estimated)
-- New: 1 migration, `CommConsentCheckbox.tsx`, `supabase/functions/send-rcs/index.ts`
-- Edited: 4 lead-form surfaces, `capture-lead`, `register-member`, `dispatch-communication`, `preferencesService.ts`, `providerSchemas.ts`, `types.ts` (auto)
-
-### Acceptance
-- All 4 lead forms render the consent checkbox; public forms block submit until checked.
-- New leads/members carry `comm_consent_*` columns + an audit row in `consent_events`.
-- Dispatcher suppresses promotional RCS/SMS to leads without consent.
-- Provider catalog shows an "RCS (Telinfy)" entry ready to receive credentials — no live sends until creds + follow-up PR.
+## Out of scope
+- Migrating consent-blocked IG users to a different OAuth scope (requires re-auth UX, separate epic).
+- RCS template management UI (lands once Telinfy returns the first DLR).
