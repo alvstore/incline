@@ -430,6 +430,7 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
 
   const mediaUrl = message.attachments?.[0]?.payload?.url || null;
 
+  // ── DEDUPE 1: by Meta mid when present ────────────────────────────────
   if (message.mid) {
     const { data: existing } = await supabase
       .from("whatsapp_messages")
@@ -442,27 +443,47 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     }
   }
 
+  // ── DEDUPE 2: content-hash fallback for mid-less IG Login deliveries ──
+  // Meta sometimes delivers the same DM on BOTH entry.messaging[] AND
+  // entry.changes[] (field=messages) without mid. Hash = sha1 of
+  // direction|content|timestamp-minute. Unique index prevents the 2nd insert.
+  let dedupeHash: string | null = null;
+  if (!message.mid) {
+    try {
+      const tsMinute = Math.floor((event.timestamp || Date.now()) / 60000);
+      const raw = `${isOutbound ? "out" : "in"}|${content}|${tsMinute}`;
+      const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(raw));
+      dedupeHash = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch { /* fall through */ }
+  }
+
 // F4: resolve IG sender display name + avatar on first contact
   let contactName: string | null = null;
+  let contactUsername: string | null = null;
   let contactAvatarUrl: string | null = null;
   let avatarSource: "storage" | "meta_cdn" | null = null;
   let avatarSyncedAt: string | null = null;
   let avatarConsentBlocked = false;
-  if (platform === "instagram" && !isOutbound && integration) {
-    const profile = await resolveInstagramSenderProfile(contactId, integration);
-    contactName = profile?.name ?? null;
-    avatarConsentBlocked = !!profile?.consent_blocked;
-    // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
-    if (profile?.avatar_url && !avatarConsentBlocked) {
-      const persisted = await persistMetaAvatar({
-        scopedId: contactId,
-        platform: "instagram",
-        cdnUrl: profile.avatar_url,
-        serviceClient: supabase,
-      });
-      contactAvatarUrl = persisted.publicUrl;
-      avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
-      avatarSyncedAt = persisted.syncedAt;
+  if (platform === "instagram" && !isOutbound) {
+    // Some Meta payloads include the sender username inline — capture it first.
+    if (event.sender?.username) contactUsername = String(event.sender.username);
+    if (integration) {
+      const profile = await resolveInstagramSenderProfile(contactId, integration);
+      contactName = profile?.name ?? contactName;
+      contactUsername = profile?.username ?? contactUsername;
+      avatarConsentBlocked = !!profile?.consent_blocked;
+      // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
+      if (profile?.avatar_url && !avatarConsentBlocked) {
+        const persisted = await persistMetaAvatar({
+          scopedId: contactId,
+          platform: "instagram",
+          cdnUrl: profile.avatar_url,
+          serviceClient: supabase,
+        });
+        contactAvatarUrl = persisted.publicUrl;
+        avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
+        avatarSyncedAt = persisted.syncedAt;
+      }
     }
   }
 
@@ -480,11 +501,17 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       status: isOutbound ? "sent" : "received",
       platform: platform as any,
       platform_message_id: message.mid || null,
+      dedupe_hash: dedupeHash,
     })
     .select("id")
     .single();
 
   if (error) {
+    // Unique-violation on dedupe_hash → already ingested via the other delivery channel.
+    if ((error as any).code === "23505") {
+      console.log(`[${platform}] dedup hit hash=${dedupeHash}`);
+      return;
+    }
     console.error(`[${platform}] insert failed:`, error.message);
     return;
   }
@@ -496,10 +523,10 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       { onConflict: "branch_id,phone_number" }
     );
 
-    // Persist display name / avatar / provenance so the chat list/header stay
-    // populated even when newer message rows lack them, and so consent-blocked
+    // Persist display name / username / avatar / provenance so the chat list/header
+    // stay populated even when newer message rows lack them, and so consent-blocked
     // contacts aren't re-queried.
-    if (contactName || contactAvatarUrl || avatarConsentBlocked) {
+    if (contactName || contactUsername || contactAvatarUrl || avatarConsentBlocked) {
       try {
         await supabase.rpc("upsert_meta_contact_profile", {
           p_branch_id: branchId,
@@ -511,6 +538,7 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
           p_avatar_source: avatarSource,
           p_avatar_synced_at: avatarSyncedAt,
           p_avatar_consent_blocked: avatarConsentBlocked,
+          p_external_username: contactUsername,
         });
       } catch (profileErr) {
         console.warn(`[${platform}] profile upsert failed:`, profileErr);
