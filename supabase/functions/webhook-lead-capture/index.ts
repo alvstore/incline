@@ -113,11 +113,35 @@ Deno.serve(async (req) => {
 
     console.log('Webhook lead created:', lead.id, 'source:', source, 'branch:', branchId);
 
+    // Record opt-in consent if provided (MSG91 / RCS / TRAI evidence).
+    try {
+      const consent = body.consent ?? null;
+      if (consent && consent.granted === true) {
+        const ip = req.headers.get('cf-connecting-ip')
+          || (req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+          || null;
+        const ua = req.headers.get('user-agent') || null;
+        await supabase.rpc('record_consent', {
+          p_subject_type: 'lead',
+          p_subject_id: lead.id,
+          p_channels: Array.isArray(consent.channels) ? consent.channels : ['sms','email','rcs','whatsapp'],
+          p_source: consent.source || source || 'webhook_lead_capture',
+          p_consent_text: consent.text || null,
+          p_ip: ip,
+          p_user_agent: ua,
+          p_action: 'grant',
+        });
+      }
+    } catch (e) {
+      console.error('record_consent failed (non-fatal):', e);
+    }
+
     // Build response immediately, defer heavy work (notifications, scoring, WhatsApp triggers)
     const response = new Response(
       JSON.stringify({ success: true, lead_id: lead.id }),
       { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
+
 
     const heavyWork = (async () => {
       try {

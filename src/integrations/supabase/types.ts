@@ -2469,6 +2469,48 @@ export type Database = {
           },
         ]
       }
+      consent_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          channels: string[]
+          consent_text: string | null
+          created_at: string
+          id: string
+          ip: unknown
+          source: string | null
+          subject_id: string
+          subject_type: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          channels?: string[]
+          consent_text?: string | null
+          created_at?: string
+          id?: string
+          ip?: unknown
+          source?: string | null
+          subject_id: string
+          subject_type: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          channels?: string[]
+          consent_text?: string | null
+          created_at?: string
+          id?: string
+          ip?: unknown
+          source?: string | null
+          subject_id?: string
+          subject_type?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       contact_segments: {
         Row: {
           audience_count: number
@@ -6107,6 +6149,13 @@ export type Database = {
           branch_id: string
           budget: string | null
           campaign_name: string | null
+          comm_consent_at: string | null
+          comm_consent_channels: string[]
+          comm_consent_granted: boolean
+          comm_consent_ip: unknown
+          comm_consent_source: string | null
+          comm_consent_text: string | null
+          comm_consent_user_agent: string | null
           conversion_idempotency_key: string | null
           converted_at: string | null
           converted_member_id: string | null
@@ -6163,6 +6212,13 @@ export type Database = {
           branch_id: string
           budget?: string | null
           campaign_name?: string | null
+          comm_consent_at?: string | null
+          comm_consent_channels?: string[]
+          comm_consent_granted?: boolean
+          comm_consent_ip?: unknown
+          comm_consent_source?: string | null
+          comm_consent_text?: string | null
+          comm_consent_user_agent?: string | null
           conversion_idempotency_key?: string | null
           converted_at?: string | null
           converted_member_id?: string | null
@@ -6219,6 +6275,13 @@ export type Database = {
           branch_id?: string
           budget?: string | null
           campaign_name?: string | null
+          comm_consent_at?: string | null
+          comm_consent_channels?: string[]
+          comm_consent_granted?: boolean
+          comm_consent_ip?: unknown
+          comm_consent_source?: string | null
+          comm_consent_text?: string | null
+          comm_consent_user_agent?: string | null
           conversion_idempotency_key?: string | null
           converted_at?: string | null
           converted_member_id?: string | null
@@ -6768,6 +6831,7 @@ export type Database = {
           payment_receipts: boolean
           quiet_hours_end: string | null
           quiet_hours_start: string | null
+          rcs_enabled: boolean
           retention_nudges: boolean
           review_requests: boolean
           sms_enabled: boolean
@@ -6788,6 +6852,7 @@ export type Database = {
           payment_receipts?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
+          rcs_enabled?: boolean
           retention_nudges?: boolean
           review_requests?: boolean
           sms_enabled?: boolean
@@ -6808,6 +6873,7 @@ export type Database = {
           payment_receipts?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
+          rcs_enabled?: boolean
           retention_nudges?: boolean
           review_requests?: boolean
           sms_enabled?: boolean
@@ -9768,6 +9834,13 @@ export type Database = {
           avatar_storage_path: string | null
           avatar_url: string | null
           city: string | null
+          comm_consent_at: string | null
+          comm_consent_channels: string[]
+          comm_consent_granted: boolean
+          comm_consent_ip: unknown
+          comm_consent_source: string | null
+          comm_consent_text: string | null
+          comm_consent_user_agent: string | null
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -9793,6 +9866,13 @@ export type Database = {
           avatar_storage_path?: string | null
           avatar_url?: string | null
           city?: string | null
+          comm_consent_at?: string | null
+          comm_consent_channels?: string[]
+          comm_consent_granted?: boolean
+          comm_consent_ip?: unknown
+          comm_consent_source?: string | null
+          comm_consent_text?: string | null
+          comm_consent_user_agent?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -9818,6 +9898,13 @@ export type Database = {
           avatar_storage_path?: string | null
           avatar_url?: string | null
           city?: string | null
+          comm_consent_at?: string | null
+          comm_consent_channels?: string[]
+          comm_consent_granted?: boolean
+          comm_consent_ip?: unknown
+          comm_consent_source?: string | null
+          comm_consent_text?: string | null
+          comm_consent_user_agent?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -13973,6 +14060,19 @@ export type Database = {
         }[]
       }
       reconcile_payments_daily: { Args: never; Returns: Json }
+      record_consent: {
+        Args: {
+          p_action?: string
+          p_channels: string[]
+          p_consent_text: string
+          p_ip?: unknown
+          p_source: string
+          p_subject_id: string
+          p_subject_type: string
+          p_user_agent?: string
+        }
+        Returns: string
+      }
       record_health_ping: {
         Args: {
           p_component: string

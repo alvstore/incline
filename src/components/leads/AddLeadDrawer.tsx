@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadService } from '@/services/leadService';
+import { supabase } from '@/integrations/supabase/client';
+import { CommConsentCheckbox, COMM_CONSENT_TEXT, COMM_CONSENT_CHANNELS } from '@/components/consent/CommConsentCheckbox';
 import { toast } from 'sonner';
 import { Flame, Sun, Snowflake } from 'lucide-react';
 
@@ -46,11 +48,13 @@ const EMPTY_LEAD = {
 export function AddLeadDrawer({ open, onOpenChange, defaultBranchId, prefill }: AddLeadDrawerProps) {
   const queryClient = useQueryClient();
   const [newLead, setNewLead] = useState({ ...EMPTY_LEAD });
+  const [consent, setConsent] = useState(false);
 
   // Apply prefill whenever the drawer opens with new data (e.g., from WhatsApp Chat).
   useEffect(() => {
     if (open && prefill) {
       setNewLead({ ...EMPTY_LEAD, ...prefill });
+      setConsent(false);
     }
   }, [open, prefill]);
 
@@ -73,19 +77,33 @@ export function AddLeadDrawer({ open, onOpenChange, defaultBranchId, prefill }: 
       status: 'new',
       score: lead.temperature === 'hot' ? 70 : lead.temperature === 'warm' ? 40 : 10,
     }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+      // Record opt-in if staff confirmed verbal consent
+      if (data?.id && consent) {
+        try {
+          await supabase.rpc('record_consent', {
+            p_subject_type: 'lead',
+            p_subject_id: data.id,
+            p_channels: [...COMM_CONSENT_CHANNELS],
+            p_source: 'staff_drawer',
+            p_consent_text: COMM_CONSENT_TEXT,
+            p_action: 'grant',
+          } as never);
+        } catch (e) {
+          console.error('record_consent failed:', e);
+        }
+      }
       onOpenChange(false);
       // Fire-and-forget: trigger unified lead notifications via edge function
       if (data?.id && defaultBranchId) {
-        import('@/integrations/supabase/client').then(({ supabase }) => {
-          supabase.functions.invoke('notify-lead-created', {
-            body: { lead_id: data.id, branch_id: defaultBranchId },
-          }).catch(e => console.error('Lead notification failed:', e));
-        });
+        supabase.functions.invoke('notify-lead-created', {
+          body: { lead_id: data.id, branch_id: defaultBranchId },
+        }).catch(e => console.error('Lead notification failed:', e));
       }
       setNewLead({ ...EMPTY_LEAD });
+      setConsent(false);
       toast.success('Lead added successfully');
     },
     onError: () => toast.error('Failed to add lead'),
@@ -251,7 +269,18 @@ export function AddLeadDrawer({ open, onOpenChange, defaultBranchId, prefill }: 
           </TabsContent>
         </Tabs>
 
-        <SheetFooter className="mt-6">
+        <div className="mt-6 px-1">
+          <CommConsentCheckbox
+            checked={consent}
+            onCheckedChange={setConsent}
+            id="add-lead-consent"
+          />
+          <p className="text-[11px] text-muted-foreground mt-1.5 pl-7">
+            For walk-ins, tick only after confirming verbal consent.
+          </p>
+        </div>
+
+        <SheetFooter className="mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             onClick={() => createLeadMutation.mutate(newLead)}

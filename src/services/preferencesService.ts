@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type CommChannel = 'whatsapp' | 'sms' | 'email' | 'in_app';
+export type CommChannel = 'whatsapp' | 'sms' | 'email' | 'in_app' | 'rcs';
 export type CommCategory =
   | 'membership_reminder' | 'payment_receipt' | 'class_notification'
   | 'announcement' | 'low_stock' | 'new_lead' | 'payment_alert'
