@@ -71,8 +71,8 @@ Deno.serve(async (req) => {
       branchId = defaultBranch.id;
     }
 
-    // Determine source and UTM data
-    const source = (body.source || body.utm_source || 'website').toLowerCase().slice(0, 50);
+    // Determine source and UTM data — server-side referrer-map safety net so
+    // visits from Linktree / Instagram / WhatsApp / etc. don't collapse to "website".
     const utmSource = (body.utm_source || '').slice(0, 100) || null;
     const utmMedium = (body.utm_medium || '').slice(0, 100) || null;
     const utmCampaign = (body.utm_campaign || '').slice(0, 100) || null;
@@ -80,6 +80,25 @@ Deno.serve(async (req) => {
     const utmTerm = (body.utm_term || '').slice(0, 100) || null;
     const landingPage = (body.landing_page || '').slice(0, 500) || null;
     const referrerUrl = (body.referrer_url || '').slice(0, 500) || null;
+
+    function deriveSource(): string {
+      const explicit = (body.source || '').toString().trim().toLowerCase();
+      if (explicit && explicit !== 'website') return explicit.slice(0, 50);
+      const ref = referrerUrl || '';
+      if (/linktr\.ee|linktree/i.test(ref)) return 'linktree';
+      if (/instagram\.com|ig\.me/i.test(ref)) return 'instagram';
+      if (/facebook\.com|fb\.me|fb\.com/i.test(ref)) return 'facebook';
+      if (/wa\.me|whatsapp\.com|api\.whatsapp/i.test(ref)) return 'whatsapp';
+      if (/youtube\.com|youtu\.be/i.test(ref)) return 'youtube';
+      if (/google\./i.test(ref)) return 'google';
+      if (/t\.co|twitter\.com|x\.com/i.test(ref)) return 'twitter';
+      if (/linkedin\.com|lnkd\.in/i.test(ref)) return 'linkedin';
+      if (/tiktok\.com/i.test(ref)) return 'tiktok';
+      const utm = (utmSource || '').toLowerCase();
+      if (utm) return utm.replace(/[^a-z0-9_-]/g, '').slice(0, 50) || 'website';
+      return explicit || 'website';
+    }
+    const source = deriveSource();
 
     const { data: lead, error: leadError } = await supabase.from('leads').insert({
       full_name: fullName,
