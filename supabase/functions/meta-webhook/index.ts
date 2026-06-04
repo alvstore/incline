@@ -227,26 +227,39 @@ async function handleIncomingEvent(req: Request) {
     console.warn("[meta-webhook] ingress log insert failed:", e);
   }
 
-  if (objectType === "whatsapp_business_account") {
-    console.log("[meta-webhook] routing → whatsapp-webhook");
+  // v4.4.0 — Acknowledge to Meta synchronously, then process in background.
+  // Meta retries on slow/5xx responses; long AI runs were causing the same
+  // inbound to be ingested 2-3x, producing the duplicate-reply bug.
+  const processInBackground = (async () => {
     try {
-      await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-hub-signature-256": req.headers.get("x-hub-signature-256") || "",
-        },
-        body: bodyText,
-      });
+      if (objectType === "whatsapp_business_account") {
+        console.log("[meta-webhook] routing → whatsapp-webhook");
+        await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-hub-signature-256": req.headers.get("x-hub-signature-256") || "",
+          },
+          body: bodyText,
+        });
+      } else if (objectType === "instagram") {
+        await processInstagramEvent(payload);
+      } else if (objectType === "page") {
+        await processPageEnvelopeEvent(payload);
+      } else {
+        console.log("[meta-webhook] unknown object type:", objectType);
+      }
     } catch (e) {
-      console.error("[meta-webhook] forward to whatsapp-webhook failed:", e);
+      console.error("[meta-webhook] background processing failed:", e);
     }
-  } else if (objectType === "instagram") {
-    await processInstagramEvent(payload);
-  } else if (objectType === "page") {
-    await processPageEnvelopeEvent(payload);
+  })();
+
+  // @ts-ignore — EdgeRuntime is available in Supabase Functions runtime
+  if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any)?.waitUntil) {
+    // @ts-ignore
+    (EdgeRuntime as any).waitUntil(processInBackground);
   } else {
-    console.log("[meta-webhook] unknown object type:", objectType);
+    await processInBackground;
   }
 
   return new Response(JSON.stringify({ success: true }), {
