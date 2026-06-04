@@ -168,6 +168,19 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'auth_token', label: 'Auth Token', placeholder: 'Enter auth token', type: 'password', section: 'credentials' },
   ],
 
+  // ── RCS (Rich Communication Services) ──
+  rcs_telinfy: [
+    { key: 'sender_id', label: 'RCS Sender / Brand ID', placeholder: 'Approved RCS brand ID', type: 'text', section: 'config' },
+    { key: 'base_url', label: 'API Base URL', placeholder: 'https://api.telinfy.com', type: 'text', section: 'config' },
+    { key: 'api_key', label: 'API Key / Bearer Token', placeholder: 'Enter Telinfy / GreenAds API key', type: 'password', section: 'credentials' },
+    { key: 'webhook_secret', label: 'DLR Webhook Secret', placeholder: 'Shared secret for delivery report webhook', type: 'password', section: 'credentials' },
+  ],
+  rcs_msg91: [
+    { key: 'sender_id', label: 'RCS Sender / Brand ID', placeholder: 'MSG91 approved RCS brand ID', type: 'text', section: 'config' },
+    { key: 'template_id', label: 'Default RCS Template ID', placeholder: 'MSG91 RCS template ID', type: 'text', section: 'config' },
+    { key: 'auth_key', label: 'Auth Key', placeholder: 'Enter MSG91 Auth Key', type: 'password', section: 'credentials' },
+  ],
+
   // ── Email ──
   email_smtp: [
     { key: 'host', label: 'SMTP Host', placeholder: 'smtp.gmail.com', type: 'text', section: 'config' },
