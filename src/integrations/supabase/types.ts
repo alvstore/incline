@@ -12186,6 +12186,7 @@ export type Database = {
           do_not_contact_set_at: string | null
           do_not_contact_set_by: string | null
           do_not_contact_until: string | null
+          external_username: string | null
           handoff_reason: string | null
           handoff_requested_at: string | null
           id: string
@@ -12218,6 +12219,7 @@ export type Database = {
           do_not_contact_set_at?: string | null
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
+          external_username?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -12250,6 +12252,7 @@ export type Database = {
           do_not_contact_set_at?: string | null
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
+          external_username?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -12330,6 +12333,7 @@ export type Database = {
           contact_name: string | null
           content: string | null
           created_at: string | null
+          dedupe_hash: string | null
           delivered_at: string | null
           direction: string
           failed_at: string | null
@@ -12358,6 +12362,7 @@ export type Database = {
           contact_name?: string | null
           content?: string | null
           created_at?: string | null
+          dedupe_hash?: string | null
           delivered_at?: string | null
           direction: string
           failed_at?: string | null
@@ -12386,6 +12391,7 @@ export type Database = {
           contact_name?: string | null
           content?: string | null
           created_at?: string | null
+          dedupe_hash?: string | null
           delivered_at?: string | null
           direction?: string
           failed_at?: string | null
@@ -14408,20 +14414,36 @@ export type Database = {
         Args: { _phone: string; _ttl_seconds?: number }
         Returns: boolean
       }
-      upsert_meta_contact_profile: {
-        Args: {
-          p_avatar_consent_blocked?: boolean
-          p_avatar_source?: string
-          p_avatar_synced_at?: string
-          p_avatar_url: string
-          p_branch_id: string
-          p_display_name: string
-          p_external_id: string
-          p_phone: string
-          p_platform: string
-        }
-        Returns: undefined
-      }
+      upsert_meta_contact_profile:
+        | {
+            Args: {
+              p_avatar_consent_blocked?: boolean
+              p_avatar_source?: string
+              p_avatar_synced_at?: string
+              p_avatar_url?: string
+              p_branch_id: string
+              p_display_name?: string
+              p_external_id?: string
+              p_external_username?: string
+              p_phone: string
+              p_platform: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_avatar_consent_blocked?: boolean
+              p_avatar_source?: string
+              p_avatar_synced_at?: string
+              p_avatar_url: string
+              p_branch_id: string
+              p_display_name: string
+              p_external_id: string
+              p_phone: string
+              p_platform: string
+            }
+            Returns: undefined
+          }
       user_visible_branch_ids: {
         Args: { p_user_id: string }
         Returns: string[]

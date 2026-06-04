@@ -227,26 +227,39 @@ async function handleIncomingEvent(req: Request) {
     console.warn("[meta-webhook] ingress log insert failed:", e);
   }
 
-  if (objectType === "whatsapp_business_account") {
-    console.log("[meta-webhook] routing → whatsapp-webhook");
+  // v4.4.0 — Acknowledge to Meta synchronously, then process in background.
+  // Meta retries on slow/5xx responses; long AI runs were causing the same
+  // inbound to be ingested 2-3x, producing the duplicate-reply bug.
+  const processInBackground = (async () => {
     try {
-      await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-hub-signature-256": req.headers.get("x-hub-signature-256") || "",
-        },
-        body: bodyText,
-      });
+      if (objectType === "whatsapp_business_account") {
+        console.log("[meta-webhook] routing → whatsapp-webhook");
+        await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-hub-signature-256": req.headers.get("x-hub-signature-256") || "",
+          },
+          body: bodyText,
+        });
+      } else if (objectType === "instagram") {
+        await processInstagramEvent(payload);
+      } else if (objectType === "page") {
+        await processPageEnvelopeEvent(payload);
+      } else {
+        console.log("[meta-webhook] unknown object type:", objectType);
+      }
     } catch (e) {
-      console.error("[meta-webhook] forward to whatsapp-webhook failed:", e);
+      console.error("[meta-webhook] background processing failed:", e);
     }
-  } else if (objectType === "instagram") {
-    await processInstagramEvent(payload);
-  } else if (objectType === "page") {
-    await processPageEnvelopeEvent(payload);
+  })();
+
+  // @ts-ignore — EdgeRuntime is available in Supabase Functions runtime
+  if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any)?.waitUntil) {
+    // @ts-ignore
+    (EdgeRuntime as any).waitUntil(processInBackground);
   } else {
-    console.log("[meta-webhook] unknown object type:", objectType);
+    await processInBackground;
   }
 
   return new Response(JSON.stringify({ success: true }), {
@@ -417,6 +430,7 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
 
   const mediaUrl = message.attachments?.[0]?.payload?.url || null;
 
+  // ── DEDUPE 1: by Meta mid when present ────────────────────────────────
   if (message.mid) {
     const { data: existing } = await supabase
       .from("whatsapp_messages")
@@ -429,27 +443,47 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     }
   }
 
+  // ── DEDUPE 2: content-hash fallback for mid-less IG Login deliveries ──
+  // Meta sometimes delivers the same DM on BOTH entry.messaging[] AND
+  // entry.changes[] (field=messages) without mid. Hash = sha1 of
+  // direction|content|timestamp-minute. Unique index prevents the 2nd insert.
+  let dedupeHash: string | null = null;
+  if (!message.mid) {
+    try {
+      const tsMinute = Math.floor((event.timestamp || Date.now()) / 60000);
+      const raw = `${isOutbound ? "out" : "in"}|${content}|${tsMinute}`;
+      const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(raw));
+      dedupeHash = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch { /* fall through */ }
+  }
+
 // F4: resolve IG sender display name + avatar on first contact
   let contactName: string | null = null;
+  let contactUsername: string | null = null;
   let contactAvatarUrl: string | null = null;
   let avatarSource: "storage" | "meta_cdn" | null = null;
   let avatarSyncedAt: string | null = null;
   let avatarConsentBlocked = false;
-  if (platform === "instagram" && !isOutbound && integration) {
-    const profile = await resolveInstagramSenderProfile(contactId, integration);
-    contactName = profile?.name ?? null;
-    avatarConsentBlocked = !!profile?.consent_blocked;
-    // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
-    if (profile?.avatar_url && !avatarConsentBlocked) {
-      const persisted = await persistMetaAvatar({
-        scopedId: contactId,
-        platform: "instagram",
-        cdnUrl: profile.avatar_url,
-        serviceClient: supabase,
-      });
-      contactAvatarUrl = persisted.publicUrl;
-      avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
-      avatarSyncedAt = persisted.syncedAt;
+  if (platform === "instagram" && !isOutbound) {
+    // Some Meta payloads include the sender username inline — capture it first.
+    if (event.sender?.username) contactUsername = String(event.sender.username);
+    if (integration) {
+      const profile = await resolveInstagramSenderProfile(contactId, integration);
+      contactName = profile?.name ?? contactName;
+      contactUsername = profile?.username ?? contactUsername;
+      avatarConsentBlocked = !!profile?.consent_blocked;
+      // Persist Meta's short-lived CDN avatar into Storage so the URL never expires.
+      if (profile?.avatar_url && !avatarConsentBlocked) {
+        const persisted = await persistMetaAvatar({
+          scopedId: contactId,
+          platform: "instagram",
+          cdnUrl: profile.avatar_url,
+          serviceClient: supabase,
+        });
+        contactAvatarUrl = persisted.publicUrl;
+        avatarSource = persisted.source === "storage" ? "storage" : "meta_cdn";
+        avatarSyncedAt = persisted.syncedAt;
+      }
     }
   }
 
@@ -467,11 +501,17 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       status: isOutbound ? "sent" : "received",
       platform: platform as any,
       platform_message_id: message.mid || null,
+      dedupe_hash: dedupeHash,
     })
     .select("id")
     .single();
 
   if (error) {
+    // Unique-violation on dedupe_hash → already ingested via the other delivery channel.
+    if ((error as any).code === "23505") {
+      console.log(`[${platform}] dedup hit hash=${dedupeHash}`);
+      return;
+    }
     console.error(`[${platform}] insert failed:`, error.message);
     return;
   }
@@ -483,10 +523,10 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
       { onConflict: "branch_id,phone_number" }
     );
 
-    // Persist display name / avatar / provenance so the chat list/header stay
-    // populated even when newer message rows lack them, and so consent-blocked
+    // Persist display name / username / avatar / provenance so the chat list/header
+    // stay populated even when newer message rows lack them, and so consent-blocked
     // contacts aren't re-queried.
-    if (contactName || contactAvatarUrl || avatarConsentBlocked) {
+    if (contactName || contactUsername || contactAvatarUrl || avatarConsentBlocked) {
       try {
         await supabase.rpc("upsert_meta_contact_profile", {
           p_branch_id: branchId,
@@ -498,6 +538,7 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
           p_avatar_source: avatarSource,
           p_avatar_synced_at: avatarSyncedAt,
           p_avatar_consent_blocked: avatarConsentBlocked,
+          p_external_username: contactUsername,
         });
       } catch (profileErr) {
         console.warn(`[${platform}] profile upsert failed:`, profileErr);
@@ -751,21 +792,19 @@ async function ingestInstagramMention(value: any, igAccountId: string) {
 
 type IgProfile = {
   name: string | null;
+  username: string | null;       // raw username without leading @
   avatar_url: string | null;     // raw Meta CDN URL (caller persists to Storage)
   consent_blocked: boolean;      // true → comment-only contact, don't retry
 };
 const _igProfileCache = new Map<string, { profile: IgProfile; ts: number }>();
 
-// v2.2.0 — Surface consent-required errors so the caller can flag the row
-// and stop re-querying Meta on every inbound message. Avatar URL returned is
-// the raw Meta CDN link (short-lived) — the caller is expected to download
-// it and persist into Supabase Storage via persistMetaAvatar().
-// Exported so meta-admin can reuse it for the backfill action.
+// v2.3.0 — Returns IG username separately (display name may be consent-blocked
+// while username is still available via /me/conversations participants).
 export async function resolveInstagramSenderProfile(igUserId: string, integration: any): Promise<IgProfile> {
   const cached = _igProfileCache.get(igUserId);
   if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) return cached.profile;
 
-  const empty: IgProfile = { name: null, avatar_url: null, consent_blocked: false };
+  const empty: IgProfile = { name: null, username: null, avatar_url: null, consent_blocked: false };
   const pageToken = integration?.credentials?.page_access_token;
   const userToken = integration?.credentials?.access_token;
   const accessToken = pageToken || userToken;
@@ -797,9 +836,33 @@ export async function resolveInstagramSenderProfile(igUserId: string, integratio
     }
   }
 
+  // v2.3.0 fallback: /me/conversations?user_id=… typically returns the
+  // participant's username even when the direct /igsid lookup is consent-blocked.
+  async function attemptConversations(base: string, token: string, businessAccountId: string): Promise<IgProfile | null> {
+    try {
+      const url = `${base}/${encodeURIComponent(businessAccountId)}/conversations?platform=instagram&user_id=${encodeURIComponent(igUserId)}&fields=participants&access_token=${encodeURIComponent(token)}`;
+      const resp = await metaFetchWithFallback(url);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data?.data) return null;
+      for (const conv of data.data) {
+        const participants = conv?.participants?.data || [];
+        for (const p of participants) {
+          if (String(p?.id) === businessAccountId) continue;
+          const uname = p?.username || null;
+          const name = p?.name || null;
+          if (uname || name) {
+            return { name: name || (uname ? `@${uname}` : null), username: uname, avatar_url: null, consent_blocked: false };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[IG profile] conversations fallback threw:`, e instanceof Error ? e.message : e);
+    }
+    return null;
+  }
+
   try {
     let result = await attempt(primaryBase, accessToken, pageToken ? "page-token" : "user-token");
-    // If primary returned consent-required, every other path will too — fail fast.
     if (!result.ok && !result.consent && pageToken && userToken && userToken !== pageToken) {
       result = await attempt(primaryBase, userToken, "user-token-fallback");
     }
@@ -807,20 +870,30 @@ export async function resolveInstagramSenderProfile(igUserId: string, integratio
       result = await attempt(fallbackBase, accessToken, "alt-host");
     }
     if (!result.ok) {
+      // Conversations fallback — works in many consent-blocked scenarios.
+      const businessAccountId = String(integration?.config?.instagram_account_id || integration?.config?.page_id || "");
+      if (businessAccountId) {
+        const convProfile = await attemptConversations(primaryBase, accessToken, businessAccountId)
+          || await attemptConversations(fallbackBase, accessToken, businessAccountId);
+        if (convProfile && (convProfile.name || convProfile.username)) {
+          _igProfileCache.set(igUserId, { profile: convProfile, ts: Date.now() });
+          console.log(`[IG profile] resolved ${igUserId} via /me/conversations → ${convProfile.name || convProfile.username}`);
+          return convProfile;
+        }
+      }
       if (result.consent) {
-        // Cache the consent-blocked result so we don't keep hitting Meta.
-        const blocked: IgProfile = { name: null, avatar_url: null, consent_blocked: true };
+        const blocked: IgProfile = { name: null, username: null, avatar_url: null, consent_blocked: true };
         _igProfileCache.set(igUserId, { profile: blocked, ts: Date.now() });
         console.warn(`[IG profile] IGSID=${igUserId} is consent-blocked — caching, will NOT retry`);
         return blocked;
       }
-      console.warn(`[IG profile] all attempts failed for IGSID=${igUserId} pageToken=${pageToken ? 'present' : 'absent'} userToken=${userToken ? 'present' : 'absent'} — NOT caching, will retry on next message`);
+      console.warn(`[IG profile] all attempts failed for IGSID=${igUserId} — NOT caching, will retry on next message`);
       return empty;
     }
-    const username = result.data.username ? `@${result.data.username}` : null;
-    const display = result.data.name || username || null;
-    const profile: IgProfile = { name: display, avatar_url: result.data.profile_pic_url || null, consent_blocked: false };
-    if (display || profile.avatar_url) _igProfileCache.set(igUserId, { profile, ts: Date.now() });
+    const username = result.data.username || null;
+    const display = result.data.name || (username ? `@${username}` : null);
+    const profile: IgProfile = { name: display, username, avatar_url: result.data.profile_pic_url || null, consent_blocked: false };
+    if (display || profile.avatar_url || username) _igProfileCache.set(igUserId, { profile, ts: Date.now() });
     if (display) console.log(`[IG profile] resolved ${igUserId} → ${display}${profile.avatar_url ? ' (with avatar)' : ''}`);
     return profile;
   } catch (e) {
