@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CommConsentCheckbox, buildConsentPayload } from '@/components/consent/CommConsentCheckbox';
+import { deriveLeadSource } from '@/lib/leads/sourceFromReferrer';
 
 import { useNoindex } from '@/lib/seo/useNoindex';
 export default function EmbedLeadForm() {
@@ -18,11 +19,14 @@ export default function EmbedLeadForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  // Extract UTM params from URL
+  // Extract UTM params from URL + referrer
   const params = new URLSearchParams(window.location.search);
-  const utmSource = params.get('utm_source') || 'embed';
+  const utmSource = params.get('utm_source') || '';
   const utmMedium = params.get('utm_medium') || '';
   const utmCampaign = params.get('utm_campaign') || '';
+  const referrerUrl = typeof document !== 'undefined' ? document.referrer : '';
+  const landingPage = typeof window !== 'undefined' ? window.location.href : '';
+  const resolvedSource = deriveLeadSource(utmSource, referrerUrl, 'website');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +39,12 @@ export default function EmbedLeadForm() {
           fullName,
           phone,
           email: email || undefined,
-          source: 'website',
-          utm_source: utmSource,
-          utm_medium: utmMedium,
-          utm_campaign: utmCampaign,
+          source: resolvedSource,
+          utm_source: utmSource || null,
+          utm_medium: utmMedium || null,
+          utm_campaign: utmCampaign || null,
+          landing_page: landingPage,
+          referrer_url: referrerUrl,
           consent: { ...buildConsentPayload(consent), source: 'embed_form' },
         },
       });
