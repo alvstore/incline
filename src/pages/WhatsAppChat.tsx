@@ -80,6 +80,7 @@ interface ChatContact {
   is_unread?: boolean;
   bot_active?: boolean;
   platform?: string;
+  external_username?: string | null;
   assigned_staff?: { full_name: string; avatar_url: string | null } | null;
 }
 
@@ -112,6 +113,7 @@ interface ChatSettingsRow {
   assigned_to: string | null;
   contact_name: string | null;
   contact_avatar_url: string | null;
+  external_username?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,12 +155,12 @@ function isIgsid(value: string): boolean {
 }
 
 /** Friendly display label when no resolved name is available. */
-function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string }): string {
+function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string; external_username?: string | null }): string {
   if (c.contact_name && c.contact_name.trim()) return c.contact_name;
+  if (c.external_username && c.external_username.trim()) return '@' + c.external_username.replace(/^@/, '');
   if ((c.platform === 'instagram' || c.platform === 'messenger') && isIgsid(c.phone_number)) {
-    // No resolved handle yet (Meta consent-gated). Title stays clean; the
-    // scoped-id moves to the subtitle as metadata.
-    return c.platform === 'instagram' ? 'Instagram user' : 'Messenger user';
+    const tail = c.phone_number.slice(-4);
+    return (c.platform === 'instagram' ? 'Instagram user · …' : 'Messenger user · …') + tail;
   }
   return formatPhoneDisplay(c.phone_number);
 }
@@ -250,7 +252,7 @@ export default function WhatsAppChatPage() {
       if (!selectedBranch || selectedBranch === 'all') return [];
       const { data, error } = await supabase
         .from('whatsapp_chat_settings')
-        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url')
+        .select('phone_number, bot_active, is_unread, assigned_to, contact_name, contact_avatar_url, external_username')
         .eq('branch_id', selectedBranch);
       if (error) throw error;
       return (data ?? []) as ChatSettingsRow[];
@@ -379,10 +381,11 @@ export default function WhatsAppChatPage() {
       member_id: ident?.member_id ?? c.member_id,
       is_unread: s?.is_unread ?? false,
       bot_active: s?.bot_active ?? true,
+      external_username: s?.external_username ?? null,
       identity_source: ident?.source ?? 'unknown',
       lead_id: ident?.lead_id ?? null,
       contact_id: ident?.contact_id ?? null,
-    } as ChatContact & { identity_source: string; lead_id: string | null; contact_id: string | null };
+    } as ChatContact & { identity_source: string; lead_id: string | null; contact_id: string | null; external_username: string | null };
   });
 
   // Messages query for the selected contact
