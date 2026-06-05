@@ -272,13 +272,13 @@ Deno.serve(async (req) => {
   for (const k of required) {
     if (!input[k as keyof DispatchInput]) return bad(400, { error: `missing_${k}` });
   }
-  const validChannels: Channel[] = ['whatsapp', 'sms', 'email', 'in_app'];
+  const validChannels: Channel[] = ['whatsapp', 'sms', 'email', 'in_app', 'rcs'];
   if (!validChannels.includes(input.channel)) return bad(400, { error: 'invalid_channel' });
   if (!input.payload?.body) return bad(400, { error: 'missing_payload_body' });
 
-  // Normalize phone recipients to E.164 (digits only) for whatsapp/sms.
+  // Normalize phone recipients to E.164 (digits only) for whatsapp/sms/rcs.
   // Defaults to India (+91) when no country code is present.
-  if (input.channel === 'whatsapp' || input.channel === 'sms') {
+  if (input.channel === 'whatsapp' || input.channel === 'sms' || input.channel === 'rcs') {
     const digits = normalizePhoneDigits(input.recipient);
     if (!digits) {
       return bad(400, { error: 'invalid_recipient_phone', details: input.recipient });
