@@ -496,6 +496,33 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     }
   }
 
+  // ── ECHO DEDUPE: when Meta echoes the bot's own outbound message back,
+  // update the local row we already inserted (which has platform_message_id=NULL)
+  // instead of creating a second visible chat bubble.
+  if (isOutbound && message.mid) {
+    const { data: localPending } = await supabase
+      .from("whatsapp_messages")
+      .select("id, platform_message_id")
+      .eq("branch_id", branchId)
+      .eq("phone_number", contactId)
+      .eq("platform", platform as any)
+      .eq("direction", "outbound")
+      .is("platform_message_id", null)
+      .eq("content", content)
+      .gte("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (localPending?.id) {
+      await supabase
+        .from("whatsapp_messages")
+        .update({ platform_message_id: message.mid, status: "sent" })
+        .eq("id", localPending.id);
+      console.log(`[${platform}] echo merged into local bot row id=${localPending.id} mid=${message.mid}`);
+      return;
+    }
+  }
+
   const { data: inserted, error } = await supabase
     .from("whatsapp_messages")
     .insert({
@@ -516,9 +543,9 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     .single();
 
   if (error) {
-    // Unique-violation on dedupe_hash → already ingested via the other delivery channel.
+    // Unique-violation on dedupe_hash OR (platform, platform_message_id) → already ingested.
     if ((error as any).code === "23505") {
-      console.log(`[${platform}] dedup hit hash=${dedupeHash}`);
+      console.log(`[${platform}] dedup hit (unique violation) mid=${message.mid || "-"} hash=${dedupeHash || "-"}`);
       return;
     }
     console.error(`[${platform}] insert failed:`, error.message);
