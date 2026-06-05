@@ -97,6 +97,7 @@ const MESSENGER_PROVIDERS = [
 const SUPABASE_FUNCTION_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const PAYMENT_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/payment-webhook`;
 const WHATSAPP_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/whatsapp-webhook`;
+const RCS_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/rcs-webhook`;
 
 export function IntegrationSettings() {
   const { selectedBranch, branchFilter } = useBranchContext();
