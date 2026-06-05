@@ -1,3 +1,12 @@
+// v5.2.0 — Instagram duplicate-reply hardening:
+//          (1) atomic per-contact AI claim via claim_meta_ai_reply RPC stops
+//              double DMs when a long text + attachment arrive back-to-back or
+//              when Meta retries the same envelope under multiple shapes.
+//          (2) outbound echo events now UPDATE the local bot row instead of
+//              inserting a second visible message (with hard unique index
+//              fallback on (platform, platform_message_id)).
+//          (3) attachment-only inbound IG/Messenger events no longer trigger
+//              the lead-capture onboarding question.
 // v5.1.0 — Persist IG profile pictures to Supabase Storage (avatars/meta/…)
 //          + classify "User consent is required" responses so comment-only
 //          contacts are not re-queried on every inbound message.
