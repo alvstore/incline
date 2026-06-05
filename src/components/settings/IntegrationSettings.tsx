@@ -20,11 +20,11 @@ import {
   CreditCard, MessageSquare, Mail, Phone,
   Settings, CheckCircle, XCircle, Save, Globe, Webhook, Copy, ExternalLink,
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
-  Instagram, Facebook, Search,
+  Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
 import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
 
-type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger';
+type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
 const GOOGLE_PROVIDERS = [
   { id: 'google_business', name: 'Google Business Profile', description: 'Track Google Reviews & reply (review requests use the per-branch link)' },
@@ -65,6 +65,11 @@ const SMS_PROVIDERS = [
   { id: 'twilio', name: 'Twilio', description: 'Global SMS provider' },
 ];
 
+const RCS_PROVIDERS = [
+  { id: 'telinfy', name: 'Telinfy / GreenAds Global', description: 'Indian RCS Business Messaging — text + rich cards' },
+  { id: 'msg91', name: 'MSG91 RCS', description: 'MSG91 RCS channel (dispatcher pending — credentials only)' },
+];
+
 // RoundSMS defaults and labels now live in providerSchemas.ts
 
 const EMAIL_PROVIDERS = [
@@ -92,6 +97,7 @@ const MESSENGER_PROVIDERS = [
 const SUPABASE_FUNCTION_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const PAYMENT_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/payment-webhook`;
 const WHATSAPP_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/whatsapp-webhook`;
+const RCS_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/rcs-webhook`;
 
 export function IntegrationSettings() {
   const { selectedBranch, branchFilter } = useBranchContext();
@@ -161,6 +167,7 @@ export function IntegrationSettings() {
   const activeWhatsApp = getIntegrationsByType('whatsapp').filter((i: any) => i.is_active).length;
   const activeInstagram = getIntegrationsByType('instagram').filter((i: any) => i.is_active).length;
   const activeMessenger = getIntegrationsByType('messenger').filter((i: any) => i.is_active).length;
+  const activeRcs = getIntegrationsByType('rcs').filter((i: any) => i.is_active).length;
 
   const openConfig = (type: IntegrationType, provider: string) => {
     const existing = integrations.find(
@@ -204,6 +211,12 @@ export function IntegrationSettings() {
           variant={(activeWhatsApp + activeInstagram + activeMessenger) > 0 ? 'success' : 'default'}
         />
         <StatCard
+          title="RCS Providers"
+          value={activeRcs}
+          icon={Radio}
+          variant={activeRcs > 0 ? 'success' : 'default'}
+        />
+        <StatCard
           title="Google Business"
           value={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length}
           icon={Globe}
@@ -215,6 +228,7 @@ export function IntegrationSettings() {
         <TabsList className="flex flex-wrap gap-1 h-auto p-1 w-full max-w-5xl">
           <TabsTrigger value="payment" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Payment</TabsTrigger>
           <TabsTrigger value="sms" className="gap-1.5"><Phone className="h-3.5 w-3.5" />SMS</TabsTrigger>
+          <TabsTrigger value="rcs" className="gap-1.5"><Radio className="h-3.5 w-3.5" />RCS<Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] leading-4">Beta</Badge></TabsTrigger>
           <TabsTrigger value="email" className="gap-1.5"><Mail className="h-3.5 w-3.5" />Email</TabsTrigger>
           <TabsTrigger value="meta" className="gap-1.5"><Facebook className="h-3.5 w-3.5" />Meta</TabsTrigger>
           <TabsTrigger value="leads" className="gap-1.5"><Send className="h-3.5 w-3.5" />Lead Capture</TabsTrigger>
@@ -333,6 +347,99 @@ export function IntegrationSettings() {
                         >
                           <Settings className="h-4 w-4 mr-2" />
                           Configure
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rcs" className="space-y-4">
+          <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Radio className="h-5 w-5 text-indigo-600" />
+                RCS Business Messaging
+                <Badge variant="secondary" className="ml-1">Beta</Badge>
+              </CardTitle>
+              <CardDescription>
+                Rich Communication Services — branded sender, read receipts, suggested replies, and rich cards on Android.
+                Sends are unified through the dispatcher (channel <code>rcs</code>) and respect Do-Not-Contact + quiet hours.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* DLR Webhook URL */}
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Webhook className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm">Delivery Report (DLR) Webhook</h4>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paste this URL into your Telinfy / GreenAds dashboard → <strong>Delivery Receipt Webhook</strong>.
+                  Updates <code>sent → delivered → read</code> on every outbound RCS message.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
+                    {RCS_WEBHOOK_URL}
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    navigator.clipboard.writeText(RCS_WEBHOOK_URL);
+                    toast.success('Webhook URL copied!');
+                  }}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* MSG91 opt-in compliance reminder */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <strong>⚠️ Opt-in required:</strong> Per RCS carrier rules (Jio, Airtel, Vi), every recipient must have given
+                  explicit consent. Lead and self-registration forms now expose a "Receive updates over RCS/WhatsApp/SMS"
+                  checkbox — only consented contacts are eligible for RCS dispatches.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {RCS_PROVIDERS.map((provider) => {
+                  const config = getIntegrationsByType('rcs').find(
+                    (i: any) => i.provider === provider.id
+                  );
+                  const isActive = !!config?.is_active;
+                  return (
+                    <Card
+                      key={provider.id}
+                      className="rounded-2xl shadow-md shadow-slate-200/40 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+                    >
+                      <CardContent className="pt-6">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                              <Radio className="h-6 w-6" />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-semibold truncate">{provider.name}</h3>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{provider.description}</p>
+                            </div>
+                          </div>
+                          <Badge
+                            variant={isActive ? 'default' : 'secondary'}
+                            className={isActive ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : ''}
+                          >
+                            {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                            {isActive ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </div>
+                        <Button
+                          className="w-full mt-4"
+                          variant={isActive ? 'outline' : 'default'}
+                          onClick={() => openConfig('rcs', provider.id)}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          {config ? 'Configure' : 'Setup'}
                         </Button>
                       </CardContent>
                     </Card>

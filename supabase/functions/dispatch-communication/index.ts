@@ -52,6 +52,7 @@
 //         opaque Meta 131047 "Re-engagement message" error).
 // v1.6.0: accept attachment.kind='video' (mapped to WA document fallback); video forwarded as-is to email base64 path.
 // v1.5.0: send approved Meta WhatsApp templates when template_id is provided; harden IN phone normalization.
+// v1.17.0: route channel='rcs' to send-rcs (Telinfy); E.164 normalisation now covers RCS too.
 // v1.4.0: normalize whatsapp/sms recipient to E.164 digits-only (defaults +91 for IN); reject malformed phones early.
 // v1.3.1: extract real edge-function error bodies and pre-create WA rows for all WhatsApp sends.
 // v1.3.0: route channel=email to send-email (was incorrectly hitting send-message);
@@ -73,7 +74,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-type Channel = 'whatsapp' | 'sms' | 'email' | 'in_app';
+type Channel = 'whatsapp' | 'sms' | 'email' | 'in_app' | 'rcs';
 type Category =
   | 'membership_reminder' | 'payment_receipt' | 'class_notification'
   | 'announcement' | 'low_stock' | 'new_lead' | 'payment_alert'
@@ -272,13 +273,13 @@ Deno.serve(async (req) => {
   for (const k of required) {
     if (!input[k as keyof DispatchInput]) return bad(400, { error: `missing_${k}` });
   }
-  const validChannels: Channel[] = ['whatsapp', 'sms', 'email', 'in_app'];
+  const validChannels: Channel[] = ['whatsapp', 'sms', 'email', 'in_app', 'rcs'];
   if (!validChannels.includes(input.channel)) return bad(400, { error: 'invalid_channel' });
   if (!input.payload?.body) return bad(400, { error: 'missing_payload_body' });
 
-  // Normalize phone recipients to E.164 (digits only) for whatsapp/sms.
+  // Normalize phone recipients to E.164 (digits only) for whatsapp/sms/rcs.
   // Defaults to India (+91) when no country code is present.
-  if (input.channel === 'whatsapp' || input.channel === 'sms') {
+  if (input.channel === 'whatsapp' || input.channel === 'sms' || input.channel === 'rcs') {
     const digits = normalizePhoneDigits(input.recipient);
     if (!digits) {
       return bad(400, { error: 'invalid_recipient_phone', details: input.recipient });
@@ -864,6 +865,22 @@ Deno.serve(async (req) => {
           });
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { message_id?: string })?.message_id;
+          break;
+        }
+        case 'rcs': {
+          const r = await supabase.functions.invoke('send-rcs', {
+            body: {
+              branch_id: input.branch_id,
+              recipient: input.recipient,
+              message: input.payload.body,
+              kind: (input.payload.variables as Record<string, unknown> | undefined)?.rcs_kind ?? 'text',
+              log_id: log!.id,
+            },
+          });
+          if (r.error) throw new Error(await functionErrorDetail(r.error));
+          const rd = r.data as { provider_message_id?: string; status?: string; reason?: string } | undefined;
+          if (rd?.status && rd.status !== 'sent') throw new Error(rd.reason || rd.status);
+          providerMessageId = rd?.provider_message_id;
           break;
         }
         case 'in_app': {
