@@ -211,10 +211,10 @@ export function IntegrationSettings() {
           variant={(activeWhatsApp + activeInstagram + activeMessenger) > 0 ? 'success' : 'default'}
         />
         <StatCard
-          title="Google Business"
-          value={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length}
-          icon={Globe}
-          variant={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length > 0 ? 'success' : 'default'}
+          title="RCS Providers"
+          value={activeRcs}
+          icon={Radio}
+          variant={activeRcs > 0 ? 'success' : 'default'}
         />
       </div>
 
@@ -222,6 +222,7 @@ export function IntegrationSettings() {
         <TabsList className="flex flex-wrap gap-1 h-auto p-1 w-full max-w-5xl">
           <TabsTrigger value="payment" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Payment</TabsTrigger>
           <TabsTrigger value="sms" className="gap-1.5"><Phone className="h-3.5 w-3.5" />SMS</TabsTrigger>
+          <TabsTrigger value="rcs" className="gap-1.5"><Radio className="h-3.5 w-3.5" />RCS<Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] leading-4">Beta</Badge></TabsTrigger>
           <TabsTrigger value="email" className="gap-1.5"><Mail className="h-3.5 w-3.5" />Email</TabsTrigger>
           <TabsTrigger value="meta" className="gap-1.5"><Facebook className="h-3.5 w-3.5" />Meta</TabsTrigger>
           <TabsTrigger value="leads" className="gap-1.5"><Send className="h-3.5 w-3.5" />Lead Capture</TabsTrigger>
