@@ -20,11 +20,11 @@ import {
   CreditCard, MessageSquare, Mail, Phone,
   Settings, CheckCircle, XCircle, Save, Globe, Webhook, Copy, ExternalLink,
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
-  Instagram, Facebook, Search,
+  Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
 import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
 
-type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger';
+type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
 const GOOGLE_PROVIDERS = [
   { id: 'google_business', name: 'Google Business Profile', description: 'Track Google Reviews & reply (review requests use the per-branch link)' },
