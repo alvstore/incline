@@ -1,58 +1,57 @@
+## Audit finding
 
-## Audit findings
+The duplicate Instagram replies are coming from two separate paths:
 
-Current state of the RCS integration:
+1. **Two inbound events in the same second**
+   - The long PR/collaboration text and the attachment were stored as two inbound Instagram messages.
+   - Each inbound message immediately triggered `triggerAiReply()`, so the bot replied once to the PR text and once to the attachment.
 
-| Layer | Status |
-|---|---|
-| `send-rcs` edge fn (Telinfy POST) | ✅ Live (v0.2.0) |
-| `rcs-webhook` (DLR receiver) | ✅ Live |
-| `providerSchemas.ts` → `rcs_telinfy` / `rcs_msg91` | ✅ Schema defined |
-| `CommChannel` type includes `'rcs'` | ✅ |
-| **`dispatch-communication` routing** | ❌ `validChannels` excludes `rcs` → every dispatch returns `invalid_channel` |
-| **Settings → Integrations UI tab for RCS** | ❌ Missing — no way to enter API key, sender ID, base URL, toggle on/off |
-| **Channel kill-switch (`channel_active_for_branch`) for RCS** | ❌ Not wired |
-| Stats card on Integrations overview | ❌ No RCS counter |
+2. **Instagram echo webhook stores the bot’s sent message again**
+   - `triggerAiReply()` first inserts an outbound row with `platform_message_id = null`.
+   - Meta then sends the outbound echo with its real `mid`, and `meta-webhook` inserts another outbound row.
+   - This makes the CRM show each bot response twice: one local pending/sent row + one echo row.
 
-Net effect: RCS is fully built on the backend but unreachable — admins cannot configure it and the dispatcher refuses the channel.
+A third risk also exists: the AI send path has no per-inbound lock, so webhook retries or parallel shapes can still race.
 
 ## Plan
 
-### 1. New "RCS" tab in `IntegrationSettings.tsx`
-Mirrors the SMS tab pattern (same `openConfig` / `ProviderConfigDrawer` flow):
-- Add `'rcs'` to `IntegrationType` union
-- New tab trigger (`<MessageSquare>` icon, label "RCS") between SMS and WhatsApp
-- Provider grid with two cards: **Telinfy / GreenAds** (primary) and **MSG91 RCS** (optional, schema already exists)
-- Each card shows: status badge (Active/Inactive), Configure button, Enable/Disable switch (same `is_active` toggle used by SMS/WhatsApp)
-- Top of tab: info panel with the DLR webhook URL `${SUPABASE_FUNCTION_BASE}/rcs-webhook` + copy button + one-line "Paste this in Telinfy → Delivery Receipt Webhook"
-- Overview stats row: add "RCS Providers" tile showing active count
-- "Opt-in compliance" callout (per MSG91 RCS rules already saved in prior work): reminder that lead form must collect explicit consent before RCS sends — link to `/leads/new`
+### 1. Add an Instagram AI reply idempotency lock
+- Create a database function `claim_meta_ai_reply(...)` that atomically decides whether the bot is allowed to reply.
+- It will block a second AI reply for the same Instagram/Messenger contact if:
+  - the inbound message already has a reply marker, or
+  - another inbound from the same contact triggered AI within a short burst window, or
+  - the exact same non-fitness redirect was already sent recently.
+- This prevents double DM replies even if Meta sends multiple webhook variants or an attachment follows the main text.
 
-The drawer (`ProviderConfigDrawer`) already renders fields from `providerSchemas.ts` so no new form code needed; it'll show Sender ID, Base URL, API Key automatically from the existing `rcs_telinfy` schema.
+### 2. Fix outbound echo handling
+- In `meta-webhook`, when an outbound echo arrives:
+  - do not insert a second visible outbound row if a matching pending/sent local bot row exists within the last few minutes;
+  - instead update that existing row with `platform_message_id` and `status = sent`.
+- Add a partial unique index on `(platform, platform_message_id)` for non-null message IDs, since the audit confirmed there are currently no duplicates.
 
-### 2. Dispatcher routing (`supabase/functions/dispatch-communication/index.ts`)
-- Extend `Channel` type and `validChannels` to include `'rcs'`
-- Add `case 'rcs':` in the channel-routing switch that invokes `send-rcs` with `{ branch_id, recipient, message: payload.body, log_id, kind: payload.variables?.rcs_kind ?? 'text' }`
-- Pre-route check: skip phone normalisation block already gated to `whatsapp|sms` (RCS uses same E.164, but reuse the same digit normaliser without rejecting)
-- Honor channel kill-switch: `channel_active_for_branch` RPC currently only knows whatsapp/sms/email — extend it (migration) to treat `'rcs'` the same way (look up `integration_settings` row where `integration_type='rcs' AND is_active`)
+### 3. Gate AI replies before calling the brain
+- Update `triggerAiReply()` in `supabase/functions/meta-webhook/index.ts`:
+  - call the new claim function before `runUnifiedAgent()`;
+  - skip silently when the claim says another reply is already in progress/recently sent;
+  - after inserting the outbound bot row, link it back to the inbound message marker.
 
-### 3. `channel_active_for_branch` migration
-Single SQL migration that updates the function body so passing `p_channel='rcs'` resolves to `EXISTS (SELECT 1 FROM integration_settings WHERE integration_type='rcs' AND is_active AND (branch_id = p_branch_id OR branch_id IS NULL))`.
+### 4. Make attachments and unsupported IG message types non-chatty
+- For Instagram/Messenger, do not run the lead-capture AI on pure `[Attachment]`, image-only, story/media-only messages unless there is meaningful text.
+- This keeps the human PR message redirect, but prevents the attachment from triggering “Hi there! What’s your name?”.
 
-### 4. Minor UI polish (Vuexy)
-- Card uses `rounded-2xl shadow-lg shadow-slate-200/50`
-- Status badge: emerald when active, slate when inactive
-- "Beta" pill on RCS tab (channel still rolling out across Indian carriers)
+### 5. Improve non-fitness stop behavior
+- The existing non-fitness guard already pauses bot/nurture, but because parallel events race, the second event can enter before the pause is visible.
+- The new claim lock closes that race, so partnerships/media/collaboration messages receive only one redirect and then bot is paused.
 
-## Files
+### 6. Validate with live data/logs
+- Query the same Instagram contact timeline after the change to verify one visible outbound per AI decision.
+- Deploy/test `meta-webhook` if edge function changes are approved.
 
-**Edit**
-- `src/components/settings/IntegrationSettings.tsx` — add tab, stats, providers list
-- `supabase/functions/dispatch-communication/index.ts` — channel routing + validChannels
+## Files to change
 
-**Create**
-- `supabase/migrations/<ts>_channel_active_for_branch_rcs.sql` — extend RPC
+- `supabase/functions/meta-webhook/index.ts`
+- New migration under `supabase/migrations/` for the idempotency RPC and unique message-id index
 
-## Out of scope
-- RCS template management UI (rich cards, suggested replies) — schema-only for now; `kind:'card'` already supported by `send-rcs` and reachable via `payload.variables.rcs_kind='card'` from campaigns
-- MSG91 RCS dispatcher (only Telinfy is wired in `send-rcs`); MSG91 card will save creds but show "Dispatcher pending" until added
+## Expected result
+
+Instagram AI will send at most one DM reply per inbound burst, attachments will not trigger an extra onboarding question, and Meta echo events will update existing outbound rows instead of duplicating them in chat.

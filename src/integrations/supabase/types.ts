@@ -8255,6 +8255,33 @@ export type Database = {
           },
         ]
       }
+      meta_ai_reply_claims: {
+        Row: {
+          branch_id: string
+          bucket: number
+          created_at: string
+          inbound_message_id: string | null
+          phone_number: string
+          platform: string
+        }
+        Insert: {
+          branch_id: string
+          bucket: number
+          created_at?: string
+          inbound_message_id?: string | null
+          phone_number: string
+          platform: string
+        }
+        Update: {
+          branch_id?: string
+          bucket?: number
+          created_at?: string
+          inbound_message_id?: string | null
+          phone_number?: string
+          platform?: string
+        }
+        Relationships: []
+      }
       mips_connections: {
         Row: {
           branch_id: string
@@ -13274,6 +13301,16 @@ export type Database = {
           _duration_minutes?: number
           _scheduled_at: string
           _trainer_id: string
+        }
+        Returns: boolean
+      }
+      claim_meta_ai_reply: {
+        Args: {
+          p_branch_id: string
+          p_inbound_message_id?: string
+          p_phone: string
+          p_platform: string
+          p_window_seconds?: number
         }
         Returns: boolean
       }

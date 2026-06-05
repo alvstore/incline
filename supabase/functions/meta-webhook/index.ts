@@ -1,3 +1,12 @@
+// v5.2.0 — Instagram duplicate-reply hardening:
+//          (1) atomic per-contact AI claim via claim_meta_ai_reply RPC stops
+//              double DMs when a long text + attachment arrive back-to-back or
+//              when Meta retries the same envelope under multiple shapes.
+//          (2) outbound echo events now UPDATE the local bot row instead of
+//              inserting a second visible message (with hard unique index
+//              fallback on (platform, platform_message_id)).
+//          (3) attachment-only inbound IG/Messenger events no longer trigger
+//              the lead-capture onboarding question.
 // v5.1.0 — Persist IG profile pictures to Supabase Storage (avatars/meta/…)
 //          + classify "User consent is required" responses so comment-only
 //          contacts are not re-queried on every inbound message.
@@ -487,6 +496,33 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     }
   }
 
+  // ── ECHO DEDUPE: when Meta echoes the bot's own outbound message back,
+  // update the local row we already inserted (which has platform_message_id=NULL)
+  // instead of creating a second visible chat bubble.
+  if (isOutbound && message.mid) {
+    const { data: localPending } = await supabase
+      .from("whatsapp_messages")
+      .select("id, platform_message_id")
+      .eq("branch_id", branchId)
+      .eq("phone_number", contactId)
+      .eq("platform", platform as any)
+      .eq("direction", "outbound")
+      .is("platform_message_id", null)
+      .eq("content", content)
+      .gte("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (localPending?.id) {
+      await supabase
+        .from("whatsapp_messages")
+        .update({ platform_message_id: message.mid, status: "sent" })
+        .eq("id", localPending.id);
+      console.log(`[${platform}] echo merged into local bot row id=${localPending.id} mid=${message.mid}`);
+      return;
+    }
+  }
+
   const { data: inserted, error } = await supabase
     .from("whatsapp_messages")
     .insert({
@@ -507,9 +543,9 @@ async function ingestMessagingEvent(event: any, platform: Platform) {
     .single();
 
   if (error) {
-    // Unique-violation on dedupe_hash → already ingested via the other delivery channel.
+    // Unique-violation on dedupe_hash OR (platform, platform_message_id) → already ingested.
     if ((error as any).code === "23505") {
-      console.log(`[${platform}] dedup hit hash=${dedupeHash}`);
+      console.log(`[${platform}] dedup hit (unique violation) mid=${message.mid || "-"} hash=${dedupeHash || "-"}`);
       return;
     }
     console.error(`[${platform}] insert failed:`, error.message);
@@ -1007,12 +1043,45 @@ async function triggerAiReply(
     console.warn(`[AI:${platform}] opt-out gate failed (continuing):`, gateErr);
   }
 
+  // ── ATTACHMENT-ONLY GUARD (IG/Messenger):
+  // Don't run lead-capture AI on pure attachment/media messages with no real text.
+  const rawContent = (inboundMsg?.content || "").trim();
+  const isAttachmentOnly =
+    rawContent === "[Attachment]" ||
+    rawContent === "[Image]" ||
+    /^\[(image|video|audio|file|sticker|share|story|reels?)[^\]]*\]$/i.test(rawContent) ||
+    rawContent.length < 2;
+  if (isAttachmentOnly && (platform === "instagram" || platform === "messenger")) {
+    console.log(`[AI:${platform}] skipping attachment-only message id=${messageId}`);
+    return;
+  }
+
+  // ── AI REPLY CLAIM (idempotency):
+  // Only the first inbound in a ~45s burst from this contact may trigger AI.
+  // Prevents double DMs when long-text + attachment arrive back-to-back, or
+  // when Meta retries the same envelope under multiple webhook shapes.
+  try {
+    const { data: claimed } = await supabase.rpc("claim_meta_ai_reply" as any, {
+      p_branch_id: branchId,
+      p_platform: platform,
+      p_phone: senderId,
+      p_window_seconds: 45,
+      p_inbound_message_id: messageId,
+    });
+    if (claimed === false) {
+      console.log(`[AI:${platform}] reply claim already held for ${senderId} — skipping duplicate`);
+      return;
+    }
+  } catch (claimErr) {
+    console.warn(`[AI:${platform}] claim_meta_ai_reply failed (continuing fail-open):`, claimErr);
+  }
+
   const result = await runUnifiedAgent(supabase, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     senderId,
     branchId,
     platform,
     messageId,
-    messageContent: inboundMsg?.content || "",
+    messageContent: rawContent,
     contactName: inboundMsg?.contact_name || null,
     messageType: inboundMsg?.message_type || "text",
   });
