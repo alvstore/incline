@@ -73,7 +73,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-type Channel = 'whatsapp' | 'sms' | 'email' | 'in_app';
+type Channel = 'whatsapp' | 'sms' | 'email' | 'in_app' | 'rcs';
 type Category =
   | 'membership_reminder' | 'payment_receipt' | 'class_notification'
   | 'announcement' | 'low_stock' | 'new_lead' | 'payment_alert'
