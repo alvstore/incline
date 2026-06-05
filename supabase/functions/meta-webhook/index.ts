@@ -1043,12 +1043,45 @@ async function triggerAiReply(
     console.warn(`[AI:${platform}] opt-out gate failed (continuing):`, gateErr);
   }
 
+  // ── ATTACHMENT-ONLY GUARD (IG/Messenger):
+  // Don't run lead-capture AI on pure attachment/media messages with no real text.
+  const rawContent = (inboundMsg?.content || "").trim();
+  const isAttachmentOnly =
+    rawContent === "[Attachment]" ||
+    rawContent === "[Image]" ||
+    /^\[(image|video|audio|file|sticker|share|story|reels?)[^\]]*\]$/i.test(rawContent) ||
+    rawContent.length < 2;
+  if (isAttachmentOnly && (platform === "instagram" || platform === "messenger")) {
+    console.log(`[AI:${platform}] skipping attachment-only message id=${messageId}`);
+    return;
+  }
+
+  // ── AI REPLY CLAIM (idempotency):
+  // Only the first inbound in a ~45s burst from this contact may trigger AI.
+  // Prevents double DMs when long-text + attachment arrive back-to-back, or
+  // when Meta retries the same envelope under multiple webhook shapes.
+  try {
+    const { data: claimed } = await supabase.rpc("claim_meta_ai_reply" as any, {
+      p_branch_id: branchId,
+      p_platform: platform,
+      p_phone: senderId,
+      p_window_seconds: 45,
+      p_inbound_message_id: messageId,
+    });
+    if (claimed === false) {
+      console.log(`[AI:${platform}] reply claim already held for ${senderId} — skipping duplicate`);
+      return;
+    }
+  } catch (claimErr) {
+    console.warn(`[AI:${platform}] claim_meta_ai_reply failed (continuing fail-open):`, claimErr);
+  }
+
   const result = await runUnifiedAgent(supabase, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     senderId,
     branchId,
     platform,
     messageId,
-    messageContent: inboundMsg?.content || "",
+    messageContent: rawContent,
     contactName: inboundMsg?.contact_name || null,
     messageType: inboundMsg?.message_type || "text",
   });
