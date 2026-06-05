@@ -216,6 +216,12 @@ export function IntegrationSettings() {
           icon={Radio}
           variant={activeRcs > 0 ? 'success' : 'default'}
         />
+        <StatCard
+          title="Google Business"
+          value={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length}
+          icon={Globe}
+          variant={getIntegrationsByType('google_business').filter((i: any) => i.is_active).length > 0 ? 'success' : 'default'}
+        />
       </div>
 
       <Tabs defaultValue="payment" className="space-y-4">
