@@ -65,6 +65,11 @@ const SMS_PROVIDERS = [
   { id: 'twilio', name: 'Twilio', description: 'Global SMS provider' },
 ];
 
+const RCS_PROVIDERS = [
+  { id: 'telinfy', name: 'Telinfy / GreenAds Global', description: 'Indian RCS Business Messaging — text + rich cards' },
+  { id: 'msg91', name: 'MSG91 RCS', description: 'MSG91 RCS channel (dispatcher pending — credentials only)' },
+];
+
 // RoundSMS defaults and labels now live in providerSchemas.ts
 
 const EMAIL_PROVIDERS = [
