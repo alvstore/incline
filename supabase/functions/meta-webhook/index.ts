@@ -1001,14 +1001,32 @@ async function getFallbackBranchId(): Promise<string | null> {
   return _fallbackBranchId;
 }
 
+// Normalize a Meta scoped ID (numeric) to the same E.164-ish form
+// (`+<digits>`) that the `normalize_phone_in` Postgres trigger produces
+// for whatsapp_messages.phone_number and whatsapp_chat_settings.phone_number.
+// Without this, every `.eq("phone_number", senderId)` lookup in the AI brain
+// misses (DB has `+1380…`, code queries `1380…`) and the model gets empty
+// history → re-asks "What's your name?" forever.
+function toPhoneKey(raw: string | null | undefined): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return s;
+  if (s.startsWith("+")) return s;
+  if (/^[0-9]+$/.test(s)) return `+${s}`;
+  return s;
+}
+
 async function triggerAiReply(
   messageId: string,
-  senderId: string,
+  rawSenderId: string,
   branchId: string,
   platform: Platform,
   _integration?: any
 ) {
-  console.log(`[AI:${platform}] start sender=${senderId} branch=${branchId}`);
+  // `senderId` is used for every DB lookup against phone_number/contact_key.
+  // `rawSenderId` is preserved separately for the Meta Graph API call, which
+  // requires the un-prefixed scoped ID as `recipient.id`.
+  const senderId = toPhoneKey(rawSenderId);
+  console.log(`[AI:${platform}] start sender=${senderId} (raw=${rawSenderId}) branch=${branchId}`);
 
   // Load the inbound message content + type for story guard
   const { data: inboundMsg } = await supabase
