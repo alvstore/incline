@@ -1036,12 +1036,28 @@ async function triggerAiReply(
   const senderId = toPhoneKey(rawSenderId);
   console.log(`[AI:${platform}] start sender=${senderId} (raw=${rawSenderId}) branch=${branchId}`);
 
+  // ── Per-channel kill-switch (Settings → AI Agent Control Center) ─────────
+  // If the master switch or this platform's channel toggle is OFF, skip
+  // BEFORE doing any DB lookups / claims / AI work. Defaults to enabled when
+  // ops_config.channels is missing, for back-compat.
+  try {
+    const { isAiChannelEnabled } = await import("../_shared/ai-channel-toggle.ts");
+    const channelOn = await isAiChannelEnabled(supabase, branchId, platform);
+    if (!channelOn) {
+      console.log(`[AI:${platform}] skipped — channel disabled in AI settings (branch=${branchId})`);
+      return;
+    }
+  } catch (chanErr) {
+    console.warn(`[AI:${platform}] channel-toggle check failed (continuing fail-open):`, chanErr);
+  }
+
   // Load the inbound message content + type for story guard
   const { data: inboundMsg } = await supabase
     .from("whatsapp_messages")
     .select("content, contact_name, message_type")
     .eq("id", messageId)
     .single();
+
 
   // ── Do-Not-Contact opt-out gate (same behaviour as whatsapp-webhook) ─────
   try {
