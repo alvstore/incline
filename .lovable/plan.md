@@ -1,57 +1,72 @@
-## Audit finding
+## Audit findings
 
-The duplicate Instagram replies are coming from two separate paths:
+The screenshots match live backend data:
 
-1. **Two inbound events in the same second**
-   - The long PR/collaboration text and the attachment were stored as two inbound Instagram messages.
-   - Each inbound message immediately triggered `triggerAiReply()`, so the bot replied once to the PR text and once to the attachment.
+- `@shweta_mulani` sent a clear PR/collaboration inquiry.
+- The AI sent the correct non-membership redirect twice, then incorrectly asked for name twice, then scheduled lead-nurture follow-ups later.
+- The system did create AI memory with `current_intent = non_fitness`, but the active chat row still has `bot_active = true`, `do_not_contact = false`, and nurture retries enabled.
 
-2. **Instagram echo webhook stores the bot’s sent message again**
-   - `triggerAiReply()` first inserts an outbound row with `platform_message_id = null`.
-   - Meta then sends the outbound echo with its real `mid`, and `meta-webhook` inserts another outbound row.
-   - This makes the CRM show each bot response twice: one local pending/sent row + one echo row.
+Root causes found:
 
-A third risk also exists: the AI send path has no per-inbound lock, so webhook retries or parallel shapes can still race.
+1. **Instagram contact key mismatch**
+   - `whatsapp_messages` and `whatsapp_chat_settings` normalize Instagram IDs like phone numbers and add `+`.
+   - `ai_memory` stores the same Instagram contact without `+`.
+   - Result: the brain can write “non_fitness” memory but later reads a different contact key and misses its own memory.
 
-## Plan
+2. **Lead nurture does not read AI memory or non-fitness intent**
+   - `lead-nurture-followup` only checks `bot_active` / `do_not_contact` in `whatsapp_chat_settings`.
+   - It does not suppress rows where `ai_memory.current_intent = non_fitness` or `handoff_reason = non_fitness_inquiry`.
+   - Result: PR/media/vendor contacts can still receive “early access / Founding Member” follow-ups.
 
-### 1. Add an Instagram AI reply idempotency lock
-- Create a database function `claim_meta_ai_reply(...)` that atomically decides whether the bot is allowed to reply.
-- It will block a second AI reply for the same Instagram/Messenger contact if:
-  - the inbound message already has a reply marker, or
-  - another inbound from the same contact triggered AI within a short burst window, or
-  - the exact same non-fitness redirect was already sent recently.
-- This prevents double DM replies even if Meta sends multiple webhook variants or an attachment follows the main text.
+3. **Instagram sender idempotency is incomplete**
+   - `meta-webhook` has a claim RPC and echo merge logic.
+   - But `send-meta-dm` marks messages as sent without saving the provider message ID into `platform_message_id`.
+   - Result: Meta echo events can still appear as a second visible outbound bubble, and send-time duplicate suppression is weaker than WhatsApp.
 
-### 2. Fix outbound echo handling
-- In `meta-webhook`, when an outbound echo arrives:
-  - do not insert a second visible outbound row if a matching pending/sent local bot row exists within the last few minutes;
-  - instead update that existing row with `platform_message_id` and `status = sent`.
-- Add a partial unique index on `(platform, platform_message_id)` for non-null message IDs, since the audit confirmed there are currently no duplicates.
+4. **Non-fitness guard is not a hard global stop yet**
+   - The AI prompt says PR/media/vendor inquiries must stop, but the cron and contact settings are still allowed to continue if any update misses the normalized chat row.
+   - This needs deterministic backend suppression, not just prompt instructions.
 
-### 3. Gate AI replies before calling the brain
-- Update `triggerAiReply()` in `supabase/functions/meta-webhook/index.ts`:
-  - call the new claim function before `runUnifiedAgent()`;
-  - skip silently when the claim says another reply is already in progress/recently sent;
-  - after inserting the outbound bot row, link it back to the inbound message marker.
+## Fix plan
 
-### 4. Make attachments and unsupported IG message types non-chatty
-- For Instagram/Messenger, do not run the lead-capture AI on pure `[Attachment]`, image-only, story/media-only messages unless there is meaningful text.
-- This keeps the human PR message redirect, but prevents the attachment from triggering “Hi there! What’s your name?”.
+1. **Normalize Instagram memory keys consistently**
+   - Add a shared helper for Meta contact keys used by `ai-memory` and `ai-agent-brain`.
+   - For Instagram/Messenger IDs, use the same canonical key as chat/messages (`+<digits>` when the database normalizer will store it that way).
+   - Load memory with both legacy and canonical keys during transition, then write only the canonical key.
 
-### 5. Improve non-fitness stop behavior
-- The existing non-fitness guard already pauses bot/nurture, but because parallel events race, the second event can enter before the pause is visible.
-- The new claim lock closes that race, so partnerships/media/collaboration messages receive only one redirect and then bot is paused.
+2. **Make non-fitness intent a hard suppression state**
+   - In `runUnifiedAgent`, when PR/media/vendor/collaboration is detected:
+     - update `whatsapp_chat_settings` with `bot_active=false`, `do_not_contact=true`, `handoff_reason='non_fitness_inquiry'`, and clear lead-nurture eligibility;
+     - write AI memory with `current_intent='non_fitness'` on the canonical key;
+     - avoid any lead-capture partial data for that contact.
+   - Add a pre-reply guard: if memory or chat settings already says non-fitness/DNC/bot paused, do not call the model and do not ask name/email/fitness questions.
 
-### 6. Validate with live data/logs
-- Query the same Instagram contact timeline after the change to verify one visible outbound per AI decision.
-- Deploy/test `meta-webhook` if edge function changes are approved.
+3. **Block nurture follow-ups for non-membership contacts**
+   - Update `lead-nurture-followup` to skip any chat where:
+     - `bot_active=false`, `do_not_contact=true`, or `handoff_reason='non_fitness_inquiry'`;
+     - AI memory for the contact has `current_intent='non_fitness'`;
+     - last outbound was the non-membership redirect;
+     - partial lead data only contains `contact_name` and no real membership intent.
+   - Replace the time-based dedupe key `lead_nurture:${chat.id}:${Date.now()}` with a stable key per chat/retry window so retries cannot duplicate.
 
-## Files to change
+4. **Add Instagram send-time lock and provider ID persistence**
+   - Update `send-meta-dm` to save Meta’s returned message ID into `whatsapp_messages.platform_message_id`.
+   - Add/use a platform-aware send lock for Instagram/Messenger similar to WhatsApp, keyed by `platform + branch + recipient`.
+   - If lock is held, mark the local duplicate as suppressed instead of sending.
 
-- `supabase/functions/meta-webhook/index.ts`
-- New migration under `supabase/migrations/` for the idempotency RPC and unique message-id index
+5. **Harden Meta webhook duplicate handling**
+   - Ensure the AI reply claim uses the canonical contact key and fails closed for duplicate-prone errors.
+   - Keep attachment-only messages from triggering onboarding.
+   - Before inserting any AI outbound row, check for the same outbound content to the same contact in the last few minutes and suppress it.
 
-## Expected result
+6. **Repair existing bad state for affected contacts**
+   - One-time data cleanup for current Instagram PR/non-membership contacts, including `@shweta_mulani`:
+     - set `bot_active=false`, `do_not_contact=true`, `handoff_reason='non_fitness_inquiry'`;
+     - align legacy `ai_memory` rows to the canonical contact key;
+     - stop further nurture retries.
 
-Instagram AI will send at most one DM reply per inbound burst, attachments will not trigger an extra onboarding question, and Meta echo events will update existing outbound rows instead of duplicating them in chat.
+7. **Validate after implementation**
+   - Query `@shweta_mulani` rows to confirm no active nurture path remains.
+   - Test simulated duplicate Instagram inbound events and verify only one outbound row/send is produced.
+   - Test a PR/collaboration message and verify only the redirect is sent once, with no future nurture follow-up.
+   - Deploy the changed edge functions.
