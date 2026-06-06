@@ -307,6 +307,30 @@ export function AILogsTab() {
             );
           })}
         </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {PLATFORM_CHIPS.map((chip) => {
+            const isActive = platformFilter === chip.value;
+            const count =
+              chip.value === "all"
+                ? logs.length
+                : logs.filter((l: any) => (l.platform ?? "whatsapp") === chip.value).length;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                onClick={() => setPlatformFilter(chip.value)}
+                className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? chip.className + " ring-2 ring-offset-1 ring-indigo-300"
+                    : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {chip.label} <span className="opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="divide-y">
