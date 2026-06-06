@@ -193,15 +193,17 @@ export default function PublicRegistration() {
       <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
         {/* Top bar */}
         <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-xl bg-white/10 p-1.5 backdrop-blur-md ring-1 ring-white/15">
-              <img src={inclineLogo} alt="The Incline Life" className="h-9 w-9 object-contain" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold leading-tight">The Incline Life</h1>
-              <p className="text-[10px] text-white/60">Member registration</p>
-            </div>
+          <div className="flex items-center gap-3">
+            <img
+              src={inclineLogo}
+              alt="The Incline Life"
+              className="h-11 w-auto object-contain drop-shadow-[0_2px_12px_rgba(167,139,250,0.35)]"
+            />
+            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+              Member registration
+            </span>
           </div>
+
 
           <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md">
             Step {Math.min(stepIdx + 1, 4)} of 4
