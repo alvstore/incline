@@ -96,6 +96,8 @@ interface DeliveryTimelineProps {
   logDeliveryStatus?: string | null;
   logSentAt?: string | null;
   logErrorMessage?: string | null;
+  /** lowercased channel ('sms' | 'email' | 'whatsapp' | 'rcs' | 'in_app'); used to render N/A pills for stages a provider can't report. */
+  channel?: string;
 }
 
 export function DeliveryTimeline({
@@ -105,6 +107,7 @@ export function DeliveryTimeline({
   logDeliveryStatus,
   logSentAt,
   logErrorMessage,
+  channel,
 }: DeliveryTimelineProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
