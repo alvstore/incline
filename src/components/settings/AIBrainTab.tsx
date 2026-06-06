@@ -33,24 +33,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Brain, Plus, Pencil, Trash2, Globe, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Brain,
+  Plus,
+  Pencil,
+  Trash2,
+  Globe,
+  MapPin,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
-
-// All AI purpose keys defined in `_shared/ai-runtime.ts::Purpose`.
-const PURPOSE_KEYS = [
-  'all',
-  'whatsapp_reply',
-  'lead_nurture',
-  'lead_score',
-  'campaign_draft',
-  'template_generate',
-  'dashboard_insight',
-  'fitness_plan',
-  'review_reply',
-  'automation_rule',
-] as const;
-
-type PurposeKey = (typeof PURPOSE_KEYS)[number];
+import { AppliesToPicker } from './ai/AppliesToPicker';
+import { useAiPurposes, titleFor } from '@/lib/ai/purposeRegistry';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface BrainRow {
   id: string;
@@ -126,6 +129,23 @@ export function AIBrainTab() {
     },
     refetchInterval: 60_000,
   });
+
+  // Which entries already have an embedding (vectorised by embed-knowledge).
+  // Lets operators see if the trigger fired without exposing the raw vector.
+  const { data: embeddedIds } = useQuery({
+    queryKey: ['ai_knowledge_embedded_ids'],
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ai_knowledge')
+        .select('id')
+        .not('embedding', 'is', null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r: { id: string }) => r.id));
+    },
+  });
+
+  const { data: registry = [] } = useAiPurposes();
 
   const saveMutation = useMutation({
     mutationFn: async (row: Partial<BrainRow>) => {
@@ -267,6 +287,7 @@ export function AIBrainTab() {
                     <TableHead>Branch</TableHead>
                     <TableHead className="text-right">Priority</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Brain</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
                 </TableHeader>
@@ -281,11 +302,16 @@ export function AIBrainTab() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {r.applies_to.map((p) => (
+                          {r.applies_to.slice(0, 3).map((p) => (
                             <Badge key={p} className="bg-indigo-50 text-indigo-700 text-xs">
-                              {p}
+                              {p === 'all' ? 'All handles' : titleFor(p, registry)}
                             </Badge>
                           ))}
+                          {r.applies_to.length > 3 && (
+                            <Badge className="bg-slate-100 text-slate-600 text-xs">
+                              +{r.applies_to.length - 3}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -312,6 +338,12 @@ export function AIBrainTab() {
                         ) : (
                           <Badge className="bg-slate-100 text-slate-600">Inactive</Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <EmbeddingPill
+                          hasEmbedding={embeddedIds?.has(r.id) ?? false}
+                          updatedAt={r.updated_at}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 justify-end">
@@ -389,67 +421,34 @@ export function AIBrainTab() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Applies to</Label>
-                <div className="flex flex-wrap gap-1.5 p-2 rounded-md border bg-slate-50/60 min-h-[42px]">
-                  {PURPOSE_KEYS.map((p) => {
-                    const active = (editing?.applies_to ?? ['all']).includes(p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => {
-                          const cur = new Set(editing?.applies_to ?? ['all']);
-                          if (active) cur.delete(p);
-                          else cur.add(p);
-                          if (p === 'all' && !active) {
-                            setEditing({ ...editing, applies_to: ['all'] });
-                            return;
-                          }
-                          if (p !== 'all' && !active) cur.delete('all');
-                          setEditing({
-                            ...editing,
-                            applies_to: Array.from(cur as Set<PurposeKey>).filter(Boolean),
-                          });
-                        }}
-                        className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                          active
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Pick <b>all</b> to share across every AI handle, or select specific ones.
-                </p>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Applies to</Label>
+              <AppliesToPicker
+                value={editing?.applies_to ?? ['all']}
+                onChange={(next) => setEditing({ ...editing, applies_to: next })}
+              />
+            </div>
 
-              <div className="space-y-1.5">
-                <Label>Branch scope</Label>
-                <Select
-                  value={editing?.branch_id ?? '__global__'}
-                  onValueChange={(v) =>
-                    setEditing({ ...editing, branch_id: v === '__global__' ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Global" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__global__">Global (all branches)</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Branch scope</Label>
+              <Select
+                value={editing?.branch_id ?? '__global__'}
+                onValueChange={(v) =>
+                  setEditing({ ...editing, branch_id: v === '__global__' ? null : v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Global" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__global__">Global (all branches)</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -518,5 +517,57 @@ export function AIBrainTab() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function EmbeddingPill({
+  hasEmbedding,
+  updatedAt,
+}: {
+  hasEmbedding: boolean;
+  updatedAt: string;
+}) {
+  if (hasEmbedding) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+              <Sparkles className="h-3 w-3" /> Ready
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Vectorised — semantic retrieval enabled.</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const ageMs = Date.now() - new Date(updatedAt).getTime();
+  if (ageMs < 5 * 60_000) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-amber-100 text-amber-700 gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> Embedding…
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Queued for embedding by embed-knowledge.</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge className="bg-red-100 text-red-700 gap-1">
+            <AlertCircle className="h-3 w-3" /> Embed failed
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          No embedding after 5 min. Falls back to keyword retrieval.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

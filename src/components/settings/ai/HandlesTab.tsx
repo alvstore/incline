@@ -1,60 +1,23 @@
 // SSOT list of AI handles. One HandleCard per ai_purposes row.
-// Operational settings (auto-reply, cadence, etc.) live in
-// ai_purposes.ops_config and are edited via HandleOpsSettings.
+// Labels + channel grouping come from the shared registry in
+// `src/lib/ai/purposeRegistry.ts` so this tab and the Brain Entry picker
+// never drift.
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Info } from 'lucide-react';
 import { HandleCard, type PurposeRow } from './HandleCard';
 import { HandleOpsSettings } from './HandleOpsSettings';
+import { PURPOSE_FALLBACK_META } from '@/lib/ai/purposeRegistry';
 
-const PURPOSE_LABELS: Record<string, { title: string; desc: string; channel: string }> = {
-  whatsapp_reply: {
-    title: 'WhatsApp / Meta Replies',
-    desc: 'Conversational brain for WhatsApp, Instagram and Messenger inbound messages.',
-    channel: 'Inbound conversation',
-  },
-  lead_nurture: {
-    title: 'Lead Nurture Nudges',
-    desc: 'Re-engagement messages for cold or partial leads.',
-    channel: 'Outbound nudge',
-  },
-  lead_score: {
-    title: 'Lead Scoring',
-    desc: '0–100 score plus reasoning and recommended next action.',
-    channel: 'Background analyzer',
-  },
-  campaign_draft: {
-    title: 'Campaign Drafter',
-    desc: 'Marketing copy for WhatsApp, SMS and Email campaigns.',
-    channel: 'Composer assistant',
-  },
-  template_generate: {
-    title: 'Template Generator',
-    desc: 'WhatsApp Cloud API templates ready for Meta approval.',
-    channel: 'Composer assistant',
-  },
-  dashboard_insight: {
-    title: 'Dashboard Insights',
-    desc: 'Business-analyst style summaries of KPIs and trends.',
-    channel: 'In-app insight',
-  },
-  fitness_plan: {
-    title: 'Fitness Plan Generator',
-    desc: 'Personalised workout and nutrition plans for members.',
-    channel: 'Member tooling',
-  },
-  review_reply: {
-    title: 'Google Review Replies',
-    desc: 'Classifies reviews and drafts on-brand public replies.',
-    channel: 'Outbound reply',
-  },
-  automation_rule: {
-    title: 'Automation Rules',
-    desc: 'AI tone for birthday wishes and rule-driven outbound sends.',
-    channel: 'Outbound automation',
-  },
-};
+function metaFor(purpose: string) {
+  const fb = PURPOSE_FALLBACK_META[purpose];
+  return {
+    title: fb?.title ?? purpose,
+    desc: fb?.description ?? '',
+    channel: fb?.channelGroup ?? 'Other',
+  };
+}
 
 const PRIORITY = [
   'whatsapp_reply',
@@ -114,7 +77,7 @@ export function HandlesTab({ onJumpToKnowledge }: { onJumpToKnowledge?: () => vo
           <HandleCard
             key={row.id}
             row={row}
-            meta={PURPOSE_LABELS[row.purpose] ?? { title: row.purpose, desc: '', channel: '' }}
+            meta={metaFor(row.purpose)}
             open={openHandle === row.purpose}
             onOpenChange={(o) => setOpenHandle(o ? row.purpose : null)}
             onJumpToKnowledge={onJumpToKnowledge}
