@@ -92,7 +92,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const platform = body.platform as "instagram" | "messenger";
     messageId = body.message_id ?? null;
-    const recipientId = String(body.recipient_id ?? body.recipient ?? body.phone_number ?? "").trim();
+    // Normalize: strip any leading `+` so the Meta scoped ID is purely
+    // numeric (Meta Graph API rejects `+` in recipient.id) and so the
+    // send-lock key is identical across all callers regardless of whether
+    // they pass `+1380…` or `1380…`.
+    const recipientIdRaw = String(body.recipient_id ?? body.recipient ?? body.phone_number ?? "").trim();
+    const recipientId = recipientIdRaw.replace(/^\+/, "");
     const content = String(body.content ?? body.message ?? body.body ?? "").trim();
     const branchId = body.branch_id ?? body.branchId;
     const igAccountIdHint = body.ig_account_id ?? null;
