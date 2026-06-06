@@ -88,8 +88,9 @@ const STREAM_META: Record<Stream, { label: string; table: string; sub: string; i
 export function AILogsTab() {
   const qc = useQueryClient();
   const [stream, setStream] = useState<Stream>("llm");
-  const [windowKey, setWindowKey] = useState<WindowKey>("7");
+  const [windowKey, setWindowKey] = useState<WindowKey>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const llmQuery = useQuery({
