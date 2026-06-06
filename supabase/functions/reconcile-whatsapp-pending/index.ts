@@ -113,6 +113,7 @@ async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string 
       _ttl_seconds: 8,
     });
     if (gotLock === false) {
+      console.log(`[reconciler] skip row=${row.id} reason=lock_held`);
       return { ok: false, reason: "lock_held_by_another_send" };
     }
   } catch (e) {
