@@ -1,58 +1,126 @@
 
-## Why no reply went out
+## Problem (audit finding)
 
-`runUnifiedAgent` (supabase/functions/_shared/ai-agent-brain.ts:148) short-circuits when `ai_purposes.ops_config.auto_reply_enabled` is false. That flag is currently `false` for `purpose='whatsapp_reply'`, so every inbound WhatsApp message is silently skipped with `auto_reply_disabled` — including Bhavyadeep's "Founding memberships" query.
+Bhavyadeep Kingrani (`+91 63775 36196`) submitted the **website form at 11:05:45 UTC**. `webhook-lead-capture` created `leads` row `a91dad34…` with `full_name="Bhavyadeep Kingrani"`, `phone=+916377536196`, `source=website`, `status=new`.
 
-The per-chat green "AI Bot" pill in the inbox only reflects `whatsapp_chat_settings.bot_active`, which is true. There is no UI signal that the global master is off, so the inbox looks healthy while nothing is replying.
+**16 seconds later** he messaged WhatsApp:
+> "Hi, I'd like to know more about Incline Fitness Founding memberships."
 
-## Step 1 — Restore the brain (data fix, one row)
+If the AI brain were to reply (after the master switch fix from the previous turn), it would have started the founder's-phase onboarding from Turn 1 — "Hi there! What's your name?" — because the brain only hydrates `ai_memory` (empty for a fresh contact) and **never reads the `leads` table**. The "KNOWN SO FAR" block in the prompt would show all `—`, so the ADVANCE RULE picks the first missing field = name.
 
-Update the single global `whatsapp_reply` row via a migration:
+Evidence in `supabase/functions/_shared/ai-agent-brain.ts`:
+- Line 274 calls `resolveMemberContext` (members only).
+- Line 279 calls `loadMemory(ai_memory)` — empty for new WhatsApp contacts.
+- Lines 506–509 render KNOWN SO FAR purely from `memory.profile` / `memory.facts`.
+- The dedupe-on-write logic at line 1372 only fires **after** the AI emits `lead_captured` JSON — too late; the user has already been re-asked everything.
 
-- `ai_purposes.ops_config.auto_reply_enabled` → `true`
-- Keep `channels.whatsapp.enabled = true`, instagram/messenger as-is (false)
-- Leave `enabled`, `reply_delay_seconds`, prompts untouched
+Also, when a lead is fully captured (all 4 fields), the brain has no "post-capture nurture" persona — it stays in onboarding mode forever for the same contact across days.
 
-After the migration, manually trigger one inbound smoke test (re-send a WhatsApp from a test number) and verify a reply lands in `whatsapp_messages` with `direction='outbound'`.
+## Plan
 
-## Step 2 — Make the inbox AI Bot pill tell the truth
+### Step 1 — Add `resolveLeadContext` lookup (server, ai-agent-brain.ts)
 
-In `src/components/whatsapp/...` (the chat header that renders the `AI Bot` toggle next to the contact name):
+Right after `resolveMemberContext` (line 274), add:
 
-- Fetch the global `ai_purposes` row for `purpose='whatsapp_reply'` (TanStack Query, cached) and read `ops_config.auto_reply_enabled` + `ops_config.channels.whatsapp.enabled`.
-- Effective state = `bot_active AND auto_reply_enabled AND channels.whatsapp.enabled AND NOT do_not_contact`.
-- When the master is OFF but `bot_active` is true, render the pill in amber with a tooltip: "Per-chat AI is on, but the global WhatsApp auto-reply is OFF in AI Control Center. No replies will be sent."
-- Add a small inline link "Open AI Control Center" to the WhatsApp Coverage & AI page so staff can fix it in one click.
+```ts
+const leadCtx = !memberCtx.isMember
+  ? await resolveLeadContext(supabase, ctx.senderId, ctx.branchId)
+  : null;
+```
 
-No edge function changes, no schema changes.
+`resolveLeadContext` (new helper in `_shared/ai-memory.ts` or inline):
+- Uses `phoneVariants(senderId)` already imported.
+- `SELECT id, full_name, email, fitness_goal, goals, plan_interest, source, status, expected_start_date, fitness_experience, preferred_time, created_at FROM leads WHERE phone IN (variants) AND branch_id = ctx.branchId ORDER BY created_at DESC LIMIT 1`.
+- Returns `{ leadId, profile, facts, capturedAt, source } | null`.
 
-## Step 3 — Add a health card in AI Control Center
+### Step 2 — Seed `ai_memory` from existing lead BEFORE the auto-learn pass
 
-In the WhatsApp Coverage & AI screen (`src/pages/settings/...` for `whatsapp_reply`):
+After `loadMemory` (line 279), if `leadCtx` exists AND `memory` lacks those keys:
 
-- Add a top status banner that shows the live effective state of the brain: Master switch · Channel switches · Last 24h reply count from `whatsapp_messages` (direction='outbound', sent_by='ai').
-- If `auto_reply_enabled=false` while channel toggles are on, show a red "Auto-reply master is OFF — no inbound WhatsApp gets a bot reply" callout with the toggle right there.
+```ts
+if (leadCtx) {
+  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+    profile: {
+      full_name: leadCtx.profile.full_name ?? undefined,
+      first_name: firstNameOf(leadCtx.profile.full_name),
+      email: leadCtx.profile.email ?? undefined,
+    },
+    facts: {
+      fitness_goal: leadCtx.facts.fitness_goal ?? undefined,
+      plan_interest: leadCtx.facts.plan_interest ?? undefined,
+      lead_source: leadCtx.source,
+      lead_captured_at: leadCtx.capturedAt,
+    },
+    do_not_ask_add: [
+      ...(leadCtx.profile.full_name ? ["name", "full_name"] : []),
+      ...(leadCtx.profile.email ? ["email"] : []),
+      ...(leadCtx.facts.fitness_goal ? ["goal", "fitness_goal"] : []),
+      ...(leadCtx.facts.plan_interest ? ["plan_interest"] : []),
+    ],
+  });
+  memory = await loadMemory(...);
+}
+```
 
-This is purely presentation; reads existing `ai_purposes` + `whatsapp_messages`.
+This makes the existing "KNOWN SO FAR" + ADVANCE RULE block (lines 505–510) work correctly: for Bhavyadeep, `name=Bhavyadeep Kingrani`, others `—`, so Turn 1 reply becomes *"Hi Bhavyadeep! What's the best email for your Founding Member invite? ✨"* — skipping the redundant name ask.
 
-## Step 4 — Backfill Bhavyadeep manually (one-time)
+Also writes `whatsapp_chat_settings.captured_lead_id = leadCtx.leadId` if not already set, so the existing lead is linked to the chat from message one.
 
-His message is sitting unread. After step 1 ships, he's outside the 24h Meta freeform window if we wait — so:
+### Step 3 — Add "post-capture nurture" persona branch
 
-- Send him the founder's-phase opening (Meta-approved template, not freeform) from the inbox, capturing him into the WhatsApp onboarding flow. The lead row already exists (`a91dad34…`, source=website, branch=INCLINE) so no duplicate.
+In the prompt section starting at line 429, split into three states based on `leadCtx` + filled fields:
 
-Step 4 is operator action, not code.
+| State | Trigger | Behavior |
+|---|---|---|
+| **Fresh** | No `leadCtx`, no `ai_memory` profile | Existing onboarding flow (Turn 1 → Turn 5). |
+| **Partial** | `leadCtx` exists OR memory has some fields | Skip filled fields, jump to first missing one. (Already works once Step 2 seeds memory.) |
+| **Captured** | All 4 fields filled (name, email, goal, plan_interest) — OR `leadCtx.status` is not `'new'` | Switch to **post-capture nurture** persona: warm conversational replies, answer fitness/founding-member questions, push Founding Member confirmation CTA, never re-ask onboarding fields, never emit `lead_captured` JSON again. |
+
+New short prompt block for the Captured state:
+
+```
+POST-CAPTURE NURTURE MODE (lead already in CRM):
+- This contact is already a captured lead (since {{lead_captured_at}}, source: {{lead_source}}).
+- DO NOT run onboarding. DO NOT ask name/email/goal/plan again. DO NOT emit lead_captured JSON.
+- Greet warmly by first name and answer their question directly.
+- For Founding Member questions: confirm interest and offer to lock in their spot ("Want our team to call you to confirm your Founding spot?").
+- For non-annual interest already on file: acknowledge, no hard push.
+- Velvet rope still applies: no ₹, no PT names, no session counts.
+- If they ask to speak to a human → call transfer_to_human.
+```
+
+### Step 4 — Suppress duplicate `notify-lead-created` + nurture cron for already-captured leads
+
+In `lead-nurture-followup` (cron) and `notify-lead-created`:
+- Skip rows where `source IN ('whatsapp_ai','instagram_ai','messenger_ai')` AND a prior lead with same phone+branch already had nurture sent. (Use an existing flag like `last_contacted_at` + a new `nurture_sent_at` column on `leads` — add via migration only if not present; otherwise reuse `last_contacted_at IS NOT NULL`.)
+- For the AI brain's `tryParseAndCaptureLead` merge branch (line 1380), set `nurture_sent_at = COALESCE(nurture_sent_at, now())` so a website-captured-then-WhatsApp-merged lead doesn't trigger nurture again.
+
+(If `nurture_sent_at` does not exist yet, this becomes a tiny migration: `ALTER TABLE leads ADD COLUMN nurture_sent_at timestamptz`.)
+
+### Step 5 — Backfill Bhavyadeep
+
+One-off: send him the founder's-phase opening template ("Hi Bhavyadeep, thanks for reaching out about Founding Memberships — what's the best email for your Founding Member invite?") from the inbox so the lead row gets `email`, then the nurture sequence proceeds naturally.
 
 ## Out of scope
 
-- No changes to `whatsapp-webhook`, `ai-agent-brain`, `dispatch-communication`, or lead capture logic.
-- No DB schema changes.
-- No changes to per-chat `bot_active` semantics.
+- No changes to `webhook-lead-capture` or `capture-lead` (they already dedupe by phone+branch).
+- No changes to the master AI switch logic (already fixed in the previous turn).
+- No schema changes beyond the optional `nurture_sent_at` column in Step 4.
+- No changes to the existing `tryParseAndCaptureLead` merge-by-phone branch — it stays as defense in depth.
 
-## Verification
+## Files to touch
 
-1. After the data fix, send a fresh WhatsApp inbound from a test number; confirm an outbound row appears within ~5s and `edge_function_logs(whatsapp-webhook)` shows no `auto_reply_disabled` skip.
-2. Open the inbox: amber state should disappear once master is back ON; switch master off in staging to confirm the amber + tooltip render correctly.
-3. AI Control Center health card shows `Auto-reply: ON · WhatsApp channel: ON · Replies (24h): >0`.
+- `supabase/functions/_shared/ai-agent-brain.ts` — add `resolveLeadContext` call, seed memory, add Captured persona branch (~60 lines).
+- `supabase/functions/_shared/ai-memory.ts` — add `resolveLeadContext` helper (~30 lines).
+- `supabase/functions/lead-nurture-followup/index.ts` — add `nurture_sent_at IS NULL` filter (~3 lines).
+- `supabase/functions/notify-lead-created/index.ts` — skip if `last_contacted_at` recent or `nurture_sent_at` present (~5 lines).
+- *(Optional)* migration adding `leads.nurture_sent_at timestamptz`.
 
-Skills used: senior-architect (root-cause flow tracing), code-reviewer (gate audit in `ai-agent-brain.ts`), ui-ux-pro-max + senior-frontend (honest-state pill + health card).
+## Validation
+
+1. Reset Bhavyadeep's `ai_memory` row (so we can replay).
+2. Simulate inbound WhatsApp "Hi, I'd like to know more about Founding memberships." via `whatsapp-webhook` test payload.
+3. Assert first AI reply starts with "Hi Bhavyadeep" and asks for **email** (not name).
+4. Assert no duplicate `leads` row created.
+5. Assert `whatsapp_chat_settings.captured_lead_id` is linked.
+6. Send "rohan@gmail.com" → assert next ask is **goal** (interactive_list), not name/email.
