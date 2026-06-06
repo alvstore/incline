@@ -282,6 +282,80 @@ export async function runUnifiedAgent(
   // 5b. Hydrate persistent contact memory (ai_memory)
   let memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
 
+  // 5b.1 LEAD HYDRATION — if this phone already has a leads row (e.g. captured
+  // via website form, Meta Ads, or prior AI conversation), seed ai_memory from
+  // it BEFORE the auto-learn pass so KNOWN SO FAR / ADVANCE RULE in the prompt
+  // skip fields already on file. Stops the bot from re-asking name/email/goal/
+  // plan_interest when the CRM already has them. v1.0.0
+  let leadCtx: LeadContext | null = null;
+  if (!memberCtx.isMember) {
+    try {
+      const variants = phoneVariants(ctx.senderId);
+      leadCtx = await resolveLeadContext(supabase, variants, ctx.branchId);
+      if (leadCtx) {
+        const profilePatch: Record<string, any> = {};
+        const factsPatch: Record<string, any> = {
+          lead_source: leadCtx.source,
+          lead_captured_at: leadCtx.capturedAt,
+          lead_status: leadCtx.status,
+        };
+        const dna: string[] = [];
+        if (leadCtx.profile.full_name) {
+          profilePatch.full_name = leadCtx.profile.full_name;
+          const fn = firstNameOf(leadCtx.profile.full_name);
+          if (fn) profilePatch.first_name = fn;
+          dna.push("name", "full_name", "first_name");
+        }
+        if (leadCtx.profile.email) {
+          profilePatch.email = leadCtx.profile.email;
+          dna.push("email");
+        }
+        if (leadCtx.facts.fitness_goal) {
+          factsPatch.fitness_goal = leadCtx.facts.fitness_goal;
+          factsPatch.goal = leadCtx.facts.fitness_goal;
+          dna.push("goal", "fitness_goal");
+        }
+        if (leadCtx.facts.plan_interest) {
+          factsPatch.plan_interest = leadCtx.facts.plan_interest;
+          dna.push("plan_interest", "membership duration");
+        }
+        if (leadCtx.facts.preferred_time) {
+          factsPatch.preferred_time = leadCtx.facts.preferred_time;
+          dna.push("preferred_time");
+        }
+        await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+          profile: profilePatch,
+          facts: factsPatch,
+          do_not_ask_add: dna,
+        });
+        memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+        // Link the existing lead to chat_settings so downstream handoff,
+        // do-not-contact, and capture dedupe work on message one.
+        if (!chatSettings?.captured_lead_id) {
+          try {
+            await supabase
+              .from("whatsapp_chat_settings")
+              .upsert(
+                {
+                  branch_id: ctx.branchId,
+                  phone_number: ctx.senderId,
+                  captured_lead_id: leadCtx.leadId,
+                },
+                { onConflict: "branch_id,phone_number" },
+              );
+          } catch (e) {
+            console.warn(`[AI:${ctx.platform}] link chat_settings.captured_lead_id failed:`, (e as Error).message);
+          }
+        }
+        console.log(`[AI:${ctx.platform}] hydrated brain from existing lead ${leadCtx.leadId} (status=${leadCtx.status}, source=${leadCtx.source})`);
+      }
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] lead hydration failed (continuing):`, (e as Error).message);
+    }
+  }
+
+
   // 5c. AUTO-LEARN: extract structured facts from the user's last message and
   // merge into ai_memory BEFORE building the prompt. This is what stops the
   // bot from re-asking phone / fitness goal / name on every turn and makes it
