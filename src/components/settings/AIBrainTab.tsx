@@ -287,6 +287,7 @@ export function AIBrainTab() {
                     <TableHead>Branch</TableHead>
                     <TableHead className="text-right">Priority</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Brain</TableHead>
                     <TableHead className="w-[100px]" />
                   </TableRow>
                 </TableHeader>
@@ -301,11 +302,16 @@ export function AIBrainTab() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {r.applies_to.map((p) => (
+                          {r.applies_to.slice(0, 3).map((p) => (
                             <Badge key={p} className="bg-indigo-50 text-indigo-700 text-xs">
-                              {p}
+                              {p === 'all' ? 'All handles' : titleFor(p, registry)}
                             </Badge>
                           ))}
+                          {r.applies_to.length > 3 && (
+                            <Badge className="bg-slate-100 text-slate-600 text-xs">
+                              +{r.applies_to.length - 3}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -332,6 +338,12 @@ export function AIBrainTab() {
                         ) : (
                           <Badge className="bg-slate-100 text-slate-600">Inactive</Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <EmbeddingPill
+                          hasEmbedding={embeddedIds?.has(r.id) ?? false}
+                          updatedAt={r.updated_at}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 justify-end">
