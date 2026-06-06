@@ -113,6 +113,8 @@ async function logCall(
     duration_ms: number;
     fallback_used?: boolean;
     error_message?: string | null;
+    platform?: string | null;
+    contact_key?: string | null;
   },
 ) {
   try {
@@ -126,6 +128,8 @@ async function logCall(
       duration_ms: row.duration_ms,
       fallback_used: row.fallback_used ?? false,
       error_message: row.error_message ?? null,
+      platform: row.platform ?? null,
+      contact_key: row.contact_key ?? null,
     });
   } catch (e) {
     console.warn("[ai-runtime] log insert failed:", (e as Error).message);
