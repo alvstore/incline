@@ -556,21 +556,50 @@ ADVANCE RULE: always move to the FIRST missing field in order name → email →
     for (const tc of toolCalls) {
       let parsedArgs: any = {};
       try { parsedArgs = JSON.parse(tc.function.arguments || "{}"); } catch { /* ignore */ }
-      const result = await executeSharedToolCall(
-        supabase, supabaseUrl, serviceKey,
-        tc.function.name, parsedArgs,
-        {
-          isMember: true,
-          memberId: memberCtx.memberId,
-          memberName: memberCtx.memberName || "Member",
-          branchId: ctx.branchId,
-          membershipId: memberCtx.membershipId ?? null,
-          planId: memberCtx.planId ?? null,
-          contextPrompt: memberCtx.contextPrompt,
-        },
-        ctx.senderId, ctx.branchId, ctx.platform,
-      );
-      toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+      const toolStart = Date.now();
+      let toolResult: any = null;
+      let toolStatus: "success" | "error" = "success";
+      let toolError: string | null = null;
+      try {
+        toolResult = await executeSharedToolCall(
+          supabase, supabaseUrl, serviceKey,
+          tc.function.name, parsedArgs,
+          {
+            isMember: true,
+            memberId: memberCtx.memberId,
+            memberName: memberCtx.memberName || "Member",
+            branchId: ctx.branchId,
+            membershipId: memberCtx.membershipId ?? null,
+            planId: memberCtx.planId ?? null,
+            contextPrompt: memberCtx.contextPrompt,
+          },
+          ctx.senderId, ctx.branchId, ctx.platform,
+        );
+        if (toolResult && typeof toolResult === "object" && (toolResult as any).success === false) {
+          toolStatus = "error";
+          toolError = String((toolResult as any).error || (toolResult as any).message || "tool_returned_failure").slice(0, 500);
+        }
+      } catch (toolErr) {
+        toolStatus = "error";
+        toolError = (toolErr as Error)?.message?.slice(0, 500) || String(toolErr);
+        toolResult = { success: false, error: toolError };
+      }
+      // Live Activity Feed: one row per tool call (fire-and-forget)
+      try {
+        await supabase.from("ai_tool_logs").insert({
+          tool_name: tc.function.name,
+          status: toolStatus,
+          execution_time_ms: Date.now() - toolStart,
+          error_message: toolError,
+          arguments: parsedArgs ?? {},
+          result: toolResult ?? {},
+          branch_id: ctx.branchId ?? null,
+          phone_number: ctx.platform === "whatsapp" ? ctx.senderId : null,
+          platform: ctx.platform ?? null,
+          contact_key: ctx.senderId ?? null,
+        });
+      } catch { /* noop */ }
+      toolMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(toolResult) });
     }
     try {
       const r2 = await callAI({
