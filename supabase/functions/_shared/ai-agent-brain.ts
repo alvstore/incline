@@ -148,6 +148,13 @@ export async function runUnifiedAgent(
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
+  // Per-channel kill-switch (WhatsApp / Instagram DM / Messenger DM). Missing
+  // entry defaults to enabled for back-compat with pre-channel-toggle configs.
+  const channelOn = aiConfig.channels?.[ctx.platform as 'whatsapp' | 'instagram' | 'messenger']?.enabled ?? true;
+  if (!channelOn) {
+    return skip(`channel_${ctx.platform}_disabled`);
+  }
+
 
   // 2. Check bot_active
   const { data: chatSettings } = await supabase
