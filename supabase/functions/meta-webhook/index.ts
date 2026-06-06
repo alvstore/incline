@@ -1198,8 +1198,10 @@ async function triggerAiReply(
   try {
     const isMetaDm = platform === "instagram" || platform === "messenger";
     const fnName = isMetaDm ? "send-meta-dm" : "send-whatsapp";
+    // Meta Graph API wants the RAW scoped ID for recipient.id (no leading `+`).
+    // WhatsApp Cloud API accepts the normalized phone_number.
     const fnBody = isMetaDm
-      ? { message_id: replyMsg.id, platform, recipient_id: senderId, content: result.replyText, branch_id: branchId }
+      ? { message_id: replyMsg.id, platform, recipient_id: rawSenderId, content: result.replyText, branch_id: branchId }
       : { message_id: replyMsg.id, phone_number: senderId, content: result.replyText, branch_id: branchId };
     const r = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
       method: "POST",
@@ -1209,8 +1211,20 @@ async function triggerAiReply(
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       console.error(`[AI:${platform}] ${fnName} HTTP ${r.status}: ${detail}`);
+      // Self-heal: flip the pending row to failed so it isn't stuck on the
+      // clock icon in the inbox forever.
+      await supabase
+        .from("whatsapp_messages")
+        .update({ status: "failed", error_message: `send-fn-http-${r.status}: ${detail.slice(0, 200)}` })
+        .eq("id", replyMsg.id);
     }
   } catch (sendErr) {
     console.error(`[AI:${platform}] send reply failed:`, sendErr);
+    try {
+      await supabase
+        .from("whatsapp_messages")
+        .update({ status: "failed", error_message: `send-fn-throw: ${(sendErr as Error)?.message || sendErr}` })
+        .eq("id", replyMsg.id);
+    } catch (_) { /* swallow */ }
   }
 }
