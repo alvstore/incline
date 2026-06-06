@@ -220,14 +220,19 @@ export async function runUnifiedAgent(
       try {
         await supabase
           .from("whatsapp_chat_settings")
-          .update({
-            bot_active: false,
-            paused_at: new Date().toISOString(),
-            handoff_reason: "non_fitness_inquiry",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("branch_id", ctx.branchId)
-          .eq("phone_number", ctx.senderId);
+          .upsert(
+            {
+              branch_id: ctx.branchId,
+              phone_number: ctx.senderId,
+              platform: ctx.platform as any,
+              bot_active: false,
+              do_not_contact: true,
+              paused_at: new Date().toISOString(),
+              handoff_reason: "non_fitness_inquiry",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "branch_id,phone_number" },
+          );
       } catch (e) {
         console.warn(`[AI:${ctx.platform}] pause bot_active failed (continuing):`, (e as Error).message);
       }
