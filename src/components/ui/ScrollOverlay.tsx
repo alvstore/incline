@@ -245,9 +245,6 @@ const ScrollOverlay = () => {
               </a>
             ))}
           </div>
-          <span className="text-xs tracking-[0.2em] uppercase font-medium text-muted-foreground">
-            @theinclinelife
-          </span>
 
           <nav
             aria-label="Legal"
