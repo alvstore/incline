@@ -53,12 +53,14 @@ serve(async (req) => {
     const cooldownHours = config.cooldown_hours;
     const cutoffTime = new Date(Date.now() - delayHours * 60 * 60 * 1000).toISOString();
 
-    // Find chats where bot is active AND the contact hasn't asked us to stop.
+    // Find chats where bot is active AND the contact hasn't asked us to stop
+    // AND the chat is not flagged as a non-membership/PR/handoff conversation.
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
-      .select("id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until")
+      .select("id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until, handoff_reason")
       .eq("bot_active", true)
-      .eq("do_not_contact", false);
+      .eq("do_not_contact", false)
+      .is("handoff_reason", null);
 
     if (chatErr) {
       console.error("Failed to query stale chats:", chatErr);
@@ -75,6 +77,33 @@ serve(async (req) => {
       // Defence-in-depth: respect snooze-until window if the row has one.
       if (chat.do_not_contact) continue;
       if (chat.do_not_contact_until && new Date(chat.do_not_contact_until) > new Date()) continue;
+      if (chat.handoff_reason) continue;
+
+      // Skip when AI memory has marked this contact as a non-membership intent
+      // (PR, vendor, media, careers, etc.) — never nurture them with sales copy.
+      try {
+        const { data: mem } = await supabase
+          .from("ai_memory")
+          .select("current_intent")
+          .eq("platform", chat.platform || "whatsapp")
+          .eq("contact_key", chat.phone_number)
+          .maybeSingle();
+        if (mem?.current_intent === "non_fitness") {
+          // Also pause this chat so future cron runs short-circuit on the SQL filter above.
+          await supabase
+            .from("whatsapp_chat_settings")
+            .update({
+              bot_active: false,
+              do_not_contact: true,
+              handoff_reason: "non_fitness_inquiry",
+              paused_at: new Date().toISOString(),
+            })
+            .eq("id", chat.id);
+          continue;
+        }
+      } catch (memErr) {
+        console.warn("lead-nurture: ai_memory lookup failed (continuing):", (memErr as Error).message);
+      }
 
       const { data: lastMsg } = await supabase
         .from("whatsapp_messages")
@@ -259,7 +288,9 @@ serve(async (req) => {
       try {
         if (chatPlatform === "whatsapp" && outsideWindow && templateRow) {
           // ── Approved-template path via dispatch-communication ──
-          const dedupeKey = `lead_nurture:${chat.id}:${Date.now()}`;
+          // Stable per-retry dedupe key so a cron rerun within the same window
+          // can never produce a duplicate dispatch.
+          const dedupeKey = `lead_nurture:${chat.id}:${(chat.nurture_retry_count || 0) + 1}`;
           const dispatchRes = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
             method: "POST",
             headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },

@@ -1056,6 +1056,50 @@ async function triggerAiReply(
     return;
   }
 
+  // ── PRE-REPLY STATE GATE:
+  // If chat_settings already says bot is paused / DNC / handed off, OR
+  // ai_memory says current_intent='non_fitness', do NOT call the model and
+  // do NOT ask onboarding questions. The non-membership redirect was already
+  // sent on the first inbound; subsequent messages must stay silent.
+  try {
+    const { data: cs } = await supabase
+      .from("whatsapp_chat_settings")
+      .select("bot_active, do_not_contact, handoff_reason")
+      .eq("branch_id", branchId)
+      .eq("phone_number", senderId)
+      .maybeSingle();
+    if (cs && (cs.bot_active === false || cs.do_not_contact === true || cs.handoff_reason)) {
+      console.log(`[AI:${platform}] suppressed — chat paused/DNC/handoff for ${senderId}`);
+      return;
+    }
+    const { data: mem } = await supabase
+      .from("ai_memory")
+      .select("current_intent")
+      .eq("platform", platform)
+      .eq("contact_key", senderId)
+      .maybeSingle();
+    if (mem?.current_intent === "non_fitness") {
+      console.log(`[AI:${platform}] suppressed — ai_memory non_fitness for ${senderId}`);
+      // Also harden chat_settings so other code paths short-circuit too.
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          {
+            branch_id: branchId,
+            phone_number: senderId,
+            platform: platform as any,
+            bot_active: false,
+            do_not_contact: true,
+            handoff_reason: "non_fitness_inquiry",
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+      return;
+    }
+  } catch (gateErr) {
+    console.warn(`[AI:${platform}] pre-reply state gate failed (continuing):`, gateErr);
+  }
+
   // ── AI REPLY CLAIM (idempotency):
   // Only the first inbound in a ~45s burst from this contact may trigger AI.
   // Prevents double DMs when long-text + attachment arrive back-to-back, or
@@ -1089,6 +1133,30 @@ async function triggerAiReply(
   if (result.skipped || !result.replyText) {
     console.log(`[AI:${platform}] skipped: ${result.skipReason || "no_reply"}`);
     return;
+  }
+
+  // ── OUTBOUND DEDUPE: if we already sent the same content to this contact in
+  // the last 3 minutes (e.g. retried envelope slipped past the claim), do not
+  // insert / send again. This is the last line of defence before Meta.
+  try {
+    const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    const { data: recentSame } = await supabase
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("branch_id", branchId)
+      .eq("phone_number", senderId)
+      .eq("platform", platform as any)
+      .eq("direction", "outbound")
+      .eq("content", result.replyText)
+      .gte("created_at", since)
+      .limit(1)
+      .maybeSingle();
+    if (recentSame) {
+      console.log(`[AI:${platform}] outbound dedupe — same reply just sent to ${senderId}`);
+      return;
+    }
+  } catch (dupErr) {
+    console.warn(`[AI:${platform}] outbound dedupe check failed (continuing):`, dupErr);
   }
 
   // Store reply
