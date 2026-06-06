@@ -105,8 +105,8 @@ export function HandleOpsSettings({ purposeId, purpose, opsConfig }: Props) {
               <Label className="text-xs font-semibold text-slate-700">{f.label}</Label>
               {f.type === 'switch' ? (
                 <Switch
-                  checked={Boolean(state[f.key])}
-                  onCheckedChange={(v) => setState((s) => ({ ...s, [f.key]: v }))}
+                  checked={readSwitch(state, f.key)}
+                  onCheckedChange={(v) => setState((s) => setPath(s, f.key, v))}
                 />
               ) : (
                 <Input
@@ -114,16 +114,14 @@ export function HandleOpsSettings({ purposeId, purpose, opsConfig }: Props) {
                   min={f.min}
                   max={f.max}
                   step={f.step ?? 1}
-                  value={state[f.key] ?? ''}
+                  value={getPath(state, f.key) ?? ''}
                   onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      [f.key]: e.target.value === '' ? null : Number(e.target.value),
-                    }))
+                    setState((s) => setPath(s, f.key, e.target.value === '' ? null : Number(e.target.value)))
                   }
                   className="font-mono text-xs h-8 w-24 text-right"
                 />
               )}
+
             </div>
             {f.help && <p className="text-[11px] text-slate-500">{f.help}</p>}
           </div>
