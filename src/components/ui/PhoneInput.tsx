@@ -17,8 +17,9 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
       const raw = val || "";
       const trimmed = raw.trim();
       let cleaned = raw.replace(/\D/g, "");
-      // Bare country code with no number yet (e.g. seed value "+91") → show empty
-      if (ccDigits && cleaned === ccDigits) return "";
+      // Bare controlled country code with no number yet (e.g. seed value "+91") → show empty.
+      // Do not treat typed local digits "91" as a prefix; valid Indian numbers can start with 91.
+      if (ccDigits && cleaned === ccDigits && trimmed.startsWith(countryCode)) return "";
       // Controlled form values are commonly stored as "+91" + local digits.
       // Remove that prefix even while the user is still typing fewer than 10 digits.
       if (ccDigits && trimmed.startsWith(countryCode)) {
