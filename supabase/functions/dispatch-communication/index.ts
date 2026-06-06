@@ -957,7 +957,7 @@ Deno.serve(async (req) => {
         delivery_status: sendError ? 'failed' : 'sent',
         status: sendError ? 'failed' : 'sent',
         provider_message_id: providerMessageId ?? null,
-        delivery_metadata: Object.keys(finalMeta).length ? finalMeta : null,
+        delivery_metadata: Object.keys(finalMeta).length ? finalMeta : {},
         error_message: sendError ?? null,
         // Re-write content from the (now possibly cleaned) rendered body so the
         // audit row matches what was actually delivered to WhatsApp.
