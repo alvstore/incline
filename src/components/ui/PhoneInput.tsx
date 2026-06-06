@@ -9,12 +9,24 @@ interface PhoneInputProps extends Omit<React.ComponentProps<"input">, "onChange"
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
   ({ className, value = "", onChange, countryCode = "+91", ...props }, ref) => {
-    // Strip the +91 / 91 / 091 / 0 country-prefix and return the bare 10-digit form
+    // Strip the visual country-prefix only when the incoming value is clearly
+    // prefixed/full-format, while preserving genuine 10-digit numbers that may
+    // naturally start with 91.
     const ccDigits = countryCode.replace(/\D/g, "");
     const stripPrefix = (val: string) => {
-      let cleaned = (val || "").replace(/\D/g, "");
-      // Bare country code with no number yet (e.g. seed value "+91") → show empty
-      if (ccDigits && cleaned === ccDigits) return "";
+      const raw = val || "";
+      const trimmed = raw.trim();
+      let cleaned = raw.replace(/\D/g, "");
+      // Bare controlled country code with no number yet (e.g. seed value "+91") → show empty.
+      // Do not treat typed local digits "91" as a prefix; valid Indian numbers can start with 91.
+      if (ccDigits && cleaned === ccDigits && trimmed.startsWith(countryCode)) return "";
+      // Controlled form values are commonly stored as "+91" + local digits.
+      // Remove that prefix even while the user is still typing fewer than 10 digits.
+      if (ccDigits && trimmed.startsWith(countryCode)) {
+        cleaned = cleaned.slice(ccDigits.length);
+      } else if (ccDigits && trimmed.startsWith("0" + ccDigits)) {
+        cleaned = cleaned.slice(1 + ccDigits.length);
+      }
       // 091XXXXXXXXXX → XXXXXXXXXX
       if (cleaned.length === 13 && cleaned.startsWith("0" + ccDigits)) {
         cleaned = cleaned.slice(1 + ccDigits.length);
@@ -29,8 +41,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     const displayValue = stripPrefix(value);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const raw = e.target.value.replace(/\D/g, "").slice(0, 10);
-      onChange?.(raw);
+      onChange?.(stripPrefix(e.target.value));
     };
 
     const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
