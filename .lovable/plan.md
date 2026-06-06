@@ -1,89 +1,55 @@
-# Audit — Instagram comment shows post ID instead of the post media
+## Audit summary
 
-## Root cause
+**1. Why LLM Logs never show Instagram / Messenger**
+- `runUnifiedAgent` (used by both WhatsApp and Meta webhooks) hard-codes `purpose: "whatsapp_reply"` regardless of platform, so every IG/Messenger reply is logged as `whatsapp_reply` — they're hidden inside the same bucket. There is no `platform` column on `ai_call_logs`.
+- The blank "—" rows in the Logs view are duplicate inserts: `ai-dispatcher.logCall` writes a row without `purpose`/`branch_id`, then `ai-runtime.generateOnce` writes a second, properly-tagged row.
 
-`supabase/functions/meta-webhook/index.ts → ingestInstagramComment` captures `value.media.id` but never asks the Graph API for the post's media. Line 741 just builds:
+**2. Why Live Activity Feed is empty**
+- Table `ai_tool_logs` exists and is wired into the UI, but **no edge function ever inserts into it**. The agent's tool dispatcher in `ai-agent-brain.ts` executes tools but never logs them.
 
-```
-const content = `[Comment on ${mediaId || "media"}] ${text}`;
-```
+**3. Is IG/Messenger AI guaranteed off?**
+- Current DB state: `ai_purposes.whatsapp_reply.ops_config = { auto_reply_enabled: false, channels: { whatsapp:{enabled:true}, instagram:{enabled:false}, messenger:{enabled:false} } }`.
+- `meta-webhook` calls `isAiChannelEnabled(branchId, platform)` and short-circuits **before** claim/runUnifiedAgent.
+- Same gate is applied in `process-ig-comment-runs` and `lead-nurture-followup`.
+- **Verdict:** Safe to flip Instagram live for inbox/visibility — even if you later set `auto_reply_enabled=true` for WhatsApp, IG and Messenger AI stay off because of the per-channel sub-toggle. WhatsApp is the only channel that will reply.
 
-and inserts the message with `message_type: "comment"`, no `media_url`, no `media_meta`, no `permalink`. The chat bubble (`WhatsAppChat.tsx` line 1295+) only renders media when `media_url` exists; with none, it falls back to printing the raw `content` — which is why the user sees `[Comment on 18436385950191564] When and where it's opening?` instead of the post / reel preview.
+---
 
-Ad comments are the same code path — Meta delivers the comment with `media.id` but never inlines the creative.
+## Fix plan
 
-## Fix
+### A. Schema — `supabase/migrations/<new>.sql`
+- `alter table ai_call_logs add column platform text, add column contact_key text;`
+- `alter table ai_tool_logs add column platform text;` (column already has branch_id, phone_number)
+- Backfill: best-effort `update ai_call_logs set platform='whatsapp' where platform is null and purpose in ('whatsapp_reply','context_extract');` — historic rows stay grouped under WhatsApp.
 
-### 1. Enrich the comment at ingest time (`meta-webhook/index.ts`)
+### B. Runtime — `supabase/functions/_shared/ai-runtime.ts`
+- Extend `GenerateOnceOptions` with `platform?: 'whatsapp'|'instagram'|'messenger'` and `contactKey?: string`.
+- Pass both into both `logCall` paths (success/fallback/error).
 
-After we have `mediaId`, `igAccountId`, and the page `access_token` from the integration, call Graph once:
+### C. Dispatcher — `supabase/functions/_shared/ai-dispatcher.ts`
+- Remove the redundant `logCall` insert (or guard it to only fire when invoked outside `generateOnce`). This kills the "—" blank-purpose duplicates.
 
-```
-GET /{media-id}?fields=id,media_type,media_url,thumbnail_url,permalink,caption&access_token=...
-```
+### D. Brain (callers) — `supabase/functions/_shared/ai-agent-brain.ts`
+- Wherever `generateOnce` is called (`whatsapp_reply`, `context_extract` paths), forward the inbound `platform` and `contact_key` already in scope.
+- Add `logAiToolCall(supabase, { platform, branch_id, contact_key, tool_name, args_preview, status, duration_ms, error_message })` helper.
+- Wrap the tool execution loop: capture start ts → run tool → write one `ai_tool_logs` row on success or failure. `args_preview` = first 500 chars of JSON.stringify(args). This makes the Live Activity Feed start populating immediately.
 
-Map the response → message row fields:
-- `media_url` ← `thumbnail_url` (videos/reels) or `media_url` (image / carousel item)
-- `media_meta` ← JSON `{ kind, media_type, permalink, caption, media_id, thumbnail_url, media_url, source: "ig_comment_media" }`
-- `message_type` ← keep `comment` (so badge stays correct), but the bubble can branch on `media_meta.kind` (`image|video|reels|carousel`)
-- `content` ← drop the noisy `[Comment on …]` prefix; store `💬 ${text}` (or just `text` plus a small "Commented on your post" badge in UI). Keep the original media id inside `media_meta.media_id` for traceability.
+### E. UI — `src/components/settings/ai/AILogsTab.tsx`
+- LLM query: also select `platform, contact_key`. Render a small platform badge per row (WA green / IG pink / Messenger blue).
+- Add a platform filter chip row (All / WhatsApp / Instagram / Messenger) next to the existing status chips.
+- Change the default window from `"7"` (which reads as "Older than 7 days" — confusing) to `"all"` so recent activity is visible by default.
 
-Graph fallbacks:
-- Carousel (`CAROUSEL_ALBUM`) → also fetch `/{media-id}/children?fields=media_url,thumbnail_url,media_type` and store the first child's URL as preview, rest in `media_meta.children`.
-- Reels (`VIDEO` with `media_product_type=REELS`) → `thumbnail_url` is the still; `permalink` opens the reel.
-- API errors (deleted media, missing perms, dark posts/IG ads where the media object is private) → keep current text fallback but use `media_meta: { kind: "comment_only", media_id, error }` so the UI can show a neutral "Comment on a post" card with a "View on Instagram" link to `https://www.instagram.com/p/<shortcode>/` when permalink is available.
+### F. Overview Live Activity Feed
+- No code change needed beyond (D). Already reads `ai_tool_logs` and auto-refreshes every 10s; will populate once the brain starts logging tool calls.
 
-Cache: dedupe Graph calls per `mediaId` inside one request burst with a short-lived in-memory map (avoid hitting the rate limit when 10 comments land on the same ad).
+### G. Verification
+- Send one WhatsApp message → expect 1 `whatsapp_reply` row with `platform='whatsapp'`, plus N `ai_tool_logs` rows (memory_save, context_extract, etc.) visible in the Live Activity Feed.
+- Send one IG DM with `instagram.enabled=false` → expect **zero** new `ai_call_logs` / `ai_tool_logs` rows; only a meta-webhook console line `[AI:instagram] skipped — channel disabled`.
+- Temporarily flip `instagram.enabled=true` → expect a new `ai_call_logs` row tagged `platform='instagram'` (proving the platform tag works).
 
-### 2. Reuse existing campaign cache when available
-
-If an `ig_comment_campaigns` row matches this `media_id`, copy its `ig_media_permalink` and `ig_media_url`/thumbnail straight onto the message — skip the Graph call. This already exists for comment-to-DM runs; just read it during ingest.
-
-### 3. Render in the chat (`WhatsAppChat.tsx`)
-
-Add a `MessageCommentMediaCard` (or branch inside the existing bubble) for `message_type === 'comment'`:
-
-```
-┌───────────────────────────────────────┐
-│ [thumb 64×64]  📷 Commented on your   │
-│                Reel / Post             │
-│                "Free Membership – fol… │  ← truncated caption
-│                ↗ Open on Instagram     │
-└───────────────────────────────────────┘
-"When and where it's opening?"
-11:49 ✓
-```
-
-Behavior:
-- Thumbnail comes from `media_meta.thumbnail_url || media_meta.media_url || msg.media_url`.
-- Whole card is an `<a target="_blank" rel="noopener">` to `media_meta.permalink`.
-- Reels get a small ▶ overlay on the thumb.
-- Carousel gets a stacked-frames icon.
-- Fallback (no media resolved): show a generic card "Comment on a post" with "Open on Instagram" linking to `https://www.instagram.com/?utm=…` only if we have a shortcode; otherwise just the badge + the comment text.
-
-### 4. Backfill existing comment rows (migration)
-
-Update `public.whatsapp_messages` where `message_type='comment'` AND `media_url IS NULL` AND `media_meta` doesn't include `permalink`:
-- Parse `media_id` out of the existing `content` (`/^\[Comment on (\d+)\]/`).
-- For rows whose `media_id` matches a known `ig_comment_campaigns.ig_media_id`, copy `permalink` + `media_url` into `media_meta` + `media_url`.
-- Leave the rest for the next inbound enrichment cycle (no Graph calls from SQL).
-
-## Files
-
-- `supabase/functions/meta-webhook/index.ts` — enrich `ingestInstagramComment`; add `fetchIgMediaPreview(mediaId, accessToken)` helper with carousel/reel handling and 5-min in-memory cache.
-- `src/pages/WhatsAppChat.tsx` — add `<IgCommentMediaCard>` (small inline component) used when `msg.message_type === 'comment'`; drop the bare `[Comment on …]` text rendering when a real preview is present.
-- New migration — backfill existing comment rows from `ig_comment_campaigns` cache.
-
-## Verification
-
-1. Trigger a fresh comment on the same ad post; chat now shows a thumbnail card + caption + "Open on Instagram", followed by the comment text "When and where it's opening?".
-2. Comment on a reel → ▶ overlay + thumbnail; click opens the reel.
-3. Comment on a carousel → first frame + stacked-frames icon.
-4. Comment on a dark/deleted ad creative → graceful card without thumbnail, no `[Comment on 184…]` raw text.
-5. Backfilled rows from the previous @e.lvnnn / @shweta_mulani threads show the cached ad preview where the campaign row knew the permalink.
-
-## Out of scope
-
-- Story replies (already handled separately via `isStoryReply` + `[Story reply → …]` prefix).
-- Mentions (`ingestInstagramMention`) — same fix can be applied later in a small follow-up; structure is identical.
-- Downloading IG media into our own Storage bucket for permanent caching (Meta CDN URLs expire after ~24h, but `permalink` is stable forever, so the card still works after the thumbnail expires — we can do permanent caching later if the UX needs it).
+### Files touched
+- 1 new migration
+- `supabase/functions/_shared/ai-runtime.ts`
+- `supabase/functions/_shared/ai-dispatcher.ts`
+- `supabase/functions/_shared/ai-agent-brain.ts`
+- `src/components/settings/ai/AILogsTab.tsx`
