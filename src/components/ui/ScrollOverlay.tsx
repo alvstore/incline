@@ -210,15 +210,44 @@ const ScrollOverlay = () => {
           </div>
         </div>
         <footer className="flex flex-col items-center gap-4 pb-2">
-          <a
-            href="https://www.instagram.com/inclineudaipur/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors group"
-          >
-            <Instagram className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-sm tracking-wider font-medium">@theinclinelife</span>
-          </a>
+          <div className="flex items-center gap-2.5">
+            {[
+              {
+                href: "https://www.instagram.com/theinclinelife/",
+                label: "Instagram @theinclinelife",
+                Icon: Instagram,
+              },
+              {
+                href: "https://www.facebook.com/profile.php?id=61585677985406",
+                label: "Facebook page",
+                Icon: Facebook,
+              },
+              {
+                href: "https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg",
+                label: "YouTube channel",
+                Icon: Youtube,
+              },
+              {
+                href: "https://www.google.com/maps/place/Incline+-+Rise.Reflect.Repeat./@24.546845,73.701003,18z",
+                label: "View on Google Maps",
+                Icon: MapPin,
+              },
+            ].map(({ href, label, Icon }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={label}
+                className="flex items-center justify-center w-11 h-11 rounded-full glass border border-primary/20 text-muted-foreground hover:text-primary hover:scale-110 hover:border-primary/50 transition-all duration-200 shadow-lg shadow-primary/5"
+              >
+                <Icon className="w-5 h-5" />
+              </a>
+            ))}
+          </div>
+          <span className="text-xs tracking-[0.2em] uppercase font-medium text-muted-foreground">
+            @theinclinelife
+          </span>
 
           <nav
             aria-label="Legal"
