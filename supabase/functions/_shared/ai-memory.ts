@@ -221,3 +221,69 @@ export function renderKnowledgeBlock(rows: AiKnowledgeRow[]): string {
   }
   return out.join("\n");
 }
+
+// ─── Lead context resolver ────────────────────────────────────────────────────
+// Hydrates the most recent existing `leads` row for a contact so the AI brain
+// can skip onboarding questions whose answers are already in the CRM.
+// v1.0.0 — added 2026-06-06 to fix Bhavyadeep-style re-asking bug.
+export interface LeadContext {
+  leadId: string;
+  status: string | null;
+  source: string | null;
+  capturedAt: string;
+  profile: { full_name: string | null; email: string | null };
+  facts: {
+    fitness_goal: string | null;
+    plan_interest: string | null;
+    expected_start_date: string | null;
+    fitness_experience: string | null;
+    preferred_time: string | null;
+  };
+}
+
+export async function resolveLeadContext(
+  supabase: SB,
+  phoneVariants: string[],
+  branchId: string | null | undefined,
+): Promise<LeadContext | null> {
+  if (!phoneVariants?.length) return null;
+  const branch = safeBranch(branchId);
+  try {
+    let q = supabase
+      .from("leads")
+      .select("id, full_name, email, fitness_goal, goals, plan_interest, source, status, expected_start_date, fitness_experience, preferred_time, created_at")
+      .in("phone", phoneVariants)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (branch) q = q.eq("branch_id", branch);
+    const { data } = await q.maybeSingle();
+    if (!data) return null;
+    return {
+      leadId: data.id,
+      status: data.status ?? null,
+      source: data.source ?? null,
+      capturedAt: data.created_at,
+      profile: {
+        full_name: data.full_name ?? null,
+        email: data.email ?? null,
+      },
+      facts: {
+        fitness_goal: data.fitness_goal ?? data.goals ?? null,
+        plan_interest: data.plan_interest ?? null,
+        expected_start_date: data.expected_start_date ?? null,
+        fitness_experience: data.fitness_experience ?? null,
+        preferred_time: data.preferred_time ?? null,
+      },
+    };
+  } catch (e) {
+    console.warn("[ai-memory] resolveLeadContext failed:", (e as Error).message);
+    return null;
+  }
+}
+
+export function firstNameOf(full?: string | null): string | null {
+  if (!full) return null;
+  const t = String(full).trim().split(/\s+/)[0];
+  return t || null;
+}
+
