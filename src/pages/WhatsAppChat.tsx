@@ -41,6 +41,7 @@ import {
   MessageSquare, Send, Search, Phone, User,
   CheckCheck, Check, Clock, Paperclip, Smile, MoreVertical, Sparkles, Loader2, Plus, AlertTriangle, Bot, UserPlus, Image, FileText,
   Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser, RefreshCw, AtSign,
+  Play, Layers, ExternalLink, MessageCircle,
 } from 'lucide-react';
 
 // Platform icon helper
@@ -92,6 +93,16 @@ interface MessageMediaMeta {
   size?: number | null;
   error?: string | null;
   kind?: string | null;
+  // IG comment media enrichment
+  media_id?: string | null;
+  media_type?: string | null;
+  media_product_type?: string | null;
+  permalink?: string | null;
+  caption?: string | null;
+  thumbnail_url?: string | null;
+  media_url?: string | null;
+  preview_url?: string | null;
+  source?: string | null;
 }
 
 interface Message {
@@ -140,6 +151,59 @@ function isAiNotConfiguredError(msg: string): boolean {
     lower.includes('openai') ||
     lower.includes('configuration') ||
     lower.includes('not set up')
+  );
+}
+
+
+function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaMeta | null; mediaUrl?: string | null; outbound: boolean }) {
+  const thumb = meta?.preview_url || meta?.thumbnail_url || meta?.media_url || mediaUrl || null;
+  const permalink = meta?.permalink || null;
+  const kind = (meta?.kind as string) || 'post';
+  const label =
+    kind === 'reels' ? 'Commented on your Reel'
+    : kind === 'video' ? 'Commented on your video'
+    : kind === 'carousel' ? 'Commented on your carousel post'
+    : kind === 'comment_only' ? 'Commented on your post'
+    : 'Commented on your post';
+  const caption = meta?.caption ? (meta.caption.length > 90 ? meta.caption.slice(0, 90) + '…' : meta.caption) : null;
+  const cardCls = outbound
+    ? 'flex gap-3 items-center rounded-xl bg-white/10 border border-white/15 px-2.5 py-2 mb-2'
+    : 'flex gap-3 items-center rounded-xl bg-muted/60 border border-border/40 px-2.5 py-2 mb-2';
+  const subCls = outbound ? 'text-[11px] text-white/70' : 'text-[11px] text-muted-foreground';
+  const titleCls = outbound ? 'text-xs font-semibold text-white/95' : 'text-xs font-semibold text-foreground';
+  const Wrapper: any = permalink ? 'a' : 'div';
+  const wrapperProps = permalink ? { href: permalink, target: '_blank', rel: 'noopener noreferrer' } : {};
+  return (
+    <Wrapper {...wrapperProps} className={cardCls + (permalink ? ' hover:opacity-95 cursor-pointer' : '')}>
+      <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center">
+        {thumb ? (
+          <img src={thumb} alt="post" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <MessageCircle className={outbound ? 'h-5 w-5 text-white/70' : 'h-5 w-5 text-muted-foreground'} />
+        )}
+        {kind === 'reels' || kind === 'video' ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <Play className="h-4 w-4 text-white fill-white" />
+          </span>
+        ) : null}
+        {kind === 'carousel' ? (
+          <span className="absolute top-0.5 right-0.5 bg-black/55 rounded p-0.5">
+            <Layers className="h-3 w-3 text-white" />
+          </span>
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className={titleCls + ' flex items-center gap-1'}>
+          <Instagram className="h-3 w-3" /> {label}
+        </div>
+        {caption ? <div className={subCls + ' truncate'}>{caption}</div> : null}
+        {permalink ? (
+          <div className={subCls + ' flex items-center gap-1 mt-0.5'}>
+            <ExternalLink className="h-3 w-3" /> Open on Instagram
+          </div>
+        ) : null}
+      </div>
+    </Wrapper>
   );
 }
 
@@ -1325,7 +1389,14 @@ export default function WhatsAppChatPage() {
                                     <FileText className="h-3 w-3" /> Template
                                   </div>
                                 )}
-                                {!['text','image','template','document'].includes(msg.message_type) && msg.media_url && (
+                                {msg.message_type === 'comment' && (
+                                  <IgCommentMediaCard
+                                    meta={msg.media_meta}
+                                    mediaUrl={msg.media_url}
+                                    outbound={msg.direction === 'outbound'}
+                                  />
+                                )}
+                                {!['text','image','template','document','comment'].includes(msg.message_type) && msg.media_url && (
                                   <WhatsAppMediaAttachment
                                     mediaUrl={msg.media_url}
                                     mediaMeta={msg.media_meta}
@@ -1333,13 +1404,17 @@ export default function WhatsAppChatPage() {
                                     direction={msg.direction}
                                   />
                                 )}
-                                {!['text','image','template','document'].includes(msg.message_type) && !msg.media_url && (
+                                {!['text','image','template','document','comment'].includes(msg.message_type) && !msg.media_url && (
                                   <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
                                     <Paperclip className="h-3 w-3" /> {msg.message_type}
                                   </div>
                                 )}
                                 {msg.content && (
-                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [word-break:break-word] [overflow-wrap:anywhere] w-full">{msg.content}</p>
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [word-break:break-word] [overflow-wrap:anywhere] w-full">
+                                    {msg.message_type === 'comment'
+                                      ? msg.content.replace(/^\[Comment on [^\]]+\]\s*/, '')
+                                      : msg.content}
+                                  </p>
                                 )}
                                 <div
                                   className={`flex items-center justify-end gap-1 mt-1 ${
