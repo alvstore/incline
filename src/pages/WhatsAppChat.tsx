@@ -41,6 +41,7 @@ import {
   MessageSquare, Send, Search, Phone, User,
   CheckCheck, Check, Clock, Paperclip, Smile, MoreVertical, Sparkles, Loader2, Plus, AlertTriangle, Bot, UserPlus, Image, FileText,
   Trash2, Ban, Eye, CircleDot, AlertCircle, Instagram, Facebook, Users, PanelRightOpen, PanelRightClose, BookUser, RefreshCw, AtSign,
+  Play, Layers, ExternalLink, MessageCircle,
 } from 'lucide-react';
 
 // Platform icon helper
