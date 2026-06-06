@@ -1,4 +1,9 @@
-// v3.7.0 — Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
+// v3.8.0 — Memory-grounded onboarding: KNOWN SO FAR hard rule in the prompt
+//          + enforceNoRepeatNameAsk post-process guard. Stops the bot from
+//          re-asking "What's your name?" on IG/Messenger when memory already
+//          has a real first name (root cause: phone-key format mismatch made
+//          history lookups return zero rows; fixed in meta-webhook v3.x).
+// 3.7.0: Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
 // 3.7.0: Non-fitness redirect (a) reads pattern/message/window from
 //        ai_purposes.guards (no inline hardcoding), (b) dedupes against the
 //        last outbound within configurable window so the same canned reply is
