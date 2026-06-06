@@ -56,6 +56,8 @@ export interface GenerateOnceOptions {
   toolChoice?: any;            // optional forced tool choice
   supabase?: SupabaseClient;
   context?: Record<string, unknown>; // logged for debugging
+  platform?: "whatsapp" | "instagram" | "messenger" | string;
+  contactKey?: string | null;
 }
 
 export interface GenerateOnceResult {
