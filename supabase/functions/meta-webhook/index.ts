@@ -711,6 +711,67 @@ async function findInstagramMessageViaConversations(igUserId: string, mid: strin
 
 // ─── F3: Instagram comments + mentions ────────────────────────────────────────
 
+// In-memory cache for IG media lookups (dedupes Graph hits across same-burst comments).
+const igMediaCache = new Map<string, { at: number; data: any }>();
+async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promise<any | null> {
+  if (!mediaId || !accessToken) return null;
+  const cached = igMediaCache.get(mediaId);
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.data;
+  const base = "https://graph.facebook.com/v21.0";
+  const fields = "id,media_type,media_product_type,media_url,thumbnail_url,permalink,caption";
+  try {
+    const r = await fetch(`${base}/${encodeURIComponent(mediaId)}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(accessToken)}`);
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.log(`[IG] media lookup failed id=${mediaId} status=${r.status} body=${txt.slice(0, 200)}`);
+      igMediaCache.set(mediaId, { at: Date.now(), data: null });
+      return null;
+    }
+    const j = await r.json();
+    let children: any[] = [];
+    if (j.media_type === "CAROUSEL_ALBUM") {
+      try {
+        const cr = await fetch(`${base}/${encodeURIComponent(mediaId)}/children?fields=media_url,thumbnail_url,media_type&access_token=${encodeURIComponent(accessToken)}`);
+        if (cr.ok) {
+          const cj = await cr.json();
+          children = Array.isArray(cj.data) ? cj.data : [];
+        }
+      } catch (_) { /* ignore */ }
+    }
+    const productType = String(j.media_product_type || "").toUpperCase();
+    const isReel = productType === "REELS" || j.media_type === "REELS";
+    const kind: "image" | "video" | "reels" | "carousel" =
+      j.media_type === "CAROUSEL_ALBUM" ? "carousel"
+      : isReel ? "reels"
+      : j.media_type === "VIDEO" ? "video"
+      : "image";
+    const previewUrl =
+      j.thumbnail_url
+      || (kind === "carousel" ? (children[0]?.thumbnail_url || children[0]?.media_url) : null)
+      || j.media_url
+      || null;
+    const data = {
+      kind,
+      media_id: j.id || mediaId,
+      media_type: j.media_type || null,
+      media_product_type: j.media_product_type || null,
+      permalink: j.permalink || null,
+      caption: j.caption || null,
+      thumbnail_url: j.thumbnail_url || null,
+      media_url: j.media_url || null,
+      preview_url: previewUrl,
+      children: children.length ? children.slice(0, 10) : undefined,
+      source: "ig_comment_media",
+    };
+    igMediaCache.set(mediaId, { at: Date.now(), data });
+    return data;
+  } catch (e) {
+    console.log(`[IG] media lookup error id=${mediaId}: ${e instanceof Error ? e.message : e}`);
+    igMediaCache.set(mediaId, { at: Date.now(), data: null });
+    return null;
+  }
+}
+
 async function ingestInstagramComment(value: any, igAccountId: string) {
   if (!value) return;
   const commentId = String(value.id || "");
@@ -738,7 +799,35 @@ async function ingestInstagramComment(value: any, igAccountId: string) {
     return;
   }
 
-  const content = `[Comment on ${mediaId || "media"}] ${text}`;
+  // Resolve post/reel/ad media — prefer cached campaign permalink, else Graph API.
+  let mediaMeta: any = null;
+  let mediaUrl: string | null = null;
+  if (mediaId) {
+    try {
+      const { data: camp } = await supabase
+        .from("ig_comment_campaigns")
+        .select("ig_media_permalink")
+        .eq("ig_media_id", mediaId)
+        .maybeSingle();
+      if (camp?.ig_media_permalink) {
+        mediaMeta = { kind: "post", media_id: mediaId, permalink: camp.ig_media_permalink, source: "ig_campaign_cache" };
+      }
+    } catch (_) { /* non-fatal */ }
+
+    const token = integration?.credentials?.page_access_token || integration?.credentials?.access_token;
+    if (token) {
+      const fetched = await fetchIgMediaPreview(mediaId, token);
+      if (fetched) {
+        mediaMeta = { ...(mediaMeta || {}), ...fetched };
+        mediaUrl = fetched.preview_url || null;
+      }
+    }
+    if (!mediaMeta) {
+      mediaMeta = { kind: "comment_only", media_id: mediaId, source: "unresolved" };
+    }
+  }
+
+  const content = text;
   const { data: inserted, error } = await supabase
     .from("whatsapp_messages")
     .insert({
@@ -747,6 +836,8 @@ async function ingestInstagramComment(value: any, igAccountId: string) {
       contact_name: fromUsername,
       message_type: "comment",
       content,
+      media_url: mediaUrl,
+      media_meta: mediaMeta,
       direction: "inbound",
       status: "received",
       platform: "instagram" as any,
@@ -758,7 +849,7 @@ async function ingestInstagramComment(value: any, igAccountId: string) {
     console.error("[IG] comment insert failed:", error.message);
     return;
   }
-  console.log(`[IG] stored comment id=${inserted?.id} from=${fromUsername || fromId}`);
+  console.log(`[IG] stored comment id=${inserted?.id} from=${fromUsername || fromId} media_kind=${mediaMeta?.kind || "none"}`);
 
   await supabase.from("whatsapp_chat_settings").upsert(
     { branch_id: branchId, phone_number: fromId, is_unread: true, platform: "instagram" as any },
