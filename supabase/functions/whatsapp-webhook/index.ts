@@ -373,32 +373,34 @@ async function processStatusUpdates(value: any, branchId: string | null) {
     const { error } = await updateQuery;
     if (error) console.error("Failed to update WhatsApp message status", error);
 
-    // 2. Dispatcher audit trail — match by provider_message_id (wamid).
-    //    `delivery_status` enum only has sent/failed; richer WhatsApp
-    //    lifecycle (delivered/read) is stashed under delivery_metadata.
+    // 2. Dispatcher audit trail — route every callback through the
+    //    record_delivery_event SSOT so the Live Feed rail advances
+    //    Queued → Sent → Delivered → Read for WA messages.
     try {
       const { data: log } = await supabase
         .from("communication_logs")
-        .select("id, delivery_metadata")
+        .select("id")
         .eq("provider_message_id", status.id)
         .maybeSingle();
       if (log?.id) {
-        const meta = (log.delivery_metadata as Record<string, unknown>) || {};
-        const patch: Record<string, unknown> = {
-          delivery_metadata: {
-            ...meta,
-            wa_status: newStatus,
-            wa_status_at: new Date().toISOString(),
-          },
-        };
-        if (newStatus === "failed") {
-          patch.delivery_status = "failed";
-          if (errMsg) patch.error_message = errMsg;
+        const mapped =
+          newStatus === "delivered" ? "delivered" :
+          newStatus === "read"      ? "read"      :
+          newStatus === "failed"    ? "failed"    :
+          newStatus === "sent"      ? "sent"      : null;
+        if (mapped) {
+          await supabase.rpc("record_delivery_event", {
+            p_log_id: log.id,
+            p_new_status: mapped,
+            p_provider: "meta_whatsapp",
+            p_provider_message_id: status.id,
+            p_error: mapped === "failed" ? errMsg : null,
+            p_metadata: { wa_status: newStatus, raw: status },
+          });
         }
-        await supabase.from("communication_logs").update(patch).eq("id", log.id);
       }
     } catch (e) {
-      console.warn("[whatsapp-webhook] communication_logs update failed:", e);
+      console.warn("[whatsapp-webhook] record_delivery_event failed:", e);
     }
   }
 }
