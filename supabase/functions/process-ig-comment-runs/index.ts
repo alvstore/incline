@@ -143,6 +143,25 @@ async function processRun(run: any): Promise<void> {
     return;
   }
 
+  // ── Per-channel AI kill-switch (Instagram). If Instagram DMs are disabled
+  // in Settings → AI Agent Control Center, skip the run entirely — no DM,
+  // no public reply, no AI calls.
+  try {
+    const { isAiChannelEnabled } = await import("../_shared/ai-channel-toggle.ts");
+    const channelOn = await isAiChannelEnabled(supabase, run.branch_id, "instagram");
+    if (!channelOn) {
+      await supabase.from("ig_comment_runs").update({
+        status: "skipped",
+        skip_reason: "channel_instagram_disabled",
+        executed_at: new Date().toISOString(),
+      }).eq("id", run.id);
+      return;
+    }
+  } catch (e) {
+    console.warn("[ig-runs] channel-toggle check failed (continuing fail-open):", e);
+  }
+
+
   const integration = await loadIntegration(run.branch_id, campaign.integration_id, campaign.ig_account_id);
   const accessToken: string | undefined =
     integration?.credentials?.page_access_token || integration?.credentials?.access_token;
