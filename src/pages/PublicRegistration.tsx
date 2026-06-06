@@ -71,9 +71,10 @@ export default function PublicRegistration() {
   const { data: branches } = useQuery({
     queryKey: ["public-branches"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("branches").select("id, name, city").eq("is_active", true).order("name");
+      // Calls SECURITY DEFINER RPC that returns only non-sensitive columns to anon users.
+      const { data, error } = await supabase.rpc("get_public_branches");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{ id: string; name: string; city: string | null }>;
     },
   });
 

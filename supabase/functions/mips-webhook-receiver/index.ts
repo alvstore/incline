@@ -378,21 +378,27 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Optional shared-secret gate. When MIPS_WEBHOOK_SECRET is configured,
-  // require a matching token via `x-mips-token` header or `Authorization: Bearer <token>`.
-  // Hardware devices must be configured to send this header.
+  // REQUIRED shared-secret gate. MIPS_WEBHOOK_SECRET must be configured.
+  // Hardware devices must send `x-mips-token` or `Authorization: Bearer <token>`.
+  // If the secret is not configured, refuse ALL requests (fail closed) to prevent
+  // forged biometric/attendance events.
   const webhookSecret = Deno.env.get("MIPS_WEBHOOK_SECRET") || "";
-  if (webhookSecret) {
-    const headerToken = req.headers.get("x-mips-token") || "";
-    const authHeader = req.headers.get("authorization") || "";
-    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-    if (headerToken !== webhookSecret && bearer !== webhookSecret) {
-      console.warn("mips-webhook-receiver: unauthorized request (missing/invalid token)");
-      return new Response(JSON.stringify({ result: 0, code: "401" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  if (!webhookSecret) {
+    console.error("mips-webhook-receiver: MIPS_WEBHOOK_SECRET is not configured — refusing all requests");
+    return new Response(JSON.stringify({ result: 0, code: "503", message: "Webhook secret not configured" }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const headerToken = req.headers.get("x-mips-token") || "";
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  if (headerToken !== webhookSecret && bearer !== webhookSecret) {
+    console.warn("mips-webhook-receiver: unauthorized request (missing/invalid token)");
+    return new Response(JSON.stringify({ result: 0, code: "401" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
 
