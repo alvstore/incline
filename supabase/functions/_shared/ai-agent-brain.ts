@@ -1595,6 +1595,7 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
         purpose: "context_extract", scope: "whatsapp_ai",
         branch_id: ctx.branchId, provider: r.provider, model: r.model,
         status: "success", duration_ms: 0, fallback_used: r.fallback_used,
+        platform: ctx.platform ?? null, contact_key: ctx.senderId ?? null,
       });
     } catch { /* noop */ }
   } catch (e) {
