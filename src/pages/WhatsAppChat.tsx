@@ -92,6 +92,16 @@ interface MessageMediaMeta {
   size?: number | null;
   error?: string | null;
   kind?: string | null;
+  // IG comment media enrichment
+  media_id?: string | null;
+  media_type?: string | null;
+  media_product_type?: string | null;
+  permalink?: string | null;
+  caption?: string | null;
+  thumbnail_url?: string | null;
+  media_url?: string | null;
+  preview_url?: string | null;
+  source?: string | null;
 }
 
 interface Message {
