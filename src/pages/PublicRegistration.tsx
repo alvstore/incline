@@ -194,14 +194,15 @@ export default function PublicRegistration() {
         {/* Top bar */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="rounded-xl bg-white/10 p-2 backdrop-blur-md ring-1 ring-white/15">
-              <Dumbbell className="h-5 w-5" />
+            <div className="rounded-xl bg-white/10 p-1.5 backdrop-blur-md ring-1 ring-white/15">
+              <img src={inclineLogo} alt="The Incline Life" className="h-9 w-9 object-contain" />
             </div>
             <div>
               <h1 className="text-sm font-bold leading-tight">The Incline Life</h1>
               <p className="text-[10px] text-white/60">Member registration</p>
             </div>
           </div>
+
           <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md">
             Step {Math.min(stepIdx + 1, 4)} of 4
           </div>
