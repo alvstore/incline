@@ -1,6 +1,9 @@
-// v1.0.0 — Outbound Instagram / Messenger DM sender.
-// Mirrors process-ig-comment-runs.loadIntegration + sendIgPrivateReply logic.
-// Inputs: { message_id, platform: 'instagram'|'messenger', recipient_id, content, branch_id, ig_account_id? }
+// v1.1.0 — Persist Meta provider message_id into platform_message_id (so the
+//          unique index `whatsapp_messages_platform_msgid_uniq` and the echo
+//          merge in meta-webhook can suppress duplicate outbound bubbles),
+//          and acquire a platform-aware send lock keyed by
+//          `meta:<platform>:<recipient>` via try_whatsapp_send_lock to stop
+//          two parallel webhook invocations from sending the same DM twice.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { META_GRAPH_VERSION, detectMetaHost, metaFetchWithFallback } from "../_shared/meta-config.ts";
 
@@ -126,6 +129,26 @@ Deno.serve(async (req) => {
       messaging_type: "RESPONSE",
     };
 
+    // Send-time race lock: prevents two parallel invocations from sending
+    // duplicate DMs to the same Instagram/Messenger recipient within 8s.
+    const lockKey = `meta:${platform}:${recipientId}`;
+    try {
+      const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock" as any, {
+        _phone: lockKey,
+        _ttl_seconds: 8,
+      });
+      if (gotLock === false) {
+        console.log(`[send-meta-dm] skip — another send in flight for ${lockKey}`);
+        await supabase
+          .from("whatsapp_messages")
+          .update({ status: "failed", error_message: "duplicate suppressed" })
+          .eq("id", messageId);
+        return json(200, { success: false, skipped: "duplicate_suppressed" });
+      }
+    } catch (lockErr) {
+      console.warn("[send-meta-dm] send-lock RPC failed, proceeding without lock:", lockErr);
+    }
+
     const r = await metaFetchWithFallback(url, {
       method: "POST",
       headers: {
@@ -155,9 +178,12 @@ Deno.serve(async (req) => {
       return json(502, { error: "meta_send_failed", meta_error: metaErrMsg, meta_code: metaErrCode });
     }
 
+    // Meta returns the provider message id under `message_id`. Persist it so
+    // the echo webhook merges with this row (instead of producing a 2nd bubble)
+    // and the unique index on (platform, platform_message_id) catches retries.
     const providerMessageId = data?.message_id || null;
     await supabase.from("whatsapp_messages")
-      .update({ status: "sent" })
+      .update({ status: "sent", platform_message_id: providerMessageId })
       .eq("id", messageId);
 
     return json(200, { success: true, message_id: providerMessageId });

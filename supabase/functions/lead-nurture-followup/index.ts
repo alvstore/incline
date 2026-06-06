@@ -288,7 +288,9 @@ serve(async (req) => {
       try {
         if (chatPlatform === "whatsapp" && outsideWindow && templateRow) {
           // ── Approved-template path via dispatch-communication ──
-          const dedupeKey = `lead_nurture:${chat.id}:${Date.now()}`;
+          // Stable per-retry dedupe key so a cron rerun within the same window
+          // can never produce a duplicate dispatch.
+          const dedupeKey = `lead_nurture:${chat.id}:${(chat.nurture_retry_count || 0) + 1}`;
           const dispatchRes = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
             method: "POST",
             headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
