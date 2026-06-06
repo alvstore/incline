@@ -91,12 +91,18 @@ async function mirrorLog(row: PendingRow, ok: boolean, wamid: string | null, err
 
 async function retryOne(row: PendingRow): Promise<{ ok: boolean; reason: string }> {
   const integration = await getIntegration(row.branch_id);
-  if (!integration) return { ok: false, reason: "no_integration" };
+  if (!integration) {
+    console.log(`[reconciler] skip row=${row.id} branch=${row.branch_id} reason=no_integration`);
+    return { ok: false, reason: "no_integration" };
+  }
 
   const accessToken = integration.credentials?.access_token as string;
   const phoneNumberId = integration.config?.phone_number_id as string;
   const appSecret = (integration.credentials?.app_secret as string) || null;
-  if (!accessToken || !phoneNumberId) return { ok: false, reason: "incomplete_credentials" };
+  if (!accessToken || !phoneNumberId) {
+    console.log(`[reconciler] skip row=${row.id} reason=incomplete_credentials`);
+    return { ok: false, reason: "incomplete_credentials" };
+  }
 
   const cleanPhone = row.phone_number.replace(/[\s\-\+]/g, "");
 
