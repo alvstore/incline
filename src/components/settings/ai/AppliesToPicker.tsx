@@ -11,7 +11,6 @@ import {
 import {
   useAiPurposes,
   groupPurposes,
-  titleFor,
   type PurposeMeta,
 } from '@/lib/ai/purposeRegistry';
 
