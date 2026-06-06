@@ -1231,7 +1231,7 @@ async function triggerAiReply(
     try {
       await supabase
         .from("whatsapp_messages")
-        .update({ status: "failed", error_message: `send-fn-throw: ${(sendErr as Error)?.message || sendErr}` })
+        .update({ status: "failed", failure_reason: `send-fn-throw: ${(sendErr as Error)?.message || sendErr}`, failed_at: new Date().toISOString() })
         .eq("id", replyMsg.id);
     } catch (_) { /* swallow */ }
   }
