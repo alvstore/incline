@@ -154,6 +154,59 @@ function isAiNotConfiguredError(msg: string): boolean {
   );
 }
 
+
+function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaMeta | null; mediaUrl?: string | null; outbound: boolean }) {
+  const thumb = meta?.preview_url || meta?.thumbnail_url || meta?.media_url || mediaUrl || null;
+  const permalink = meta?.permalink || null;
+  const kind = (meta?.kind as string) || 'post';
+  const label =
+    kind === 'reels' ? 'Commented on your Reel'
+    : kind === 'video' ? 'Commented on your video'
+    : kind === 'carousel' ? 'Commented on your carousel post'
+    : kind === 'comment_only' ? 'Commented on your post'
+    : 'Commented on your post';
+  const caption = meta?.caption ? (meta.caption.length > 90 ? meta.caption.slice(0, 90) + '…' : meta.caption) : null;
+  const cardCls = outbound
+    ? 'flex gap-3 items-center rounded-xl bg-white/10 border border-white/15 px-2.5 py-2 mb-2'
+    : 'flex gap-3 items-center rounded-xl bg-muted/60 border border-border/40 px-2.5 py-2 mb-2';
+  const subCls = outbound ? 'text-[11px] text-white/70' : 'text-[11px] text-muted-foreground';
+  const titleCls = outbound ? 'text-xs font-semibold text-white/95' : 'text-xs font-semibold text-foreground';
+  const Wrapper: any = permalink ? 'a' : 'div';
+  const wrapperProps = permalink ? { href: permalink, target: '_blank', rel: 'noopener noreferrer' } : {};
+  return (
+    <Wrapper {...wrapperProps} className={cardCls + (permalink ? ' hover:opacity-95 cursor-pointer' : '')}>
+      <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center">
+        {thumb ? (
+          <img src={thumb} alt="post" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <MessageCircle className={outbound ? 'h-5 w-5 text-white/70' : 'h-5 w-5 text-muted-foreground'} />
+        )}
+        {kind === 'reels' || kind === 'video' ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <Play className="h-4 w-4 text-white fill-white" />
+          </span>
+        ) : null}
+        {kind === 'carousel' ? (
+          <span className="absolute top-0.5 right-0.5 bg-black/55 rounded p-0.5">
+            <Layers className="h-3 w-3 text-white" />
+          </span>
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className={titleCls + ' flex items-center gap-1'}>
+          <Instagram className="h-3 w-3" /> {label}
+        </div>
+        {caption ? <div className={subCls + ' truncate'}>{caption}</div> : null}
+        {permalink ? (
+          <div className={subCls + ' flex items-center gap-1 mt-0.5'}>
+            <ExternalLink className="h-3 w-3" /> Open on Instagram
+          </div>
+        ) : null}
+      </div>
+    </Wrapper>
+  );
+}
+
 type ChatFilter = 'all' | 'unread' | 'needs_human' | 'my_chats' | 'whatsapp' | 'instagram' | 'messenger';
 
 function normalizePhone(phone: string): string {
