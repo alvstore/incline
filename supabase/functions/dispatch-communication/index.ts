@@ -1,4 +1,8 @@
-// dispatch-communication v1.16.0
+// dispatch-communication v1.17.0
+// v1.17.0: FIX — finalize update no longer sets delivery_metadata=null (NOT NULL
+//          column → silent update failure → WA/SMS/email logs stuck in 'sending'
+//          forever). Also injects URL-button component for AUTHENTICATION (OTP)
+//          templates so Meta accepts the send instead of returning 131008.
 // v1.16.0: Unified WhatsApp delivery decision — single resolver replaces the
 //          confusing "Outside 24h customer-service window" failure path.
 //          Order of resolution for WhatsApp sends:
