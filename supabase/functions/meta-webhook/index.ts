@@ -1,3 +1,11 @@
+// v5.4.0 — Normalize Meta scoped sender IDs to `+<digits>` (phoneKey) before
+//          ALL DB lookups in triggerAiReply (state gate, ai_memory, AI claim,
+//          outbound dedupe, message insert, send-whatsapp body). Without this
+//          the brain queried `1234…` while the DB normalizer stored `+1234…`
+//          → empty history → AI re-asked "What's your name?" every turn.
+//          Also: self-heal stuck IG/Messenger outbound rows by flipping them
+//          to `failed` when send-fn returns non-OK or throws, so the inbox
+//          stops showing an indefinite clock icon.
 // v5.2.0 — Instagram duplicate-reply hardening:
 //          (1) atomic per-contact AI claim via claim_meta_ai_reply RPC stops
 //              double DMs when a long text + attachment arrive back-to-back or
