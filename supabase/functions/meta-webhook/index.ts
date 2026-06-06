@@ -714,6 +714,43 @@ async function findInstagramMessageViaConversations(igUserId: string, mid: strin
 
 // ─── F3: Instagram comments + mentions ────────────────────────────────────────
 
+// Cache an IG CDN thumbnail to our own public bucket so it survives Meta's ~24h URL expiry.
+async function cacheIgThumbnail(mediaId: string, sourceUrl: string): Promise<string | null> {
+  if (!mediaId || !sourceUrl) return null;
+  try {
+    const path = `ig-cache/${mediaId}.jpg`;
+    // Skip download if we already cached it.
+    const { data: existing } = await supabase.storage.from("template-media").list("ig-cache", {
+      search: `${mediaId}.jpg`,
+      limit: 1,
+    });
+    if (existing && existing.length) {
+      const { data: pub } = supabase.storage.from("template-media").getPublicUrl(path);
+      return pub?.publicUrl || null;
+    }
+    const r = await fetch(sourceUrl);
+    if (!r.ok) {
+      console.log(`[IG] thumb download failed id=${mediaId} status=${r.status}`);
+      return null;
+    }
+    const buf = new Uint8Array(await r.arrayBuffer());
+    const contentType = r.headers.get("content-type") || "image/jpeg";
+    const { error: upErr } = await supabase.storage.from("template-media").upload(path, buf, {
+      contentType,
+      upsert: true,
+    });
+    if (upErr) {
+      console.log(`[IG] thumb upload failed id=${mediaId}: ${upErr.message}`);
+      return null;
+    }
+    const { data: pub } = supabase.storage.from("template-media").getPublicUrl(path);
+    return pub?.publicUrl || null;
+  } catch (e) {
+    console.log(`[IG] thumb cache error id=${mediaId}: ${e instanceof Error ? e.message : e}`);
+    return null;
+  }
+}
+
 // In-memory cache for IG media lookups (dedupes Graph hits across same-burst comments).
 const igMediaCache = new Map<string, { at: number; data: any }>();
 async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promise<any | null> {
@@ -748,11 +785,16 @@ async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promis
       : isReel ? "reels"
       : j.media_type === "VIDEO" ? "video"
       : "image";
-    const previewUrl =
+    const ephemeralPreview =
       j.thumbnail_url
       || (kind === "carousel" ? (children[0]?.thumbnail_url || children[0]?.media_url) : null)
       || j.media_url
       || null;
+
+    // Permanently cache the thumbnail into our public bucket so the chat card
+    // still renders after Meta's CDN URL expires (~24h).
+    const cachedUrl = ephemeralPreview ? await cacheIgThumbnail(mediaId, ephemeralPreview) : null;
+
     const data = {
       kind,
       media_id: j.id || mediaId,
@@ -762,7 +804,9 @@ async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promis
       caption: j.caption || null,
       thumbnail_url: j.thumbnail_url || null,
       media_url: j.media_url || null,
-      preview_url: previewUrl,
+      preview_url: cachedUrl || ephemeralPreview,
+      cached_preview_url: cachedUrl,
+      ephemeral_preview_url: ephemeralPreview,
       children: children.length ? children.slice(0, 10) : undefined,
       source: "ig_comment_media",
     };
@@ -773,6 +817,7 @@ async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promis
     igMediaCache.set(mediaId, { at: Date.now(), data: null });
     return null;
   }
+}
 }
 
 async function ingestInstagramComment(value: any, igAccountId: string) {
