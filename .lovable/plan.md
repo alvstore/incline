@@ -1,72 +1,102 @@
-## Audit findings
+## Root causes (confirmed by audit)
 
-The screenshots match live backend data:
+### Bug A — AI keeps re-asking "What's your name?" (and re-greeting)
 
-- `@shweta_mulani` sent a clear PR/collaboration inquiry.
-- The AI sent the correct non-membership redirect twice, then incorrectly asked for name twice, then scheduled lead-nurture follow-ups later.
-- The system did create AI memory with `current_intent = non_fitness`, but the active chat row still has `bot_active = true`, `do_not_contact = false`, and nurture retries enabled.
+- `whatsapp_messages.phone_number` and `whatsapp_chat_settings.phone_number` are auto-normalized by a Postgres trigger (`normalize_phone_in`) to E.164 format: **`+1380828610766741`**.
+- `meta-webhook/index.ts` reads the raw Instagram/Messenger scoped sender ID (`event.sender.id` = `1380828610766741`, no `+`) and passes it straight through as `senderId` to `runUnifiedAgent`.
+- Inside `ai-agent-brain.ts` every history / state lookup runs `.eq("phone_number", ctx.senderId)`:
+  - line 275 — recent messages for the auto-learn extractor
+  - line 304 — full conversation history fed to the model
+  - meta-webhook line 1069 — chat_settings state gate
+  - meta-webhook line 1147 — outbound 3-minute dedupe
 
-Root causes found:
+  All of these return **zero rows** because the stored key is `+1380828610766741` and we query for `1380828610766741`.
 
-1. **Instagram contact key mismatch**
-   - `whatsapp_messages` and `whatsapp_chat_settings` normalize Instagram IDs like phone numbers and add `+`.
-   - `ai_memory` stores the same Instagram contact without `+`.
-   - Result: the brain can write “non_fitness” memory but later reads a different contact key and misses its own memory.
+- Net effect: the model gets an empty `history`, so every inbound looks like the very first turn → it always emits the "Turn 1" greeting + "What's your name?", even though `ai_memory.profile.first_name = "Karanveer"` was correctly captured.
 
-2. **Lead nurture does not read AI memory or non-fitness intent**
-   - `lead-nurture-followup` only checks `bot_active` / `do_not_contact` in `whatsapp_chat_settings`.
-   - It does not suppress rows where `ai_memory.current_intent = non_fitness` or `handoff_reason = non_fitness_inquiry`.
-   - Result: PR/media/vendor contacts can still receive “early access / Founding Member” follow-ups.
+Verified directly in the database:
 
-3. **Instagram sender idempotency is incomplete**
-   - `meta-webhook` has a claim RPC and echo merge logic.
-   - But `send-meta-dm` marks messages as sent without saving the provider message ID into `platform_message_id`.
-   - Result: Meta echo events can still appear as a second visible outbound bubble, and send-time duplicate suppression is weaker than WhatsApp.
+```
+ai_memory.contact_key       = '1380828610766741'  (no +)
+whatsapp_chat_settings.phone_number = '+1380828610766741'
+whatsapp_messages.phone_number      = '+1380828610766741'
+```
 
-4. **Non-fitness guard is not a hard global stop yet**
-   - The AI prompt says PR/media/vendor inquiries must stop, but the cron and contact settings are still allowed to continue if any update misses the normalized chat row.
-   - This needs deterministic backend suppression, not just prompt instructions.
+### Bug B — Outbound IG/Messenger messages stuck on the clock icon (pending)
 
-## Fix plan
+- Meta-webhook inserts the outbound bubble with `status = 'pending'` and then `fetch()`-es `send-meta-dm`. If `send-meta-dm` errors, times out, or its row update is blocked (e.g. the new send-lock returns `false`, or Meta returns an error and the row update path runs before lock release), the row stays at `pending` forever — that's the clock icon in the screenshot.
+- We have a stuck row right now: `59a8aa95-f742-4ab8-9272-f8bf594f4721`, IG outbound, content "Hi there! What's your name?", `status = pending` since 08:00:55 UTC.
+- There is no self-heal: nothing flips long-pending Meta outbounds to `failed`, and nothing retries them, so they look "invisible / never delivered" in the inbox UI.
 
-1. **Normalize Instagram memory keys consistently**
-   - Add a shared helper for Meta contact keys used by `ai-memory` and `ai-agent-brain`.
-   - For Instagram/Messenger IDs, use the same canonical key as chat/messages (`+<digits>` when the database normalizer will store it that way).
-   - Load memory with both legacy and canonical keys during transition, then write only the canonical key.
+### Bug C — Brain doesn't respect existing memory even when loaded
 
-2. **Make non-fitness intent a hard suppression state**
-   - In `runUnifiedAgent`, when PR/media/vendor/collaboration is detected:
-     - update `whatsapp_chat_settings` with `bot_active=false`, `do_not_contact=true`, `handoff_reason='non_fitness_inquiry'`, and clear lead-nurture eligibility;
-     - write AI memory with `current_intent='non_fitness'` on the canonical key;
-     - avoid any lead-capture partial data for that contact.
-   - Add a pre-reply guard: if memory or chat settings already says non-fitness/DNC/bot paused, do not call the model and do not ask name/email/fitness questions.
+Even after Bug A is fixed, the lead-capture prompt is purely turn-numbered. If `memory.profile.first_name` is already set, the prompt must explicitly **skip the name ask** and jump to email (and similarly skip email/goal/plan_interest if those are already in memory). Today it relies entirely on history to figure out which turn it's on.
 
-3. **Block nurture follow-ups for non-membership contacts**
-   - Update `lead-nurture-followup` to skip any chat where:
-     - `bot_active=false`, `do_not_contact=true`, or `handoff_reason='non_fitness_inquiry'`;
-     - AI memory for the contact has `current_intent='non_fitness'`;
-     - last outbound was the non-membership redirect;
-     - partial lead data only contains `contact_name` and no real membership intent.
-   - Replace the time-based dedupe key `lead_nurture:${chat.id}:${Date.now()}` with a stable key per chat/retry window so retries cannot duplicate.
+---
 
-4. **Add Instagram send-time lock and provider ID persistence**
-   - Update `send-meta-dm` to save Meta’s returned message ID into `whatsapp_messages.platform_message_id`.
-   - Add/use a platform-aware send lock for Instagram/Messenger similar to WhatsApp, keyed by `platform + branch + recipient`.
-   - If lock is held, mark the local duplicate as suppressed instead of sending.
+## Fixes
 
-5. **Harden Meta webhook duplicate handling**
-   - Ensure the AI reply claim uses the canonical contact key and fails closed for duplicate-prone errors.
-   - Keep attachment-only messages from triggering onboarding.
-   - Before inserting any AI outbound row, check for the same outbound content to the same contact in the last few minutes and suppress it.
+### 1. Normalize the Meta sender ID once at the webhook boundary
 
-6. **Repair existing bad state for affected contacts**
-   - One-time data cleanup for current Instagram PR/non-membership contacts, including `@shweta_mulani`:
-     - set `bot_active=false`, `do_not_contact=true`, `handoff_reason='non_fitness_inquiry'`;
-     - align legacy `ai_memory` rows to the canonical contact key;
-     - stop further nurture retries.
+In `supabase/functions/meta-webhook/index.ts`:
 
-7. **Validate after implementation**
-   - Query `@shweta_mulani` rows to confirm no active nurture path remains.
-   - Test simulated duplicate Instagram inbound events and verify only one outbound row/send is produced.
-   - Test a PR/collaboration message and verify only the redirect is sent once, with no future nurture follow-up.
-   - Deploy the changed edge functions.
+- Add a small helper `toPhoneKey(raw)` that returns `+` + raw digits when the raw value is a numeric Meta scoped ID, matching what `normalize_phone_in` produces. (For non-numeric IG handles we fall back to the raw value, but every IG/Messenger scoped ID is numeric.)
+- Compute `const phoneKey = toPhoneKey(contactId)` once, then use `phoneKey` for **every** DB query and insert: ingest insert (`whatsapp_messages`, `whatsapp_chat_settings`, `is_unread`), echo dedupe, AI pre-reply state gate, `claim_meta_ai_reply` RPC, outbound dedupe, the outbound `whatsapp_messages` insert, and the `send-whatsapp` payload's `phone_number`.
+- Keep passing the **raw** `contactId` only to `send-meta-dm` as `recipient_id` — Meta's Graph API needs the raw scoped ID, not the `+`-prefixed phone key.
+- Pass `phoneKey` (not raw) into `runUnifiedAgent` as `senderId`, so every `.eq("phone_number", ctx.senderId)` inside `ai-agent-brain.ts` lines up with stored data automatically.
+
+### 2. Normalize `ai_memory.contact_key` + backfill
+
+- In `_shared/ai-memory.ts` (`loadMemory` / `upsertMemory`), apply the same `toPhoneKey` for IG/Messenger contact keys so memory keys match `whatsapp_messages.phone_number` going forward.
+- One-time SQL backfill in a migration:
+  ```sql
+  UPDATE public.ai_memory
+     SET contact_key = '+' || contact_key
+   WHERE platform IN ('instagram','messenger')
+     AND contact_key ~ '^[0-9]+$';
+  ```
+
+### 3. Make the brain respect known profile fields
+
+In `ai-agent-brain.ts` lead-capture block (around lines 414–460):
+
+- After loading `memory`, compute booleans: `hasName`, `hasEmail`, `hasGoal`, `hasPlanInterest` from `memory.profile` / `memory.facts`.
+- Inject explicit hard rules into the prompt:
+  - "Known so far — name: {value or '—'}, email: {value or '—'}, goal: {value or '—'}, plan_interest: {value or '—'}. NEVER ask for any field already filled. Always advance to the next missing field in the order name → email → goal → plan_interest."
+- Server-side safety net: after the model produces `replyText`, if `hasName` is true AND the reply text matches `/(what.?s|may i know).{0,15}your\s+(good\s+)?name/i`, replace it with the next-step message (acknowledge by name, ask for email) so a bad model response can never leak out the same question again.
+
+### 4. Self-heal stuck Meta outbounds (Bug B)
+
+- Add a post-send watcher in `meta-webhook/index.ts`: when the `fetch('send-meta-dm')` resolves non-OK or throws, immediately `UPDATE whatsapp_messages SET status='failed', error_message=...` for the row we just inserted. Today only some branches do this.
+- Add a small reconciliation cron (re-use `process-whatsapp-retry-queue` or extend it): every 2 minutes, find IG/Messenger outbound rows where `status='pending'` AND `created_at < now() - interval '2 min'`. Re-invoke `send-meta-dm` once; on second failure, flip to `failed` with reason so the inbox shows a clear "failed" state instead of an indefinite clock.
+- One-time SQL repair in the same migration:
+  ```sql
+  UPDATE public.whatsapp_messages
+     SET status = 'failed',
+         error_message = COALESCE(error_message, 'stuck_pending_meta_outbound_autofix')
+   WHERE platform IN ('instagram','messenger')
+     AND direction = 'outbound'
+     AND status = 'pending'
+     AND created_at < now() - interval '10 min';
+  ```
+
+### 5. Verification
+
+After deploy, send a fresh IG DM from a test account and confirm:
+- First reply asks for name (Turn 1).
+- Sending the name produces a Turn 2 reply that **thanks the user by name and asks for email** (not "What's your name?" again).
+- `ai_memory.contact_key` for the test contact starts with `+`.
+- `whatsapp_messages` rows reach `status='sent'` (single tick) within seconds; no rows remain in `pending` longer than 2 minutes.
+
+## Files to change
+
+- `supabase/functions/meta-webhook/index.ts` — sender-ID normalization, all `.eq("phone_number", …)` call sites, error-path status update.
+- `supabase/functions/_shared/ai-memory.ts` — normalize `contact_key` for IG/Messenger.
+- `supabase/functions/_shared/ai-agent-brain.ts` — known-fields hard rule + post-process guard against repeating "What's your name?".
+- `supabase/functions/process-whatsapp-retry-queue/index.ts` (or a new tiny `reconcile-meta-outbound`) — pending-outbound watchdog.
+- New migration: backfill `ai_memory.contact_key` and mark the historical stuck IG/Messenger pending rows as failed.
+
+## Out of scope
+
+- Visual chat UI for the "pending → sent" tick animation (already present).
+- Other channels (WhatsApp Cloud already uses normalized phone numbers everywhere — this fix is Meta-DM-specific).
