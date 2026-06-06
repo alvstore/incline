@@ -60,7 +60,11 @@ import {
   loadMemory,
   upsertMemory,
   renderMemoryBlock,
+  resolveLeadContext,
+  firstNameOf,
+  type LeadContext,
 } from "./ai-memory.ts";
+
 import { buildSystemPrompt } from "./ai-prompt.ts";
 
 // ─── Placeholder-name guard ────────────────────────────────────────────────────
