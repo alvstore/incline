@@ -13681,6 +13681,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_public_branches: {
+        Args: never
+        Returns: {
+          city: string
+          id: string
+          name: string
+        }[]
+      }
       get_setting_numeric: {
         Args: { p_branch_id: string; p_default: number; p_key: string }
         Returns: number
