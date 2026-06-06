@@ -1,3 +1,7 @@
+// v6.1.0 — Hardened sendAiReply: try/catch around Meta send (no more stuck `pending`
+//          on cold shutdown), fixed silent column bug (`error_message` → `failure_reason`)
+//          on send-lock duplicate path, mirror every AI outbound into communication_logs
+//          so the Communication Hub finally sees AI replies, observability logs added.
 // v6.0.1 — Hotfix: import computeAppSecretProof (was undefined → all AI replies crashed).
 // v6.0.0 — SSOT: routes through `runUnifiedAgent` from _shared/ai-agent-brain.ts.
 //          Deletes the 800-line duplicate brain (system prompt, tool loop,
@@ -668,7 +672,13 @@ async function sendAiReply(
     });
     if (gotLock === false) {
       console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone}`);
-      await supabase.from("whatsapp_messages").update({ status: "failed", error_message: "duplicate suppressed" }).eq("id", aiMsg.id);
+      // v6.1.0 fix: was writing to non-existent column `error_message` on
+      // whatsapp_messages; that silently failed and left the row stuck pending.
+      await supabase.from("whatsapp_messages").update({
+        status: "failed",
+        failure_reason: "duplicate suppressed (send-lock held)",
+        failed_at: new Date().toISOString(),
+      }).eq("id", aiMsg.id);
       return;
     }
   } catch (lockErr) {
@@ -694,23 +704,85 @@ async function sendAiReply(
     metaBody.text = { body: replyText };
   }
 
-  const metaResponse = await fetch(metaUrl, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(metaBody),
-  });
+  // v6.1.0: wrap the Meta call so a worker shutdown / network exception no
+  // longer leaves the outbound row stuck in `pending` forever. On any failure
+  // we mark the row failed with a reason — the reconciler then retries.
+  let metaResponse: Response | null = null;
+  let metaData: any = null;
+  let sendException: Error | null = null;
+  try {
+    metaResponse = await fetch(metaUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(metaBody),
+    });
+    metaData = await metaResponse.json();
+  } catch (e) {
+    sendException = e as Error;
+    console.error("[sendAiReply] Meta fetch exception:", sendException.message);
+  }
 
-  const metaData = await metaResponse.json();
+  const wamid: string | null = metaData?.messages?.[0]?.id || null;
+  const ok = !!metaResponse && metaResponse.ok && !sendException;
 
-  if (metaResponse.ok) {
+  if (ok) {
     await supabase
       .from("whatsapp_messages")
       .update({
         status: "sent",
-        whatsapp_message_id: metaData?.messages?.[0]?.id || null,
+        sent_at: new Date().toISOString(),
+        whatsapp_message_id: wamid,
       })
       .eq("id", aiMsg.id);
+  } else {
+    const reason = sendException
+      ? `exception: ${sendException.message}`
+      : `meta: ${JSON.stringify(metaData?.error || metaData || {}).slice(0, 500)}`;
+    const code = String(metaData?.error?.code ?? (sendException ? "exception" : ""));
+    console.error("AI auto-reply Meta send failed:", reason);
+    await supabase.from("whatsapp_messages").update({
+      status: "failed",
+      failure_reason: reason,
+      failure_code: code || null,
+      failed_at: new Date().toISOString(),
+    }).eq("id", aiMsg.id);
+  }
 
+  // v6.1.0: Mirror every AI auto-reply into communication_logs so the
+  // Communication Hub finally has visibility into AI conversations.
+  // NOTE: this is the ONLY sanctioned direct insert into communication_logs
+  // outside `dispatch-communication` — the AI brain runs its own DNC /
+  // 24h-window / quiet-hours gates before this code is reached. CI guard
+  // should exempt `whatsapp-webhook/sendAiReply`.
+  try {
+    await supabase.from("communication_logs").insert({
+      branch_id: branchId,
+      type: "whatsapp",
+      channel: "whatsapp",
+      category: "ai_auto_reply",
+      recipient: cleanPhone,
+      content: (replyText || "").slice(0, 2000),
+      status: ok ? "sent" : "failed",
+      delivery_status: ok ? "sent" : "failed",
+      provider_message_id: wamid,
+      error_message: ok
+        ? null
+        : (sendException
+            ? `exception: ${sendException.message}`
+            : JSON.stringify(metaData?.error || metaData || {}).slice(0, 500)),
+      dedupe_key: `ai_reply:${aiMsg.id}`,
+      delivery_metadata: {
+        ai_message_id: aiMsg.id,
+        platform: "whatsapp",
+        meta_response_code: metaResponse?.status ?? null,
+        interactive: !!interactivePayload,
+      },
+    });
+  } catch (mirrorErr) {
+    console.warn("[sendAiReply] communication_logs mirror failed:", (mirrorErr as Error).message);
+  }
+
+  if (ok) {
     // Repeat-question guard: track last 3 AI questions; if same question 3×, force handoff.
     try {
       const firstQ = (replyText.match(/[^?!.]*\?/) || [])[0]?.trim().toLowerCase().slice(0, 200);
@@ -740,9 +812,6 @@ async function sendAiReply(
     } catch (guardErr) {
       console.warn("repeat-question guard failed:", guardErr);
     }
-  } else {
-    console.error("AI auto-reply Meta send failed:", JSON.stringify(metaData));
-    await supabase.from("whatsapp_messages").update({ status: "failed" }).eq("id", aiMsg.id);
   }
 }
 
