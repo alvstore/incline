@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         console.log(`[send-meta-dm] skip — another send in flight for ${lockKey}`);
         await supabase
           .from("whatsapp_messages")
-          .update({ status: "failed", error_message: "duplicate suppressed" })
+          .update({ status: "failed", failure_reason: "duplicate suppressed", failed_at: new Date().toISOString() })
           .eq("id", messageId);
         return json(200, { success: false, skipped: "duplicate_suppressed" });
       }
