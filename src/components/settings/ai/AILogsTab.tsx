@@ -41,6 +41,7 @@ import { toast } from "sonner";
 type Stream = "llm" | "tools";
 type WindowKey = "1" | "7" | "30" | "all";
 type StatusFilter = "all" | "success" | "fallback" | "error";
+type PlatformFilter = "all" | "whatsapp" | "instagram" | "messenger";
 
 const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
   { value: "1", label: "Older than 1 day", days: 1 },
@@ -48,6 +49,19 @@ const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
   { value: "30", label: "Older than 30 days", days: 30 },
   { value: "all", label: "All logs", days: null },
 ];
+
+const PLATFORM_CHIPS: { value: PlatformFilter; label: string; className: string }[] = [
+  { value: "all", label: "All channels", className: "bg-slate-100 text-slate-700" },
+  { value: "whatsapp", label: "WhatsApp", className: "bg-emerald-100 text-emerald-700" },
+  { value: "instagram", label: "Instagram", className: "bg-pink-100 text-pink-700" },
+  { value: "messenger", label: "Messenger", className: "bg-sky-100 text-sky-700" },
+];
+
+const PLATFORM_BADGE: Record<string, string> = {
+  whatsapp: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  instagram: "bg-pink-50 text-pink-700 border-pink-200",
+  messenger: "bg-sky-50 text-sky-700 border-sky-200",
+};
 
 const STATUS_CHIPS: { value: StatusFilter; label: string; className: string }[] = [
   { value: "all", label: "All", className: "bg-slate-100 text-slate-700" },
