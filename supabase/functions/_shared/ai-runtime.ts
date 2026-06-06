@@ -213,6 +213,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       status: r.fallback_used ? "fallback" : "success",
       duration_ms: dur,
       fallback_used: r.fallback_used,
+      platform: opts.platform ?? null,
+      contact_key: opts.contactKey ?? null,
     });
     return {
       content: r.content,
