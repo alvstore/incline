@@ -13,6 +13,8 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     const ccDigits = countryCode.replace(/\D/g, "");
     const stripPrefix = (val: string) => {
       let cleaned = (val || "").replace(/\D/g, "");
+      // Bare country code with no number yet (e.g. seed value "+91") → show empty
+      if (ccDigits && cleaned === ccDigits) return "";
       // 091XXXXXXXXXX → XXXXXXXXXX
       if (cleaned.length === 13 && cleaned.startsWith("0" + ccDigits)) {
         cleaned = cleaned.slice(1 + ccDigits.length);
@@ -22,6 +24,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
       while (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
       return cleaned.slice(0, 10);
     };
+
 
     const displayValue = stripPrefix(value);
 
