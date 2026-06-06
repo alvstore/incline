@@ -519,3 +519,55 @@ export function AIBrainTab() {
     </div>
   );
 }
+
+function EmbeddingPill({
+  hasEmbedding,
+  updatedAt,
+}: {
+  hasEmbedding: boolean;
+  updatedAt: string;
+}) {
+  if (hasEmbedding) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+              <Sparkles className="h-3 w-3" /> Ready
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Vectorised — semantic retrieval enabled.</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const ageMs = Date.now() - new Date(updatedAt).getTime();
+  if (ageMs < 5 * 60_000) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-amber-100 text-amber-700 gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> Embedding…
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Queued for embedding by embed-knowledge.</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge className="bg-red-100 text-red-700 gap-1">
+            <AlertCircle className="h-3 w-3" /> Embed failed
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          No embedding after 5 min. Falls back to keyword retrieval.
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
