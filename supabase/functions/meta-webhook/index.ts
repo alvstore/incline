@@ -1,3 +1,6 @@
+// v5.5.0 — IG comments now resolve post/reel/ad media via Graph API +
+//   ig_comment_campaigns cache; stores preview thumbnail + permalink in media_meta
+//   so the chat UI shows the actual post instead of "[Comment on <media_id>]".
 // v5.4.0 — Normalize Meta scoped sender IDs to `+<digits>` (phoneKey) before
 //          ALL DB lookups in triggerAiReply (state gate, ai_memory, AI claim,
 //          outbound dedupe, message insert, send-whatsapp body). Without this
