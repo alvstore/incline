@@ -16,10 +16,13 @@ import { StepDots } from "@/components/registration/StepDots";
 import { SignaturePad, type SignaturePadHandle } from "@/components/registration/SignaturePad";
 import { toast } from "sonner";
 import {
-  Loader2, ShieldCheck, Dumbbell, ArrowRight, ArrowLeft,
-  Sparkles, RefreshCw, ChevronDown, MapPin,
+  Loader2, ShieldCheck, ArrowRight, ArrowLeft,
+  Sparkles, RefreshCw, ChevronDown, MapPin, Check,
 } from "lucide-react";
 import heroImage from "@/assets/registration-hero-v2.jpg";
+import inclineLogo from "@/assets/incline-logo.png";
+import { cn } from "@/lib/utils";
+
 import SEO from "@/components/seo/SEO";
 import {
   PARQ_QUESTIONS,
