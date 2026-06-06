@@ -1046,10 +1046,12 @@ export function purposeToConfig(purpose: any): OrgAiConfig {
     model: purpose.model || undefined,
     lead_capture: extraLeadCapture,
     instagram_story_reply_enabled: ops.instagram_story_reply_enabled === true,
+    channels: (ops.channels && typeof ops.channels === 'object') ? ops.channels : undefined,
     ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
       ? { _tools_allowed: purpose.tools_allowed }
       : {}),
   } as OrgAiConfig & { _tools_allowed?: string[] };
+
 }
 
 async function loadCapturedSnapshot(supabase: any, leadId: string): Promise<string> {
