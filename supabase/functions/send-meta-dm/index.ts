@@ -1,4 +1,7 @@
-// v1.1.0 — Persist Meta provider message_id into platform_message_id (so the
+// v1.2.0 — Strip leading `+` from recipient_id so Meta Graph API never gets a
+//          phone-style key and the send-lock cache hits regardless of caller
+//          format. Fixes duplicate "another send in flight" misses seen in
+//          logs where IG IDs arrived as both `+1234…` and `1234…`.
 //          unique index `whatsapp_messages_platform_msgid_uniq` and the echo
 //          merge in meta-webhook can suppress duplicate outbound bubbles),
 //          and acquire a platform-aware send lock keyed by
@@ -92,7 +95,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const platform = body.platform as "instagram" | "messenger";
     messageId = body.message_id ?? null;
-    const recipientId = String(body.recipient_id ?? body.recipient ?? body.phone_number ?? "").trim();
+    // Normalize: strip any leading `+` so the Meta scoped ID is purely
+    // numeric (Meta Graph API rejects `+` in recipient.id) and so the
+    // send-lock key is identical across all callers regardless of whether
+    // they pass `+1380…` or `1380…`.
+    const recipientIdRaw = String(body.recipient_id ?? body.recipient ?? body.phone_number ?? "").trim();
+    const recipientId = recipientIdRaw.replace(/^\+/, "");
     const content = String(body.content ?? body.message ?? body.body ?? "").trim();
     const branchId = body.branch_id ?? body.branchId;
     const igAccountIdHint = body.ig_account_id ?? null;
@@ -141,7 +149,7 @@ Deno.serve(async (req) => {
         console.log(`[send-meta-dm] skip — another send in flight for ${lockKey}`);
         await supabase
           .from("whatsapp_messages")
-          .update({ status: "failed", error_message: "duplicate suppressed" })
+          .update({ status: "failed", failure_reason: "duplicate suppressed", failed_at: new Date().toISOString() })
           .eq("id", messageId);
         return json(200, { success: false, skipped: "duplicate_suppressed" });
       }

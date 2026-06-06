@@ -1,4 +1,9 @@
-// v3.7.0 — Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
+// v3.8.0 — Memory-grounded onboarding: KNOWN SO FAR hard rule in the prompt
+//          + enforceNoRepeatNameAsk post-process guard. Stops the bot from
+//          re-asking "What's your name?" on IG/Messenger when memory already
+//          has a real first name (root cause: phone-key format mismatch made
+//          history lookups return zero rows; fixed in meta-webhook v3.x).
+// 3.7.0: Non-fitness guard now dedupes + pauses nurture (DNC + bot_active)
 // 3.7.0: Non-fitness redirect (a) reads pattern/message/window from
 //        ai_purposes.guards (no inline hardcoding), (b) dedupes against the
 //        last outbound within configurable window so the same canned reply is
@@ -485,7 +490,14 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 - When you have name + email + goal + plan_interest, respond with ONLY this JSON:
 {"status":"lead_captured","data":{${targetFields.map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
 - Use the exact field keys: ${targetFields.join(", ")}
-- For plan_interest, normalize to one of: monthly | quarterly | half_yearly | annual.`;
+- For plan_interest, normalize to one of: monthly | quarterly | half_yearly | annual.
+
+KNOWN SO FAR (treat as ground truth — NEVER re-ask any field already filled):
+- name: ${memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "—"}
+- email: ${memory?.profile?.email || "—"}
+- fitness_goal: ${memory?.facts?.fitness_goal || memory?.facts?.goal || "—"}
+- plan_interest: ${memory?.facts?.plan_interest || "—"}
+ADVANCE RULE: always move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, your reply MUST start by acknowledging them by first name and ask for the next missing field — NEVER ask "What's your name?" again under any phrasing.`;
 
   }
 
@@ -576,6 +588,16 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 
   // 9c. FOUNDER'S PHASE plain-text sanitizer — final line of defense.
   replyText = sanitizeFoundersPhaseText({
+    replyText,
+    memory,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
+  // 9d. NAME-REPEAT GUARD — if memory already has a real first name and the
+  // model is still asking for it (history fetch can be empty, model can ignore
+  // the prompt), rewrite the reply to thank the user and advance to the next
+  // missing field. This is the last barrier and never depends on the LLM.
+  replyText = enforceNoRepeatNameAsk({
     replyText,
     memory,
     leadCaptureEnabled: shouldCaptureLead,
@@ -790,6 +812,52 @@ function enforceOutboundInteractiveGuards(input: {
 
   return replyText;
 }
+
+// ─── Name-repeat guard ────────────────────────────────────────────────────────
+// If memory.profile already has a real first name and the LLM produced any
+// variant of "what's your name?", rewrite the reply to acknowledge the user
+// and ask for the next missing onboarding field.
+const NAME_ASK_RE =
+  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+
+function enforceNoRepeatNameAsk(input: {
+  replyText: string;
+  memory: any;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, leadCaptureEnabled } = input;
+  if (!leadCaptureEnabled) return replyText;
+  const text = String(replyText || "");
+  if (!text) return replyText;
+  // Skip JSON-only payloads — handled by the interactive guards.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  if (!looksLikeRealName(rawName, (memory as any)?.profile?.phone)) return replyText;
+  if (!NAME_ASK_RE.test(text)) return replyText;
+
+  const firstName = String(rawName).trim().split(/\s+/)[0];
+  const knownEmail = !!memory?.profile?.email;
+  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const knownPlan = !!memory?.facts?.plan_interest;
+
+  console.log(
+    `[AI:guards] rewriting reply — name=${firstName} already captured but model re-asked for name`,
+  );
+
+  if (!knownEmail) {
+    return `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`;
+  }
+  if (!knownGoal) {
+    return `Got it, ${firstName} — what's your main fitness goal? ✨`;
+  }
+  if (!knownPlan) {
+    return `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`;
+  }
+  return `You're on our Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`;
+}
+
+
 
 // ─── Founder's Phase plain-text sanitizer (v3.5.0) ─────────────────────────
 // We DO allow the words monthly/quarterly/half-yearly/annual/Founding/plan/goal
