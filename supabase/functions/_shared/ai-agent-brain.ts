@@ -1,3 +1,9 @@
+// v3.9.0 — Lead hydration: brain now reads existing leads row by phone variants
+//          and seeds ai_memory + do_not_ask BEFORE the auto-learn pass, so a
+//          contact already captured via website/Meta-Ads/prior chat is NOT
+//          re-asked name/email/goal/plan. Adds POST-CAPTURE NURTURE persona
+//          for fully-captured / engaged leads (no onboarding, warm assist,
+//          Founding Member CTA). Links existing lead to chat_settings on msg 1.
 // v3.8.0 — Memory-grounded onboarding: KNOWN SO FAR hard rule in the prompt
 //          + enforceNoRepeatNameAsk post-process guard. Stops the bot from
 //          re-asking "What's your name?" on IG/Messenger when memory already
@@ -60,7 +66,11 @@ import {
   loadMemory,
   upsertMemory,
   renderMemoryBlock,
+  resolveLeadContext,
+  firstNameOf,
+  type LeadContext,
 } from "./ai-memory.ts";
+
 import { buildSystemPrompt } from "./ai-prompt.ts";
 
 // ─── Placeholder-name guard ────────────────────────────────────────────────────
@@ -278,6 +288,80 @@ export async function runUnifiedAgent(
   // 5b. Hydrate persistent contact memory (ai_memory)
   let memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
 
+  // 5b.1 LEAD HYDRATION — if this phone already has a leads row (e.g. captured
+  // via website form, Meta Ads, or prior AI conversation), seed ai_memory from
+  // it BEFORE the auto-learn pass so KNOWN SO FAR / ADVANCE RULE in the prompt
+  // skip fields already on file. Stops the bot from re-asking name/email/goal/
+  // plan_interest when the CRM already has them. v1.0.0
+  let leadCtx: LeadContext | null = null;
+  if (!memberCtx.isMember) {
+    try {
+      const variants = phoneVariants(ctx.senderId);
+      leadCtx = await resolveLeadContext(supabase, variants, ctx.branchId);
+      if (leadCtx) {
+        const profilePatch: Record<string, any> = {};
+        const factsPatch: Record<string, any> = {
+          lead_source: leadCtx.source,
+          lead_captured_at: leadCtx.capturedAt,
+          lead_status: leadCtx.status,
+        };
+        const dna: string[] = [];
+        if (leadCtx.profile.full_name) {
+          profilePatch.full_name = leadCtx.profile.full_name;
+          const fn = firstNameOf(leadCtx.profile.full_name);
+          if (fn) profilePatch.first_name = fn;
+          dna.push("name", "full_name", "first_name");
+        }
+        if (leadCtx.profile.email) {
+          profilePatch.email = leadCtx.profile.email;
+          dna.push("email");
+        }
+        if (leadCtx.facts.fitness_goal) {
+          factsPatch.fitness_goal = leadCtx.facts.fitness_goal;
+          factsPatch.goal = leadCtx.facts.fitness_goal;
+          dna.push("goal", "fitness_goal");
+        }
+        if (leadCtx.facts.plan_interest) {
+          factsPatch.plan_interest = leadCtx.facts.plan_interest;
+          dna.push("plan_interest", "membership duration");
+        }
+        if (leadCtx.facts.preferred_time) {
+          factsPatch.preferred_time = leadCtx.facts.preferred_time;
+          dna.push("preferred_time");
+        }
+        await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+          profile: profilePatch,
+          facts: factsPatch,
+          do_not_ask_add: dna,
+        });
+        memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+        // Link the existing lead to chat_settings so downstream handoff,
+        // do-not-contact, and capture dedupe work on message one.
+        if (!chatSettings?.captured_lead_id) {
+          try {
+            await supabase
+              .from("whatsapp_chat_settings")
+              .upsert(
+                {
+                  branch_id: ctx.branchId,
+                  phone_number: ctx.senderId,
+                  captured_lead_id: leadCtx.leadId,
+                },
+                { onConflict: "branch_id,phone_number" },
+              );
+          } catch (e) {
+            console.warn(`[AI:${ctx.platform}] link chat_settings.captured_lead_id failed:`, (e as Error).message);
+          }
+        }
+        console.log(`[AI:${ctx.platform}] hydrated brain from existing lead ${leadCtx.leadId} (status=${leadCtx.status}, source=${leadCtx.source})`);
+      }
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] lead hydration failed (continuing):`, (e as Error).message);
+    }
+  }
+
+
   // 5c. AUTO-LEARN: extract structured facts from the user's last message and
   // merge into ai_memory BEFORE building the prompt. This is what stops the
   // bot from re-asking phone / fitness goal / name on every turn and makes it
@@ -427,8 +511,42 @@ GENERAL RULES:
 
   // Lead capture for non-members
   const leadCaptureConfig = aiConfig.lead_capture;
-  const shouldCaptureLead = !memberCtx.isMember && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // Compute "already fully captured" — name+email+goal+plan_interest all on file
+  // (from leads row hydrated in 5b.1 OR from prior ai_memory). Skip onboarding
+  // and switch to post-capture nurture persona. v1.0.0 (2026-06-06)
+  const hasName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const hasEmail = !!memory?.profile?.email;
+  const hasGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const hasPlanInterest = !!memory?.facts?.plan_interest;
+  const fullyCaptured = hasName && hasEmail && hasGoal && hasPlanInterest;
+  // Treat a non-'new' lead status (contacted/qualified/won/lost) as captured too.
+  const leadAlreadyEngaged = !!(leadCtx && leadCtx.status && leadCtx.status !== "new");
+  const inPostCaptureNurture = !memberCtx.isMember && (fullyCaptured || leadAlreadyEngaged);
+
+  const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+
+  if (inPostCaptureNurture) {
+    const fn = memory?.profile?.first_name || firstNameOf(memory?.profile?.full_name) || "there";
+    const planInt = memory?.facts?.plan_interest || leadCtx?.facts?.plan_interest || "—";
+    const goal = memory?.facts?.fitness_goal || memory?.facts?.goal || leadCtx?.facts?.fitness_goal || "—";
+    const src = leadCtx?.source || memory?.facts?.lead_source || "prior contact";
+    systemPrompt += `\n\nPOST-CAPTURE NURTURE MODE (lead already in CRM — DO NOT re-onboard):
+This contact is an EXISTING captured lead. Source: ${src}. Known plan_interest: ${planInt}. Known goal: ${goal}.
+
+HARD RULES:
+- DO NOT ask for name, email, fitness goal, or plan_interest again. They are on file.
+- DO NOT emit any {"status":"lead_captured"...} JSON — the lead already exists.
+- DO NOT run the Turn 1 → Turn 5 onboarding sequence.
+- Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
+- If they ask about Founding Member / membership / pricing: "Our Founding Member (Annual) enrollment is the only active offer right now — happy to have our team call you to lock in your Founding spot. Sound good?"
+- If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge, offer human follow-up.
+- VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
+- If they want to speak to a person or you hit two errors: call transfer_to_human.
+- Keep replies under 25 words, one question max, at most 1 emoji.`;
+  }
+
   if (shouldCaptureLead) {
+
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
       goal: "Fitness Goal (Weight Loss / Muscle Gain / Endurance / Flexibility / General Fitness)",
