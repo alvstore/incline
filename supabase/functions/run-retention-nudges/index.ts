@@ -15,6 +15,17 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Auth gate: cron-only. Require service-role bearer to prevent public abuse
+    // (bulk member messaging, provider quota exhaustion).
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (bearer !== supabaseServiceKey) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const results = { stage_1: 0, stage_2: 0, stage_3: 0, skipped_cooldown: 0, skipped_returned: 0, skipped_frozen: 0 };

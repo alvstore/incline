@@ -887,10 +887,41 @@ async function handleRefreshIgProfile(body: any) {
   return json({ success: true, name: res.name, avatar_url: storedUrl, source });
 }
 
+// ──────────────── AUTH GATE ────────────────
+// All meta-admin actions require an authenticated owner/admin user.
+async function assertOwnerOrAdmin(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: u, error: uErr } = await userClient.auth.getUser();
+    if (uErr || !u?.user) return json({ error: "Unauthorized" }, 401);
+
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    const { data: roles } = await adminClient
+      .from("user_roles").select("role")
+      .eq("user_id", u.user.id).in("role", ["owner", "admin"]).limit(1);
+    if (!roles || roles.length === 0) return json({ error: "Forbidden" }, 403);
+    return null;
+  } catch (_) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+}
+
 // ──────────────── DISPATCHER ────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const authError = await assertOwnerOrAdmin(req);
+    if (authError) return authError;
+
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
     switch (action) {
