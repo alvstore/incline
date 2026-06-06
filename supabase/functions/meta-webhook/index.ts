@@ -1223,7 +1223,7 @@ async function triggerAiReply(
       // clock icon in the inbox forever.
       await supabase
         .from("whatsapp_messages")
-        .update({ status: "failed", error_message: `send-fn-http-${r.status}: ${detail.slice(0, 200)}` })
+        .update({ status: "failed", failure_reason: `send-fn-http-${r.status}: ${detail.slice(0, 200)}`, failed_at: new Date().toISOString() })
         .eq("id", replyMsg.id);
     }
   } catch (sendErr) {
