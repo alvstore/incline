@@ -123,7 +123,10 @@ interface OrgAiConfig {
     handoff_message?: string;
   };
   instagram_story_reply_enabled?: boolean; // default false
+  /** Per-channel AI DM reply toggles. Missing entry defaults to true (back-compat). */
+  channels?: Partial<Record<'whatsapp' | 'instagram' | 'messenger', { enabled?: boolean }>>;
 }
+
 
 // ─── Main entry point ──────────────────────────────────────────────────────────
 
