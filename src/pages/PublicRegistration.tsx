@@ -474,7 +474,7 @@ export default function PublicRegistration() {
                 {[
                   { k: "waiver", l: "I accept the assumption of risk and waiver above.", required: true },
                   { k: "dpdp", l: "I consent to processing of my personal data per the DPDP Act, 2023.", required: true },
-                  { k: "whatsapp", l: "I agree to receive WhatsApp / SMS updates from Incline.", required: true },
+                  { k: "whatsapp", l: "I agree to receive WhatsApp / SMS / Email / RCS updates from Incline.", required: true },
                   { k: "photo", l: "I consent to my photo being used for member identification.", required: false },
                 ].map((c) => (
                   <label
