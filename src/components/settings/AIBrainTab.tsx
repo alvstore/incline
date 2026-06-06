@@ -33,24 +33,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Brain, Plus, Pencil, Trash2, Globe, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Brain,
+  Plus,
+  Pencil,
+  Trash2,
+  Globe,
+  MapPin,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
-
-// All AI purpose keys defined in `_shared/ai-runtime.ts::Purpose`.
-const PURPOSE_KEYS = [
-  'all',
-  'whatsapp_reply',
-  'lead_nurture',
-  'lead_score',
-  'campaign_draft',
-  'template_generate',
-  'dashboard_insight',
-  'fitness_plan',
-  'review_reply',
-  'automation_rule',
-] as const;
-
-type PurposeKey = (typeof PURPOSE_KEYS)[number];
+import { AppliesToPicker } from './ai/AppliesToPicker';
+import { useAiPurposes, titleFor } from '@/lib/ai/purposeRegistry';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface BrainRow {
   id: string;
