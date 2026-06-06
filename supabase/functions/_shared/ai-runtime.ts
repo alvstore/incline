@@ -237,6 +237,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       status: "error",
       duration_ms: dur,
       error_message: msg,
+      platform: opts.platform ?? null,
+      contact_key: opts.contactKey ?? null,
     });
     throw err;
   }
