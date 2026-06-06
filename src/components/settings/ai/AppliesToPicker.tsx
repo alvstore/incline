@@ -160,12 +160,6 @@ export function AppliesToPicker({ value, onChange }: Props) {
       </div>
     </TooltipProvider>
   );
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function _suppress() {
-    // titleFor is re-exported for callers; keep import side-effect alive.
-    void titleFor;
-  }
 }
 
 function PurposeChip({
