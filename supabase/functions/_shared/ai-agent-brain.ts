@@ -808,6 +808,52 @@ function enforceOutboundInteractiveGuards(input: {
   return replyText;
 }
 
+// ─── Name-repeat guard ────────────────────────────────────────────────────────
+// If memory.profile already has a real first name and the LLM produced any
+// variant of "what's your name?", rewrite the reply to acknowledge the user
+// and ask for the next missing onboarding field.
+const NAME_ASK_RE =
+  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+
+function enforceNoRepeatNameAsk(input: {
+  replyText: string;
+  memory: any;
+  leadCaptureEnabled: boolean;
+}): string {
+  const { replyText, memory, leadCaptureEnabled } = input;
+  if (!leadCaptureEnabled) return replyText;
+  const text = String(replyText || "");
+  if (!text) return replyText;
+  // Skip JSON-only payloads — handled by the interactive guards.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  if (!looksLikeRealName(rawName, (memory as any)?.profile?.phone)) return replyText;
+  if (!NAME_ASK_RE.test(text)) return replyText;
+
+  const firstName = String(rawName).trim().split(/\s+/)[0];
+  const knownEmail = !!memory?.profile?.email;
+  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const knownPlan = !!memory?.facts?.plan_interest;
+
+  console.log(
+    `[AI:guards] rewriting reply — name=${firstName} already captured but model re-asked for name`,
+  );
+
+  if (!knownEmail) {
+    return `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`;
+  }
+  if (!knownGoal) {
+    return `Got it, ${firstName} — what's your main fitness goal? ✨`;
+  }
+  if (!knownPlan) {
+    return `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`;
+  }
+  return `You're on our Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`;
+}
+
+
+
 // ─── Founder's Phase plain-text sanitizer (v3.5.0) ─────────────────────────
 // We DO allow the words monthly/quarterly/half-yearly/annual/Founding/plan/goal
 // because we now capture plan_interest as free text. We block only price
