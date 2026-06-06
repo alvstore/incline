@@ -194,12 +194,18 @@ export function DeliveryTimeline({
   const failureEvent = effectiveEvents.find((e) => e.new_status === 'failed' || e.new_status === 'bounced');
   const hasFailure = !!failureEvent;
 
+  // Channel capability: SMS has no "read" / "replied" receipt — drop those
+  // stages so the rail doesn't sit forever pending for SMS rows.
+  const channelStageOrder: readonly Stage[] = (channel === 'sms')
+    ? (stageOrder.filter((s) => s !== 'read' && s !== 'replied') as Stage[])
+    : (stageOrder as readonly Stage[]);
+
   // Visible stage list:
-  //  • happy path → all 5 stages
+  //  • happy path → channel-appropriate stages
   //  • failure   → reached stages + failed pill at the end
   const visibleStages: Stage[] = hasFailure
-    ? ([...stageOrder.filter((s) => reachedStages.has(s)), failureEvent!.new_status as Stage])
-    : ([...stageOrder] as Stage[]);
+    ? ([...channelStageOrder.filter((s) => reachedStages.has(s)), failureEvent!.new_status as Stage])
+    : ([...channelStageOrder] as Stage[]);
 
   // Latest reached stage = drives the "active" pulse
   const lastEvent = effectiveEvents[effectiveEvents.length - 1];
