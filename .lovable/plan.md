@@ -1,126 +1,129 @@
 
-## Problem (audit finding)
+## Audit findings
 
-Bhavyadeep Kingrani (`+91 63775 36196`) submitted the **website form at 11:05:45 UTC**. `webhook-lead-capture` created `leads` row `a91dad34…` with `full_name="Bhavyadeep Kingrani"`, `phone=+916377536196`, `source=website`, `status=new`.
+The "Applies to" chips in `AIBrainTab.tsx` (New / Edit Brain Entry drawer) do work functionally — the server's `retrieveKnowledge` in `_shared/ai-prompt.ts:126` filters `ai_knowledge.applies_to` by `.overlaps([purpose, 'all'])`, so picking `whatsapp_reply` truly routes that brain row to the WhatsApp brain.
 
-**16 seconds later** he messaged WhatsApp:
-> "Hi, I'd like to know more about Incline Fitness Founding memberships."
+But the form is **not unified** with the rest of the AI hub. Three drift risks:
 
-If the AI brain were to reply (after the master switch fix from the previous turn), it would have started the founder's-phase onboarding from Turn 1 — "Hi there! What's your name?" — because the brain only hydrates `ai_memory` (empty for a fresh contact) and **never reads the `leads` table**. The "KNOWN SO FAR" block in the prompt would show all `—`, so the ADVANCE RULE picks the first missing field = name.
-
-Evidence in `supabase/functions/_shared/ai-agent-brain.ts`:
-- Line 274 calls `resolveMemberContext` (members only).
-- Line 279 calls `loadMemory(ai_memory)` — empty for new WhatsApp contacts.
-- Lines 506–509 render KNOWN SO FAR purely from `memory.profile` / `memory.facts`.
-- The dedupe-on-write logic at line 1372 only fires **after** the AI emits `lead_captured` JSON — too late; the user has already been re-asked everything.
-
-Also, when a lead is fully captured (all 4 fields), the brain has no "post-capture nurture" persona — it stays in onboarding mode forever for the same contact across days.
-
-## Plan
-
-### Step 1 — Add `resolveLeadContext` lookup (server, ai-agent-brain.ts)
-
-Right after `resolveMemberContext` (line 274), add:
-
-```ts
-const leadCtx = !memberCtx.isMember
-  ? await resolveLeadContext(supabase, ctx.senderId, ctx.branchId)
-  : null;
-```
-
-`resolveLeadContext` (new helper in `_shared/ai-memory.ts` or inline):
-- Uses `phoneVariants(senderId)` already imported.
-- `SELECT id, full_name, email, fitness_goal, goals, plan_interest, source, status, expected_start_date, fitness_experience, preferred_time, created_at FROM leads WHERE phone IN (variants) AND branch_id = ctx.branchId ORDER BY created_at DESC LIMIT 1`.
-- Returns `{ leadId, profile, facts, capturedAt, source } | null`.
-
-### Step 2 — Seed `ai_memory` from existing lead BEFORE the auto-learn pass
-
-After `loadMemory` (line 279), if `leadCtx` exists AND `memory` lacks those keys:
-
-```ts
-if (leadCtx) {
-  await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
-    profile: {
-      full_name: leadCtx.profile.full_name ?? undefined,
-      first_name: firstNameOf(leadCtx.profile.full_name),
-      email: leadCtx.profile.email ?? undefined,
-    },
-    facts: {
-      fitness_goal: leadCtx.facts.fitness_goal ?? undefined,
-      plan_interest: leadCtx.facts.plan_interest ?? undefined,
-      lead_source: leadCtx.source,
-      lead_captured_at: leadCtx.capturedAt,
-    },
-    do_not_ask_add: [
-      ...(leadCtx.profile.full_name ? ["name", "full_name"] : []),
-      ...(leadCtx.profile.email ? ["email"] : []),
-      ...(leadCtx.facts.fitness_goal ? ["goal", "fitness_goal"] : []),
-      ...(leadCtx.facts.plan_interest ? ["plan_interest"] : []),
-    ],
-  });
-  memory = await loadMemory(...);
-}
-```
-
-This makes the existing "KNOWN SO FAR" + ADVANCE RULE block (lines 505–510) work correctly: for Bhavyadeep, `name=Bhavyadeep Kingrani`, others `—`, so Turn 1 reply becomes *"Hi Bhavyadeep! What's the best email for your Founding Member invite? ✨"* — skipping the redundant name ask.
-
-Also writes `whatsapp_chat_settings.captured_lead_id = leadCtx.leadId` if not already set, so the existing lead is linked to the chat from message one.
-
-### Step 3 — Add "post-capture nurture" persona branch
-
-In the prompt section starting at line 429, split into three states based on `leadCtx` + filled fields:
-
-| State | Trigger | Behavior |
+| # | Issue | File |
 |---|---|---|
-| **Fresh** | No `leadCtx`, no `ai_memory` profile | Existing onboarding flow (Turn 1 → Turn 5). |
-| **Partial** | `leadCtx` exists OR memory has some fields | Skip filled fields, jump to first missing one. (Already works once Step 2 seeds memory.) |
-| **Captured** | All 4 fields filled (name, email, goal, plan_interest) — OR `leadCtx.status` is not `'new'` | Switch to **post-capture nurture** persona: warm conversational replies, answer fitness/founding-member questions, push Founding Member confirmation CTA, never re-ask onboarding fields, never emit `lead_captured` JSON again. |
+| 1 | Purpose list is **hardcoded** in `PURPOSE_KEYS` (10 strings). Drifts from DB. | `src/components/settings/AIBrainTab.tsx:40` |
+| 2 | Same list **re-declared** with labels in `PURPOSE_LABELS` + `PRIORITY` | `src/components/settings/ai/HandlesTab.tsx:11,59` |
+| 3 | Server has its own `Purpose` union in `_shared/ai-runtime.ts` | edge fns |
+| 4 | Chips show raw keys (`whatsapp_reply`) — not the friendly title shown on Handles tab ("WhatsApp / Meta Replies") | drawer |
+| 5 | No grouping by channel (Inbound / Outbound / Composer / Background) even though `HandlesTab` already has that metadata | drawer |
+| 6 | No "Select All / Clear" affordance, no live count ("Applies to 3 of 9 handles") | drawer |
+| 7 | No embedding-status pill — user has no signal the row was vectorised by `embed-knowledge` | list + drawer |
+| 8 | If a row in DB has a typo in `applies_to` (legacy / hand-edited), the picker silently drops it on save | drawer |
 
-New short prompt block for the Captured state:
+## Plan — Unify "Applies to" with the live `ai_purposes` registry
+
+### Step 1 — Create one shared registry hook (SSOT)
+
+New file `src/lib/ai/purposeRegistry.ts`:
+
+```ts
+export type PurposeKey = string; // dynamic — read from DB
+
+export interface PurposeMeta {
+  key: string;                 // 'whatsapp_reply'
+  title: string;               // 'WhatsApp / Meta Replies'
+  description: string;
+  channelGroup: 'Inbound' | 'Outbound' | 'Composer' | 'Background' | 'Member tooling';
+  enabled: boolean;
+}
+
+export const PURPOSE_META_FALLBACK: Record<string, Omit<PurposeMeta,'key'|'enabled'>> = {
+  whatsapp_reply:    { title: 'WhatsApp / Meta Replies', description: '…', channelGroup: 'Inbound' },
+  lead_nurture:      { title: 'Lead Nurture Nudges',     description: '…', channelGroup: 'Outbound' },
+  lead_score:        { title: 'Lead Scoring',            description: '…', channelGroup: 'Background' },
+  review_reply:      { title: 'Google Review Replies',   description: '…', channelGroup: 'Outbound' },
+  campaign_draft:    { title: 'Campaign Drafter',        description: '…', channelGroup: 'Composer' },
+  template_generate: { title: 'Template Generator',      description: '…', channelGroup: 'Composer' },
+  fitness_plan:      { title: 'Fitness Plan Generator',  description: '…', channelGroup: 'Member tooling' },
+  dashboard_insight: { title: 'Dashboard Insights',      description: '…', channelGroup: 'Background' },
+  automation_rule:   { title: 'Automation Rules',        description: '…', channelGroup: 'Outbound' },
+};
+
+// React hook: source-of-truth = live `ai_purposes` rows; fallback metadata
+// supplies pretty labels. New purposes added via migration appear automatically.
+export function useAiPurposes() { /* useQuery → from('ai_purposes').select('purpose, enabled').is('branch_id', null) */ }
+```
+
+`HandlesTab.tsx` and `AIBrainTab.tsx` both refactor to consume this hook → **single SSOT**.
+
+### Step 2 — Rebuild the "Applies to" picker
+
+Replace the flat chip wrap (lines 392–430 of `AIBrainTab.tsx`) with a grouped, labelled, search-aware control:
 
 ```
-POST-CAPTURE NURTURE MODE (lead already in CRM):
-- This contact is already a captured lead (since {{lead_captured_at}}, source: {{lead_source}}).
-- DO NOT run onboarding. DO NOT ask name/email/goal/plan again. DO NOT emit lead_captured JSON.
-- Greet warmly by first name and answer their question directly.
-- For Founding Member questions: confirm interest and offer to lock in their spot ("Want our team to call you to confirm your Founding spot?").
-- For non-annual interest already on file: acknowledge, no hard push.
-- Velvet rope still applies: no ₹, no PT names, no session counts.
-- If they ask to speak to a human → call transfer_to_human.
+┌─ Applies to ────────────────────────────── [All] [Clear] ──┐
+│  Wildcard                                                  │
+│  [ ✓ all — share with every AI handle ]                   │
+│                                                            │
+│  Inbound                                                   │
+│  [ ✓ WhatsApp / Meta Replies ]                            │
+│                                                            │
+│  Outbound                                                  │
+│  [   Lead Nurture Nudges ] [   Google Review Replies ]    │
+│  [   Automation Rules ]                                    │
+│                                                            │
+│  Composer                                                  │
+│  [   Campaign Drafter ] [   Template Generator ]          │
+│                                                            │
+│  Background                                                │
+│  [   Lead Scoring ] [   Dashboard Insights ]              │
+│                                                            │
+│  Member tooling                                            │
+│  [   Fitness Plan Generator ]                              │
+└────────────────────────────────────────────────────────────┘
+Applies to 1 of 9 handles · WhatsApp / Meta Replies
 ```
 
-### Step 4 — Suppress duplicate `notify-lead-created` + nurture cron for already-captured leads
+Chip rules:
+- Chip shows **friendly title** (key as small monospace caption underneath, only when search is open).
+- Disabled-purpose chips render with `bg-slate-100 text-slate-400` and a tooltip "Handle disabled — entry will not be consumed until enabled".
+- Selecting `all` deselects others (existing behaviour, kept).
+- Selecting anything deselects `all` (existing behaviour, kept).
+- "Select All non-wildcard" and "Clear" pills at top-right.
+- Live counter under the picker reads `Applies to N of M handles · {comma-joined titles}` (max 3, then "+2 more").
 
-In `lead-nurture-followup` (cron) and `notify-lead-created`:
-- Skip rows where `source IN ('whatsapp_ai','instagram_ai','messenger_ai')` AND a prior lead with same phone+branch already had nurture sent. (Use an existing flag like `last_contacted_at` + a new `nurture_sent_at` column on `leads` — add via migration only if not present; otherwise reuse `last_contacted_at IS NOT NULL`.)
-- For the AI brain's `tryParseAndCaptureLead` merge branch (line 1380), set `nurture_sent_at = COALESCE(nurture_sent_at, now())` so a website-captured-then-WhatsApp-merged lead doesn't trigger nurture again.
+### Step 3 — Unknown-key warning
 
-(If `nurture_sent_at` does not exist yet, this becomes a tiny migration: `ALTER TABLE leads ADD COLUMN nurture_sent_at timestamptz`.)
+When loading an existing row, if `applies_to` contains a key not in the live `ai_purposes` registry, render a yellow chip `unknown: foo` with `AlertTriangle` icon + tooltip "This purpose is not registered. Click to remove." Prevents silent drops on save.
 
-### Step 5 — Backfill Bhavyadeep
+### Step 4 — Embedding status pill (knowledge list + drawer footer)
 
-One-off: send him the founder's-phase opening template ("Hi Bhavyadeep, thanks for reaching out about Founding Memberships — what's the best email for your Founding Member invite?") from the inbox so the lead row gets `email`, then the nurture sequence proceeds naturally.
+In the brain-entry table row (`AIBrainTab.tsx` ~line 280), and in the drawer footer next to Save, query `ai_knowledge.embedding IS NOT NULL` and render:
+- `Ready` (emerald, 4.5:1 contrast) — has embedding.
+- `Embedding…` (amber + Loader2) — saved <60 s ago, no embedding yet.
+- `Embed failed` (red) — older than 5 min, still no embedding (cron didn't pick it up).
+
+Read-only — gives operators a real signal whether the trigger fired.
+
+### Step 5 — Reuse, don't duplicate, in `HandlesTab.tsx`
+
+Replace lines 11–69 of `HandlesTab.tsx` with imports from the new registry. Keep `PURPOSES_WITH_OPS` (it's a UI capability flag, not a list of purposes).
 
 ## Out of scope
 
-- No changes to `webhook-lead-capture` or `capture-lead` (they already dedupe by phone+branch).
-- No changes to the master AI switch logic (already fixed in the previous turn).
-- No schema changes beyond the optional `nurture_sent_at` column in Step 4.
-- No changes to the existing `tryParseAndCaptureLead` merge-by-phone branch — it stays as defense in depth.
+- No DB schema changes. `ai_purposes` already has everything we need.
+- No server changes (`_shared/ai-prompt.ts` retrieval untouched).
+- No new migrations.
+- No tooling/Zod runtime added — registry hook is enough.
 
 ## Files to touch
 
-- `supabase/functions/_shared/ai-agent-brain.ts` — add `resolveLeadContext` call, seed memory, add Captured persona branch (~60 lines).
-- `supabase/functions/_shared/ai-memory.ts` — add `resolveLeadContext` helper (~30 lines).
-- `supabase/functions/lead-nurture-followup/index.ts` — add `nurture_sent_at IS NULL` filter (~3 lines).
-- `supabase/functions/notify-lead-created/index.ts` — skip if `last_contacted_at` recent or `nurture_sent_at` present (~5 lines).
-- *(Optional)* migration adding `leads.nurture_sent_at timestamptz`.
+| File | Change |
+|---|---|
+| `src/lib/ai/purposeRegistry.ts` | **new** — hook + metadata SSOT (~80 lines) |
+| `src/components/settings/AIBrainTab.tsx` | replace `PURPOSE_KEYS` hardcode (line 40), rebuild picker (lines 392–430), add embedding pill in list row + drawer (~120 lines edited) |
+| `src/components/settings/ai/HandlesTab.tsx` | swap inline labels for registry hook (lines 11–69) — pure refactor, no behaviour change |
 
 ## Validation
 
-1. Reset Bhavyadeep's `ai_memory` row (so we can replay).
-2. Simulate inbound WhatsApp "Hi, I'd like to know more about Founding memberships." via `whatsapp-webhook` test payload.
-3. Assert first AI reply starts with "Hi Bhavyadeep" and asks for **email** (not name).
-4. Assert no duplicate `leads` row created.
-5. Assert `whatsapp_chat_settings.captured_lead_id` is linked.
-6. Send "rohan@gmail.com" → assert next ask is **goal** (interactive_list), not name/email.
+1. Open New Brain Entry → confirm chips render with friendly titles, grouped by channel, `all` chip on top.
+2. Disable `automation_rule` in Handles tab → reopen drawer → chip is greyed with tooltip.
+3. Add a brain entry with `applies_to=['whatsapp_reply']` → save → list row shows "Embedding…" pill → polls to "Ready" within ~30 s.
+4. Manually insert a row with `applies_to=['bogus_purpose']` via SQL → reopen → see yellow `unknown: bogus_purpose` chip with remove-on-click.
+5. Insert a new purpose via DB (e.g. `ig_caption`) → no code change required → it appears in the picker automatically (proves SSOT).
