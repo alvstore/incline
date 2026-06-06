@@ -1,6 +1,6 @@
-// v0.1.0 — Telinfy / GreenAds Global RCS DLR (delivery receipt) receiver.
-// Telinfy POSTs `{ message_id, status, to, timestamp, error }` to this URL.
-// Public endpoint (no JWT). Updates communication_logs.delivery_status.
+// v0.2.0 — Telinfy / GreenAds Global RCS DLR (delivery receipt) receiver.
+// Public endpoint (no JWT). Routes every callback through `record_delivery_event`
+// so the Live Feed rail advances correctly (Queued → Sent → Delivered → Read).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -31,18 +31,26 @@ Deno.serve(async (req) => {
 
       const mapped =
         rawStatus.includes('deliver') ? 'delivered' :
-        rawStatus.includes('read') ? 'read' :
+        rawStatus.includes('read')    ? 'read' :
         rawStatus.includes('fail') || rawStatus.includes('reject') ? 'failed' :
-        rawStatus.includes('sent') ? 'sent' : rawStatus || 'unknown';
+        rawStatus.includes('sent')    ? 'sent' : null;
+      if (!mapped) continue;
 
-      const patch: Record<string, unknown> = { delivery_status: mapped };
-      if (mapped === 'delivered') patch.delivered_at = new Date().toISOString();
-      if (mapped === 'read') patch.read_at = new Date().toISOString();
-      if (mapped === 'failed') patch.error_message = evt?.error || evt?.reason || 'provider_failed';
+      const { data: log } = await supabase
+        .from('communication_logs')
+        .select('id')
+        .eq('provider_message_id', String(providerId))
+        .maybeSingle();
+      if (!log?.id) continue;
 
-      await supabase.from('communication_logs')
-        .update(patch)
-        .eq('provider_message_id', String(providerId));
+      await supabase.rpc('record_delivery_event', {
+        p_log_id: log.id,
+        p_new_status: mapped,
+        p_provider: 'telinfy_rcs',
+        p_provider_message_id: String(providerId),
+        p_error: mapped === 'failed' ? (evt?.error || evt?.reason || 'provider_failed') : null,
+        p_metadata: { raw: evt },
+      });
     }
 
     return new Response(JSON.stringify({ ok: true }), {
