@@ -138,3 +138,9 @@ verify_jwt = false
 
 [functions.process-email-queue]
 verify_jwt = true
+
+[functions.email-webhook]
+verify_jwt = false
+
+[functions.sms-webhook]
+verify_jwt = false
