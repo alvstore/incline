@@ -261,15 +261,58 @@ export default function PublicRegistration() {
               </div>
 
               <Field label="Choose your home branch" error={form.formState.errors.branch_id?.message}>
-                <select className={fieldSelectCls} {...form.register("branch_id")}>
-                  <option value="">Select a branch…</option>
-                  {branches?.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.city ? `— ${b.city}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <input type="hidden" {...form.register("branch_id")} />
+                {!branches ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="h-[62px] rounded-xl bg-white/5 animate-pulse" />
+                    <div className="h-[62px] rounded-xl bg-white/5 animate-pulse" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {branches.map((b) => {
+                      const selected = form.watch("branch_id") === b.id;
+                      return (
+                        <button
+                          type="button"
+                          key={b.id}
+                          onClick={() => form.setValue("branch_id", b.id, { shouldValidate: true })}
+                          aria-pressed={selected}
+                          className={cn(
+                            "group flex items-center gap-3 rounded-xl border p-3 text-left transition-all backdrop-blur-md",
+                            selected
+                              ? "border-primary/70 bg-primary/15 ring-2 ring-primary/40 shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.5)]"
+                              : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
+                              selected ? "bg-primary/25 text-primary-foreground" : "bg-white/10 text-white/70"
+                            )}
+                          >
+                            <MapPin className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-white">{b.name}</span>
+                            {b.city && (
+                              <span className="block truncate text-xs text-white/55">{b.city}</span>
+                            )}
+                          </span>
+                          <span
+                            className={cn(
+                              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
+                              selected ? "border-primary bg-primary" : "border-white/25"
+                            )}
+                          >
+                            {selected && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </Field>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="City"><Input className={fieldInputCls} {...form.register("city")} /></Field>
