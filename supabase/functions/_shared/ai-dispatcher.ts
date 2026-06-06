@@ -234,9 +234,14 @@ async function executeCall(
   }
 }
 
-async function logCall(
-  supabase: SupabaseClient,
-  row: {
+// NOTE: This used to insert a row into ai_call_logs on every provider call,
+// but those rows had no `purpose` / `branch_id` / `platform`, causing the
+// blank "—" duplicate rows in Settings → AI Agent → Plumbing → Logs.
+// The canonical log row is now written by `ai-runtime.generateOnce`, which
+// has the full context. Keep this as a no-op for API back-compat.
+function logCall(
+  _supabase: SupabaseClient,
+  _row: {
     provider: string;
     scope: string;
     model: string;
@@ -246,8 +251,7 @@ async function logCall(
     fallback_used?: boolean;
   },
 ) {
-  // Fire-and-forget; never block the caller
-  supabase.from("ai_call_logs").insert(row).then(() => {}).catch(() => {});
+  /* no-op — see comment above */
 }
 
 export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
