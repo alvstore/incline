@@ -123,7 +123,10 @@ interface OrgAiConfig {
     handoff_message?: string;
   };
   instagram_story_reply_enabled?: boolean; // default false
+  /** Per-channel AI DM reply toggles. Missing entry defaults to true (back-compat). */
+  channels?: Partial<Record<'whatsapp' | 'instagram' | 'messenger', { enabled?: boolean }>>;
 }
+
 
 // ─── Main entry point ──────────────────────────────────────────────────────────
 
@@ -145,6 +148,13 @@ export async function runUnifiedAgent(
   if (!aiConfig.auto_reply_enabled) {
     return skip("auto_reply_disabled");
   }
+  // Per-channel kill-switch (WhatsApp / Instagram DM / Messenger DM). Missing
+  // entry defaults to enabled for back-compat with pre-channel-toggle configs.
+  const channelOn = aiConfig.channels?.[ctx.platform as 'whatsapp' | 'instagram' | 'messenger']?.enabled ?? true;
+  if (!channelOn) {
+    return skip(`channel_${ctx.platform}_disabled`);
+  }
+
 
   // 2. Check bot_active
   const { data: chatSettings } = await supabase
@@ -1036,10 +1046,12 @@ export function purposeToConfig(purpose: any): OrgAiConfig {
     model: purpose.model || undefined,
     lead_capture: extraLeadCapture,
     instagram_story_reply_enabled: ops.instagram_story_reply_enabled === true,
+    channels: (ops.channels && typeof ops.channels === 'object') ? ops.channels : undefined,
     ...(Array.isArray(purpose.tools_allowed) && purpose.tools_allowed.length > 0
       ? { _tools_allowed: purpose.tools_allowed }
       : {}),
   } as OrgAiConfig & { _tools_allowed?: string[] };
+
 }
 
 async function loadCapturedSnapshot(supabase: any, leadId: string): Promise<string> {

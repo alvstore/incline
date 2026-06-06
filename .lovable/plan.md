@@ -1,102 +1,76 @@
-## Root causes (confirmed by audit)
+# Per-Channel AI Reply Toggles — Audit & Plan
 
-### Bug A — AI keeps re-asking "What's your name?" (and re-greeting)
+## Problem
+Today the AI brain has ONE master switch: `ai_purposes.ops_config.auto_reply_enabled` (purpose `whatsapp_reply`). That single boolean gates the AI brain for **all** inbound DMs — WhatsApp, Instagram, and Facebook Messenger — because `meta-webhook` and `whatsapp-webhook` both call the same `runAiAgentBrain()` (see `supabase/functions/_shared/ai-agent-brain.ts:145`).
 
-- `whatsapp_messages.phone_number` and `whatsapp_chat_settings.phone_number` are auto-normalized by a Postgres trigger (`normalize_phone_in`) to E.164 format: **`+1380828610766741`**.
-- `meta-webhook/index.ts` reads the raw Instagram/Messenger scoped sender ID (`event.sender.id` = `1380828610766741`, no `+`) and passes it straight through as `senderId` to `runUnifiedAgent`.
-- Inside `ai-agent-brain.ts` every history / state lookup runs `.eq("phone_number", ctx.senderId)`:
-  - line 275 — recent messages for the auto-learn extractor
-  - line 304 — full conversation history fed to the model
-  - meta-webhook line 1069 — chat_settings state gate
-  - meta-webhook line 1147 — outbound 3-minute dedupe
+There is no UI/way to say "keep AI on for WhatsApp, off for Instagram" (or vice versa). The only per-channel control today is `instagram_auto_reply_comments` (comments → DM), not DM replies themselves.
 
-  All of these return **zero rows** because the stored key is `+1380828610766741` and we query for `1380828610766741`.
+## Solution
+Introduce a `channels` map in `ops_config` and gate the brain by `ctx.platform`:
 
-- Net effect: the model gets an empty `history`, so every inbound looks like the very first turn → it always emits the "Turn 1" greeting + "What's your name?", even though `ai_memory.profile.first_name = "Karanveer"` was correctly captured.
-
-Verified directly in the database:
-
+```jsonc
+ops_config: {
+  auto_reply_enabled: true,          // kept as global kill-switch (back-compat)
+  channels: {
+    whatsapp:  { enabled: true },
+    instagram: { enabled: true },
+    messenger: { enabled: true }
+  },
+  reply_delay_seconds: 3,
+  instagram_auto_reply_comments: false,
+  instagram_story_reply_enabled: false
+}
 ```
-ai_memory.contact_key       = '1380828610766741'  (no +)
-whatsapp_chat_settings.phone_number = '+1380828610766741'
-whatsapp_messages.phone_number      = '+1380828610766741'
-```
 
-### Bug B — Outbound IG/Messenger messages stuck on the clock icon (pending)
+Effective AI-on = `auto_reply_enabled && channels[platform].enabled`. Missing channel entry defaults to `true` (back-compat with current behavior).
 
-- Meta-webhook inserts the outbound bubble with `status = 'pending'` and then `fetch()`-es `send-meta-dm`. If `send-meta-dm` errors, times out, or its row update is blocked (e.g. the new send-lock returns `false`, or Meta returns an error and the row update path runs before lock release), the row stays at `pending` forever — that's the clock icon in the screenshot.
-- We have a stuck row right now: `59a8aa95-f742-4ab8-9272-f8bf594f4721`, IG outbound, content "Hi there! What's your name?", `status = pending` since 08:00:55 UTC.
-- There is no self-heal: nothing flips long-pending Meta outbounds to `failed`, and nothing retries them, so they look "invisible / never delivered" in the inbox UI.
+## Changes
 
-### Bug C — Brain doesn't respect existing memory even when loaded
+### 1. Data (migration)
+- Backfill `ai_purposes` row `purpose='whatsapp_reply'` to add `channels: { whatsapp:{enabled:true}, instagram:{enabled:true}, messenger:{enabled:true} }` derived from current `auto_reply_enabled`.
+- No schema change — `ops_config` is already JSONB.
 
-Even after Bug A is fixed, the lead-capture prompt is purely turn-numbered. If `memory.profile.first_name` is already set, the prompt must explicitly **skip the name ask** and jump to email (and similarly skip email/goal/plan_interest if those are already in memory). Today it relies entirely on history to figure out which turn it's on.
-
----
-
-## Fixes
-
-### 1. Normalize the Meta sender ID once at the webhook boundary
-
-In `supabase/functions/meta-webhook/index.ts`:
-
-- Add a small helper `toPhoneKey(raw)` that returns `+` + raw digits when the raw value is a numeric Meta scoped ID, matching what `normalize_phone_in` produces. (For non-numeric IG handles we fall back to the raw value, but every IG/Messenger scoped ID is numeric.)
-- Compute `const phoneKey = toPhoneKey(contactId)` once, then use `phoneKey` for **every** DB query and insert: ingest insert (`whatsapp_messages`, `whatsapp_chat_settings`, `is_unread`), echo dedupe, AI pre-reply state gate, `claim_meta_ai_reply` RPC, outbound dedupe, the outbound `whatsapp_messages` insert, and the `send-whatsapp` payload's `phone_number`.
-- Keep passing the **raw** `contactId` only to `send-meta-dm` as `recipient_id` — Meta's Graph API needs the raw scoped ID, not the `+`-prefixed phone key.
-- Pass `phoneKey` (not raw) into `runUnifiedAgent` as `senderId`, so every `.eq("phone_number", ctx.senderId)` inside `ai-agent-brain.ts` lines up with stored data automatically.
-
-### 2. Normalize `ai_memory.contact_key` + backfill
-
-- In `_shared/ai-memory.ts` (`loadMemory` / `upsertMemory`), apply the same `toPhoneKey` for IG/Messenger contact keys so memory keys match `whatsapp_messages.phone_number` going forward.
-- One-time SQL backfill in a migration:
-  ```sql
-  UPDATE public.ai_memory
-     SET contact_key = '+' || contact_key
-   WHERE platform IN ('instagram','messenger')
-     AND contact_key ~ '^[0-9]+$';
+### 2. Brain (`supabase/functions/_shared/ai-agent-brain.ts`)
+- Extend `OrgAiConfig` type: `channels?: Record<'whatsapp'|'instagram'|'messenger', {enabled:boolean}>`.
+- In `loadOrgAiConfig`, parse `ops.channels` and pass through.
+- New gate after the existing `auto_reply_enabled` check (~line 145):
+  ```ts
+  const channelOn = aiConfig.channels?.[ctx.platform]?.enabled ?? true;
+  if (!channelOn) return skip(`channel_${ctx.platform}_disabled`);
   ```
+- Bump file version comment.
 
-### 3. Make the brain respect known profile fields
+### 3. Meta webhook (`supabase/functions/meta-webhook/index.ts`)
+- No logic change needed (brain handles gating), but add an early-exit fast path that reads the same channel flag before claiming the AI lock to avoid noisy `meta_ai_reply_claims` rows when the channel is off.
 
-In `ai-agent-brain.ts` lead-capture block (around lines 414–460):
+### 4. UI (`src/components/settings/ai/HandleOpsSettings.tsx` + parent `AIAgentControlCenter.tsx`)
+- Replace the single "Auto-reply enabled" switch with a grouped section:
+  - **Master AI auto-reply** (existing `auto_reply_enabled`) — kill-switch label updated to "Master AI auto-reply (all channels)".
+  - **Per-channel** switches (only shown when master is on):
+    - WhatsApp DM AI replies → `channels.whatsapp.enabled`
+    - Instagram DM AI replies → `channels.instagram.enabled`
+    - Messenger DM AI replies → `channels.messenger.enabled`
+- Each switch reads/writes the nested path in `ops_config` via the existing save handler (extend it to support dotted/nested keys, or convert the row schema to include explicit nested fields).
+- Vuexy styling: rounded-2xl card, lucide icons (`MessageCircle`, `Instagram`, `Facebook`), colored badges for current state (Active/Paused).
 
-- After loading `memory`, compute booleans: `hasName`, `hasEmail`, `hasGoal`, `hasPlanInterest` from `memory.profile` / `memory.facts`.
-- Inject explicit hard rules into the prompt:
-  - "Known so far — name: {value or '—'}, email: {value or '—'}, goal: {value or '—'}, plan_interest: {value or '—'}. NEVER ask for any field already filled. Always advance to the next missing field in the order name → email → goal → plan_interest."
-- Server-side safety net: after the model produces `replyText`, if `hasName` is true AND the reply text matches `/(what.?s|may i know).{0,15}your\s+(good\s+)?name/i`, replace it with the next-step message (acknowledge by name, ask for email) so a bad model response can never leak out the same question again.
+### 5. Lead-nurture & retry paths
+- `lead-nurture-followup/index.ts` and `process-comm-retry-queue/index.ts` already respect `do_not_contact` and `bot_active`. Add a helper `isChannelAiEnabled(platform, branchId)` and short-circuit there too so scheduled outbound AI follow-ups also honor the per-channel switch.
 
-### 4. Self-heal stuck Meta outbounds (Bug B)
-
-- Add a post-send watcher in `meta-webhook/index.ts`: when the `fetch('send-meta-dm')` resolves non-OK or throws, immediately `UPDATE whatsapp_messages SET status='failed', error_message=...` for the row we just inserted. Today only some branches do this.
-- Add a small reconciliation cron (re-use `process-whatsapp-retry-queue` or extend it): every 2 minutes, find IG/Messenger outbound rows where `status='pending'` AND `created_at < now() - interval '2 min'`. Re-invoke `send-meta-dm` once; on second failure, flip to `failed` with reason so the inbox shows a clear "failed" state instead of an indefinite clock.
-- One-time SQL repair in the same migration:
-  ```sql
-  UPDATE public.whatsapp_messages
-     SET status = 'failed',
-         error_message = COALESCE(error_message, 'stuck_pending_meta_outbound_autofix')
-   WHERE platform IN ('instagram','messenger')
-     AND direction = 'outbound'
-     AND status = 'pending'
-     AND created_at < now() - interval '10 min';
-  ```
-
-### 5. Verification
-
-After deploy, send a fresh IG DM from a test account and confirm:
-- First reply asks for name (Turn 1).
-- Sending the name produces a Turn 2 reply that **thanks the user by name and asks for email** (not "What's your name?" again).
-- `ai_memory.contact_key` for the test contact starts with `+`.
-- `whatsapp_messages` rows reach `status='sent'` (single tick) within seconds; no rows remain in `pending` longer than 2 minutes.
-
-## Files to change
-
-- `supabase/functions/meta-webhook/index.ts` — sender-ID normalization, all `.eq("phone_number", …)` call sites, error-path status update.
-- `supabase/functions/_shared/ai-memory.ts` — normalize `contact_key` for IG/Messenger.
-- `supabase/functions/_shared/ai-agent-brain.ts` — known-fields hard rule + post-process guard against repeating "What's your name?".
-- `supabase/functions/process-whatsapp-retry-queue/index.ts` (or a new tiny `reconcile-meta-outbound`) — pending-outbound watchdog.
-- New migration: backfill `ai_memory.contact_key` and mark the historical stuck IG/Messenger pending rows as failed.
+### 6. Tests / verification
+- Manually flip Instagram off in UI → send IG DM → expect `skipped: channel_instagram_disabled` in `ai_call_logs` and zero outbound message.
+- Send WhatsApp DM in parallel → expect normal AI reply.
+- Flip master off → both channels skip with `auto_reply_disabled`.
 
 ## Out of scope
+- Per-conversation toggle (already covered by `whatsapp_chat_settings.bot_active`).
+- Branch-level overrides (current row is global `branch_id IS NULL`; can be added later by inserting branch-specific rows — already supported by `loadAiPurpose`).
+- Splitting comments vs story vs DM for Instagram further (already separate flags).
 
-- Visual chat UI for the "pending → sent" tick animation (already present).
-- Other channels (WhatsApp Cloud already uses normalized phone numbers everywhere — this fix is Meta-DM-specific).
+## Files touched
+- `supabase/migrations/<ts>_ai_channel_toggles.sql` (new)
+- `supabase/functions/_shared/ai-agent-brain.ts`
+- `supabase/functions/meta-webhook/index.ts`
+- `supabase/functions/lead-nurture-followup/index.ts`
+- `supabase/functions/process-comm-retry-queue/index.ts`
+- `src/components/settings/ai/HandleOpsSettings.tsx`
+- `src/components/settings/AIAgentControlCenter.tsx` (if schema list lives there)
