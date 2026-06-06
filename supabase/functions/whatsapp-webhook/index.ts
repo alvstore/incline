@@ -1,3 +1,7 @@
+// v6.1.0 — Hardened sendAiReply: try/catch around Meta send (no more stuck `pending`
+//          on cold shutdown), fixed silent column bug (`error_message` → `failure_reason`)
+//          on send-lock duplicate path, mirror every AI outbound into communication_logs
+//          so the Communication Hub finally sees AI replies, observability logs added.
 // v6.0.1 — Hotfix: import computeAppSecretProof (was undefined → all AI replies crashed).
 // v6.0.0 — SSOT: routes through `runUnifiedAgent` from _shared/ai-agent-brain.ts.
 //          Deletes the 800-line duplicate brain (system prompt, tool loop,
