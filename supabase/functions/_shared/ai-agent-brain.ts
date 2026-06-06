@@ -1,3 +1,9 @@
+// v3.9.0 — Lead hydration: brain now reads existing leads row by phone variants
+//          and seeds ai_memory + do_not_ask BEFORE the auto-learn pass, so a
+//          contact already captured via website/Meta-Ads/prior chat is NOT
+//          re-asked name/email/goal/plan. Adds POST-CAPTURE NURTURE persona
+//          for fully-captured / engaged leads (no onboarding, warm assist,
+//          Founding Member CTA). Links existing lead to chat_settings on msg 1.
 // v3.8.0 — Memory-grounded onboarding: KNOWN SO FAR hard rule in the prompt
 //          + enforceNoRepeatNameAsk post-process guard. Stops the bot from
 //          re-asking "What's your name?" on IG/Messenger when memory already
