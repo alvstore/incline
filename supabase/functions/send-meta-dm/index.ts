@@ -1,4 +1,7 @@
-// v1.1.0 — Persist Meta provider message_id into platform_message_id (so the
+// v1.2.0 — Strip leading `+` from recipient_id so Meta Graph API never gets a
+//          phone-style key and the send-lock cache hits regardless of caller
+//          format. Fixes duplicate "another send in flight" misses seen in
+//          logs where IG IDs arrived as both `+1234…` and `1234…`.
 //          unique index `whatsapp_messages_platform_msgid_uniq` and the echo
 //          merge in meta-webhook can suppress duplicate outbound bubbles),
 //          and acquire a platform-aware send lock keyed by
