@@ -77,7 +77,7 @@ export function HandlesTab({ onJumpToKnowledge }: { onJumpToKnowledge?: () => vo
           <HandleCard
             key={row.id}
             row={row}
-            meta={PURPOSE_LABELS[row.purpose] ?? { title: row.purpose, desc: '', channel: '' }}
+            meta={metaFor(row.purpose)}
             open={openHandle === row.purpose}
             onOpenChange={(o) => setOpenHandle(o ? row.purpose : null)}
             onJumpToKnowledge={onJumpToKnowledge}
