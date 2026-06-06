@@ -430,6 +430,11 @@ export function AILogsTab() {
               <Badge variant="outline" className="text-xs shrink-0">
                 {l.tool_name ?? "—"}
               </Badge>
+              {l.platform && (
+                <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                  {l.platform}
+                </span>
+              )}
               <span className="text-slate-600 truncate flex-1">
                 {l.phone_number && <span className="text-slate-400">{l.phone_number}</span>}
                 {l.error_message && (
