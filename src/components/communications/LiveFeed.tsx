@@ -586,7 +586,9 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                                     logDeliveryStatus={log.delivery_status}
                                     logSentAt={log.sent_at}
                                     logErrorMessage={log.error_message}
+                                    channel={(log.channel || log.type || '').toLowerCase()}
                                   />
+
                                   {log.error_message && (
                                     <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">
                                       <strong>Error:</strong> {log.error_message}
