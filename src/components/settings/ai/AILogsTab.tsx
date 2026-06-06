@@ -99,7 +99,7 @@ export function AILogsTab() {
       const { data } = await supabase
         .from("ai_call_logs")
         .select(
-          "id, purpose, provider, model, status, duration_ms, fallback_used, error_message, created_at",
+          "id, purpose, provider, model, status, duration_ms, fallback_used, error_message, created_at, platform, contact_key",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -115,7 +115,7 @@ export function AILogsTab() {
       const { data } = await supabase
         .from("ai_tool_logs")
         .select(
-          "id, tool_name, status, execution_time_ms, error_message, created_at, phone_number",
+          "id, tool_name, status, execution_time_ms, error_message, created_at, phone_number, platform, contact_key",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -129,15 +129,19 @@ export function AILogsTab() {
   const logs = useMemo(() => (active.data ?? []) as any[], [active.data]);
 
   const visibleLogs = useMemo(() => {
-    if (stream === "tools") {
-      if (statusFilter === "all") return logs;
-      if (statusFilter === "fallback") return [];
-      return logs.filter((l) => l.status === statusFilter);
+    let out = logs;
+    if (platformFilter !== "all") {
+      out = out.filter((l: any) => (l.platform ?? "whatsapp") === platformFilter);
     }
-    if (statusFilter === "all") return logs;
-    if (statusFilter === "fallback") return logs.filter((l: any) => l.fallback_used);
-    return logs.filter((l: any) => l.status === statusFilter);
-  }, [logs, statusFilter, stream]);
+    if (stream === "tools") {
+      if (statusFilter === "all") return out;
+      if (statusFilter === "fallback") return [];
+      return out.filter((l) => l.status === statusFilter);
+    }
+    if (statusFilter === "all") return out;
+    if (statusFilter === "fallback") return out.filter((l: any) => l.fallback_used);
+    return out.filter((l: any) => l.status === statusFilter);
+  }, [logs, statusFilter, platformFilter, stream]);
 
   const clearMutation = useMutation({
     mutationFn: async () => {
