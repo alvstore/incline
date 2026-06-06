@@ -1,3 +1,6 @@
+// v5.6.0 — Permanent IG thumbnail caching: download Meta CDN preview into
+//   public `template-media/ig-cache/{media_id}.jpg` so the comment card
+//   survives the ~24h Meta URL expiry. Falls back to ephemeral URL on failure.
 // v5.5.0 — IG comments now resolve post/reel/ad media via Graph API +
 //   ig_comment_campaigns cache; stores preview thumbnail + permalink in media_meta
 //   so the chat UI shows the actual post instead of "[Comment on <media_id>]".
