@@ -538,6 +538,8 @@ ADVANCE RULE: always move to the FIRST missing field in order name → email →
       status: r.fallback_used ? "fallback" : "success",
       duration_ms: 0,
       fallback_used: r.fallback_used,
+      platform: ctx.platform ?? null,
+      contact_key: ctx.senderId ?? null,
     }); } catch { /* noop */ }
   } catch (e) {
     console.error(`[AI:${ctx.platform}] dispatcher failed:`, e);
