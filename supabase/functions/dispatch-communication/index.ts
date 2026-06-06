@@ -1,4 +1,8 @@
-// dispatch-communication v1.16.0
+// dispatch-communication v1.17.0
+// v1.17.0: FIX — finalize update no longer sets delivery_metadata=null (NOT NULL
+//          column → silent update failure → WA/SMS/email logs stuck in 'sending'
+//          forever). Also injects URL-button component for AUTHENTICATION (OTP)
+//          templates so Meta accepts the send instead of returning 131008.
 // v1.16.0: Unified WhatsApp delivery decision — single resolver replaces the
 //          confusing "Outside 24h customer-service window" failure path.
 //          Order of resolution for WhatsApp sends:
@@ -574,7 +578,7 @@ Deno.serve(async (req) => {
               // instead of paying the round-trip + opaque Meta rejection.
               const { data: wt } = await supabase
                 .from('whatsapp_templates')
-                .select('status, category, is_stale, rejected_reason')
+                .select('status, category, is_stale, rejected_reason, components')
                 .eq('name', templateName)
                 .limit(1)
                 .maybeSingle();
@@ -631,6 +635,23 @@ Deno.serve(async (req) => {
                 ? baseValues
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
               components = templateComponents(keys, templateValues);
+
+              // AUTHENTICATION templates (OTP) require an extra `button` component
+              // mirroring the body OTP value, otherwise Meta returns 131008
+              // "Required parameter is missing". Detect the URL/OTP button on the
+              // live Meta template mirror and inject it.
+              if (wt && String(wt.category || '').toUpperCase() === 'AUTHENTICATION') {
+                const liveComponents = Array.isArray((wt as any).components) ? (wt as any).components : [];
+                const buttonsBlock = liveComponents.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+                const urlButton = buttonsBlock?.buttons?.find((b: any) => String(b?.type || '').toUpperCase() === 'URL');
+                if (urlButton) {
+                  const otpValue = resolveVarValue(keys[0] ?? 'code', templateValues, 0) || '';
+                  components = [
+                    ...(components ?? []),
+                    { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otpValue || ' ' }] },
+                  ];
+                }
+              }
 
               if (tpl.content) {
                 const rendered = String(tpl.content)
@@ -940,7 +961,7 @@ Deno.serve(async (req) => {
         delivery_status: sendError ? 'failed' : 'sent',
         status: sendError ? 'failed' : 'sent',
         provider_message_id: providerMessageId ?? null,
-        delivery_metadata: Object.keys(finalMeta).length ? finalMeta : null,
+        delivery_metadata: Object.keys(finalMeta).length ? finalMeta : {},
         error_message: sendError ?? null,
         // Re-write content from the (now possibly cleaned) rendered body so the
         // audit row matches what was actually delivered to WhatsApp.
