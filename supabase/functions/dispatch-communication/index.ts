@@ -632,6 +632,23 @@ Deno.serve(async (req) => {
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
               components = templateComponents(keys, templateValues);
 
+              // AUTHENTICATION templates (OTP) require an extra `button` component
+              // mirroring the body OTP value, otherwise Meta returns 131008
+              // "Required parameter is missing". Detect the URL/OTP button on the
+              // live Meta template mirror and inject it.
+              if (wt && String(wt.category || '').toUpperCase() === 'AUTHENTICATION') {
+                const liveComponents = Array.isArray((wt as any).components) ? (wt as any).components : [];
+                const buttonsBlock = liveComponents.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+                const urlButton = buttonsBlock?.buttons?.find((b: any) => String(b?.type || '').toUpperCase() === 'URL');
+                if (urlButton) {
+                  const otpValue = resolveVarValue(keys[0] ?? 'code', templateValues, 0) || '';
+                  components = [
+                    ...(components ?? []),
+                    { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: otpValue || ' ' }] },
+                  ];
+                }
+              }
+
               if (tpl.content) {
                 const rendered = String(tpl.content)
                   .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
