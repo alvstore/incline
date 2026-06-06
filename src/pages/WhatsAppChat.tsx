@@ -1233,7 +1233,7 @@ export default function WhatsAppChatPage() {
                                 />
                                 {masterMisaligned && (
                                   <Link
-                                    to="/settings/communication-templates?tab=whatsapp&sub=coverage"
+                                    to="/settings?tab=ai-agent"
                                     className="text-[11px] font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2"
                                   >
                                     Fix
