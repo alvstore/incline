@@ -588,6 +588,16 @@ ADVANCE RULE: always move to the FIRST missing field in order name → email →
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9d. NAME-REPEAT GUARD — if memory already has a real first name and the
+  // model is still asking for it (history fetch can be empty, model can ignore
+  // the prompt), rewrite the reply to thank the user and advance to the next
+  // missing field. This is the last barrier and never depends on the LLM.
+  replyText = enforceNoRepeatNameAsk({
+    replyText,
+    memory,
+    leadCaptureEnabled: shouldCaptureLead,
+  });
+
 
 
 
