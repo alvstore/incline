@@ -130,6 +130,23 @@ export function AIBrainTab() {
     refetchInterval: 60_000,
   });
 
+  // Which entries already have an embedding (vectorised by embed-knowledge).
+  // Lets operators see if the trigger fired without exposing the raw vector.
+  const { data: embeddedIds } = useQuery({
+    queryKey: ['ai_knowledge_embedded_ids'],
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ai_knowledge')
+        .select('id')
+        .not('embedding', 'is', null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r: { id: string }) => r.id));
+    },
+  });
+
+  const { data: registry = [] } = useAiPurposes();
+
   const saveMutation = useMutation({
     mutationFn: async (row: Partial<BrainRow>) => {
       const payload = {
