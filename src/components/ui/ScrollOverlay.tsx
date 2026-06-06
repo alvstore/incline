@@ -1,6 +1,9 @@
 import {
   ChevronDown,
   Instagram,
+  Facebook,
+  Youtube,
+  MapPin,
   Dumbbell,
   Snowflake,
   Flame,
