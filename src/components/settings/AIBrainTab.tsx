@@ -393,47 +393,16 @@ export function AIBrainTab() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Applies to</Label>
-                <div className="flex flex-wrap gap-1.5 p-2 rounded-md border bg-slate-50/60 min-h-[42px]">
-                  {PURPOSE_KEYS.map((p) => {
-                    const active = (editing?.applies_to ?? ['all']).includes(p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => {
-                          const cur = new Set(editing?.applies_to ?? ['all']);
-                          if (active) cur.delete(p);
-                          else cur.add(p);
-                          if (p === 'all' && !active) {
-                            setEditing({ ...editing, applies_to: ['all'] });
-                            return;
-                          }
-                          if (p !== 'all' && !active) cur.delete('all');
-                          setEditing({
-                            ...editing,
-                            applies_to: Array.from(cur as Set<PurposeKey>).filter(Boolean),
-                          });
-                        }}
-                        className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                          active
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Pick <b>all</b> to share across every AI handle, or select specific ones.
-                </p>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Applies to</Label>
+              <AppliesToPicker
+                value={editing?.applies_to ?? ['all']}
+                onChange={(next) => setEditing({ ...editing, applies_to: next })}
+              />
+            </div>
 
-              <div className="space-y-1.5">
-                <Label>Branch scope</Label>
+            <div className="space-y-1.5">
+              <Label>Branch scope</Label>
                 <Select
                   value={editing?.branch_id ?? '__global__'}
                   onValueChange={(v) =>
