@@ -1048,6 +1048,18 @@ export default function WhatsAppChatPage() {
                         </h3>
                         {(() => {
                           const src = (selectedContact as any).identity_source as string | undefined;
+                          const plat = selectedContact.platform;
+                          // For IG/Messenger contacts member-by-phone resolution never
+                          // applies, so show a platform badge instead of "Unknown".
+                          if ((!src || src === 'unknown') && (plat === 'instagram' || plat === 'messenger')) {
+                            const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
+                            const cls = plat === 'instagram'
+                              ? 'border-pink-300 bg-pink-50 text-pink-700'
+                              : 'border-blue-300 bg-blue-50 text-blue-700';
+                            return (
+                              <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ml-1 ${cls}`}>{label}</Badge>
+                            );
+                          }
                           if (!src || src === 'unknown') return (
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-amber-300 bg-amber-50 text-amber-700">Unknown</Badge>
                           );
@@ -1061,6 +1073,7 @@ export default function WhatsAppChatPage() {
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-blue-300 bg-blue-50 text-blue-700">Contact</Badge>
                           );
                         })()}
+
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {(() => {
