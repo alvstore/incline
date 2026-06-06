@@ -2302,19 +2302,25 @@ export type Database = {
       communication_logs: {
         Row: {
           attempt_count: number
+          bounced_at: string | null
           branch_id: string
           category: string | null
           channel: string | null
+          clicked_at: string | null
           content: string | null
           created_at: string
           dedupe_key: string | null
+          delivered_at: string | null
           delivery_metadata: Json
           delivery_status: Database["public"]["Enums"]["reminder_delivery_status"]
           error_message: string | null
+          failed_at: string | null
           id: string
           member_id: string | null
           provider_message_id: string | null
+          read_at: string | null
           recipient: string
+          replied_at: string | null
           sent_at: string | null
           status: string | null
           subject: string | null
@@ -2324,19 +2330,25 @@ export type Database = {
         }
         Insert: {
           attempt_count?: number
+          bounced_at?: string | null
           branch_id: string
           category?: string | null
           channel?: string | null
+          clicked_at?: string | null
           content?: string | null
           created_at?: string
           dedupe_key?: string | null
+          delivered_at?: string | null
           delivery_metadata?: Json
           delivery_status?: Database["public"]["Enums"]["reminder_delivery_status"]
           error_message?: string | null
+          failed_at?: string | null
           id?: string
           member_id?: string | null
           provider_message_id?: string | null
+          read_at?: string | null
           recipient: string
+          replied_at?: string | null
           sent_at?: string | null
           status?: string | null
           subject?: string | null
@@ -2346,19 +2358,25 @@ export type Database = {
         }
         Update: {
           attempt_count?: number
+          bounced_at?: string | null
           branch_id?: string
           category?: string | null
           channel?: string | null
+          clicked_at?: string | null
           content?: string | null
           created_at?: string
           dedupe_key?: string | null
+          delivered_at?: string | null
           delivery_metadata?: Json
           delivery_status?: Database["public"]["Enums"]["reminder_delivery_status"]
           error_message?: string | null
+          failed_at?: string | null
           id?: string
           member_id?: string | null
           provider_message_id?: string | null
+          read_at?: string | null
           recipient?: string
+          replied_at?: string | null
           sent_at?: string | null
           status?: string | null
           subject?: string | null
@@ -14136,6 +14154,17 @@ export type Database = {
         }
         Returns: string
       }
+      record_delivery_event: {
+        Args: {
+          p_error?: string
+          p_log_id: string
+          p_metadata?: Json
+          p_new_status: string
+          p_provider?: string
+          p_provider_message_id?: string
+        }
+        Returns: Json
+      }
       record_health_ping: {
         Args: {
           p_component: string
@@ -14674,6 +14703,11 @@ export type Database = {
         | "suppressed"
         | "deduped"
         | "queued"
+        | "delivered"
+        | "read"
+        | "replied"
+        | "bounced"
+        | "clicked"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "pending" | "in_progress" | "completed" | "cancelled"
       wallet_txn_type:
@@ -14966,6 +15000,11 @@ export const Constants = {
         "suppressed",
         "deduped",
         "queued",
+        "delivered",
+        "read",
+        "replied",
+        "bounced",
+        "clicked",
       ],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["pending", "in_progress", "completed", "cancelled"],

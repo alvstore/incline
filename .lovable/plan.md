@@ -1,125 +1,101 @@
+# Why every message is stuck on "Sent"
 
-## Audit findings — ravindra (+91 80055 43139) chat
+## Root cause (deep scan results)
 
-### Timeline (from `ai_call_logs` + `whatsapp_messages`)
+The Live Feed's delivery rail (Queued → Sent → Delivered → Read → Replied) reads from two places:
 
-| Time (UTC) | Event | Status |
-|---|---|---|
-| 13:04:54 | inbound "when it will start in udaipir" | received |
-| 13:05:01 | context_extract | success |
-| 13:05:04 | inbound "udaipur*" | received |
-| 13:05:04 | whatsapp_reply LLM call | success |
-| 13:05:05 | outbound "Hi there! What's your name?" | **delivered** ✓ (send-lock acquired, expires 13:05:13) |
-| 13:05:10 | context_extract | success |
-| 13:05:14 | whatsapp_reply LLM call | success — **but NO `whatsapp_messages` row was created** |
-| 13:05:16 | inbound "ravindra" | received |
-| 13:05:22 | context_extract | success |
-| 13:05:26 | whatsapp_reply LLM call success → row inserted with `status='pending'` | **STUCK pending forever** ✗ |
+1. `communication_delivery_events` (per-stage event rows)
+2. Fallback: `communication_logs.delivery_status` + `delivery_metadata`
 
-`failure_reason`, `failure_code`, `failed_at`, `sent_at`, `whatsapp_message_id` are all NULL. No `error_logs` entry. No `communication_logs` entry.
+**Nothing in the codebase ever inserts a row into `communication_delivery_events`** (confirmed via `rg` — only the UI reads it; no edge fn, trigger, or migration writes it). So the UI always falls back to the log row's `delivery_status`.
 
-### Root cause #1 — Pending-forever bug in `sendAiReply`
-
-In `supabase/functions/whatsapp-webhook/index.ts` (lines 633–712):
-
-1. Line 633: insert outbound row with `status='pending'`.
-2. Line 697: `fetch(metaUrl, …)` — un-wrapped network call.
-3. Line 706 (on OK) or line 745 (on non-OK): update status.
-
-If the edge-function worker shuts down between the insert and the Meta call — which the function logs show happens every few minutes (`Shutdown` events 30–90 s apart) — the row is committed as `pending` and the `fetch` never completes. **There is no reaper / retry queue for AI auto-reply rows stuck in `pending`.** It sits forever, looks like a successful AI reply in the database, never reaches Meta.
-
-### Root cause #2 — Broken column reference masks duplicate-suppression
-
-Line 671:
-```ts
-.update({ status: "failed", error_message: "duplicate suppressed" })
+And `delivery_status` is the enum `reminder_delivery_status` whose values are only:
 ```
-`whatsapp_messages` has **no `error_message` column** — it has `failure_reason`/`failure_code` (see `\d whatsapp_messages`). PostgREST returns `42703` and the update silently no-ops, leaving the duplicate row also stuck at `pending`. Line 392 has the same bug for inbound rows.
-
-### Root cause #3 — Communication Hub has zero visibility
-
-`sendAiReply` writes directly to `whatsapp_messages` and never calls `dispatchCommunication()`. Communication Hub reads `communication_logs`. Therefore:
-- Every AI auto-reply (across hundreds of contacts) is invisible in Communication Hub.
-- No dedupe, no quiet-hours, no DNC check applied at the hub layer (only the brain-side gates work).
-- Project memory explicitly states "All NEW outbound Email/SMS/WhatsApp/in-app code MUST call `dispatchCommunication()`" — this legacy path was never migrated and the CI guard exempts it.
-
-### Root cause #4 — Missing turn at 13:05:14
-
-The LLM produced a reply (cost was logged in `ai_call_logs`), but no row was inserted. Two possible causes (need to verify after fix #1 lands):
-- `sendAiReply` was called and `runUnifiedAgent` returned `skipped=true` due to an internal guard, OR
-- the row was inserted in a worker that died before commit. Either way, fix #1 + new observability will surface it.
-
-## Plan — Make AI auto-reply observable, recoverable, and unified
-
-### Step 1 — Fix the silent column bug (P0, 1 line)
-
-In `whatsapp-webhook/index.ts`:
-- Line 392: `patch.error_message = errMsg` → `patch.failure_reason = errMsg`
-- Line 671: `error_message: "duplicate suppressed"` → `failure_reason: "duplicate suppressed", failed_at: new Date().toISOString()`
-
-Also set `failed_at = new Date().toISOString()` on line 745 (the Meta-non-OK branch) and capture `failure_reason = JSON.stringify(metaData?.error || metaData).slice(0, 500)`, `failure_code = String(metaData?.error?.code ?? '')`.
-
-### Step 2 — Wrap the Meta send in try/finally + mark stuck rows (P0)
-
-Wrap lines 697–746 in `try { … } catch (e) { update status='failed', failure_reason='exception: ' + e.message, failed_at=now() } finally { release send-lock }`. So any cold-shutdown between insert and `await metaResponse.json()` at least logs the failure rather than leaving `pending`.
-
-### Step 3 — Recovery cron: reap stuck AI `pending` rows
-
-New edge function `reconcile-whatsapp-pending`:
-- Selects `whatsapp_messages` rows where `direction='outbound' AND status='pending' AND created_at < now() - interval '3 minutes' AND whatsapp_message_id IS NULL` (cap 100 per tick).
-- For each row, re-attempts the Meta send via the existing integration credentials (using the same logic as `sendAiReply`). On success → `status='sent', sent_at=now(), whatsapp_message_id=…`. On failure → `status='failed', failure_reason='reconciler: ' + …, failed_at=now()`.
-- pg_cron schedule: every 2 minutes. Idempotent (uses the same send-lock RPC).
-
-This guarantees Bhavyadeep-style stuck rows resolve themselves within ~5 min.
-
-### Step 4 — Mirror every AI outbound into `communication_logs`
-
-In `sendAiReply`, on the success branch (after line 712) and on the failure branch (after line 745), insert into `communication_logs`:
+scheduled, sending, sent, failed, skipped, suppressed, deduped, queued
 ```
-{
-  branch_id, recipient: cleanPhone, type: 'whatsapp', channel: 'whatsapp',
-  category: 'ai_auto_reply', status: 'sent'|'failed',
-  delivery_status: 'sent'|'failed',
-  content: replyText.slice(0, 2000), provider_message_id: whatsapp_message_id,
-  error_message: failure_reason ?? null,
-  dedupe_key: `ai_reply:${aiMsg.id}`,
-  delivery_metadata: { ai_message_id: aiMsg.id, platform: 'whatsapp', meta_response_code: metaResponse.status }
-}
+`delivered` and `read` are **not valid enum values**. Confirmed:
 ```
-This is a **mirror write, not a route through `dispatchCommunication`** — the brain has its own gates (DNC, quiet-hours via the brain, 24h template logic), and routing through the dispatcher would require non-trivial refactor. The mirror gives Communication Hub the visibility it needs today.
+ERROR: invalid input value for enum reminder_delivery_status: "delivered"
+```
+So even when providers send delivered/read callbacks, the log can never advance past `sent`.
 
-Document the exemption in the CI guard comment so future devs know `sendAiReply` is the only sanctioned direct-write path.
+### Per-channel state today
 
-### Step 5 — Backfill the stuck row
+| Channel | Provider callback received? | What we do with it | Result in UI |
+|---|---|---|---|
+| **WhatsApp** | ✅ Meta posts `statuses[]` (sent/delivered/read/failed) into `whatsapp-webhook` | Updates `whatsapp_messages.status` correctly. For `communication_logs` only stashes `wa_status` inside `delivery_metadata` JSON; never promotes to `delivery_status`; never inserts a delivery_event. | Stuck at Sent |
+| **Email** | ❌ No Resend/SES webhook function exists (`ls supabase/functions` has no email webhook). `send-email` writes `delivery_status='sent'` once. | No delivered/opened/bounced ingestion at all. | Stuck at Sent |
+| **SMS** | ❌ `send-sms` calls RoundSMS `dlr_endpoint` but **only at send time** to register DLR — there is no inbound webhook handler that ingests the DLR pings. | Provider has no URL to call back into. | Stuck at Sent |
+| **RCS** | ✅ `rcs-webhook` exists and tries to write `delivery_status='delivered' / 'read'` directly — but the enum **rejects** those values, so the update silently fails. Also writes to wrong column `error_message` (column is `error_message` here, OK) but `delivered_at` / `read_at` don't exist on `communication_logs`. | Stuck at Sent + silent enum errors |
 
-Either:
-- Trigger the new reconciler manually for this row, OR
-- Set its status to `failed` with `failure_reason='legacy stuck pending — pre-reconciler'` so it no longer pollutes the chat thread UI.
+`communication_logs` schema confirms there are **no `delivered_at` / `read_at` / `replied_at` timestamp columns** either — so even fixing the enum wouldn't give us per-stage timestamps.
 
-Recommended: let the reconciler retry it once (it's still within Meta's 24h freeform window — last inbound 13:05:16, so freeform allowed until +24h tomorrow).
+---
 
-### Step 6 — Investigate the missing turn at 13:05:14
+# The plan
 
-Add a single `console.log` at the top of `triggerAiAutoReply` and at the start/end of `sendAiReply` capturing `messageId`, `phone`, `result.skipReason`. Then re-run any test inbound from a sandbox number to confirm the brain isn't silently skipping mid-onboarding. Pure observability; no behavioural change.
+A single, channel-agnostic delivery-lifecycle pipeline. Four parts.
 
-## Out of scope
+## 1. Schema — extend `communication_logs` and the enum (one migration)
 
-- No changes to AI brain logic, persona, lead capture, or memory hydration.
-- No refactor of `sendAiReply` to fully route through `dispatchCommunication` — that's a P2 hardening, separate plan.
-- No schema changes — all existing columns are reused.
+- Add enum values to `reminder_delivery_status`: `delivered`, `read`, `replied`, `bounced`, `clicked` (`ALTER TYPE … ADD VALUE`).
+- Add nullable timestamp columns: `delivered_at`, `read_at`, `replied_at`, `failed_at`, `bounced_at`.
+- Keep `delivery_metadata` JSONB for provider raw payloads.
+- Backfill: no destructive change to existing rows.
 
-## Files to touch
+## 2. Single helper: `record_delivery_event` RPC
 
-| File | Change |
-|---|---|
-| `supabase/functions/whatsapp-webhook/index.ts` | Fix column bug (l.392, l.671), wrap Meta send in try/catch with `failed_at`/`failure_reason`, mirror write to `communication_logs` on both branches, add 3 `console.log` lines for observability |
-| `supabase/functions/reconcile-whatsapp-pending/index.ts` | **new** edge fn (~120 lines) — reaper for stuck `pending` outbound rows |
-| `supabase/migrations/<ts>_reconcile_whatsapp_pending_cron.sql` | pg_cron `*/2 * * * *` job that POSTs to the new fn with service-role bearer |
-| Manual SQL (no migration) | Backfill the one stuck row (`3e5f9bcb…`) — done after Step 3 deploys |
+A SECURITY DEFINER SQL function `public.record_delivery_event(p_log_id uuid, p_new_status text, p_provider text, p_provider_message_id text, p_error text, p_metadata jsonb)` that:
 
-## Validation
+- Inserts a row into `communication_delivery_events` (channel / branch derived from the log).
+- Monotonically advances `communication_logs.delivery_status` (never downgrade — e.g. don't overwrite `read` with `delivered`).
+- Stamps the matching `*_at` column.
+- Merges `metadata` into `delivery_metadata`.
+- Idempotent on `(communication_log_id, new_status)` so repeated webhook pings are no-ops.
 
-1. After Step 1+2, deploy `whatsapp-webhook` and send a test inbound from a Meta sandbox number → confirm any failure now writes `failure_reason` + `failed_at` (not silent `pending`).
-2. After Step 3, manually insert a fake `pending` row and confirm the reconciler picks it up within 2 min.
-3. After Step 4, open Communication Hub → filter `category=ai_auto_reply` → confirm new AI replies appear with `status='sent'` and `provider_message_id` populated.
-4. Re-trigger the brain for ravindra's number with a fresh inbound — confirm the next outbound reaches `status='sent'` and shows in the Hub.
+This becomes the **only** path the UI rail depends on.
+
+## 3. Wire the four channels into the helper
+
+### WhatsApp — `whatsapp-webhook/index.ts`
+- In `processStatusUpdates`, after looking up the log by `provider_message_id=wamid`, call `record_delivery_event` for every `sent | delivered | read | failed` callback Meta sends.
+- Keep the existing `whatsapp_messages.status` update (CRM inbox).
+
+### Email — new `email-webhook` edge function (public, no JWT)
+- Accepts Resend webhook events (`email.delivered`, `email.bounced`, `email.opened`, `email.complained`, `email.clicked`).
+- Looks up log by `provider_message_id` (the Resend id we already store) and calls `record_delivery_event`.
+- Add the webhook URL to the Resend dashboard secret/config (one-time setup note in the response).
+
+### SMS — new `sms-webhook` edge function
+- Accepts RoundSMS DLR POSTs.
+- Look up log by `provider_message_id` (= `batch_id` we already capture) and call `record_delivery_event`.
+- Update `send-sms` to set `dlr_endpoint` to point at this new function URL on send.
+
+### RCS — fix `rcs-webhook/index.ts`
+- Replace the direct `communication_logs.update({ delivery_status: 'delivered' … })` with a call to `record_delivery_event` (this also fixes the silent enum failure).
+
+## 4. UI — `DeliveryTimeline.tsx`
+
+- No structural change to the rail (already supports 5 stages).
+- Remove the "synthesize from log" fallback once events are flowing — keep it only for legacy rows older than the migration date so old chats still render reasonably.
+- Add per-channel capability hints: SMS providers that don't support read receipts collapse `Read` to a muted state with an "N/A for SMS" tooltip instead of leaving it falsely "pending".
+
+---
+
+# Out of scope (will note, not build)
+
+- In-App notification "read" tracking already exists separately via `notification_reads` — not unified here.
+- Email "clicked" link tracking requires Resend's tracking pixel — included in mapping but does not affect the rail (only metadata).
+- Backfilling historical stuck rows: keep them as-is (UI fallback still renders); future sends start clean.
+
+# Files touched
+
+- `supabase/migrations/<new>.sql` — enum + columns + `record_delivery_event` RPC.
+- `supabase/functions/whatsapp-webhook/index.ts` — call helper in `processStatusUpdates`.
+- `supabase/functions/rcs-webhook/index.ts` — call helper instead of direct update.
+- `supabase/functions/send-sms/index.ts` — point `dlr_endpoint` at new webhook.
+- `supabase/functions/sms-webhook/index.ts` — **new**.
+- `supabase/functions/email-webhook/index.ts` — **new**.
+- `src/components/communications/DeliveryTimeline.tsx` — minor: SMS "N/A for read" + retire synthesize once events exist.
+
+Approve and I'll implement.
