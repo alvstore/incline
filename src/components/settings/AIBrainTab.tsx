@@ -392,7 +392,6 @@ export function AIBrainTab() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Applies to</Label>
               <AppliesToPicker
@@ -403,25 +402,24 @@ export function AIBrainTab() {
 
             <div className="space-y-1.5">
               <Label>Branch scope</Label>
-                <Select
-                  value={editing?.branch_id ?? '__global__'}
-                  onValueChange={(v) =>
-                    setEditing({ ...editing, branch_id: v === '__global__' ? null : v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Global" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__global__">Global (all branches)</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                value={editing?.branch_id ?? '__global__'}
+                onValueChange={(v) =>
+                  setEditing({ ...editing, branch_id: v === '__global__' ? null : v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Global" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__global__">Global (all branches)</SelectItem>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
