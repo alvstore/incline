@@ -149,10 +149,12 @@ function normalizePhone(phone: string): string {
   return phone.replace(/^\+/, '');
 }
 
-/** True for raw Instagram-Scoped IDs (long numeric string, no '+'). */
+/** True for raw Instagram-Scoped IDs (long numeric string, with or without
+ *  a leading '+' — DB trigger normalize_phone_in prefixes '+' to all digits). */
 function isIgsid(value: string): boolean {
-  return /^\d{12,}$/.test(value);
+  return /^\+?\d{12,}$/.test(value);
 }
+
 
 /** Friendly display label when no resolved name is available. */
 function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string; external_username?: string | null }): string {
@@ -1046,6 +1048,18 @@ export default function WhatsAppChatPage() {
                         </h3>
                         {(() => {
                           const src = (selectedContact as any).identity_source as string | undefined;
+                          const plat = selectedContact.platform;
+                          // For IG/Messenger contacts member-by-phone resolution never
+                          // applies, so show a platform badge instead of "Unknown".
+                          if ((!src || src === 'unknown') && (plat === 'instagram' || plat === 'messenger')) {
+                            const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
+                            const cls = plat === 'instagram'
+                              ? 'border-pink-300 bg-pink-50 text-pink-700'
+                              : 'border-blue-300 bg-blue-50 text-blue-700';
+                            return (
+                              <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ml-1 ${cls}`}>{label}</Badge>
+                            );
+                          }
                           if (!src || src === 'unknown') return (
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-amber-300 bg-amber-50 text-amber-700">Unknown</Badge>
                           );
@@ -1059,23 +1073,28 @@ export default function WhatsAppChatPage() {
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-blue-300 bg-blue-50 text-blue-700">Contact</Badge>
                           );
                         })()}
+
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {(() => {
                           const plat = selectedContact.platform;
                           const ph = selectedContact.phone_number;
-                          if ((plat === 'instagram' || plat === 'messenger') && isIgsid(ph)) {
-                            const looksLikeHandle = selectedContact.contact_name?.startsWith('@');
-                            if (looksLikeHandle) {
-                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{selectedContact.contact_name?.replace(/^@/, '')}</span></>);
+                          if (plat === 'instagram' || plat === 'messenger') {
+                            const handle = (selectedContact.external_username || '').replace(/^@/, '')
+                              || (selectedContact.contact_name?.startsWith('@')
+                                  ? selectedContact.contact_name.replace(/^@/, '')
+                                  : '');
+                            if (handle) {
+                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{handle}</span></>);
                             }
-                            const short = ph.slice(-6);
+                            const short = (ph || '').replace(/^\+/, '').slice(-6);
                             const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
                             return (<span className="font-mono text-[11px]">{label} user · {short}</span>);
                           }
                           return (<><Phone className="h-3 w-3" />{formatPhoneDisplay(ph)}</>);
                         })()}
                       </div>
+
                     </div>
                   </div>
                   <div className="flex items-center gap-3">

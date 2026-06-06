@@ -168,6 +168,19 @@ serve(async (req) => {
       // the outbound row that references it — earlier versions had a TDZ bug).
       const chatPlatform = chat.platform || "whatsapp";
 
+      // ── Per-channel AI kill-switch (Settings → AI Agent Control Center) ──
+      try {
+        const { isAiChannelEnabled } = await import("../_shared/ai-channel-toggle.ts");
+        const channelOn = await isAiChannelEnabled(supabase, chat.branch_id, chatPlatform);
+        if (!channelOn) {
+          console.log(`[lead-nurture] skipping ${chat.phone_number} — AI channel '${chatPlatform}' is disabled`);
+          continue;
+        }
+      } catch (e) {
+        console.warn("[lead-nurture] channel-toggle check failed (continuing fail-open):", e);
+      }
+
+
       // ── Meta 24h customer-service window guard (WhatsApp only) ──
       // If the most recent INBOUND WhatsApp message from this number is older
       // than 24h, freeform messages will be rejected (Meta 131047). In that
