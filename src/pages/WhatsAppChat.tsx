@@ -1188,29 +1188,66 @@ export default function WhatsAppChatPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {/* Convert to Lead button removed — use the prominent CTA in the right sidebar instead. */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50">
-                      <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">AI Bot</span>
-                      <Switch
-                        checked={botActive}
-                        onCheckedChange={async (checked) => {
-                          setBotActive(checked);
-                          if (selectedContact && selectedBranch && selectedBranch !== 'all') {
-                            await supabase.from('whatsapp_chat_settings').upsert(
-                              {
-                                branch_id: selectedBranch,
-                                phone_number: selectedContact.phone_number,
-                                bot_active: checked,
-                                ...(!checked ? { paused_at: new Date().toISOString() } : { paused_at: null }),
-                              },
-                              { onConflict: 'branch_id,phone_number' }
-                            );
-                            toast.success(checked ? 'AI Bot enabled' : 'AI Bot paused for this contact');
-                          }
-                        }}
-                        className="scale-75"
-                      />
-                    </div>
+                    {(() => {
+                      // Effective AI state: per-chat ON AND global master ON AND channel ON.
+                      // If per-chat is ON but the global master/channel is OFF, render
+                      // amber so staff aren't misled into thinking the bot will reply.
+                      const masterMisaligned = botActive && (!aiMasterOn || !aiChannelOn);
+                      const pillTone = masterMisaligned
+                        ? 'bg-amber-50 ring-1 ring-amber-300'
+                        : 'bg-muted/50';
+                      const iconTone = masterMisaligned ? 'text-amber-600' : 'text-muted-foreground';
+                      const labelTone = masterMisaligned ? 'text-amber-700 font-medium' : 'text-muted-foreground';
+                      const tooltipMsg = masterMisaligned
+                        ? `Per-chat AI is on, but the global ${!aiMasterOn ? 'auto-reply master' : 'WhatsApp channel'} is OFF in AI Control Center. No replies will be sent.`
+                        : 'AI auto-reply for this conversation';
+                      return (
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${pillTone}`}>
+                                {masterMisaligned ? (
+                                  <AlertTriangle className={`h-3.5 w-3.5 ${iconTone}`} />
+                                ) : (
+                                  <Bot className={`h-3.5 w-3.5 ${iconTone}`} />
+                                )}
+                                <span className={`text-xs ${labelTone}`}>AI Bot</span>
+                                <Switch
+                                  checked={botActive}
+                                  onCheckedChange={async (checked) => {
+                                    setBotActive(checked);
+                                    if (selectedContact && selectedBranch && selectedBranch !== 'all') {
+                                      await supabase.from('whatsapp_chat_settings').upsert(
+                                        {
+                                          branch_id: selectedBranch,
+                                          phone_number: selectedContact.phone_number,
+                                          bot_active: checked,
+                                          ...(!checked ? { paused_at: new Date().toISOString() } : { paused_at: null }),
+                                        },
+                                        { onConflict: 'branch_id,phone_number' }
+                                      );
+                                      toast.success(checked ? 'AI Bot enabled' : 'AI Bot paused for this contact');
+                                    }
+                                  }}
+                                  className="scale-75"
+                                />
+                                {masterMisaligned && (
+                                  <Link
+                                    to="/settings/communication-templates?tab=whatsapp&sub=coverage"
+                                    className="text-[11px] font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2"
+                                  >
+                                    Fix
+                                  </Link>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-xs text-xs">
+                              {tooltipMsg}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })()}
                     <Button
                       variant="ghost"
                       size="icon"
