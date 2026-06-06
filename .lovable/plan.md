@@ -1,66 +1,41 @@
-## Scope
-Two small UI fixes on `/register` (`src/pages/PublicRegistration.tsx`).
 
-### 1. Header logo
-- Replace the `Dumbbell` icon + hard-coded `"The Incline Life"` / `"Member registration"` text block with the actual brand logo image.
-- Import `inclineLogo from "@/assets/incline-logo.png"`.
-- Render in a glass chip:
-  ```tsx
-  <div className="rounded-xl bg-white/10 p-1.5 backdrop-blur-md ring-1 ring-white/15">
-    <img src={inclineLogo} alt="The Incline Life" className="h-9 w-9 object-contain" />
-  </div>
-  ```
-- Keep the right-side "Step X of 4" pill unchanged.
-- Drop the `Dumbbell` import (still used? check — only header uses it; remove if unused).
+## Goal
+Mirror the existing Instagram handle treatment for **Facebook**, **YouTube**, and **Google location** on the public landing footer and in structured-data (`sameAs`) so they appear in the UI and feed AEO/LLM answers.
 
-### 2. "Choose your home branch" selector
-Replace the native `<select>` (which falls back to OS-styled blue list) with a branded tile picker that matches the dark glass aesthetic. Single-select, keyboard accessible.
+## URLs to wire in
+- Instagram → `https://www.instagram.com/theinclinelife/` (already live)
+- Facebook → `https://www.facebook.com/profile.php?id=61585677985406` (Facebook scrape returned 403, so no vanity handle — use raw profile URL)
+- YouTube → `https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg` (studio URL is admin-only; public channel URL derived from channel ID)
+- Google Maps (place) → `https://www.google.com/maps/place/?q=place_id:ChIJq7uKbjXvZzkRnYxCp0uL3uo` 
+  → Simpler/equivalent: keep the user-friendly share form `https://maps.app.goo.gl/...` if available, otherwise use the deep link the user shared. I'll use the canonical place URL: `https://www.google.com/maps/place/Incline+-+Rise.Reflect.Repeat./@24.546845,73.701003,18z`
 
-- Render branches as a responsive grid of clickable cards (1 col on mobile, 2 col `sm:grid-cols-2`):
-  ```tsx
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-    {branches?.map((b) => {
-      const selected = form.watch("branch_id") === b.id;
-      return (
-        <button
-          type="button"
-          key={b.id}
-          onClick={() => form.setValue("branch_id", b.id, { shouldValidate: true })}
-          aria-pressed={selected}
-          className={cn(
-            "group flex items-center gap-3 rounded-xl border p-3 text-left transition-all",
-            "bg-white/5 hover:bg-white/10 backdrop-blur-md",
-            selected
-              ? "border-primary ring-2 ring-primary/40 bg-primary/10"
-              : "border-white/10"
-          )}
-        >
-          <span className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg",
-            selected ? "bg-primary/20 text-primary" : "bg-white/10 text-white/70"
-          )}>
-            <MapPin className="h-4 w-4" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-semibold text-white truncate">{b.name}</span>
-            {b.city && <span className="block text-xs text-white/60 truncate">{b.city}</span>}
-          </span>
-          <span className={cn(
-            "h-4 w-4 rounded-full border-2 flex items-center justify-center transition",
-            selected ? "border-primary bg-primary" : "border-white/30"
-          )}>
-            {selected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-          </span>
-        </button>
-      );
-    })}
-  </div>
-  ```
-- Loading state: when `branches` is undefined, render 2 skeleton tiles (`<div className="h-[60px] rounded-xl bg-white/5 animate-pulse" />`).
-- Keep `form.register("branch_id")` validation via the existing `useForm` + zod — value is set imperatively with `setValue`.
-- Error message still rendered by `<Field>`.
+## Changes
 
-### Files touched
-- `src/pages/PublicRegistration.tsx` (only)
+### 1. `src/components/ui/ScrollOverlay.tsx` — public footer on `/`
+Replace the single Instagram link with a horizontal social row of 4 icon-links — Instagram, Facebook, YouTube, MapPin (Google location) — using `lucide-react` icons (`Instagram`, `Facebook`, `Youtube`, `MapPin`).
 
-No backend, schema, or business-logic changes.
+UI pattern:
+- 44×44 round touch targets, `rounded-full glass border border-primary/20`, `text-muted-foreground hover:text-primary hover:scale-110`, 200ms transition.
+- Each link: `target="_blank" rel="noopener noreferrer"` + descriptive `aria-label` ("Instagram @theinclinelife", "Facebook page", "YouTube channel", "View on Google Maps").
+- Keep the `@theinclinelife` handle text under the icon row (small, tracked) so the handle is still discoverable.
+- Order: Instagram · Facebook · YouTube · Google Maps.
+
+### 2. `index.html` — JSON-LD `sameAs` arrays (3 blocks)
+Update all three `sameAs` arrays to:
+```json
+"sameAs": [
+  "https://www.instagram.com/theinclinelife/",
+  "https://www.facebook.com/profile.php?id=61585677985406",
+  "https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg",
+  "https://www.google.com/maps/place/Incline+-+Rise.Reflect.Repeat./@24.546845,73.701003,18z"
+]
+```
+Leave the existing `hasMap` field on the LocalBusiness block — already correct.
+
+### 3. `public/llms.txt` and `public/llms-full.txt`
+If they list Instagram, append Facebook / YouTube / Google Maps URLs in the same "Socials" section so LLM crawlers pick them up. No-op if not present.
+
+## Out of scope
+- No backend / DB changes.
+- No changes to internal IG / WhatsApp / Meta automation settings (those are messaging APIs, not public marketing handles).
+- No new dependencies — all icons already ship with `lucide-react`.
