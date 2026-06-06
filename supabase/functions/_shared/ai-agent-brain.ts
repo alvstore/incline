@@ -485,7 +485,14 @@ Then stop — do NOT continue onboarding and do NOT output the lead_captured JSO
 - When you have name + email + goal + plan_interest, respond with ONLY this JSON:
 {"status":"lead_captured","data":{${targetFields.map((f: string) => `"${f}":"<actual_value>"`).join(",")}}}
 - Use the exact field keys: ${targetFields.join(", ")}
-- For plan_interest, normalize to one of: monthly | quarterly | half_yearly | annual.`;
+- For plan_interest, normalize to one of: monthly | quarterly | half_yearly | annual.
+
+KNOWN SO FAR (treat as ground truth — NEVER re-ask any field already filled):
+- name: ${memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "—"}
+- email: ${memory?.profile?.email || "—"}
+- fitness_goal: ${memory?.facts?.fitness_goal || memory?.facts?.goal || "—"}
+- plan_interest: ${memory?.facts?.plan_interest || "—"}
+ADVANCE RULE: always move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, your reply MUST start by acknowledging them by first name and ask for the next missing field — NEVER ask "What's your name?" again under any phrasing.`;
 
   }
 
