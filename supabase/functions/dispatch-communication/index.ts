@@ -574,7 +574,7 @@ Deno.serve(async (req) => {
               // instead of paying the round-trip + opaque Meta rejection.
               const { data: wt } = await supabase
                 .from('whatsapp_templates')
-                .select('status, category, is_stale, rejected_reason')
+                .select('status, category, is_stale, rejected_reason, components')
                 .eq('name', templateName)
                 .limit(1)
                 .maybeSingle();
