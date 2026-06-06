@@ -56,6 +56,8 @@ export interface GenerateOnceOptions {
   toolChoice?: any;            // optional forced tool choice
   supabase?: SupabaseClient;
   context?: Record<string, unknown>; // logged for debugging
+  platform?: "whatsapp" | "instagram" | "messenger" | string;
+  contactKey?: string | null;
 }
 
 export interface GenerateOnceResult {
@@ -111,6 +113,8 @@ async function logCall(
     duration_ms: number;
     fallback_used?: boolean;
     error_message?: string | null;
+    platform?: string | null;
+    contact_key?: string | null;
   },
 ) {
   try {
@@ -124,6 +128,8 @@ async function logCall(
       duration_ms: row.duration_ms,
       fallback_used: row.fallback_used ?? false,
       error_message: row.error_message ?? null,
+      platform: row.platform ?? null,
+      contact_key: row.contact_key ?? null,
     });
   } catch (e) {
     console.warn("[ai-runtime] log insert failed:", (e as Error).message);
@@ -207,6 +213,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       status: r.fallback_used ? "fallback" : "success",
       duration_ms: dur,
       fallback_used: r.fallback_used,
+      platform: opts.platform ?? null,
+      contact_key: opts.contactKey ?? null,
     });
     return {
       content: r.content,
@@ -229,6 +237,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       status: "error",
       duration_ms: dur,
       error_message: msg,
+      platform: opts.platform ?? null,
+      contact_key: opts.contactKey ?? null,
     });
     throw err;
   }

@@ -217,12 +217,14 @@ export type Database = {
         Row: {
           branch_id: string | null
           completion_tokens: number | null
+          contact_key: string | null
           created_at: string
           duration_ms: number | null
           error_message: string | null
           fallback_used: boolean
           id: string
           model: string | null
+          platform: string | null
           prompt_tokens: number | null
           provider: string
           purpose: string | null
@@ -232,12 +234,14 @@ export type Database = {
         Insert: {
           branch_id?: string | null
           completion_tokens?: number | null
+          contact_key?: string | null
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
           fallback_used?: boolean
           id?: string
           model?: string | null
+          platform?: string | null
           prompt_tokens?: number | null
           provider: string
           purpose?: string | null
@@ -247,12 +251,14 @@ export type Database = {
         Update: {
           branch_id?: string | null
           completion_tokens?: number | null
+          contact_key?: string | null
           created_at?: string
           duration_ms?: number | null
           error_message?: string | null
           fallback_used?: boolean
           id?: string
           model?: string | null
+          platform?: string | null
           prompt_tokens?: number | null
           provider?: string
           purpose?: string | null
@@ -557,12 +563,14 @@ export type Database = {
           arguments: Json | null
           branch_id: string | null
           chat_id: string | null
+          contact_key: string | null
           created_at: string
           error_message: string | null
           execution_time_ms: number | null
           id: string
           message_id: string | null
           phone_number: string | null
+          platform: string | null
           result: Json | null
           status: string
           tool_name: string
@@ -571,12 +579,14 @@ export type Database = {
           arguments?: Json | null
           branch_id?: string | null
           chat_id?: string | null
+          contact_key?: string | null
           created_at?: string
           error_message?: string | null
           execution_time_ms?: number | null
           id?: string
           message_id?: string | null
           phone_number?: string | null
+          platform?: string | null
           result?: Json | null
           status?: string
           tool_name: string
@@ -585,12 +595,14 @@ export type Database = {
           arguments?: Json | null
           branch_id?: string | null
           chat_id?: string | null
+          contact_key?: string | null
           created_at?: string
           error_message?: string | null
           execution_time_ms?: number | null
           id?: string
           message_id?: string | null
           phone_number?: string | null
+          platform?: string | null
           result?: Json | null
           status?: string
           tool_name?: string

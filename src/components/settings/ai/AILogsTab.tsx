@@ -41,6 +41,7 @@ import { toast } from "sonner";
 type Stream = "llm" | "tools";
 type WindowKey = "1" | "7" | "30" | "all";
 type StatusFilter = "all" | "success" | "fallback" | "error";
+type PlatformFilter = "all" | "whatsapp" | "instagram" | "messenger";
 
 const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
   { value: "1", label: "Older than 1 day", days: 1 },
@@ -48,6 +49,19 @@ const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
   { value: "30", label: "Older than 30 days", days: 30 },
   { value: "all", label: "All logs", days: null },
 ];
+
+const PLATFORM_CHIPS: { value: PlatformFilter; label: string; className: string }[] = [
+  { value: "all", label: "All channels", className: "bg-slate-100 text-slate-700" },
+  { value: "whatsapp", label: "WhatsApp", className: "bg-emerald-100 text-emerald-700" },
+  { value: "instagram", label: "Instagram", className: "bg-pink-100 text-pink-700" },
+  { value: "messenger", label: "Messenger", className: "bg-sky-100 text-sky-700" },
+];
+
+const PLATFORM_BADGE: Record<string, string> = {
+  whatsapp: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  instagram: "bg-pink-50 text-pink-700 border-pink-200",
+  messenger: "bg-sky-50 text-sky-700 border-sky-200",
+};
 
 const STATUS_CHIPS: { value: StatusFilter; label: string; className: string }[] = [
   { value: "all", label: "All", className: "bg-slate-100 text-slate-700" },
@@ -74,8 +88,9 @@ const STREAM_META: Record<Stream, { label: string; table: string; sub: string; i
 export function AILogsTab() {
   const qc = useQueryClient();
   const [stream, setStream] = useState<Stream>("llm");
-  const [windowKey, setWindowKey] = useState<WindowKey>("7");
+  const [windowKey, setWindowKey] = useState<WindowKey>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const llmQuery = useQuery({
@@ -84,7 +99,7 @@ export function AILogsTab() {
       const { data } = await supabase
         .from("ai_call_logs")
         .select(
-          "id, purpose, provider, model, status, duration_ms, fallback_used, error_message, created_at",
+          "id, purpose, provider, model, status, duration_ms, fallback_used, error_message, created_at, platform, contact_key",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -100,7 +115,7 @@ export function AILogsTab() {
       const { data } = await supabase
         .from("ai_tool_logs")
         .select(
-          "id, tool_name, status, execution_time_ms, error_message, created_at, phone_number",
+          "id, tool_name, status, execution_time_ms, error_message, created_at, phone_number, platform, contact_key",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -114,15 +129,19 @@ export function AILogsTab() {
   const logs = useMemo(() => (active.data ?? []) as any[], [active.data]);
 
   const visibleLogs = useMemo(() => {
-    if (stream === "tools") {
-      if (statusFilter === "all") return logs;
-      if (statusFilter === "fallback") return [];
-      return logs.filter((l) => l.status === statusFilter);
+    let out = logs;
+    if (platformFilter !== "all") {
+      out = out.filter((l: any) => (l.platform ?? "whatsapp") === platformFilter);
     }
-    if (statusFilter === "all") return logs;
-    if (statusFilter === "fallback") return logs.filter((l: any) => l.fallback_used);
-    return logs.filter((l: any) => l.status === statusFilter);
-  }, [logs, statusFilter, stream]);
+    if (stream === "tools") {
+      if (statusFilter === "all") return out;
+      if (statusFilter === "fallback") return [];
+      return out.filter((l) => l.status === statusFilter);
+    }
+    if (statusFilter === "all") return out;
+    if (statusFilter === "fallback") return out.filter((l: any) => l.fallback_used);
+    return out.filter((l: any) => l.status === statusFilter);
+  }, [logs, statusFilter, platformFilter, stream]);
 
   const clearMutation = useMutation({
     mutationFn: async () => {
@@ -288,6 +307,30 @@ export function AILogsTab() {
             );
           })}
         </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {PLATFORM_CHIPS.map((chip) => {
+            const isActive = platformFilter === chip.value;
+            const count =
+              chip.value === "all"
+                ? logs.length
+                : logs.filter((l: any) => (l.platform ?? "whatsapp") === chip.value).length;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                onClick={() => setPlatformFilter(chip.value)}
+                className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? chip.className + " ring-2 ring-offset-1 ring-indigo-300"
+                    : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {chip.label} <span className="opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="divide-y">
@@ -332,6 +375,11 @@ export function AILogsTab() {
                   <Badge variant="outline" className="text-xs shrink-0">
                     {l.purpose ?? "—"}
                   </Badge>
+                  {l.platform && (
+                    <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                      {l.platform}
+                    </span>
+                  )}
                   <span className="text-slate-600 truncate flex-1">
                     {l.provider} · {l.model ?? "—"}
                     {l.fallback_used && <span className="ml-2 text-amber-600">(fallback)</span>}
@@ -382,6 +430,11 @@ export function AILogsTab() {
               <Badge variant="outline" className="text-xs shrink-0">
                 {l.tool_name ?? "—"}
               </Badge>
+              {l.platform && (
+                <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                  {l.platform}
+                </span>
+              )}
               <span className="text-slate-600 truncate flex-1">
                 {l.phone_number && <span className="text-slate-400">{l.phone_number}</span>}
                 {l.error_message && (

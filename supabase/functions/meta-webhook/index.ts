@@ -821,7 +821,8 @@ async function fetchIgMediaPreview(mediaId: string, accessToken: string): Promis
     return null;
   }
 }
-}
+
+
 
 async function ingestInstagramComment(value: any, igAccountId: string) {
   if (!value) return;
