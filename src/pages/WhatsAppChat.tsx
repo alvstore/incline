@@ -352,6 +352,29 @@ export default function WhatsAppChatPage() {
     enabled: transferStaffOpen,
   });
 
+  // Global AI master switch — drives the honest-state pill in the chat header.
+  // ai_purposes.ops_config.auto_reply_enabled is the kill switch checked by
+  // runUnifiedAgent (supabase/functions/_shared/ai-agent-brain.ts:148). If it's
+  // OFF, per-chat bot_active is meaningless because the brain skips early.
+  const { data: aiMaster } = useQuery({
+    queryKey: ['ai-purpose', 'whatsapp_reply'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ai_purposes')
+        .select('enabled, ops_config')
+        .eq('purpose', 'whatsapp_reply')
+        .maybeSingle();
+      const ops = (data?.ops_config ?? {}) as any;
+      return {
+        masterEnabled: ops?.auto_reply_enabled === true && data?.enabled !== false,
+        whatsappChannelEnabled: ops?.channels?.whatsapp?.enabled !== false,
+      };
+    },
+    staleTime: 60_000,
+  });
+  const aiMasterOn = aiMaster?.masterEnabled !== false;
+  const aiChannelOn = aiMaster?.whatsappChannelEnabled !== false;
+
   // Slash command templates
   const { data: slashTemplates = [] } = useQuery({
     queryKey: ['slash-templates'],
