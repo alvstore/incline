@@ -505,8 +505,42 @@ GENERAL RULES:
 
   // Lead capture for non-members
   const leadCaptureConfig = aiConfig.lead_capture;
-  const shouldCaptureLead = !memberCtx.isMember && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+  // Compute "already fully captured" — name+email+goal+plan_interest all on file
+  // (from leads row hydrated in 5b.1 OR from prior ai_memory). Skip onboarding
+  // and switch to post-capture nurture persona. v1.0.0 (2026-06-06)
+  const hasName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
+  const hasEmail = !!memory?.profile?.email;
+  const hasGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const hasPlanInterest = !!memory?.facts?.plan_interest;
+  const fullyCaptured = hasName && hasEmail && hasGoal && hasPlanInterest;
+  // Treat a non-'new' lead status (contacted/qualified/won/lost) as captured too.
+  const leadAlreadyEngaged = !!(leadCtx && leadCtx.status && leadCtx.status !== "new");
+  const inPostCaptureNurture = !memberCtx.isMember && (fullyCaptured || leadAlreadyEngaged);
+
+  const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
+
+  if (inPostCaptureNurture) {
+    const fn = memory?.profile?.first_name || firstNameOf(memory?.profile?.full_name) || "there";
+    const planInt = memory?.facts?.plan_interest || leadCtx?.facts?.plan_interest || "—";
+    const goal = memory?.facts?.fitness_goal || memory?.facts?.goal || leadCtx?.facts?.fitness_goal || "—";
+    const src = leadCtx?.source || memory?.facts?.lead_source || "prior contact";
+    systemPrompt += `\n\nPOST-CAPTURE NURTURE MODE (lead already in CRM — DO NOT re-onboard):
+This contact is an EXISTING captured lead. Source: ${src}. Known plan_interest: ${planInt}. Known goal: ${goal}.
+
+HARD RULES:
+- DO NOT ask for name, email, fitness goal, or plan_interest again. They are on file.
+- DO NOT emit any {"status":"lead_captured"...} JSON — the lead already exists.
+- DO NOT run the Turn 1 → Turn 5 onboarding sequence.
+- Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
+- If they ask about Founding Member / membership / pricing: "Our Founding Member (Annual) enrollment is the only active offer right now — happy to have our team call you to lock in your Founding spot. Sound good?"
+- If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge, offer human follow-up.
+- VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
+- If they want to speak to a person or you hit two errors: call transfer_to_human.
+- Keep replies under 25 words, one question max, at most 1 emoji.`;
+  }
+
   if (shouldCaptureLead) {
+
     const fieldLabels: Record<string, string> = {
       name: "Full Name", phone: "Phone Number", email: "Email Address",
       goal: "Fitness Goal (Weight Loss / Muscle Gain / Endurance / Flexibility / General Fitness)",
