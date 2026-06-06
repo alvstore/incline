@@ -20,15 +20,16 @@ interface Props {
   opsConfig: OpsConfig;
 }
 
-const FIELDS: Record<
-  string,
-  Array<
-    | { key: string; label: string; help?: string; type: 'switch' }
-    | { key: string; label: string; help?: string; type: 'number'; min?: number; max?: number; step?: number }
-  >
-> = {
+type FieldDef =
+  | { key: string; label: string; help?: string; type: 'switch' }
+  | { key: string; label: string; help?: string; type: 'number'; min?: number; max?: number; step?: number };
+
+const FIELDS: Record<string, FieldDef[]> = {
   whatsapp_reply: [
-    { key: 'auto_reply_enabled', label: 'Auto-reply enabled', type: 'switch', help: 'Master switch for the WhatsApp / Meta brain.' },
+    { key: 'auto_reply_enabled', label: 'Master AI auto-reply (all channels)', type: 'switch', help: 'Global kill-switch. When off, AI never replies to any inbound DM regardless of per-channel toggles below.' },
+    { key: 'channels.whatsapp.enabled', label: 'WhatsApp DM AI replies', type: 'switch', help: 'AI replies to inbound WhatsApp messages. Default on.' },
+    { key: 'channels.instagram.enabled', label: 'Instagram DM AI replies', type: 'switch', help: 'AI replies to inbound Instagram direct messages. Default on.' },
+    { key: 'channels.messenger.enabled', label: 'Messenger DM AI replies', type: 'switch', help: 'AI replies to inbound Facebook Messenger messages. Default on.' },
     { key: 'reply_delay_seconds', label: 'Reply delay (seconds)', type: 'number', min: 0, max: 30, step: 1, help: 'Optional human-like pause before sending.' },
     { key: 'instagram_story_reply_enabled', label: 'Reply to Instagram story replies', type: 'switch' },
     { key: 'instagram_auto_reply_comments', label: 'Auto-reply Instagram comments', type: 'switch' },
@@ -40,6 +41,30 @@ const FIELDS: Record<
     { key: 'cooldown_hours', label: 'Cooldown between nudges (hours)', type: 'number', min: 1, max: 168, step: 1 },
   ],
 };
+
+/** Read/write nested keys like "channels.whatsapp.enabled" on an OpsConfig object. */
+function getPath(obj: OpsConfig, path: string): any {
+  return path.split('.').reduce<any>((acc, k) => (acc == null ? undefined : acc[k]), obj);
+}
+function setPath(obj: OpsConfig, path: string, value: any): OpsConfig {
+  const keys = path.split('.');
+  const next: OpsConfig = { ...obj };
+  let cursor: any = next;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i];
+    cursor[k] = { ...(cursor[k] ?? {}) };
+    cursor = cursor[k];
+  }
+  cursor[keys[keys.length - 1]] = value;
+  return next;
+}
+/** Per-channel switches default to ON when missing (back-compat with pre-toggle configs). */
+function readSwitch(state: OpsConfig, key: string): boolean {
+  const raw = getPath(state, key);
+  if (raw === undefined && key.startsWith('channels.')) return true;
+  return Boolean(raw);
+}
+
 
 export function HandleOpsSettings({ purposeId, purpose, opsConfig }: Props) {
   const qc = useQueryClient();
