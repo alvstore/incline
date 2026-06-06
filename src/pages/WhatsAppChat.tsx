@@ -149,10 +149,12 @@ function normalizePhone(phone: string): string {
   return phone.replace(/^\+/, '');
 }
 
-/** True for raw Instagram-Scoped IDs (long numeric string, no '+'). */
+/** True for raw Instagram-Scoped IDs (long numeric string, with or without
+ *  a leading '+' — DB trigger normalize_phone_in prefixes '+' to all digits). */
 function isIgsid(value: string): boolean {
-  return /^\d{12,}$/.test(value);
+  return /^\+?\d{12,}$/.test(value);
 }
+
 
 /** Friendly display label when no resolved name is available. */
 function displayLabel(c: { contact_name: string | null; phone_number: string; platform?: string; external_username?: string | null }): string {
