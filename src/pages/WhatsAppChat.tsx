@@ -1389,7 +1389,14 @@ export default function WhatsAppChatPage() {
                                     <FileText className="h-3 w-3" /> Template
                                   </div>
                                 )}
-                                {!['text','image','template','document'].includes(msg.message_type) && msg.media_url && (
+                                {msg.message_type === 'comment' && (
+                                  <IgCommentMediaCard
+                                    meta={msg.media_meta}
+                                    mediaUrl={msg.media_url}
+                                    outbound={msg.direction === 'outbound'}
+                                  />
+                                )}
+                                {!['text','image','template','document','comment'].includes(msg.message_type) && msg.media_url && (
                                   <WhatsAppMediaAttachment
                                     mediaUrl={msg.media_url}
                                     mediaMeta={msg.media_meta}
@@ -1397,13 +1404,17 @@ export default function WhatsAppChatPage() {
                                     direction={msg.direction}
                                   />
                                 )}
-                                {!['text','image','template','document'].includes(msg.message_type) && !msg.media_url && (
+                                {!['text','image','template','document','comment'].includes(msg.message_type) && !msg.media_url && (
                                   <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
                                     <Paperclip className="h-3 w-3" /> {msg.message_type}
                                   </div>
                                 )}
                                 {msg.content && (
-                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [word-break:break-word] [overflow-wrap:anywhere] w-full">{msg.content}</p>
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [word-break:break-word] [overflow-wrap:anywhere] w-full">
+                                    {msg.message_type === 'comment'
+                                      ? msg.content.replace(/^\[Comment on [^\]]+\]\s*/, '')
+                                      : msg.content}
+                                  </p>
                                 )}
                                 <div
                                   className={`flex items-center justify-end gap-1 mt-1 ${
