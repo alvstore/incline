@@ -1079,18 +1079,22 @@ export default function WhatsAppChatPage() {
                         {(() => {
                           const plat = selectedContact.platform;
                           const ph = selectedContact.phone_number;
-                          if ((plat === 'instagram' || plat === 'messenger') && isIgsid(ph)) {
-                            const looksLikeHandle = selectedContact.contact_name?.startsWith('@');
-                            if (looksLikeHandle) {
-                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{selectedContact.contact_name?.replace(/^@/, '')}</span></>);
+                          if (plat === 'instagram' || plat === 'messenger') {
+                            const handle = (selectedContact.external_username || '').replace(/^@/, '')
+                              || (selectedContact.contact_name?.startsWith('@')
+                                  ? selectedContact.contact_name.replace(/^@/, '')
+                                  : '');
+                            if (handle) {
+                              return (<><AtSign className="h-3 w-3" /><span className="font-mono">{handle}</span></>);
                             }
-                            const short = ph.slice(-6);
+                            const short = (ph || '').replace(/^\+/, '').slice(-6);
                             const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
                             return (<span className="font-mono text-[11px]">{label} user · {short}</span>);
                           }
                           return (<><Phone className="h-3 w-3" />{formatPhoneDisplay(ph)}</>);
                         })()}
                       </div>
+
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
