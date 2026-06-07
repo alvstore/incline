@@ -1,4 +1,4 @@
-// run-retention-nudges v2.1.0 — routes through dispatch-communication; skips members with frozen membership
+// run-retention-nudges v2.2.0 — accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain); routes through dispatch-communication; skips members with frozen membership
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -16,10 +16,15 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth gate: cron-only. Require service-role bearer to prevent public abuse
-    // (bulk member messaging, provider quota exhaustion).
+    // Auth gate: cron-only. Accept either:
+    //   1. Authorization: Bearer <service-role-key>, OR
+    //   2. apikey: <service-role-key> + x-system-call: automation-brain
+    // (master automation-brain dispatcher uses pattern #2.)
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (bearer !== supabaseServiceKey) {
+    const apikey = req.headers.get("apikey") || "";
+    const sysCall = req.headers.get("x-system-call") || "";
+    const isSystem = bearer === supabaseServiceKey || (apikey === supabaseServiceKey && sysCall === "automation-brain");
+    if (!isSystem) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

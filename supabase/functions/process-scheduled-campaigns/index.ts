@@ -1,5 +1,5 @@
-// v1.1.0 — Honors audience_kind (members | leads | staff | contacts | mixed | segment).
-//          Non-members go through resolve_campaign_audience RPC + recipients path.
+// v1.2.0 — Accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain).
+//          Honors audience_kind (members | leads | staff | contacts | mixed | segment).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -14,10 +14,16 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth gate: cron-only. Require service-role bearer to prevent unauthorized
-    // campaign sends or timing leaks.
+    // Auth gate: cron-only. Accept either:
+    //   1. Authorization: Bearer <service-role-key>, OR
+    //   2. apikey: <service-role-key> + x-system-call: automation-brain
+    // (the master automation-brain dispatcher uses pattern #2 because the new
+    // signing-keys gateway rejects dual sb_ keys.)
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (bearer !== serviceKey) {
+    const apikey = req.headers.get("apikey") || "";
+    const sysCall = req.headers.get("x-system-call") || "";
+    const isSystem = bearer === serviceKey || (apikey === serviceKey && sysCall === "automation-brain");
+    if (!isSystem) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

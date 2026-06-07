@@ -24,7 +24,12 @@ export async function captureEdgeError(
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !serviceKey) return;
 
-    const message = error instanceof Error ? error.message : String(error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : (() => { try { return JSON.stringify(error); } catch { return String(error); } })();
     const stack = error instanceof Error ? error.stack : null;
 
     // Direct PostgREST RPC call — fast, no SDK overhead, fire-and-forget.
