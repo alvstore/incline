@@ -1,93 +1,108 @@
-## System Health Audit — Findings
+## System Audit — Read-Only Findings (no changes made)
 
-Top open errors right now (from `error_logs WHERE status='open'`):
-
-| # | Severity | Source / Function | Count | Symptom |
-|---|---|---|---|---|
-| 1 | error | `automation_brain → process_scheduled_campaigns` | **336** (growing every 5 min) | `HTTP 401: Unauthorized` |
-| 2 | error | `automation_brain → run_retention_nudges` | 2 | `HTTP 401: Unauthorized` |
-| 3 | error | frontend (anon `/`) | many | Network: `permission denied for function log_error_event` + `permission denied for table branches` |
-| 4 | error | `edge_function → register-member` | 6 | Logged as literal `[object Object]` (lost detail) |
-| 5 | error | `edge_function → send-whatsapp` | 9 | Meta API 400/404 — bad template/params (data issue, not code) |
-
-### Root causes
-
-1. **Cron 401 (issue 1 & 2).** `automation-brain` v1.4.0 dispatches with `apikey: SERVICE_KEY` + `x-system-call: automation-brain` and **no `Authorization` header** (gateway rejects dual sb_ keys). But `process-scheduled-campaigns` and `run-retention-nudges` only accept service-role *bearer*, so every tick returns 401. (`send-reminders`, `birthday_wish` already handle the system header — see memory.)
-
-2. **Frontend `log_error_event` 401.** RPC was created but `GRANT EXECUTE` was never given to `anon` / `authenticated`. Anon callers on the public `/` landing page (and any auth-error replay) silently fail to log, masking real bugs.
-
-3. **Frontend `branches` 401.** `branches` table has zero grants to `anon`/`authenticated` (only `sandbox_exec`). RLS policy `Staff view branches` correctly targets `authenticated`, but without the GRANT PostgREST returns 42501. `BranchContext` runs for every user incl. anon visitors on `/`, so the landing page floods 401s.
-
-4. **`[object Object]` logs.** `captureEdgeError` does `error instanceof Error ? .message : String(error)`. `String(postgrestError)` → `[object Object]`. We lose the real error.
-
-5. **send-whatsapp Meta errors.** Data-level (invalid template name / missing required param). Out of scope for this audit — leave as-is, just resolve old rows.
+Scope: security scanner + Supabase linter (459 issues) + RLS policies + error_logs + communication_logs (7d) + edge function logs + code metrics. Nothing modified.
 
 ---
 
-## Plan
+### 1. Security & RLS (highest priority)
 
-### 1. Migration — grants only (no schema change)
-```sql
--- Frontend error capture (anon landing pages need this too)
-GRANT EXECUTE ON FUNCTION public.log_error_event(
-  text, text, text, text, text, text, uuid, uuid, text, text, text, jsonb
-) TO anon, authenticated;
+**P0 — Critical (block before next release)**
+- None open. The 10 scanner findings raised earlier this turn were fixed in the previous migration. Re-scan is clean.
 
--- Branch list is read by BranchContext on every page load incl. anon
-GRANT SELECT ON public.branches TO authenticated;
--- (anon: keep blocked — landing page should not fetch; see step 4)
-```
+**P1 — High (Supabase linter, 459 total — grouped)**
+1. **SECURITY DEFINER functions executable by `anon` / `authenticated` (~420 of the 459 warnings).** Most of these are legitimate (`has_role`, `has_any_role`, `record_payment`, `purchase_membership`, etc.) but a meaningful subset are internal helpers (`dr_*`, embedding triggers, audit helpers, system-only RPCs) that should `REVOKE EXECUTE FROM PUBLIC, anon, authenticated` and `GRANT EXECUTE TO service_role` only. Needs a one-time triage pass: list every SECURITY DEFINER fn, classify [public API / authenticated API / system-only], then revoke unused grants.
+2. **Function search_path mutable (2 fns).** Two functions still missing `SET search_path = public`. Search-path hijack risk inside a SECURITY DEFINER context.
+3. **Extensions in `public` schema (3): `pg_trgm`, `pg_net`, `vector`.** Recommended to move to `extensions` schema; non-trivial migration risk because `vector` is used in `ai_knowledge.embedding`. Treat as **accepted warning** unless a security review demands the move.
+4. **Public bucket allows listing (6 buckets).** `org-assets`, `member-photos`, `attachments`(?), `workout-videos`, etc. — broad SELECT on `storage.objects` lets clients `list()` everything. Restrict SELECT to either path-scoped prefixes or staff role.
+5. **RLS-enabled tables with no policies (4 tables).** RLS on but zero policy = table is locked for everyone except service_role. Usually intentional, but enumerate and confirm each is meant to be admin-only.
+6. **RLS policy always-true on UPDATE/INSERT/DELETE (3 hits).** A blanket `WITH CHECK (true)` on a write path is a privilege escalation vector. Identify the 3 tables and tighten.
 
-### 2. Edge function — accept system header (parity with `send-reminders`)
-In **`process-scheduled-campaigns/index.ts`** and **`run-retention-nudges/index.ts`** replace the bearer-only check with:
-
-```ts
-const bearer  = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i,"").trim();
-const apikey  = req.headers.get("apikey") || "";
-const sysCall = req.headers.get("x-system-call") || "";
-const isSystem = bearer === serviceKey ||
-                 (apikey === serviceKey && sysCall === "automation-brain");
-if (!isSystem) return new Response(JSON.stringify({error:"Unauthorized"}), { status: 401, headers: ... });
-```
-Bump versions: `process-scheduled-campaigns` → v1.2.0, `run-retention-nudges` → vN+1. No business-logic change.
-
-### 3. Shared helper — preserve real error
-In **`supabase/functions/_shared/capture-edge-error.ts`**, change message extraction to:
-
-```ts
-const message =
-  error instanceof Error ? error.message :
-  typeof error === "string" ? error :
-  (() => { try { return JSON.stringify(error); } catch { return String(error); } })();
-```
-Benefits every edge function (register-member, etc.) — no per-call changes.
-
-### 4. Frontend — stop anon landing page from hitting `branches`
-In **`src/contexts/BranchContext.tsx`**: only call `useBranches()` when `session?.user` exists (anon visitors don't need branch list). Cheaper, removes the noise, and we keep the GRANT scoped to `authenticated`.
-
-### 5. Cleanup — resolve stale rows
-After fixes deploy, mark the old open errors as resolved so the SystemHealth dashboard is green:
-```sql
-UPDATE error_logs SET status='resolved', resolved_at=now()
-WHERE status='open'
-  AND (function_name IN ('process-scheduled-campaigns','run-retention-nudges','register-member')
-       OR error_message LIKE 'Automation rule %failed: HTTP 401%'
-       OR error_message = '[object Object]'
-       OR error_message LIKE 'Automation rule %failed: HTTP 502%');
-```
-(send-whatsapp Meta errors left open — they're real data issues to triage separately.)
+**P2 — Operational**
+7. **GOTRUE_JWT_DEFAULT_GROUP_NAME / GOTRUE_JWT_ADMIN_GROUP_NAME deprecated** (auth logs). No action by us — Supabase will remove. Track upstream.
+8. **Pwned-passwords HIBP cache loading every reboot.** Confirms HIBP is on — good. No fix needed.
 
 ---
 
-## Files touched
-- `supabase/migrations/<new>.sql` — grants only
-- `supabase/functions/process-scheduled-campaigns/index.ts`
-- `supabase/functions/run-retention-nudges/index.ts`
-- `supabase/functions/_shared/capture-edge-error.ts`
-- `src/contexts/BranchContext.tsx`
-- one-shot SQL via insert tool for cleanup
+### 2. RPC / Database integrity
 
-## Verification
-- Tail `error_logs` 10 min after deploy — `process_scheduled_campaigns 401` should stop growing.
-- Load `/` while signed-out — no `permission denied` in Network panel.
-- Trigger a frontend error — new row appears in `error_logs` with real message (not `[object Object]`).
+- **No open errors in `error_logs` in the last 7 days.** Recent log table shows only 6 historical `resolved` rows. Healthy.
+- **`dr_block_writes` trigger present** on critical tables (per memory) — confirmed safe for restores.
+- **`record_payment`, `purchase_membership`, `cancel_membership`, `freeze_membership`, `transition_member_lifecycle`** all present and SECURITY DEFINER — matches Core memory.
+- **Avatar storage path convention drift.** `MemberAvatarUpload.tsx` writes to bucket `avatars` (`avatars/{userId}-…`), `EditProfileDrawer.tsx` writes to bucket `member-photos` (`avatars/{userId}-…`). Two different buckets for the same logical asset. Not a bug today (both buckets exist), but confusing and means avatar reads must check both. Worth consolidating in a future cleanup.
+
+---
+
+### 3. Communications (last 7 days)
+
+```text
+email     sent       22
+email     failed      2
+whatsapp  sent        8
+whatsapp  failed      9   ← failure rate ≈ 53%
+whatsapp  suppressed  1
+```
+
+Drilling into the 9 WhatsApp failures:
+- **8 × Meta error `(#100) Invalid parameter`** on numbers `917356696393`, `919191910000`, `916384224228`. These look like test/placeholder numbers — confirm before action.
+- **1 × `132001 Template does not exist in this WABA`** for `919928910901`. Means a template referenced in the dispatcher is not in Meta's library or was deleted. Needs a Templates Hub re-sync.
+- **Earlier "auto-repaired: stuck in sending due to `delivery_metadata` NOT NULL bug — dispatch-communication v1.17.0"** rows confirm the v1.17.0 fix is reaping correctly. No action.
+
+---
+
+### 4. Edge function health
+
+Sampled logs (last few cycles):
+| Function | State |
+|---|---|
+| `automation-brain` | booting/shutting cleanly every 5 min — OK |
+| `process-ig-comment-runs` | running every 1 min — OK |
+| `reconcile-whatsapp-pending` | `{reaped:0,sent:0,failed:0}` — idle, OK |
+| `send-reminders v2` | latest tick: `sent=0 failed=0`, all cleanup blocks `success:true` — OK |
+| `process-comm-retry-queue` | booting on schedule — OK (no work to do) |
+| `process-whatsapp-retry-queue` | booting on schedule — OK |
+| `process-scheduled-campaigns` | booting on schedule — OK (since this turn's auth fix) |
+| `lead-nurture-followup` | skipping IG leads because `AI channel 'instagram' is disabled` — **intentional per `ai_purposes.ops_config.channels` toggle**, not an error. Worth surfacing in admin UI so it isn't mistaken for a bug. |
+| `google-reviews-brain` | boots, shuts down — no errors |
+
+No 4xx/5xx HTTP responses in the analytics edge logs sample window.
+
+---
+
+### 5. Code quality (read-only metrics)
+
+- **`: any` / `as any` occurrences:** ~1807 across `src/` (excluding `types.ts`). High — long-tail technical debt. Recommend a per-area cleanup budget rather than a big-bang refactor.
+- **`console.log/warn/error` calls in src:** 88. Acceptable but should be replaced with `captureClientError` / `log_error_event` for any error path that should be observable in System Health.
+- **TODO/FIXME/HACK:** Effectively none in `src/` or `supabase/functions/` (matches only doc comments). Good.
+- **Large files / god components:** not measured this turn — recommend running `code_quality_checker.py` against `src/components` and `src/pages` in a follow-up for hard numbers.
+
+---
+
+### 6. UX / workflow observations (from earlier user-supplied chat trace)
+
+- WhatsApp lead flow Name → Email → Goal → Plan — working per Founder's Phase memory.
+- The "message marked Sent but is actually Delivered/Read" gap was closed earlier this turn via `record_delivery_event` + email/SMS/RCS webhooks + DeliveryTimeline channel awareness.
+- Communication Hub still lacks a per-message "why did this fail" inline hint for Meta error codes (100, 132001, 131047, etc.). Currently surfaced only in `error_message` JSON blob. Could map to friendly labels in `LiveFeed`.
+
+---
+
+### 7. Prioritized backlog (recommended order, no work performed)
+
+| # | Priority | Item |
+|---|---|---|
+| 1 | P1 | Triage SECURITY DEFINER grants; revoke `anon`/`authenticated` EXECUTE on system-only RPCs |
+| 2 | P1 | Find & tighten the 3 always-true UPDATE/INSERT/DELETE RLS policies |
+| 3 | P1 | Scope SELECT on 6 public buckets to staff/owner prefixes (or accept and document) |
+| 4 | P1 | Pin `search_path` on the 2 remaining mutable functions |
+| 5 | P2 | Confirm/clean the 4 "RLS enabled, no policy" tables |
+| 6 | P2 | Re-sync deleted WhatsApp template causing 132001 for `919928910901` |
+| 7 | P2 | Friendly error-code mapping in `LiveFeed` for Meta WhatsApp failures |
+| 8 | P3 | Consolidate avatar bucket usage (`avatars` vs `member-photos/avatars/`) |
+| 9 | P3 | Move `pg_trgm` / `pg_net` / `vector` extensions out of `public` (risk: vector column refs) |
+| 10 | P3 | Replace stray `console.*` with `captureClientError` on error paths |
+| 11 | P4 | Per-area `any`-type cleanup budget |
+
+---
+
+### Notes
+- Nothing in this audit was changed. Each item above is a candidate; pick which to schedule.
+- The current preview is stable: no console errors, no failed network requests, all cron functions returning clean ticks.
