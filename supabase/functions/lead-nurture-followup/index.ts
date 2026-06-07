@@ -1,3 +1,7 @@
+// v6.1.0 — service-role auth gate added (cron-only): accepts
+//          Authorization: Bearer <service-role-key> OR
+//          apikey=<service-role-key> + x-system-call=automation-brain.
+//          Mirrors run-retention-nudges v2.2.0 pattern.
 // v6.0.0 — SSOT: all operational toggles (enabled/delay/retries/cooldown) come
 //          from ai_purposes.ops_config for purpose='lead_nurture'. The legacy
 //          organization_settings.lead_nurture_config column has been dropped.
@@ -12,7 +16,7 @@ const serve = Deno.serve;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-system-call",
 };
 
 serve(async (req) => {
@@ -23,6 +27,21 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Auth gate: cron-only. Accept either:
+    //   1. Authorization: Bearer <service-role-key>, OR
+    //   2. apikey: <service-role-key> + x-system-call: automation-brain
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const apikey = req.headers.get("apikey") || "";
+    const sysCall = req.headers.get("x-system-call") || "";
+    const isSystem = bearer === supabaseKey || (apikey === supabaseKey && sysCall === "automation-brain");
+    if (!isSystem) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // SSOT: read ops_config from ai_purposes (global row).
