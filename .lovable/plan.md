@@ -1,49 +1,60 @@
 ## Goal
-Close the two **critical** "Missing Auth Gate" findings without breaking the cron caller (`automation-brain`) or any UI flow.
 
-## Findings
-1. **`lead-nurture-followup`** — no auth check. Cron-only function, but anyone on the internet can POST and trigger mass WhatsApp/SMS/email + burn AI credits.
-2. **`score-leads`** — no auth check, no callers found in repo (orphan today). Still exposes PII reads, lead-score writes, and AI credit abuse to anyone on the internet.
+Audit and refactor the three pages shown in the screenshots so every color comes from the semantic design tokens (`primary`, `foreground`, `muted-foreground`, `card`, `accent`, `destructive`, `success`, `warning`, `info`, `border`) instead of raw Tailwind palette classes (`indigo-600`, `violet-600`, `slate-900`, `emerald-500`, `amber-500`, etc.). This is required so the Theme Picker + light/dark mode actually change the look.
 
-## Fix
+## Scope
 
-### A. `lead-nurture-followup` — adopt the canonical cron gate
-Apply the exact pattern already used by `run-retention-nudges` v2.2.0:
+Pages in scope:
+1. **Trainers** — `src/pages/Trainers.tsx`
+   - Plus drawers: `src/components/trainers/TrainerProfileDrawer.tsx`, `EditTrainerDrawer.tsx`
+2. **Tasks (Mission Control)** — `src/pages/Tasks.tsx` (already clean) + all `src/components/tasks/*` files that flagged in the audit:
+   - `TasksHeader.tsx`, `TaskStatsBento.tsx`, `TaskFilterPills.tsx`, `TaskBoard.tsx`, `TaskCard.tsx`, `TaskListView.tsx`, `TaskCalendarView.tsx`, `DueDatePill.tsx`, `AssigneeAvatar.tsx`, `taskTokens.ts`
+3. **PT Packages** — `src/pages/PTSessions.tsx` (~140 hardcoded usages including the big hero/stat cards, "Top Performer", "Package Type Split", "Revenue by Trainer", tier gradients, status pills)
 
-- Accept **either** `Authorization: Bearer <service-role-key>` **or** `apikey=<service-role-key> + x-system-call=automation-brain` (this is how the master `automation-brain-tick` dispatcher invokes child workers — see `automation-brain/index.ts`).
-- Reject everything else with HTTP 401.
-- Inserted right after the OPTIONS handler, before the service-role client is created.
+Out of scope: any other page, any business logic, any data-fetching code, drawers other than the ones above.
 
-No change to business logic, response shape, or cron configuration. The hourly cron continues to fire (it already passes the service-role bearer via `automation-brain`), so the lead-nurture pipeline keeps running unchanged.
+## Token Mapping (applied everywhere)
 
-Bump header to `// v6.1.0 — service-role auth gate added`.
+```text
+bg-white, bg-slate-50           → bg-card / bg-background
+text-slate-900                  → text-foreground
+text-slate-700/600              → text-foreground / text-muted-foreground
+text-slate-500/400              → text-muted-foreground
+border-slate-200, border-*-200  → border-border
+shadow-slate-200/50             → shadow-md (keep soft shadow, drop color)
+bg-indigo-600, bg-violet-600,
+gradient from-indigo to-violet  → bg-primary  (or gradient from-primary to-primary with brightness variation via /80)
+text-indigo-700, text-violet-700→ text-primary
+bg-indigo-50, bg-violet-50      → bg-primary/10
+ring-indigo-500                 → ring-ring / ring-primary
+bg-emerald-* / text-emerald-*   → bg-success / text-success (token exists in tailwind.config.ts)
+bg-amber-* / text-amber-*       → bg-warning / text-warning
+bg-red-* / text-red-*           → bg-destructive / text-destructive
+bg-sky-* / text-sky-*           → bg-info / text-info
+bg-rose-500 (cancelled bar)     → bg-destructive
+```
 
-### B. `score-leads` — JWT + staff role gate
-Pattern mirrors `create-member-user/index.ts`:
+For the gradient hero cards (Trainers "Active Trainers", PT "Top Performer", Tasks "Today's Focus") use `bg-gradient-to-br from-primary to-primary/70 text-primary-foreground` so the brand gradient follows the active theme.
 
-1. Read `Authorization: Bearer <jwt>`.
-2. If header equals service-role key → allow (covers future automation use).
-3. Else create an anon client with that bearer, call `supabase.auth.getUser()`.
-4. With a service-role admin client, query `user_roles` for that user and require role ∈ `{owner, admin, manager, staff}`. (Trainers and members may not score leads.)
-5. Return 401 if no JWT/invalid, 403 if role insufficient.
+For tier palettes in `PTSessions.tsx` (silver / gold / platinum) keep distinct hues but swap to token-aware equivalents:
+- silver → `from-muted to-muted-foreground/40`
+- gold   → `from-warning/80 to-warning`
+- platinum / default → `from-primary to-primary/70`
 
-Existing PII fetch + AI scoring + `leads.score` update remain inside the gate, untouched.
+## Approach
 
-Bump header to `// v2.1.0 — JWT + staff role gate added`.
+1. Read each target file once, then do a careful search-and-replace per file using the mapping table above. Group edits per file into a single `code--line_replace` where possible.
+2. Preserve all layout/spacing/typography classes — only swap color tokens.
+3. After edits, run the build (auto) and visually verify the three pages in light + one dark theme via the preview.
+
+## Non-goals / constraints
+
+- No changes to copy, layout, icons, or data.
+- Status semantics stay the same (success=green, warning=amber, destructive=red, info=sky) — they just route through tokens so themes can re-skin.
+- Keep `rounded-2xl`, soft shadows, and Vuexy density unchanged.
 
 ## Validation
-- Repo grep confirms no client/edge caller invokes `score-leads` today, so adding strict auth cannot regress any UI/cron path.
-- `lead-nurture-followup` is invoked only by the `automation-brain` cron, which already sends `Authorization: Bearer <service-role>` — verified by the matching pattern in `run-retention-nudges` which was hardened the same way and continues to run on its hourly schedule.
-- Smoke test after deploy:
-  - `supabase--curl_edge_functions` POST `/lead-nurture-followup` with no auth → expect 401.
-  - Same with `Authorization: Bearer <service-role>` (auto-injected by the tool when using the system header) → expect 200 + processed counts.
-  - POST `/score-leads` with no auth → 401; with member-role JWT → 403; with admin JWT → 200.
-- Both findings auto-close on the next security scan; no other findings are touched.
 
-## Out of Scope
-The remaining two **warn**-level findings in the same security report (`ai-draft-campaign-message` missing role check, `embed-knowledge` missing auth) are not in this request — flag them as the next ticket if you want them tackled in a follow-up pass.
-
-## Risk
-Very low. Only behavior change is that unauthenticated callers now receive 401 instead of running the function. No data, schema, or cron-schedule changes.
-
-Approve to switch to build mode.
+- Toggle Settings → Appearance theme + dark mode; confirm Trainers, Tasks, and PT Packages re-skin instead of staying indigo/slate.
+- Confirm contrast on hero gradient cards in both modes.
+- No regressions in drawers opened from these pages.
