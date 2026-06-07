@@ -1,3 +1,4 @@
+// v2.1.0 — JWT + staff role gate added. Service-role bearer also accepted for future automation use.
 // v2.0.0 — AI Lead Scoring Edge Function (SSOT: routes through ai-runtime)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -8,19 +9,48 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const STAFF_ROLES = ["owner", "admin", "manager", "staff"];
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { lead_id, lead_ids } = await req.json();
-    // AI provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Auth gate: service-role bearer OR authenticated staff/manager/admin/owner JWT.
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!bearer) {
+      return json({ error: "Unauthorized" }, 401);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    if (bearer !== serviceKey) {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${bearer}` } },
+      });
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(bearer);
+      const userId = claims?.claims?.sub;
+      if (claimsErr || !userId) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .in("role", STAFF_ROLES)
+        .limit(1);
+      if (!roles?.length) {
+        return json({ error: "Forbidden" }, 403);
+      }
+    }
+
+    const { lead_id, lead_ids } = await req.json();
 
     const idsToScore = lead_ids || (lead_id ? [lead_id] : []);
     if (!idsToScore.length) {

@@ -1,54 +1,49 @@
 ## Goal
-Reduce the remaining 342 Supabase linter findings concentrated in rules `0028_anon_security_definer_function_executable` and `0029_authenticated_security_definer_function_executable` — without touching any application behavior.
+Close the two **critical** "Missing Auth Gate" findings without breaking the cron caller (`automation-brain`) or any UI flow.
 
-## Findings Today
-- 146 `SECURITY DEFINER` public functions are still executable by `anon`.
-- The same set (plus ~20 more) is executable by `authenticated`.
-- Audit of all client and edge-function callers shows the actual pre-auth (anon) surface is only **2 RPCs**:
-  - `get_public_branches` — used by `/register`
-  - `get_howbody_public_report` — used by `/howbody/report/:id`
-- Everything else is called either from an authenticated session in the SPA, or from an edge function using the `service_role` admin client (which is unaffected by anon/authenticated grants).
+## Findings
+1. **`lead-nurture-followup`** — no auth check. Cron-only function, but anyone on the internet can POST and trigger mass WhatsApp/SMS/email + burn AI credits.
+2. **`score-leads`** — no auth check, no callers found in repo (orphan today). Still exposes PII reads, lead-score writes, and AI credit abuse to anyone on the internet.
 
-## Strategy (Two-Pass, Single Migration)
+## Fix
 
-### Pass A — Revoke `anon` EXECUTE from 144 functions
-Drop `anon` from every SECURITY DEFINER public function **except** the 2-RPC public whitelist. Examples of the bulk being trimmed:
-- Member-portal RPCs (book_class, book_facility_slot, member_check_in, record_member_measurement, claim_referral_reward, …)
-- Staff/admin RPCs (purchase_membership, record_payment, freeze_membership, cancel_membership, payroll_*, process_approval_request, decide_role_change_request, …)
-- Search/analytics helpers (search_command_*, analytics_revenue_*, get_inactive_members, …)
-- Permission/identity helpers (has_role, has_capability, user_visible_branches, current_active_branch, …)
+### A. `lead-nurture-followup` — adopt the canonical cron gate
+Apply the exact pattern already used by `run-retention-nudges` v2.2.0:
 
-None of these are called from unauthenticated client code or from any anon-key flow — verified via repo-wide grep of `supabase.rpc(...)` plus all edge function callers.
+- Accept **either** `Authorization: Bearer <service-role-key>` **or** `apikey=<service-role-key> + x-system-call=automation-brain` (this is how the master `automation-brain-tick` dispatcher invokes child workers — see `automation-brain/index.ts`).
+- Reject everything else with HTTP 401.
+- Inserted right after the OPTIONS handler, before the service-role client is created.
 
-### Pass B — Also revoke `authenticated` EXECUTE on cron/edge-only functions
-A subset is called exclusively from edge functions (which use service_role) or from pg_cron. Removing `authenticated` here is safe and drops a matching `0029` finding too:
-- `bump_ig_campaign_counters`, `claim_meta_ai_reply`, `upsert_meta_contact_profile`, `record_delivery_event`, `mark_no_show_bookings`, `generate_renewal_invoices`, `check_critical_error_alerts`, `daily_reconcile_member_access`, `reverse_stale_pt_purchases`, `purge_expired_otp_verifications`, `should_send_communication`, `is_in_quiet_hours`, `advance_referral_lifecycle`, `award_group_bonus`, `issue_referral_reward`, `convert_referral`, `evaluate_member_access_state`, `get_employer_profile`, `trg_payment_activate_pt_package`, `fn_booking_status_audit`.
+No change to business logic, response shape, or cron configuration. The hourly cron continues to fire (it already passes the service-role bearer via `automation-brain`), so the lead-nurture pipeline keeps running unchanged.
 
-`service_role` keeps `EXECUTE` (re-granted explicitly) on every touched function so edge functions and triggers continue to run.
+Bump header to `// v6.1.0 — service-role auth gate added`.
 
-### Untouched (still anon-executable on purpose)
-- `get_public_branches`
-- `get_howbody_public_report`
+### B. `score-leads` — JWT + staff role gate
+Pattern mirrors `create-member-user/index.ts`:
 
-## Expected Linter Impact
-- ~144 `0028_anon_*` findings cleared (Pass A).
-- ~20 additional `0029_authenticated_*` findings cleared (Pass B).
-- Projected total: **342 → ~178** (≈48% drop).
+1. Read `Authorization: Bearer <jwt>`.
+2. If header equals service-role key → allow (covers future automation use).
+3. Else create an anon client with that bearer, call `supabase.auth.getUser()`.
+4. With a service-role admin client, query `user_roles` for that user and require role ∈ `{owner, admin, manager, staff}`. (Trainers and members may not score leads.)
+5. Return 401 if no JWT/invalid, 403 if role insufficient.
 
-## Validation Plan
-1. Migration runs as one transaction — if any function name typo, the whole revoke rolls back.
-2. After apply, smoke check in preview:
-   - Member portal: load `/portal`, book a class slot, view dues.
-   - Staff: open Members list (uses `search_members`), record a payment, freeze/cancel a membership.
-   - Public: `/register` lists branches; `/howbody/report/:id` loads.
-3. Tail `error_logs` for 15 min looking for `permission denied for function`. If any appears, the offending function gets a follow-up `GRANT EXECUTE ... TO authenticated` (one-line hotfix).
-4. Re-run `supabase--linter`; expect ≤180 findings.
+Existing PII fetch + AI scoring + `leads.score` update remain inside the gate, untouched.
 
-## Out of Scope (Future Passes)
-- The remaining ~178 findings cover legitimately authenticated user RPCs. Removing `authenticated` from those WOULD break the app, so they require redesign (move to edge function + service_role) and are deferred.
-- `0025_public_bucket_allows_listing` (6), `0024_permissive_rls_policy` (3), `0014_extension_in_public` (3), `0008_rls_enabled_no_policy` (1) — separate tickets, different fix patterns.
+Bump header to `// v2.1.0 — JWT + staff role gate added`.
+
+## Validation
+- Repo grep confirms no client/edge caller invokes `score-leads` today, so adding strict auth cannot regress any UI/cron path.
+- `lead-nurture-followup` is invoked only by the `automation-brain` cron, which already sends `Authorization: Bearer <service-role>` — verified by the matching pattern in `run-retention-nudges` which was hardened the same way and continues to run on its hourly schedule.
+- Smoke test after deploy:
+  - `supabase--curl_edge_functions` POST `/lead-nurture-followup` with no auth → expect 401.
+  - Same with `Authorization: Bearer <service-role>` (auto-injected by the tool when using the system header) → expect 200 + processed counts.
+  - POST `/score-leads` with no auth → 401; with member-role JWT → 403; with admin JWT → 200.
+- Both findings auto-close on the next security scan; no other findings are touched.
+
+## Out of Scope
+The remaining two **warn**-level findings in the same security report (`ai-draft-campaign-message` missing role check, `embed-knowledge` missing auth) are not in this request — flag them as the next ticket if you want them tackled in a follow-up pass.
 
 ## Risk
-Low. Worst case is a single missed authenticated caller throws "permission denied for function X"; the fix is a one-line `GRANT EXECUTE ... TO authenticated;` follow-up migration. No data is modified; no behavior changes for any role that legitimately needs access.
+Very low. Only behavior change is that unauthenticated callers now receive 401 instead of running the function. No data, schema, or cron-schedule changes.
 
-Approve to switch to build mode and apply the migration.
+Approve to switch to build mode.
