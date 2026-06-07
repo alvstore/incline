@@ -1,108 +1,81 @@
-## System Audit — Read-Only Findings (no changes made)
+# Resolve remaining linter findings safely
 
-Scope: security scanner + Supabase linter (459 issues) + RLS policies + error_logs + communication_logs (7d) + edge function logs + code metrics. Nothing modified.
+## Goal
+Drop the SECURITY DEFINER linter count by revoking client-side `EXECUTE` on the **42 internal functions** that no UI / SDK code ever calls. This eliminates ~84 of the 388 secdef findings (0028 + 0029) with **zero functional risk** because every one of these 42 functions runs only via triggers, cron, or service-role workers — never via the Supabase JS client.
 
----
+Total findings after this pass: **~342** (down from 426).
 
-### 1. Security & RLS (highest priority)
+## What is in scope (safe to revoke)
 
-**P0 — Critical (block before next release)**
-- None open. The 10 scanner findings raised earlier this turn were fixed in the previous migration. Re-scan is clean.
+42 functions across three buckets, all confirmed as never called from `src/`:
 
-**P1 — High (Supabase linter, 459 total — grouped)**
-1. **SECURITY DEFINER functions executable by `anon` / `authenticated` (~420 of the 459 warnings).** Most of these are legitimate (`has_role`, `has_any_role`, `record_payment`, `purchase_membership`, etc.) but a meaningful subset are internal helpers (`dr_*`, embedding triggers, audit helpers, system-only RPCs) that should `REVOKE EXECUTE FROM PUBLIC, anon, authenticated` and `GRANT EXECUTE TO service_role` only. Needs a one-time triage pass: list every SECURITY DEFINER fn, classify [public API / authenticated API / system-only], then revoke unused grants.
-2. **Function search_path mutable (2 fns).** Two functions still missing `SET search_path = public`. Search-path hijack risk inside a SECURITY DEFINER context.
-3. **Extensions in `public` schema (3): `pg_trgm`, `pg_net`, `vector`.** Recommended to move to `extensions` schema; non-trivial migration risk because `vector` is used in `ai_knowledge.embedding`. Treat as **accepted warning** unless a security review demands the move.
-4. **Public bucket allows listing (6 buckets).** `org-assets`, `member-photos`, `attachments`(?), `workout-videos`, etc. — broad SELECT on `storage.objects` lets clients `list()` everything. Restrict SELECT to either path-scoped prefixes or staff role.
-5. **RLS-enabled tables with no policies (4 tables).** RLS on but zero policy = table is locked for everyone except service_role. Usually intentional, but enumerate and confirm each is meant to be admin-only.
-6. **RLS policy always-true on UPDATE/INSERT/DELETE (3 hits).** A blanket `WITH CHECK (true)` on a write path is a privilege escalation vector. Identify the 3 tables and tighten.
+**Trigger functions (fired by `pg_trigger`, never via API):**
+`tg_payment_activate_pt_package`, `trg_payment_status_reverse_commission`, `audit_log_trigger_function`, `audit_log_trigger_function_nb`, `audit_set_actor`, `auto_assign_member_role`, `auto_assign_staff_role`, `auto_assign_trainer_role`, `fn_comm_retry_queue_dedupe`, `fn_enqueue_failed_communication`, `fn_notify_lead_created`, `handle_new_feedback`, `handle_new_user`, `howbody_mirror_body_to_measurements`, `howbody_mirror_posture_to_measurements`, `howbody_notify_member_body`, `howbody_notify_member_posture`, `notifications_dedupe_guard`, `notify_late_attendance`, `notify_lead_created`, `notify_locker_assigned`, `notify_membership_expiring`, `notify_new_member`, `notify_payment_received`, `notify_referral_converted`, `sync_lead_to_contact`, `sync_member_to_contact`, `tasks_log_status_change`, `tasks_notify_assignee`, `update_slot_booked_count`, `update_updated_at`, `_notify_booking_event`, `_resolve_audit_target_name`
 
-**P2 — Operational**
-7. **GOTRUE_JWT_DEFAULT_GROUP_NAME / GOTRUE_JWT_ADMIN_GROUP_NAME deprecated** (auth logs). No action by us — Supabase will remove. Track upstream.
-8. **Pwned-passwords HIBP cache loading every reboot.** Confirms HIBP is on — good. No fix needed.
+**Code-generators (called by triggers, not the client):**
+`assign_employee_code`, `assign_trainer_code`, `generate_invoice_number`, `generate_member_code`, `generate_trainer_code`
 
----
+**Cron-only workers (called by `pg_cron` as `service_role`):**
+`auto_close_stale_attendance`, `auto_disable_hardware_access`, `auto_expire_memberships`, `auto_freeze_membership`
 
-### 2. RPC / Database integrity
+## What is explicitly NOT touched
+- All `record_*`, `purchase_*`, `cancel_*`, `freeze_*`, `book_*`, `validate_*`, `redeem_*`, `signMemberDocument`, `has_role`, `has_capability`, `set_active_branch`, `transition_member_lifecycle`, `match_ai_knowledge`, `dispatchCommunication` paths — every legitimate UI RPC stays callable.
+- The 13 accepted findings (3 extensions in public, 6 public buckets, 3 always-true RLS policies, 1 service-role-only table) stay as documented in the security memory.
 
-- **No open errors in `error_logs` in the last 7 days.** Recent log table shows only 6 historical `resolved` rows. Healthy.
-- **`dr_block_writes` trigger present** on critical tables (per memory) — confirmed safe for restores.
-- **`record_payment`, `purchase_membership`, `cancel_membership`, `freeze_membership`, `transition_member_lifecycle`** all present and SECURITY DEFINER — matches Core memory.
-- **Avatar storage path convention drift.** `MemberAvatarUpload.tsx` writes to bucket `avatars` (`avatars/{userId}-…`), `EditProfileDrawer.tsx` writes to bucket `member-photos` (`avatars/{userId}-…`). Two different buckets for the same logical asset. Not a bug today (both buckets exist), but confusing and means avatar reads must check both. Worth consolidating in a future cleanup.
+## Migration
 
----
-
-### 3. Communications (last 7 days)
-
-```text
-email     sent       22
-email     failed      2
-whatsapp  sent        8
-whatsapp  failed      9   ← failure rate ≈ 53%
-whatsapp  suppressed  1
+```sql
+DO $$
+DECLARE
+  fn text;
+  fn_list text[] := ARRAY[
+    -- trigger functions
+    'tg_payment_activate_pt_package','trg_payment_status_reverse_commission',
+    'audit_log_trigger_function','audit_log_trigger_function_nb','audit_set_actor',
+    'auto_assign_member_role','auto_assign_staff_role','auto_assign_trainer_role',
+    'fn_comm_retry_queue_dedupe','fn_enqueue_failed_communication','fn_notify_lead_created',
+    'handle_new_feedback','handle_new_user',
+    'howbody_mirror_body_to_measurements','howbody_mirror_posture_to_measurements',
+    'howbody_notify_member_body','howbody_notify_member_posture',
+    'notifications_dedupe_guard','notify_late_attendance','notify_lead_created',
+    'notify_locker_assigned','notify_membership_expiring','notify_new_member',
+    'notify_payment_received','notify_referral_converted',
+    'sync_lead_to_contact','sync_member_to_contact',
+    'tasks_log_status_change','tasks_notify_assignee',
+    'update_slot_booked_count','update_updated_at',
+    '_notify_booking_event','_resolve_audit_target_name',
+    -- code generators (trigger-fired)
+    'assign_employee_code','assign_trainer_code',
+    'generate_invoice_number','generate_member_code','generate_trainer_code',
+    -- cron-only workers
+    'auto_close_stale_attendance','auto_disable_hardware_access',
+    'auto_expire_memberships','auto_freeze_membership'
+  ];
+BEGIN
+  FOREACH fn IN ARRAY fn_list LOOP
+    -- Revoke from public client roles for every overload of the function.
+    EXECUTE format(
+      'DO $i$ DECLARE r record; BEGIN
+         FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+                  WHERE pronamespace = ''public''::regnamespace AND proname = %L LOOP
+           EXECUTE ''REVOKE EXECUTE ON FUNCTION '' || r.sig || '' FROM PUBLIC, anon, authenticated'';
+           EXECUTE ''GRANT  EXECUTE ON FUNCTION '' || r.sig || '' TO service_role'';
+         END LOOP;
+       END $i$;',
+      fn
+    );
+  END LOOP;
+END $$;
 ```
 
-Drilling into the 9 WhatsApp failures:
-- **8 × Meta error `(#100) Invalid parameter`** on numbers `917356696393`, `919191910000`, `916384224228`. These look like test/placeholder numbers — confirm before action.
-- **1 × `132001 Template does not exist in this WABA`** for `919928910901`. Means a template referenced in the dispatcher is not in Meta's library or was deleted. Needs a Templates Hub re-sync.
-- **Earlier "auto-repaired: stuck in sending due to `delivery_metadata` NOT NULL bug — dispatch-communication v1.17.0"** rows confirm the v1.17.0 fix is reaping correctly. No action.
+## Validation
+1. After migration runs, re-run `supabase--linter`. Expected: ~342 total findings (down from 426).
+2. Smoke-check the live app:
+   - Create a member → triggers `handle_new_user`, `assign_employee_code`, `auto_assign_member_role`, `sync_member_to_contact`, `notify_new_member` (all still fire because triggers run as table owner, not client).
+   - Record a payment → triggers `tg_payment_activate_pt_package`, `notify_payment_received`, `audit_log_trigger_function`.
+   - Wait for next `automation-brain-tick` (5 min) → cron workers still fire because cron runs as `service_role`.
+3. Watch `error_logs` for `permission denied for function` over the next 15 minutes; rollback the affected function's grant if anything surfaces.
 
----
-
-### 4. Edge function health
-
-Sampled logs (last few cycles):
-| Function | State |
-|---|---|
-| `automation-brain` | booting/shutting cleanly every 5 min — OK |
-| `process-ig-comment-runs` | running every 1 min — OK |
-| `reconcile-whatsapp-pending` | `{reaped:0,sent:0,failed:0}` — idle, OK |
-| `send-reminders v2` | latest tick: `sent=0 failed=0`, all cleanup blocks `success:true` — OK |
-| `process-comm-retry-queue` | booting on schedule — OK (no work to do) |
-| `process-whatsapp-retry-queue` | booting on schedule — OK |
-| `process-scheduled-campaigns` | booting on schedule — OK (since this turn's auth fix) |
-| `lead-nurture-followup` | skipping IG leads because `AI channel 'instagram' is disabled` — **intentional per `ai_purposes.ops_config.channels` toggle**, not an error. Worth surfacing in admin UI so it isn't mistaken for a bug. |
-| `google-reviews-brain` | boots, shuts down — no errors |
-
-No 4xx/5xx HTTP responses in the analytics edge logs sample window.
-
----
-
-### 5. Code quality (read-only metrics)
-
-- **`: any` / `as any` occurrences:** ~1807 across `src/` (excluding `types.ts`). High — long-tail technical debt. Recommend a per-area cleanup budget rather than a big-bang refactor.
-- **`console.log/warn/error` calls in src:** 88. Acceptable but should be replaced with `captureClientError` / `log_error_event` for any error path that should be observable in System Health.
-- **TODO/FIXME/HACK:** Effectively none in `src/` or `supabase/functions/` (matches only doc comments). Good.
-- **Large files / god components:** not measured this turn — recommend running `code_quality_checker.py` against `src/components` and `src/pages` in a follow-up for hard numbers.
-
----
-
-### 6. UX / workflow observations (from earlier user-supplied chat trace)
-
-- WhatsApp lead flow Name → Email → Goal → Plan — working per Founder's Phase memory.
-- The "message marked Sent but is actually Delivered/Read" gap was closed earlier this turn via `record_delivery_event` + email/SMS/RCS webhooks + DeliveryTimeline channel awareness.
-- Communication Hub still lacks a per-message "why did this fail" inline hint for Meta error codes (100, 132001, 131047, etc.). Currently surfaced only in `error_message` JSON blob. Could map to friendly labels in `LiveFeed`.
-
----
-
-### 7. Prioritized backlog (recommended order, no work performed)
-
-| # | Priority | Item |
-|---|---|---|
-| 1 | P1 | Triage SECURITY DEFINER grants; revoke `anon`/`authenticated` EXECUTE on system-only RPCs |
-| 2 | P1 | Find & tighten the 3 always-true UPDATE/INSERT/DELETE RLS policies |
-| 3 | P1 | Scope SELECT on 6 public buckets to staff/owner prefixes (or accept and document) |
-| 4 | P1 | Pin `search_path` on the 2 remaining mutable functions |
-| 5 | P2 | Confirm/clean the 4 "RLS enabled, no policy" tables |
-| 6 | P2 | Re-sync deleted WhatsApp template causing 132001 for `919928910901` |
-| 7 | P2 | Friendly error-code mapping in `LiveFeed` for Meta WhatsApp failures |
-| 8 | P3 | Consolidate avatar bucket usage (`avatars` vs `member-photos/avatars/`) |
-| 9 | P3 | Move `pg_trgm` / `pg_net` / `vector` extensions out of `public` (risk: vector column refs) |
-| 10 | P3 | Replace stray `console.*` with `captureClientError` on error paths |
-| 11 | P4 | Per-area `any`-type cleanup budget |
-
----
-
-### Notes
-- Nothing in this audit was changed. Each item above is a candidate; pick which to schedule.
-- The current preview is stable: no console errors, no failed network requests, all cron functions returning clean ticks.
+## Out of scope (next pass, your call)
+- Triaging the remaining ~150 anon-callable RPCs (member portal, public landing, lead capture). Needs per-function review since some legitimately need `anon` for `/register`, public catalog, feedback flow, etc.
+- The 4 cron worker names you may want kept anon-revoked but still allow manual "Run Now" buttons in `AutomationsControlRoom` — those buttons already go through edge functions with service-role, so this is safe.
