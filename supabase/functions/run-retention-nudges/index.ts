@@ -1,4 +1,4 @@
-// run-retention-nudges v2.1.0 — routes through dispatch-communication; skips members with frozen membership
+// run-retention-nudges v2.2.0 — accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain); routes through dispatch-communication; skips members with frozen membership
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
