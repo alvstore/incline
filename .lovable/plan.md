@@ -1,101 +1,93 @@
-# Why every message is stuck on "Sent"
+## System Health Audit — Findings
 
-## Root cause (deep scan results)
+Top open errors right now (from `error_logs WHERE status='open'`):
 
-The Live Feed's delivery rail (Queued → Sent → Delivered → Read → Replied) reads from two places:
+| # | Severity | Source / Function | Count | Symptom |
+|---|---|---|---|---|
+| 1 | error | `automation_brain → process_scheduled_campaigns` | **336** (growing every 5 min) | `HTTP 401: Unauthorized` |
+| 2 | error | `automation_brain → run_retention_nudges` | 2 | `HTTP 401: Unauthorized` |
+| 3 | error | frontend (anon `/`) | many | Network: `permission denied for function log_error_event` + `permission denied for table branches` |
+| 4 | error | `edge_function → register-member` | 6 | Logged as literal `[object Object]` (lost detail) |
+| 5 | error | `edge_function → send-whatsapp` | 9 | Meta API 400/404 — bad template/params (data issue, not code) |
 
-1. `communication_delivery_events` (per-stage event rows)
-2. Fallback: `communication_logs.delivery_status` + `delivery_metadata`
+### Root causes
 
-**Nothing in the codebase ever inserts a row into `communication_delivery_events`** (confirmed via `rg` — only the UI reads it; no edge fn, trigger, or migration writes it). So the UI always falls back to the log row's `delivery_status`.
+1. **Cron 401 (issue 1 & 2).** `automation-brain` v1.4.0 dispatches with `apikey: SERVICE_KEY` + `x-system-call: automation-brain` and **no `Authorization` header** (gateway rejects dual sb_ keys). But `process-scheduled-campaigns` and `run-retention-nudges` only accept service-role *bearer*, so every tick returns 401. (`send-reminders`, `birthday_wish` already handle the system header — see memory.)
 
-And `delivery_status` is the enum `reminder_delivery_status` whose values are only:
-```
-scheduled, sending, sent, failed, skipped, suppressed, deduped, queued
-```
-`delivered` and `read` are **not valid enum values**. Confirmed:
-```
-ERROR: invalid input value for enum reminder_delivery_status: "delivered"
-```
-So even when providers send delivered/read callbacks, the log can never advance past `sent`.
+2. **Frontend `log_error_event` 401.** RPC was created but `GRANT EXECUTE` was never given to `anon` / `authenticated`. Anon callers on the public `/` landing page (and any auth-error replay) silently fail to log, masking real bugs.
 
-### Per-channel state today
+3. **Frontend `branches` 401.** `branches` table has zero grants to `anon`/`authenticated` (only `sandbox_exec`). RLS policy `Staff view branches` correctly targets `authenticated`, but without the GRANT PostgREST returns 42501. `BranchContext` runs for every user incl. anon visitors on `/`, so the landing page floods 401s.
 
-| Channel | Provider callback received? | What we do with it | Result in UI |
-|---|---|---|---|
-| **WhatsApp** | ✅ Meta posts `statuses[]` (sent/delivered/read/failed) into `whatsapp-webhook` | Updates `whatsapp_messages.status` correctly. For `communication_logs` only stashes `wa_status` inside `delivery_metadata` JSON; never promotes to `delivery_status`; never inserts a delivery_event. | Stuck at Sent |
-| **Email** | ❌ No Resend/SES webhook function exists (`ls supabase/functions` has no email webhook). `send-email` writes `delivery_status='sent'` once. | No delivered/opened/bounced ingestion at all. | Stuck at Sent |
-| **SMS** | ❌ `send-sms` calls RoundSMS `dlr_endpoint` but **only at send time** to register DLR — there is no inbound webhook handler that ingests the DLR pings. | Provider has no URL to call back into. | Stuck at Sent |
-| **RCS** | ✅ `rcs-webhook` exists and tries to write `delivery_status='delivered' / 'read'` directly — but the enum **rejects** those values, so the update silently fails. Also writes to wrong column `error_message` (column is `error_message` here, OK) but `delivered_at` / `read_at` don't exist on `communication_logs`. | Stuck at Sent + silent enum errors |
+4. **`[object Object]` logs.** `captureEdgeError` does `error instanceof Error ? .message : String(error)`. `String(postgrestError)` → `[object Object]`. We lose the real error.
 
-`communication_logs` schema confirms there are **no `delivered_at` / `read_at` / `replied_at` timestamp columns** either — so even fixing the enum wouldn't give us per-stage timestamps.
+5. **send-whatsapp Meta errors.** Data-level (invalid template name / missing required param). Out of scope for this audit — leave as-is, just resolve old rows.
 
 ---
 
-# The plan
+## Plan
 
-A single, channel-agnostic delivery-lifecycle pipeline. Four parts.
+### 1. Migration — grants only (no schema change)
+```sql
+-- Frontend error capture (anon landing pages need this too)
+GRANT EXECUTE ON FUNCTION public.log_error_event(
+  text, text, text, text, text, text, uuid, uuid, text, text, text, jsonb
+) TO anon, authenticated;
 
-## 1. Schema — extend `communication_logs` and the enum (one migration)
+-- Branch list is read by BranchContext on every page load incl. anon
+GRANT SELECT ON public.branches TO authenticated;
+-- (anon: keep blocked — landing page should not fetch; see step 4)
+```
 
-- Add enum values to `reminder_delivery_status`: `delivered`, `read`, `replied`, `bounced`, `clicked` (`ALTER TYPE … ADD VALUE`).
-- Add nullable timestamp columns: `delivered_at`, `read_at`, `replied_at`, `failed_at`, `bounced_at`.
-- Keep `delivery_metadata` JSONB for provider raw payloads.
-- Backfill: no destructive change to existing rows.
+### 2. Edge function — accept system header (parity with `send-reminders`)
+In **`process-scheduled-campaigns/index.ts`** and **`run-retention-nudges/index.ts`** replace the bearer-only check with:
 
-## 2. Single helper: `record_delivery_event` RPC
+```ts
+const bearer  = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i,"").trim();
+const apikey  = req.headers.get("apikey") || "";
+const sysCall = req.headers.get("x-system-call") || "";
+const isSystem = bearer === serviceKey ||
+                 (apikey === serviceKey && sysCall === "automation-brain");
+if (!isSystem) return new Response(JSON.stringify({error:"Unauthorized"}), { status: 401, headers: ... });
+```
+Bump versions: `process-scheduled-campaigns` → v1.2.0, `run-retention-nudges` → vN+1. No business-logic change.
 
-A SECURITY DEFINER SQL function `public.record_delivery_event(p_log_id uuid, p_new_status text, p_provider text, p_provider_message_id text, p_error text, p_metadata jsonb)` that:
+### 3. Shared helper — preserve real error
+In **`supabase/functions/_shared/capture-edge-error.ts`**, change message extraction to:
 
-- Inserts a row into `communication_delivery_events` (channel / branch derived from the log).
-- Monotonically advances `communication_logs.delivery_status` (never downgrade — e.g. don't overwrite `read` with `delivered`).
-- Stamps the matching `*_at` column.
-- Merges `metadata` into `delivery_metadata`.
-- Idempotent on `(communication_log_id, new_status)` so repeated webhook pings are no-ops.
+```ts
+const message =
+  error instanceof Error ? error.message :
+  typeof error === "string" ? error :
+  (() => { try { return JSON.stringify(error); } catch { return String(error); } })();
+```
+Benefits every edge function (register-member, etc.) — no per-call changes.
 
-This becomes the **only** path the UI rail depends on.
+### 4. Frontend — stop anon landing page from hitting `branches`
+In **`src/contexts/BranchContext.tsx`**: only call `useBranches()` when `session?.user` exists (anon visitors don't need branch list). Cheaper, removes the noise, and we keep the GRANT scoped to `authenticated`.
 
-## 3. Wire the four channels into the helper
-
-### WhatsApp — `whatsapp-webhook/index.ts`
-- In `processStatusUpdates`, after looking up the log by `provider_message_id=wamid`, call `record_delivery_event` for every `sent | delivered | read | failed` callback Meta sends.
-- Keep the existing `whatsapp_messages.status` update (CRM inbox).
-
-### Email — new `email-webhook` edge function (public, no JWT)
-- Accepts Resend webhook events (`email.delivered`, `email.bounced`, `email.opened`, `email.complained`, `email.clicked`).
-- Looks up log by `provider_message_id` (the Resend id we already store) and calls `record_delivery_event`.
-- Add the webhook URL to the Resend dashboard secret/config (one-time setup note in the response).
-
-### SMS — new `sms-webhook` edge function
-- Accepts RoundSMS DLR POSTs.
-- Look up log by `provider_message_id` (= `batch_id` we already capture) and call `record_delivery_event`.
-- Update `send-sms` to set `dlr_endpoint` to point at this new function URL on send.
-
-### RCS — fix `rcs-webhook/index.ts`
-- Replace the direct `communication_logs.update({ delivery_status: 'delivered' … })` with a call to `record_delivery_event` (this also fixes the silent enum failure).
-
-## 4. UI — `DeliveryTimeline.tsx`
-
-- No structural change to the rail (already supports 5 stages).
-- Remove the "synthesize from log" fallback once events are flowing — keep it only for legacy rows older than the migration date so old chats still render reasonably.
-- Add per-channel capability hints: SMS providers that don't support read receipts collapse `Read` to a muted state with an "N/A for SMS" tooltip instead of leaving it falsely "pending".
+### 5. Cleanup — resolve stale rows
+After fixes deploy, mark the old open errors as resolved so the SystemHealth dashboard is green:
+```sql
+UPDATE error_logs SET status='resolved', resolved_at=now()
+WHERE status='open'
+  AND (function_name IN ('process-scheduled-campaigns','run-retention-nudges','register-member')
+       OR error_message LIKE 'Automation rule %failed: HTTP 401%'
+       OR error_message = '[object Object]'
+       OR error_message LIKE 'Automation rule %failed: HTTP 502%');
+```
+(send-whatsapp Meta errors left open — they're real data issues to triage separately.)
 
 ---
 
-# Out of scope (will note, not build)
+## Files touched
+- `supabase/migrations/<new>.sql` — grants only
+- `supabase/functions/process-scheduled-campaigns/index.ts`
+- `supabase/functions/run-retention-nudges/index.ts`
+- `supabase/functions/_shared/capture-edge-error.ts`
+- `src/contexts/BranchContext.tsx`
+- one-shot SQL via insert tool for cleanup
 
-- In-App notification "read" tracking already exists separately via `notification_reads` — not unified here.
-- Email "clicked" link tracking requires Resend's tracking pixel — included in mapping but does not affect the rail (only metadata).
-- Backfilling historical stuck rows: keep them as-is (UI fallback still renders); future sends start clean.
-
-# Files touched
-
-- `supabase/migrations/<new>.sql` — enum + columns + `record_delivery_event` RPC.
-- `supabase/functions/whatsapp-webhook/index.ts` — call helper in `processStatusUpdates`.
-- `supabase/functions/rcs-webhook/index.ts` — call helper instead of direct update.
-- `supabase/functions/send-sms/index.ts` — point `dlr_endpoint` at new webhook.
-- `supabase/functions/sms-webhook/index.ts` — **new**.
-- `supabase/functions/email-webhook/index.ts` — **new**.
-- `src/components/communications/DeliveryTimeline.tsx` — minor: SMS "N/A for read" + retire synthesize once events exist.
-
-Approve and I'll implement.
+## Verification
+- Tail `error_logs` 10 min after deploy — `process_scheduled_campaigns 401` should stop growing.
+- Load `/` while signed-out — no `permission denied` in Network panel.
+- Trigger a frontend error — new row appears in `error_logs` with real message (not `[object Object]`).
