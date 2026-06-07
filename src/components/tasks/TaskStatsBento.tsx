@@ -88,7 +88,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
       <div className="col-span-2 lg:col-span-3 rounded-2xl bg-card p-4 shadow-lg shadow-md ring-1 ring-border flex items-center gap-4">
         <div className="relative h-20 w-20 flex-shrink-0">
           <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90">
-            <circle cx="40" cy="40" r={r} stroke="currentColor" className="text-slate-100" strokeWidth="8" fill="none" />
+            <circle cx="40" cy="40" r={r} stroke="currentColor" className="text-muted" strokeWidth="8" fill="none" />
             <circle
               cx="40"
               cy="40"
