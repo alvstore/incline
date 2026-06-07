@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { DeliveryTimeline } from './DeliveryTimeline';
 import { KpiStrip, type KpiCounts } from './KpiStrip';
 import { formatPhoneDisplay, phoneVariants } from '@/lib/contacts/phone';
+import { parseCommError } from '@/lib/comms/metaErrorLabels';
 
 type ChannelKey = 'all' | 'whatsapp' | 'sms' | 'email' | 'in_app';
 
@@ -589,11 +590,26 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                                     channel={(log.channel || log.type || '').toLowerCase()}
                                   />
 
-                                  {log.error_message && (
-                                    <div className="mt-2 text-xs text-rose-600 dark:text-rose-400">
-                                      <strong>Error:</strong> {log.error_message}
-                                    </div>
-                                  )}
+                                  {log.error_message && (() => {
+                                    const fe = parseCommError(log.error_message);
+                                    if (!fe) return null;
+                                    return (
+                                      <div className="mt-2 rounded-md border border-rose-200/60 bg-rose-50/60 dark:border-rose-500/30 dark:bg-rose-500/10 px-2.5 py-2 text-xs">
+                                        <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-medium">
+                                          <XCircle className="h-3.5 w-3.5" />
+                                          {fe.code ? <span className="font-mono">#{fe.code}</span> : null}
+                                          <span>{fe.short}</span>
+                                        </div>
+                                        {fe.hint && (
+                                          <div className="mt-1 text-rose-700/80 dark:text-rose-300/80">{fe.hint}</div>
+                                        )}
+                                        <details className="mt-1">
+                                          <summary className="cursor-pointer text-rose-600/70 dark:text-rose-300/60 hover:text-rose-700">raw</summary>
+                                          <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-rose-700/70 dark:text-rose-300/60">{fe.raw}</pre>
+                                        </details>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
