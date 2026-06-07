@@ -10,13 +10,13 @@ interface Props {
 }
 
 const PALETTE = [
-  'bg-indigo-100 text-indigo-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-sky-100 text-sky-700',
-  'bg-fuchsia-100 text-fuchsia-700',
+  'bg-primary/15 text-primary',
+  'bg-primary/15 text-primary',
+  'bg-success/15 text-success',
+  'bg-warning/15 text-warning',
+  'bg-destructive/15 text-destructive',
+  'bg-info/15 text-info',
+  'bg-primary/15 text-primary',
 ];
 
 function colorFor(seed: string) {
@@ -36,10 +36,10 @@ function initialsOf(name?: string | null, email?: string | null) {
 export function AssigneeAvatar({ name, email, size = 'sm', className, showName }: Props) {
   if (!name && !email) {
     return (
-      <span className={cn('inline-flex items-center gap-1.5 text-xs text-slate-400', className)}>
+      <span className={cn('inline-flex items-center gap-1.5 text-xs text-muted-foreground', className)}>
         <span
           className={cn(
-            'rounded-full ring-2 ring-white bg-slate-100 text-slate-400 flex items-center justify-center font-medium',
+            'rounded-full ring-2 ring-white bg-muted text-muted-foreground flex items-center justify-center font-medium',
             size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs',
           )}
         >
@@ -60,7 +60,7 @@ export function AssigneeAvatar({ name, email, size = 'sm', className, showName }
           {initials}
         </AvatarFallback>
       </Avatar>
-      {showName && <span className="text-xs font-medium text-slate-700 truncate max-w-[110px]">{label}</span>}
+      {showName && <span className="text-xs font-medium text-foreground truncate max-w-[110px]">{label}</span>}
     </span>
   );
 }

@@ -18,15 +18,15 @@ function Lane({ lane, tasks, onOpen }: { lane: typeof LANES[number]; tasks: any[
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col rounded-2xl bg-slate-50/70 ring-1 ring-slate-200/60 p-3 min-h-[300px] transition-colors',
-        isOver && 'bg-indigo-50/60 ring-indigo-300',
+        'flex flex-col rounded-2xl bg-muted/40 ring-1 ring-border p-3 min-h-[300px] transition-colors',
+        isOver && 'bg-primary/10 ring-primary/40',
       )}
     >
       <div className="mb-3 flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span className={cn('h-2 w-2 rounded-full bg-gradient-to-r', lane.accent)} />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">{lane.label}</h3>
-          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200 tabular-nums">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">{lane.label}</h3>
+          <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground ring-1 ring-border tabular-nums">
             {tasks.length}
           </span>
         </div>
@@ -34,7 +34,7 @@ function Lane({ lane, tasks, onOpen }: { lane: typeof LANES[number]; tasks: any[
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-2 flex-1">
           {tasks.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-6 text-xs text-slate-400">
+            <div className="flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-border py-6 text-xs text-muted-foreground">
               Drop tasks here
             </div>
           ) : (
@@ -69,12 +69,12 @@ export function TaskBoard({ tasks, onOpen, onMove }: Props) {
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-2xl bg-white p-12 shadow-lg shadow-slate-200/50 text-center">
-        <div className="mx-auto h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+      <div className="rounded-2xl bg-card p-12 shadow-lg shadow-md text-center">
+        <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
           <CheckSquare className="h-6 w-6" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">No tasks match this view</h3>
-        <p className="mt-1 text-xs text-slate-500">Try a different filter, or create a new task.</p>
+        <h3 className="text-sm font-semibold text-foreground">No tasks match this view</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Try a different filter, or create a new task.</p>
       </div>
     );
   }

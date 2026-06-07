@@ -29,10 +29,10 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
             onClick={() => onChange(f.id)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150',
-              'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1',
+              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
               active
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-indigo-500/20'
-                : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-indigo-300 hover:text-indigo-700',
+                ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-md shadow-md'
+                : 'bg-card text-muted-foreground ring-1 ring-border hover:ring-primary/40 hover:text-primary',
             )}
           >
             {f.label}
@@ -40,7 +40,7 @@ export function TaskFilterPills({ value, onChange, counts }: Props) {
               <span
                 className={cn(
                   'inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums',
-                  active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600',
+                  active ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground',
                 )}
               >
                 {count}

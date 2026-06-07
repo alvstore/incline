@@ -11,7 +11,7 @@ interface Props {
 export function DueDatePill({ dueDate, completed, className }: Props) {
   if (!dueDate) {
     return (
-      <span className={cn('inline-flex items-center gap-1 text-xs text-slate-400', className)}>
+      <span className={cn('inline-flex items-center gap-1 text-xs text-muted-foreground', className)}>
         <CalendarDays className="h-3 w-3" />
         No due date
       </span>
@@ -22,12 +22,12 @@ export function DueDatePill({ dueDate, completed, className }: Props) {
   const dueSoon = !completed && !overdue && differenceInHours(d, new Date()) <= 24;
 
   const tone = completed
-    ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+    ? 'bg-success/10 text-success ring-success/30'
     : overdue
-      ? 'bg-red-50 text-red-700 ring-red-100'
+      ? 'bg-destructive/10 text-destructive ring-destructive/30'
       : dueSoon
-        ? 'bg-amber-50 text-amber-700 ring-amber-100'
-        : 'bg-slate-50 text-slate-600 ring-slate-100';
+        ? 'bg-warning/10 text-warning ring-warning/30'
+        : 'bg-muted/40 text-muted-foreground ring-border';
 
   const label = overdue
     ? `${formatDistanceToNowStrict(d)} overdue`

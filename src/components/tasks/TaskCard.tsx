@@ -28,9 +28,9 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative rounded-xl bg-white p-3.5 shadow-sm ring-1 ring-slate-200/60',
-        'transition-all duration-200 hover:shadow-md hover:shadow-indigo-500/5 hover:ring-indigo-200',
-        isDragging && 'opacity-50 ring-indigo-400 shadow-xl',
+        'group relative rounded-xl bg-card p-3.5 shadow-sm ring-1 ring-border',
+        'transition-all duration-200 hover:shadow-md hover:shadow-sm hover:ring-primary/30',
+        isDragging && 'opacity-50 ring-primary shadow-xl',
         task.status === 'completed' && 'opacity-75',
       )}
     >
@@ -38,7 +38,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
         <button
           {...attributes}
           {...listeners}
-          className="absolute right-1 top-1 p-1 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+          className="absolute right-1 top-1 p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-ring rounded"
           aria-label="Drag task"
           onClick={(e) => e.stopPropagation()}
         >
@@ -52,14 +52,14 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
           <div className="min-w-0 flex-1">
             <h4
               className={cn(
-                'text-sm font-semibold text-slate-900 leading-snug',
-                task.status === 'completed' && 'line-through text-slate-500',
+                'text-sm font-semibold text-foreground leading-snug',
+                task.status === 'completed' && 'line-through text-muted-foreground',
               )}
             >
               {task.title}
             </h4>
             {task.description && (
-              <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">{task.description}</p>
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{task.description}</p>
             )}
           </div>
         </div>
@@ -80,7 +80,7 @@ export function TaskCard({ task, onClick, draggable = true }: Props) {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {task.comments_count > 0 && (
-              <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-400">
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
                 <MessageSquare className="h-3 w-3" /> {task.comments_count}
               </span>
             )}

@@ -50,26 +50,26 @@ function inferTier(name: string | null | undefined): Tier {
 }
 
 const TIER_RIBBON: Record<Tier, string> = {
-  silver: 'bg-gradient-to-r from-slate-400 via-slate-300 to-zinc-400',
-  gold: 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500',
-  platinum: 'bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500',
-  default: 'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500',
+  silver: 'bg-gradient-to-r from-muted-foreground/60 via-muted to-muted-foreground/60',
+  gold: 'bg-gradient-to-r from-warning via-warning to-warning',
+  platinum: 'bg-gradient-to-r from-primary via-primary to-primary/90',
+  default: 'bg-gradient-to-r from-primary via-primary to-primary/80',
 };
 
 const TIER_ICON_BG: Record<Tier, string> = {
-  silver: 'bg-slate-100 text-slate-600',
-  gold: 'bg-amber-100 text-amber-700',
-  platinum: 'bg-violet-100 text-violet-700',
-  default: 'bg-indigo-100 text-indigo-700',
+  silver: 'bg-muted text-muted-foreground',
+  gold: 'bg-warning/15 text-warning',
+  platinum: 'bg-primary/15 text-primary',
+  default: 'bg-primary/15 text-primary',
 };
 
 const AVATAR_PALETTE = [
-  'bg-indigo-100 text-indigo-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-sky-100 text-sky-700',
-  'bg-rose-100 text-rose-700',
+  'bg-primary/15 text-primary',
+  'bg-primary/15 text-primary',
+  'bg-success/15 text-success',
+  'bg-warning/15 text-warning',
+  'bg-info/15 text-info',
+  'bg-destructive/15 text-destructive',
 ];
 
 function initialsOf(name: string | null | undefined): string {
@@ -160,8 +160,8 @@ export default function PTSessionsPage() {
     const sessionBased = activePackages?.filter((p: any) => p.sessions_total > 0).length || 0;
     const durationBased = activePackages?.filter((p: any) => p.sessions_total === 0).length || 0;
     return [
-      { name: 'Session-Based', value: sessionBased, color: 'hsl(238 84% 60%)' },
-      { name: 'Duration-Based', value: durationBased, color: 'hsl(258 90% 66%)' },
+      { name: 'Session-Based', value: sessionBased, color: 'hsl(var(--primary))' },
+      { name: 'Duration-Based', value: durationBased, color: 'hsl(var(--accent))' },
     ];
   }, [activePackages]);
 
@@ -230,11 +230,11 @@ export default function PTSessionsPage() {
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-indigo-700">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
               <Sparkles className="h-3.5 w-3.5" /> Coaching Studio
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Personal Training Packages</h1>
-            <p className="text-sm text-slate-500 max-w-2xl">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Personal Training Packages</h1>
+            <p className="text-sm text-muted-foreground max-w-2xl">
               Design, sell and track every 1-on-1 coaching package across your branches.
             </p>
           </div>
@@ -263,7 +263,7 @@ export default function PTSessionsPage() {
             {canManage && (
               <Button
                 onClick={() => setIsCreatePackageOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-200"
+                className="rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md hover:shadow-xl hover:shadow-lg transition-all duration-200"
               >
                 <Plus className="mr-2 h-4 w-4" /> Create Package
               </Button>
@@ -306,16 +306,16 @@ export default function PTSessionsPage() {
         {/* Analytics Row */}
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Top Performer */}
-          <Card className="rounded-2xl border-0 overflow-hidden text-white relative bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 shadow-lg shadow-indigo-500/20">
+          <Card className="rounded-2xl border-0 overflow-hidden text-white relative bg-gradient-to-br from-primary via-primary to-primary/90 shadow-lg shadow-md">
             <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-            <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-fuchsia-400/20 blur-2xl" />
+            <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-primary/20 blur-2xl" />
             <CardHeader className="pb-2 relative z-10">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/70">
                   Top Performer
                 </p>
-                <div className="rounded-full bg-amber-400/20 p-1.5 ring-1 ring-amber-300/40">
-                  <Crown className="h-4 w-4 text-amber-200" />
+                <div className="rounded-full bg-warning/20 p-1.5 ring-1 ring-warning/30">
+                  <Crown className="h-4 w-4 text-warning-foreground" />
                 </div>
               </div>
             </CardHeader>
@@ -385,10 +385,10 @@ export default function PTSessionsPage() {
           </Card>
 
           {/* Package Type Split */}
-          <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200">
+          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-slate-900">Package Type Split</CardTitle>
-              <p className="text-xs text-slate-500">How your active members are distributed.</p>
+              <CardTitle className="text-sm font-semibold text-foreground">Package Type Split</CardTitle>
+              <p className="text-xs text-muted-foreground">How your active members are distributed.</p>
             </CardHeader>
             <CardContent>
               {typeTotal > 0 ? (
@@ -411,8 +411,8 @@ export default function PTSessionsPage() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xl font-bold text-slate-900 leading-none">{typeTotal}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Active</span>
+                      <span className="text-xl font-bold text-foreground leading-none">{typeTotal}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Active</span>
                     </div>
                   </div>
                   <div className="flex-1 space-y-3 min-w-0">
@@ -423,11 +423,11 @@ export default function PTSessionsPage() {
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: d.color }} />
-                              <span className="font-medium text-slate-700 truncate">{d.name}</span>
+                              <span className="font-medium text-foreground truncate">{d.name}</span>
                             </div>
-                            <span className="font-semibold text-slate-900 tabular-nums">{d.value} · {pct}%</span>
+                            <span className="font-semibold text-foreground tabular-nums">{d.value} · {pct}%</span>
                           </div>
-                          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: d.color }} />
                           </div>
                         </div>
@@ -442,16 +442,16 @@ export default function PTSessionsPage() {
           </Card>
 
           {/* Revenue by Trainer */}
-          <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200">
+          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-2 flex flex-row items-start justify-between">
               <div>
-                <CardTitle className="text-sm font-semibold text-slate-900">Revenue by Trainer</CardTitle>
-                <p className="text-xs text-slate-500">Top earners this period.</p>
+                <CardTitle className="text-sm font-semibold text-foreground">Revenue by Trainer</CardTitle>
+                <p className="text-xs text-muted-foreground">Top earners this period.</p>
               </div>
               {totalRevenue > 0 && (
                 <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Total</p>
-                  <p className="text-sm font-bold text-slate-900">{formatINR(totalRevenue)}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</p>
+                  <p className="text-sm font-bold text-foreground">{formatINR(totalRevenue)}</p>
                 </div>
               )}
             </CardHeader>
@@ -461,12 +461,12 @@ export default function PTSessionsPage() {
                   {trainerRevenue.slice(0, 5).map((t, i) => {
                     const pct = topRevenue ? Math.max(4, (t.revenue / topRevenue) * 100) : 0;
                     const rankStyles = i === 0
-                      ? 'bg-amber-100 text-amber-700'
+                      ? 'bg-warning/15 text-warning'
                       : i === 1
-                        ? 'bg-slate-200 text-slate-700'
+                        ? 'bg-muted text-foreground'
                         : i === 2
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-slate-100 text-slate-500';
+                          ? 'bg-warning/15 text-warning'
+                          : 'bg-muted text-muted-foreground';
                     return (
                       <li key={`${t.name}-${i}`} className="flex items-center gap-3">
                         <span className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0', rankStyles)}>
@@ -477,19 +477,19 @@ export default function PTSessionsPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900 truncate">{t.name}</p>
-                            <p className="text-sm font-bold text-slate-900 tabular-nums flex-shrink-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{t.name}</p>
+                            <p className="text-sm font-bold text-foreground tabular-nums flex-shrink-0">
                               {formatINR(t.revenue)}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                               <div
-                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+                                className="h-full rounded-full bg-gradient-to-r from-primary to-primary"
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
-                            <span className="text-[10px] text-slate-500 font-medium flex-shrink-0">
+                            <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
                               {t.clients} client{t.clients === 1 ? '' : 's'}
                             </span>
                           </div>
@@ -507,21 +507,21 @@ export default function PTSessionsPage() {
 
         {/* Session Status Strip */}
         {totalSessions > 0 && (
-          <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
             <CardContent className="py-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Session Status</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Session Status</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill color="emerald" label="Completed" count={completedCount} />
                     <StatusPill color="indigo" label="Scheduled" count={scheduledCount} />
                     <StatusPill color="rose" label="Cancelled" count={cancelledCount} />
                   </div>
                 </div>
-                <div className="flex h-2 w-full md:w-72 overflow-hidden rounded-full bg-slate-100">
-                  <div className="bg-emerald-500" style={{ width: `${(completedCount / totalSessions) * 100}%` }} />
-                  <div className="bg-indigo-500" style={{ width: `${(scheduledCount / totalSessions) * 100}%` }} />
-                  <div className="bg-rose-500" style={{ width: `${(cancelledCount / totalSessions) * 100}%` }} />
+                <div className="flex h-2 w-full md:w-72 overflow-hidden rounded-full bg-muted">
+                  <div className="bg-success" style={{ width: `${(completedCount / totalSessions) * 100}%` }} />
+                  <div className="bg-primary" style={{ width: `${(scheduledCount / totalSessions) * 100}%` }} />
+                  <div className="bg-destructive" style={{ width: `${(cancelledCount / totalSessions) * 100}%` }} />
                 </div>
               </div>
             </CardContent>
@@ -529,22 +529,22 @@ export default function PTSessionsPage() {
         )}
 
         <Tabs defaultValue="packages" className="space-y-4">
-          <TabsList className="rounded-xl bg-slate-100/80 p-1">
-            <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Packages</TabsTrigger>
-            <TabsTrigger value="active" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Active Packages</TabsTrigger>
-            <TabsTrigger value="sessions" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Sessions</TabsTrigger>
+          <TabsList className="rounded-xl bg-muted p-1">
+            <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Packages</TabsTrigger>
+            <TabsTrigger value="active" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Active Packages</TabsTrigger>
+            <TabsTrigger value="sessions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Sessions</TabsTrigger>
           </TabsList>
 
           <TabsContent value="packages" className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm shadow-slate-200/50">
+            <div className="flex items-center justify-between rounded-xl bg-card px-4 py-3 shadow-sm shadow-md">
               <div className="flex items-center gap-3">
                 <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive" />
-                <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1.5 text-slate-700">
+                <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1.5 text-foreground">
                   {showInactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   Show Inactive
                 </Label>
               </div>
-              <span className="text-xs text-slate-500 hidden sm:inline">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
                 {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
               </span>
             </div>
@@ -555,31 +555,31 @@ export default function PTSessionsPage() {
             {packagesLoading ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Card key={i} className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 animate-pulse overflow-hidden">
-                    <div className="h-1.5 bg-slate-200" />
+                  <Card key={i} className="rounded-2xl border-0 bg-card shadow-lg shadow-md animate-pulse overflow-hidden">
+                    <div className="h-1.5 bg-muted" />
                     <CardHeader>
-                      <div className="h-4 bg-slate-200 rounded w-24" />
-                      <div className="h-6 bg-slate-200 rounded w-40 mt-2" />
+                      <div className="h-4 bg-muted rounded w-24" />
+                      <div className="h-6 bg-muted rounded w-40 mt-2" />
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        <div className="h-4 bg-slate-200 rounded w-full" />
-                        <div className="h-4 bg-slate-200 rounded w-3/4" />
+                        <div className="h-4 bg-muted rounded w-full" />
+                        <div className="h-4 bg-muted rounded w-3/4" />
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : filteredPackages.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
                 <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-indigo-50 flex items-center justify-center mb-4">
-                    <Package className="h-6 w-6 text-indigo-600" />
+                  <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Package className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-base font-semibold text-slate-900">
+                  <p className="text-base font-semibold text-foreground">
                     {showInactive ? "No PT packages yet" : "No active PT packages"}
                   </p>
-                  <p className="text-sm text-slate-500 mt-1 max-w-xs">
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                     {showInactive
                       ? "Create your first coaching package to get started."
                       : "Create your first package, or toggle 'Show Inactive' to see archived ones."}
@@ -587,7 +587,7 @@ export default function PTSessionsPage() {
                   {canManage && (
                     <Button
                       onClick={() => setIsCreatePackageOpen(true)}
-                      className="mt-5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20"
+                      className="mt-5 rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md"
                     >
                       <Plus className="mr-2 h-4 w-4" /> Create Package
                     </Button>
@@ -613,7 +613,7 @@ export default function PTSessionsPage() {
             <div className="flex justify-end">
               <Button
                 onClick={() => setIsScheduleOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20"
+                className="rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md"
               >
                 <Calendar className="mr-2 h-4 w-4" /> Schedule Session
               </Button>
@@ -658,25 +658,25 @@ export default function PTSessionsPage() {
             </Sheet>
 
             {activePackages?.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
                 <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
-                    <Users className="h-6 w-6 text-emerald-600" />
+                  <div className="h-14 w-14 rounded-full bg-success/10 flex items-center justify-center mb-4">
+                    <Users className="h-6 w-6 text-success" />
                   </div>
-                  <p className="text-base font-semibold text-slate-900">No active PT packages</p>
-                  <p className="text-sm text-slate-500 mt-1 max-w-xs">
+                  <p className="text-base font-semibold text-foreground">No active PT packages</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                     Once members purchase a package it will appear here for scheduling.
                   </p>
-                  <Button onClick={() => setIsScheduleOpen(true)} className="mt-5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
+                  <Button onClick={() => setIsScheduleOpen(true)} className="mt-5 rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white">
                     <Calendar className="mr-2 h-4 w-4" /> Schedule Session
                   </Button>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 overflow-hidden">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Member</TableHead>
                       <TableHead>Package</TableHead>
                       <TableHead>Trainer</TableHead>
@@ -687,17 +687,17 @@ export default function PTSessionsPage() {
                   </TableHeader>
                   <TableBody>
                     {activePackages?.map((pkg) => (
-                      <TableRow key={pkg.id} className="hover:bg-slate-50 transition-colors duration-150">
+                      <TableRow key={pkg.id} className="hover:bg-muted/50 transition-colors duration-150">
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold', avatarColor(pkg.member_name))}>
                               {initialsOf(pkg.member_name)}
                             </div>
-                            <span className="font-medium text-slate-900">{pkg.member_name}</span>
+                            <span className="font-medium text-foreground">{pkg.member_name}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-slate-700">{pkg.package_name}</TableCell>
-                        <TableCell className="text-slate-700">{pkg.trainer_name || "—"}</TableCell>
+                        <TableCell className="text-foreground">{pkg.package_name}</TableCell>
+                        <TableCell className="text-foreground">{pkg.trainer_name || "—"}</TableCell>
                         <TableCell>
                           {(() => {
                             if (pkg.sessions_total > 0) {
@@ -705,8 +705,8 @@ export default function PTSessionsPage() {
                               const pct = Math.round((used / pkg.sessions_total) * 100);
                               return (
                                 <div className="space-y-1 min-w-[130px]">
-                                  <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-amber-500' : '[&>div]:bg-emerald-500'}`} />
-                                  <p className="text-xs text-slate-500">{used}/{pkg.sessions_total} sessions</p>
+                                  <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-warning' : '[&>div]:bg-success'}`} />
+                                  <p className="text-xs text-muted-foreground">{used}/{pkg.sessions_total} sessions</p>
                                 </div>
                               );
                             }
@@ -718,14 +718,14 @@ export default function PTSessionsPage() {
                             const daysLeft = Math.max(0, differenceInDays(end, new Date()));
                             return (
                               <div className="space-y-1 min-w-[150px]">
-                                <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-amber-500' : '[&>div]:bg-emerald-500'}`} />
-                                <p className="text-xs text-slate-500">{elapsed}d / {totalDays}d · {daysLeft}d left</p>
-                                <p className="text-[10px] text-slate-400">{format(start, "MMM d")} → {format(end, "MMM d")}</p>
+                                <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-warning' : '[&>div]:bg-success'}`} />
+                                <p className="text-xs text-muted-foreground">{elapsed}d / {totalDays}d · {daysLeft}d left</p>
+                                <p className="text-[10px] text-muted-foreground">{format(start, "MMM d")} → {format(end, "MMM d")}</p>
                               </div>
                             );
                           })()}
                         </TableCell>
-                        <TableCell className="text-slate-700">{format(new Date(pkg.expiry_date), "PP")}</TableCell>
+                        <TableCell className="text-foreground">{format(new Date(pkg.expiry_date), "PP")}</TableCell>
                         <TableCell>
                           <Badge variant={pkg.status === "active" ? "default" : "secondary"} className="rounded-full">
                             {pkg.status}
@@ -741,20 +741,20 @@ export default function PTSessionsPage() {
 
           <TabsContent value="sessions" className="space-y-4">
             {sessions?.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
                 <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
-                    <Clock className="h-6 w-6 text-amber-600" />
+                  <div className="h-14 w-14 rounded-full bg-warning/10 flex items-center justify-center mb-4">
+                    <Clock className="h-6 w-6 text-warning" />
                   </div>
-                  <p className="text-base font-semibold text-slate-900">No upcoming sessions</p>
-                  <p className="text-sm text-slate-500 mt-1 max-w-xs">Sessions you schedule will appear here.</p>
+                  <p className="text-base font-semibold text-foreground">No upcoming sessions</p>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Sessions you schedule will appear here.</p>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 overflow-hidden">
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Date & Time</TableHead>
                       <TableHead>Member</TableHead>
                       <TableHead>Duration</TableHead>
@@ -764,10 +764,10 @@ export default function PTSessionsPage() {
                   </TableHeader>
                   <TableBody>
                     {sessions?.map((session) => (
-                      <TableRow key={session.id} className="hover:bg-slate-50 transition-colors duration-150">
-                        <TableCell className="font-medium text-slate-900">{format(new Date(session.scheduled_at), "PPP p")}</TableCell>
-                        <TableCell className="text-slate-700">{session.member_name}</TableCell>
-                        <TableCell className="text-slate-700">{session.duration_minutes} min</TableCell>
+                      <TableRow key={session.id} className="hover:bg-muted/50 transition-colors duration-150">
+                        <TableCell className="font-medium text-foreground">{format(new Date(session.scheduled_at), "PPP p")}</TableCell>
+                        <TableCell className="text-foreground">{session.member_name}</TableCell>
+                        <TableCell className="text-foreground">{session.duration_minutes} min</TableCell>
                         <TableCell>
                           <Badge
                             variant={session.status === "completed" ? "default" : session.status === "cancelled" ? "destructive" : "secondary"}
@@ -783,7 +783,7 @@ export default function PTSessionsPage() {
                                 size="icon"
                                 variant="ghost"
                                 aria-label="Mark session complete"
-                                className="h-9 w-9 rounded-lg hover:bg-emerald-50 text-emerald-600 cursor-pointer"
+                                className="h-9 w-9 rounded-lg hover:bg-success/10 text-success cursor-pointer"
                                 onClick={() => handleCompleteSession(session.id)}
                               >
                                 <Check className="h-4 w-4" />
@@ -792,7 +792,7 @@ export default function PTSessionsPage() {
                                 size="icon"
                                 variant="ghost"
                                 aria-label="Cancel session"
-                                className="h-9 w-9 rounded-lg hover:bg-red-50 text-red-600 cursor-pointer"
+                                className="h-9 w-9 rounded-lg hover:bg-destructive/10 text-destructive cursor-pointer"
                                 onClick={() => handleCancelSession(session.id)}
                               >
                                 <X className="h-4 w-4" />
@@ -826,13 +826,13 @@ function KpiCard({
   sub: string;
 }) {
   const tintMap = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
-    sky: 'bg-sky-50 text-sky-600',
+    indigo: 'bg-primary/10 text-primary',
+    emerald: 'bg-success/10 text-success',
+    amber: 'bg-warning/10 text-warning',
+    sky: 'bg-info/10 text-info',
   } as const;
   return (
-    <Card className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200">
+    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between">
           <div className={cn('h-10 w-10 rounded-full flex items-center justify-center', tintMap[tint])}>
@@ -840,9 +840,9 @@ function KpiCard({
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-          <p className="text-3xl font-bold text-slate-900 tabular-nums mt-1">{value}</p>
-          <p className="text-xs text-slate-500 mt-1">{sub}</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+          <p className="text-3xl font-bold text-foreground tabular-nums mt-1">{value}</p>
+          <p className="text-xs text-muted-foreground mt-1">{sub}</p>
         </div>
       </CardContent>
     </Card>
@@ -851,13 +851,13 @@ function KpiCard({
 
 function StatusPill({ color, label, count }: { color: 'emerald' | 'indigo' | 'rose'; label: string; count: number }) {
   const map = {
-    emerald: 'bg-emerald-50 text-emerald-700',
-    indigo: 'bg-indigo-50 text-indigo-700',
-    rose: 'bg-rose-50 text-rose-700',
+    emerald: 'bg-success/10 text-success',
+    indigo: 'bg-primary/10 text-primary',
+    rose: 'bg-destructive/10 text-destructive',
   } as const;
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium', map[color])}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', color === 'emerald' ? 'bg-emerald-500' : color === 'indigo' ? 'bg-indigo-500' : 'bg-rose-500')} />
+      <span className={cn('h-1.5 w-1.5 rounded-full', color === 'emerald' ? 'bg-success' : color === 'indigo' ? 'bg-primary' : 'bg-destructive')} />
       {label} <span className="font-bold tabular-nums">{count}</span>
     </span>
   );
@@ -866,11 +866,11 @@ function StatusPill({ color, label, count }: { color: 'emerald' | 'indigo' | 'ro
 function EmptyMini({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
-      <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-2">
+      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-2">
         {icon}
       </div>
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      <p className="text-xs text-slate-500 mt-0.5 max-w-[200px]">{hint}</p>
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px]">{hint}</p>
     </div>
   );
 }
@@ -936,7 +936,7 @@ function PackageCard({
   return (
     <Card
       className={cn(
-        'rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden relative group flex flex-col',
+        'rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200 overflow-hidden relative group flex flex-col',
         inactive && 'opacity-70',
       )}
     >
@@ -953,7 +953,7 @@ function PackageCard({
                 variant="ghost"
                 size="icon"
                 aria-label="Edit package"
-                className="h-8 w-8 rounded-lg hover:bg-indigo-50 text-indigo-600 cursor-pointer"
+                className="h-8 w-8 rounded-lg hover:bg-primary/10 text-primary cursor-pointer"
                 onClick={onEdit}
               >
                 <Edit className="h-4 w-4" />
@@ -962,7 +962,7 @@ function PackageCard({
                 variant="ghost"
                 size="icon"
                 aria-label={inactive ? 'Activate package' : 'Deactivate package'}
-                className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+                className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground cursor-pointer"
                 onClick={onToggle}
               >
                 {inactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -974,10 +974,10 @@ function PackageCard({
           <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', TIER_ICON_BG[tier])}>
             <Package className="h-4 w-4" />
           </div>
-          <CardTitle className="text-lg font-bold text-slate-900 leading-snug">{pkg.name}</CardTitle>
+          <CardTitle className="text-lg font-bold text-foreground leading-snug">{pkg.name}</CardTitle>
         </div>
         {inactive && (
-          <Badge className="absolute top-3 right-3 rounded-full bg-slate-200 text-slate-700 text-[10px] hover:bg-slate-200">
+          <Badge className="absolute top-3 right-3 rounded-full bg-muted text-foreground text-[10px] hover:bg-muted">
             Inactive
           </Badge>
         )}
@@ -995,39 +995,39 @@ function PackageCard({
                       <Icon className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{row.label}</p>
-                      <p className="text-sm text-slate-700 leading-snug">{row.value}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{row.label}</p>
+                      <p className="text-sm text-foreground leading-snug">{row.value}</p>
                     </div>
                   </li>
                 );
               })}
             </ul>
           ) : (
-            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
               {pkg.description}
             </p>
           )
         )}
 
         <div className="mt-auto pt-2">
-          <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl bg-slate-50/60 py-3">
+          <div className="grid grid-cols-3 divide-x divide-border rounded-xl bg-muted/40 py-3">
             <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                 {isMonthly ? 'Months' : 'Sessions'}
               </p>
-              <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">
+              <p className="text-base font-bold text-foreground mt-0.5 tabular-nums">
                 {isMonthly ? months : (pkg.total_sessions || 0)}
               </p>
             </div>
             <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Price</p>
-              <p className="text-base font-bold text-slate-900 mt-0.5 flex items-center justify-center tabular-nums">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</p>
+              <p className="text-base font-bold text-foreground mt-0.5 flex items-center justify-center tabular-nums">
                 <IndianRupee className="h-3.5 w-3.5" />{(pkg.price || 0).toLocaleString('en-IN')}
               </p>
             </div>
             <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Validity</p>
-              <p className="text-base font-bold text-slate-900 mt-0.5 tabular-nums">{pkg.validity_days || 0}d</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Validity</p>
+              <p className="text-base font-bold text-foreground mt-0.5 tabular-nums">{pkg.validity_days || 0}d</p>
             </div>
           </div>
         </div>
