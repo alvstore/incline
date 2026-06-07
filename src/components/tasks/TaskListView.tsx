@@ -21,7 +21,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
     return (
       <div className="space-y-2">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200/60">
+          <div key={i} className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
             <Skeleton className="h-2 w-2 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3 w-1/3" />
@@ -37,12 +37,12 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-2xl bg-white p-12 shadow-lg shadow-slate-200/50 text-center">
-        <div className="mx-auto h-12 w-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+      <div className="rounded-2xl bg-card p-12 shadow-lg shadow-md text-center">
+        <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
           <CheckSquare className="h-6 w-6" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">No tasks here yet</h3>
-        <p className="mt-1 text-xs text-slate-500">Adjust filters, or click "New Task" to create one.</p>
+        <h3 className="text-sm font-semibold text-foreground">No tasks here yet</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Adjust filters, or click "New Task" to create one.</p>
       </div>
     );
   }
@@ -54,8 +54,8 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
           key={task.id}
           onClick={() => onOpen(task)}
           className={cn(
-            'group flex items-center gap-3 rounded-xl bg-white p-3 sm:p-4 shadow-sm ring-1 ring-slate-200/60 cursor-pointer',
-            'transition-all duration-150 hover:shadow-md hover:shadow-indigo-500/5 hover:ring-indigo-200',
+            'group flex items-center gap-3 rounded-xl bg-card p-3 sm:p-4 shadow-sm ring-1 ring-border cursor-pointer',
+            'transition-all duration-150 hover:shadow-md hover:shadow-sm hover:ring-primary/30',
             task.status === 'completed' && 'opacity-70',
           )}
         >
@@ -63,7 +63,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className={cn('text-sm font-semibold text-slate-900 truncate', task.status === 'completed' && 'line-through text-slate-500')}>
+              <h4 className={cn('text-sm font-semibold text-foreground truncate', task.status === 'completed' && 'line-through text-muted-foreground')}>
                 {task.title}
               </h4>
               {(task.priority === 'high' || task.priority === 'urgent') && (
@@ -73,7 +73,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
               )}
             </div>
             {task.description && (
-              <p className="text-xs text-slate-500 truncate mt-0.5">{task.description}</p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>
             )}
             <div className="mt-1.5 flex items-center gap-2 sm:hidden">
               <DueDatePill dueDate={task.due_date} completed={task.status === 'completed'} />
@@ -86,7 +86,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
 
           <div onClick={(e) => e.stopPropagation()} className="hidden md:block">
             <Select value={task.assigned_to || 'unassigned'} onValueChange={(v) => onAssign(task.id, v)}>
-              <SelectTrigger className="h-8 w-40 rounded-lg border-slate-200 text-xs">
+              <SelectTrigger className="h-8 w-40 rounded-lg border-border text-xs">
                 <SelectValue placeholder="Assign…" />
               </SelectTrigger>
               <SelectContent>
@@ -107,7 +107,7 @@ export function TaskListView({ tasks, isLoading, staffUsers, onOpen, onAssign, o
             <Select value={task.status} onValueChange={(v) => onStatus(task.id, v as TaskStatus)}>
               <SelectTrigger
                 className={cn(
-                  'h-7 w-auto min-w-[110px] rounded-full border-0 text-xs font-semibold focus:ring-2 focus:ring-indigo-500',
+                  'h-7 w-auto min-w-[110px] rounded-full border-0 text-xs font-semibold focus:ring-2 focus:ring-ring',
                   STATUS_PILL[task.status],
                 )}
               >

@@ -228,7 +228,7 @@ export function EditTrainerDrawer({ open, onOpenChange, trainer }: EditTrainerDr
 
           {/* Personal Details */}
           <div className="space-y-3 p-4 border rounded-lg">
-            <div className="rounded-md bg-indigo-50 border border-indigo-200 p-2.5 text-xs text-indigo-900">
+            <div className="rounded-md bg-primary/10 border border-indigo-200 p-2.5 text-xs text-indigo-900">
               Personal details are shared with the Employee/HRM record (one master profile). Changes here update everywhere.
             </div>
             <h4 className="font-medium text-sm">Personal Details</h4>

@@ -45,11 +45,11 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
   }, [tasks]);
 
   return (
-    <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-lg shadow-slate-200/50">
+    <div className="rounded-2xl bg-card p-4 sm:p-6 shadow-lg shadow-md">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-indigo-600" />
-          <h3 className="text-base font-bold text-slate-900">{format(cursor, 'MMMM yyyy')}</h3>
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <h3 className="text-base font-bold text-foreground">{format(cursor, 'MMMM yyyy')}</h3>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => setCursor(subMonths(cursor, 1))} aria-label="Previous month">
@@ -62,7 +62,7 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-px text-xs font-semibold text-slate-500 mb-1">
+      <div className="grid grid-cols-7 gap-px text-xs font-semibold text-muted-foreground mb-1">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
           <div key={d} className="px-2 py-1 text-center uppercase tracking-wider">{d}</div>
         ))}
@@ -78,12 +78,12 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
             <div
               key={key}
               className={cn(
-                'relative min-h-[88px] rounded-lg p-1.5 ring-1 ring-slate-100',
-                inMonth ? 'bg-slate-50/50' : 'bg-white opacity-50',
-                today && 'ring-2 ring-indigo-500 bg-indigo-50/50',
+                'relative min-h-[88px] rounded-lg p-1.5 ring-1 ring-border',
+                inMonth ? 'bg-muted/30' : 'bg-card opacity-50',
+                today && 'ring-2 ring-ring bg-primary/10/50',
               )}
             >
-              <div className={cn('text-[11px] font-bold mb-1', today ? 'text-indigo-700' : 'text-slate-600')}>
+              <div className={cn('text-[11px] font-bold mb-1', today ? 'text-primary' : 'text-muted-foreground')}>
                 {format(d, 'd')}
               </div>
               <div className="space-y-1">
@@ -91,14 +91,14 @@ export function TaskCalendarView({ tasks, onOpen }: Props) {
                   <button
                     key={t.id}
                     onClick={() => onOpen(t)}
-                    className="w-full flex items-center gap-1 rounded bg-white px-1.5 py-1 text-left text-[10px] font-medium text-slate-700 ring-1 ring-slate-200 hover:ring-indigo-300 hover:bg-indigo-50/40 transition-colors"
+                    className="w-full flex items-center gap-1 rounded bg-card px-1.5 py-1 text-left text-[10px] font-medium text-foreground ring-1 ring-border hover:ring-primary/40 hover:bg-primary/10 transition-colors"
                   >
                     <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', PRIORITY_DOT[t.priority])} />
                     <span className="truncate">{t.title}</span>
                   </button>
                 ))}
                 {list.length > 3 && (
-                  <div className="text-[10px] text-slate-400 px-1">+{list.length - 3} more</div>
+                  <div className="text-[10px] text-muted-foreground px-1">+{list.length - 3} more</div>
                 )}
               </div>
             </div>

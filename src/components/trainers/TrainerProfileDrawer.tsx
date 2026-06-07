@@ -129,9 +129,9 @@ export function TrainerProfileDrawer({ open, onOpenChange, trainer, onDeactivate
             {/* Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><User className="h-5 w-5 mx-auto text-muted-foreground mb-1" /><p className="text-2xl font-bold">{generalClients.length}</p><p className="text-xs text-muted-foreground">General Clients</p></CardContent></Card>
-              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><Star className="h-5 w-5 mx-auto text-amber-500 mb-1" /><p className="text-2xl font-bold">{activePTClients}</p><p className="text-xs text-muted-foreground">PT Clients</p></CardContent></Card>
-              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><DollarSign className="h-5 w-5 mx-auto text-emerald-500 mb-1" /><p className="text-2xl font-bold">₹{revenue.thisMonth.toLocaleString()}</p><p className="text-xs text-muted-foreground">Revenue (Month)</p></CardContent></Card>
-              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><TrendingUp className="h-5 w-5 mx-auto text-sky-500 mb-1" /><p className="text-2xl font-bold">{utilization.toFixed(0)}%</p><p className="text-xs text-muted-foreground">PT Utilization</p></CardContent></Card>
+              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><Star className="h-5 w-5 mx-auto text-warning mb-1" /><p className="text-2xl font-bold">{activePTClients}</p><p className="text-xs text-muted-foreground">PT Clients</p></CardContent></Card>
+              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><DollarSign className="h-5 w-5 mx-auto text-success mb-1" /><p className="text-2xl font-bold">₹{revenue.thisMonth.toLocaleString()}</p><p className="text-xs text-muted-foreground">Revenue (Month)</p></CardContent></Card>
+              <Card className="border-border/50 rounded-xl"><CardContent className="p-3 text-center"><TrendingUp className="h-5 w-5 mx-auto text-info mb-1" /><p className="text-2xl font-bold">{utilization.toFixed(0)}%</p><p className="text-xs text-muted-foreground">PT Utilization</p></CardContent></Card>
             </div>
 
             {/* PT Capacity Bar */}
@@ -142,7 +142,7 @@ export function TrainerProfileDrawer({ open, onOpenChange, trainer, onDeactivate
                   <span className="text-sm text-muted-foreground">{activePTClients}/{maxClients}</span>
                 </div>
                 <Progress value={utilization} className="h-3" />
-                {utilization >= 80 && <p className="text-xs text-amber-500 mt-2">Near full capacity</p>}
+                {utilization >= 80 && <p className="text-xs text-warning mt-2">Near full capacity</p>}
               </CardContent>
             </Card>
 

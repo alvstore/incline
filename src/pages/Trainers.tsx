@@ -122,7 +122,7 @@ export default function TrainersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><Dumbbell className="h-6 w-6" /></div>
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary to-primary/90 text-white"><Dumbbell className="h-6 w-6" /></div>
               Trainers
             </h1>
             <p className="text-muted-foreground mt-1">
@@ -137,14 +137,14 @@ export default function TrainersPage() {
 
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-5">
-          <Card className="bg-gradient-to-br from-violet-600 to-indigo-600 text-white border-0 shadow-lg shadow-indigo-500/20 rounded-2xl overflow-hidden relative">
+          <Card className="bg-gradient-to-br from-primary to-primary/90 text-white border-0 shadow-lg shadow-md rounded-2xl overflow-hidden relative">
             <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-6 translate-x-6" />
             <CardContent className="pt-6 pb-5 relative z-10"><Dumbbell className="h-5 w-5 opacity-80 mb-2" /><div className="text-3xl font-bold">{activeTrainers}</div><p className="text-sm opacity-80 mt-0.5">Active Trainers</p></CardContent>
           </Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-primary/10"><User className="h-4 w-4 text-primary" /></div></div><div className="text-2xl font-bold text-foreground">{totalGeneralClients}</div><p className="text-sm text-muted-foreground mt-0.5">General Clients</p></CardContent></Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10"><Star className="h-4 w-4 text-amber-600" /></div></div><div className="text-2xl font-bold text-foreground">{totalPTClients}</div><p className="text-sm text-muted-foreground mt-0.5">PT Clients</p></CardContent></Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10"><DollarSign className="h-4 w-4 text-emerald-600" /></div></div><div className="text-2xl font-bold text-foreground">₹{monthlyRevenue.toLocaleString()}</div><p className="text-sm text-muted-foreground mt-0.5">Monthly Revenue</p></CardContent></Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-sky-50 dark:bg-sky-500/10"><TrendingUp className="h-4 w-4 text-sky-600" /></div></div><div className="text-2xl font-bold text-foreground">{activeTrainers > 0 ? Math.round(((totalPTClients + totalGeneralClients) / activeTrainers)) : 0}</div><p className="text-sm text-muted-foreground mt-0.5">Avg Clients/Trainer</p></CardContent></Card>
+          <Card className="bg-card border border-border/50 shadow-lg shadow-md rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-primary/10"><User className="h-4 w-4 text-primary" /></div></div><div className="text-2xl font-bold text-foreground">{totalGeneralClients}</div><p className="text-sm text-muted-foreground mt-0.5">General Clients</p></CardContent></Card>
+          <Card className="bg-card border border-border/50 shadow-lg shadow-md rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-warning/10 dark:bg-warning/10"><Star className="h-4 w-4 text-warning" /></div></div><div className="text-2xl font-bold text-foreground">{totalPTClients}</div><p className="text-sm text-muted-foreground mt-0.5">PT Clients</p></CardContent></Card>
+          <Card className="bg-card border border-border/50 shadow-lg shadow-md rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-success/10 dark:bg-success/10"><DollarSign className="h-4 w-4 text-success" /></div></div><div className="text-2xl font-bold text-foreground">₹{monthlyRevenue.toLocaleString()}</div><p className="text-sm text-muted-foreground mt-0.5">Monthly Revenue</p></CardContent></Card>
+          <Card className="bg-card border border-border/50 shadow-lg shadow-md rounded-2xl"><CardContent className="pt-6 pb-5"><div className="flex items-center gap-2 mb-2"><div className="p-1.5 rounded-lg bg-info/10 dark:bg-info/100/10"><TrendingUp className="h-4 w-4 text-info" /></div></div><div className="text-2xl font-bold text-foreground">{activeTrainers > 0 ? Math.round(((totalPTClients + totalGeneralClients) / activeTrainers)) : 0}</div><p className="text-sm text-muted-foreground mt-0.5">Avg Clients/Trainer</p></CardContent></Card>
         </div>
 
         {/* Trainer Cards */}
@@ -168,10 +168,10 @@ export default function TrainersPage() {
               const ptUtil = Math.min((ptClients / maxClients) * 100, 100);
               return (
                 <Card key={trainer.id} className={`group cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 rounded-2xl border-border/50 shadow-lg overflow-hidden ${!trainer.is_active ? "opacity-50" : ""}`} onClick={() => openTrainerProfile(trainer)}>
-                  <div className="h-1.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+                  <div className="h-1.5 bg-gradient-to-r from-primary to-primary/90" />
                   <CardContent className="p-5 space-y-4">
                     <div className="flex items-center gap-4">
-                      <Avatar className="h-14 w-14 ring-2 ring-primary/10 ring-offset-2"><AvatarImage src={trainer.profile_avatar || undefined} /><AvatarFallback className="bg-gradient-to-br from-violet-100 to-indigo-100 text-violet-700 font-bold">{(trainer.profile_name || "T").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                      <Avatar className="h-14 w-14 ring-2 ring-primary/10 ring-offset-2"><AvatarImage src={trainer.profile_avatar || undefined} /><AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-bold">{(trainer.profile_name || "T").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-base font-bold text-foreground truncate">{trainer.profile_name || "Unknown"}</h3>
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1"><Mail className="h-3 w-3 flex-shrink-0" />{trainer.profile_email}</p>
@@ -182,12 +182,12 @@ export default function TrainersPage() {
                       <div className="p-3 rounded-xl bg-muted/50 border border-border/30"><div className="flex items-center gap-1.5 mb-1"><User className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs text-muted-foreground">General</span></div><p className="text-xl font-bold text-foreground">{genClients}</p></div>
                       <div className="p-3 rounded-xl bg-primary/5 border border-primary/10"><div className="flex items-center gap-1.5 mb-1"><Star className="h-3.5 w-3.5 text-primary" /><span className="text-xs text-primary">PT Clients</span></div><p className="text-xl font-bold text-foreground">{ptClients}<span className="text-sm font-normal text-muted-foreground">/{maxClients}</span></p></div>
                     </div>
-                    <div className="space-y-1.5"><div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">PT Capacity</span><span className={`font-semibold ${ptUtil >= 80 ? 'text-destructive' : ptUtil >= 50 ? 'text-amber-500' : 'text-emerald-500'}`}>{ptUtil.toFixed(0)}%</span></div><Progress value={ptUtil} className="h-2" /></div>
+                    <div className="space-y-1.5"><div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">PT Capacity</span><span className={`font-semibold ${ptUtil >= 80 ? 'text-destructive' : ptUtil >= 50 ? 'text-warning' : 'text-success'}`}>{ptUtil.toFixed(0)}%</span></div><Progress value={ptUtil} className="h-2" /></div>
                     {trainer.profile_phone && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Phone className="h-3.5 w-3.5" /><span>{trainer.profile_phone}</span></div>}
                     {trainer.specializations?.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">{trainer.specializations.slice(0, 3).map((spec: string, idx: number) => <Badge key={idx} variant="secondary" className="text-xs rounded-full px-2.5">{spec}</Badge>)}{trainer.specializations.length > 3 && <Badge variant="outline" className="text-xs rounded-full">+{trainer.specializations.length - 3}</Badge>}</div>
                     )}
-                    {trainer.certifications?.length > 0 && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Award className="h-3.5 w-3.5 text-amber-500" /><span className="truncate">{trainer.certifications.join(", ")}</span></div>}
+                    {trainer.certifications?.length > 0 && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Award className="h-3.5 w-3.5 text-warning" /><span className="truncate">{trainer.certifications.join(", ")}</span></div>}
                     {trainer.hourly_rate && <div className="pt-2 border-t border-border/30 flex items-center justify-between"><span className="text-sm text-muted-foreground">Hourly Rate</span><span className="text-sm font-bold text-foreground">₹{trainer.hourly_rate}</span></div>}
                   </CardContent>
                 </Card>
