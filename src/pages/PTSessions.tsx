@@ -160,8 +160,8 @@ export default function PTSessionsPage() {
     const sessionBased = activePackages?.filter((p: any) => p.sessions_total > 0).length || 0;
     const durationBased = activePackages?.filter((p: any) => p.sessions_total === 0).length || 0;
     return [
-      { name: 'Session-Based', value: sessionBased, color: 'hsl(238 84% 60%)' },
-      { name: 'Duration-Based', value: durationBased, color: 'hsl(258 90% 66%)' },
+      { name: 'Session-Based', value: sessionBased, color: 'hsl(var(--primary))' },
+      { name: 'Duration-Based', value: durationBased, color: 'hsl(var(--accent))' },
     ];
   }, [activePackages]);
 
