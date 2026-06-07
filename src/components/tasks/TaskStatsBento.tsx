@@ -104,7 +104,7 @@ export function TaskStatsBento({ stats, myOpenCount, onOpenMine, onFilter }: Pro
             <defs>
               <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="hsl(var(--success))" />
-                <stop offset="100%" stopColor="hsl(var(--primary))" />)
+                <stop offset="100%" stopColor="hsl(var(--primary))" />
               </linearGradient>
             </defs>
           </svg>
