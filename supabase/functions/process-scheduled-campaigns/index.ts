@@ -1,5 +1,5 @@
-// v1.1.0 — Honors audience_kind (members | leads | staff | contacts | mixed | segment).
-//          Non-members go through resolve_campaign_audience RPC + recipients path.
+// v1.2.0 — Accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain).
+//          Honors audience_kind (members | leads | staff | contacts | mixed | segment).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
