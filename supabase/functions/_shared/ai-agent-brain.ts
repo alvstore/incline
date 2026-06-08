@@ -535,6 +535,48 @@ GENERAL RULES:
       memory?.profile?.first_name ||
       firstNameOf(memory?.profile?.full_name) ||
       "";
+
+    // v4.1.0 — extend per-field short-circuit (was only annual-step).
+    // Each captured field forces the NEXT deterministic step without an LLM
+    // call so a stalled/timed-out Gemini turn cannot drop the funnel.
+
+    // Step 1: nothing captured → ask name (plain text)
+    if (!hasName) {
+      return {
+        replyText: "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨",
+        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+      };
+    }
+
+    // Step 2: name captured, no email → ask email (plain text)
+    if (hasName && !hasEmail) {
+      return {
+        replyText: _fn
+          ? `Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
+          : "Could you share your email for your Founding Member invite? ✨",
+        leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+      };
+    }
+
+    // Step 3: name+email captured, no goal → ask goal (interactive list)
+    if (hasName && hasEmail && !hasGoal) {
+      const reply = JSON.stringify({
+        type: "interactive_list",
+        body: _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?",
+        button: "Choose goal",
+        sections: [{
+          title: "Fitness Goal",
+          rows: [
+            { id: "weight_loss", title: "Weight Loss" },
+            { id: "muscle_gain", title: "Muscle Gain" },
+            { id: "endurance", title: "Endurance" },
+            { id: "general", title: "Flexibility / General" },
+          ],
+        }],
+      });
+      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+    }
+
     if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
       const reply = JSON.stringify({
         type: "interactive_list",
