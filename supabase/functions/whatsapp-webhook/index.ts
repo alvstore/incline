@@ -722,19 +722,23 @@ async function sendAiReply(
   // losing parallel invocation would still insert a row and then mark it
   // `failed (duplicate suppressed)` — leaving a ghost in the chat history.
   const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
+  // v6.4.0 — lock key scoped per inbound so back-to-back messages from the same
+  // lead are not silently suppressed. Falls back to phone-only when no inbound
+  // context (opt-out confirmations, manual recovery sends).
+  const lockKey = inboundMessageId ? `${cleanPhone}:${inboundMessageId}` : cleanPhone;
   try {
     const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
-      _phone: cleanPhone,
+      _phone: lockKey,
       _ttl_seconds: 8,
     });
     if (gotLock === false) {
-      console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone} (no row inserted)`);
+      console.log(`[sendAiReply] skip — duplicate webhook for ${lockKey} (no row inserted)`);
       try {
         await supabase.rpc("log_error_event", {
           p_source: "whatsapp_webhook",
           p_severity: "warning",
-          p_message: `sendAiReply skipped: send-lock held for ${cleanPhone}`,
-          p_context: { branch_id: branchId, phone: cleanPhone, reason: "send_lock_held" },
+          p_message: `sendAiReply skipped: send-lock held for ${lockKey}`,
+          p_context: { branch_id: branchId, phone: cleanPhone, inbound_message_id: inboundMessageId ?? null, reason: "send_lock_held" },
         });
       } catch { /* noop */ }
       return;
@@ -922,6 +926,27 @@ async function sendAiReply(
     } catch (guardErr) {
       console.warn("repeat-question guard failed:", guardErr);
     }
+  }
+  } catch (sendErr) {
+    // v6.4.0 — outer guard: every silent failure inside sendAiReply now lands
+    // in error_logs so SystemHealth surfaces "AI generated reply but send
+    // crashed" instead of leaving the conversation looking dead.
+    const msg = (sendErr as Error)?.message?.slice(0, 400) || "unknown";
+    console.error("[sendAiReply] uncaught exception:", msg);
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_webhook",
+        p_severity: "error",
+        p_message: `sendAiReply crashed: ${msg}`,
+        p_context: {
+          branch_id: branchId,
+          phone: inboundMsg.phone_number,
+          inbound_message_id: inboundMessageId ?? null,
+          reply_sample: String(replyText || "").slice(0, 240),
+          stage: "sendAiReply",
+        },
+      });
+    } catch { /* noop */ }
   }
 }
 
