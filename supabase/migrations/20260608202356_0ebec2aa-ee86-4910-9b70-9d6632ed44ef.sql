@@ -1,0 +1,1 @@
+DELETE FROM public.automation_rules WHERE key = 'sync_ai_knowledge';
