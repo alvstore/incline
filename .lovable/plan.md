@@ -1,90 +1,71 @@
-# AI Brain / Memory / Knowledge — Audit & Hardening Plan
+# Audit & Fix — `/register` flow + DB error backlog
 
-## Audit findings (what's actually wrong today)
+## What's broken (root cause)
 
-**Knowledge base (RAG)**
-- `ai_knowledge` has only **8 manual rows** (all global, none branch-scoped). Memory note says "Catalog→brain sync TODO" — plans, PT packages, facilities, trainers, hours, FAQs are **not** in the brain. RAG retrieves at threshold 0.75 but there's nothing rich to retrieve.
-- No automatic refresh when catalogs (plans, PT, branches, hours, classes) change.
+**`/register` self-onboarding is completely broken since June 8 05:26 UTC.**
 
-**AI Brain (`_shared/ai-agent-brain.ts`, 1852 LOC)**
-- Two parallel AI entry paths: `generateOnce` (SSOT in `ai-runtime.ts`) vs direct `callAI` (used by brain). Duplicate call-log writes, drift risk.
-- Tool follow-up call has **no retry / no jitter** on transient gateway failures (429/5xx); falls straight to deterministic fallback (better than silence but a lost real reply).
-- `ai_purposes.whatsapp_reply` row has `provider_id=NULL` and `model=NULL` — purpose config is effectively unused for the most critical surface.
-- Onboarding prompt is rebuilt inline every turn (~1.5KB); duplicated logic between webhook prompt and `ai-prompt.ts`.
+`error_logs` shows 7 consecutive `23514` failures in 2 minutes from the `register-member` edge function. All identical:
 
-**Memory (`ai_memory`)**
-- Hydrated + patched correctly, but `summary` is rarely written → after ~20 turns, history trimming drops early context.
-- No TTL / compaction job.
+```
+new row for relation "members" violates check constraint "members_lifecycle_state_check"
+```
 
-**Send path** — already hardened in v6.3.0 (error_logs on every silent return). ✅
+- `register-member/index.ts:421` inserts `lifecycle_state: "pending_plan"`.
+- The CHECK constraint (migration `20260503131220`) only allows: `created · pending_verification · verified · active · onboarded · suspended · archived`.
+- Result: every self-registration auth user gets created, then the member insert fails, the edge fn deletes the orphaned auth user — user sees a 500, no member created, no signed waiver, no CRM handoff.
 
-**Lead-loss observability**
-- No SLO monitor. We only see failures when a human notices. Need a cron that flags `inbound_without_reply_within_5m`.
+`pending_plan` IS a real domain state per project memory ("Public Self-Onboarding → pending_plan CRM handoff") and the Members UI already pins/styles it (`Members.tsx:160-169`, badge `pending_plan: 'bg-warning/15…animate-pulse'`). It was simply never added to the constraint or the lifecycle state machine.
 
-**Tech check (web)** — current best practice for LLM agent reliability is: structured retries w/ jittered backoff, semantic-cache + fact-grounded RAG, periodic memory summarization, and a DLQ for unrecoverable turns (LangGraph / AI SDK patterns). Implement minimally without adding new frameworks.
+## Other findings in last 24h `error_logs`
 
----
+| Source | Count | Verdict |
+|---|---|---|
+| `edge_function` / `23514` | **7** | The bug above — fix below |
+| `ai_lead_loss` warning on `+918854869672` | 3 | Real — separate WhatsApp 24h-window issue, not this loop |
+| `frontend` Network error | 4 | Transient client offline blips, not actionable |
 
-## Plan (6 focused changes, no new frameworks)
+No other DB constraint, RLS, or trigger errors in 24h. System otherwise green.
 
-### 1. Single SSOT for AI calls
-- Migrate the brain's two `callAI` sites in `ai-agent-brain.ts` (primary + tool-follow-up) to call `generateOnce({ purpose: "whatsapp_reply", … })` from `ai-runtime.ts`.
-- Drop the manual `ai_call_logs` insert in brain — `generateOnce` already logs.
-- Wire `ai_purposes.whatsapp_reply` with explicit `provider_id` + `model` (default `google/gemini-3-flash-preview`).
+## Fix plan
 
-### 2. Retry with jittered backoff on gateway failures
-- Inside `generateOnce` (so all 13 callers benefit): on `429`, `5xx`, network errors → 2 retries with 250ms + 750ms jittered backoff before throwing.
-- On final failure, log `error_logs` (severity=error, source=`ai_gateway`) with purpose + branch + contact.
+### 1. Extend the lifecycle constraint to include `pending_plan`
+One migration that drops + re-adds `members_lifecycle_state_check` with `pending_plan` appended, and teaches `transition_member_lifecycle` that `pending_plan → active` and `pending_plan → archived` are valid moves (so reception's "assign plan" still passes the state machine).
 
-### 3. Knowledge-base catalog sync
-- New cron-driven edge fn `sync-ai-knowledge` (runs hourly + on-demand) that upserts `ai_knowledge` rows with `source='catalog'` from:
-  - `membership_plans` (active, founder phase ⇒ duration + benefits only, no prices)
-  - `pt_packages` (names only, no prices/sessions during founder phase)
-  - `branches` (name, address, hours, contact)
-  - `classes` (name, schedule overview)
-  - `facilities` (name, hours, capacity)
-  - `system_events`/FAQ from `src/lib/templates/systemEvents.ts`
-- Uses stable `source_ref` (e.g. `plan:<id>`) for idempotent upsert; existing trigger embeds.
-- Respects Founder's Phase sanitizer rules (no ₹, no PT session counts).
+```text
+allowed states (new): created · pending_verification · verified ·
+                      pending_plan · active · onboarded · suspended · archived
+```
 
-### 4. Memory summarization
-- After every 10 turns OR when history > 4KB, brain calls `generateOnce({ purpose:"context_extract", … })` to produce a 3-sentence `summary` and writes to `ai_memory.summary`.
-- Brain prepends summary to system prompt instead of full early history → context never lost.
+This is the minimal-surface fix. It preserves every existing reference (`Members.tsx`, the badge, the pin-to-top sort, the edge fn) without renaming.
 
-### 5. Lead-loss SLO monitor
-- New cron edge fn `monitor-ai-lead-loss` (every 5 min, dispatched by `automation-brain`):
-  - Finds `whatsapp_messages.direction='inbound'` in last 30 min with no outbound reply within 5 min AND `whatsapp_chat_settings.bot_active=true`.
-  - Writes `error_logs` (severity=`warning`, source=`ai_lead_loss`) per affected contact (dedup by fingerprint = phone).
-  - Triggers retry: re-invokes `triggerAiAutoReply` once with original message_id.
-- New SystemHealth tile: "AI reply SLA — last 24h" using this signal.
+### 2. Backfill: nothing to clean
+Those 7 inserts were rolled back atomically; no orphan member rows, no orphan auth users (the edge fn already deletes them on failure). Confirmed by row count check at the end of this plan.
 
-### 6. Code cleanup (no behavior change)
-- Delete the inline onboarding prompt block from brain; move into `ai-prompt.ts` (already the SSOT per memory).
-- Remove the manual log insert (step 1).
-- Mark legacy comments referencing the deleted 800-line webhook brain (already gone) as resolved.
+### 3. Surface DB constraint failures in System Health
+Add `database` + `edge_function` severity=`error` rows to the new AI Reply SLA tile area as a small "DB Integrity (24h)" card so the next constraint violation isn't only visible by querying psql. Uses existing `error_logs` table — no new tables.
 
----
+### 4. Prevent recurrence
+Add a one-line CI lint (`scripts/post-merge.sh` already exists) that greps every edge fn for `lifecycle_state:\s*['"]` and fails the build if the value isn't in the allowed-set constant. Cheap, no new tooling.
 
-## Technical details
+## Files touched
 
 | File | Change |
 |---|---|
-| `supabase/functions/_shared/ai-runtime.ts` | Add `retryOnTransient` (default true), jittered 2-retry; log final failure to `error_logs`. |
-| `supabase/functions/_shared/ai-agent-brain.ts` | Replace 2× `callAI` with `generateOnce`; drop manual `ai_call_logs` insert; extract onboarding prompt to `ai-prompt.ts`; add 10-turn summarization hook. |
-| `supabase/functions/_shared/ai-prompt.ts` | Add `buildOnboardingPrompt(memory, ctx)` returning the WA founder-phase block. |
-| `supabase/functions/sync-ai-knowledge/index.ts` | **NEW.** Catalog → `ai_knowledge` upsert with `source='catalog'`. |
-| `supabase/functions/monitor-ai-lead-loss/index.ts` | **NEW.** SLO cron + auto-retry. |
-| Migration | Seed `ai_purposes.whatsapp_reply` with `provider_id`, `model='google/gemini-3-flash-preview'`. Register both crons in `automation_rules`. |
-| `src/pages/Settings.tsx` (SystemHealth) | Add "AI Reply SLA (24h)" tile reading `error_logs` source=`ai_lead_loss`. |
+| `supabase/migrations/<new>.sql` | Drop + re-add `members_lifecycle_state_check` with `pending_plan`; update `transition_member_lifecycle` allowed transitions; `NOTIFY pgrst`. |
+| `src/components/system/DbIntegrityCard.tsx` | **NEW.** 24h roll-up of `error_logs` where source IN ('edge_function','database','trigger') AND severity='error'. |
+| `src/pages/SystemHealth.tsx` | Mount `<DbIntegrityCard />` next to `<AiReplySlaCard />`. |
+| `scripts/post-merge.sh` | Add lifecycle-state lint. |
 
 ## Verification
-- Replay Ravindra + Gaurav last inbound → confirm outbound row created within 10s, `ai_call_logs` shows single (not duplicate) row, no `error_logs.warning`.
-- Manually drop one network packet via `provider_id='invalid'` → confirm 2 retries, fallback to default provider, single `error_logs` entry.
-- After 11 turns in a test thread → confirm `ai_memory.summary` populated.
-- Run `sync-ai-knowledge` once → confirm ~30+ `source='catalog'` rows with embeddings.
-- Pause bot + send inbound → `monitor-ai-lead-loss` does NOT alert (bot disabled). Re-enable → alert fires + retry succeeds.
+
+1. Hit `/register` end-to-end with a throwaway phone → expect 200, member row with `lifecycle_state='pending_plan'`, waiver PDF in storage, lead row updated.
+2. `psql` → `SELECT lifecycle_state, count(*) FROM members GROUP BY 1` shows `pending_plan` rows present.
+3. From Members page, click "Assign Plan" on a pending_plan member → state moves to `active` without RPC error.
+4. `SELECT count(*) FROM error_logs WHERE error_message ILIKE '%members_lifecycle_state_check%' AND created_at > now() - interval '1h'` = 0.
+5. DbIntegrityCard renders "Healthy" on the System Health page.
 
 ## Out of scope
-- WhatsApp send-lock RPC (v6.2.0 correct).
-- Founder-phase sanitizer (correct).
-- Frontend redesign of Settings → AI Agent (separate request).
+
+- `ai_lead_loss` warning for `+918854869672` (separate WhatsApp 24h-window thread; will track in its own loop).
+- Re-architecting member states (the 8-state machine is fine; only one value was missing).
+
