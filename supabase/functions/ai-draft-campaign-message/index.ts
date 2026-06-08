@@ -65,6 +65,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Role gate: only staff/manager/admin/owner can draft campaign copy.
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: roles } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", u.user.id)
+      .in("role", ["owner", "admin", "manager", "staff"])
+      .limit(1);
+    if (!roles?.length) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     const body: Body = await req.json();
     if (!body.channel || !body.prompt?.trim()) {
       return new Response(JSON.stringify({ error: "channel and prompt required" }), {

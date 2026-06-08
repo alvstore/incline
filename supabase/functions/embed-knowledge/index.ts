@@ -58,9 +58,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    // Auth gate: service-role only. Called by DB trigger and server-side ai-prompt.ts.
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (!SERVICE_ROLE || bearer !== SERVICE_ROLE) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const body = await req.json().catch(() => ({}));
+
 
     // Query mode: caller wants a vector back for a one-shot user message.
     if (body?.mode === "query") {
