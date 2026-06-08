@@ -81,11 +81,11 @@ function fmtTime12(t: string | null | undefined): string | null {
 }
 
 const ROLE_TONES: Record<StaffRoleLabel, string> = {
-  Trainer: 'bg-indigo-100 text-indigo-700',
-  Manager: 'bg-violet-100 text-violet-700',
-  'Front Desk': 'bg-amber-100 text-amber-700',
-  Cleaning: 'bg-emerald-100 text-emerald-700',
-  Staff: 'bg-slate-100 text-slate-700',
+  Trainer: 'bg-primary/15 text-primary',
+  Manager: 'bg-primary/15 text-primary',
+  'Front Desk': 'bg-warning/15 text-warning',
+  Cleaning: 'bg-success/15 text-success',
+  Staff: 'bg-muted text-foreground',
 };
 
 type View = 'day' | 'week' | 'month' | 'attendance';
@@ -95,10 +95,10 @@ function ShiftPill({ start, end, tone }: { start: string | null; end: string | n
   if (!start || !end) return <span className="text-xs text-muted-foreground">—</span>;
   const overnight = end < start;
   const baseCls = overnight
-    ? 'bg-blue-100 text-blue-700'
+    ? 'bg-info/15 text-info'
     : tone === 'morning'
-      ? 'bg-emerald-100 text-emerald-700'
-      : 'bg-indigo-100 text-indigo-700';
+      ? 'bg-success/15 text-success'
+      : 'bg-primary/15 text-primary';
   const Icon = overnight ? Moon : tone === 'morning' ? Sun : Moon;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${baseCls}`}>
@@ -278,20 +278,20 @@ export default function StaffRoster() {
     <AppLayout>
       <div className="space-y-6">
         {/* Hero strip */}
-        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 p-6 text-white shadow-lg shadow-indigo-500/20">
+        <div className="rounded-2xl bg-gradient-to-r from-primary via-primary to-primary p-6 text-primary-foreground shadow-lg shadow-primary/20">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-white/70">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary-foreground/70">
                 <CalIcon className="h-3.5 w-3.5" />
                 Duty &amp; Attendance · {currentBranchName || 'No branch selected'}
               </div>
               <h1 className="mt-1 text-3xl font-bold tracking-tight">Staff Roster</h1>
-              <p className="mt-1 text-sm text-white/80">{periodLabel}</p>
+              <p className="mt-1 text-sm text-primary-foreground/80">{periodLabel}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge className="rounded-full bg-white/15 text-white hover:bg-white/20">
+                <Badge className="rounded-full bg-card/15 text-primary-foreground hover:bg-card/20">
                   {allStaff.length} staff
                 </Badge>
-                <Badge className="rounded-full bg-white/15 text-white hover:bg-white/20">
+                <Badge className="rounded-full bg-card/15 text-primary-foreground hover:bg-card/20">
                   {allStaff.filter((t) => Object.values(t.shifts).some((s) => s?.is_weekly_off)).length} with weekly-off
                 </Badge>
               </div>
@@ -301,7 +301,7 @@ export default function StaffRoster() {
                 <>
                   <div className="inline-flex rounded-md overflow-hidden">
                     <Button
-                      variant="secondary" className="bg-white text-indigo-700 hover:bg-white/90 rounded-r-none"
+                      variant="secondary" className="bg-card text-primary hover:bg-card/90 rounded-r-none"
                       onClick={() => handleExportPdf('download')} disabled={busyPdf}
                     >
                       <Download className="mr-2 h-4 w-4" />
@@ -311,7 +311,7 @@ export default function StaffRoster() {
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="secondary"
-                          className="bg-white text-indigo-700 hover:bg-white/90 rounded-l-none border-l border-indigo-100 px-2"
+                          className="bg-card text-primary hover:bg-card/90 rounded-l-none border-l border-primary/15 px-2"
                           disabled={busyPdf} aria-label="More export options"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -331,13 +331,13 @@ export default function StaffRoster() {
                     </DropdownMenu>
                   </div>
                   <Button
-                    variant="ghost" className="text-white hover:bg-white/15"
+                    variant="ghost" className="text-primary-foreground hover:bg-card/15"
                     onClick={() => handleExportPdf('print')} disabled={busyPdf}
                   >
                     <Printer className="mr-2 h-4 w-4" /> Print
                   </Button>
                   <Button
-                    variant="ghost" className="text-white hover:bg-white/15"
+                    variant="ghost" className="text-primary-foreground hover:bg-card/15"
                     onClick={() => setSendOpen(true)}
                   >
                     <Send className="mr-2 h-4 w-4" /> Send
@@ -351,15 +351,15 @@ export default function StaffRoster() {
         {/* Dynamic role + department filter chips */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Users className="h-3.5 w-3.5" /> Role
             </span>
             <button
               onClick={() => { setRoleFilter('all'); setDeptFilter(null); }}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 roleFilter === 'all'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-card text-muted-foreground border border-border hover:bg-muted'
               }`}
             >
               All <span className="opacity-70">· {allStaff.length}</span>
@@ -372,7 +372,7 @@ export default function StaffRoster() {
                   onClick={() => { setRoleFilter(role); setDeptFilter(null); }}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     active
-                      ? 'bg-indigo-600 text-white shadow-sm'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : `${ROLE_TONES[role]} hover:opacity-80`
                   }`}
                 >
@@ -383,15 +383,15 @@ export default function StaffRoster() {
           </div>
           {deptChips.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Department
               </span>
               <button
                 onClick={() => setDeptFilter(null)}
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                   deptFilter === null
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    ? 'bg-foreground text-primary-foreground'
+                    : 'bg-card text-muted-foreground border border-border hover:bg-muted'
                 }`}
               >
                 Any
@@ -404,8 +404,8 @@ export default function StaffRoster() {
                     onClick={() => setDeptFilter(active ? null : dept)}
                     className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                       active
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                        ? 'bg-foreground text-primary-foreground'
+                        : 'bg-card text-muted-foreground border border-border hover:bg-muted'
                     }`}
                   >
                     {dept} <span className="opacity-70">· {count}</span>
@@ -450,14 +450,14 @@ export default function StaffRoster() {
           {view === 'week' && (
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setWeekAnchor(addWeeks(weekAnchor, -1))}>‹ Prev</Button>
-              <span className="text-sm font-medium text-slate-700">{format(weekAnchor, 'dd MMM yyyy')}</span>
+              <span className="text-sm font-medium text-foreground">{format(weekAnchor, 'dd MMM yyyy')}</span>
               <Button size="sm" variant="outline" onClick={() => setWeekAnchor(addWeeks(weekAnchor, 1))}>Next ›</Button>
             </div>
           )}
           {view === 'month' && (
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setMonthAnchor(addMonths(monthAnchor, -1))}>‹ Prev</Button>
-              <span className="text-sm font-medium text-slate-700">{format(monthAnchor, 'MMMM yyyy')}</span>
+              <span className="text-sm font-medium text-foreground">{format(monthAnchor, 'MMMM yyyy')}</span>
               <Button size="sm" variant="outline" onClick={() => setMonthAnchor(addMonths(monthAnchor, 1))}>Next ›</Button>
             </div>
           )}
@@ -471,10 +471,10 @@ export default function StaffRoster() {
         </div>
 
         {/* Main content card */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-0 shadow-lg shadow/50">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
-              <CalIcon className="h-5 w-5 text-indigo-600" />
+              <CalIcon className="h-5 w-5 text-primary" />
               {view === 'day' && `${WEEKDAYS.find((d) => d.idx === weekday)?.full} schedule`}
               {view === 'week' && 'Weekly grid'}
               {view === 'month' && 'Monthly heatmap'}
@@ -492,15 +492,15 @@ export default function StaffRoster() {
             )}
             {isError && (
               <div className="p-8 flex flex-col items-center text-center gap-2">
-                <AlertCircle className="h-10 w-10 text-red-500" />
-                <p className="text-sm text-slate-600">Failed to load roster: {(error as any)?.message}</p>
+                <AlertCircle className="h-10 w-10 text-destructive" />
+                <p className="text-sm text-muted-foreground">Failed to load roster: {(error as any)?.message}</p>
               </div>
             )}
             {!isLoading && !isError && trainers.length === 0 && view !== 'attendance' && (
               <div className="p-12 flex flex-col items-center text-center gap-2">
-                <CalIcon className="h-10 w-10 text-slate-300" />
-                <p className="text-sm font-medium text-slate-700">No staff match this filter</p>
-                <p className="text-xs text-slate-500">Add staff from the Trainers or HRM pages, or change the role filter.</p>
+                <CalIcon className="h-10 w-10 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">No staff match this filter</p>
+                <p className="text-xs text-muted-foreground">Add staff from the Trainers or HRM pages, or change the role filter.</p>
               </div>
             )}
 
@@ -601,13 +601,13 @@ function DayView({
   return (
     <Table>
       <TableHeader>
-        <TableRow className="bg-slate-50/80">
-          <TableHead className="font-semibold text-slate-600">Staff</TableHead>
-          <TableHead className="font-semibold text-slate-600">Role</TableHead>
-          <TableHead className="font-semibold text-slate-600">Morning Shift</TableHead>
-          <TableHead className="font-semibold text-slate-600">Evening Shift</TableHead>
-          <TableHead className="font-semibold text-slate-600">Status</TableHead>
-          <TableHead className="text-right font-semibold text-slate-600">Actions</TableHead>
+        <TableRow className="bg-muted/80">
+          <TableHead className="font-semibold text-muted-foreground">Staff</TableHead>
+          <TableHead className="font-semibold text-muted-foreground">Role</TableHead>
+          <TableHead className="font-semibold text-muted-foreground">Morning Shift</TableHead>
+          <TableHead className="font-semibold text-muted-foreground">Evening Shift</TableHead>
+          <TableHead className="font-semibold text-muted-foreground">Status</TableHead>
+          <TableHead className="text-right font-semibold text-muted-foreground">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -615,19 +615,19 @@ function DayView({
           const s = t.shifts[weekday];
           const off = s?.is_weekly_off;
           return (
-            <TableRow key={t.user_id} className="hover:bg-slate-50/60 transition-colors">
+            <TableRow key={t.user_id} className="hover:bg-muted/60 transition-colors">
               <TableCell>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-9 w-9">
                     <AvatarImage src={t.avatar_url || undefined} />
-                    <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col leading-tight">
-                    <span className="font-medium text-slate-900">{t.full_name}</span>
+                    <span className="font-medium text-foreground">{t.full_name}</span>
                     {t.position && t.position !== t.role && (
-                      <span className="text-[11px] text-slate-500">{t.position}{t.department ? ` · ${t.department}` : ''}</span>
+                      <span className="text-[11px] text-muted-foreground">{t.position}{t.department ? ` · ${t.department}` : ''}</span>
                     )}
                   </div>
                 </div>
@@ -638,17 +638,17 @@ function DayView({
                 </span>
               </TableCell>
               <TableCell>
-                {off ? <span className="text-xs text-slate-400">Weekly off</span> :
+                {off ? <span className="text-xs text-muted-foreground">Weekly off</span> :
                   <ShiftPill start={s?.morning_start ?? null} end={s?.morning_end ?? null} tone="morning" />}
               </TableCell>
               <TableCell>
-                {off ? <span className="text-xs text-slate-400">—</span> :
+                {off ? <span className="text-xs text-muted-foreground">—</span> :
                   <ShiftPill start={s?.evening_start ?? null} end={s?.evening_end ?? null} tone="evening" />}
               </TableCell>
               <TableCell>
-                {off ? <Badge className="bg-blue-100 text-blue-700 rounded-full">Off</Badge>
-                  : s ? <Badge className="bg-emerald-100 text-emerald-700 rounded-full">Scheduled</Badge>
-                  : <Badge variant="outline" className="rounded-full text-slate-500">Unscheduled</Badge>}
+                {off ? <Badge className="bg-info/15 text-info rounded-full">Off</Badge>
+                  : s ? <Badge className="bg-success/15 text-success rounded-full">Scheduled</Badge>
+                  : <Badge variant="outline" className="rounded-full text-muted-foreground">Unscheduled</Badge>}
               </TableCell>
               <TableCell className="text-right">
                 <div className="inline-flex gap-1">
@@ -660,14 +660,14 @@ function DayView({
                       </Button>
                       {s?.id && (
                         <Button size="sm" variant="ghost"
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => onDelete(t.user_id, weekday)} aria-label="Delete shift">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </>
                   ) : (
-                    <span className="text-[10px] text-slate-400">View only</span>
+                    <span className="text-[10px] text-muted-foreground">View only</span>
                   )}
                 </div>
               </TableCell>
@@ -692,14 +692,14 @@ function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50/80">
+        <thead className="bg-muted/80">
           <tr>
-            <th className="sticky left-0 z-10 bg-slate-50/80 px-4 py-3 text-left font-semibold text-slate-600">Staff</th>
+            <th className="sticky left-0 z-10 bg-muted/80 px-4 py-3 text-left font-semibold text-muted-foreground">Staff</th>
             {WEEKDAYS.map((d) => (
-              <th key={d.idx} className="px-3 py-3 text-center font-semibold text-slate-600 min-w-[110px]">
+              <th key={d.idx} className="px-3 py-3 text-center font-semibold text-muted-foreground min-w-[110px]">
                 {d.short}
                 {d.idx === 0 && sundayContracted && (
-                  <span className="block text-[9px] font-normal text-amber-600 mt-0.5">contracted</span>
+                  <span className="block text-[9px] font-normal text-warning mt-0.5">contracted</span>
                 )}
               </th>
             ))}
@@ -707,19 +707,19 @@ function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow
         </thead>
         <tbody>
           {trainers.map((t) => (
-            <tr key={t.user_id} className="border-t border-slate-100 hover:bg-slate-50/50">
-              <td className="sticky left-0 z-10 bg-white px-4 py-3">
+            <tr key={t.user_id} className="border-t border-border hover:bg-muted/50">
+              <td className="sticky left-0 z-10 bg-card px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-7 w-7">
                     <AvatarImage src={t.avatar_url || undefined} />
-                    <AvatarFallback className="bg-indigo-50 text-indigo-700 text-[10px] font-semibold">
+                    <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="font-medium text-slate-900 whitespace-nowrap leading-tight">{t.full_name}</span>
+                    <span className="font-medium text-foreground whitespace-nowrap leading-tight">{t.full_name}</span>
                     {t.position && t.position !== t.role && (
-                      <span className="text-[10px] text-slate-500 leading-tight">{t.position}</span>
+                      <span className="text-[10px] text-muted-foreground leading-tight">{t.position}</span>
                     )}
                     <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium mt-0.5 ${ROLE_TONES[t.role]}`}>
                       {t.role}
@@ -734,28 +734,28 @@ function WeekView({ trainers, canEditFor, onEdit }: { trainers: TrainerRosterRow
                     <button
                       onClick={() => canEditFor(t.user_id) && onEdit({ trainer: t, weekday: d.idx })}
                       disabled={!canEditFor(t.user_id)}
-                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 enabled:hover:border-indigo-200 enabled:hover:bg-indigo-50/40 transition-colors disabled:cursor-default"
+                      className="inline-flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-1 py-1 enabled:hover:border-primary/25 enabled:hover:bg-primary/10 transition-colors disabled:cursor-default"
                     >
                       {s?.is_weekly_off ? (
-                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">OFF</span>
+                        <span className="inline-block rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-medium text-info">OFF</span>
                       ) : s ? (
                         <>
                           {s.morning_start && s.morning_end && (
-                            <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <span className="inline-block rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success">
                               {fmtTime12(s.morning_start)}–{fmtTime12(s.morning_end)}
                             </span>
                           )}
                           {s.evening_start && s.evening_end && (
-                            <span className="inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                            <span className="inline-block rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
                               {fmtTime12(s.evening_start)}–{fmtTime12(s.evening_end)}
                             </span>
                           )}
                           {!(s.morning_start || s.evening_start) && (
-                            <span className="text-xs text-slate-300">—</span>
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </>
                       ) : (
-                        <span className="text-xs text-slate-300">—</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </button>
                   </td>
@@ -798,33 +798,33 @@ function MonthView({
 
   return (
     <div className="p-4">
-      <div className="grid grid-cols-7 gap-1 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+      <div className="grid grid-cols-7 gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
           <div key={d} className="text-center py-2">{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((d, i) => {
-          if (d === null) return <div key={i} className="h-24 rounded-lg bg-slate-50/30" />;
+          if (d === null) return <div key={i} className="h-24 rounded-lg bg-muted/30" />;
           const wd = new Date(year, month, d).getDay();
           const { onDuty, off } = stats(wd);
-          const intensity = onDuty === 0 ? 'bg-slate-50' : onDuty <= 2 ? 'bg-indigo-50' : onDuty <= 4 ? 'bg-indigo-100' : 'bg-indigo-200';
+          const intensity = onDuty === 0 ? 'bg-muted' : onDuty <= 2 ? 'bg-primary/10' : onDuty <= 4 ? 'bg-primary/15' : 'bg-primary/25';
           return (
             <button
               key={i}
               onClick={() => onEditDay(wd)}
-              className={`h-24 rounded-lg ${intensity} border border-slate-100 hover:border-indigo-400 hover:shadow-md hover:shadow-indigo-500/10 transition-all p-2 text-left flex flex-col`}
+              className={`h-24 rounded-lg ${intensity} border border-border hover:border-primary hover:shadow-md hover:shadow-primary/20 transition-all p-2 text-left flex flex-col`}
             >
-              <span className="text-sm font-bold text-slate-900">{d}</span>
+              <span className="text-sm font-bold text-foreground">{d}</span>
               <div className="mt-auto space-y-0.5">
-                {onDuty > 0 && <div className="text-[10px] font-medium text-indigo-700">{onDuty} on duty</div>}
-                {off > 0 && <div className="text-[10px] font-medium text-blue-600">{off} off</div>}
+                {onDuty > 0 && <div className="text-[10px] font-medium text-primary">{onDuty} on duty</div>}
+                {off > 0 && <div className="text-[10px] font-medium text-info">{off} off</div>}
               </div>
             </button>
           );
         })}
       </div>
-      <p className="mt-3 text-xs text-slate-500 text-center">Click any day to edit that weekday&rsquo;s schedule.</p>
+      <p className="mt-3 text-xs text-muted-foreground text-center">Click any day to edit that weekday&rsquo;s schedule.</p>
     </div>
   );
 }
@@ -972,12 +972,12 @@ function AttendanceMatrix({
         <Button
           size="sm" variant={showOnlyLate ? 'default' : 'outline'}
           onClick={() => setShowOnlyLate((v) => !v)}
-          className={showOnlyLate ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+          className={showOnlyLate ? 'bg-warning hover:bg-warning text-primary-foreground' : ''}
         >
           <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
           {showOnlyLate ? 'Showing late only' : 'Show only late'}
         </Button>
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <LegendDot tone="emerald" label="On time" />
           <LegendDot tone="amber" label="Late" />
           <LegendDot tone="red" label="Absent" />
@@ -987,49 +987,49 @@ function AttendanceMatrix({
       </div>
 
       {/* Matrix */}
-      <div className="overflow-x-auto rounded-xl border border-slate-100">
+      <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 sticky top-0">
+          <thead className="bg-muted sticky top-0">
             <tr>
-              <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600 min-w-[180px]">Staff</th>
+              <th className="sticky left-0 z-10 bg-muted px-3 py-2 text-left font-semibold text-muted-foreground min-w-[180px]">Staff</th>
               {dayNums.map((d) => {
                 const wd = new Date(year, month, d).getDay();
                 const isWeekend = wd === 0 || wd === 6;
                 return (
-                  <th key={d} className={`px-1 py-2 text-center font-semibold ${isWeekend ? 'text-indigo-600' : 'text-slate-600'} min-w-[24px]`}>
+                  <th key={d} className={`px-1 py-2 text-center font-semibold ${isWeekend ? 'text-primary' : 'text-muted-foreground'} min-w-[24px]`}>
                     <div>{d}</div>
-                    <div className="text-[8px] font-normal text-slate-400">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][wd]}</div>
+                    <div className="text-[8px] font-normal text-muted-foreground">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][wd]}</div>
                   </th>
                 );
               })}
-              <th className="px-2 py-2 text-center font-semibold text-emerald-700 min-w-[44px]">P</th>
-              <th className="px-2 py-2 text-center font-semibold text-amber-700 min-w-[44px]">L</th>
-              <th className="px-2 py-2 text-center font-semibold text-red-700 min-w-[44px]">A</th>
-              <th className="px-2 py-2 text-center font-semibold text-blue-700 min-w-[44px]">O</th>
-              <th className="px-2 py-2 text-center font-semibold text-slate-700 min-w-[56px]">Hours</th>
+              <th className="px-2 py-2 text-center font-semibold text-success min-w-[44px]">P</th>
+              <th className="px-2 py-2 text-center font-semibold text-warning min-w-[44px]">L</th>
+              <th className="px-2 py-2 text-center font-semibold text-destructive min-w-[44px]">A</th>
+              <th className="px-2 py-2 text-center font-semibold text-info min-w-[44px]">O</th>
+              <th className="px-2 py-2 text-center font-semibold text-foreground min-w-[56px]">Hours</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={daysInMonth + 6} className="py-12 text-center text-slate-500">
+                <td colSpan={daysInMonth + 6} className="py-12 text-center text-muted-foreground">
                   <Clock className="mx-auto h-10 w-10 opacity-40 mb-2" />
                   No attendance to show.
                 </td>
               </tr>
             )}
             {rows.map(({ staff: s, cells, stats }) => (
-              <tr key={s.user_id} className="border-t border-slate-100 hover:bg-slate-50/40">
-                <td className="sticky left-0 z-10 bg-white px-3 py-2">
+              <tr key={s.user_id} className="border-t border-border hover:bg-muted/40">
+                <td className="sticky left-0 z-10 bg-card px-3 py-2">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
                       <AvatarImage src={s.avatar_url || undefined} />
-                      <AvatarFallback className="bg-indigo-50 text-indigo-700 text-[9px]">
+                      <AvatarFallback className="bg-primary/10 text-primary text-[9px]">
                         {s.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col leading-tight">
-                      <span className="font-medium text-slate-900 text-xs">{s.full_name}</span>
+                      <span className="font-medium text-foreground text-xs">{s.full_name}</span>
                       <span className={`inline-block w-fit rounded-full px-1.5 text-[9px] font-medium ${ROLE_TONES[s.role]}`}>
                         {s.role}
                       </span>
@@ -1039,18 +1039,18 @@ function AttendanceMatrix({
                 {cells.map((c, i) => (
                   <AttCell key={i} cell={c} day={i + 1} />
                 ))}
-                <td className="text-center font-semibold text-emerald-700">{stats.present}</td>
-                <td className="text-center font-semibold text-amber-700">{stats.late}</td>
-                <td className="text-center font-semibold text-red-700">{stats.absent}</td>
-                <td className="text-center font-semibold text-blue-700">{stats.off}</td>
-                <td className="text-center font-semibold text-slate-700">{stats.hours.toFixed(1)}h</td>
+                <td className="text-center font-semibold text-success">{stats.present}</td>
+                <td className="text-center font-semibold text-warning">{stats.late}</td>
+                <td className="text-center font-semibold text-destructive">{stats.absent}</td>
+                <td className="text-center font-semibold text-info">{stats.off}</td>
+                <td className="text-center font-semibold text-foreground">{stats.hours.toFixed(1)}h</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <p className="text-[11px] text-slate-500">
+      <p className="text-[11px] text-muted-foreground">
         Late = check-in more than {GRACE_MINUTES} min after scheduled start. Absent = scheduled day with no check-in.
       </p>
     </div>
@@ -1059,12 +1059,12 @@ function AttendanceMatrix({
 
 function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: number }) {
   const tone = {
-    ontime: 'bg-emerald-100 text-emerald-700',
-    late: 'bg-amber-100 text-amber-700',
-    absent: 'bg-red-100 text-red-700',
-    off: 'bg-blue-100 text-blue-700',
-    unscheduled: 'text-slate-300',
-    future: 'text-slate-200',
+    ontime: 'bg-success/15 text-success',
+    late: 'bg-warning/15 text-warning',
+    absent: 'bg-destructive/15 text-destructive',
+    off: 'bg-info/15 text-info',
+    unscheduled: 'text-muted-foreground',
+    future: 'text-muted-foreground',
   }[cell.kind as AttCellKind];
 
   const symbol = {
@@ -1098,25 +1098,25 @@ function AttCell({ cell, day }: { cell: ReturnType<typeof Object> & any; day: nu
 
 function KpiCard({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: 'indigo' | 'emerald' | 'amber' | 'red' }) {
   const toneCls = {
-    indigo: 'bg-indigo-50 text-indigo-700',
-    emerald: 'bg-emerald-50 text-emerald-700',
-    amber: 'bg-amber-50 text-amber-700',
-    red: 'bg-red-50 text-red-700',
+    indigo: 'bg-primary/10 text-primary',
+    emerald: 'bg-success/10 text-success',
+    amber: 'bg-warning/10 text-warning',
+    red: 'bg-destructive/10 text-destructive',
   }[tone];
   return (
-    <div className="rounded-xl bg-white border border-slate-100 shadow-sm p-3">
+    <div className="rounded-xl bg-card border border-border shadow-sm p-3">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</span>
         <span className={`p-1.5 rounded-full ${toneCls}`}>{icon}</span>
       </div>
-      <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+      <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
     </div>
   );
 }
 
 function LegendDot({ tone, label }: { tone: 'emerald' | 'amber' | 'red' | 'blue' | 'slate'; label: string }) {
   const cls = {
-    emerald: 'bg-emerald-400', amber: 'bg-amber-400', red: 'bg-red-400', blue: 'bg-blue-400', slate: 'bg-slate-300',
+    emerald: 'bg-success', amber: 'bg-warning', red: 'bg-destructive', blue: 'bg-info', slate: 'bg-muted',
   }[tone];
   return (
     <span className="inline-flex items-center gap-1">
@@ -1243,10 +1243,10 @@ function ShiftEditSheet({
 
         <div className="py-6 space-y-6">
           {/* Apply to days */}
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 space-y-3">
+          <div className="rounded-xl border border-primary/15 bg-primary/10 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <CalIcon className="h-4 w-4 text-indigo-600" />
-              <span className="font-semibold text-sm text-indigo-900">Apply this shift to</span>
+              <CalIcon className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm text-primary">Apply this shift to</span>
               <Badge variant="outline" className="ml-auto text-[10px] rounded-full">{previewCount} day{previewCount === 1 ? '' : 's'}</Badge>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1257,7 +1257,7 @@ function ShiftEditSheet({
                 ['custom', 'Custom days…'],
               ] as [ApplyMode, string][]).map(([k, label]) => (
                 <label key={k} className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer ${
-                  applyMode === k ? 'border-indigo-400 bg-white' : 'border-slate-200 bg-white/60'
+                  applyMode === k ? 'border-primary bg-card' : 'border-border bg-card/60'
                 }`}>
                   <input
                     type="radio" name="apply-mode" value={k}
@@ -1281,7 +1281,7 @@ function ShiftEditSheet({
                         setCustomDays(next);
                       }}
                       className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        sel ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
+                        sel ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-muted-foreground'
                       }`}
                     >
                       {d.short}
@@ -1291,20 +1291,20 @@ function ShiftEditSheet({
               </div>
             )}
             {applyMode !== 'this' && !off && (
-              <div className="flex items-start gap-2 text-xs text-slate-600">
+              <div className="flex items-start gap-2 text-xs text-muted-foreground">
                 <input
                   id="ow" type="checkbox" className="mt-0.5"
                   checked={overwriteOff} onChange={(e) => setOverwriteOff(e.target.checked)}
                 />
                 <label htmlFor="ow">
-                  Overwrite existing weekly-off days. <span className="text-slate-400">(Off by default — weekly-off rows are preserved.)</span>
+                  Overwrite existing weekly-off days. <span className="text-muted-foreground">(Off by default — weekly-off rows are preserved.)</span>
                 </label>
               </div>
             )}
           </div>
 
           {isSunday && !off && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 flex items-start gap-2">
+            <div className="rounded-lg bg-warning/10 border border-warning/25 text-warning text-xs px-3 py-2 flex items-start gap-2">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <div>
                 Sunday is a contractual working day for some staff. You can assign a normal shift here.
@@ -1319,25 +1319,25 @@ function ShiftEditSheet({
             </div>
           )}
 
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 px-4">
+          <div className="flex items-center justify-between rounded-xl bg-muted p-3 px-4">
             <div>
               <Label htmlFor="off-toggle" className="font-medium">Weekly off</Label>
-              <p className="text-xs text-slate-500">Marks this day as a rest day. Only one weekly-off allowed per staff member.</p>
+              <p className="text-xs text-muted-foreground">Marks this day as a rest day. Only one weekly-off allowed per staff member.</p>
             </div>
             <Switch id="off-toggle" checked={off} onCheckedChange={setOff} />
           </div>
 
           {otherOffDay && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2">
+            <div className="rounded-lg bg-warning/10 border border-warning/25 text-warning text-xs px-3 py-2">
               ⚠ {edit.trainer.full_name} already has a weekly-off on <b>{otherOffDay}</b>. Saving will fail unless you clear the existing off-day first.
             </div>
           )}
 
           <fieldset disabled={off} className="space-y-4 disabled:opacity-50">
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4 space-y-3">
+            <div className="rounded-xl border border-success/15 bg-success/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Sun className="h-4 w-4 text-emerald-600" />
-                <span className="font-semibold text-sm text-emerald-900">Morning block</span>
+                <Sun className="h-4 w-4 text-success" />
+                <span className="font-semibold text-sm text-success">Morning block</span>
                 {(morningStart || morningEnd) && (
                   <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs"
                     onClick={() => { setMorningStart(''); setMorningEnd(''); }}>Clear</Button>
@@ -1347,23 +1347,23 @@ function ShiftEditSheet({
                 <div>
                   <Label htmlFor="ms" className="text-xs">Start</Label>
                   <Input id="ms" type="time" value={morningStart} onChange={(e) => setMorningStart(e.target.value)} />
-                  {morningStart && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(morningStart)}</p>}
+                  {morningStart && <p className="text-[10px] text-muted-foreground mt-1">{fmtTime12(morningStart)}</p>}
                 </div>
                 <div>
                   <Label htmlFor="me" className="text-xs">End</Label>
                   <Input id="me" type="time" value={morningEnd} onChange={(e) => setMorningEnd(e.target.value)} />
-                  {morningEnd && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(morningEnd)}</p>}
+                  {morningEnd && <p className="text-[10px] text-muted-foreground mt-1">{fmtTime12(morningEnd)}</p>}
                 </div>
               </div>
               {morningStart && morningEnd && morningEnd < morningStart && (
-                <p className="text-xs text-blue-700">Overnight shift detected (ends next day).</p>
+                <p className="text-xs text-info">Overnight shift detected (ends next day).</p>
               )}
             </div>
 
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 space-y-3">
+            <div className="rounded-xl border border-primary/15 bg-primary/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Moon className="h-4 w-4 text-indigo-600" />
-                <span className="font-semibold text-sm text-indigo-900">Evening block</span>
+                <Moon className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm text-primary">Evening block</span>
                 {(eveningStart || eveningEnd) && (
                   <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs"
                     onClick={() => { setEveningStart(''); setEveningEnd(''); }}>Clear</Button>
@@ -1373,18 +1373,18 @@ function ShiftEditSheet({
                 <div>
                   <Label htmlFor="es" className="text-xs">Start</Label>
                   <Input id="es" type="time" value={eveningStart} onChange={(e) => setEveningStart(e.target.value)} />
-                  {eveningStart && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(eveningStart)}</p>}
+                  {eveningStart && <p className="text-[10px] text-muted-foreground mt-1">{fmtTime12(eveningStart)}</p>}
                 </div>
                 <div>
                   <Label htmlFor="ee" className="text-xs">End</Label>
                   <Input id="ee" type="time" value={eveningEnd} onChange={(e) => setEveningEnd(e.target.value)} />
-                  {eveningEnd && <p className="text-[10px] text-slate-500 mt-1">{fmtTime12(eveningEnd)}</p>}
+                  {eveningEnd && <p className="text-[10px] text-muted-foreground mt-1">{fmtTime12(eveningEnd)}</p>}
                 </div>
               </div>
             </div>
           </fieldset>
 
-          {error && <div className="rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2">{error}</div>}
+          {error && <div className="rounded-lg bg-destructive/10 text-destructive text-sm px-3 py-2">{error}</div>}
         </div>
 
         <SheetFooter className="gap-2">
@@ -1478,7 +1478,7 @@ function RosterSendDrawer({
         </SheetHeader>
         <div className="py-6 space-y-4">
           <div>
-            <Label className="text-xs uppercase tracking-wider text-slate-500">Channel</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channel</Label>
             <Tabs value={channel} onValueChange={(v) => setChannel(v as 'whatsapp' | 'email')} className="mt-2">
               <TabsList className="w-full">
                 <TabsTrigger value="whatsapp" className="flex-1">WhatsApp</TabsTrigger>
@@ -1487,7 +1487,7 @@ function RosterSendDrawer({
             </Tabs>
           </div>
           <div>
-            <Label htmlFor="rcp" className="text-xs uppercase tracking-wider text-slate-500">
+            <Label htmlFor="rcp" className="text-xs uppercase tracking-wider text-muted-foreground">
               {channel === 'whatsapp' ? 'WhatsApp number (+91…)' : 'Email address'}
             </Label>
             <Input
@@ -1496,7 +1496,7 @@ function RosterSendDrawer({
               value={recipient} onChange={(e) => setRecipient(e.target.value)}
             />
           </div>
-          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+          <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
             A branded weekly roster PDF will be generated and sent as an attachment.
           </div>
         </div>
@@ -1533,7 +1533,7 @@ function SundayDatePicker({
       <Button
         size="icon" variant="ghost"
         onClick={() => onChange(prevSunday(date))}
-        className="h-8 w-8 text-slate-500 hover:text-amber-600"
+        className="h-8 w-8 text-muted-foreground hover:text-warning"
         aria-label="Previous Sunday"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -1543,12 +1543,12 @@ function SundayDatePicker({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 rounded-full border-amber-200 bg-white text-xs font-semibold text-slate-800 hover:border-amber-400 hover:bg-amber-50"
+            className="h-8 gap-1.5 rounded-full border-warning/25 bg-card text-xs font-semibold text-foreground hover:border-warning hover:bg-warning/10"
           >
-            <CalendarDays className="h-3.5 w-3.5 text-amber-600" />
+            <CalendarDays className="h-3.5 w-3.5 text-warning" />
             {format(date, 'EEE, dd MMM yyyy')}
             {isUpcoming && (
-              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+              <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-warning">
                 Next
               </span>
             )}
@@ -1568,7 +1568,7 @@ function SundayDatePicker({
       <Button
         size="icon" variant="ghost"
         onClick={() => onChange(nextSundayFrom(date))}
-        className="h-8 w-8 text-slate-500 hover:text-amber-600"
+        className="h-8 w-8 text-muted-foreground hover:text-warning"
         aria-label="Next Sunday"
       >
         <ChevronRight className="h-4 w-4" />
@@ -1590,11 +1590,11 @@ function SundayDutyCard({
   onAssign: () => void;
 }) {
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-amber-100/40 bg-gradient-to-br from-amber-50/60 via-white to-white">
+    <Card className="rounded-2xl border-0 shadow-lg shadow-warning/20 bg-gradient-to-br from-warning/10 via-white to-white">
       <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Sun className="h-5 w-5 text-amber-500" />
+            <Sun className="h-5 w-5 text-warning" />
             Sunday Duty
           </CardTitle>
           <Badge variant="outline" className="rounded-full text-[10px]">
@@ -1606,7 +1606,7 @@ function SundayDutyCard({
           <Button
             size="sm"
             onClick={onAssign}
-            className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+            className="bg-warning hover:bg-warning text-primary-foreground shadow-sm"
             disabled={allStaffCount === 0}
           >
             + Assign Sunday
@@ -1615,7 +1615,7 @@ function SundayDutyCard({
       </CardHeader>
       <CardContent className="pt-0">
         {entries.length === 0 ? (
-          <p className="text-xs text-slate-500 py-2">
+          <p className="text-xs text-muted-foreground py-2">
             No one assigned for <b>{format(sundayDate, 'EEE, dd MMM')}</b>. Most staff have Sunday as their weekly off — tap <b>Assign Sunday</b> to add duty for this Sunday or every Sunday.
           </p>
         ) : (
@@ -1624,8 +1624,8 @@ function SundayDutyCard({
               const t = e.staff;
               const editable = canEditFor(t.user_id);
               const commonClass = cn(
-                'group flex items-center gap-2 rounded-full bg-white border border-amber-200 pl-1 pr-3 py-1 transition-all',
-                editable ? 'hover:border-amber-400 hover:shadow-sm cursor-pointer' : 'cursor-default opacity-90',
+                'group flex items-center gap-2 rounded-full bg-card border border-warning/25 pl-1 pr-3 py-1 transition-all',
+                editable ? 'hover:border-warning hover:shadow-sm cursor-pointer' : 'cursor-default opacity-90',
               );
               const titleText = editable
                 ? (e.source === 'override' ? `One-off for ${format(sundayDate, 'dd MMM')} · tap to edit` : 'Recurring every Sunday · tap to edit')
@@ -1634,20 +1634,20 @@ function SundayDutyCard({
                 <>
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={t.avatar_url || undefined} />
-                    <AvatarFallback className="bg-amber-100 text-amber-700 text-[10px] font-semibold">
+                    <AvatarFallback className="bg-warning/15 text-warning text-[10px] font-semibold">
                       {t.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-xs font-medium text-slate-900">{t.full_name}</span>
+                  <span className="text-xs font-medium text-foreground">{t.full_name}</span>
                   <span className={cn(
                     'rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
                     e.source === 'override'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-slate-100 text-slate-600',
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-muted text-muted-foreground',
                   )}>
                     {e.source === 'override' ? 'One-off' : 'Recurring'}
                   </span>
-                  <span className="text-[10px] text-amber-700 font-medium">
+                  <span className="text-[10px] text-warning font-medium">
                     {e.morning_start && fmtTime12(e.morning_start)}
                     {e.morning_start && e.morning_end && '–'}
                     {e.morning_end && fmtTime12(e.morning_end)}
@@ -1780,7 +1780,7 @@ function SundayAssignSheet({
       <SheetContent className="sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Sun className="h-5 w-5 text-amber-500" /> Assign Sunday Duty
+            <Sun className="h-5 w-5 text-warning" /> Assign Sunday Duty
           </SheetTitle>
           <SheetDescription>
             Assigning duty for <b>{dateLabel}</b>{isUpcoming ? ' (next Sunday)' : ''}. Choose whether this applies just to this Sunday or repeats every Sunday going forward. Times default to 6 AM – 12 PM and are editable per person.
@@ -1789,8 +1789,8 @@ function SundayAssignSheet({
 
         <div className="py-4 space-y-4">
           {/* Date picker row */}
-          <div className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-amber-50/40 p-3">
-            <Label className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+          <div className="flex flex-col gap-2 rounded-xl border border-warning/15 bg-warning/10 p-3">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-warning">
               Sunday date
             </Label>
             <SundayDatePicker date={sundayDate} onChange={onChangeSundayDate} />
@@ -1798,7 +1798,7 @@ function SundayAssignSheet({
 
           {/* Scope toggle */}
           <div className="space-y-2">
-            <Label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Apply to
             </Label>
             <div className="grid grid-cols-2 gap-2">
@@ -1808,14 +1808,14 @@ function SundayAssignSheet({
                 className={cn(
                   'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
                   scope === 'one_off'
-                    ? 'border-amber-400 bg-amber-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300',
+                    ? 'border-warning bg-warning/10 shadow-sm'
+                    : 'border-border bg-card hover:border-border',
                 )}
               >
-                <CalendarDays className={cn('h-4 w-4 mt-0.5', scope === 'one_off' ? 'text-amber-600' : 'text-slate-400')} />
+                <CalendarDays className={cn('h-4 w-4 mt-0.5', scope === 'one_off' ? 'text-warning' : 'text-muted-foreground')} />
                 <div>
-                  <div className="text-xs font-semibold text-slate-900">Just this Sunday</div>
-                  <div className="text-[10px] text-slate-500 leading-tight">One-off for {format(sundayDate, 'dd MMM')}. Their weekly schedule stays unchanged.</div>
+                  <div className="text-xs font-semibold text-foreground">Just this Sunday</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">One-off for {format(sundayDate, 'dd MMM')}. Their weekly schedule stays unchanged.</div>
                 </div>
               </button>
               <button
@@ -1824,14 +1824,14 @@ function SundayAssignSheet({
                 className={cn(
                   'flex items-start gap-2 rounded-xl border p-3 text-left transition-all',
                   scope === 'recurring'
-                    ? 'border-indigo-400 bg-indigo-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300',
+                    ? 'border-primary bg-primary/10 shadow-sm'
+                    : 'border-border bg-card hover:border-border',
                 )}
               >
-                <Repeat className={cn('h-4 w-4 mt-0.5', scope === 'recurring' ? 'text-indigo-600' : 'text-slate-400')} />
+                <Repeat className={cn('h-4 w-4 mt-0.5', scope === 'recurring' ? 'text-primary' : 'text-muted-foreground')} />
                 <div>
-                  <div className="text-xs font-semibold text-slate-900">Every Sunday going forward</div>
-                  <div className="text-[10px] text-slate-500 leading-tight">Overrides their weekly off permanently until changed.</div>
+                  <div className="text-xs font-semibold text-foreground">Every Sunday going forward</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">Overrides their weekly off permanently until changed.</div>
                 </div>
               </button>
             </div>
@@ -1843,9 +1843,9 @@ function SundayAssignSheet({
             onChange={(e) => setSearch(e.target.value)}
             className="h-9"
           />
-          <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+          <div className="rounded-xl border border-border divide-y divide-border max-h-[360px] overflow-y-auto">
             {filtered.length === 0 && (
-              <p className="p-6 text-center text-sm text-slate-500">No matching staff.</p>
+              <p className="p-6 text-center text-sm text-muted-foreground">No matching staff.</p>
             )}
             {filtered.map((c) => {
               const pick = picks[c.user_id];
@@ -1853,36 +1853,36 @@ function SundayAssignSheet({
               const wasInitial = initialUserIds.has(c.user_id);
               const rowEditable = canEditFor(c.user_id);
               return (
-                <div key={c.user_id} className={cn('p-3', isOn ? 'bg-amber-50/50' : 'bg-white', !rowEditable && 'opacity-60')}>
+                <div key={c.user_id} className={cn('p-3', isOn ? 'bg-warning/10' : 'bg-card', !rowEditable && 'opacity-60')}>
                   <label className={cn('flex items-center gap-3', rowEditable ? 'cursor-pointer' : 'cursor-not-allowed')}>
                     <input
                       type="checkbox"
                       checked={isOn}
                       disabled={!rowEditable}
                       onChange={() => rowEditable && toggle(c.user_id)}
-                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 disabled:opacity-50"
+                      className="h-4 w-4 rounded border-border text-warning focus:ring-warning disabled:opacity-50"
                     />
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={c.avatar_url || undefined} />
-                      <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                         {c.full_name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5 flex-wrap">
+                      <div className="text-sm font-medium text-foreground truncate flex items-center gap-1.5 flex-wrap">
                         {c.full_name}
                         {!rowEditable && (
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600">
+                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                             You — ask another manager or owner
                           </span>
                         )}
                         {wasInitial && !isOn && rowEditable && (
-                          <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-600">
+                          <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-destructive">
                             Will be removed
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate">
+                      <div className="text-[11px] text-muted-foreground truncate">
                         {c.position || c.role}{c.department ? ` · ${c.department}` : ''}
                       </div>
                     </div>
@@ -1894,22 +1894,22 @@ function SundayAssignSheet({
                   {isOn && (
                     <div className="mt-3 ml-7 grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-success flex items-center gap-1">
                           <Sun className="h-3 w-3" /> Morning
                         </Label>
                         <div className="flex items-center gap-1">
                           <Input type="time" disabled={!rowEditable} value={pick.morning_start} onChange={(e) => updateField(c.user_id, 'morning_start', e.target.value)} className="h-8 text-xs" />
-                          <span className="text-slate-400 text-xs">→</span>
+                          <span className="text-muted-foreground text-xs">→</span>
                           <Input type="time" disabled={!rowEditable} value={pick.morning_end} onChange={(e) => updateField(c.user_id, 'morning_end', e.target.value)} className="h-8 text-xs" />
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-indigo-700 flex items-center gap-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-primary flex items-center gap-1">
                           <Moon className="h-3 w-3" /> Evening
                         </Label>
                         <div className="flex items-center gap-1">
                           <Input type="time" disabled={!rowEditable} value={pick.evening_start} onChange={(e) => updateField(c.user_id, 'evening_start', e.target.value)} className="h-8 text-xs" />
-                          <span className="text-slate-400 text-xs">→</span>
+                          <span className="text-muted-foreground text-xs">→</span>
                           <Input type="time" disabled={!rowEditable} value={pick.evening_end} onChange={(e) => updateField(c.user_id, 'evening_end', e.target.value)} className="h-8 text-xs" />
                         </div>
                       </div>
@@ -1927,8 +1927,8 @@ function SundayAssignSheet({
             onClick={handleConfirm}
             disabled={!hasChanges || saving}
             className={cn(
-              'text-white',
-              scope === 'recurring' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-500 hover:bg-amber-600',
+              'text-primary-foreground',
+              scope === 'recurring' ? 'bg-primary hover:bg-primary' : 'bg-warning hover:bg-warning',
             )}
           >
             {saving

@@ -63,12 +63,12 @@ type AppRole = Database['public']['Enums']['app_role'];
 const ROLE_OPTIONS: AppRole[] = ['owner', 'admin', 'manager', 'staff', 'trainer', 'member'];
 
 const ROLE_COLORS: Record<AppRole, string> = {
-  owner: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  admin: 'bg-red-500/10 text-red-500 border-red-500/20',
-  manager: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  staff: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  trainer: 'bg-green-500/10 text-green-500 border-green-500/20',
-  member: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+  owner: 'bg-primary/10 text-primary border-primary/20',
+  admin: 'bg-destructive/10 text-destructive border-destructive/20',
+  manager: 'bg-warning/10 text-warning border-warning/20',
+  staff: 'bg-info/10 text-info border-info/20',
+  trainer: 'bg-success/10 text-success border-success/20',
+  member: 'bg-muted-foreground/10 text-muted-foreground border-border/20',
 };
 
 const TAB_FILTERS: Record<string, AppRole | null> = {
@@ -223,14 +223,14 @@ export default function AdminRoles() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-6 text-primary-foreground shadow-lg">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/10">
+            <div className="p-2 rounded-xl bg-card/10">
               <Shield className="h-6 w-6" />
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">User Roles Management</h1>
-              <p className="text-white/70 text-sm">Manage access, assign roles, and control permissions</p>
+              <p className="text-primary-foreground/70 text-sm">Manage access, assign roles, and control permissions</p>
             </div>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function AdminRoles() {
         </div>
 
         {/* Search + Tabs */}
-        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-xl shadow-lg shadow/50">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="relative flex-1">
@@ -394,7 +394,7 @@ export default function AdminRoles() {
                   </SelectContent>
                 </Select>
                 {newRole && ['owner', 'admin'].includes(newRole) && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <p className="text-xs text-warning flex items-center gap-1">
                     <AlertCircle className="h-3 w-3" /> Owner/Admin assignments require approval unless you are owner.
                   </p>
                 )}
@@ -433,7 +433,7 @@ export default function AdminRoles() {
                 </div>
               )}
               {pendingRequests.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
                   <strong>{pendingRequests.length} pending</strong> role change request(s) awaiting owner approval.
                 </div>
               )}
