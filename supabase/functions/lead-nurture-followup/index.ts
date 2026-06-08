@@ -213,11 +213,15 @@ serve(async (req) => {
       .maybeSingle();
 
     const ops = ((purposeRow?.ops_config as Record<string, any>) ?? {});
-    const scheduleMinutes: number[] = Array.isArray(ops.schedule_minutes) && ops.schedule_minutes.length
-      ? ops.schedule_minutes.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0)
-      : [120, 360, 1200]; // default: +2h, +6h, +20h
-    const maxRetries: number = Number(ops.max_retries) > 0 ? Number(ops.max_retries) : scheduleMinutes.length;
-    const windowHours: number = Number(ops.window_hours) > 0 ? Number(ops.window_hours) : 24;
+    // UI-driven cadence (HandleOpsSettings → ai_purposes.ops_config):
+    //   delay_hours    — wait before the first nudge (retryCount === 0)
+    //   cooldown_hours — wait between subsequent nudges (retryCount >= 1)
+    //   max_retries    — total nudges per lead
+    const delayHours: number = Number(ops.delay_hours) > 0 ? Number(ops.delay_hours) : 2;
+    const cooldownHours: number = Number(ops.cooldown_hours) > 0 ? Number(ops.cooldown_hours) : 6;
+    const maxRetries: number = Number(ops.max_retries) > 0 ? Number(ops.max_retries) : 3;
+    // WhatsApp 24h freeform window is a protocol constant — not user-tunable.
+    const WHATSAPP_FREEFORM_WINDOW_HOURS = 24;
     const config = {
       enabled: ops.enabled ?? purposeRow?.enabled ?? true,
     };
@@ -227,8 +231,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const _earliestWaitMs = Math.min(...scheduleMinutes) * 60 * 1000; // kept for log/diag
 
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
