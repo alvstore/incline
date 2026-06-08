@@ -162,7 +162,7 @@ export default function ClassesPage() {
       }
       return { label: "Today", variant: "outline" as const, color: "bg-success/10 text-success border-success/30" };
     }
-    return { label: "Upcoming", variant: "outline" as const, color: "bg-blue-500/10 text-blue-600 border-blue-500/30" };
+    return { label: "Upcoming", variant: "outline" as const, color: "bg-info/10 text-info border-info/30" };
   };
 
   // Get capacity percentage

@@ -7,18 +7,18 @@ import type { LeadFilters as LeadFiltersType } from '@/services/leadService';
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'negotiation', 'converted', 'lost'] as const;
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  new: { color: 'bg-sky-500/10 text-sky-600 border-sky-200', label: 'New' },
-  contacted: { color: 'bg-amber-500/10 text-amber-600 border-amber-200', label: 'Contacted' },
-  qualified: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200', label: 'Qualified' },
-  negotiation: { color: 'bg-violet-500/10 text-violet-600 border-violet-200', label: 'Negotiation' },
+  new: { color: 'bg-info/10 text-info border-info/25', label: 'New' },
+  contacted: { color: 'bg-warning/10 text-warning border-warning/25', label: 'Contacted' },
+  qualified: { color: 'bg-success/10 text-success border-success/25', label: 'Qualified' },
+  negotiation: { color: 'bg-primary/10 text-primary border-primary/25', label: 'Negotiation' },
   converted: { color: 'bg-primary/10 text-primary border-primary/20', label: 'Converted' },
   lost: { color: 'bg-muted text-muted-foreground border-border', label: 'Lost' },
 };
 
 const TEMP_CONFIG = [
-  { value: 'hot', label: 'Hot', icon: Flame, color: 'bg-red-500/10 text-red-600 border-red-200' },
-  { value: 'warm', label: 'Warm', icon: Sun, color: 'bg-amber-500/10 text-amber-600 border-amber-200' },
-  { value: 'cold', label: 'Cold', icon: Snowflake, color: 'bg-blue-500/10 text-blue-600 border-blue-200' },
+  { value: 'hot', label: 'Hot', icon: Flame, color: 'bg-destructive/10 text-destructive border-destructive/25' },
+  { value: 'warm', label: 'Warm', icon: Sun, color: 'bg-warning/10 text-warning border-warning/25' },
+  { value: 'cold', label: 'Cold', icon: Snowflake, color: 'bg-info/10 text-info border-info/25' },
 ];
 
 interface LeadFilterBarProps {

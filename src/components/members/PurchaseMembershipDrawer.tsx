@@ -387,9 +387,9 @@ export function PurchaseMembershipDrawer({
 
           {/* Referral Bonus Indicator */}
           {pendingReferral && referralSettings && (
-            <Card className="border-green-500/50 bg-green-500/5">
+            <Card className="border-success/50 bg-success/5">
               <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-green-600">
+                <div className="flex items-center gap-2 text-success">
                   <Gift className="h-5 w-5" />
                   <div>
                     <p className="font-medium">Referral Bonus Active!</p>

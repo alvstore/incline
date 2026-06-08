@@ -396,7 +396,7 @@ Team Incline Fitness`;
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">{memberName}</p>
-                  <p className={`text-sm font-medium ${invoice.status === 'paid' ? 'text-green-500' : 'text-yellow-500'}`}>
+                  <p className={`text-sm font-medium ${invoice.status === 'paid' ? 'text-success' : 'text-warning'}`}>
                     {invoice.status.toUpperCase()}
                   </p>
                 </div>
@@ -428,7 +428,7 @@ Team Incline Fitness`;
             <p className="text-sm font-medium text-muted-foreground">Share via</p>
             
             <Button 
-              className="w-full justify-start gap-3 bg-green-600 hover:bg-green-700"
+              className="w-full justify-start gap-3 bg-success hover:bg-success"
               onClick={handleWhatsAppShare}
               disabled={!phone || sendingWhatsApp}
             >

@@ -155,7 +155,7 @@ export function AppSidebar({
   const renderUnreadBadge = (href: string) => {
     if (href !== '/whatsapp-chat' || unreadCount === 0) return null;
     return (
-      <span className="bg-red-500 text-white rounded-full text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center px-1">
+      <span className="bg-destructive text-primary-foreground rounded-full text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center px-1">
         {unreadCount > 99 ? '99+' : unreadCount}
       </span>
     );
@@ -236,7 +236,7 @@ export function AppSidebar({
                               >
                                 <item.icon className="h-4 w-4" />
                                 {item.href === '/whatsapp-chat' && unreadCount > 0 && (
-                                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-[9px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-0.5">
+                                  <span className="absolute -top-1 -right-1 bg-destructive text-primary-foreground rounded-full text-[9px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-0.5">
                                     {unreadCount > 9 ? '9+' : unreadCount}
                                   </span>
                                 )}
@@ -366,7 +366,7 @@ export function MobileNav() {
                           <item.icon className="h-4 w-4" />
                           <span className="flex-1">{item.label}</span>
                           {item.href === '/whatsapp-chat' && unreadCount > 0 && (
-                            <span className="bg-red-500 text-white rounded-full text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                            <span className="bg-destructive text-primary-foreground rounded-full text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center px-1">
                               {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                           )}

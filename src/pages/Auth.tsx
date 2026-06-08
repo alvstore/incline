@@ -68,7 +68,7 @@ export default function AuthPage() {
   const handleLoginSuccess = () => navigate('/home');
 
   return (
-    <div className="incline-auth min-h-dvh w-full bg-slate-50 lg:grid lg:grid-cols-2">
+    <div className="incline-auth min-h-dvh w-full bg-muted lg:grid lg:grid-cols-2">
       <SEO
         title="Sign in | The Incline Life"
         description="Sign in to your Incline membership portal to book classes, manage your plan, view invoices and access recovery sessions."
@@ -90,8 +90,8 @@ export default function AuthPage() {
       <div className="relative flex flex-col items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
         {/* Soft decorative bg blobs (right side, behind card) */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-100/60 blur-3xl" />
-          <div className="absolute bottom-0 -left-20 h-72 w-72 rounded-full bg-cyan-100/50 blur-3xl" />
+          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-info/15 blur-3xl" />
+          <div className="absolute bottom-0 -left-20 h-72 w-72 rounded-full bg-info/15 blur-3xl" />
         </div>
 
         <div className="relative w-full max-w-[440px] space-y-6">
@@ -99,14 +99,14 @@ export default function AuthPage() {
             <LoginForm onSuccess={handleLoginSuccess} />
           </div>
 
-          <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-500">
-            <Link to="/privacy-policy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
-            <span aria-hidden className="text-slate-300">·</span>
-            <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
-            <span aria-hidden className="text-slate-300">·</span>
-            <Link to="/data-deletion" className="hover:text-slate-900 transition-colors">Data Deletion</Link>
+          <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <span aria-hidden className="text-muted-foreground">·</span>
+            <Link to="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+            <span aria-hidden className="text-muted-foreground">·</span>
+            <Link to="/data-deletion" className="hover:text-foreground transition-colors">Data Deletion</Link>
           </nav>
-          <p className="text-center text-[11px] text-slate-400">
+          <p className="text-center text-[11px] text-muted-foreground">
             © {new Date().getFullYear()} The Incline Life by Incline
           </p>
         </div>

@@ -306,9 +306,9 @@ export default function HRMPage() {
   }), [unifiedPeople]);
 
   const roleChipClass: Record<StaffRole, string> = {
-    manager: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30',
-    trainer: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
-    staff: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+    manager: 'bg-primary/10 text-primary border-primary/30',
+    trainer: 'bg-primary/10 text-primary border-primary/30',
+    staff: 'bg-info/10 text-info border-info/30',
   };
 
   const openEditFor = (person: UnifiedStaffPerson, role: StaffRole) => {
@@ -394,7 +394,7 @@ export default function HRMPage() {
       <div className="flex flex-wrap gap-1">
         {primary}
         {alsoTrainer && (
-          <Badge className="border bg-purple-500/10 text-purple-600 border-purple-500/30" title="Also holds a trainer record — PT commissions added on top of base salary">
+          <Badge className="border bg-primary/10 text-primary border-primary/30" title="Also holds a trainer record — PT commissions added on top of base salary">
             <Dumbbell className="mr-1 h-3 w-3 inline" />Trainer
           </Badge>
         )}
@@ -814,7 +814,7 @@ export default function HRMPage() {
                     })()}
                   </p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <Users className="h-6 w-6" />
                 </div>
               </div>
@@ -828,7 +828,7 @@ export default function HRMPage() {
                   <p className="text-sm opacity-80">Active</p>
                   <h3 className="text-3xl font-bold mt-1">{stats.active}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <CheckCircle className="h-6 w-6" />
                 </div>
               </div>
@@ -842,7 +842,7 @@ export default function HRMPage() {
                   <p className="text-sm opacity-80">Active Contracts</p>
                   <h3 className="text-3xl font-bold mt-1">{stats.activeContracts}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <FileText className="h-6 w-6" />
                 </div>
               </div>
@@ -856,7 +856,7 @@ export default function HRMPage() {
                   <p className="text-sm opacity-80">Monthly Payroll</p>
                   <h3 className="text-3xl font-bold mt-1">₹{stats.totalSalary.toLocaleString()}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <DollarSign className="h-6 w-6" />
                 </div>
               </div>
@@ -891,32 +891,32 @@ export default function HRMPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
+              <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-indigo-600" /> Managers
+                    <Briefcase className="h-4 w-4 text-primary" /> Managers
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-indigo-600">{dirStats.managers}</div>
+                  <div className="text-3xl font-bold text-primary">{dirStats.managers}</div>
                 </CardContent>
               </Card>
-              <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+              <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Dumbbell className="h-4 w-4 text-purple-600" /> Trainers
+                    <Dumbbell className="h-4 w-4 text-primary" /> Trainers
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-purple-600">{dirStats.trainers}</div>
+                  <div className="text-3xl font-bold text-primary">{dirStats.trainers}</div>
                 </CardContent>
               </Card>
-              <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
+              <Card className="bg-gradient-to-br from-info/10 to-info/5 border-info/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Other Staff</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">{dirStats.otherStaff}</div>
+                  <div className="text-3xl font-bold text-info">{dirStats.otherStaff}</div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20">
@@ -1046,7 +1046,7 @@ export default function HRMPage() {
                           <TableCell>
                             {person.exit_date ? (
                               <div className="space-y-0.5">
-                                <Badge className="bg-red-50 text-red-700 border-red-200 border">
+                                <Badge className="bg-destructive/10 text-destructive border-destructive/25 border">
                                   Offboarded
                                 </Badge>
                                 <div className="text-[11px] text-muted-foreground">
@@ -1164,7 +1164,7 @@ export default function HRMPage() {
                               <Button
                                 size="sm"
                                 variant={contract.signature_status === 'signed' ? 'default' : 'outline'}
-                                className={`h-8 rounded-none border-0 ${contract.signature_status === 'signed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                className={`h-8 rounded-none border-0 ${contract.signature_status === 'signed' ? 'bg-success hover:bg-success text-primary-foreground' : ''}`}
                                 onClick={() => {
                                   if (contract.signature_status === 'signed') {
                                     setViewingSignedContract(contract);
@@ -1206,10 +1206,10 @@ export default function HRMPage() {
                               variant="outline"
                               className={
                                 contractFillState(contract) === 'signed'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                  ? 'bg-success/10 text-success border-success/25 text-[10px]'
                                   : contractFillState(contract) === 'ready_to_sign'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200 text-[10px]'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200 text-[10px]'
+                                  ? 'bg-info/10 text-info border-info/25 text-[10px]'
+                                  : 'bg-warning/10 text-warning border-warning/25 text-[10px]'
                               }
                               title={
                                 contractFillState(contract) === 'signed'
@@ -1403,27 +1403,27 @@ export default function HRMPage() {
                                 />
                                 <div className="flex flex-wrap gap-1">
                                   {(p.halfDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-500/10 text-amber-700 border-amber-500/30">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-warning/10 text-warning border-warning/30">
                                       {p.halfDays} half
                                     </Badge>
                                   )}
                                   {(p.lateDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-500/10 text-orange-700 border-orange-500/30">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-warning/10 text-warning border-warning/30">
                                       {p.lateDays} late
                                     </Badge>
                                   )}
                                   {(p.missingCheckoutDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-red-500/10 text-red-700 border-red-500/30">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-destructive/10 text-destructive border-destructive/30">
                                       {p.missingCheckoutDays} no-out
                                     </Badge>
                                   )}
                                   {(p.otHours || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-blue-500/10 text-blue-700 border-blue-500/30">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-info/10 text-info border-info/30">
                                       +{Math.round(p.otHours)}h OT
                                     </Badge>
                                   )}
                                   {(p.leaveDays || 0) > 0 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-violet-500/10 text-violet-700 border-violet-500/30">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 bg-primary/10 text-primary border-primary/30">
                                       {p.leaveDays} leave
                                     </Badge>
                                   )}

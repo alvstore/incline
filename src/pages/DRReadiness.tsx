@@ -74,16 +74,16 @@ export default function DRReadiness() {
   return (
     <div className="container mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+        <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
           Disaster Recovery — Readiness Checklist
         </h1>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           DR is considered <strong>operational</strong> only when all 10 steps are signed off.
           Until then, the standby environment may be incomplete.
         </p>
       </header>
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle className="text-lg">Status</CardTitle>
@@ -92,11 +92,11 @@ export default function DRReadiness() {
             </CardDescription>
           </div>
           {operational ? (
-            <Badge className="gap-1 rounded-full bg-emerald-100 px-3 py-1 text-emerald-700 hover:bg-emerald-100">
+            <Badge className="gap-1 rounded-full bg-success/15 px-3 py-1 text-success hover:bg-success/15">
               <ShieldCheck className="h-4 w-4" /> DR Operational
             </Badge>
           ) : (
-            <Badge variant="secondary" className="gap-1 rounded-full bg-amber-100 px-3 py-1 text-amber-700 hover:bg-amber-100">
+            <Badge variant="secondary" className="gap-1 rounded-full bg-warning/15 px-3 py-1 text-warning hover:bg-warning/15">
               <ShieldAlert className="h-4 w-4" /> Not Yet Operational
             </Badge>
           )}
@@ -113,7 +113,7 @@ export default function DRReadiness() {
         <ol className="space-y-3">
           {rows?.map((row) => (
             <li key={row.step_no}>
-              <Card className={`rounded-2xl shadow-md transition-all ${row.completed ? "bg-emerald-50/40" : "bg-white"}`}>
+              <Card className={`rounded-2xl shadow-md transition-all ${row.completed ? "bg-success/10" : "bg-card"}`}>
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
                   <div className="flex items-start gap-3">
                     <Checkbox
@@ -125,7 +125,7 @@ export default function DRReadiness() {
                       aria-label={`Mark step ${row.step_no} complete`}
                       className="mt-1"
                     />
-                    <div className="min-w-[2rem] text-sm font-bold text-slate-500">
+                    <div className="min-w-[2rem] text-sm font-bold text-muted-foreground">
                       {String(row.step_no).padStart(2, "0")}
                     </div>
                   </div>
@@ -133,12 +133,12 @@ export default function DRReadiness() {
                   <div className="flex-1 space-y-2">
                     <label
                       htmlFor={`step-${row.step_no}`}
-                      className="block cursor-pointer text-sm font-semibold text-slate-900"
+                      className="block cursor-pointer text-sm font-semibold text-foreground"
                     >
                       {row.label}
                     </label>
                     {row.description && (
-                      <p className="text-xs leading-relaxed text-slate-600">{row.description}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{row.description}</p>
                     )}
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -154,7 +154,7 @@ export default function DRReadiness() {
                         }}
                       />
                       {row.completed && row.completed_at && (
-                        <div className="flex items-center gap-1 whitespace-nowrap text-xs text-emerald-700">
+                        <div className="flex items-center gap-1 whitespace-nowrap text-xs text-success">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           {format(new Date(row.completed_at), "dd MMM yyyy, HH:mm")}
                         </div>
@@ -168,9 +168,9 @@ export default function DRReadiness() {
         </ol>
       )}
 
-      <Card className="rounded-2xl bg-slate-50 shadow-sm">
-        <CardContent className="space-y-2 p-4 text-xs text-slate-600">
-          <p className="font-semibold text-slate-700">What this means</p>
+      <Card className="rounded-2xl bg-muted shadow-sm">
+        <CardContent className="space-y-2 p-4 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground">What this means</p>
           <p>
             The checklist is the single source of truth for DR readiness. The "DR Operational" badge
             (and the green banner sitewide) only appears when every box is ticked. Each step requires

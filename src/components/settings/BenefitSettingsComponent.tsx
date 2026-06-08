@@ -200,7 +200,7 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, hint, icon, gradient }: KpiCardProps) {
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 dark:shadow-slate-900/40 overflow-hidden">
+    <Card className="rounded-2xl border-0 shadow-lg shadow/60 dark:shadow/40 overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -208,7 +208,7 @@ function KpiCard({ label, value, hint, icon, gradient }: KpiCardProps) {
             <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
             {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
           </div>
-          <div className={`p-2.5 rounded-xl text-white shadow-md ${gradient}`}>{icon}</div>
+          <div className={`p-2.5 rounded-xl text-primary-foreground shadow-md ${gradient}`}>{icon}</div>
         </div>
       </CardContent>
     </Card>
@@ -331,28 +331,28 @@ export function BenefitSettingsComponent() {
           value={benefitsCount}
           hint={`${bookableCount} bookable`}
           icon={<Sparkles className="h-5 w-5" />}
-          gradient="bg-gradient-to-br from-violet-500 to-indigo-600"
+          gradient="bg-gradient-to-br from-primary to-primary"
         />
         <KpiCard
           label="Facilities / Rooms"
           value={facilityStats?.total ?? 0}
           hint={facilityStats?.maintenance ? `${facilityStats.maintenance} in maintenance` : "All operational"}
           icon={<Building2 className="h-5 w-5" />}
-          gradient="bg-gradient-to-br from-sky-500 to-cyan-600"
+          gradient="bg-gradient-to-br from-info to-info"
         />
         <KpiCard
           label="Slot Booking Enabled"
           value={slotEnabledCount}
           hint={`of ${bookableCount} bookable`}
           icon={<CalendarClock className="h-5 w-5" />}
-          gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
+          gradient="bg-gradient-to-br from-success to-success"
         />
         <KpiCard
           label="Active Credits"
           value={activeCreditsCount ?? 0}
           hint="Members with remaining credits"
           icon={<Wallet className="h-5 w-5" />}
-          gradient="bg-gradient-to-br from-amber-500 to-orange-600"
+          gradient="bg-gradient-to-br from-warning to-warning"
         />
       </div>
 

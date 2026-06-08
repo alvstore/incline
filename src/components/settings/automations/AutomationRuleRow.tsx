@@ -27,39 +27,39 @@ export function AutomationRuleRow({ rule, recentRuns, onToggle, onRunNow, onEdit
       <div
         className={`h-2.5 w-2.5 rounded-full shrink-0 ${
           !rule.is_active
-            ? 'bg-slate-300'
+            ? 'bg-muted'
             : rule.last_status === 'error'
-              ? 'bg-rose-500 animate-pulse'
+              ? 'bg-destructive animate-pulse'
               : rule.last_status === 'success'
-                ? 'bg-emerald-500'
-                : 'bg-slate-300'
+                ? 'bg-success'
+                : 'bg-muted'
         }`}
         aria-hidden
       />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-slate-900 truncate">{rule.name}</p>
+          <p className="font-semibold text-foreground truncate">{rule.name}</p>
           {rule.use_ai && (
-            <Badge className="bg-violet-100 text-violet-700 gap-1 hover:bg-violet-100">
+            <Badge className="bg-primary/15 text-primary gap-1 hover:bg-primary/15">
               <Sparkles className="h-3 w-3" /> AI
             </Badge>
           )}
           {rule.is_system && (
-            <Badge variant="outline" className="gap-1 text-slate-500 border-slate-200">
+            <Badge variant="outline" className="gap-1 text-muted-foreground border-border">
               <Lock className="h-3 w-3" /> System
             </Badge>
           )}
           {rule.last_status === 'error' && (
-            <Badge className="bg-rose-100 text-rose-700 gap-1 hover:bg-rose-100">
+            <Badge className="bg-destructive/15 text-destructive gap-1 hover:bg-destructive/15">
               <AlertTriangle className="h-3 w-3" /> Failing
             </Badge>
           )}
         </div>
         {rule.description && (
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{rule.description}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{rule.description}</p>
         )}
-        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
+        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3 w-3" /> {describeCron(rule.cron_expression)}
           </span>
@@ -68,7 +68,7 @@ export function AutomationRuleRow({ rule, recentRuns, onToggle, onRunNow, onEdit
           )}
           <span>· Next {formatDistanceToNow(new Date(rule.next_run_at), { addSuffix: true })}</span>
           {rule.last_error && (
-            <span className="text-rose-600 truncate max-w-[260px]" title={rule.last_error}>
+            <span className="text-destructive truncate max-w-[260px]" title={rule.last_error}>
               · {rule.last_error}
             </span>
           )}
@@ -80,7 +80,7 @@ export function AutomationRuleRow({ rule, recentRuns, onToggle, onRunNow, onEdit
         <button
           onClick={onFocusRail}
           aria-label="Show recent runs"
-          className="hidden md:flex items-end gap-0.5 h-6 px-1 rounded hover:bg-slate-100"
+          className="hidden md:flex items-end gap-0.5 h-6 px-1 rounded hover:bg-muted"
         >
           {sparkline.map((r) => (
             <span
@@ -88,10 +88,10 @@ export function AutomationRuleRow({ rule, recentRuns, onToggle, onRunNow, onEdit
               title={`${r.status} · ${r.dispatched_count} dispatched`}
               className={`w-1 rounded-sm ${
                 r.status === 'success'
-                  ? 'bg-emerald-400 h-4'
+                  ? 'bg-success h-4'
                   : r.status === 'error'
-                    ? 'bg-rose-400 h-5'
-                    : 'bg-slate-300 h-2'
+                    ? 'bg-destructive h-5'
+                    : 'bg-muted h-2'
               }`}
             />
           ))}

@@ -22,22 +22,22 @@ import { parseCommError } from '@/lib/comms/metaErrorLabels';
 type ChannelKey = 'all' | 'whatsapp' | 'sms' | 'email' | 'in_app';
 
 const channelMeta: Record<string, { icon: any; color: string; label: string }> = {
-  whatsapp: { icon: MessageSquare, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10', label: 'WhatsApp' },
-  sms: { icon: Phone, color: 'text-sky-600 bg-sky-50 dark:bg-sky-500/10', label: 'SMS' },
-  email: { icon: Mail, color: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10', label: 'Email' },
-  in_app: { icon: Bell, color: 'text-violet-600 bg-violet-50 dark:bg-violet-500/10', label: 'In-App' },
+  whatsapp: { icon: MessageSquare, color: 'text-success bg-success/10 dark:bg-success/10', label: 'WhatsApp' },
+  sms: { icon: Phone, color: 'text-info bg-info/10 dark:bg-info/10', label: 'SMS' },
+  email: { icon: Mail, color: 'text-warning bg-warning/10 dark:bg-warning/10', label: 'Email' },
+  in_app: { icon: Bell, color: 'text-primary bg-primary/10 dark:bg-primary/10', label: 'In-App' },
 };
 
 const statusBadge = (s: string) => {
   const map: Record<string, { cls: string; icon: any; label: string }> = {
-    sent: { cls: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30', icon: Send, label: 'Sent' },
-    delivered: { cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30', icon: CheckCircle2, label: 'Delivered' },
-    read: { cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30', icon: Eye, label: 'Read' },
-    replied: { cls: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30', icon: MessageSquareReply, label: 'Replied' },
-    failed: { cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30', icon: XCircle, label: 'Failed' },
-    bounced: { cls: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30', icon: XCircle, label: 'Bounced' },
-    pending: { cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30', icon: Clock, label: 'Pending' },
-    queued: { cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30', icon: Clock, label: 'Queued' },
+    sent: { cls: 'bg-info/10 text-info dark:text-info border-info/30', icon: Send, label: 'Sent' },
+    delivered: { cls: 'bg-success/10 text-success dark:text-success border-success/30', icon: CheckCircle2, label: 'Delivered' },
+    read: { cls: 'bg-primary/10 text-primary dark:text-primary border-primary/30', icon: Eye, label: 'Read' },
+    replied: { cls: 'bg-primary/10 text-primary dark:text-primary border-primary/30', icon: MessageSquareReply, label: 'Replied' },
+    failed: { cls: 'bg-destructive/10 text-destructive dark:text-destructive border-destructive/30', icon: XCircle, label: 'Failed' },
+    bounced: { cls: 'bg-destructive/10 text-destructive dark:text-destructive border-destructive/30', icon: XCircle, label: 'Bounced' },
+    pending: { cls: 'bg-warning/10 text-warning dark:text-warning border-warning/30', icon: Clock, label: 'Pending' },
+    queued: { cls: 'bg-warning/10 text-warning dark:text-warning border-warning/30', icon: Clock, label: 'Queued' },
   };
   const m = map[s] || { cls: 'bg-muted text-muted-foreground border-border', icon: Clock, label: s };
   const Icon = m.icon;
@@ -410,12 +410,12 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   };
 
   const dotColor: Record<string, string> = {
-    sent: 'bg-sky-500',
-    delivered: 'bg-emerald-500',
-    read: 'bg-violet-500',
-    replied: 'bg-indigo-500',
-    failed: 'bg-rose-500',
-    pending: 'bg-amber-500',
+    sent: 'bg-info',
+    delivered: 'bg-success',
+    read: 'bg-primary',
+    replied: 'bg-primary',
+    failed: 'bg-destructive',
+    pending: 'bg-warning',
   };
 
   return (
@@ -427,8 +427,8 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2">
               <div className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
               </div>
               <span className="text-sm font-semibold text-foreground">Live Feed</span>
               <Badge variant="outline" className="rounded-full text-[10px] tabular-nums">{filtered.length}</Badge>
@@ -552,7 +552,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                           {statusBadge(rollup.primary)}
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {rollup.failed > 0 && rollup.failed < rollup.total && (
-                              <span className="text-rose-600 dark:text-rose-400 mr-1">{rollup.failed} failed ·</span>
+                              <span className="text-destructive dark:text-destructive mr-1">{rollup.failed} failed ·</span>
                             )}
                             {format(new Date(g.latest.created_at), 'HH:mm:ss')}
                           </span>
@@ -594,18 +594,18 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
                                     const fe = parseCommError(log.error_message);
                                     if (!fe) return null;
                                     return (
-                                      <div className="mt-2 rounded-md border border-rose-200/60 bg-rose-50/60 dark:border-rose-500/30 dark:bg-rose-500/10 px-2.5 py-2 text-xs">
-                                        <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-medium">
+                                      <div className="mt-2 rounded-md border border-destructive/25 bg-destructive/10 dark:border-destructive/30 dark:bg-destructive/10 px-2.5 py-2 text-xs">
+                                        <div className="flex items-center gap-1.5 text-destructive dark:text-destructive font-medium">
                                           <XCircle className="h-3.5 w-3.5" />
                                           {fe.code ? <span className="font-mono">#{fe.code}</span> : null}
                                           <span>{fe.short}</span>
                                         </div>
                                         {fe.hint && (
-                                          <div className="mt-1 text-rose-700/80 dark:text-rose-300/80">{fe.hint}</div>
+                                          <div className="mt-1 text-destructive/80 dark:text-destructive/80">{fe.hint}</div>
                                         )}
                                         <details className="mt-1">
-                                          <summary className="cursor-pointer text-rose-600/70 dark:text-rose-300/60 hover:text-rose-700">raw</summary>
-                                          <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-rose-700/70 dark:text-rose-300/60">{fe.raw}</pre>
+                                          <summary className="cursor-pointer text-destructive/70 dark:text-destructive/60 hover:text-destructive">raw</summary>
+                                          <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-destructive/70 dark:text-destructive/60">{fe.raw}</pre>
                                         </details>
                                       </div>
                                     );

@@ -19,15 +19,15 @@ interface Props {
 export function AgentPresenceBar({ viewing, typing }: Props) {
   if (viewing.length === 0 && typing.length === 0) return null;
   return (
-    <div className="flex items-center gap-3 px-4 py-1.5 bg-amber-50 border-b border-amber-100 text-xs text-amber-900">
+    <div className="flex items-center gap-3 px-4 py-1.5 bg-warning/10 border-b border-warning/15 text-xs text-warning">
       {typing.length > 0 && (
         <div className="flex items-center gap-1.5">
-          <Pencil className="h-3.5 w-3.5 text-amber-600" />
+          <Pencil className="h-3.5 w-3.5 text-warning" />
           <div className="flex -space-x-1.5">
             {typing.slice(0, 3).map((p) => (
-              <Avatar key={p.user_id} className="h-5 w-5 border border-amber-200">
+              <Avatar key={p.user_id} className="h-5 w-5 border border-warning/25">
                 <AvatarImage src={p.avatar_url ?? undefined} />
-                <AvatarFallback className="text-[10px] bg-amber-200 text-amber-900">
+                <AvatarFallback className="text-[10px] bg-warning/25 text-warning">
                   {initials(p.full_name)}
                 </AvatarFallback>
               </Avatar>
@@ -39,13 +39,13 @@ export function AgentPresenceBar({ viewing, typing }: Props) {
         </div>
       )}
       {viewing.length > 0 && (
-        <div className="flex items-center gap-1.5 text-amber-700">
+        <div className="flex items-center gap-1.5 text-warning">
           <Eye className="h-3.5 w-3.5" />
           <div className="flex -space-x-1.5">
             {viewing.slice(0, 3).map((p) => (
-              <Avatar key={p.user_id} className="h-5 w-5 border border-amber-200">
+              <Avatar key={p.user_id} className="h-5 w-5 border border-warning/25">
                 <AvatarImage src={p.avatar_url ?? undefined} />
-                <AvatarFallback className="text-[10px] bg-white text-amber-700">
+                <AvatarFallback className="text-[10px] bg-card text-warning">
                   {initials(p.full_name)}
                 </AvatarFallback>
               </Avatar>

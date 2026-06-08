@@ -28,14 +28,14 @@ const GATEWAY_LABEL: Record<string, string> = {
 };
 
 function statusColor(s: string | null): string {
-  if (s === 'captured' || s === 'paid' || s === 'completed') return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+  if (s === 'captured' || s === 'paid' || s === 'completed') return 'bg-success/10 text-success border-success/20';
   if (s === 'failed' || s === 'rejected' || s === 'expired') return 'bg-destructive/10 text-destructive border-destructive/20';
-  if (s === 'authorized' || s === 'pending' || s === 'created' || s === 'awaiting_payment') return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
-  return 'bg-sky-500/10 text-sky-600 border-sky-500/20';
+  if (s === 'authorized' || s === 'pending' || s === 'created' || s === 'awaiting_payment') return 'bg-warning/10 text-warning border-warning/20';
+  return 'bg-info/10 text-info border-info/20';
 }
 
 function SignatureChip({ verified }: { verified: boolean | null }) {
-  if (verified === true) return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1 text-[10px]"><ShieldCheck className="h-2.5 w-2.5" />Verified</Badge>;
+  if (verified === true) return <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1 text-[10px]"><ShieldCheck className="h-2.5 w-2.5" />Verified</Badge>;
   if (verified === false) return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1 text-[10px]"><ShieldX className="h-2.5 w-2.5" />Invalid</Badge>;
   return <Badge variant="outline" className="bg-muted text-muted-foreground gap-1 text-[10px]"><ShieldAlert className="h-2.5 w-2.5" />n/a</Badge>;
 }
@@ -99,9 +99,9 @@ export function PaymentLinkTimeline({ invoiceId }: { invoiceId: string }) {
             return (
               <div key={r.id} className="flex items-start gap-3 text-xs p-2 bg-muted/40 rounded-lg">
                 <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                  r.status === 'captured' ? 'bg-emerald-500'
+                  r.status === 'captured' ? 'bg-success'
                     : isError ? 'bg-destructive'
-                    : 'bg-amber-500'
+                    : 'bg-warning'
                 }`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

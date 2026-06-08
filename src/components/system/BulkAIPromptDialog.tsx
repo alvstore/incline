@@ -79,7 +79,7 @@ export function BulkAIPromptDialog({ open, onOpenChange, errors, groupedBy = 'se
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <Sparkles className="h-5 w-5 text-primary" />
             Group AI Fix Prompt — {errors.length} error{errors.length === 1 ? '' : 's'}
           </SheetTitle>
         </SheetHeader>

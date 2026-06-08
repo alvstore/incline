@@ -621,7 +621,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
           </div>
 
           {linkedRecord && (
-            <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-xs space-y-1">
+            <div className="p-3 rounded-lg border border-warning/25 bg-warning/10 text-warning text-xs space-y-1">
               <p className="font-semibold">Dual role detected</p>
               {linkedRecord.kind === 'employee' ? (
                 <p>This person also has an employee record ({linkedRecord.code}, base ₹{Number(linkedRecord.salary || 0).toLocaleString('en-IN')}/mo). Payroll uses the employee salary as the single base — this trainer contract should only define the PT commission %. Setting Base Salary here will not be paid twice.</p>
@@ -821,7 +821,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">{v.label}{v.required ? ' *' : ''}</Label>
                           {auto && (
-                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] text-success bg-success/10 px-1.5 py-0.5 rounded">
                               Auto · {auto.source}
                             </span>
                           )}
@@ -863,8 +863,8 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-2 pt-2">
-                <div className="flex items-center justify-between rounded-lg border border-amber-200/60 bg-amber-50/60 p-2.5">
-                  <div className="text-xs text-amber-900">
+                <div className="flex items-center justify-between rounded-lg border border-warning/25 bg-warning/10 p-2.5">
+                  <div className="text-xs text-warning">
                     Unlock legal clauses to edit the boilerplate template. Action is audit-logged.
                   </div>
                   <Switch

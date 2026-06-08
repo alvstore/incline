@@ -150,7 +150,7 @@ export default function FitnessTemplatesPage() {
     return (
       <Card
         key={template.id}
-        className="rounded-2xl border-0 hover:shadow-xl hover:shadow-slate-200/50 transition-shadow shadow-lg shadow-slate-200/30"
+        className="rounded-2xl border-0 hover:shadow-xl hover:shadow/50 transition-shadow shadow-lg shadow/30"
       >
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
@@ -183,7 +183,7 @@ export default function FitnessTemplatesPage() {
               </Badge>
             )}
             {template.is_common && (
-              <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-xs gap-1">
+              <Badge className="bg-success/10 text-success border-success/25 text-xs gap-1">
                 <Share2 className="h-3 w-3" /> Common
               </Badge>
             )}
@@ -209,7 +209,7 @@ export default function FitnessTemplatesPage() {
               </Badge>
             )}
             {isPdf && (
-              <Badge className="bg-rose-500/10 text-rose-600 border-rose-200 text-xs gap-1">
+              <Badge className="bg-destructive/10 text-destructive border-destructive/25 text-xs gap-1">
                 <FileText className="h-3 w-3" /> PDF
               </Badge>
             )}

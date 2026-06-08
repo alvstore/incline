@@ -219,7 +219,7 @@ export default function MemberCheckout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted">
         <GymLoader text="Loading invoice..." />
       </div>
     );
@@ -227,7 +227,7 @@ export default function MemberCheckout() {
 
   if (!invoice) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted p-4">
         <Card className="max-w-md w-full rounded-2xl shadow-xl">
           <CardContent className="flex flex-col items-center py-10 gap-4">
             <AlertCircle className="h-12 w-12 text-destructive" />
@@ -240,17 +240,17 @@ export default function MemberCheckout() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow-slate-200/50">
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-5">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted p-4">
+      <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow/50">
+        <div className="bg-gradient-to-r from-warning to-warning text-primary-foreground px-6 py-5">
           <h1 className="text-xl font-bold">Incline Fitness</h1>
-          <p className="text-orange-100 text-sm">{invoice.branch_name}</p>
+          <p className="text-warning text-sm">{invoice.branch_name}</p>
         </div>
 
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Invoice {invoice.invoice_number}</CardTitle>
-            <Badge variant={isPaid ? 'default' : 'secondary'} className={isPaid ? 'bg-green-500 text-white' : ''}>
+            <Badge variant={isPaid ? 'default' : 'secondary'} className={isPaid ? 'bg-success text-primary-foreground' : ''}>
               {isPaid ? (
                 <><CheckCircle className="h-3 w-3 mr-1" /> Paid</>
               ) : (
@@ -273,7 +273,7 @@ export default function MemberCheckout() {
             {invoice.amount_paid > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Already Paid</span>
-                <span className="font-medium text-green-600">₹{invoice.amount_paid.toLocaleString()}</span>
+                <span className="font-medium text-success">₹{invoice.amount_paid.toLocaleString()}</span>
               </div>
             )}
             {!isPaid && (
@@ -299,8 +299,8 @@ export default function MemberCheckout() {
 
           {isPaid ? (
             <div className="text-center py-4 space-y-3">
-              <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              <h3 className="text-lg font-semibold text-green-700">Payment Received</h3>
+              <CheckCircle className="h-16 w-16 text-success mx-auto" />
+              <h3 className="text-lg font-semibold text-success">Payment Received</h3>
               <p className="text-muted-foreground text-sm">Thank you! Your payment has been confirmed.</p>
               {profile && (
                 <Button variant="outline" onClick={() => navigate('/my-invoices')}>
@@ -311,7 +311,7 @@ export default function MemberCheckout() {
           ) : (
             <>
               <Button
-                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-warning to-warning hover:from-warning hover:to-warning"
                 onClick={startPayment}
                 disabled={submitting}
               >
@@ -322,7 +322,7 @@ export default function MemberCheckout() {
                 )}
               </Button>
               <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                <ShieldCheck className="h-3.5 w-3.5 text-success" />
                 Secure payment powered by Razorpay. PCI-DSS compliant.
               </p>
             </>

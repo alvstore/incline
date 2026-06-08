@@ -13,19 +13,19 @@ import { toast } from 'sonner';
 import { format, subDays } from 'date-fns';
 
 const CLASSIFICATION_BADGE: Record<string, { label: string; cls: string; icon: any }> = {
-  pending:           { label: 'AI pending',      cls: 'bg-slate-100 text-slate-600',     icon: Loader2 },
-  genuine:           { label: 'Genuine',         cls: 'bg-emerald-100 text-emerald-700', icon: Sparkles },
-  unhappy_member:    { label: 'Unhappy member',  cls: 'bg-amber-100 text-amber-700',     icon: AlertTriangle },
-  suspected_fake:    { label: 'Suspected fake',  cls: 'bg-red-100 text-red-700',         icon: ShieldAlert },
-  spam:              { label: 'Spam',            cls: 'bg-red-100 text-red-700',         icon: ShieldAlert },
+  pending:           { label: 'AI pending',      cls: 'bg-muted text-muted-foreground',     icon: Loader2 },
+  genuine:           { label: 'Genuine',         cls: 'bg-success/15 text-success', icon: Sparkles },
+  unhappy_member:    { label: 'Unhappy member',  cls: 'bg-warning/15 text-warning',     icon: AlertTriangle },
+  suspected_fake:    { label: 'Suspected fake',  cls: 'bg-destructive/15 text-destructive',         icon: ShieldAlert },
+  spam:              { label: 'Spam',            cls: 'bg-destructive/15 text-destructive',         icon: ShieldAlert },
 };
 
 const REPLY_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  draft:     { label: 'Draft',     cls: 'bg-slate-100 text-slate-600' },
-  approved:  { label: 'Approved',  cls: 'bg-blue-100 text-blue-700' },
-  sent:      { label: 'Replied',   cls: 'bg-emerald-100 text-emerald-700' },
-  reported:  { label: 'Reported',  cls: 'bg-red-100 text-red-700' },
-  dismissed: { label: 'Dismissed', cls: 'bg-slate-100 text-slate-500' },
+  draft:     { label: 'Draft',     cls: 'bg-muted text-muted-foreground' },
+  approved:  { label: 'Approved',  cls: 'bg-info/15 text-info' },
+  sent:      { label: 'Replied',   cls: 'bg-success/15 text-success' },
+  reported:  { label: 'Reported',  cls: 'bg-destructive/15 text-destructive' },
+  dismissed: { label: 'Dismissed', cls: 'bg-muted text-muted-foreground' },
 };
 
 interface InboundRow {
@@ -159,7 +159,7 @@ export default function ExternalReviewsTab() {
     onSuccess: () => refetch(),
   });
 
-  const ratingColor = (r: number | null) => (r ?? 0) >= 4 ? 'text-emerald-500' : (r ?? 0) >= 3 ? 'text-amber-500' : 'text-red-500';
+  const ratingColor = (r: number | null) => (r ?? 0) >= 4 ? 'text-success' : (r ?? 0) >= 3 ? 'text-warning' : 'text-destructive';
 
   if (!branchId) {
     return <Card className="rounded-2xl"><CardContent className="py-8 text-center text-muted-foreground">Select a branch to view external reviews.</CardContent></Card>;
@@ -170,12 +170,12 @@ export default function ExternalReviewsTab() {
   return (
     <div className="space-y-6">
       {notConfigured && (
-        <Card className="rounded-2xl border-amber-200 bg-amber-50">
+        <Card className="rounded-2xl border-warning/25 bg-warning/10">
           <CardContent className="py-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
             <div className="flex-1">
-              <p className="font-medium text-amber-900">Google Business not configured for this branch</p>
-              <p className="text-sm text-amber-800">Configure under Settings → Integrations → Google Business to start fetching reviews and posting replies.</p>
+              <p className="font-medium text-warning">Google Business not configured for this branch</p>
+              <p className="text-sm text-warning">Configure under Settings → Integrations → Google Business to start fetching reviews and posting replies.</p>
             </div>
             <Button asChild size="sm" variant="outline">
               <a href="/settings?tab=integrations">Configure</a>
@@ -237,12 +237,12 @@ export default function ExternalReviewsTab() {
             const draftValue = drafts[r.id] ?? r.reply_text ?? r.ai_draft_reply ?? '';
             const Icon = cb.icon;
             return (
-              <Card key={r.id} className="rounded-2xl shadow-lg shadow-slate-200/50">
+              <Card key={r.id} className="rounded-2xl shadow-lg shadow/50">
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900">{r.author_name ?? 'Anonymous'}</p>
+                        <p className="font-semibold text-foreground">{r.author_name ?? 'Anonymous'}</p>
                         <div className={`flex items-center gap-0.5 ${ratingColor(r.rating)}`}>
                           {[...Array(5)].map((_, i) => <Star key={i} className={`h-4 w-4 ${i < (r.rating ?? 0) ? 'fill-current' : 'text-muted'}`} />)}
                         </div>
@@ -258,25 +258,25 @@ export default function ExternalReviewsTab() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{r.review_text || <em className="text-muted-foreground">No text</em>}</p>
+                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{r.review_text || <em className="text-muted-foreground">No text</em>}</p>
 
                   {/* Match & evidence */}
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     {r.match_type === 'member' && (
-                      <Badge className="bg-emerald-50 text-emerald-700">Active member: {r.match_evidence?.name} · {r.match_evidence?.lifecycle_state ?? r.match_evidence?.status ?? 'unknown'}</Badge>
+                      <Badge className="bg-success/10 text-success">Active member: {r.match_evidence?.name} · {r.match_evidence?.lifecycle_state ?? r.match_evidence?.status ?? 'unknown'}</Badge>
                     )}
                     {r.match_type === 'lead' && (
-                      <Badge className="bg-blue-50 text-blue-700">Lead: {r.match_evidence?.name} · source {r.match_evidence?.source ?? '—'} · {r.match_evidence?.status ?? '—'}</Badge>
+                      <Badge className="bg-info/10 text-info">Lead: {r.match_evidence?.name} · source {r.match_evidence?.source ?? '—'} · {r.match_evidence?.status ?? '—'}</Badge>
                     )}
                     {r.match_type === 'none' && (
-                      <Badge className="bg-slate-100 text-slate-600">No record found in this branch</Badge>
+                      <Badge className="bg-muted text-muted-foreground">No record found in this branch</Badge>
                     )}
                   </div>
 
                   {/* AI reasoning */}
                   {r.ai_reasoning && (
-                    <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">AI reasoning</p>
+                    <div className="rounded-xl bg-muted p-3 text-sm text-foreground">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">AI reasoning</p>
                       {r.ai_reasoning}
                     </div>
                   )}
@@ -284,7 +284,7 @@ export default function ExternalReviewsTab() {
                   {/* Reply box */}
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Draft reply (editable)</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Draft reply (editable)</p>
                       <Textarea
                         value={draftValue}
                         onChange={(e) => setDrafts(d => ({ ...d, [r.id]: e.target.value }))}
@@ -314,11 +314,11 @@ export default function ExternalReviewsTab() {
                   )}
 
                   {r.reply_status === 'sent' && r.google_reply_text && (
-                    <div className="rounded-xl bg-emerald-50 p-3 text-sm">
-                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <div className="rounded-xl bg-success/10 p-3 text-sm">
+                      <p className="text-xs font-semibold text-success uppercase tracking-wider mb-1 flex items-center gap-1">
                         <ExternalLink className="h-3 w-3" /> Replied on Google {r.replied_at ? `· ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
                       </p>
-                      <p className="text-slate-700 whitespace-pre-wrap">{r.google_reply_text}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text}</p>
                     </div>
                   )}
                 </CardContent>

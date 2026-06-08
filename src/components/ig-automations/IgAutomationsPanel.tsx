@@ -78,26 +78,26 @@ export function IgAutomationsPanel() {
   return (
     <div className="space-y-6">
       {/* HERO — Real-Time Operations band */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 p-6 shadow-xl shadow-indigo-500/20">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-12 -left-6 h-40 w-40 rounded-full bg-fuchsia-400/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary p-6 shadow-xl shadow-primary/20">
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-card/10 blur-3xl" />
+        <div className="absolute -bottom-12 -left-6 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-4 text-white">
-            <div className="rounded-2xl bg-white/15 p-3 backdrop-blur-sm ring-1 ring-white/20">
+          <div className="flex items-start gap-4 text-primary-foreground">
+            <div className="rounded-2xl bg-card/15 p-3 backdrop-blur-sm ring-1 ring-white/20">
               <Instagram className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold tracking-tight">Instagram Comment-to-DM</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px] font-medium text-emerald-100 ring-1 ring-emerald-300/40">
+                <span className="inline-flex items-center gap-1 rounded-full bg-success/20 px-2 py-0.5 text-[11px] font-medium text-success ring-1 ring-success/40">
                   <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success/40" />
                   </span>
                   Live
                 </span>
               </div>
-              <p className="mt-1 max-w-xl text-sm text-indigo-100/90">
+              <p className="mt-1 max-w-xl text-sm text-primary/90">
                 Auto-DM users who comment trigger keywords on your Instagram posts. Set keywords, pick a post, and watch leads flow in.
               </p>
             </div>
@@ -105,7 +105,7 @@ export function IgAutomationsPanel() {
           <Button
             onClick={() => setCreating(true)}
             disabled={!branchId}
-            className="h-11 min-w-[160px] rounded-xl bg-white text-indigo-700 shadow-lg shadow-indigo-900/20 transition-all duration-200 hover:bg-indigo-50 hover:shadow-xl focus:ring-2 focus:ring-white/60"
+            className="h-11 min-w-[160px] rounded-xl bg-card text-primary shadow-lg shadow-primary/20 transition-all duration-200 hover:bg-primary/10 hover:shadow-xl focus:ring-2 focus:ring-white/60"
           >
             <Plus className="mr-1.5 h-4 w-4" /> New Campaign
           </Button>
@@ -124,24 +124,24 @@ export function IgAutomationsPanel() {
         <button
           type="button"
           onClick={() => setApprovalsFor({ open: true, campaign: null })}
-          className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50 via-amber-50 to-orange-50 p-4 text-left shadow-sm shadow-amber-200/40 transition-all duration-200 hover:shadow-md hover:shadow-amber-300/30 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="group flex w-full items-center gap-4 rounded-2xl border border-warning/25 bg-gradient-to-r from-warning/10 via-warning/10 to-warning/10 p-4 text-left shadow-sm shadow-warning/20 transition-all duration-200 hover:shadow-md hover:shadow-warning/20 focus:outline-none focus:ring-2 focus:ring-warning"
           aria-label="Open approval queue"
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md shadow-amber-500/30">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-warning text-primary-foreground shadow-md shadow-warning/20">
             <ShieldAlert className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-amber-900">
+              <span className="text-sm font-bold text-warning">
                 {approvalsCount} DM{approvalsCount === 1 ? "" : "s"} awaiting your review
               </span>
-              <Badge className="rounded-full border-0 bg-amber-200 text-amber-800">Action required</Badge>
+              <Badge className="rounded-full border-0 bg-warning/25 text-warning">Action required</Badge>
             </div>
-            <p className="mt-0.5 text-xs text-amber-700/80">
+            <p className="mt-0.5 text-xs text-warning/80">
               Human-review campaigns are holding these messages. Approve, edit, or reject to release.
             </p>
           </div>
-          <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition-colors group-hover:bg-amber-100">
+          <span className="rounded-lg bg-card px-3 py-1.5 text-xs font-semibold text-warning ring-1 ring-warning/25 transition-colors group-hover:bg-warning/15">
             Open queue →
           </span>
         </button>
@@ -174,14 +174,14 @@ export function IgAutomationsPanel() {
 
       <IgTrendCard branchId={branchId} />
 
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow/50">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
-            <CardTitle className="text-base font-bold text-slate-900">Campaigns</CardTitle>
-            <p className="mt-0.5 text-xs text-slate-500">Toggle, edit, or inspect runs</p>
+            <CardTitle className="text-base font-bold text-foreground">Campaigns</CardTitle>
+            <p className="mt-0.5 text-xs text-muted-foreground">Toggle, edit, or inspect runs</p>
           </div>
           {campaigns.length > 0 && (
-            <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 text-slate-600">
+            <Badge variant="outline" className="rounded-full border-border bg-muted text-muted-foreground">
               {campaigns.length} total
             </Badge>
           )}
@@ -190,7 +190,7 @@ export function IgAutomationsPanel() {
           {isLoading ? (
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
+                <div key={i} className="flex items-center gap-3 rounded-xl border border-border p-3">
                   <Skeleton className="h-9 w-9 rounded-lg" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-3 w-1/3" />
@@ -201,48 +201,48 @@ export function IgAutomationsPanel() {
               ))}
             </div>
           ) : campaigns.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 py-14 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30">
+            <div className="rounded-2xl border-2 border-dashed border-border bg-muted/40 py-14 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20">
                 <Instagram className="h-6 w-6" />
               </div>
-              <p className="text-sm font-semibold text-slate-900">No campaigns yet</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="text-sm font-semibold text-foreground">No campaigns yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Create your first auto-DM campaign in under a minute.
               </p>
               <Button
                 onClick={() => setCreating(true)}
                 disabled={!branchId}
-                className="mt-5 h-10 rounded-xl bg-indigo-600 px-5 text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700"
+                className="mt-5 h-10 rounded-xl bg-primary px-5 text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary"
               >
                 <Plus className="mr-1.5 h-4 w-4" /> Create campaign
               </Button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl ring-1 ring-slate-100">
+            <div className="overflow-hidden rounded-xl ring-1 ring-border">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Name</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Keywords</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Scope</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Mode</TableHead>
-                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">DMs</TableHead>
-                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">Leads</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Last triggered</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Status</TableHead>
-                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">Actions</TableHead>
+                  <TableRow className="bg-muted/70 hover:bg-muted/70">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Keywords</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Scope</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Mode</TableHead>
+                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">DMs</TableHead>
+                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Leads</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Last triggered</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {campaigns.map((c) => (
                     <TableRow
                       key={c.id}
-                      className="cursor-pointer transition-colors duration-150 hover:bg-indigo-50/40"
+                      className="cursor-pointer transition-colors duration-150 hover:bg-primary/10"
                     >
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className={`h-2 w-2 rounded-full ${c.is_active ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" : "bg-slate-300"}`} />
-                          <span className="font-semibold text-slate-900">{c.name}</span>
+                          <div className={`h-2 w-2 rounded-full ${c.is_active ? "bg-success shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" : "bg-muted"}`} />
+                          <span className="font-semibold text-foreground">{c.name}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -250,36 +250,36 @@ export function IgAutomationsPanel() {
                           {c.keywords.slice(0, 3).map((k) => (
                             <Badge
                               key={k}
-                              className="rounded-full border-0 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                              className="rounded-full border-0 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15"
                             >
                               {k}
                             </Badge>
                           ))}
                           {c.keywords.length > 3 && (
-                            <Badge variant="outline" className="rounded-full border-slate-200 px-2 py-0.5 text-[11px] text-slate-500">
+                            <Badge variant="outline" className="rounded-full border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                               +{c.keywords.length - 3}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500">
+                      <TableCell className="text-xs text-muted-foreground">
                         {c.ig_media_id ? (
-                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px]">
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px]">
                             {c.ig_media_id.slice(0, 10)}…
                           </span>
                         ) : (
-                          <span className="text-slate-400">All posts</span>
+                          <span className="text-muted-foreground">All posts</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium capitalize text-violet-700">
+                        <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium capitalize text-primary">
                           {c.reply_mode}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-semibold text-slate-900 tabular-nums">{c.dms_sent}</TableCell>
-                      <TableCell className="text-right font-semibold text-slate-900 tabular-nums">{c.leads_created}</TableCell>
-                      <TableCell className="text-xs text-slate-500">
-                        {c.last_triggered_at ? format(new Date(c.last_triggered_at), "dd MMM, HH:mm") : <span className="text-slate-300">—</span>}
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{c.dms_sent}</TableCell>
+                      <TableCell className="text-right font-semibold text-foreground tabular-nums">{c.leads_created}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {c.last_triggered_at ? format(new Date(c.last_triggered_at), "dd MMM, HH:mm") : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
                         <Switch
@@ -294,7 +294,7 @@ export function IgAutomationsPanel() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-8 rounded-lg px-2 text-xs text-amber-700 hover:bg-amber-50"
+                              className="h-8 rounded-lg px-2 text-xs text-warning hover:bg-warning/10"
                               onClick={() => setApprovalsFor({ open: true, campaign: c })}
                               aria-label={`Review pending DMs for ${c.name}`}
                             >
@@ -304,7 +304,7 @@ export function IgAutomationsPanel() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 rounded-lg p-0 hover:bg-indigo-50 hover:text-indigo-600"
+                            className="h-8 w-8 rounded-lg p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => setLogsFor(c)}
                             aria-label={`View logs for ${c.name}`}
                           >
@@ -313,7 +313,7 @@ export function IgAutomationsPanel() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 rounded-lg p-0 hover:bg-indigo-50 hover:text-indigo-600"
+                            className="h-8 w-8 rounded-lg p-0 hover:bg-primary/10 hover:text-primary"
                             onClick={() => setEditing(c)}
                             aria-label={`Edit ${c.name}`}
                           >
@@ -322,7 +322,7 @@ export function IgAutomationsPanel() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 rounded-lg p-0 hover:bg-red-50 hover:text-red-600"
+                            className="h-8 w-8 rounded-lg p-0 hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => setDeleting(c)}
                             aria-label={`Delete ${c.name}`}
                           >
@@ -370,7 +370,7 @@ export function IgAutomationsPanel() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
             >
               Delete
             </AlertDialogAction>
@@ -387,14 +387,14 @@ function HeroStat({
   return (
     <div className={`rounded-xl px-3 py-2.5 backdrop-blur-sm ring-1 transition-colors ${
       accent
-        ? "bg-white/20 ring-white/30"
-        : "bg-white/10 ring-white/15 hover:bg-white/15"
+        ? "bg-card/20 ring-white/30"
+        : "bg-card/10 ring-white/15 hover:bg-card/15"
     }`}>
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-100/80">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary/80">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="mt-1 text-2xl font-bold tabular-nums text-white">
+      <div className="mt-1 text-2xl font-bold tabular-nums text-primary-foreground">
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
     </div>
@@ -411,22 +411,22 @@ function MetricTile({
   tone: "indigo" | "emerald" | "violet" | "red" | "amber";
 }) {
   const toneMap = {
-    indigo: "bg-indigo-50 text-indigo-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    violet: "bg-violet-50 text-violet-600",
-    red: "bg-red-50 text-red-600",
-    amber: "bg-amber-50 text-amber-600",
+    indigo: "bg-primary/10 text-primary",
+    emerald: "bg-success/10 text-success",
+    violet: "bg-primary/10 text-primary",
+    red: "bg-destructive/10 text-destructive",
+    amber: "bg-warning/10 text-warning",
   } as const;
   return (
-    <Card className="group rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
+    <Card className="group rounded-2xl border-0 shadow-lg shadow/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/20">
       <CardContent className="flex items-center gap-3 p-4">
         <div className={`rounded-xl p-2.5 ${toneMap[tone]} transition-transform duration-200 group-hover:scale-110`}>
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">{value.toLocaleString()}</div>
-          <div className="text-[11px] text-slate-400">{hint}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+          <div className="text-2xl font-bold text-foreground tabular-nums">{value.toLocaleString()}</div>
+          <div className="text-[11px] text-muted-foreground">{hint}</div>
         </div>
       </CardContent>
     </Card>
@@ -440,21 +440,21 @@ function IgTrendCard({ branchId }: { branchId: string | null }) {
     { sent: 0, failed: 0, matched: 0 },
   );
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl border-0 shadow-lg shadow/50">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <div className="rounded-lg bg-indigo-50 p-1.5">
-              <TrendingUp className="h-4 w-4 text-indigo-600" />
+          <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+            <div className="rounded-lg bg-primary/10 p-1.5">
+              <TrendingUp className="h-4 w-4 text-primary" />
             </div>
             Activity
           </CardTitle>
-          <p className="mt-0.5 text-xs text-slate-500">Last 14 days</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Last 14 days</p>
         </div>
         <div className="flex gap-3 text-xs">
-          <LegendChip color="bg-indigo-500" label="Matched" value={totals.matched} />
-          <LegendChip color="bg-emerald-500" label="Sent" value={totals.sent} />
-          <LegendChip color="bg-red-500" label="Failed" value={totals.failed} />
+          <LegendChip color="bg-primary" label="Matched" value={totals.matched} />
+          <LegendChip color="bg-success" label="Sent" value={totals.sent} />
+          <LegendChip color="bg-destructive" label="Failed" value={totals.failed} />
         </div>
       </CardHeader>
       <CardContent className="h-56 pt-0">
@@ -495,10 +495,10 @@ function IgTrendCard({ branchId }: { branchId: string | null }) {
 
 function LegendChip({ color, label, value }: { color: string; label: string; value: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1 ring-1 ring-slate-100">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-1 ring-1 ring-border">
       <span className={`h-2 w-2 rounded-full ${color}`} />
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-slate-900 tabular-nums">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground tabular-nums">{value}</span>
     </span>
   );
 }

@@ -55,10 +55,10 @@ export function HowbodyDevicesCard() {
   }
 
   return (
-    <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl p-6 shadow-lg shadow/50">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="rounded-full bg-violet-50 p-2 text-violet-600"><Cpu className="h-5 w-5" /></div>
+          <div className="rounded-full bg-primary/10 p-2 text-primary"><Cpu className="h-5 w-5" /></div>
           <div>
             <h2 className="text-lg font-bold">Body Scanner Devices</h2>
             <p className="text-sm text-muted-foreground">
@@ -67,18 +67,18 @@ export function HowbodyDevicesCard() {
           </div>
         </div>
         {canManage ? (
-          <Button onClick={openAdd} className="bg-violet-600 hover:bg-violet-700">
+          <Button onClick={openAdd} className="bg-primary hover:bg-primary">
             <Plus className="mr-2 h-4 w-4" /> Add device
           </Button>
         ) : (
-          <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
+          <Badge variant="outline" className="border-border bg-muted text-muted-foreground">
             <Lock className="mr-1 h-3 w-3" /> View only
           </Badge>
         )}
       </div>
 
       <div className="mt-4 relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -87,9 +87,9 @@ export function HowbodyDevicesCard() {
         />
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
+      <div className="mt-4 overflow-hidden rounded-xl border border-border">
         <Table>
-          <TableHeader className="bg-slate-50">
+          <TableHeader className="bg-muted">
             <TableRow>
               <TableHead>Equipment No.</TableHead>
               <TableHead>Label / Location</TableHead>
@@ -104,13 +104,13 @@ export function HowbodyDevicesCard() {
             {isLoading && (
               <TableRow>
                 <TableCell colSpan={canManage ? 7 : 6} className="py-10 text-center">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canManage ? 7 : 6} className="py-10 text-center text-sm text-slate-500">
+                <TableCell colSpan={canManage ? 7 : 6} className="py-10 text-center text-sm text-muted-foreground">
                   {search ? "No devices match your search." : "No devices registered yet."}
                 </TableCell>
               </TableRow>
@@ -118,21 +118,21 @@ export function HowbodyDevicesCard() {
             {filtered.map((d) => (
               <TableRow
                 key={d.id}
-                className={canManage ? "cursor-pointer hover:bg-slate-50" : ""}
+                className={canManage ? "cursor-pointer hover:bg-muted" : ""}
                 onClick={() => openEdit(d)}
               >
                 <TableCell className="font-mono text-xs">
                   {d.equipment_no}
                   {d.auto_registered && (
-                    <Badge variant="outline" className="ml-2 border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+                    <Badge variant="outline" className="ml-2 border-warning/25 bg-warning/10 text-[10px] text-warning">
                       Auto-registered
                     </Badge>
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium text-slate-900">{d.label || <span className="text-slate-400">—</span>}</div>
+                  <div className="font-medium text-foreground">{d.label || <span className="text-muted-foreground">—</span>}</div>
                   {d.location && (
-                    <div className="flex items-center gap-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="h-3 w-3" /> {d.location}
                     </div>
                   )}
@@ -140,19 +140,19 @@ export function HowbodyDevicesCard() {
                 <TableCell className="text-sm">
                   {d.branch_id
                     ? (branchMap[d.branch_id] || "—")
-                    : <span className="text-amber-600">Unassigned</span>}
+                    : <span className="text-warning">Unassigned</span>}
                 </TableCell>
                 <TableCell className="text-sm font-semibold">{d.total_scans}</TableCell>
-                <TableCell className="text-xs text-slate-500">
+                <TableCell className="text-xs text-muted-foreground">
                   {d.last_seen_at ? formatDistanceToNow(new Date(d.last_seen_at), { addSuffix: true }) : "Never"}
                 </TableCell>
                 <TableCell>
                   {d.is_active ? (
-                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                    <Badge variant="outline" className="border-success/25 bg-success/10 text-success">
                       <CircleDot className="mr-1 h-3 w-3" /> Active
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
+                    <Badge variant="outline" className="border-border bg-muted text-muted-foreground">
                       Disabled
                     </Badge>
                   )}

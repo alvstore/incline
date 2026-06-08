@@ -448,19 +448,19 @@ export default function MemberClassBooking() {
     <AppLayout>
       <div className="space-y-5 max-w-5xl mx-auto">
         {/* ─── Hero: Date Strip ─── */}
-        <Card className="border-0 shadow-lg shadow-indigo-500/10 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white overflow-hidden">
+        <Card className="border-0 shadow-lg shadow-primary/20 bg-gradient-to-br from-primary via-primary to-primary text-primary-foreground overflow-hidden">
           <CardContent className="p-5 sm:p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Book & Schedule</h1>
-                <p className="text-white/80 text-sm mt-0.5">
+                <p className="text-primary-foreground/80 text-sm mt-0.5">
                   {format(selectedDate, 'EEEE, d MMMM yyyy')}
                   {totalForDay > 0 && ` • ${totalForDay} session${totalForDay > 1 ? 's' : ''}`}
                 </p>
               </div>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="secondary" size="icon" className="shrink-0 bg-white/15 hover:bg-white/25 text-white border-0">
+                  <Button variant="secondary" size="icon" className="shrink-0 bg-card/15 hover:bg-card/25 text-primary-foreground border-0">
                     <CalendarDays className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
@@ -488,8 +488,8 @@ export default function MemberClassBooking() {
                     onClick={() => setSelectedDate(d)}
                     className={`shrink-0 w-14 sm:w-16 rounded-2xl py-2.5 transition-all ${
                       isSelected
-                        ? 'bg-white text-indigo-700 shadow-lg scale-105'
-                        : 'bg-white/10 text-white hover:bg-white/20'
+                        ? 'bg-card text-primary shadow-lg scale-105'
+                        : 'bg-card/10 text-primary-foreground hover:bg-card/20'
                     }`}
                   >
                     <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">
@@ -499,7 +499,7 @@ export default function MemberClassBooking() {
                       {format(d, 'd')}
                     </div>
                     {count > 0 && (
-                      <div className={`mt-1 mx-auto h-1 w-1 rounded-full ${isSelected ? 'bg-indigo-700' : 'bg-white/70'}`} />
+                      <div className={`mt-1 mx-auto h-1 w-1 rounded-full ${isSelected ? 'bg-primary' : 'bg-card/70'}`} />
                     )}
                   </button>
                 );
@@ -536,9 +536,9 @@ export default function MemberClassBooking() {
 
         {/* ─── Profile gender warning ─── */}
         {noGenderSet && (activeFilter === 'all' || activeFilter === 'recovery') && (
-          <Card className="border-amber-500/30 bg-amber-500/5">
+          <Card className="border-warning/30 bg-warning/5">
             <CardContent className="py-3 px-4 flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+              <AlertCircle className="h-5 w-5 text-warning shrink-0" />
               <div className="flex-1 text-sm">
                 <span className="font-medium">Add your gender to your profile</span>
                 <span className="text-muted-foreground"> to see male/female-only recovery facilities.</span>
@@ -584,7 +584,7 @@ export default function MemberClassBooking() {
         {!isLoading && totalForDay > 0 && (
           <Tabs value={timeBucket} onValueChange={(v) => setTimeBucket(v as any)} className="w-full">
             <TabsList className="grid grid-cols-5 w-full h-auto p-1 rounded-2xl bg-muted/60">
-              <TabsTrigger value="all" className="rounded-xl text-xs py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              <TabsTrigger value="all" className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 All <span className="ml-1 opacity-60">{totalForDay}</span>
               </TabsTrigger>
               {(['Morning', 'Afternoon', 'Evening', 'Night'] as const).map(b => (
@@ -592,7 +592,7 @@ export default function MemberClassBooking() {
                   key={b}
                   value={b}
                   disabled={timeGroups[b].length === 0}
-                  className="rounded-xl text-xs py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  className="rounded-xl text-xs py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
                   {b} <span className="ml-1 opacity-60">{timeGroups[b].length}</span>
                 </TabsTrigger>

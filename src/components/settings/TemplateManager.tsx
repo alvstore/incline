@@ -101,8 +101,8 @@ function metaStatusBadge(status: string | null | undefined) {
     APPROVED: { label: 'Approved', icon: CheckCircle, className: 'bg-success/10 text-success border-success/20' },
     PENDING: { label: 'Pending', icon: Clock, className: 'bg-warning/10 text-warning border-warning/20' },
     REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/20' },
-    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-gray-100 text-gray-600 border-gray-200' },
-    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-gray-100 text-gray-600 border-gray-200' },
+    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
+    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
   };
   const cfg = map[status];
   if (!cfg) return null;
@@ -356,8 +356,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     const Icon = icon;
     const label = `${src === 'dynamic' ? 'Dynamic' : 'Static'} ${ht === 'document' ? 'PDF' : ht.charAt(0).toUpperCase() + ht.slice(1)}`;
     const cls = src === 'dynamic'
-      ? 'bg-violet-50 text-violet-700 border-violet-200'
-      : 'bg-sky-50 text-sky-700 border-sky-200';
+      ? 'bg-primary/10 text-primary border-primary/25'
+      : 'bg-info/10 text-info border-info/25';
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
         <Icon className="h-3 w-3" />
@@ -373,14 +373,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     const approved = (t.meta_template_status || '').toUpperCase() === 'APPROVED';
     if (ht !== 'none' && approved) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200" title="Recipients receive a native WhatsApp document/image/video as the message header.">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-success/10 text-success border-success/25" title="Recipients receive a native WhatsApp document/image/video as the message header.">
           Native {ht === 'document' ? 'PDF' : ht}
         </span>
       );
     }
     if (ht !== 'none' && !approved) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-amber-50 text-amber-700 border-amber-200" title="Native delivery becomes active once Meta approves this template. Until then sends fall back to a link in the body.">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-warning/10 text-warning border-warning/25" title="Native delivery becomes active once Meta approves this template. Until then sends fall back to a link in the body.">
           Native (pending approval)
         </span>
       );
@@ -631,15 +631,15 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
   return (
     <div className="space-y-6">
       {!hideHeader && (
-      <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 shadow-lg shadow-indigo-500/20 text-white">
+      <div className="rounded-2xl bg-gradient-to-r from-primary to-primary p-6 shadow-lg shadow-primary/20 text-primary-foreground">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="bg-white/15 backdrop-blur-sm p-2.5 rounded-xl">
+            <div className="bg-card/15 backdrop-blur-sm p-2.5 rounded-xl">
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
               <h3 className="text-xl font-bold leading-tight">Communication Templates</h3>
-              <p className="text-sm text-white/80 mt-0.5">
+              <p className="text-sm text-primary-foreground/80 mt-0.5">
                 Manage SMS, Email and WhatsApp message templates · {templates.length} total
               </p>
             </div>
@@ -648,7 +648,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
             <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" className="bg-white/15 hover:bg-white/25 text-white border-0 backdrop-blur-sm">
+                <Button variant="secondary" className="bg-card/15 hover:bg-card/25 text-primary-foreground border-0 backdrop-blur-sm">
                   <Sparkles className="mr-2 h-4 w-4" />
                   Quick Presets
                 </Button>
@@ -658,7 +658,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 <DropdownMenuSeparator />
                 {DYNAMIC_PDF_PRESETS.map((p) => (
                   <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                    <FileText className="h-4 w-4 mt-0.5 text-violet-600 flex-shrink-0" />
+                    <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{p.label}</p>
                       <p className="text-[11px] text-muted-foreground truncate">
@@ -669,7 +669,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => openEditor()} className="bg-white text-indigo-700 hover:bg-white/90 shadow-sm">
+            <Button onClick={() => openEditor()} className="bg-card text-primary hover:bg-card/90 shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Template
             </Button>
@@ -681,7 +681,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-4">
+            <div key={i} className="rounded-2xl bg-card shadow-lg shadow/50 p-4">
               <Skeleton className="h-5 w-1/3 mb-2" />
               <Skeleton className="h-4 w-2/3 mb-2" />
               <Skeleton className="h-3 w-1/2" />
@@ -714,10 +714,10 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mr-1">Status:</span>
                   {([
                     { v: 'all',      label: 'All',       cls: 'bg-muted text-foreground' },
-                    { v: 'approved', label: '✅ Approved', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-                    { v: 'pending',  label: '⏳ Pending',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-                    { v: 'rejected', label: '❌ Rejected', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-                    { v: 'draft',    label: '⚪ Draft',    cls: 'bg-slate-50 text-slate-700 border-slate-200' },
+                    { v: 'approved', label: '✅ Approved', cls: 'bg-success/10 text-success border-success/25' },
+                    { v: 'pending',  label: '⏳ Pending',  cls: 'bg-warning/10 text-warning border-warning/25' },
+                    { v: 'rejected', label: '❌ Rejected', cls: 'bg-destructive/10 text-destructive border-destructive/25' },
+                    { v: 'draft',    label: '⚪ Draft',    cls: 'bg-muted text-foreground border-border' },
                   ] as const).map((s) => (
                     <button
                       key={s.v}
@@ -733,22 +733,22 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   <MetaSyncControls />
                 </div>
               )}
-              <Card className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 border-0">
+              <Card className="rounded-2xl bg-card shadow-lg shadow/50 border-0">
                 <CardContent className="pt-4">
                   {!groupedTemplates[value]?.length ? (
                     <div className="py-12 text-center">
-                      <div className="inline-flex bg-indigo-50 text-indigo-600 p-3 rounded-2xl mb-3">
+                      <div className="inline-flex bg-primary/10 text-primary p-3 rounded-2xl mb-3">
                         <FileText className="h-6 w-6" />
                       </div>
-                      <p className="text-sm font-medium text-slate-900">No {label} templates yet</p>
-                      <p className="text-xs text-slate-500 mt-1">Click "Add Template" to create one.</p>
+                      <p className="text-sm font-medium text-foreground">No {label} templates yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click "Add Template" to create one.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {groupedTemplates[value].map((template) => (
                         <div
                           key={template.id}
-                          className="flex items-center justify-between p-4 rounded-xl border border-slate-200/70 bg-white hover:bg-slate-50 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200"
+                          className="flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:bg-muted hover:shadow-md hover:shadow-primary/20 transition-all duration-200"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -781,11 +781,11 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                               return (
                                 <div className="flex items-center gap-2 mt-1.5 text-[10px]">
                                   <span className="text-muted-foreground uppercase tracking-wider font-semibold">7d:</span>
-                                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">{ds.sent} sent</span>
-                                  {ds.delivered > 0 && <span className="px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700 font-medium">{ds.delivered} delivered</span>}
-                                  {ds.read > 0 && <span className="px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium">{ds.read} read</span>}
-                                  {ds.failed > 0 && <span className="px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 font-medium">{ds.failed} failed</span>}
-                                  {ds.queued > 0 && <span className="px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">{ds.queued} queued</span>}
+                                  <span className="px-1.5 py-0.5 rounded-full bg-success/10 text-success font-medium">{ds.sent} sent</span>
+                                  {ds.delivered > 0 && <span className="px-1.5 py-0.5 rounded-full bg-info/10 text-info font-medium">{ds.delivered} delivered</span>}
+                                  {ds.read > 0 && <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{ds.read} read</span>}
+                                  {ds.failed > 0 && <span className="px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium">{ds.failed} failed</span>}
+                                  {ds.queued > 0 && <span className="px-1.5 py-0.5 rounded-full bg-warning/10 text-warning font-medium">{ds.queued} queued</span>}
                                 </div>
                               );
                             })()}
@@ -969,11 +969,11 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                         <Eye className="h-3 w-3" /> Live Preview
                       </p>
                       {validation.ok ? (
-                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/25">
                           <CheckCircle className="h-3 w-3 mr-1" /> Valid
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200">
+                        <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/25">
                           <AlertCircle className="h-3 w-3 mr-1" /> {validation.unknown.length} unknown var{validation.unknown.length > 1 ? 's' : ''}
                         </Badge>
                       )}
@@ -982,7 +982,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                       {preview || <span className="text-muted-foreground italic">Type a message to see preview…</span>}
                     </p>
                     {validation.unknown.length > 0 && (
-                      <p className="text-[11px] text-rose-600">
+                      <p className="text-[11px] text-destructive">
                         Unknown variable{validation.unknown.length > 1 ? 's' : ''}: {validation.unknown.map((v) => `{{${v}}}`).join(', ')}
                       </p>
                     )}
@@ -1129,7 +1129,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 )}
 
                 {formData.attachment_source === 'dynamic' && formData.header_type !== 'none' && (
-                  <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 p-2 text-[11px] text-violet-800 dark:text-violet-200 space-y-1">
+                  <div className="rounded-md bg-primary/10 dark:bg-primary/30 border border-primary/25 dark:border-primary p-2 text-[11px] text-primary dark:text-primary space-y-1">
                     <p><strong>Dynamic mode — no upload required.</strong> The system generates and signs the file at send time and attaches it automatically. Supported sources:</p>
                     <ul className="list-disc pl-4 space-y-0.5">
                       <li><strong>Invoice PDF</strong> — Invoice Share / Send Receipt drawer</li>
@@ -1339,7 +1339,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                   <Badge variant="outline" className="capitalize">{tpl.type}</Badge>
                   {evt && <Badge variant="secondary">{evt.label}</Badge>}
                   {tpl.attachment_source && tpl.attachment_source !== 'none' && (
-                    <Badge className="bg-indigo-100 text-indigo-700">
+                    <Badge className="bg-primary/15 text-primary">
                       <FileText className="h-3 w-3 mr-1" />
                       {tpl.attachment_source === 'dynamic' ? 'Dynamic PDF' : 'Static media'}
                     </Badge>
@@ -1347,20 +1347,20 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 </div>
 
                 {isEmail && (
-                  <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200">
-                    <div className="px-4 py-2 bg-slate-50 border-b text-xs">
-                      <div><span className="text-slate-500">From: </span>Incline &lt;noreply@theincline.in&gt;</div>
-                      <div><span className="text-slate-500">Subject: </span><span className="font-medium">{subject || '(no subject)'}</span></div>
+                  <div className="rounded-xl overflow-hidden shadow-sm border border-border">
+                    <div className="px-4 py-2 bg-muted border-b text-xs">
+                      <div><span className="text-muted-foreground">From: </span>Incline &lt;noreply@theincline.in&gt;</div>
+                      <div><span className="text-muted-foreground">Subject: </span><span className="font-medium">{subject || '(no subject)'}</span></div>
                     </div>
                     {/* Branded shell preview — mirrors supabase/functions/send-email/index.ts */}
-                    <div className="bg-black px-6 py-5 text-center border-b-2 border-[#EAB308]">
+                    <div className="bg-foreground px-6 py-5 text-center border-b-2 border-[#EAB308]">
                       <div className="text-[#EAB308] text-2xl font-extrabold tracking-[2px]">INCLINE</div>
-                      <div className="text-white/60 text-[10px] tracking-[4px] uppercase mt-1">Rise. Reflect. Repeat.</div>
+                      <div className="text-primary-foreground/60 text-[10px] tracking-[4px] uppercase mt-1">Rise. Reflect. Repeat.</div>
                     </div>
-                    <div className="bg-[#111111] p-6 text-white/90 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(rendered.replace(/\n/g, '<br/>')) }} />
-                    <div className="bg-[#0a0a0a] px-6 py-4 text-center border-t border-white/10">
+                    <div className="bg-[#111111] p-6 text-primary-foreground/90 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(rendered.replace(/\n/g, '<br/>')) }} />
+                    <div className="bg-[#0a0a0a] px-6 py-4 text-center border-t border-primary-foreground/10">
                       <div className="text-[#EAB308] text-xs font-semibold">The Incline Life by Incline</div>
-                      <div className="text-white/40 text-[11px] mt-1">theincline.in</div>
+                      <div className="text-primary-foreground/40 text-[11px] mt-1">theincline.in</div>
                     </div>
                   </div>
                 )}
@@ -1368,27 +1368,27 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                 {isWa && (
                   <div className="rounded-2xl bg-[#e7f3df] p-3 max-w-sm ml-auto shadow">
                     {dyn && (
-                      <div className="rounded-lg bg-white/80 border border-slate-200 p-2 mb-2 flex items-center gap-2 text-xs">
-                        <FileText className="h-4 w-4 text-rose-600" />
+                      <div className="rounded-lg bg-card/80 border border-border p-2 mb-2 flex items-center gap-2 text-xs">
+                        <FileText className="h-4 w-4 text-destructive" />
                         <div className="flex-1 min-w-0 truncate">
-                          <div className="font-medium text-slate-800 truncate">
+                          <div className="font-medium text-foreground truncate">
                             {(tpl.attachment_filename_template || 'document.pdf').replace(/\{\{[^}]+\}\}/g, 'sample')}
                           </div>
-                          <div className="text-[10px] text-slate-500">PDF · attached at send time</div>
+                          <div className="text-[10px] text-muted-foreground">PDF · attached at send time</div>
                         </div>
                       </div>
                     )}
                     {tpl.header_media_url && tpl.header_type === 'image' && (
                       <img src={tpl.header_media_url} alt="" className="rounded-lg mb-2 max-h-40 object-cover w-full" />
                     )}
-                    <p className="text-sm text-slate-900 whitespace-pre-wrap">{rendered}</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{rendered}</p>
                   </div>
                 )}
 
                 {tpl.type === 'sms' && (
-                  <div className="rounded-2xl bg-slate-100 p-3 max-w-xs">
-                    <p className="text-sm text-slate-900 whitespace-pre-wrap">{rendered}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">{rendered.length} chars</p>
+                  <div className="rounded-2xl bg-muted p-3 max-w-xs">
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{rendered}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{rendered.length} chars</p>
                   </div>
                 )}
 

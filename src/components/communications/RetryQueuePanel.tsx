@@ -11,9 +11,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const channelIcon = (t: string) => {
-  if (t === 'whatsapp') return <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />;
-  if (t === 'sms') return <Phone className="h-3.5 w-3.5 text-sky-600" />;
-  if (t === 'email') return <Mail className="h-3.5 w-3.5 text-amber-600" />;
+  if (t === 'whatsapp') return <MessageSquare className="h-3.5 w-3.5 text-success" />;
+  if (t === 'sms') return <Phone className="h-3.5 w-3.5 text-info" />;
+  if (t === 'email') return <Mail className="h-3.5 w-3.5 text-warning" />;
   return <AlertCircle className="h-3.5 w-3.5" />;
 };
 
@@ -73,12 +73,12 @@ export function RetryQueuePanel() {
   });
 
   return (
-    <Card className="rounded-2xl border-border/50 shadow-lg shadow-rose-500/5">
+    <Card className="rounded-2xl border-border/50 shadow-lg shadow-destructive/20">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10">
-              <AlertCircle className="h-4 w-4 text-rose-600" />
+            <div className="p-1.5 rounded-lg bg-destructive/10 dark:bg-destructive/10">
+              <AlertCircle className="h-4 w-4 text-destructive" />
             </div>
             Failed & Retry Queue
             {rows.length > 0 && (
@@ -92,8 +92,8 @@ export function RetryQueuePanel() {
           <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
         ) : rows.length === 0 ? (
           <div className="py-10 text-center">
-            <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-2">
-              <RotateCcw className="h-5 w-5 text-emerald-600" />
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-success/10 dark:bg-success/10 flex items-center justify-center mb-2">
+              <RotateCcw className="h-5 w-5 text-success" />
             </div>
             <p className="text-sm font-medium text-foreground">All clear</p>
             <p className="text-xs text-muted-foreground">No failed messages awaiting retry</p>
@@ -117,7 +117,7 @@ export function RetryQueuePanel() {
                         {r.retry_count}/{r.max_retries}
                       </Badge>
                     </div>
-                    <p className="text-[11px] text-rose-600 dark:text-rose-400 truncate mt-0.5">
+                    <p className="text-[11px] text-destructive dark:text-destructive truncate mt-0.5">
                       {r.last_error || 'Awaiting retry'}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -128,7 +128,7 @@ export function RetryQueuePanel() {
                     <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => retryNow.mutate(r.id)}>
                       <RotateCcw className="h-3 w-3" />Retry
                     </Button>
-                    <Button size="icon" variant="ghost" className="rounded-lg h-8 w-8 text-muted-foreground hover:text-rose-600" onClick={() => cancel.mutate(r.id)}>
+                    <Button size="icon" variant="ghost" className="rounded-lg h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => cancel.mutate(r.id)}>
                       <Ban className="h-3.5 w-3.5" />
                     </Button>
                   </div>

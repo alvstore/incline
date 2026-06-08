@@ -19,15 +19,15 @@ export function PtStatusHero(props: PtStatusHeroProps) {
   return (
     <Card
       className={cn(
-        'rounded-2xl border-0 shadow-lg shadow-indigo-500/10 overflow-hidden text-white',
-        'bg-gradient-to-br from-violet-600 to-indigo-600',
+        'rounded-2xl border-0 shadow-lg shadow-primary/20 overflow-hidden text-primary-foreground',
+        'bg-gradient-to-br from-primary to-primary',
         props.className,
       )}
     >
       <div className="p-5 flex items-center gap-5">
         <RingIndicator {...props} />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-xs uppercase tracking-wider text-white/70 flex items-center gap-1">
+          <p className="text-xs uppercase tracking-wider text-primary-foreground/70 flex items-center gap-1">
             {props.packageType === 'monthly' ? (
               <CalendarDays className="h-3.5 w-3.5" />
             ) : (
@@ -36,7 +36,7 @@ export function PtStatusHero(props: PtStatusHeroProps) {
             {props.packageType === 'monthly' ? 'Monthly Plan' : 'Session Pack'}
           </p>
           <h3 className="text-lg font-bold truncate">{props.packageName}</h3>
-          <p className="text-sm text-white/80">
+          <p className="text-sm text-primary-foreground/80">
             {props.packageType === 'monthly'
               ? props.expiryDate
                 ? `Plan ends ${format(new Date(props.expiryDate), 'd MMM yyyy')}`
@@ -44,7 +44,7 @@ export function PtStatusHero(props: PtStatusHeroProps) {
               : `${props.sessionsRemaining ?? 0} of ${props.sessionsTotal ?? 0} sessions remaining`}
           </p>
           {props.trainerName && (
-            <p className="text-sm text-white/70">Trainer · {props.trainerName}</p>
+            <p className="text-sm text-primary-foreground/70">Trainer · {props.trainerName}</p>
           )}
         </div>
       </div>
@@ -118,7 +118,7 @@ function RingIndicator(props: PtStatusHeroProps) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xl font-bold leading-none">{centerTop}</span>
         {centerBottom && (
-          <span className="text-[10px] uppercase tracking-wider text-white/80 mt-1">
+          <span className="text-[10px] uppercase tracking-wider text-primary-foreground/80 mt-1">
             {centerBottom}
           </span>
         )}

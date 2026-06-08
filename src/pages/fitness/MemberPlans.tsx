@@ -71,7 +71,7 @@ function KpiCard({
   accent: string;
 }) {
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/40">
+    <Card className="rounded-2xl border-0 shadow-lg shadow/40">
       <CardContent className="p-4 flex items-center gap-3">
         <div className={`h-11 w-11 rounded-2xl flex items-center justify-center ${accent}`}>
           <Icon className="h-5 w-5" />
@@ -362,7 +362,7 @@ export default function FitnessMemberPlansPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : visibleGroups.length === 0 ? (
-              <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/40">
+              <Card className="rounded-2xl border-0 shadow-lg shadow/40">
                 <CardContent className="py-16 text-center">
                   <div className="h-14 w-14 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
                     <Users className="h-7 w-7 text-muted-foreground" />
@@ -391,7 +391,7 @@ export default function FitnessMemberPlansPage() {
                   return (
                     <Card
                       key={g.member_id}
-                      className="rounded-2xl border-0 shadow-lg shadow-slate-200/40"
+                      className="rounded-2xl border-0 shadow-lg shadow/40"
                     >
                       <CardContent className="p-4 space-y-3">
                         <button

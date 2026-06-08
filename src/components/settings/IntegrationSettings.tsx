@@ -318,8 +318,8 @@ export function IntegrationSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <p className="text-xs text-amber-700 dark:text-amber-400">
+              <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                <p className="text-xs text-warning dark:text-warning">
                   <strong>⚠️ DLT Registration Required:</strong> For Indian SMS providers (RoundSMS, MSG91, Fast2SMS), DLT registration is mandatory for transactional SMS. You'll need your DLT Principal Entity ID, registered Sender ID, and pre-approved DLT Template IDs.
                 </p>
               </div>
@@ -358,10 +358,10 @@ export function IntegrationSettings() {
         </TabsContent>
 
         <TabsContent value="rcs" className="space-y-4">
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+          <Card className="rounded-2xl shadow-lg shadow/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Radio className="h-5 w-5 text-indigo-600" />
+                <Radio className="h-5 w-5 text-primary" />
                 RCS Business Messaging
                 <Badge variant="secondary" className="ml-1">Beta</Badge>
               </CardTitle>
@@ -395,8 +395,8 @@ export function IntegrationSettings() {
               </div>
 
               {/* MSG91 opt-in compliance reminder */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <p className="text-xs text-amber-700 dark:text-amber-400">
+              <div className="p-3 rounded-xl bg-warning/10 border border-warning/20">
+                <p className="text-xs text-warning dark:text-warning">
                   <strong>⚠️ Opt-in required:</strong> Per RCS carrier rules (Jio, Airtel, Vi), every recipient must have given
                   explicit consent. Lead and self-registration forms now expose a "Receive updates over RCS/WhatsApp/SMS"
                   checkbox — only consented contacts are eligible for RCS dispatches.
@@ -412,12 +412,12 @@ export function IntegrationSettings() {
                   return (
                     <Card
                       key={provider.id}
-                      className="rounded-2xl shadow-md shadow-slate-200/40 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10"
+                      className="rounded-2xl shadow-md shadow/40 transition-all duration-200 hover:shadow-xl hover:shadow-primary/20"
                     >
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                            <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                               <Radio className="h-6 w-6" />
                             </div>
                             <div className="min-w-0">
@@ -427,7 +427,7 @@ export function IntegrationSettings() {
                           </div>
                           <Badge
                             variant={isActive ? 'default' : 'secondary'}
-                            className={isActive ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : ''}
+                            className={isActive ? 'bg-success/15 text-success hover:bg-success/15' : ''}
                           >
                             {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                             {isActive ? 'Active' : 'Inactive'}
@@ -531,15 +531,15 @@ export function IntegrationSettings() {
             const missingSecret = metaIntegrations.filter((i: any) => !i.credentials?.app_secret);
             if (metaIntegrations.length === 0 || missingSecret.length === 0) return null;
             return (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-start gap-3">
-                <div className="rounded-full bg-amber-100 dark:bg-amber-900/40 p-2 mt-0.5">
-                  <XCircle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+              <div className="rounded-xl border border-warning/40 bg-warning/10 dark:bg-warning/30 p-4 flex items-start gap-3">
+                <div className="rounded-full bg-warning/15 dark:bg-warning/40 p-2 mt-0.5">
+                  <XCircle className="h-4 w-4 text-warning dark:text-warning" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  <p className="text-sm font-semibold text-warning dark:text-warning">
                     Webhook signature verification disabled for {missingSecret.length} integration(s)
                   </p>
-                  <p className="text-xs text-amber-800 dark:text-amber-300/90">
+                  <p className="text-xs text-warning dark:text-warning/90">
                     Add the App Secret to {missingSecret.map((i: any) => i.provider || i.integration_type).join(', ')}.
                     <br />• <b>WhatsApp & Instagram via Facebook (EAA…):</b> use the <strong>Basic App Secret</strong> from Meta → Settings → Basic.
                     <br />• <b>Instagram Business Login (IGAA…):</b> use the <strong>Instagram App Secret</strong> from Meta → Instagram product → API setup with Instagram login → Instagram app secret.
@@ -554,8 +554,8 @@ export function IntegrationSettings() {
           <Tabs defaultValue="whatsapp_meta" className="space-y-4">
             <TabsList className="flex flex-wrap gap-1 h-auto p-1 w-full">
               <TabsTrigger value="whatsapp_meta" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" />WhatsApp</TabsTrigger>
-              <TabsTrigger value="instagram_meta" className="gap-1.5"><Instagram className="h-3.5 w-3.5 text-pink-500" />Instagram</TabsTrigger>
-              <TabsTrigger value="messenger_meta" className="gap-1.5"><Facebook className="h-3.5 w-3.5 text-blue-600" />Messenger</TabsTrigger>
+              <TabsTrigger value="instagram_meta" className="gap-1.5"><Instagram className="h-3.5 w-3.5 text-destructive" />Instagram</TabsTrigger>
+              <TabsTrigger value="messenger_meta" className="gap-1.5"><Facebook className="h-3.5 w-3.5 text-info" />Messenger</TabsTrigger>
             </TabsList>
 
             {/* ─── WhatsApp Subtab ─── */}
@@ -572,9 +572,9 @@ export function IntegrationSettings() {
                 </CardHeader>
             <CardContent className="space-y-4">
               {/* Webhook URL */}
-              <div className="p-4 rounded-lg bg-green-500/5 border border-green-500/10 space-y-2">
+              <div className="p-4 rounded-lg bg-success/5 border border-success/10 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4 text-green-600" />
+                  <Webhook className="h-4 w-4 text-success" />
                   <h4 className="font-semibold text-sm">WhatsApp Webhook URL (whatsapp-webhook)</h4>
                 </div>
                 <p className="text-xs text-muted-foreground">Paste this URL in your Meta Developer Portal → WhatsApp → Configuration → Webhook.</p>
@@ -716,8 +716,8 @@ export function IntegrationSettings() {
                       </div>
                     </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                    <p className="text-xs text-warning dark:text-warning">
                       <strong>Note:</strong> Meta requires your business to be verified and WhatsApp message templates to be approved before sending to non-opted-in users.
                     </p>
                   </div>
@@ -732,7 +732,7 @@ export function IntegrationSettings() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Instagram className="h-5 w-5 text-pink-500" />
+                    <Instagram className="h-5 w-5 text-destructive" />
                     Instagram Direct Messages
                   </CardTitle>
                   <CardDescription>
@@ -741,9 +741,9 @@ export function IntegrationSettings() {
                 </CardHeader>
             <CardContent className="space-y-4">
               {/* Webhook URL */}
-              <div className="p-4 rounded-lg bg-pink-500/5 border border-pink-500/10 space-y-2">
+              <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/10 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4 text-pink-500" />
+                  <Webhook className="h-4 w-4 text-destructive" />
                   <h4 className="font-semibold text-sm">Instagram Webhook URL (meta-webhook)</h4>
                 </div>
                 <p className="text-xs text-muted-foreground">Paste this URL in your Meta Developer Portal → Instagram → Webhooks → Callback URL.</p>
@@ -888,12 +888,12 @@ export function IntegrationSettings() {
                 </div>
 
                 {diagnostics && (
-                  <div className="mt-3 rounded-lg border border-pink-200 bg-white p-3 space-y-2">
+                  <div className="mt-3 rounded-lg border border-destructive/25 bg-card p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       {diagnostics.ok ? (
-                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        <CheckCircle className="h-4 w-4 text-success" />
                       ) : (
-                        <XCircle className="h-4 w-4 text-rose-600" />
+                        <XCircle className="h-4 w-4 text-destructive" />
                       )}
                       <h5 className="text-sm font-semibold">
                         {diagnostics.ok ? 'All checks passed' : 'Issues detected'}
@@ -903,9 +903,9 @@ export function IntegrationSettings() {
                       {diagnostics.checks.map((c: any) => (
                         <li key={c.id} className="flex items-start gap-2 text-xs">
                           {c.ok ? (
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />
                           ) : (
-                            <XCircle className="h-3.5 w-3.5 text-rose-600 mt-0.5 shrink-0" />
+                            <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
                           )}
                           <div>
                             <div className="font-medium">{c.label}</div>
@@ -919,33 +919,33 @@ export function IntegrationSettings() {
               </div>
 
               {/* Setup Path Guide — IG Login vs FB Login */}
-              <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/60 space-y-3">
+              <div className="p-4 rounded-xl bg-warning/10 border border-warning/25 space-y-3">
                 <div className="flex items-start gap-2">
-                  <Instagram className="h-4 w-4 text-amber-600 mt-0.5" />
+                  <Instagram className="h-4 w-4 text-warning mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-sm text-amber-900">Which Meta setup did you use?</h4>
-                    <p className="text-xs text-amber-800/80 mt-0.5">
+                    <h4 className="font-semibold text-sm text-warning">Which Meta setup did you use?</h4>
+                    <p className="text-xs text-warning/80 mt-0.5">
                       We auto-detect your token type and route to the correct Meta API host. Pick the path that matches your Meta App use-case.
                     </p>
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg bg-white p-3 border border-amber-200/40">
+                  <div className="rounded-lg bg-card p-3 border border-warning/25">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <Badge variant="default" className="bg-pink-500 hover:bg-pink-500 text-white text-[10px]">Recommended</Badge>
+                      <Badge variant="default" className="bg-destructive hover:bg-destructive text-primary-foreground text-[10px]">Recommended</Badge>
                       <span className="text-xs font-semibold">API setup with Facebook login</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mb-2">
                       Token starts with <code className="font-mono">EAA…</code>. Same Meta App as WhatsApp. Supports Messenger.
                     </p>
-                    <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                    <ul className="text-[11px] text-foreground space-y-1 list-disc list-inside">
                       <li><b>Page Access Token</b> from Graph API Explorer</li>
                       <li><b>Page ID</b> (the FB Page linked to IG)</li>
                       <li><b>Instagram Account ID</b> (auto from /me/accounts)</li>
                       <li><b>App Secret</b> (Settings → Basic) for webhook verification</li>
                     </ul>
                   </div>
-                  <div className="rounded-lg bg-white p-3 border border-amber-200/40">
+                  <div className="rounded-lg bg-card p-3 border border-warning/25">
                     <div className="flex items-center gap-2 mb-1.5">
                       <Badge variant="secondary" className="text-[10px]">Alternative</Badge>
                       <span className="text-xs font-semibold">API setup with Instagram login</span>
@@ -953,15 +953,15 @@ export function IntegrationSettings() {
                     <p className="text-[11px] text-muted-foreground mb-2">
                       Token starts with <code className="font-mono">IGAA…</code>. No Facebook Page required. IG-only.
                     </p>
-                    <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                    <ul className="text-[11px] text-foreground space-y-1 list-disc list-inside">
                       <li><b>Long-lived IG Access Token</b> from Business Login</li>
                       <li><b>Instagram Account ID</b> = <code className="font-mono">user_id</code> from /me</li>
                       <li>Required scopes: <code className="font-mono">instagram_business_basic</code>, <code className="font-mono">instagram_business_manage_messages</code>, <code className="font-mono">instagram_manage_comments</code></li>
-                      <li><b className="text-rose-600">Instagram App Secret</b> (Meta → Instagram product → "API setup with Instagram login" → Instagram app secret) — REQUIRED for webhook signatures. This is a <u>different value</u> from the Basic App Secret used by WhatsApp.</li>
+                      <li><b className="text-destructive">Instagram App Secret</b> (Meta → Instagram product → "API setup with Instagram login" → Instagram app secret) — REQUIRED for webhook signatures. This is a <u>different value</u> from the Basic App Secret used by WhatsApp.</li>
                     </ul>
-                    <div className="mt-2 pt-2 border-t border-amber-100 space-y-2">
+                    <div className="mt-2 pt-2 border-t border-warning/15 space-y-2">
                       <div>
-                        <p className="text-[11px] text-amber-900 mb-1"><b>OAuth Redirect URL</b> — paste in Meta Dashboard → Instagram → "Set up Instagram business login":</p>
+                        <p className="text-[11px] text-warning mb-1"><b>OAuth Redirect URL</b> — paste in Meta Dashboard → Instagram → "Set up Instagram business login":</p>
                         <div className="flex items-center gap-1.5">
                           <code className="flex-1 text-[10px] bg-muted px-2 py-1 rounded font-mono break-all">
                             {`${SUPABASE_FUNCTION_BASE}/meta-oauth-callback`}
@@ -975,7 +975,7 @@ export function IntegrationSettings() {
                         </div>
                       </div>
                       <div>
-                        <p className="text-[11px] text-amber-900 mb-1"><b>Data Deletion URL</b> — paste in Meta Dashboard → Settings → Basic:</p>
+                        <p className="text-[11px] text-warning mb-1"><b>Data Deletion URL</b> — paste in Meta Dashboard → Settings → Basic:</p>
                         <div className="flex items-center gap-1.5">
                           <code className="flex-1 text-[10px] bg-muted px-2 py-1 rounded font-mono break-all">
                             {`${SUPABASE_FUNCTION_BASE}/meta-data-deletion`}
@@ -988,13 +988,13 @@ export function IntegrationSettings() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-[10px] text-amber-800/70">
+                      <p className="text-[10px] text-warning/70">
                         Pinned to Meta Graph <b>v25.0</b> on both hosts (auto-fallback to v23.0 on graph.instagram.com if Meta hasn't rolled v25 there yet).
                       </p>
                     </div>
                   </div>
                 </div>
-                <p className="text-[11px] text-amber-900/80">
+                <p className="text-[11px] text-warning/80">
                   💡 Click <b>Test Connection</b> after saving — we'll tell you exactly which flow your token matches and whether the IG account ID is correct.
                 </p>
               </div>
@@ -1008,8 +1008,8 @@ export function IntegrationSettings() {
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
-                              <Instagram className="h-5 w-5 text-white" />
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-destructive to-primary flex items-center justify-center">
+                              <Instagram className="h-5 w-5 text-primary-foreground" />
                             </div>
                             <div>
                               <h3 className="font-semibold">{provider.name}</h3>
@@ -1043,7 +1043,7 @@ export function IntegrationSettings() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Facebook className="h-5 w-5 text-blue-600" />
+                    <Facebook className="h-5 w-5 text-info" />
                     Facebook Messenger
                   </CardTitle>
                   <CardDescription>
@@ -1052,9 +1052,9 @@ export function IntegrationSettings() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Webhook URL */}
-                  <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/10 space-y-2">
+                  <div className="p-4 rounded-lg bg-info/5 border border-info/10 space-y-2">
                     <div className="flex items-center gap-2">
-                      <Webhook className="h-4 w-4 text-blue-600" />
+                      <Webhook className="h-4 w-4 text-info" />
                       <h4 className="font-semibold text-sm">Facebook Messenger Webhook URL (meta-webhook)</h4>
                     </div>
                     <p className="text-xs text-muted-foreground">Paste this URL in your Meta Developer Portal → Messenger → Webhooks → Callback URL.</p>
@@ -1080,8 +1080,8 @@ export function IntegrationSettings() {
                           <CardContent className="pt-6">
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                  <Facebook className="h-5 w-5 text-blue-600" />
+                                <div className="h-10 w-10 rounded-xl bg-info/15 flex items-center justify-center">
+                                  <Facebook className="h-5 w-5 text-info" />
                                 </div>
                                 <div>
                                   <h3 className="font-semibold">{provider.name}</h3>
@@ -1134,7 +1134,7 @@ export function IntegrationSettings() {
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
-                            <Globe className="h-8 w-8 text-blue-500" />
+                            <Globe className="h-8 w-8 text-info" />
                             <div>
                               <h3 className="font-semibold">{provider.name}</h3>
                               <p className="text-sm text-muted-foreground">{provider.description}</p>
@@ -1249,8 +1249,8 @@ export function IntegrationSettings() {
                       </div>
                     </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                    <p className="text-xs text-warning dark:text-warning">
                       <strong>Note:</strong> Your Google Business listing must be verified before reviews can be synced.
                     </p>
                   </div>
@@ -1499,7 +1499,7 @@ function IntegrationConfigSheet({
             <Label>{field.label}</Label>
             {hasStored && !isTouched && (
               <Badge variant="outline" className="text-[10px] gap-1 rounded-full">
-                <CheckCircle className="h-3 w-3 text-green-600" /> Saved
+                <CheckCircle className="h-3 w-3 text-success" /> Saved
               </Badge>
             )}
             {hasStored && isTouched && (
@@ -1621,7 +1621,7 @@ function IntegrationConfigSheet({
                   </p>
                 </div>
 
-                <div className="text-[11px] p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-800 dark:text-blue-300">
+                <div className="text-[11px] p-2 rounded-lg bg-info/10 border border-info/20 text-info dark:text-info">
                   Seeing <code className="font-mono">Google API 403 ... has not been used in project ... or it is disabled</code>? Open Google Cloud Console → APIs &amp; Services → Library and enable <strong>Google My Business API</strong>, <strong>My Business Account Management API</strong>, and <strong>My Business Business Information API</strong> for the same project as your OAuth client. Wait ~1 minute, then click Test Connection.
                 </div>
 
@@ -1633,14 +1633,14 @@ function IntegrationConfigSheet({
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground">OAuth refresh token</span>
-                      <span className={hasRefreshToken ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>
+                      <span className={hasRefreshToken ? 'text-success font-medium' : 'text-warning font-medium'}>
                         {hasRefreshToken ? 'Connected' : 'Not connected'}
                       </span>
                     </div>
                   </div>
                 )}
 
-                <div className="text-[11px] p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300">
+                <div className="text-[11px] p-2 rounded-lg bg-warning/10 border border-warning/20 text-warning dark:text-warning">
                   Seeing <code className="font-mono">Error 401: deleted_client</code> from Google? The OAuth client was removed in Google Cloud. Open Google Auth Platform → Clients, create a new <strong>Web application</strong> client, paste the new Client ID + Secret here, save, then Connect Google.
                 </div>
 
@@ -1812,7 +1812,7 @@ function LeadCaptureTab() {
           {/* Simplified Slug-Based URL */}
           <div className="space-y-2">
             <Label className="font-semibold flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
+              <CheckCircle className="h-4 w-4 text-success" />
               Plug & Play Webhook URL
             </Label>
             <div className="flex items-center gap-2">

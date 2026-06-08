@@ -146,8 +146,8 @@ export default function HowbodyLogin() {
   if (!equipmentNo || !scanId) {
     return (
       <Shell>
-        <Card className="rounded-2xl p-8 text-center shadow-lg shadow-teal-500/10">
-          <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" />
+        <Card className="rounded-2xl p-8 text-center shadow-lg shadow-success/20">
+          <AlertTriangle className="mx-auto h-10 w-10 text-warning" />
           <h2 className="mt-4 text-xl font-bold">Invalid QR link</h2>
           <p className="mt-2 text-muted-foreground">
             Please scan the QR code shown on the body scanner directly.
@@ -161,7 +161,7 @@ export default function HowbodyLogin() {
     return (
       <Shell>
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-success" />
         </div>
       </Shell>
     );
@@ -170,18 +170,18 @@ export default function HowbodyLogin() {
   if (!user) {
     return (
       <Shell>
-        <Card className="rounded-2xl p-8 shadow-lg shadow-teal-500/10">
-          <ScanLine className="h-10 w-10 text-teal-500" />
+        <Card className="rounded-2xl p-8 shadow-lg shadow-success/20">
+          <ScanLine className="h-10 w-10 text-success" />
           <h2 className="mt-4 text-xl font-bold">Sign in to start your scan</h2>
           <p className="mt-2 text-muted-foreground">
             Please sign in with your member account, then come back to this page.
           </p>
-          <Button asChild className="mt-6 w-full bg-teal-500 hover:bg-teal-600">
+          <Button asChild className="mt-6 w-full bg-success hover:bg-success">
             <Link to={`/auth?redirect=/howbody-login?equipmentNo=${encodeURIComponent(equipmentNo)}&scanId=${encodeURIComponent(scanId)}`}>
               Sign in to continue
             </Link>
           </Button>
-          <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
+          <div className="mt-4 rounded-xl bg-muted p-3 text-xs text-muted-foreground">
             Device: <span className="font-mono">{equipmentNo}</span>
           </div>
         </Card>
@@ -192,11 +192,11 @@ export default function HowbodyLogin() {
   if (status === "bound") {
     return (
       <Shell>
-        <Card className="rounded-2xl border-0 bg-gradient-to-br from-teal-500 to-emerald-600 p-10 text-center text-white shadow-2xl shadow-teal-500/30">
+        <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success p-10 text-center text-primary-foreground shadow-2xl shadow-success/20">
           <CheckCircle2 className="mx-auto h-16 w-16" />
           <h2 className="mt-4 text-2xl font-bold">You're linked!</h2>
-          <p className="mt-2 text-teal-50">Step on the scanner now and follow the on-screen instructions.</p>
-          <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm">
+          <p className="mt-2 text-success">Step on the scanner now and follow the on-screen instructions.</p>
+          <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-card/15 px-4 py-2 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" /> Waiting for your report…
           </div>
         </Card>
@@ -207,10 +207,10 @@ export default function HowbodyLogin() {
   if (status === "error") {
     return (
       <Shell>
-        <Card className="rounded-2xl p-8 shadow-lg shadow-rose-500/10">
-          <AlertTriangle className="h-10 w-10 text-rose-500" />
+        <Card className="rounded-2xl p-8 shadow-lg shadow-destructive/20">
+          <AlertTriangle className="h-10 w-10 text-destructive" />
           <h2 className="mt-4 text-xl font-bold">Couldn't link to scanner</h2>
-          <p className="mt-2 text-rose-600">{errorMsg}</p>
+          <p className="mt-2 text-destructive">{errorMsg}</p>
           <Button onClick={() => setStatus("idle")} className="mt-6 w-full" variant="outline">
             Try again
           </Button>
@@ -222,31 +222,31 @@ export default function HowbodyLogin() {
   // idle / binding
   return (
     <Shell>
-      <Card className="rounded-2xl p-6 shadow-lg shadow-teal-500/10">
+      <Card className="rounded-2xl p-6 shadow-lg shadow-success/20">
         <div className="flex items-start gap-3">
-          <div className="rounded-full bg-teal-50 p-2 text-teal-600"><ScanLine className="h-6 w-6" /></div>
+          <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-6 w-6" /></div>
           <div className="flex-1">
             <h2 className="text-xl font-bold">Body Scanner Login</h2>
             <p className="text-sm text-muted-foreground">
-              {deviceLabel ? <span className="font-medium text-slate-700">{deviceLabel}</span> : "Device"}
+              {deviceLabel ? <span className="font-medium text-foreground">{deviceLabel}</span> : "Device"}
               {" · "}<span className="font-mono text-xs">{equipmentNo}</span>
             </p>
           </div>
-          <Badge variant="outline" className="border-teal-200 bg-teal-50 text-teal-700">
+          <Badge variant="outline" className="border-success/25 bg-success/10 text-success">
             <ShieldCheck className="mr-1 h-3 w-3" /> Secure
           </Badge>
         </div>
 
         {!isStaff && memberId && (
           <div className="mt-6 space-y-4">
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Logged in as</p>
+            <div className="rounded-xl bg-muted p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Logged in as</p>
               <p className="mt-1 text-base font-semibold">{profile?.full_name || profile?.email}</p>
             </div>
             <Button
               onClick={() => bindMember(memberId)}
               disabled={status === "binding"}
-              className="w-full bg-teal-500 hover:bg-teal-600"
+              className="w-full bg-success hover:bg-success"
             >
               {status === "binding" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Link me to this scanner
@@ -255,7 +255,7 @@ export default function HowbodyLogin() {
         )}
 
         {!isStaff && !memberId && (
-          <div className="mt-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-700">
+          <div className="mt-6 rounded-xl bg-warning/10 p-4 text-sm text-warning">
             Your member profile isn't ready. Please ask staff to assist.
           </div>
         )}
@@ -282,19 +282,19 @@ export default function HowbodyLogin() {
                   key={m.id}
                   onClick={() => bindMember(m.id)}
                   disabled={status === "binding"}
-                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50"
+                  className="flex w-full items-center justify-between rounded-xl border border-border p-3 text-left transition hover:border-success/40 hover:bg-success/10 disabled:opacity-50"
                 >
                   <div>
                     <p className="font-semibold">{m.full_name || "Unnamed"}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {m.member_code} · {m.phone || "no phone"}
                     </p>
                   </div>
-                  <span className="text-sm font-medium text-teal-600">Link →</span>
+                  <span className="text-sm font-medium text-success">Link →</span>
                 </button>
               ))}
               {results.length === 0 && search && !searching && (
-                <p className="text-center text-sm text-slate-500">No members found.</p>
+                <p className="text-center text-sm text-muted-foreground">No members found.</p>
               )}
             </div>
           </div>
@@ -306,14 +306,14 @@ export default function HowbodyLogin() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 via-white to-teal-50/40 px-4 py-8">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-muted via-white to-success/10 px-4 py-8">
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-teal-600">Incline · Body Scan</p>
-          <h1 className="mt-1 text-lg font-bold text-slate-900">Body Composition Scanner</h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-success">Incline · Body Scan</p>
+          <h1 className="mt-1 text-lg font-bold text-foreground">Body Composition Scanner</h1>
         </div>
         {children}
-        <p className="mt-6 text-center text-xs text-slate-400">
+        <p className="mt-6 text-center text-xs text-muted-foreground">
           The Incline Life by Incline
         </p>
       </div>

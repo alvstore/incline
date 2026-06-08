@@ -54,9 +54,9 @@ const STEPS = ["Profile", "Health", "Sign", "Verify"] as const;
 
 // Dark glass form input styles
 const fieldInputCls =
-  "h-11 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-white/40 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:border-primary/60";
+  "h-11 rounded-xl bg-card/5 border-primary-foreground/10 text-primary-foreground placeholder:text-primary-foreground/40 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:border-primary/60";
 const fieldSelectCls =
-  "h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white focus:border-primary/60 focus:ring-2 focus:ring-primary/40 focus:outline-none [&>option]:text-slate-900";
+  "h-11 w-full rounded-xl border border-primary-foreground/10 bg-card/5 px-3 text-sm text-primary-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/40 focus:outline-none [&>option]:text-foreground";
 
 export default function PublicRegistration() {
   const nav = useNavigate();
@@ -169,7 +169,7 @@ export default function PublicRegistration() {
 
   return (
     <div
-      className="relative min-h-[100dvh] w-full overflow-hidden bg-[#08060f] text-white"
+      className="relative min-h-[100dvh] w-full overflow-hidden bg-[#08060f] text-primary-foreground"
       style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <SEO
@@ -187,7 +187,7 @@ export default function PublicRegistration() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#08060f]/40 via-[#08060f]/70 to-[#08060f]" />
         <div className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/30 blur-[120px]" />
-        <div className="absolute -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-violet-600/30 blur-[140px]" />
+        <div className="absolute -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-primary/30 blur-[140px]" />
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
@@ -199,13 +199,13 @@ export default function PublicRegistration() {
               alt="The Incline Life"
               className="h-11 w-auto object-contain drop-shadow-[0_2px_12px_rgba(167,139,250,0.35)]"
             />
-            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/50">
               Member registration
             </span>
           </div>
 
 
-          <div className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md">
+          <div className="rounded-full border border-primary-foreground/15 bg-card/5 px-3 py-1 text-[11px] font-medium text-primary-foreground/80 backdrop-blur-md">
             Step {Math.min(stepIdx + 1, 4)} of 4
           </div>
         </header>
@@ -216,7 +216,7 @@ export default function PublicRegistration() {
           <h2 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">
             Your transformation
             <br />
-            <span className="bg-gradient-to-r from-primary to-violet-300 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary to-primary/40 bg-clip-text text-transparent">
               starts here.
             </span>
           </h2>
@@ -226,7 +226,7 @@ export default function PublicRegistration() {
         <GlassCard className="mt-8 flex-1 p-5 sm:mt-10 sm:p-7">
           <div className="mb-6 flex items-center justify-between">
             <StepDots total={4} current={stepIdx} labels={[...STEPS]} />
-            <span className="text-xs font-medium text-white/60">{STEPS[stepIdx]}</span>
+            <span className="text-xs font-medium text-primary-foreground/60">{STEPS[stepIdx]}</span>
           </div>
 
           {step === "details" && (
@@ -237,7 +237,7 @@ export default function PublicRegistration() {
 
               <Field label="Phone (WhatsApp)" error={form.formState.errors.phone?.message}>
                 <PhoneInput
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/40"
+                  className="bg-card/5 border-primary-foreground/10 text-primary-foreground placeholder:text-primary-foreground/40"
                   value={form.watch("phone")}
                   onChange={(v) => form.setValue("phone", v ? `+91${v}` : "", { shouldValidate: true })}
                 />
@@ -264,8 +264,8 @@ export default function PublicRegistration() {
                 <input type="hidden" {...form.register("branch_id")} />
                 {!branches ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div className="h-[62px] rounded-xl bg-white/5 animate-pulse" />
-                    <div className="h-[62px] rounded-xl bg-white/5 animate-pulse" />
+                    <div className="h-[62px] rounded-xl bg-card/5 animate-pulse" />
+                    <div className="h-[62px] rounded-xl bg-card/5 animate-pulse" />
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -281,27 +281,27 @@ export default function PublicRegistration() {
                             "group flex items-center gap-3 rounded-xl border p-3 text-left transition-all backdrop-blur-md",
                             selected
                               ? "border-primary/70 bg-primary/15 ring-2 ring-primary/40 shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.5)]"
-                              : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                              : "border-primary-foreground/10 bg-card/5 hover:bg-card/10 hover:border-primary-foreground/20"
                           )}
                         >
                           <span
                             className={cn(
                               "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-                              selected ? "bg-primary/25 text-primary-foreground" : "bg-white/10 text-white/70"
+                              selected ? "bg-primary/25 text-primary-foreground" : "bg-card/10 text-primary-foreground/70"
                             )}
                           >
                             <MapPin className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-white">{b.name}</span>
+                            <span className="block truncate text-sm font-semibold text-primary-foreground">{b.name}</span>
                             {b.city && (
-                              <span className="block truncate text-xs text-white/55">{b.city}</span>
+                              <span className="block truncate text-xs text-primary-foreground/55">{b.city}</span>
                             )}
                           </span>
                           <span
                             className={cn(
                               "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
-                              selected ? "border-primary bg-primary" : "border-white/25"
+                              selected ? "border-primary bg-primary" : "border-primary-foreground/25"
                             )}
                           >
                             {selected && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
@@ -339,13 +339,13 @@ export default function PublicRegistration() {
                         className={`group flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all duration-200 ${
                           active
                             ? "border-primary/60 bg-primary/15 shadow-[0_0_0_1px_hsl(var(--primary)/0.4)]"
-                            : "border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10"
+                            : "border-primary-foreground/10 bg-card/5 hover:border-primary-foreground/25 hover:bg-card/10"
                         }`}
                       >
-                        <div className={`rounded-lg p-1.5 ${active ? "bg-primary text-primary-foreground" : "bg-white/10 text-white/70"}`}>
+                        <div className={`rounded-lg p-1.5 ${active ? "bg-primary text-primary-foreground" : "bg-card/10 text-primary-foreground/70"}`}>
                           <Icon className="h-4 w-4" />
                         </div>
-                        <span className={`text-sm font-medium ${active ? "text-white" : "text-white/80"}`}>{g.key}</span>
+                        <span className={`text-sm font-medium ${active ? "text-primary-foreground" : "text-primary-foreground/80"}`}>{g.key}</span>
                       </button>
                     );
                   })}
@@ -368,7 +368,7 @@ export default function PublicRegistration() {
                           key={g}
                           onClick={() => form.setValue("fitness_goals", active ? "" : g)}
                           className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                            active ? "bg-primary text-primary-foreground" : "bg-white/10 text-white/80 hover:bg-white/15"
+                            active ? "bg-primary text-primary-foreground" : "bg-card/10 text-primary-foreground/80 hover:bg-card/15"
                           }`}
                         >
                           {g}
@@ -395,7 +395,7 @@ export default function PublicRegistration() {
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                           checked
                             ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.6)]"
-                            : "bg-white/5 text-white/80 ring-1 ring-inset ring-white/10 hover:bg-white/10"
+                            : "bg-card/5 text-primary-foreground/80 ring-1 ring-inset ring-white/10 hover:bg-card/10"
                         }`}
                       >
                         {opt}
@@ -411,7 +411,7 @@ export default function PublicRegistration() {
                     className={`mt-3 ${fieldInputCls}`}
                   />
                 )}
-                <p className="mt-2 text-[11px] text-white/50">Confidential — only your trainer sees this.</p>
+                <p className="mt-2 text-[11px] text-primary-foreground/50">Confidential — only your trainer sees this.</p>
               </Field>
 
               <LiquidButton type="submit" size="lg" className="w-full">
@@ -422,11 +422,11 @@ export default function PublicRegistration() {
 
           {step === "parq" && (
             <div className="space-y-5">
-              <p className="text-sm text-white/70">Quick health check — answer honestly to keep you safe.</p>
+              <p className="text-sm text-primary-foreground/70">Quick health check — answer honestly to keep you safe.</p>
               <div className="space-y-3">
                 {PARQ_QUESTIONS.map((q, i) => (
-                  <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="mb-3 text-sm font-medium text-white/90">{q}</p>
+                  <div key={i} className="rounded-2xl border border-primary-foreground/10 bg-card/5 p-4">
+                    <p className="mb-3 text-sm font-medium text-primary-foreground/90">{q}</p>
                     <div className="flex gap-2">
                       {(["no", "yes"] as const).map((v) => (
                         <button
@@ -436,9 +436,9 @@ export default function PublicRegistration() {
                           className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                             parq[`q${i}`] === v
                               ? v === "yes"
-                                ? "bg-amber-500 text-white shadow-[0_4px_14px_-4px_rgb(245_158_11/0.5)]"
-                                : "bg-emerald-500 text-white shadow-[0_4px_14px_-4px_rgb(16_185_129/0.5)]"
-                              : "bg-white/5 text-white/70 ring-1 ring-inset ring-white/10 hover:bg-white/10"
+                                ? "bg-warning text-primary-foreground shadow-[0_4px_14px_-4px_rgb(245_158_11/0.5)]"
+                                : "bg-success text-primary-foreground shadow-[0_4px_14px_-4px_rgb(16_185_129/0.5)]"
+                              : "bg-card/5 text-primary-foreground/70 ring-1 ring-inset ring-white/10 hover:bg-card/10"
                           }`}
                         >
                           {v.toUpperCase()}
@@ -461,8 +461,8 @@ export default function PublicRegistration() {
 
           {step === "sign" && (
             <div className="space-y-5">
-              <p className="text-sm text-white/70">Review and sign to continue.</p>
-              <div className="max-h-44 overflow-auto rounded-2xl border border-white/10 bg-white/5 p-4 text-xs leading-relaxed text-white/80">
+              <p className="text-sm text-primary-foreground/70">Review and sign to continue.</p>
+              <div className="max-h-44 overflow-auto rounded-2xl border border-primary-foreground/10 bg-card/5 p-4 text-xs leading-relaxed text-primary-foreground/80">
                 I acknowledge that physical exercise involves inherent risk of injury. I voluntarily assume all such risks
                 and agree to follow gym rules, trainer instructions, and equipment guidelines. I release The Incline Life
                 by Incline, its staff and contractors from liability for any injury, loss, or damage arising from my
@@ -479,29 +479,29 @@ export default function PublicRegistration() {
                 ].map((c) => (
                   <label
                     key={c.k}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/80 transition-colors hover:bg-white/10"
+                    className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-primary-foreground/10 bg-card/5 p-3 text-xs text-primary-foreground/80 transition-colors hover:bg-card/10"
                   >
                     <Checkbox
                       checked={(consents as Record<string, boolean>)[c.k]}
                       onCheckedChange={(v) => setConsents((s) => ({ ...s, [c.k]: !!v }))}
-                      className="mt-0.5 border-white/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                      className="mt-0.5 border-primary-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                     />
                     <span className="leading-snug">
                       {c.l}
-                      {c.required && <span className="ml-1 text-red-400">*</span>}
-                      {!c.required && <span className="ml-1 text-white/40">(optional)</span>}
+                      {c.required && <span className="ml-1 text-destructive">*</span>}
+                      {!c.required && <span className="ml-1 text-primary-foreground/40">(optional)</span>}
                     </span>
                   </label>
                 ))}
               </div>
 
               <div>
-                <Label className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Signature</Label>
-                <p className="mb-2 mt-1 flex items-center gap-1.5 text-xs text-white/50">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/60">Signature</Label>
+                <p className="mb-2 mt-1 flex items-center gap-1.5 text-xs text-primary-foreground/50">
                   <Sparkles className="h-3 w-3 text-primary" />
                   Sign with Apple Pencil or your finger
                 </p>
-                <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-white/20">
+                <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-white/20">
                   <SignaturePad ref={sigRef} />
                 </div>
                 <button
@@ -527,8 +527,8 @@ export default function PublicRegistration() {
 
           {step === "otp" && (
             <div className="space-y-6">
-              <p className="text-sm text-white/70">
-                We sent a 6-digit code to <span className="font-semibold text-white">{details?.phone}</span> on WhatsApp
+              <p className="text-sm text-primary-foreground/70">
+                We sent a 6-digit code to <span className="font-semibold text-primary-foreground">{details?.phone}</span> on WhatsApp
                 {details?.email ? " & email" : ""}.
               </p>
               <div className="flex justify-center">
@@ -538,7 +538,7 @@ export default function PublicRegistration() {
                       <InputOTPSlot
                         key={i}
                         index={i}
-                        className="h-14 w-12 rounded-xl border-2 border-white/15 bg-white/5 text-xl font-bold text-white shadow-sm transition-all data-[active=true]:border-primary data-[active=true]:ring-2 data-[active=true]:ring-primary/30"
+                        className="h-14 w-12 rounded-xl border-2 border-primary-foreground/15 bg-card/5 text-xl font-bold text-primary-foreground shadow-sm transition-all data-[active=true]:border-primary data-[active=true]:ring-2 data-[active=true]:ring-primary/30"
                       />
                     ))}
                   </InputOTPGroup>
@@ -567,11 +567,11 @@ export default function PublicRegistration() {
 
           {step === "done" && (
             <div className="space-y-4 py-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 ring-1 ring-emerald-400/40">
-                <ShieldCheck className="h-8 w-8 text-emerald-400" />
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/20 ring-1 ring-success/40">
+                <ShieldCheck className="h-8 w-8 text-success" />
               </div>
               <h3 className="text-xl font-bold">You're in!</h3>
-              <p className="text-sm text-white/70">
+              <p className="text-sm text-primary-foreground/70">
                 Visit reception to activate your plan. Redirecting to your dashboard…
               </p>
             </div>
@@ -579,7 +579,7 @@ export default function PublicRegistration() {
         </GlassCard>
 
         {/* Trust strip */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-white/50">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-primary-foreground/50">
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3 w-3" /> DPDP-compliant</span>
           <span className="inline-flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {branches?.length ?? 0} branches</span>
           <span>© 2026 The Incline Life by Incline</span>
@@ -592,9 +592,9 @@ export default function PublicRegistration() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <Label className="text-[11px] font-semibold uppercase tracking-wider text-white/60">{label}</Label>
+      <Label className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/60">{label}</Label>
       <div className="mt-1.5">{children}</div>
-      {error && <p className="mt-1.5 text-xs font-medium text-red-400">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-medium text-destructive">{error}</p>}
     </div>
   );
 }

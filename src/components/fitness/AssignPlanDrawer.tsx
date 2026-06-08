@@ -347,8 +347,8 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-emerald-500/5 border-emerald-200/50 p-3 flex items-start gap-3">
-                <Users className="h-4 w-4 mt-0.5 text-emerald-600" />
+              <div className="rounded-xl border bg-success/5 border-success/25 p-3 flex items-start gap-3">
+                <Users className="h-4 w-4 mt-0.5 text-success" />
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <Label htmlFor="is-common-toggle" className="text-sm font-medium cursor-pointer">

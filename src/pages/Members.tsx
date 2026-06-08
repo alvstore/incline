@@ -612,7 +612,7 @@ export default function MembersPage() {
                                   {activeMembership?.id && freeDaysByMembership[activeMembership.id] > 0 && (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-[10px] w-fit gap-1">
+                                        <Badge variant="outline" className="bg-warning/15 text-warning border-warning/40 text-[10px] w-fit gap-1">
                                           <Gift className="h-3 w-3" />
                                           +{freeDaysByMembership[activeMembership.id]}d gift
                                         </Badge>

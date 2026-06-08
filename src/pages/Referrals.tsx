@@ -332,9 +332,9 @@ export default function ReferralsPage() {
     : null;
 
   const getStatusClass = (status: string) => {
-    if (status === 'converted') return 'bg-green-500/10 text-green-500';
-    if (status === 'expired') return 'bg-red-500/10 text-red-500';
-    return 'bg-yellow-500/10 text-yellow-500';
+    if (status === 'converted') return 'bg-success/10 text-success';
+    if (status === 'expired') return 'bg-destructive/10 text-destructive';
+    return 'bg-warning/10 text-warning';
   };
 
   return (
@@ -385,7 +385,7 @@ export default function ReferralsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Converted</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500" data-testid="text-converted-referrals">{stats.converted}</div>
+              <div className="text-2xl font-bold text-success" data-testid="text-converted-referrals">{stats.converted}</div>
             </CardContent>
           </Card>
           <Card>
@@ -393,7 +393,7 @@ export default function ReferralsPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-500" data-testid="text-pending-referrals">{stats.pending}</div>
+              <div className="text-2xl font-bold text-warning" data-testid="text-pending-referrals">{stats.pending}</div>
             </CardContent>
           </Card>
           <Card>
@@ -413,7 +413,7 @@ export default function ReferralsPage() {
             <TabsTrigger value="rewards">
               Rewards
               {rewards.filter(r => !r.is_claimed).length > 0 && (
-                <Badge className="ml-2 h-5 min-w-[20px] bg-yellow-500/10 text-yellow-600 text-[10px]">
+                <Badge className="ml-2 h-5 min-w-[20px] bg-warning/10 text-warning text-[10px]">
                   {rewards.filter(r => !r.is_claimed).length}
                 </Badge>
               )}
@@ -462,7 +462,7 @@ export default function ReferralsPage() {
                                 data-testid={`button-copy-code-${referral.id}`}
                               >
                                 {copiedCode === referral.referral_code ? (
-                                  <Check className="h-3 w-3 text-green-500" />
+                                  <Check className="h-3 w-3 text-success" />
                                 ) : (
                                   <Copy className="h-3 w-3" />
                                 )}
@@ -570,7 +570,7 @@ export default function ReferralsPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge className={reward.is_claimed ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}>
+                            <Badge className={reward.is_claimed ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
                               {reward.is_claimed ? 'Claimed' : 'Pending'}
                             </Badge>
                           </TableCell>

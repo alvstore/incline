@@ -29,7 +29,7 @@ export function AnnouncementAttachment({ url, kind, filename, compact }: Props) 
         src={url}
         controls
         playsInline
-        className={`rounded-xl border border-border/60 w-full ${compact ? 'max-h-48' : 'max-h-80'} bg-black`}
+        className={`rounded-xl border border-border/60 w-full ${compact ? 'max-h-48' : 'max-h-80'} bg-foreground`}
       />
     );
   }
@@ -42,7 +42,7 @@ export function AnnouncementAttachment({ url, kind, filename, compact }: Props) 
       rel="noopener noreferrer"
       className="inline-flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50 transition"
     >
-      <FileText className="h-4 w-4 text-amber-600" />
+      <FileText className="h-4 w-4 text-warning" />
       <span className="truncate max-w-[200px]">{filename || 'Attachment'}</span>
       <Download className="h-3.5 w-3.5 text-muted-foreground" />
     </a>

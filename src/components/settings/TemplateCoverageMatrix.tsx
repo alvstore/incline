@@ -16,8 +16,8 @@ type Channel = EventChannel;
 type RowState = 'ok' | 'pending' | 'rejected' | 'inactive' | 'missing';
 
 const STATE_META: Record<RowState, { label: string; icon: any; cls: string }> = {
-  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-  pending: { label: 'Pending Approval', icon: ShieldAlert, cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-success/10 text-success border-success/20' },
+  pending: { label: 'Pending Approval', icon: ShieldAlert, cls: 'bg-warning/10 text-warning border-warning/20' },
   rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-destructive/10 text-destructive border-destructive/20' },
   inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-muted text-muted-foreground' },
   missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -113,13 +113,13 @@ export function TemplateCoverageMatrix({ channel }: Props) {
   return (
     <>
       <div className="space-y-4">
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+        <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
           <CardContent className="pt-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex-1 min-w-[220px]">
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Coverage</p>
-                  <span className="text-sm font-bold text-slate-900">{okCount}/{total} · {pct}%</span>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Coverage</p>
+                  <span className="text-sm font-bold text-foreground">{okCount}/{total} · {pct}%</span>
                 </div>
                 <Progress value={pct} className="h-2" />
               </div>
@@ -132,7 +132,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                 Auto-fill missing with AI ({missingEvents.length})
               </Button>
               <Button variant="outline" onClick={() => openAi()} className="gap-2">
-                <Sparkles className="h-4 w-4 text-violet-600" />
+                <Sparkles className="h-4 w-4 text-primary" />
                 Open AI Studio
               </Button>
             </div>
@@ -144,11 +144,11 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                 return (
                   <div
                     key={r.event}
-                    className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-slate-50/60 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/60 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate text-slate-900">{r.label}</p>
-                      <p className="text-xs text-slate-500 truncate">
+                      <p className="font-medium text-sm truncate text-foreground">{r.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {r.tpl ? `→ ${r.tpl.name}` : '— No template configured —'}
                         {r.metaName && <span className="ml-2 font-mono">[{r.metaName}]</span>}
                       </p>
@@ -161,7 +161,7 @@ export function TemplateCoverageMatrix({ channel }: Props) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 px-2 text-xs gap-1 text-violet-600 hover:bg-violet-50"
+                          className="h-7 px-2 text-xs gap-1 text-primary hover:bg-primary/10"
                           onClick={() => openAi([r.event])}
                         >
                           <Sparkles className="h-3 w-3" /> AI Draft

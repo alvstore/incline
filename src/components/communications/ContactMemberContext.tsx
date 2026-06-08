@@ -42,13 +42,13 @@ export function ContactMemberContext({ memberId, onInsert }: Props) {
   const endDate = ms?.end_date ? new Date(ms.end_date) : null;
   const daysLeft = endDate ? differenceInDays(endDate, new Date()) : null;
 
-  let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+  let badgeClass = 'bg-muted text-foreground border-border';
   let badgeText = 'No active plan';
   if (daysLeft !== null) {
-    if (daysLeft < 0) { badgeClass = 'bg-red-100 text-red-700 border-red-200'; badgeText = `Expired ${Math.abs(daysLeft)}d ago`; }
-    else if (daysLeft <= 7) { badgeClass = 'bg-red-100 text-red-700 border-red-200'; badgeText = `Expires in ${daysLeft}d`; }
-    else if (daysLeft <= 30) { badgeClass = 'bg-amber-100 text-amber-700 border-amber-200'; badgeText = `Expires in ${daysLeft}d`; }
-    else { badgeClass = 'bg-emerald-100 text-emerald-700 border-emerald-200'; badgeText = `${daysLeft}d remaining`; }
+    if (daysLeft < 0) { badgeClass = 'bg-destructive/15 text-destructive border-destructive/25'; badgeText = `Expired ${Math.abs(daysLeft)}d ago`; }
+    else if (daysLeft <= 7) { badgeClass = 'bg-destructive/15 text-destructive border-destructive/25'; badgeText = `Expires in ${daysLeft}d`; }
+    else if (daysLeft <= 30) { badgeClass = 'bg-warning/15 text-warning border-warning/25'; badgeText = `Expires in ${daysLeft}d`; }
+    else { badgeClass = 'bg-success/15 text-success border-success/25'; badgeText = `${daysLeft}d remaining`; }
   }
 
   const lastCheckIn = data?.lastAttendance?.check_in ? new Date(data.lastAttendance.check_in) : null;
@@ -58,9 +58,9 @@ export function ContactMemberContext({ memberId, onInsert }: Props) {
   return (
     <div className="space-y-4">
       {/* Membership card */}
-      <div className="rounded-2xl bg-card p-4 shadow-md shadow-slate-200/50">
+      <div className="rounded-2xl bg-card p-4 shadow-md shadow/50">
         <div className="flex items-center gap-2.5 mb-3">
-          <div className="h-8 w-8 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-600 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-full bg-primary/15 dark:bg-primary/20 text-primary flex items-center justify-center">
             <CreditCard className="h-4 w-4" />
           </div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Membership</p>
@@ -71,9 +71,9 @@ export function ContactMemberContext({ memberId, onInsert }: Props) {
       </div>
 
       {/* Last attendance */}
-      <div className="rounded-2xl bg-card p-4 shadow-md shadow-slate-200/50">
+      <div className="rounded-2xl bg-card p-4 shadow-md shadow/50">
         <div className="flex items-center gap-2.5 mb-3">
-          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-full bg-info/15 dark:bg-info/20 text-info flex items-center justify-center">
             <Activity className="h-4 w-4" />
           </div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Last Visit</p>
@@ -89,31 +89,31 @@ export function ContactMemberContext({ memberId, onInsert }: Props) {
       </div>
 
       {/* Quick actions */}
-      <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-500/10 dark:to-indigo-500/10 p-4 shadow-sm shadow-violet-200/40 space-y-2">
+      <div className="rounded-2xl bg-gradient-to-br from-primary/10 to-primary/10 dark:from-primary/10 dark:to-primary/10 p-4 shadow-sm shadow-primary/20 space-y-2">
         <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1">Quick Actions</p>
         <Button
           size="sm"
           variant="outline"
-          className="w-full rounded-xl gap-2 justify-start bg-white"
+          className="w-full rounded-xl gap-2 justify-start bg-card"
           onClick={() => onInsert(`Hi ${firstName}, please complete your payment here: ${baseUrl}/member/pay?member=${memberId}`)}
         >
-          <Wallet className="h-3.5 w-3.5 text-emerald-600" /> Send Payment Link
+          <Wallet className="h-3.5 w-3.5 text-success" /> Send Payment Link
         </Button>
         <Button
           size="sm"
           variant="outline"
-          className="w-full rounded-xl gap-2 justify-start bg-white"
+          className="w-full rounded-xl gap-2 justify-start bg-card"
           onClick={() => onInsert(`Hi ${firstName}, ready to book your next PT session? Tap here: ${baseUrl}/pt-sessions`)}
         >
-          <Dumbbell className="h-3.5 w-3.5 text-violet-600" /> Book PT Session
+          <Dumbbell className="h-3.5 w-3.5 text-primary" /> Book PT Session
         </Button>
         <Button
           size="sm"
           variant="outline"
-          className="w-full rounded-xl gap-2 justify-start bg-white"
+          className="w-full rounded-xl gap-2 justify-start bg-card"
           onClick={() => onInsert(`Hi ${firstName}, book your facility slot here: ${baseUrl}/my-classes`)}
         >
-          <CalendarCheck className="h-3.5 w-3.5 text-blue-600" /> Book Facility Slot
+          <CalendarCheck className="h-3.5 w-3.5 text-info" /> Book Facility Slot
         </Button>
       </div>
     </div>

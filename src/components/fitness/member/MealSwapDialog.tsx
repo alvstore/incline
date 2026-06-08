@@ -200,7 +200,7 @@ export function MealSwapDialog({
                           <Flame className="h-3 w-3 mr-0.5" />
                           {Math.round(item.calories)} kcal
                           {currentCalories && diff !== 0 && (
-                            <span className={diff > 0 ? 'text-amber-500 ml-1' : 'text-emerald-500 ml-1'}>
+                            <span className={diff > 0 ? 'text-warning ml-1' : 'text-success ml-1'}>
                               ({diff > 0 ? '+' : ''}{Math.round(diff)})
                             </span>
                           )}

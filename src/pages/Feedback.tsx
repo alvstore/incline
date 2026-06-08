@@ -25,11 +25,11 @@ import { LivePill } from '@/components/ui/live-pill';
 type RequestStatus = 'not_sent' | 'queued' | 'sent' | 'delivered' | 'failed';
 
 const REQUEST_STATUS_BADGE: Record<RequestStatus, { label: string; cls: string }> = {
-  not_sent: { label: 'Not sent', cls: 'bg-slate-100 text-slate-600' },
-  queued:   { label: 'Queued',   cls: 'bg-amber-100 text-amber-700' },
-  sent:     { label: 'Sent',     cls: 'bg-blue-100 text-blue-700' },
-  delivered:{ label: 'Delivered',cls: 'bg-emerald-100 text-emerald-700' },
-  failed:   { label: 'Failed',   cls: 'bg-red-100 text-red-700' },
+  not_sent: { label: 'Not sent', cls: 'bg-muted text-muted-foreground' },
+  queued:   { label: 'Queued',   cls: 'bg-warning/15 text-warning' },
+  sent:     { label: 'Sent',     cls: 'bg-info/15 text-info' },
+  delivered:{ label: 'Delivered',cls: 'bg-success/15 text-success' },
+  failed:   { label: 'Failed',   cls: 'bg-destructive/15 text-destructive' },
 };
 
 export default function FeedbackPage() {
@@ -146,13 +146,13 @@ export default function FeedbackPage() {
     return { avgRating, lowOpen, requestsSent, reviewsReceived, conversion };
   }, [feedbackList]);
 
-  const ratingColor = (r: number) => r >= 4 ? 'text-emerald-500' : r >= 3 ? 'text-amber-500' : 'text-red-500';
+  const ratingColor = (r: number) => r >= 4 ? 'text-success' : r >= 3 ? 'text-warning' : 'text-destructive';
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'pending':  return <Badge className="bg-amber-100 text-amber-700"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
-      case 'reviewed': return <Badge className="bg-blue-100 text-blue-700"><Eye className="w-3 h-3 mr-1" />Reviewed</Badge>;
-      case 'resolved': return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3 mr-1" />Resolved</Badge>;
+      case 'pending':  return <Badge className="bg-warning/15 text-warning"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+      case 'reviewed': return <Badge className="bg-info/15 text-info"><Eye className="w-3 h-3 mr-1" />Reviewed</Badge>;
+      case 'resolved': return <Badge className="bg-success/15 text-success"><CheckCircle className="w-3 h-3 mr-1" />Resolved</Badge>;
       default:         return <Badge variant="secondary">{status}</Badge>;
     }
   };
@@ -252,7 +252,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* Feedback Table */}
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader><CardTitle>All Feedback</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (
@@ -302,7 +302,7 @@ export default function FeedbackPage() {
                           {f.employee_name && <p className="text-xs">Staff: {f.employee_name}</p>}
                           {!f.trainer_name && !f.employee_name && '-'}
                           {f.recovery_task_id && (
-                            <Badge className="mt-1 bg-red-50 text-red-700 text-[10px]">Recovery task</Badge>
+                            <Badge className="mt-1 bg-destructive/10 text-destructive text-[10px]">Recovery task</Badge>
                           )}
                         </TableCell>
                         <TableCell>{statusBadge(f.status)}</TableCell>
@@ -326,7 +326,7 @@ export default function FeedbackPage() {
                         </TableCell>
                         <TableCell>
                           {f.google_review_id ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+                            <Badge className="bg-success/15 text-success gap-1">
                               <Globe className="h-3 w-3" />Received
                             </Badge>
                           ) : (

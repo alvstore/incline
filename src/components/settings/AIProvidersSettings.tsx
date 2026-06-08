@@ -74,7 +74,7 @@ export function AIProvidersSettings() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-violet-600" />
+              <Brain className="h-5 w-5 text-primary" />
               AI Providers
             </CardTitle>
             <CardDescription>
@@ -116,13 +116,13 @@ export function AIProvidersSettings() {
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       {p.is_active ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 w-fit">Active</Badge>
+                        <Badge className="bg-success/15 text-success border border-success/25 w-fit">Active</Badge>
                       ) : (
                         <Badge variant="secondary" className="w-fit">Disabled</Badge>
                       )}
-                      {p.is_default && <Badge className="bg-violet-100 text-violet-700 border border-violet-200 w-fit text-[10px]">Default for scope</Badge>}
+                      {p.is_default && <Badge className="bg-primary/15 text-primary border border-primary/25 w-fit text-[10px]">Default for scope</Badge>}
                       {p.is_active && !p.is_default && (
-                        <Badge className="bg-amber-100 text-amber-700 border border-amber-200 w-fit text-[10px]">Active but not default — won't be used</Badge>
+                        <Badge className="bg-warning/15 text-warning border border-warning/25 w-fit text-[10px]">Active but not default — won't be used</Badge>
                       )}
                     </div>
                   </TableCell>
@@ -131,7 +131,7 @@ export function AIProvidersSettings() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="mr-1 text-violet-700 border-violet-200 hover:bg-violet-50"
+                        className="mr-1 text-primary border-primary/25 hover:bg-primary/10"
                         onClick={async () => {
                           const { error } = await (supabase as any).rpc('set_default_ai_provider', { p_id: p.id });
                           if (error) { toast.error(error.message); return; }
@@ -282,7 +282,7 @@ function ProviderDrawer({
       <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-violet-600" />
+            <Sparkles className="h-5 w-5 text-primary" />
             {isEdit ? 'Edit AI Provider' : 'Add AI Provider'}
           </SheetTitle>
           <SheetDescription>
@@ -410,15 +410,15 @@ function ProviderDrawer({
           </div>
 
           {testResult && (
-            <div className={`rounded-lg border p-3 text-sm ${testResult.success ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`rounded-lg border p-3 text-sm ${testResult.success ? 'bg-success/10 border-success/25' : 'bg-destructive/10 border-destructive/25'}`}>
               {testResult.success ? (
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5" />
+                  <CheckCircle2 className="h-4 w-4 text-success mt-0.5" />
                   <div className="flex-1">
-                    <div className="font-medium text-emerald-900">Connection OK ({testResult.latency_ms}ms)</div>
-                    <div className="text-xs text-emerald-700 mt-1">Sample reply: "{testResult.sample_reply}"</div>
+                    <div className="font-medium text-success">Connection OK ({testResult.latency_ms}ms)</div>
+                    <div className="text-xs text-success mt-1">Sample reply: "{testResult.sample_reply}"</div>
                     {testResult.pasted_raw_key && (
-                      <div className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded p-2">
+                      <div className="text-xs text-warning mt-2 bg-warning/10 border border-warning/25 rounded p-2">
                         ⚠️ You pasted the raw API key in the Secret Name field. This worked for testing,
                         but for production you must store the key as a Cloud secret and put only the
                         secret name (e.g. <code>GOOGLE_AI_API_KEY</code>) in this field.
@@ -428,10 +428,10 @@ function ProviderDrawer({
                 </div>
               ) : (
                 <div className="flex items-start gap-2">
-                  <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                  <XCircle className="h-4 w-4 text-destructive mt-0.5" />
                   <div>
-                    <div className="font-medium text-red-900">Test failed</div>
-                    <div className="text-xs text-red-700 mt-1 break-all">{testResult.error}</div>
+                    <div className="font-medium text-destructive">Test failed</div>
+                    <div className="text-xs text-destructive mt-1 break-all">{testResult.error}</div>
                   </div>
                 </div>
               )}

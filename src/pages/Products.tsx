@@ -194,7 +194,7 @@ export default function ProductsPage() {
                   <p className="text-sm opacity-80">Total Products</p>
                   <h3 className="text-3xl font-bold mt-1">{stats.totalProducts}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <Package className="h-6 w-6" />
                 </div>
               </div>
@@ -208,7 +208,7 @@ export default function ProductsPage() {
                   <p className="text-sm opacity-80">Low Stock</p>
                   <h3 className="text-3xl font-bold mt-1">{stats.lowStock}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <AlertTriangle className="h-6 w-6" />
                 </div>
               </div>
@@ -222,7 +222,7 @@ export default function ProductsPage() {
                   <p className="text-sm opacity-80">Stock Value</p>
                   <h3 className="text-3xl font-bold mt-1">₹{stats.totalValue.toLocaleString()}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <TrendingUp className="h-6 w-6" />
                 </div>
               </div>
@@ -236,7 +236,7 @@ export default function ProductsPage() {
                   <p className="text-sm opacity-80">Categories</p>
                   <h3 className="text-3xl font-bold mt-1">{stats.categories}</h3>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
                   <Tag className="h-6 w-6" />
                 </div>
               </div>
@@ -379,12 +379,12 @@ export default function ProductsPage() {
                                       <div className="flex items-center gap-2">
                                         <p className="font-medium">{product.name}</p>
                                         {product.requires_batch_tracking && (
-                                          <Badge className="bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-medium px-2 py-0">
+                                          <Badge className="bg-primary/15 text-primary rounded-full text-[10px] font-medium px-2 py-0">
                                             <Layers className="h-3 w-3 mr-1" /> Batch
                                           </Badge>
                                         )}
                                         {product.requires_lab_report && (
-                                          <Badge className="bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium px-2 py-0">
+                                          <Badge className="bg-success/15 text-success rounded-full text-[10px] font-medium px-2 py-0">
                                             <ShieldCheck className="h-3 w-3 mr-1" /> CoA
                                           </Badge>
                                         )}

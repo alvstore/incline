@@ -199,7 +199,7 @@ export function MemberPlanProgressBlock({ memberId }: Props) {
                   {p.type === 'workout' ? (
                     <Dumbbell className="h-3.5 w-3.5 text-primary shrink-0" />
                   ) : (
-                    <Apple className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <Apple className="h-3.5 w-3.5 text-success shrink-0" />
                   )}
                   <span className="truncate">{p.name}</span>
                   {p.isAI && (
@@ -237,14 +237,14 @@ export function MemberPlanProgressBlock({ memberId }: Props) {
             ))}
             {mealLog.slice(0, 5).map((c) => (
               <div key={`ml-${c.id}`} className="flex items-center gap-2 text-muted-foreground">
-                <Apple className="h-3 w-3 text-emerald-500" />
+                <Apple className="h-3 w-3 text-success" />
                 Logged <span className="text-foreground font-medium">{c.meal_name || 'meal'}</span>
                 <span className="ml-auto">{format(new Date(c.completed_at), 'MMM d, HH:mm')}</span>
               </div>
             ))}
             {swaps.slice(0, 5).map((s) => (
               <div key={`sw-${s.id}`} className="flex items-center gap-2 text-muted-foreground">
-                <Replace className="h-3 w-3 text-amber-500" />
+                <Replace className="h-3 w-3 text-warning" />
                 Swapped to <span className="text-foreground font-medium">{s.new_meal?.name}</span>
                 <span className="ml-auto">{format(new Date(s.swapped_at), 'MMM d, HH:mm')}</span>
               </div>

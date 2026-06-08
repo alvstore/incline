@@ -25,12 +25,12 @@ export function PtPackageBadge({
       : null;
     const tone =
       days === null
-        ? 'bg-slate-100 text-slate-700'
+        ? 'bg-muted text-foreground'
         : days < 0
-          ? 'bg-red-100 text-red-700'
+          ? 'bg-destructive/15 text-destructive'
           : days <= 7
-            ? 'bg-amber-100 text-amber-700'
-            : 'bg-emerald-100 text-emerald-700';
+            ? 'bg-warning/15 text-warning'
+            : 'bg-success/15 text-success';
 
     return (
       <div
@@ -56,14 +56,14 @@ export function PtPackageBadge({
 
   return (
     <div className={cn('flex flex-col gap-1 min-w-[140px]', className)}>
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 w-fit">
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary w-fit">
         <Dumbbell className="h-3.5 w-3.5" />
         <span>{remaining} sessions left</span>
       </div>
       {total > 0 && (
         <Progress
           value={pct}
-          className="h-1 rounded-full bg-indigo-100 [&>div]:bg-indigo-500"
+          className="h-1 rounded-full bg-primary/15 [&>div]:bg-primary"
         />
       )}
     </div>

@@ -94,27 +94,27 @@ function WeekStrip({
               onClick={() => onSelect(d)}
               className={cn(
                 'flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px] py-2 px-3 rounded-2xl border transition-all',
-                'focus:outline-none focus:ring-2 focus:ring-indigo-500',
+                'focus:outline-none focus:ring-2 focus:ring-primary',
                 isSelected
-                  ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white border-transparent shadow-lg shadow-indigo-500/30'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40',
+                  ? 'bg-gradient-to-br from-primary to-primary text-primary-foreground border-transparent shadow-lg shadow-primary/20'
+                  : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-primary/10',
               )}
             >
               <span className={cn(
                 'text-[10px] font-semibold uppercase tracking-wider',
-                isSelected ? 'text-white/80' : 'text-slate-500',
+                isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground',
               )}>
                 {format(d, 'EEE')}
               </span>
               <span className="text-lg font-bold leading-tight">{format(d, 'd')}</span>
               <span className={cn(
                 'text-[10px]',
-                isSelected ? 'text-white/70' : 'text-slate-400',
+                isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground',
               )}>
                 {format(d, 'MMM')}
               </span>
               {isToday && !isSelected && (
-                <span className="mt-0.5 h-1 w-1 rounded-full bg-indigo-500" />
+                <span className="mt-0.5 h-1 w-1 rounded-full bg-primary" />
               )}
             </button>
           );
@@ -177,26 +177,26 @@ function TrainerRail({
             onClick={() => onSelect(t.id)}
             className={cn(
               'w-full flex items-center gap-3 p-2.5 rounded-xl transition-all text-left group',
-              'focus:outline-none focus:ring-2 focus:ring-indigo-500',
+              'focus:outline-none focus:ring-2 focus:ring-primary',
               active
-                ? 'bg-indigo-50 ring-1 ring-indigo-200 shadow-sm shadow-indigo-500/10'
-                : 'hover:bg-slate-50',
+                ? 'bg-primary/10 ring-1 ring-primary/25 shadow-sm shadow-primary/20'
+                : 'hover:bg-muted',
             )}
           >
             <div className={cn(
               'h-1 w-1 rounded-full transition-all',
-              active ? 'bg-indigo-600 h-10 w-1' : 'bg-transparent',
+              active ? 'bg-primary h-10 w-1' : 'bg-transparent',
             )} />
             <Avatar className="h-9 w-9 shrink-0">
               <AvatarImage src={t.avatar_url ?? undefined} />
-              <AvatarFallback className={active ? 'bg-indigo-100 text-indigo-700' : ''}>
+              <AvatarFallback className={active ? 'bg-primary/15 text-primary' : ''}>
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className={cn(
                 'text-sm font-medium truncate',
-                active ? 'text-indigo-900' : 'text-slate-700',
+                active ? 'text-primary' : 'text-foreground',
               )}>
                 {t.full_name || 'Trainer'}
               </p>
@@ -250,22 +250,22 @@ function ClientRosterCard({
 
   return (
     <div className={cn(
-      'group relative rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-4 transition-all',
-      'hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-0.5',
-      isCompletedish && 'ring-1 ring-emerald-200 bg-gradient-to-br from-emerald-50/40 to-white',
+      'group relative rounded-2xl bg-card shadow-lg shadow/50 p-4 transition-all',
+      'hover:shadow-xl hover:shadow-primary/20 hover:-translate-y-0.5',
+      isCompletedish && 'ring-1 ring-success/25 bg-gradient-to-br from-success/10 to-white',
     )}>
       <div className="flex items-start gap-3">
         <Avatar className="h-11 w-11 shrink-0 ring-2 ring-white shadow-sm">
           <AvatarImage src={client.avatarUrl ?? undefined} />
-          <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold">
+          <AvatarFallback className="bg-primary/15 text-primary font-semibold">
             {initials}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-900 truncate leading-tight">
+          <p className="font-semibold text-foreground truncate leading-tight">
             {client.memberName}
           </p>
-          <p className="text-xs text-slate-500 truncate">
+          <p className="text-xs text-muted-foreground truncate">
             {client.memberCode} · {client.packageName}
           </p>
         </div>
@@ -285,7 +285,7 @@ function ClientRosterCard({
           <div className="flex items-center justify-between gap-2">
             <PtStatusBadge status={status!} />
             {session?.scheduled_at && (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted-foreground">
                 {format(new Date(session.scheduled_at), 'HH:mm')}
               </span>
             )}
@@ -296,8 +296,8 @@ function ClientRosterCard({
               onClick={() => markPresent.mutate()}
               disabled={markPresent.isPending || !isToday}
               className={cn(
-                'flex-1 h-10 rounded-xl font-semibold shadow-md shadow-indigo-500/20',
-                'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700',
+                'flex-1 h-10 rounded-xl font-semibold shadow-md shadow-primary/20',
+                'bg-gradient-to-r from-primary to-primary hover:from-primary hover:to-primary',
               )}
             >
               {markPresent.isPending ? (
@@ -320,7 +320,7 @@ function ClientRosterCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center justify-center gap-1.5 h-10 rounded-xl bg-slate-50 text-slate-400 text-xs cursor-not-allowed">
+                <div className="flex items-center justify-center gap-1.5 h-10 rounded-xl bg-muted text-muted-foreground text-xs cursor-not-allowed">
                   <Info className="h-3.5 w-3.5" />
                   View only
                 </div>
@@ -332,7 +332,7 @@ function ClientRosterCard({
           </TooltipProvider>
         )}
         {!isLogged && !isToday && canMark && (
-          <p className="mt-1.5 text-[11px] text-slate-400 text-center">
+          <p className="mt-1.5 text-[11px] text-muted-foreground text-center">
             Marking is only available for today
           </p>
         )}
@@ -472,22 +472,22 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   };
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-2xl transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-900">Recent attendance history</span>
-          <span className="text-xs text-slate-500">(audit & export)</span>
+          <span className="text-sm font-semibold text-foreground">Recent attendance history</span>
+          <span className="text-xs text-muted-foreground">(audit & export)</span>
         </div>
-        {open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
       </button>
       {open && (
         <CardContent className="pt-0 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label className="text-xs font-medium text-slate-600">Search</label>
+              <label className="text-xs font-medium text-muted-foreground">Search</label>
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input className="pl-8" placeholder="Member, trainer or package…"
@@ -495,7 +495,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Range</label>
+              <label className="text-xs font-medium text-muted-foreground">Range</label>
               <Select value={range} onValueChange={setRange}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -504,7 +504,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Trainer</label>
+              <label className="text-xs font-medium text-muted-foreground">Trainer</label>
               <Select value={trainerFilter} onValueChange={setTrainerFilter}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -514,7 +514,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Status</label>
+              <label className="text-xs font-medium text-muted-foreground">Status</label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -544,7 +544,7 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
           ) : (
             <div className="rounded-xl border overflow-hidden">
               <Table>
-                <TableHeader className="bg-slate-50">
+                <TableHeader className="bg-muted">
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Member</TableHead>
@@ -556,9 +556,9 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
                 </TableHeader>
                 <TableBody>
                   {filtered.map((r) => (
-                    <TableRow key={r.id} className="hover:bg-slate-50">
+                    <TableRow key={r.id} className="hover:bg-muted">
                       <TableCell className="whitespace-nowrap">
-                        <div className="font-medium text-slate-900">{format(new Date(r.scheduled_at), 'dd MMM yyyy')}</div>
+                        <div className="font-medium text-foreground">{format(new Date(r.scheduled_at), 'dd MMM yyyy')}</div>
                         <div className="text-xs text-muted-foreground">{format(new Date(r.scheduled_at), 'HH:mm')}</div>
                       </TableCell>
                       <TableCell>
@@ -749,7 +749,7 @@ export function PtAttendanceTabContent() {
   return (
     <div className="space-y-4">
       {/* Top: Week strip */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardContent className="p-4">
           <WeekStrip selected={selectedDate} onSelect={setSelectedDate} />
         </CardContent>
@@ -761,9 +761,9 @@ export function PtAttendanceTabContent() {
         isTrainerOnly ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[260px_1fr]',
       )}>
         {!isTrainerOnly && (
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+          <Card className="rounded-2xl shadow-lg shadow/50 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Users className="h-3.5 w-3.5" />
                 Trainers
               </CardTitle>
@@ -779,13 +779,13 @@ export function PtAttendanceTabContent() {
           </Card>
         )}
 
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base text-slate-900">
+              <CardTitle className="text-base text-foreground">
                 {selectedTrainer ? `${selectedTrainer.full_name}'s clients` : 'PT roster'}
               </CardTitle>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {format(selectedDate, 'EEEE, d MMMM yyyy')}
                 {clients.length > 0 && ` · ${clients.length} active client${clients.length === 1 ? '' : 's'}`}
               </p>
@@ -804,10 +804,10 @@ export function PtAttendanceTabContent() {
               </div>
             ) : clients.length === 0 ? (
               <div className="py-16 text-center">
-                <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                  <Users className="h-6 w-6 text-slate-400" />
+                <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                  <Users className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm font-medium text-slate-700">No active PT clients</p>
+                <p className="text-sm font-medium text-foreground">No active PT clients</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {selectedTrainer?.full_name ?? 'This trainer'} has no active PT packages assigned.
                 </p>

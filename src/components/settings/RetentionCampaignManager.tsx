@@ -20,14 +20,14 @@ import { AIGenerateTemplatesDrawer } from '@/components/settings/AIGenerateTempl
 
 const STAGE_ICONS = [Zap, Clock, Gift];
 const STAGE_COLORS = [
-  'bg-sky-50 text-sky-600 border-sky-200',
-  'bg-amber-50 text-amber-600 border-amber-200',
-  'bg-emerald-50 text-emerald-600 border-emerald-200',
+  'bg-info/10 text-info border-info/25',
+  'bg-warning/10 text-warning border-warning/25',
+  'bg-success/10 text-success border-success/25',
 ];
 
 const CHANNEL_OPTIONS = [
-  { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-500' },
-  { id: 'sms', label: 'SMS', icon: Phone, color: 'text-sky-500' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'text-success' },
+  { id: 'sms', label: 'SMS', icon: Phone, color: 'text-info' },
   { id: 'email', label: 'Email', icon: Mail, color: 'text-primary' },
 ];
 
@@ -192,7 +192,7 @@ export function RetentionCampaignManager() {
               Configure the 3-stage automated nudge sequence for inactive members.
               Use <code className="bg-muted px-1 rounded text-xs">{'{member_name}'}</code> as a placeholder.
             </p>
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-xs text-info mt-1">
               Members with a frozen membership are automatically excluded until the freeze is lifted.
             </p>
           </div>
@@ -204,12 +204,12 @@ export function RetentionCampaignManager() {
       </div>
 
       {/* Cooldown Indicator */}
-      <Card className="rounded-2xl border-sky-200 bg-sky-50/50">
+      <Card className="rounded-2xl border-info/25 bg-info/10">
         <CardContent className="flex items-center gap-3 py-4">
-          <ShieldCheck className="h-5 w-5 text-sky-600 shrink-0" />
+          <ShieldCheck className="h-5 w-5 text-info shrink-0" />
           <div>
-            <p className="text-sm font-medium text-sky-800">30-Day Cooldown Active</p>
-            <p className="text-xs text-sky-600">Each member can only receive each nudge stage once every 30 days. Sequence resets if the member visits the gym.</p>
+            <p className="text-sm font-medium text-info">30-Day Cooldown Active</p>
+            <p className="text-xs text-info">Each member can only receive each nudge stage once every 30 days. Sequence resets if the member visits the gym.</p>
           </div>
         </CardContent>
       </Card>

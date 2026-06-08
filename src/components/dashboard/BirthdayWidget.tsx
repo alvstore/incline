@@ -57,7 +57,7 @@ export default function BirthdayWidget({ branchId, className }: BirthdayWidgetPr
           </div>
         </div>
         {isFetching && !isLoading && (
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-label="Refreshing" />
+          <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" aria-label="Refreshing" />
         )}
       </div>
 

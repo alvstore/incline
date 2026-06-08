@@ -436,7 +436,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
 
   if (shiftLoading || punchLoading) {
     return (
-      <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl border-0 shadow-lg shadow/50">
         <CardContent className="py-6 flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading duty status…
         </CardContent>
@@ -463,8 +463,8 @@ function DutyStatusCard({ userId }: { userId: string }) {
   void tick;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 text-white">
+    <Card className="rounded-2xl border-0 shadow-lg shadow/50 overflow-hidden">
+      <div className="bg-gradient-to-r from-primary to-primary px-6 py-4 text-primary-foreground">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80">Duty Status</p>
@@ -493,7 +493,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
         </div>
 
         {openPunch && (
-          <div className="rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2.5 text-sm flex items-center justify-between">
+          <div className="rounded-xl bg-success/10 text-success px-4 py-2.5 text-sm flex items-center justify-between">
             <span>
               Clocked in at <strong>{format(new Date(openPunch.check_in), 'HH:mm')}</strong>
               {' · '}{Math.floor(elapsedMin / 60)}h {elapsedMin % 60}m elapsed
@@ -502,7 +502,7 @@ function DutyStatusCard({ userId }: { userId: string }) {
         )}
 
         {(punches || []).filter((p: any) => p.check_out).length > 0 && (
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             Today's completed punches:{' '}
             {(punches || []).filter((p: any) => p.check_out).map((p: any) => (
               <span key={p.id} className="mr-2">
@@ -518,15 +518,15 @@ function DutyStatusCard({ userId }: { userId: string }) {
             disabled={punch.isPending || (isOff && !openPunch)}
             onClick={onPunch}
             className={openPunch
-              ? 'bg-red-600 hover:bg-red-700 text-white'
-              : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white'}
+              ? 'bg-destructive hover:bg-destructive text-primary-foreground'
+              : 'bg-gradient-to-r from-primary to-primary hover:opacity-90 text-primary-foreground'}
           >
             {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
               openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
             {openPunch ? `Clock Out · ${labelFor(openPunch.shift_type)}` : `Clock In · ${labelFor(suggested)} Shift`}
           </Button>
           {isOff && !openPunch && (
-            <p className="text-sm text-slate-500 self-center">Enjoy your rest day — no shift scheduled.</p>
+            <p className="text-sm text-muted-foreground self-center">Enjoy your rest day — no shift scheduled.</p>
           )}
         </div>
       </CardContent>
@@ -542,8 +542,8 @@ function BlockPill({
   label, icon: Icon, tone, text,
 }: { label: string; icon: any; tone: 'emerald' | 'indigo'; text: string }) {
   const cls = tone === 'emerald'
-    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-    : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+    ? 'bg-success/10 text-success border-success/15'
+    : 'bg-primary/10 text-primary border-primary/15';
   return (
     <div className={`rounded-xl border p-3 ${cls}`}>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-80">

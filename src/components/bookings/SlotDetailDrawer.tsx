@@ -14,11 +14,11 @@ interface SlotDetailDrawerProps {
 }
 
 const SOURCE_BADGE: Record<string, string> = {
-  member_portal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  concierge: 'bg-violet-50 text-violet-700 border-violet-200',
-  whatsapp_ai: 'bg-sky-50 text-sky-700 border-sky-200',
-  admin: 'bg-amber-50 text-amber-700 border-amber-200',
-  system: 'bg-slate-100 text-slate-700 border-slate-200',
+  member_portal: 'bg-success/10 text-success border-success/25',
+  concierge: 'bg-primary/10 text-primary border-primary/25',
+  whatsapp_ai: 'bg-info/10 text-info border-info/25',
+  admin: 'bg-warning/10 text-warning border-warning/25',
+  system: 'bg-muted text-foreground border-border',
 };
 
 export function SlotDetailDrawer({ slotId, onClose }: SlotDetailDrawerProps) {
@@ -111,7 +111,7 @@ export function SlotDetailDrawer({ slotId, onClose }: SlotDetailDrawerProps) {
                           {b.source?.replace('_', ' ') || 'member portal'}
                         </Badge>
                         {b.force_added && (
-                          <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                          <Badge variant="outline" className="text-[10px] gap-1 bg-warning/10 text-warning border-warning/25">
                             <ShieldAlert className="h-3 w-3" /> force
                           </Badge>
                         )}

@@ -34,16 +34,16 @@ export function PolicyAuditCard() {
   const healthy = total - noRls.length - noPolicies.length;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldCheck className="h-5 w-5 text-indigo-600" />
+          <ShieldCheck className="h-5 w-5 text-primary" />
           RLS Policy Audit
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-3 text-center">
@@ -57,8 +57,8 @@ export function PolicyAuditCard() {
             </div>
 
             {noRls.length > 0 && (
-              <div className="rounded-lg bg-red-50 p-3">
-                <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-red-700">
+              <div className="rounded-lg bg-destructive/10 p-3">
+                <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-destructive">
                   <ShieldAlert className="h-3.5 w-3.5" /> Tables without RLS
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -68,13 +68,13 @@ export function PolicyAuditCard() {
                     </Badge>
                   ))}
                   {noRls.length > 12 && (
-                    <span className="text-xs text-red-700">+{noRls.length - 12} more</span>
+                    <span className="text-xs text-destructive">+{noRls.length - 12} more</span>
                   )}
                 </div>
               </div>
             )}
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {total} public tables audited.
             </p>
           </>
@@ -95,10 +95,10 @@ function Stat({
 }) {
   const color =
     tone === 'ok'
-      ? 'text-emerald-700 bg-emerald-50'
+      ? 'text-success bg-success/10'
       : tone === 'warn'
-      ? 'text-amber-700 bg-amber-50'
-      : 'text-red-700 bg-red-50';
+      ? 'text-warning bg-warning/10'
+      : 'text-destructive bg-destructive/10';
   return (
     <div className={`rounded-lg p-3 ${color}`}>
       <div className="text-2xl font-bold">{value}</div>

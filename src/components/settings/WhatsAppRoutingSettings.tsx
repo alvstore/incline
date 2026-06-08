@@ -50,10 +50,10 @@ export function WhatsAppRoutingSettings() {
   };
 
   return (
-    <Card className="rounded-2xl shadow-md shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-md shadow/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Phone className="h-4 w-4 text-violet-600" /> My WhatsApp Routing
+          <Phone className="h-4 w-4 text-primary" /> My WhatsApp Routing
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -69,7 +69,7 @@ export function WhatsAppRoutingSettings() {
           Replies still go through the business number — Meta doesn't allow transferring a conversation to a different phone.
         </p>
         {loading ? (
-          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-violet-600" /></div>
+          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : (
           <>
             <div className="space-y-1.5">
@@ -88,7 +88,7 @@ export function WhatsAppRoutingSettings() {
               </div>
               <Switch checked={available} onCheckedChange={setAvailable} />
             </div>
-            <Button onClick={save} disabled={saving} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white gap-2">
+            <Button onClick={save} disabled={saving} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
             </Button>
           </>

@@ -8,9 +8,9 @@ const LAST_UPDATED = 'April 1, 2026';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 sm:p-8">
-      <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">{title}</h2>
-      <div className="space-y-3 text-white/70 text-sm sm:text-base leading-relaxed">{children}</div>
+    <section className="rounded-2xl border border-primary-foreground/10 bg-card/[0.03] p-6 sm:p-8">
+      <h2 className="text-xl sm:text-2xl font-bold text-primary-foreground mb-4">{title}</h2>
+      <div className="space-y-3 text-primary-foreground/70 text-sm sm:text-base leading-relaxed">{children}</div>
     </section>
   );
 }
@@ -25,21 +25,21 @@ export default function PrivacyPolicyPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-primary-foreground">
       <SEO
         title="Privacy Policy | The Incline Life by Incline"
         description="How The Incline Life by Incline collects, uses, and protects your personal information."
         path="/privacy-policy"
       />
-      <header className="border-b border-white/10 bg-[#050508]/90 backdrop-blur-xl sticky top-0 z-20">
+      <header className="border-b border-primary-foreground/10 bg-[#050508]/90 backdrop-blur-xl sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="inline-flex items-center gap-2 text-white/90 hover:text-white transition-colors">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
+          <Link to="/" className="inline-flex items-center gap-2 text-primary-foreground/90 hover:text-primary-foreground transition-colors">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-warning to-destructive flex items-center justify-center">
               <Dumbbell className="h-5 w-5" />
             </div>
             <span className="font-bold">Back to Home</span>
           </Link>
-          <Link to="/terms" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
+          <Link to="/terms" className="text-sm text-warning hover:text-warning transition-colors">
             View Terms
           </Link>
         </div>
@@ -48,13 +48,13 @@ export default function PrivacyPolicyPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-8">
         <div className="space-y-4">
           <h1 className="text-3xl sm:text-4xl font-black tracking-tight">Privacy Policy</h1>
-          <p className="text-white/60">Last updated: {LAST_UPDATED}</p>
-          <p className="text-white/70 text-sm sm:text-base leading-relaxed">
+          <p className="text-primary-foreground/60">Last updated: {LAST_UPDATED}</p>
+          <p className="text-primary-foreground/70 text-sm sm:text-base leading-relaxed">
             This Privacy Policy explains how we collect, use, store, and share personal information when you use our public website,
             premium fitness CRM platform, member portals, recovery facilities, and communication tools, including
             Meta WhatsApp Cloud API and Instagram Direct Messaging.
           </p>
-          <p className="text-white/70 text-sm sm:text-base leading-relaxed">
+          <p className="text-primary-foreground/70 text-sm sm:text-base leading-relaxed">
             This Policy applies to {theme.gymName} and its authorized branch operations.
           </p>
         </div>

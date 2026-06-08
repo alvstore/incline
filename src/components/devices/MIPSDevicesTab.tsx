@@ -49,15 +49,15 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCa
   };
 
   return (
-    <Card className={`rounded-2xl shadow-lg transition-all ${isOnline ? "shadow-green-500/10 border-green-500/20" : "shadow-muted/20"}`}>
+    <Card className={`rounded-2xl shadow-lg transition-all ${isOnline ? "shadow-success/20 border-success/20" : "shadow-muted/20"}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl relative ${isOnline ? "bg-green-500/10" : "bg-muted"}`}>
+            <div className={`p-2.5 rounded-xl relative ${isOnline ? "bg-success/10" : "bg-muted"}`}>
               <Monitor className="h-5 w-5" />
               {/* Glowing status dot */}
               <span className={`absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${
-                isOnline ? "bg-green-500 shadow-[0_0_8px_2px_rgba(34,197,94,0.4)] animate-pulse" : "bg-destructive"
+                isOnline ? "bg-success shadow-[0_0_8px_2px_rgba(34,197,94,0.4)] animate-pulse" : "bg-destructive"
               }`} />
             </div>
             <div>
@@ -72,7 +72,7 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCa
               {isOnline ? "Online" : "Offline"}
             </Badge>
             {branchName && (
-              <Badge variant="outline" className="text-[10px] bg-violet-500/10 text-violet-700 border-violet-500/20">
+              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
                 {branchName}
               </Badge>
             )}

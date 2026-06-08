@@ -113,16 +113,16 @@ export function OffboardStaffSheet({ open, onOpenChange, person, mode = 'offboar
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="sm:max-w-xl w-full p-0 flex flex-col rounded-l-2xl border-0 shadow-2xl">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b border-slate-200/60">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/60">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-full ${isReinstate ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+            <div className={`p-2.5 rounded-full ${isReinstate ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
               {isReinstate ? <CheckCircle2 className="h-5 w-5" /> : <UserX className="h-5 w-5" />}
             </div>
             <div>
-              <SheetTitle className="text-lg font-bold text-slate-900">
+              <SheetTitle className="text-lg font-bold text-foreground">
                 {isReinstate ? `Reinstate ${person.name}` : `Offboard ${person.name}`}
               </SheetTitle>
-              <SheetDescription className="text-sm text-slate-500">
+              <SheetDescription className="text-sm text-muted-foreground">
                 {isReinstate
                   ? 'Restore turnstile access, app login and active rosters.'
                   : 'Revoke turnstile access, remove app login, mark exit. History stays intact.'}
@@ -134,17 +134,17 @@ export function OffboardStaffSheet({ open, onOpenChange, person, mode = 'offboar
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* Roles */}
           <section className="space-y-2">
-            <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {isReinstate ? 'Roles to reinstate' : 'Roles to offboard'}
             </Label>
-            <div className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50/50">
+            <div className="rounded-xl border border-border p-3 space-y-2 bg-muted/50">
               {person.roles.map((r) => (
                 <label key={r} className="flex items-center gap-3 cursor-pointer">
                   <Checkbox
                     checked={selectedRoles.includes(r)}
                     onCheckedChange={(c) => toggleRole(r, !!c)}
                   />
-                  <span className="text-sm font-medium text-slate-700 capitalize">{r}</span>
+                  <span className="text-sm font-medium text-foreground capitalize">{r}</span>
                 </label>
               ))}
             </div>
@@ -172,18 +172,18 @@ export function OffboardStaffSheet({ open, onOpenChange, person, mode = 'offboar
               </section>
 
               <section className="space-y-1.5">
-                <Label htmlFor="reason">Reason <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Label htmlFor="reason">Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Short reason for exit" />
               </section>
 
               <section className="space-y-1.5">
-                <Label htmlFor="notes">Internal notes <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Label htmlFor="notes">Internal notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Visible only to HR / Owners" />
               </section>
 
               {/* Checklist preview */}
-              <section className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2.5">
-                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">What happens</div>
+              <section className="rounded-xl bg-muted border border-border p-4 space-y-2.5">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">What happens</div>
                 <ChecklistItem icon={<ShieldOff className="h-4 w-4" />} label="Revoke MIPS turnstile / biometric access" />
                 <ChecklistItem icon={<KeyRound className="h-4 w-4" />} label="Remove app roles & sign out of all sessions" />
                 <ChecklistItem icon={<CalendarX className="h-4 w-4" />} label="Unassign future class schedules (if trainer)" />
@@ -191,30 +191,30 @@ export function OffboardStaffSheet({ open, onOpenChange, person, mode = 'offboar
               </section>
 
               {/* Confirm typed name */}
-              <section className="rounded-xl border border-red-200 bg-red-50/50 p-4 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-red-700">
+              <section className="rounded-xl border border-destructive/25 bg-destructive/10 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  Type <span className="font-mono px-1.5 py-0.5 bg-white rounded border border-red-200">{person.name}</span> to confirm
+                  Type <span className="font-mono px-1.5 py-0.5 bg-card rounded border border-destructive/25">{person.name}</span> to confirm
                 </div>
                 <Input
                   value={confirmName}
                   onChange={(e) => setConfirmName(e.target.value)}
                   placeholder="Type full name"
-                  className="bg-white"
+                  className="bg-card"
                 />
               </section>
             </>
           )}
         </div>
 
-        <div className="sticky bottom-0 px-6 py-4 border-t border-slate-200/60 bg-white flex items-center justify-end gap-2">
+        <div className="sticky bottom-0 px-6 py-4 border-t border-border/60 bg-card flex items-center justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
           <Button
             onClick={submit}
             disabled={!canSubmit}
             className={isReinstate
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-red-600 hover:bg-red-700 text-white'}
+              ? 'bg-success hover:bg-success text-primary-foreground'
+              : 'bg-destructive hover:bg-destructive text-primary-foreground'}
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {isReinstate ? 'Reinstate' : `Offboard ${person.name.split(' ')[0]}`}
@@ -227,8 +227,8 @@ export function OffboardStaffSheet({ open, onOpenChange, person, mode = 'offboar
 
 function ChecklistItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center gap-2.5 text-sm text-slate-700">
-      <span className="text-slate-500">{icon}</span>
+    <div className="flex items-center gap-2.5 text-sm text-foreground">
+      <span className="text-muted-foreground">{icon}</span>
       {label}
     </div>
   );

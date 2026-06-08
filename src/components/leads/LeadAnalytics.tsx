@@ -113,7 +113,7 @@ export function LeadAnalytics({ leads }: LeadAnalyticsProps) {
             <p className="text-2xl font-bold text-foreground">{adLeads.length}</p>
             <p className="text-xs text-muted-foreground">
               {adLeads.length > 0 && (
-                <Badge variant="outline" className="text-[10px] h-4 px-1 border-amber-300 text-amber-600 bg-amber-50">
+                <Badge variant="outline" className="text-[10px] h-4 px-1 border-warning/40 text-warning bg-warning/10">
                   <Megaphone className="h-2.5 w-2.5 mr-0.5" />
                   Ad-sourced
                 </Badge>
@@ -157,7 +157,7 @@ export function LeadAnalytics({ leads }: LeadAnalyticsProps) {
         {/* Ad Campaign Attribution */}
         <Card className="rounded-2xl border-border/50 shadow-lg shadow-primary/5">
           <CardHeader><CardTitle className="text-base flex items-center gap-2">
-            <Megaphone className="h-4 w-4 text-amber-500" />
+            <Megaphone className="h-4 w-4 text-warning" />
             Ad Campaign Performance
           </CardTitle></CardHeader>
           <CardContent>
@@ -171,7 +171,7 @@ export function LeadAnalytics({ leads }: LeadAnalyticsProps) {
                       <span className="text-xs w-32 text-right text-muted-foreground truncate">{c.name}</span>
                       <div className="flex-1 h-6 bg-muted/30 rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full flex items-center justify-end pr-2 text-xs font-bold text-white"
+                          className="h-full rounded-full flex items-center justify-end pr-2 text-xs font-bold text-primary-foreground"
                           style={{ width: `${width}%`, backgroundColor: FUNNEL_COLORS[i] || '#f59e0b' }}
                         >
                           {c.value}

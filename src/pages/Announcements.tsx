@@ -56,7 +56,7 @@ export default function AnnouncementsPage() {
         {/* Header */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/30">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-primary via-primary to-info text-primary-foreground shadow-lg shadow-primary/20">
               <Radio className="h-6 w-6" />
             </div>
             <div>
@@ -94,7 +94,7 @@ export default function AnnouncementsPage() {
               <Rocket className="h-3.5 w-3.5" />Campaigns
             </TabsTrigger>
             <TabsTrigger value="instagram" className="rounded-lg gap-2 data-[state=active]:shadow-md">
-              <Instagram className="h-3.5 w-3.5 text-pink-500" />IG Comment-to-DM
+              <Instagram className="h-3.5 w-3.5 text-destructive" />IG Comment-to-DM
             </TabsTrigger>
             <TabsTrigger value="retry" className="rounded-lg gap-2 data-[state=active]:shadow-md">
               <AlertCircle className="h-3.5 w-3.5" />Retry Queue
@@ -134,8 +134,8 @@ export default function AnnouncementsPage() {
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4 flex-1">
-                          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500/15 to-indigo-500/10 flex items-center justify-center flex-shrink-0">
-                            <Megaphone className="h-5 w-5 text-violet-600" />
+                          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/15 to-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Megaphone className="h-5 w-5 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-foreground">{announcement.title}</h3>
@@ -163,7 +163,7 @@ export default function AnnouncementsPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 ml-4">
-                          <Badge className={`rounded-full ${announcement.is_active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
+                          <Badge className={`rounded-full ${announcement.is_active ? 'bg-success/10 text-success dark:text-success border-success/30' : 'bg-muted text-muted-foreground'}`}>
                             {announcement.is_active ? 'Active' : 'Inactive'}
                           </Badge>
                           <Button size="icon" variant="ghost" className="rounded-xl" onClick={() => deleteMutation.mutate(announcement.id)}>

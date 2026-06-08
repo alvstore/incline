@@ -19,16 +19,16 @@ const GATEWAY_LABEL: Record<string, string> = {
 
 function StatusBadge({ status, httpStatus }: { status: string | null; httpStatus: number | null }) {
   const isOk = httpStatus !== null && httpStatus >= 200 && httpStatus < 300;
-  const cls = status === 'captured' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+  const cls = status === 'captured' ? 'bg-success/10 text-success border-success/20'
     : status === 'failed' || status === 'rejected' ? 'bg-destructive/10 text-destructive border-destructive/20'
-    : status === 'authorized' || status === 'pending' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-    : isOk ? 'bg-sky-500/10 text-sky-600 border-sky-500/20'
+    : status === 'authorized' || status === 'pending' ? 'bg-warning/10 text-warning border-warning/20'
+    : isOk ? 'bg-info/10 text-info border-info/20'
     : 'bg-muted text-muted-foreground';
   return <Badge variant="outline" className={cls}>{status || 'received'}</Badge>;
 }
 
 function SignatureBadge({ verified }: { verified: boolean | null }) {
-  if (verified === true) return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1"><ShieldCheck className="h-3 w-3" />Verified</Badge>;
+  if (verified === true) return <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1"><ShieldCheck className="h-3 w-3" />Verified</Badge>;
   if (verified === false) return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1"><ShieldX className="h-3 w-3" />Invalid</Badge>;
   return <Badge variant="outline" className="bg-muted text-muted-foreground gap-1"><ShieldAlert className="h-3 w-3" />Not checked</Badge>;
 }
@@ -266,17 +266,17 @@ export function WebhookActivityPanel() {
             <p className="text-xs text-muted-foreground">Total (last 100)</p>
             <p className="text-2xl font-bold">{stats.total}</p>
           </div>
-          <div className="rounded-xl border border-emerald-500/20 p-3 bg-emerald-500/5">
-            <p className="text-xs text-emerald-700 dark:text-emerald-400">Captured</p>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{stats.captured}</p>
+          <div className="rounded-xl border border-success/20 p-3 bg-success/5">
+            <p className="text-xs text-success dark:text-success">Captured</p>
+            <p className="text-2xl font-bold text-success dark:text-success">{stats.captured}</p>
           </div>
           <div className="rounded-xl border border-destructive/20 p-3 bg-destructive/5">
             <p className="text-xs text-destructive">Failed / Rejected</p>
             <p className="text-2xl font-bold text-destructive">{stats.failed}</p>
           </div>
-          <div className="rounded-xl border border-amber-500/20 p-3 bg-amber-500/5">
-            <p className="text-xs text-amber-700 dark:text-amber-400">Bad signatures</p>
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.sigInvalid}</p>
+          <div className="rounded-xl border border-warning/20 p-3 bg-warning/5">
+            <p className="text-xs text-warning dark:text-warning">Bad signatures</p>
+            <p className="text-2xl font-bold text-warning dark:text-warning">{stats.sigInvalid}</p>
           </div>
         </div>
 
@@ -393,16 +393,16 @@ export function WebhookActivityPanel() {
                         <TableCell><SignatureBadge verified={r.signature_verified} /></TableCell>
                         <TableCell>
                           {r.http_status === null ? <span className="text-muted-foreground text-sm">—</span> : (
-                            <span className={`font-mono text-sm ${isOk ? 'text-emerald-600' : 'text-destructive'}`}>{r.http_status}</span>
+                            <span className={`font-mono text-sm ${isOk ? 'text-success' : 'text-destructive'}`}>{r.http_status}</span>
                           )}
                         </TableCell>
                         <TableCell><StatusBadge status={r.status} httpStatus={r.http_status} /></TableCell>
                         <TableCell>
                           {(() => {
                             const a = deriveAction(r);
-                            const tone = a.tone === 'good' ? 'text-emerald-600'
+                            const tone = a.tone === 'good' ? 'text-success'
                               : a.tone === 'bad' ? 'text-destructive'
-                              : a.tone === 'warn' ? 'text-amber-600'
+                              : a.tone === 'warn' ? 'text-warning'
                               : 'text-muted-foreground';
                             return <span className={`text-xs ${tone}`}>{a.label}</span>;
                           })()}
@@ -584,7 +584,7 @@ export function GatewayLastReceivedBadge({ gateway, branchId }: { gateway: strin
   const ok = (data.http_status ?? 0) >= 200 && (data.http_status ?? 0) < 300 && data.signature_verified !== false;
   const Icon = ok ? CheckCircle2 : XCircle;
   return (
-    <div className={`mt-2 flex items-center gap-1.5 text-xs ${ok ? 'text-emerald-600' : 'text-destructive'}`}>
+    <div className={`mt-2 flex items-center gap-1.5 text-xs ${ok ? 'text-success' : 'text-destructive'}`}>
       <Icon className="h-3.5 w-3.5" />
       <span>Last webhook {formatDistanceToNow(new Date(data.received_at), { addSuffix: true })}</span>
     </div>

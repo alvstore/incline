@@ -280,10 +280,10 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         key={`${person.type}-${person.id}`}
         className={`rounded-xl transition-all hover:shadow-md ${
           isSynced
-            ? "border-green-500/20 shadow-green-500/5"
+            ? "border-success/20 shadow-success/20"
             : isFailed
               ? "border-destructive/20 shadow-destructive/5"
-              : "border-orange-500/20 shadow-orange-500/5"
+              : "border-warning/20 shadow-warning/20"
         }`}
       >
         <CardContent className="p-4">
@@ -299,17 +299,17 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold truncate">{person.name}</span>
                 {person.type === "trainer" && (
-                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-500/20 gap-0.5">
+                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
                     <Dumbbell className="h-2.5 w-2.5" /> Trainer
                   </Badge>
                 )}
                 {person.type === "employee" && (
-                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 border-purple-500/20 gap-0.5">
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 gap-0.5">
                     <Briefcase className="h-2.5 w-2.5" /> Staff
                   </Badge>
                 )}
                 {!branchId && mainBranchId && person.branchId === mainBranchId && (
-                  <Badge variant="outline" className="text-[10px] bg-violet-500/10 text-violet-700 border-violet-500/20">Main</Badge>
+                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">Main</Badge>
                 )}
               </div>
 
@@ -323,7 +323,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                 {isSynced ? (
-                  <Badge variant="default" className="bg-green-500/10 text-green-700 border border-green-500/20 text-[10px] gap-0.5">
+                  <Badge variant="default" className="bg-success/10 text-success border border-success/20 text-[10px] gap-0.5">
                     <Check className="h-3 w-3" /> Registered
                   </Badge>
                 ) : isFailed ? (
@@ -331,24 +331,24 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
                     <X className="h-3 w-3" /> Failed
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-700 border-orange-500/20 gap-0.5">
+                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
                     <AlertCircle className="h-3 w-3" /> Not Registered
                   </Badge>
                 )}
 
                 {!person.hasPhoto && (
-                  <Badge variant="outline" className="text-[10px] bg-yellow-500/10 text-yellow-700 border-yellow-500/20 gap-0.5">
+                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
                     <Image className="h-3 w-3" /> No Photo
                   </Badge>
                 )}
 
                 {verifyStatus !== undefined && (
                   verifyStatus ? (
-                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/20 gap-0.5">
+                    <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/20 gap-0.5">
                       <ShieldCheck className="h-3 w-3" /> On Device
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-700 border-red-500/20 gap-0.5">
+                    <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/20 gap-0.5">
                       <ShieldX className="h-3 w-3" /> Missing
                     </Badge>
                   )
@@ -467,19 +467,19 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         <Card className="rounded-xl">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Total Synced</p>
-            <p className="text-xl font-bold text-green-600">{stats.syncedMembers + stats.syncedStaff}</p>
+            <p className="text-xl font-bold text-success">{stats.syncedMembers + stats.syncedStaff}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-xl font-bold text-orange-600">{personnel.length - stats.syncedMembers - stats.syncedStaff}</p>
+            <p className="text-xl font-bold text-warning">{personnel.length - stats.syncedMembers - stats.syncedStaff}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">No Photo</p>
-            <p className="text-xl font-bold text-yellow-600">{stats.noPhoto}</p>
+            <p className="text-xl font-bold text-warning">{stats.noPhoto}</p>
           </CardContent>
         </Card>
       </div>
@@ -529,15 +529,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               <div className="space-y-6 pr-2">
                 {renderSection(
                   "Registered on MIPS",
-                  <UserCheck className="h-4 w-4 text-green-600" />,
+                  <UserCheck className="h-4 w-4 text-success" />,
                   registeredMembers,
-                  "bg-green-500/10 text-green-700 border-green-500/20"
+                  "bg-success/10 text-success border-success/20"
                 )}
                 {renderSection(
                   "Not Registered",
-                  <UserX className="h-4 w-4 text-orange-600" />,
+                  <UserX className="h-4 w-4 text-warning" />,
                   unregisteredMembers,
-                  "bg-orange-500/10 text-orange-700 border-orange-500/20"
+                  "bg-warning/10 text-warning border-warning/20"
                 )}
               </div>
             </ScrollArea>
@@ -554,15 +554,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               <div className="space-y-6 pr-2">
                 {renderSection(
                   "Registered on MIPS",
-                  <UserCheck className="h-4 w-4 text-green-600" />,
+                  <UserCheck className="h-4 w-4 text-success" />,
                   registeredStaff,
-                  "bg-green-500/10 text-green-700 border-green-500/20"
+                  "bg-success/10 text-success border-success/20"
                 )}
                 {renderSection(
                   "Not Registered",
-                  <UserX className="h-4 w-4 text-orange-600" />,
+                  <UserX className="h-4 w-4 text-warning" />,
                   unregisteredStaff,
-                  "bg-orange-500/10 text-orange-700 border-orange-500/20"
+                  "bg-warning/10 text-warning border-warning/20"
                 )}
               </div>
             </ScrollArea>

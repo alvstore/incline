@@ -49,9 +49,9 @@ import {
 // Platform icon helper
 const PlatformIcon = ({ platform, className = "h-3.5 w-3.5" }: { platform?: string; className?: string }) => {
   switch (platform) {
-    case 'instagram': return <Instagram className={`${className} text-pink-500`} />;
-    case 'messenger': return <Facebook className={`${className} text-blue-500`} />;
-    default: return <MessageSquare className={`${className} text-emerald-500`} />;
+    case 'instagram': return <Instagram className={`${className} text-destructive`} />;
+    case 'messenger': return <Facebook className={`${className} text-info`} />;
+    default: return <MessageSquare className={`${className} text-success`} />;
   }
 };
 import { AddLeadDrawer } from '@/components/leads/AddLeadDrawer';
@@ -169,28 +169,28 @@ function IgCommentMediaCard({ meta, mediaUrl, outbound }: { meta?: MessageMediaM
     : 'Commented on your post';
   const caption = meta?.caption ? (meta.caption.length > 90 ? meta.caption.slice(0, 90) + '…' : meta.caption) : null;
   const cardCls = outbound
-    ? 'flex gap-3 items-center rounded-xl bg-white/10 border border-white/15 px-2.5 py-2 mb-2'
+    ? 'flex gap-3 items-center rounded-xl bg-card/10 border border-primary-foreground/15 px-2.5 py-2 mb-2'
     : 'flex gap-3 items-center rounded-xl bg-muted/60 border border-border/40 px-2.5 py-2 mb-2';
-  const subCls = outbound ? 'text-[11px] text-white/70' : 'text-[11px] text-muted-foreground';
-  const titleCls = outbound ? 'text-xs font-semibold text-white/95' : 'text-xs font-semibold text-foreground';
+  const subCls = outbound ? 'text-[11px] text-primary-foreground/70' : 'text-[11px] text-muted-foreground';
+  const titleCls = outbound ? 'text-xs font-semibold text-primary-foreground/95' : 'text-xs font-semibold text-foreground';
   const Wrapper: any = permalink ? 'a' : 'div';
   const wrapperProps = permalink ? { href: permalink, target: '_blank', rel: 'noopener noreferrer' } : {};
   return (
     <Wrapper {...wrapperProps} className={cardCls + (permalink ? ' hover:opacity-95 cursor-pointer' : '')}>
-      <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center">
+      <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-foreground/20 flex items-center justify-center">
         {thumb ? (
           <img src={thumb} alt="post" className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <MessageCircle className={outbound ? 'h-5 w-5 text-white/70' : 'h-5 w-5 text-muted-foreground'} />
+          <MessageCircle className={outbound ? 'h-5 w-5 text-primary-foreground/70' : 'h-5 w-5 text-muted-foreground'} />
         )}
         {kind === 'reels' || kind === 'video' ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-            <Play className="h-4 w-4 text-white fill-white" />
+          <span className="absolute inset-0 flex items-center justify-center bg-foreground/25">
+            <Play className="h-4 w-4 text-primary-foreground fill-white" />
           </span>
         ) : null}
         {kind === 'carousel' ? (
-          <span className="absolute top-0.5 right-0.5 bg-black/55 rounded p-0.5">
-            <Layers className="h-3 w-3 text-white" />
+          <span className="absolute top-0.5 right-0.5 bg-foreground/55 rounded p-0.5">
+            <Layers className="h-3 w-3 text-primary-foreground" />
           </span>
         ) : null}
       </div>
@@ -805,10 +805,10 @@ export default function WhatsAppChatPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'read': return <CheckCheck className="h-3.5 w-3.5 text-sky-400" />;
-      case 'delivered': return <CheckCheck className="h-3.5 w-3.5 text-white/50" />;
-      case 'sent': return <Check className="h-3.5 w-3.5 text-white/50" />;
-      default: return <Clock className="h-3.5 w-3.5 text-white/40" />;
+      case 'read': return <CheckCheck className="h-3.5 w-3.5 text-info" />;
+      case 'delivered': return <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/50" />;
+      case 'sent': return <Check className="h-3.5 w-3.5 text-primary-foreground/50" />;
+      default: return <Clock className="h-3.5 w-3.5 text-primary-foreground/40" />;
     }
   };
 
@@ -925,7 +925,7 @@ export default function WhatsAppChatPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-xl text-emerald-600 hover:bg-emerald-500/10"
+                    className="h-8 w-8 rounded-xl text-success hover:bg-success/10"
                     onClick={handleOpenNewChat}
                     title="Start new chat"
                     data-testid="button-new-chat"
@@ -973,9 +973,9 @@ export default function WhatsAppChatPage() {
               {/* Platform filter badges — always visible */}
               <div className="flex gap-1 mt-1.5">
                 {[
-                  { key: 'whatsapp' as ChatFilter, icon: <MessageSquare className="h-3 w-3" />, label: 'WhatsApp', color: 'text-emerald-500', activeBg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30' },
-                  { key: 'instagram' as ChatFilter, icon: <Instagram className="h-3 w-3" />, label: 'Instagram', color: 'text-pink-500', activeBg: 'bg-pink-500/15 text-pink-700 dark:text-pink-400 ring-1 ring-pink-500/30' },
-                  { key: 'messenger' as ChatFilter, icon: <Facebook className="h-3 w-3" />, label: 'Messenger', color: 'text-blue-500', activeBg: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/30' },
+                  { key: 'whatsapp' as ChatFilter, icon: <MessageSquare className="h-3 w-3" />, label: 'WhatsApp', color: 'text-success', activeBg: 'bg-success/15 text-success dark:text-success ring-1 ring-success/30' },
+                  { key: 'instagram' as ChatFilter, icon: <Instagram className="h-3 w-3" />, label: 'Instagram', color: 'text-destructive', activeBg: 'bg-destructive/15 text-destructive dark:text-destructive ring-1 ring-destructive/30' },
+                  { key: 'messenger' as ChatFilter, icon: <Facebook className="h-3 w-3" />, label: 'Messenger', color: 'text-info', activeBg: 'bg-info/15 text-info dark:text-info ring-1 ring-info/30' },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -1027,10 +1027,10 @@ export default function WhatsAppChatPage() {
                         )}
                         <AvatarFallback className={`font-bold text-sm ${
                           contact.platform === 'instagram'
-                            ? 'bg-gradient-to-br from-pink-100 to-purple-100 text-pink-700'
+                            ? 'bg-gradient-to-br from-destructive/15 to-primary/15 text-destructive'
                             : contact.platform === 'messenger'
-                            ? 'bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700'
-                            : 'bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-700'
+                            ? 'bg-gradient-to-br from-info/15 to-primary/15 text-info'
+                            : 'bg-gradient-to-br from-success/15 to-success/15 text-success'
                         }`}>
                           {(contact.contact_name?.[0]?.toUpperCase()) ||
                            (contact.platform === 'instagram' ? <Instagram className="h-5 w-5" /> :
@@ -1041,20 +1041,20 @@ export default function WhatsAppChatPage() {
                       {/* Platform badge — always shown */}
                       <span className={`absolute -bottom-0.5 -right-0.5 rounded-full p-0.5 ${
                         contact.platform === 'instagram'
-                          ? 'bg-pink-500'
+                          ? 'bg-destructive'
                           : contact.platform === 'messenger'
-                          ? 'bg-blue-500'
-                          : 'bg-emerald-500'
+                          ? 'bg-info'
+                          : 'bg-success'
                       }`}>
-                        <PlatformIcon platform={contact.platform} className="h-3 w-3 !text-white" />
+                        <PlatformIcon platform={contact.platform} className="h-3 w-3 !text-primary-foreground" />
                       </span>
                       {/* Visual indicators */}
                       {contact.is_unread && (
-                        <span className="absolute -top-0.5 -left-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-background" />
+                        <span className="absolute -top-0.5 -left-0.5 w-3 h-3 rounded-full bg-info border-2 border-background" />
                       )}
                       {contact.bot_active === false && !contact.is_unread && (
                         <span className="absolute -top-0.5 -left-0.5">
-                          <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                          <AlertCircle className="h-3.5 w-3.5 text-warning" />
                         </span>
                       )}
                     </div>
@@ -1067,10 +1067,10 @@ export default function WhatsAppChatPage() {
                           </span>
                           <Badge variant="outline" className={`text-[9px] h-4 px-1 flex-shrink-0 rounded-md font-medium ${
                             contact.platform === 'instagram'
-                              ? 'border-pink-300 text-pink-600 bg-pink-50 dark:bg-pink-500/10 dark:border-pink-500/30'
+                              ? 'border-destructive/40 text-destructive bg-destructive/10 dark:bg-destructive/10 dark:border-destructive/30'
                               : contact.platform === 'messenger'
-                              ? 'border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/30'
-                              : 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/30'
+                              ? 'border-info/40 text-info bg-info/10 dark:bg-info/10 dark:border-info/30'
+                              : 'border-success/40 text-success bg-success/10 dark:bg-success/10 dark:border-success/30'
                           }`}>
                             {contact.platform === 'instagram' ? 'IG' : contact.platform === 'messenger' ? 'FB' : 'WA'}
                           </Badge>
@@ -1083,7 +1083,7 @@ export default function WhatsAppChatPage() {
                     </div>
 
                     {contact.unread_count > 0 && (
-                      <Badge className="rounded-full h-5 min-w-[20px] flex items-center justify-center bg-emerald-500 text-white text-[10px] p-0">
+                      <Badge className="rounded-full h-5 min-w-[20px] flex items-center justify-center bg-success text-primary-foreground text-[10px] p-0">
                         {contact.unread_count}
                       </Badge>
                     )}
@@ -1113,10 +1113,10 @@ export default function WhatsAppChatPage() {
                         )}
                         <AvatarFallback className={`font-bold ${
                           selectedContact.platform === 'instagram'
-                            ? 'bg-gradient-to-br from-pink-100 to-purple-100 text-pink-700'
+                            ? 'bg-gradient-to-br from-destructive/15 to-primary/15 text-destructive'
                             : selectedContact.platform === 'messenger'
-                            ? 'bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700'
-                            : 'bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-700'
+                            ? 'bg-gradient-to-br from-info/15 to-primary/15 text-info'
+                            : 'bg-gradient-to-br from-success/15 to-success/15 text-success'
                         }`}>
                           {(selectedContact.contact_name?.[0]?.toUpperCase()) ||
                            (selectedContact.platform === 'instagram' ? <Instagram className="h-5 w-5" /> :
@@ -1143,23 +1143,23 @@ export default function WhatsAppChatPage() {
                           if ((!src || src === 'unknown') && (plat === 'instagram' || plat === 'messenger')) {
                             const label = plat === 'instagram' ? 'Instagram' : 'Messenger';
                             const cls = plat === 'instagram'
-                              ? 'border-pink-300 bg-pink-50 text-pink-700'
-                              : 'border-blue-300 bg-blue-50 text-blue-700';
+                              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                              : 'border-info/40 bg-info/10 text-info';
                             return (
                               <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ml-1 ${cls}`}>{label}</Badge>
                             );
                           }
                           if (!src || src === 'unknown') return (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-amber-300 bg-amber-50 text-amber-700">Unknown</Badge>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-warning/40 bg-warning/10 text-warning">Unknown</Badge>
                           );
                           if (src === 'member') return (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-emerald-300 bg-emerald-50 text-emerald-700">Member</Badge>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-success/40 bg-success/10 text-success">Member</Badge>
                           );
                           if (src === 'lead') return (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-violet-300 bg-violet-50 text-violet-700">Lead</Badge>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-primary/40 bg-primary/10 text-primary">Lead</Badge>
                           );
                           return (
-                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-blue-300 bg-blue-50 text-blue-700">Contact</Badge>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-1 border-info/40 bg-info/10 text-info">Contact</Badge>
                           );
                         })()}
 
@@ -1194,10 +1194,10 @@ export default function WhatsAppChatPage() {
                       // amber so staff aren't misled into thinking the bot will reply.
                       const masterMisaligned = botActive && (!aiMasterOn || !aiChannelOn);
                       const pillTone = masterMisaligned
-                        ? 'bg-amber-50 ring-1 ring-amber-300'
+                        ? 'bg-warning/10 ring-1 ring-warning/40'
                         : 'bg-muted/50';
-                      const iconTone = masterMisaligned ? 'text-amber-600' : 'text-muted-foreground';
-                      const labelTone = masterMisaligned ? 'text-amber-700 font-medium' : 'text-muted-foreground';
+                      const iconTone = masterMisaligned ? 'text-warning' : 'text-muted-foreground';
+                      const labelTone = masterMisaligned ? 'text-warning font-medium' : 'text-muted-foreground';
                       const tooltipMsg = masterMisaligned
                         ? `Per-chat AI is on, but the global ${!aiMasterOn ? 'auto-reply master' : 'WhatsApp channel'} is OFF in AI Control Center. No replies will be sent.`
                         : 'AI auto-reply for this conversation';
@@ -1234,7 +1234,7 @@ export default function WhatsAppChatPage() {
                                 {masterMisaligned && (
                                   <Link
                                     to="/settings?tab=ai-agent"
-                                    className="text-[11px] font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2"
+                                    className="text-[11px] font-medium text-warning hover:text-warning underline underline-offset-2"
                                   >
                                     Fix
                                   </Link>
@@ -1293,7 +1293,7 @@ export default function WhatsAppChatPage() {
                               toast.error(e?.message || 'Failed to refresh profile', { id: tid });
                             }
                           }}>
-                            <RefreshCw className="h-4 w-4 mr-2 text-pink-600" /> Refresh {selectedContact.platform === 'instagram' ? 'Instagram' : 'Messenger'} Profile
+                            <RefreshCw className="h-4 w-4 mr-2 text-destructive" /> Refresh {selectedContact.platform === 'instagram' ? 'Instagram' : 'Messenger'} Profile
                           </DropdownMenuItem>
                         )}
                         {((selectedContact as any).identity_source === 'unknown' || (selectedContact as any).identity_source === undefined) && (
@@ -1304,7 +1304,7 @@ export default function WhatsAppChatPage() {
                             });
                             setSaveContactOpen(true);
                           }}>
-                            <BookUser className="h-4 w-4 mr-2 text-indigo-600" /> Save as Contact
+                            <BookUser className="h-4 w-4 mr-2 text-primary" /> Save as Contact
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
@@ -1328,7 +1328,7 @@ export default function WhatsAppChatPage() {
 
                 {/* Branch-not-selected inline notice */}
                 {isBranchUnselected && (
-                  <div className="flex items-center gap-2.5 px-5 py-2.5 bg-yellow-500/10 border-b border-yellow-500/20 text-sm text-yellow-700 dark:text-yellow-400">
+                  <div className="flex items-center gap-2.5 px-5 py-2.5 bg-warning/10 border-b border-warning/20 text-sm text-warning dark:text-warning">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                     <span>
                       Please select a specific branch from the branch selector to send messages.
@@ -1339,7 +1339,7 @@ export default function WhatsAppChatPage() {
                 {/* Multi-device agent presence */}
                 <AgentPresenceBar viewing={viewingOthers} typing={typingOthers} />
                 {lastPeerReplyAt && (Date.now() - new Date(lastPeerReplyAt).getTime() < 8000) && (
-                  <div className="px-4 py-1.5 bg-blue-50 border-b border-blue-100 text-xs text-blue-800">
+                  <div className="px-4 py-1.5 bg-info/10 border-b border-info/15 text-xs text-info">
                     Another agent just replied to this conversation.
                   </div>
                 )}
@@ -1375,16 +1375,16 @@ export default function WhatsAppChatPage() {
                             const leadId = leadCapturedMatch[1];
                             return (
                               <div key={msg.id} className="flex justify-center my-4">
-                                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-5 py-3 text-center shadow-lg shadow-emerald-500/5 animate-pulse-once">
+                                <div className="bg-success/10 border border-success/30 rounded-2xl px-5 py-3 text-center shadow-lg shadow-success/20 animate-pulse-once">
                                   <div className="flex items-center gap-2 justify-center mb-1">
-                                    <Sparkles className="h-4 w-4 text-emerald-500" />
-                                    <span className="font-semibold text-sm text-emerald-700 dark:text-emerald-400">AI Successfully Captured Lead</span>
+                                    <Sparkles className="h-4 w-4 text-success" />
+                                    <span className="font-semibold text-sm text-success dark:text-success">AI Successfully Captured Lead</span>
                                   </div>
                                   <p className="text-xs text-muted-foreground mb-2">The AI collected all required information and created a lead in your CRM.</p>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="gap-1.5 text-xs rounded-lg border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                                    className="gap-1.5 text-xs rounded-lg border-success/30 text-success dark:text-success hover:bg-success/10"
                                     onClick={() => navigate('/leads')}
                                   >
                                     <UserPlus className="h-3.5 w-3.5" />
@@ -1399,13 +1399,13 @@ export default function WhatsAppChatPage() {
                           if (msg.is_internal_note) {
                             return (
                               <div key={msg.id} className="flex justify-end mb-1">
-                                <div className="max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm bg-amber-500/10 border border-amber-500/20 rounded-br-md">
+                                <div className="max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm bg-warning/10 border border-warning/20 rounded-br-md">
                                   <div className="flex items-center gap-1.5 mb-1">
-                                    <Eye className="h-3 w-3 text-amber-600" />
-                                    <span className="text-[10px] font-semibold text-amber-600">Staff Only Note</span>
+                                    <Eye className="h-3 w-3 text-warning" />
+                                    <span className="text-[10px] font-semibold text-warning">Staff Only Note</span>
                                   </div>
                                   <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">{msg.content}</p>
-                                  <div className="flex items-center justify-end gap-1 mt-1 text-amber-500/60">
+                                  <div className="flex items-center justify-end gap-1 mt-1 text-warning/60">
                                     <span className="text-[10px]">{format(new Date(msg.created_at), 'HH:mm')}</span>
                                   </div>
                                 </div>
@@ -1423,10 +1423,10 @@ export default function WhatsAppChatPage() {
                                 className={`max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm break-words overflow-hidden ${
                                   msg.direction === 'outbound'
                                     ? selectedContact.platform === 'instagram'
-                                      ? 'bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-br-md'
+                                      ? 'bg-gradient-to-br from-destructive to-primary text-primary-foreground rounded-br-md'
                                       : selectedContact.platform === 'messenger'
-                                      ? 'bg-blue-500 text-white rounded-br-md'
-                                      : 'bg-emerald-600 text-white rounded-br-md'
+                                      ? 'bg-info text-primary-foreground rounded-br-md'
+                                      : 'bg-success text-primary-foreground rounded-br-md'
                                     : 'bg-card border border-border/50 text-foreground rounded-bl-md'
                                 }`}
                               >
@@ -1447,7 +1447,7 @@ export default function WhatsAppChatPage() {
                                   />
                                 )}
                                 {msg.message_type === 'template' && (
-                                  <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
+                                  <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-primary-foreground/50' : 'text-muted-foreground'}`}>
                                     <FileText className="h-3 w-3" /> Template
                                   </div>
                                 )}
@@ -1467,7 +1467,7 @@ export default function WhatsAppChatPage() {
                                   />
                                 )}
                                 {!['text','image','template','document','comment'].includes(msg.message_type) && !msg.media_url && (
-                                  <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-white/50' : 'text-muted-foreground'}`}>
+                                  <div className={`flex items-center gap-1 mb-1 text-[10px] ${msg.direction === 'outbound' ? 'text-primary-foreground/50' : 'text-muted-foreground'}`}>
                                     <Paperclip className="h-3 w-3" /> {msg.message_type}
                                   </div>
                                 )}
@@ -1480,7 +1480,7 @@ export default function WhatsAppChatPage() {
                                 )}
                                 <div
                                   className={`flex items-center justify-end gap-1 mt-1 ${
-                                    msg.direction === 'outbound' ? 'text-white/60' : 'text-muted-foreground'
+                                    msg.direction === 'outbound' ? 'text-primary-foreground/60' : 'text-muted-foreground'
                                   }`}
                                 >
                                   <span className="text-[10px]">{format(new Date(msg.created_at), 'HH:mm')}</span>
@@ -1498,8 +1498,8 @@ export default function WhatsAppChatPage() {
                                         key={log.id}
                                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] max-w-[85%] ml-auto ${
                                           log.status === 'success'
-                                            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                                            : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                            ? 'bg-primary/10 text-primary dark:text-primary'
+                                            : 'bg-destructive/10 text-destructive dark:text-destructive'
                                         }`}
                                       >
                                         {log.status === 'success' ? (
@@ -1517,7 +1517,7 @@ export default function WhatsAppChatPage() {
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-4 px-1.5 text-[10px] text-amber-600 hover:text-amber-700 ml-auto"
+                                            className="h-4 px-1.5 text-[10px] text-warning hover:text-warning ml-auto"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               navigate(`/whatsapp-chat?phone=${encodeURIComponent(selectedContact?.phone_number || '')}`);
@@ -1545,7 +1545,7 @@ export default function WhatsAppChatPage() {
                 <div className="px-4 py-3 border-t border-border/30 bg-card flex-shrink-0">
                   {/* Whisper Mode Banner */}
                   {whisperMode && (
-                    <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+                    <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/20 text-xs text-warning dark:text-warning">
                       <Eye className="h-3.5 w-3.5" />
                       <span className="font-medium">Internal Note Mode</span> — This message will NOT be sent to the customer
                       <Button variant="ghost" size="sm" className="ml-auto h-5 px-1.5 text-[10px]" onClick={() => setWhisperMode(false)}>Exit</Button>
@@ -1612,7 +1612,7 @@ export default function WhatsAppChatPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="rounded-xl text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 flex-shrink-0"
+                      className="rounded-xl text-primary hover:text-primary hover:bg-primary/10 flex-shrink-0"
                       onClick={handleAiSuggest}
                       disabled={aiSuggesting || messages.length === 0}
                       title="AI Suggest Reply"
@@ -1624,7 +1624,7 @@ export default function WhatsAppChatPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className={`rounded-xl flex-shrink-0 ${whisperMode ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground hover:text-foreground'}`}
+                      className={`rounded-xl flex-shrink-0 ${whisperMode ? 'text-warning bg-warning/10' : 'text-muted-foreground hover:text-foreground'}`}
                       onClick={() => setWhisperMode(!whisperMode)}
                       title="Internal Note (Whisper Mode)"
                     >
@@ -1652,19 +1652,19 @@ export default function WhatsAppChatPage() {
                         if (e.key === 'Enter' && !e.shiftKey && !slashMenuOpen) handleSend();
                       }}
                       disabled={isBranchUnselected}
-                      className={`flex-1 rounded-xl border-0 focus-visible:ring-1 disabled:opacity-60 ${whisperMode ? 'bg-amber-500/5 ring-1 ring-amber-500/20' : 'bg-muted/50'}`}
+                      className={`flex-1 rounded-xl border-0 focus-visible:ring-1 disabled:opacity-60 ${whisperMode ? 'bg-warning/5 ring-1 ring-warning/20' : 'bg-muted/50'}`}
                       data-testid="input-new-message"
                     />
                     <Button
                       onClick={handleSend}
                       disabled={!newMessage.trim() || sendMessage.isPending || isBranchUnselected}
                       size="icon"
-                      className={`rounded-xl text-white flex-shrink-0 ${
+                      className={`rounded-xl text-primary-foreground flex-shrink-0 ${
                         selectedContact?.platform === 'instagram'
-                          ? 'bg-pink-500 hover:bg-pink-600'
+                          ? 'bg-destructive hover:bg-destructive'
                           : selectedContact?.platform === 'messenger'
-                          ? 'bg-blue-500 hover:bg-blue-600'
-                          : 'bg-emerald-600 hover:bg-emerald-700'
+                          ? 'bg-info hover:bg-info'
+                          : 'bg-success hover:bg-success'
                       }`}
                       data-testid="button-send-message"
                     >
@@ -1678,14 +1678,14 @@ export default function WhatsAppChatPage() {
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <div className="mx-auto flex items-center justify-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
-                      <MessageSquare className="h-7 w-7 text-emerald-500" />
+                    <div className="w-14 h-14 rounded-2xl bg-success/10 flex items-center justify-center">
+                      <MessageSquare className="h-7 w-7 text-success" />
                     </div>
-                    <div className="w-14 h-14 rounded-2xl bg-pink-500/10 flex items-center justify-center">
-                      <Instagram className="h-7 w-7 text-pink-500" />
+                    <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
+                      <Instagram className="h-7 w-7 text-destructive" />
                     </div>
-                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                      <Facebook className="h-7 w-7 text-blue-500" />
+                    <div className="w-14 h-14 rounded-2xl bg-info/10 flex items-center justify-center">
+                      <Facebook className="h-7 w-7 text-info" />
                     </div>
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-1">Unified Inbox</h3>
@@ -1703,7 +1703,7 @@ export default function WhatsAppChatPage() {
                     </Button>
                   )}
                   {isBranchUnselected && (
-                    <div className="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 rounded-lg px-3 py-2 max-w-xs mx-auto">
+                    <div className="flex items-center gap-2 text-xs text-warning dark:text-warning bg-warning/10 rounded-lg px-3 py-2 max-w-xs mx-auto">
                       <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                       Select a specific branch from the selector above to send messages
                     </div>
@@ -1718,12 +1718,12 @@ export default function WhatsAppChatPage() {
             <div className="hidden xl:flex w-[300px] border-l border-border/50 flex-col bg-card overflow-y-auto">
               <div className="p-5 space-y-5">
                 {/* Profile card */}
-                <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 p-5 shadow-sm shadow-emerald-200/40 text-center">
-                  <Avatar className="h-16 w-16 mx-auto mb-3 ring-2 ring-emerald-500/30">
+                <div className="rounded-2xl bg-gradient-to-br from-success/10 to-success/10 dark:from-success/10 dark:to-success/10 p-5 shadow-sm shadow-success/20 text-center">
+                  <Avatar className="h-16 w-16 mx-auto mb-3 ring-2 ring-success/30">
                     {selectedContact.contact_avatar_url && (
                       <AvatarImage src={selectedContact.contact_avatar_url} alt={selectedContact.contact_name || 'avatar'} />
                     )}
-                    <AvatarFallback className="bg-emerald-500 text-white text-xl font-bold">
+                    <AvatarFallback className="bg-success text-primary-foreground text-xl font-bold">
                       {(selectedContact.contact_name || selectedContact.phone_number)?.[0]?.toUpperCase() || <User className="h-6 w-6" />}
                     </AvatarFallback>
                   </Avatar>
@@ -1742,9 +1742,9 @@ export default function WhatsAppChatPage() {
                   </button>
                   <div className="flex flex-wrap justify-center gap-1.5 mt-3">
                     {selectedContact.member_id ? (
-                      <Badge className="bg-emerald-500 text-white">Member</Badge>
+                      <Badge className="bg-success text-primary-foreground">Member</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50">Lead</Badge>
+                      <Badge variant="outline" className="border-warning/40 text-warning bg-warning/10">Lead</Badge>
                     )}
                     <Badge variant="outline" className="text-[10px]">
                       {selectedContact.platform === 'instagram' ? 'Instagram' : selectedContact.platform === 'messenger' ? 'Messenger' : 'WhatsApp'}
@@ -1758,7 +1758,7 @@ export default function WhatsAppChatPage() {
                     <Button
                       variant="default"
                       size="sm"
-                      className="w-full rounded-xl gap-2 bg-violet-600 hover:bg-violet-700"
+                      className="w-full rounded-xl gap-2 bg-primary hover:bg-primary"
                       onClick={() => setConvertLeadOpen(true)}
                     >
                       <UserPlus className="h-3.5 w-3.5" />
@@ -1805,11 +1805,11 @@ export default function WhatsAppChatPage() {
                         <p className="text-[10px] text-muted-foreground uppercase">Total</p>
                       </div>
                       <div>
-                        <p className="text-lg font-bold text-emerald-600">{contactStats.inbound}</p>
+                        <p className="text-lg font-bold text-success">{contactStats.inbound}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">In</p>
                       </div>
                       <div>
-                        <p className="text-lg font-bold text-blue-600">{contactStats.outbound}</p>
+                        <p className="text-lg font-bold text-info">{contactStats.outbound}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Out</p>
                       </div>
                     </div>
@@ -1830,8 +1830,8 @@ export default function WhatsAppChatPage() {
       <ResponsiveSheet open={newChatOpen} onOpenChange={setNewChatOpen} width="md">
         <ResponsiveSheetHeader>
           <ResponsiveSheetTitle className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10">
-              <MessageSquare className="h-4 w-4 text-emerald-500" />
+            <div className="p-1.5 rounded-lg bg-success/10">
+              <MessageSquare className="h-4 w-4 text-success" />
             </div>
             New Chat
           </ResponsiveSheetTitle>
@@ -1875,7 +1875,7 @@ export default function WhatsAppChatPage() {
           <Button
             onClick={handleStartNewChat}
             disabled={!newChatPhone.trim()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="bg-success hover:bg-success text-primary-foreground"
             data-testid="button-start-chat"
           >
             Open Chat

@@ -35,14 +35,14 @@ export function DefaultPasswordCard({ label = 'Default Login Password' }: Defaul
   };
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 flex items-center gap-3">
-      <div className="bg-indigo-100 text-indigo-600 p-2 rounded-full">
+    <div className="rounded-xl border border-primary/15 bg-primary/10 p-3 flex items-center gap-3">
+      <div className="bg-primary/15 text-primary p-2 rounded-full">
         <KeyRound className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
-        <p className="font-mono text-sm font-bold text-slate-900">{DEFAULT_TEMP_PASSWORD}</p>
-        <p className="text-xs text-slate-500">User must change this on first login.</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+        <p className="font-mono text-sm font-bold text-foreground">{DEFAULT_TEMP_PASSWORD}</p>
+        <p className="text-xs text-muted-foreground">User must change this on first login.</p>
       </div>
       <Button
         type="button"
@@ -52,7 +52,7 @@ export function DefaultPasswordCard({ label = 'Default Login Password' }: Defaul
         className="shrink-0"
         aria-label="Copy default password"
       >
-        {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+        {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
       </Button>
     </div>
   );

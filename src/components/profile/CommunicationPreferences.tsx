@@ -64,8 +64,8 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
 
   if (isLoading) {
     return (
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
-        <CardContent className="p-8 flex items-center justify-center text-slate-500">
+      <Card className="rounded-2xl shadow-lg shadow/50">
+        <CardContent className="p-8 flex items-center justify-center text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading preferences…
         </CardContent>
       </Card>
@@ -76,10 +76,10 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
     setDraft((d) => ({ ...d, [k]: v }));
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-slate-900">
-          <Bell className="w-5 h-5 text-indigo-600" />
+        <CardTitle className="flex items-center gap-2 text-foreground">
+          <Bell className="w-5 h-5 text-primary" />
           Communication Preferences
         </CardTitle>
         <CardDescription>
@@ -89,7 +89,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
       <CardContent className="space-y-8">
         {/* Channel kill switches */}
         <section>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Channels</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Channels</h3>
           <div className="space-y-3">
             <ChannelToggle
               icon={<MessageSquare className="w-4 h-4" />}
@@ -114,7 +114,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
 
         {/* Category opt-outs */}
         <section>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Topics</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Topics</h3>
           <div className="space-y-3">
             <CategoryToggle label="Membership reminders" checked={draft.membership_reminders} onChange={(v) => set('membership_reminders', v)} />
             <CategoryToggle label="Payment receipts" checked={draft.payment_receipts} onChange={(v) => set('payment_receipts', v)} />
@@ -128,8 +128,8 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
 
         {/* Quiet hours */}
         <section>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Quiet hours</h3>
-          <p className="text-sm text-slate-500 mb-3">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quiet hours</h3>
+          <p className="text-sm text-muted-foreground mb-3">
             Non-urgent messages during this window are queued and delivered after.
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -158,7 +158,7 @@ export function CommunicationPreferences({ memberId, branchId }: Props) {
           <Button
             onClick={() => save.mutate()}
             disabled={save.isPending}
-            className="bg-indigo-600 hover:bg-indigo-700"
+            className="bg-primary hover:bg-primary"
           >
             {save.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Save preferences
@@ -173,9 +173,9 @@ function ChannelToggle({
   icon, label, checked, onChange,
 }: { icon: React.ReactNode; label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5">
-      <div className="flex items-center gap-2.5 text-sm font-medium text-slate-700">
-        <span className="text-indigo-600">{icon}</span>
+    <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-2.5">
+      <div className="flex items-center gap-2.5 text-sm font-medium text-foreground">
+        <span className="text-primary">{icon}</span>
         {label}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={`Toggle ${label}`} />
@@ -187,7 +187,7 @@ function CategoryToggle({
   label, checked, onChange,
 }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between text-sm text-slate-700">
+    <div className="flex items-center justify-between text-sm text-foreground">
       <span>{label}</span>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={`Toggle ${label}`} />
     </div>

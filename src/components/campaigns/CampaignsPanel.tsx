@@ -28,11 +28,11 @@ import { format, formatDistanceToNow } from 'date-fns';
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
 const statusBadge = (s: string) => {
   switch (s) {
-    case 'sent': return { c: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 };
-    case 'sending': return { c: 'bg-blue-100 text-blue-700 border-blue-200', icon: Loader2 };
-    case 'scheduled': return { c: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock };
-    case 'failed': return { c: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle };
-    default: return { c: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock };
+    case 'sent': return { c: 'bg-success/15 text-success border-success/25', icon: CheckCircle2 };
+    case 'sending': return { c: 'bg-info/15 text-info border-info/25', icon: Loader2 };
+    case 'scheduled': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock };
+    case 'failed': return { c: 'bg-destructive/15 text-destructive border-destructive/25', icon: AlertTriangle };
+    default: return { c: 'bg-muted text-foreground border-border', icon: Clock };
   }
 };
 
@@ -95,7 +95,7 @@ export function CampaignsPanel() {
         </div>
         <Button
           onClick={openCreate}
-          className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white gap-2"
+          className="rounded-xl bg-primary hover:bg-primary text-primary-foreground gap-2"
           disabled={!branchId}
         >
           <Plus className="h-4 w-4" /> New Campaign
@@ -103,7 +103,7 @@ export function CampaignsPanel() {
       </div>
 
       {!branchId && (
-        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-amber-800 text-sm">
+        <div className="rounded-2xl bg-warning/10 border border-warning/25 p-4 text-warning text-sm">
           Select a specific branch from the top-bar selector to view and create campaigns.
         </div>
       )}
@@ -126,7 +126,7 @@ export function CampaignsPanel() {
       )}
 
       {branchId && isLoading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : branchId && filteredCampaigns.length === 0 ? (
         <div className="rounded-2xl bg-card border border-dashed border-border p-12 text-center">
           <Megaphone className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
@@ -143,10 +143,10 @@ export function CampaignsPanel() {
             const editable = c.status === 'draft' || c.status === 'scheduled';
             const inFlight = c.status === 'sending';
             return (
-              <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow-slate-200/50 hover:shadow-lg hover:ring-1 hover:ring-violet-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 relative">
+              <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow/50 hover:shadow-lg hover:ring-1 hover:ring-primary/25 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary relative">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 text-violet-600 flex items-center justify-center shrink-0">
+                    <div className="h-9 w-9 rounded-xl bg-primary/15 dark:bg-primary/20 text-primary flex items-center justify-center shrink-0">
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
@@ -184,7 +184,7 @@ export function CampaignsPanel() {
                         )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           disabled={inFlight}
                           onClick={() => setConfirmDelete(c)}
                         >
@@ -196,7 +196,7 @@ export function CampaignsPanel() {
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.message}</p>
                 {isScheduled && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 mb-3 text-xs text-amber-800 flex items-center gap-1.5">
+                  <div className="rounded-lg bg-warning/10 border border-warning/25 px-2.5 py-1.5 mb-3 text-xs text-warning flex items-center gap-1.5">
                     <Clock className="h-3 w-3" />
                     Sends {formatDistanceToNow(new Date(c.scheduled_at!), { addSuffix: true })}
                   </div>
@@ -207,11 +207,11 @@ export function CampaignsPanel() {
                     <p className="text-[10px] text-muted-foreground uppercase">Sent to</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-emerald-600">{c.success_count}</p>
+                    <p className="text-lg font-bold text-success">{c.success_count}</p>
                     <p className="text-[10px] text-muted-foreground uppercase">Delivered</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-red-600">{c.failure_count}</p>
+                    <p className="text-lg font-bold text-destructive">{c.failure_count}</p>
                     <p className="text-[10px] text-muted-foreground uppercase">Failed</p>
                   </div>
                 </div>
@@ -248,7 +248,7 @@ export function CampaignsPanel() {
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="rounded-xl bg-red-600 hover:bg-red-700"
+              className="rounded-xl bg-destructive hover:bg-destructive"
               onClick={() => confirmDelete && delMut.mutate(confirmDelete.id)}
               disabled={delMut.isPending}
             >

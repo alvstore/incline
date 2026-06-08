@@ -112,7 +112,7 @@ export function HowbodySettings() {
       hint: "Vendor doc §3.1 — device APPENDS ?equipmentNo=…&scanId=… automatically.",
       value: `${origin}/scan-login`,
       tag: "Dynamic params",
-      tagCls: "border-teal-200 bg-teal-50 text-teal-700",
+      tagCls: "border-success/25 bg-success/10 text-success",
     },
     {
       key: "send-to-phone",
@@ -120,7 +120,7 @@ export function HowbodySettings() {
       hint: "Vendor doc §3.2 — STATIC URL, no parameters. Member must be logged in.",
       value: `${origin}/my-scan-report`,
       tag: "Static",
-      tagCls: "border-amber-200 bg-amber-50 text-amber-700",
+      tagCls: "border-warning/25 bg-warning/10 text-warning",
     },
     {
       key: "body-webhook",
@@ -128,7 +128,7 @@ export function HowbodySettings() {
       hint: "Vendor doc §3.4 — receives body composition results. Auto-fires WhatsApp + Email delivery.",
       value: `${SUPABASE_URL}/functions/v1/howbody-body-webhook`,
       tag: "Inbound POST",
-      tagCls: "border-indigo-200 bg-indigo-50 text-indigo-700",
+      tagCls: "border-primary/25 bg-primary/10 text-primary",
     },
     {
       key: "posture-webhook",
@@ -136,37 +136,37 @@ export function HowbodySettings() {
       hint: "Vendor doc §3.3 — receives posture analysis. Auto-fires WhatsApp + Email delivery.",
       value: `${SUPABASE_URL}/functions/v1/howbody-posture-webhook`,
       tag: "Inbound POST",
-      tagCls: "border-indigo-200 bg-indigo-50 text-indigo-700",
+      tagCls: "border-primary/25 bg-primary/10 text-primary",
     },
   ];
 
   const sourceBadge = creds?.source === "db"
-    ? { label: "Configured (Database)", cls: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: Database }
+    ? { label: "Configured (Database)", cls: "border-success/25 bg-success/10 text-success", icon: Database }
     : creds?.source === "env"
-      ? { label: "Using env fallback", cls: "border-amber-200 bg-amber-50 text-amber-700", icon: Server }
-      : { label: "Not configured", cls: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+      ? { label: "Using env fallback", cls: "border-warning/25 bg-warning/10 text-warning", icon: Server }
+      : { label: "Not configured", cls: "border-destructive/25 bg-destructive/10 text-destructive", icon: XCircle };
   const SourceIcon = sourceBadge.icon;
 
   return (
     <Tabs defaultValue="credentials" className="w-full">
-      <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-slate-100 p-1">
-        <TabsTrigger value="credentials" className="rounded-xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+      <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-muted p-1">
+        <TabsTrigger value="credentials" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
           <KeyRound className="h-4 w-4" /> Credentials
         </TabsTrigger>
-        <TabsTrigger value="webhooks" className="rounded-xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsTrigger value="webhooks" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
           <Webhook className="h-4 w-4" /> Webhooks
         </TabsTrigger>
-        <TabsTrigger value="devices" className="rounded-xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsTrigger value="devices" className="rounded-xl gap-2 data-[state=active]:bg-card data-[state=active]:shadow-sm">
           <Cpu className="h-4 w-4" /> Devices
         </TabsTrigger>
       </TabsList>
 
       {/* === Tab 1: Credentials === */}
       <TabsContent value="credentials" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-indigo-50 p-2 text-indigo-600"><KeyRound className="h-5 w-5" /></div>
+              <div className="rounded-full bg-primary/10 p-2 text-primary"><KeyRound className="h-5 w-5" /></div>
               <div>
                 <h2 className="text-lg font-bold">HOWBODY Credentials</h2>
                 <p className="text-sm text-muted-foreground">
@@ -180,7 +180,7 @@ export function HowbodySettings() {
           </div>
 
           {loading ? (
-            <div className="mt-6 flex items-center gap-2 text-sm text-slate-500">
+            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : (
@@ -220,20 +220,20 @@ export function HowbodySettings() {
                     {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Provided by HOWBODY. Used for both outbound API calls and inbound webhook verification.
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-muted p-3">
                 <div>
                   <p className="text-sm font-medium">Active</p>
-                  <p className="text-xs text-slate-500">Disable to fall back to env vars (if configured).</p>
+                  <p className="text-xs text-muted-foreground">Disable to fall back to env vars (if configured).</p>
                 </div>
                 <Switch checked={isActive} onCheckedChange={setIsActive} />
               </div>
 
-              <Button onClick={saveCreds} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700">
+              <Button onClick={saveCreds} disabled={saving} className="w-full bg-primary hover:bg-primary">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 Save credentials
               </Button>
@@ -242,9 +242,9 @@ export function HowbodySettings() {
         </Card>
 
         {/* Test connection */}
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
           <div className="flex items-start gap-3">
-            <div className="rounded-full bg-teal-50 p-2 text-teal-600"><CheckCircle2 className="h-5 w-5" /></div>
+            <div className="rounded-full bg-success/10 p-2 text-success"><CheckCircle2 className="h-5 w-5" /></div>
             <div className="flex-1">
               <h3 className="text-base font-bold">Test connection</h3>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -252,12 +252,12 @@ export function HowbodySettings() {
               </p>
             </div>
           </div>
-          <Button onClick={runTest} disabled={testing} className="mt-4 bg-teal-500 hover:bg-teal-600">
+          <Button onClick={runTest} disabled={testing} className="mt-4 bg-success hover:bg-success">
             {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Run test
           </Button>
           {testResult && (
-            <div className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-sm ${testResult.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+            <div className={`mt-4 flex items-start gap-2 rounded-xl p-3 text-sm ${testResult.ok ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
               {testResult.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
               <span>{testResult.msg}</span>
             </div>
@@ -267,9 +267,9 @@ export function HowbodySettings() {
 
       {/* === Tab 2: Webhooks === */}
       <TabsContent value="webhooks" className="mt-6 space-y-6">
-        <Card className="rounded-2xl p-6 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl p-6 shadow-lg shadow/50">
           <div className="flex items-start gap-3">
-            <div className="rounded-full bg-teal-50 p-2 text-teal-600"><ScanLine className="h-5 w-5" /></div>
+            <div className="rounded-full bg-success/10 p-2 text-success"><ScanLine className="h-5 w-5" /></div>
             <div>
               <h2 className="text-lg font-bold">Body Scanner Webhooks</h2>
               <p className="text-sm text-muted-foreground">
@@ -279,8 +279,8 @@ export function HowbodySettings() {
           </div>
 
           {/* Vendor constraint callout */}
-          <div className="mt-5 flex items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200/60">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="mt-5 flex items-start gap-3 rounded-xl bg-warning/10 p-3 text-sm text-warning ring-1 ring-warning/25">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div>
               <p className="font-semibold">Vendor URL rules</p>
               <p className="mt-0.5 text-xs">
@@ -294,7 +294,7 @@ export function HowbodySettings() {
             {webhookUrls.map((u) => (
               <div key={u.key}>
                 <div className="flex items-center justify-between gap-2">
-                  <Label className="text-xs uppercase tracking-wide text-slate-500">{u.label}</Label>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">{u.label}</Label>
                   <Badge variant="outline" className={u.tagCls}>{u.tag}</Badge>
                 </div>
                 <div className="mt-1 flex gap-2">
@@ -303,7 +303,7 @@ export function HowbodySettings() {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{u.hint}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{u.hint}</p>
               </div>
             ))}
           </div>

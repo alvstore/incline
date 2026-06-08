@@ -314,7 +314,7 @@ export default function BenefitTracking() {
                 title="Gift Sessions"
                 value={totalGiftSessions}
                 icon={Gift}
-                className={totalGiftSessions > 0 ? 'border-amber-500/50' : ''}
+                className={totalGiftSessions > 0 ? 'border-warning/50' : ''}
               />
             </div>
 
@@ -325,7 +325,7 @@ export default function BenefitTracking() {
                 <TabsTrigger value="gifts" className="gap-1.5">
                   <Gift className="h-3.5 w-3.5" /> Gifts
                   {activeComps.length > 0 && (
-                    <Badge className="ml-1 h-4 px-1.5 text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30">
+                    <Badge className="ml-1 h-4 px-1.5 text-[10px] bg-warning/15 text-warning border-warning/30">
                       {activeComps.length}
                     </Badge>
                   )}
@@ -355,7 +355,7 @@ export default function BenefitTracking() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Gift className="h-5 w-5 text-amber-500" />
+                      <Gift className="h-5 w-5 text-warning" />
                       Gifts & Complimentary Sessions
                     </CardTitle>
                     <CardDescription>
@@ -388,7 +388,7 @@ export default function BenefitTracking() {
                                 <TableCell>{format(new Date(c.created_at), 'dd MMM yyyy')}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="gap-1">
-                                    <Sparkles className="h-3 w-3 text-amber-500" />
+                                    <Sparkles className="h-3 w-3 text-warning" />
                                     {c.benefit_types?.name || 'Benefit'}
                                   </Badge>
                                 </TableCell>
@@ -398,7 +398,7 @@ export default function BenefitTracking() {
                                   {exhausted ? (
                                     <Badge variant="secondary" className="text-[10px]">Exhausted</Badge>
                                   ) : (
-                                    <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                                    <Badge className="bg-warning/10 text-warning border-warning/30">
                                       {remaining} left
                                     </Badge>
                                   )}

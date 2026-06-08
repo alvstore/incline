@@ -116,8 +116,8 @@ export default function MyScanReport() {
   if (!isStaff && !memberId && !authLoading) {
     return (
       <Shell>
-        <Card className="rounded-2xl p-8 shadow-lg shadow-amber-500/10">
-          <AlertTriangle className="h-10 w-10 text-amber-500" />
+        <Card className="rounded-2xl p-8 shadow-lg shadow-warning/20">
+          <AlertTriangle className="h-10 w-10 text-warning" />
           <h2 className="mt-4 text-xl font-bold">Member profile missing</h2>
           <p className="mt-2 text-muted-foreground">
             Your account isn't linked to a member yet. Please ask the front desk to assist.
@@ -131,11 +131,11 @@ export default function MyScanReport() {
   return (
     <Shell>
       {/* Auto-delivery banner */}
-      <div className="mb-4 flex items-start gap-3 rounded-2xl bg-gradient-to-br from-teal-50 to-emerald-50 p-4 text-sm text-emerald-800 ring-1 ring-emerald-200/60">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+      <div className="mb-4 flex items-start gap-3 rounded-2xl bg-gradient-to-br from-success/10 to-success/10 p-4 text-sm text-success ring-1 ring-success/25">
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
         <div>
           <p className="font-semibold">Your report has already been delivered</p>
-          <p className="mt-0.5 text-xs text-emerald-700">
+          <p className="mt-0.5 text-xs text-success">
             We auto-sent it to your <span className="inline-flex items-center gap-1"><Smartphone className="h-3 w-3" />WhatsApp</span> and{" "}
             <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />email</span>. This page is for re-viewing.
           </p>
@@ -143,11 +143,11 @@ export default function MyScanReport() {
       </div>
 
       {isStaff && memberLabel && (
-        <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm">
-          <span className="text-slate-600">Viewing reports for <span className="font-semibold text-slate-900">{memberLabel}</span></span>
+        <div className="mb-3 flex items-center justify-between rounded-xl bg-muted p-3 text-sm">
+          <span className="text-muted-foreground">Viewing reports for <span className="font-semibold text-foreground">{memberLabel}</span></span>
           <button
             onClick={() => { setMemberId(null); setBody(null); setPosture(null); }}
-            className="text-xs font-medium text-indigo-600 hover:underline"
+            className="text-xs font-medium text-primary hover:underline"
           >
             Change member
           </button>
@@ -186,10 +186,10 @@ export default function MyScanReport() {
           />
 
           {!body && !posture && (
-            <Card className="rounded-2xl p-8 text-center shadow-lg shadow-slate-200/50">
-              <ScanLine className="mx-auto h-10 w-10 text-slate-400" />
-              <p className="mt-3 font-semibold text-slate-700">No scans yet</p>
-              <p className="mt-1 text-sm text-slate-500">
+            <Card className="rounded-2xl p-8 text-center shadow-lg shadow/50">
+              <ScanLine className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="mt-3 font-semibold text-foreground">No scans yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Step on the body scanner — your report will appear here automatically.
               </p>
             </Card>
@@ -215,8 +215,8 @@ function ReportCard({
   onView: () => void;
 }) {
   const toneCls = tone === "teal"
-    ? { badge: "bg-teal-50 text-teal-600", btn: "bg-teal-500 hover:bg-teal-600", shadow: "shadow-teal-500/10" }
-    : { badge: "bg-indigo-50 text-indigo-600", btn: "bg-indigo-500 hover:bg-indigo-600", shadow: "shadow-indigo-500/10" };
+    ? { badge: "bg-success/10 text-success", btn: "bg-success hover:bg-success", shadow: "shadow-success/20" }
+    : { badge: "bg-primary/10 text-primary", btn: "bg-primary hover:bg-primary", shadow: "shadow-primary/20" };
 
   if (!report) {
     return (
@@ -225,7 +225,7 @@ function ReportCard({
           <div className={`rounded-full p-2 ${toneCls.badge}`}>{icon}</div>
           <div>
             <h3 className="font-bold">{title}</h3>
-            <p className="text-xs text-slate-500">{empty}</p>
+            <p className="text-xs text-muted-foreground">{empty}</p>
           </div>
         </div>
       </Card>
@@ -239,15 +239,15 @@ function ReportCard({
           <div className={`rounded-full p-2 ${toneCls.badge}`}>{icon}</div>
           <div>
             <h3 className="font-bold">{title}</h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {report.test_time ? new Date(report.test_time).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—"}
             </p>
           </div>
         </div>
         {metric && (
           <div className="text-right">
-            <p className="text-2xl font-bold text-slate-900">{metric}</p>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">{metricLabel}</p>
+            <p className="text-2xl font-bold text-foreground">{metric}</p>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{metricLabel}</p>
           </div>
         )}
       </div>
@@ -261,9 +261,9 @@ function ReportCard({
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-2">
-      <p className="text-base font-bold text-slate-900">{value}</p>
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded-xl bg-muted p-2">
+      <p className="text-base font-bold text-foreground">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -271,7 +271,7 @@ function Mini({ label, value }: { label: string; value: string }) {
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+      <Loader2 className="h-8 w-8 animate-spin text-success" />
     </div>
   );
 }
@@ -319,9 +319,9 @@ function StaffPicker({ onPick }: { onPick: (m: MemberHit) => void }) {
   }
 
   return (
-    <Card className="rounded-2xl p-6 shadow-lg shadow-indigo-500/10">
+    <Card className="rounded-2xl p-6 shadow-lg shadow-primary/20">
       <div className="flex items-start gap-3">
-        <div className="rounded-full bg-indigo-50 p-2 text-indigo-600"><Search className="h-5 w-5" /></div>
+        <div className="rounded-full bg-primary/10 p-2 text-primary"><Search className="h-5 w-5" /></div>
         <div>
           <h2 className="text-xl font-bold">Find member's report</h2>
           <p className="text-sm text-muted-foreground">Look up a member to view their latest scan.</p>
@@ -343,17 +343,17 @@ function StaffPicker({ onPick }: { onPick: (m: MemberHit) => void }) {
           <button
             key={m.id}
             onClick={() => onPick(m)}
-            className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left transition hover:border-indigo-300 hover:bg-indigo-50"
+            className="flex w-full items-center justify-between rounded-xl border border-border p-3 text-left transition hover:border-primary/40 hover:bg-primary/10"
           >
             <div>
               <p className="font-semibold">{m.full_name || "Unnamed"}</p>
-              <p className="text-xs text-slate-500">{m.member_code} · {m.phone || "no phone"}</p>
+              <p className="text-xs text-muted-foreground">{m.member_code} · {m.phone || "no phone"}</p>
             </div>
-            <span className="text-sm font-medium text-indigo-600">View →</span>
+            <span className="text-sm font-medium text-primary">View →</span>
           </button>
         ))}
         {results.length === 0 && search && !searching && (
-          <p className="text-center text-sm text-slate-500">No members found.</p>
+          <p className="text-center text-sm text-muted-foreground">No members found.</p>
         )}
       </div>
     </Card>
@@ -362,14 +362,14 @@ function StaffPicker({ onPick }: { onPick: (m: MemberHit) => void }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 via-white to-teal-50/40 px-4 py-8">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-muted via-white to-success/10 px-4 py-8">
       <div className="mx-auto max-w-md">
         <div className="mb-6 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-teal-600">Incline · Body Scan</p>
-          <h1 className="mt-1 text-lg font-bold text-slate-900">My Scan Report</h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-success">Incline · Body Scan</p>
+          <h1 className="mt-1 text-lg font-bold text-foreground">My Scan Report</h1>
         </div>
         {children}
-        <p className="mt-6 text-center text-xs text-slate-400">The Incline Life by Incline</p>
+        <p className="mt-6 text-center text-xs text-muted-foreground">The Incline Life by Incline</p>
       </div>
     </div>
   );

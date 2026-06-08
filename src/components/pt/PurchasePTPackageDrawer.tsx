@@ -299,14 +299,14 @@ export function PurchasePTPackageDrawer({
         </SheetHeader>
 
         {!trainerId && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg bg-amber-50 text-amber-800 px-3 py-2 text-sm">
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg bg-warning/10 text-warning px-3 py-2 text-sm">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             Assign a trainer to this member before purchasing.
           </div>
         )}
 
         {awaitingPayment && (
-          <div className="mx-6 mt-4 flex items-center justify-between gap-2 rounded-lg bg-blue-50 text-blue-800 px-3 py-2 text-sm">
+          <div className="mx-6 mt-4 flex items-center justify-between gap-2 rounded-lg bg-info/10 text-info px-3 py-2 text-sm">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Waiting for payment…
             </div>
@@ -322,11 +322,11 @@ export function PurchasePTPackageDrawer({
 
         <div className="px-6 pt-4">
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <TabsList className="grid grid-cols-2 w-full bg-slate-100 p-1 rounded-xl">
-              <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <TabsList className="grid grid-cols-2 w-full bg-muted p-1 rounded-xl">
+              <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 <Dumbbell className="h-4 w-4 mr-2" /> Session Pack
               </TabsTrigger>
-              <TabsTrigger value="monthly" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              <TabsTrigger value="monthly" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 <CalendarDays className="h-4 w-4 mr-2" /> Monthly Plan
               </TabsTrigger>
             </TabsList>
@@ -401,7 +401,7 @@ export function PurchasePTPackageDrawer({
                 className={`cursor-pointer rounded-2xl border-2 border-dashed transition-all ${
                   selected === 'custom'
                     ? 'border-primary bg-primary/5'
-                    : 'border-slate-200 hover:border-slate-300'
+                    : 'border-border hover:border-border'
                 }`}
               >
                 <CardContent className="p-4 space-y-3">
@@ -466,7 +466,7 @@ export function PurchasePTPackageDrawer({
           )}
         </div>
 
-        <div className="border-t bg-white/95 backdrop-blur px-6 py-4 space-y-2">
+        <div className="border-t bg-card/95 backdrop-blur px-6 py-4 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Payment source</Label>
@@ -492,19 +492,19 @@ export function PurchasePTPackageDrawer({
             </div>
           </div>
 
-          <div className="flex justify-between text-sm text-slate-600">
+          <div className="flex justify-between text-sm text-muted-foreground">
             <span>Subtotal (pre-GST)</span>
             <span>{formatINR(breakdown.subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm text-slate-600">
+          <div className="flex justify-between text-sm text-muted-foreground">
             <span>GST {PT_GST_RATE}% (mandatory, incl.)</span>
             <span>{formatINR(breakdown.tax)}</span>
           </div>
-          <div className="flex justify-between text-sm text-emerald-700">
+          <div className="flex justify-between text-sm text-success">
             <span>Trainer commission (preview)</span>
             <span>{formatINR(commissionPreview)}</span>
           </div>
-          <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-slate-200">
+          <div className="flex justify-between text-base font-bold pt-1 border-t border-dashed border-border">
             <span>Final Total</span>
             <span>{formatINR(breakdown.total)}</span>
           </div>

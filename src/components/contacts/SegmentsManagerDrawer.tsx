@@ -75,7 +75,7 @@ export function SegmentsManagerDrawer({ open, onOpenChange, branchId }: Props) {
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-violet-100 text-violet-700"><Layers className="h-5 w-5" /></span>
+            <span className="p-2 rounded-xl bg-primary/15 text-primary"><Layers className="h-5 w-5" /></span>
             Marketing Segments
           </SheetTitle>
           <SheetDescription>
@@ -85,9 +85,9 @@ export function SegmentsManagerDrawer({ open, onOpenChange, branchId }: Props) {
 
         <div className="space-y-6 mt-6">
           {/* Builder */}
-          <div className="rounded-2xl border bg-slate-50 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-600" /> New segment
+          <div className="rounded-2xl border bg-muted p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> New segment
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -157,15 +157,15 @@ export function SegmentsManagerDrawer({ open, onOpenChange, branchId }: Props) {
 
           {/* Existing segments */}
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-700">Saved segments ({segments.length})</h3>
+            <h3 className="text-sm font-semibold text-foreground">Saved segments ({segments.length})</h3>
             {segments.length === 0 ? (
-              <p className="text-xs text-slate-500">No segments yet. Save your first audience above.</p>
+              <p className="text-xs text-muted-foreground">No segments yet. Save your first audience above.</p>
             ) : (
               segments.map((s) => (
-                <div key={s.id} className="rounded-xl border bg-white p-3 flex items-center justify-between gap-3">
+                <div key={s.id} className="rounded-xl border bg-card p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-slate-900 truncate">{s.name}</p>
-                    <p className="text-xs text-slate-500 truncate">
+                    <p className="font-medium text-foreground truncate">{s.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {s.audience_count} contacts · refreshed {s.last_refreshed_at ? new Date(s.last_refreshed_at).toLocaleString() : 'never'}
                     </p>
                   </div>
@@ -180,10 +180,10 @@ export function SegmentsManagerDrawer({ open, onOpenChange, branchId }: Props) {
                         onOpenChange(false);
                       }}
                     >
-                      <Send className="h-4 w-4 text-violet-600" />
+                      <Send className="h-4 w-4 text-primary" />
                     </Button>
                     <Button
-                      variant="ghost" size="icon" className="rounded-xl text-red-600"
+                      variant="ghost" size="icon" className="rounded-xl text-destructive"
                       onClick={() => delMut.mutate(s.id)}
                     >
                       <Trash2 className="h-4 w-4" />

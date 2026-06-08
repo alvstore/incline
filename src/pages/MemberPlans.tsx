@@ -156,25 +156,25 @@ export default function MemberPlansPage() {
         {/* Active membership hero */}
         {activeMembership ? (
           <Card className="overflow-hidden rounded-2xl border-border/60 shadow-lg shadow-primary/10">
-            <CardContent className="grid gap-4 bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-primary-foreground md:grid-cols-[1.4fr_1fr] md:items-center">
+            <CardContent className="grid gap-4 bg-gradient-to-r from-primary to-primary p-6 text-primary-foreground md:grid-cols-[1.4fr_1fr] md:items-center">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 backdrop-blur px-3 py-1 text-xs font-medium">
+                <div className="inline-flex items-center gap-2 rounded-full bg-card/15 backdrop-blur px-3 py-1 text-xs font-medium">
                   {isFrozen ? <Snowflake className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                   {isFrozen ? 'Membership Frozen' : 'Active Membership'}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-bold">{activeMembership.plan?.name || 'Your Plan'}</h2>
-                <p className="text-sm text-white/85">
+                <p className="text-sm text-primary-foreground/85">
                   {format(new Date(activeMembership.start_date), 'dd MMM yyyy')} →{' '}
                   {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-white/70">Days remaining</p>
+                <div className="rounded-2xl bg-card/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/70">Days remaining</p>
                   <p className="mt-2 text-2xl font-semibold">{daysRemaining}</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-white/70">Outstanding dues</p>
+                <div className="rounded-2xl bg-card/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/70">Outstanding dues</p>
                   <p className="mt-2 text-2xl font-semibold">₹{totalDue.toLocaleString()}</p>
                 </div>
               </div>

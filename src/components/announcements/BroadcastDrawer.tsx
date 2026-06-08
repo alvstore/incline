@@ -25,10 +25,10 @@ interface BroadcastDrawerProps {
 type Channel = 'inapp' | 'whatsapp' | 'sms' | 'email';
 
 const CHANNELS: { value: Channel; label: string; icon: any; color: string }[] = [
-  { value: 'inapp',    label: 'In-App',   icon: Bell,          color: 'text-violet-600' },
-  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-500' },
-  { value: 'sms',      label: 'SMS',      icon: Phone,         color: 'text-sky-500' },
-  { value: 'email',    label: 'Email',    icon: Mail,          color: 'text-amber-500' },
+  { value: 'inapp',    label: 'In-App',   icon: Bell,          color: 'text-primary' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'text-success' },
+  { value: 'sms',      label: 'SMS',      icon: Phone,         color: 'text-info' },
+  { value: 'email',    label: 'Email',    icon: Mail,          color: 'text-warning' },
 ];
 
 export function BroadcastDrawer({ open, onOpenChange, branchId, initialType = 'inapp', initialMessage = '' }: BroadcastDrawerProps) {
@@ -318,7 +318,7 @@ export function BroadcastDrawer({ open, onOpenChange, branchId, initialType = 'i
               <Label>Attachment (Optional)</Label>
               {attachment ? (
                 <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30">
-                  {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-emerald-500" /> : <FileText className="h-4 w-4 text-amber-500" />}
+                  {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-success" /> : <FileText className="h-4 w-4 text-warning" />}
                   <span className="text-sm flex-1 truncate">{attachment.filename}</span>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setAttachment(null)} aria-label="Remove attachment">
                     <X className="h-4 w-4" />

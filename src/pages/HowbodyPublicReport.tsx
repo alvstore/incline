@@ -43,13 +43,13 @@ export default function HowbodyPublicReport({ reportType }: Props) {
   }, [token, reportType]);
 
   if (loading) {
-    return <Shell><Loader2 className="mx-auto h-8 w-8 animate-spin text-teal-500" /></Shell>;
+    return <Shell><Loader2 className="mx-auto h-8 w-8 animate-spin text-success" /></Shell>;
   }
   if (error) {
     return (
       <Shell>
-        <Card className="rounded-2xl p-8 text-center shadow-lg shadow-rose-500/10">
-          <AlertTriangle className="mx-auto h-10 w-10 text-rose-500" />
+        <Card className="rounded-2xl p-8 text-center shadow-lg shadow-destructive/20">
+          <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
           <p className="mt-4 font-semibold">{error}</p>
         </Card>
       </Shell>
@@ -63,13 +63,13 @@ export default function HowbodyPublicReport({ reportType }: Props) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 via-white to-teal-50/40 px-4 py-8">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-muted via-white to-success/10 px-4 py-8">
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-teal-600">Incline Body Scan Report</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-success">Incline Body Scan Report</p>
         </div>
         {children}
-        <p className="text-center text-xs text-slate-400">The Incline Life by Incline</p>
+        <p className="text-center text-xs text-muted-foreground">The Incline Life by Incline</p>
       </div>
     </div>
   );
@@ -78,13 +78,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Metric({ label, value, unit, hint }: { label: string; value: any; unit?: string; hint?: string }) {
   if (value === null || value === undefined) return null;
   return (
-    <div className="rounded-2xl bg-white p-4 shadow shadow-slate-200/60">
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">
+    <div className="rounded-2xl bg-card p-4 shadow shadow/60">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-foreground">
         {Number(value).toFixed(value % 1 === 0 ? 0 : 1)}
-        {unit && <span className="ml-1 text-sm font-medium text-slate-400">{unit}</span>}
+        {unit && <span className="ml-1 text-sm font-medium text-muted-foreground">{unit}</span>}
       </p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -92,15 +92,15 @@ function Metric({ label, value, unit, hint }: { label: string; value: any; unit?
 function BodyReport({ r }: { r: any }) {
   return (
     <Shell>
-      <Card className="rounded-2xl border-0 bg-gradient-to-br from-teal-500 to-emerald-600 p-8 text-white shadow-xl shadow-teal-500/30">
+      <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success p-8 text-primary-foreground shadow-xl shadow-success/20">
         <div className="flex items-center gap-3">
           <Activity className="h-8 w-8" />
           <div>
-            <p className="text-xs uppercase tracking-wide text-teal-50">Body Composition</p>
+            <p className="text-xs uppercase tracking-wide text-success">Body Composition</p>
             <h1 className="text-2xl font-bold">Health Score · {r.health_score ?? "—"}</h1>
           </div>
         </div>
-        {r.test_time && <p className="mt-2 text-sm text-teal-50">{new Date(r.test_time).toLocaleString()}</p>}
+        {r.test_time && <p className="mt-2 text-sm text-success">{new Date(r.test_time).toLocaleString()}</p>}
       </Card>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -130,23 +130,23 @@ function PostureReport({ r }: { r: any }) {
   ].filter((i) => i.src);
   return (
     <Shell>
-      <Card className="rounded-2xl border-0 bg-gradient-to-br from-teal-500 to-emerald-600 p-8 text-white shadow-xl shadow-teal-500/30">
+      <Card className="rounded-2xl border-0 bg-gradient-to-br from-success to-success p-8 text-primary-foreground shadow-xl shadow-success/20">
         <div className="flex items-center gap-3">
           <Scan className="h-8 w-8" />
           <div>
-            <p className="text-xs uppercase tracking-wide text-teal-50">Posture Assessment</p>
+            <p className="text-xs uppercase tracking-wide text-success">Posture Assessment</p>
             <h1 className="text-2xl font-bold">Posture Score · {r.score ?? "—"}</h1>
           </div>
         </div>
-        {r.test_time && <p className="mt-2 text-sm text-teal-50">{new Date(r.test_time).toLocaleString()}</p>}
+        {r.test_time && <p className="mt-2 text-sm text-success">{new Date(r.test_time).toLocaleString()}</p>}
       </Card>
 
       {imgs.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {imgs.map((i) => (
-            <div key={i.label} className="overflow-hidden rounded-2xl bg-white shadow shadow-slate-200/60">
+            <div key={i.label} className="overflow-hidden rounded-2xl bg-card shadow shadow/60">
               <img src={i.src} alt={i.label} loading="lazy" className="h-48 w-full object-cover" />
-              <p className="px-3 py-2 text-xs font-medium text-slate-700">{i.label}</p>
+              <p className="px-3 py-2 text-xs font-medium text-foreground">{i.label}</p>
             </div>
           ))}
         </div>

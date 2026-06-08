@@ -46,12 +46,12 @@ export function CommConsentCheckbox({
 }: CommConsentCheckboxProps) {
   const labelCls =
     tone === 'dark'
-      ? 'text-sm text-white/80 leading-relaxed cursor-pointer'
-      : 'text-sm text-slate-600 leading-relaxed cursor-pointer';
+      ? 'text-sm text-primary-foreground/80 leading-relaxed cursor-pointer'
+      : 'text-sm text-muted-foreground leading-relaxed cursor-pointer';
   const linkCls =
     tone === 'dark'
       ? 'text-primary hover:underline'
-      : 'text-indigo-600 hover:underline';
+      : 'text-primary hover:underline';
 
   return (
     <div className={cn('flex items-start gap-2.5', className)}>

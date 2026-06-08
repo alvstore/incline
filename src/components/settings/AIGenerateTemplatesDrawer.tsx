@@ -49,9 +49,9 @@ interface Props {
 }
 
 const CHANNEL_META: Record<Channel, { label: string; icon: any; color: string }> = {
-  whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-500' },
-  sms: { label: 'SMS', icon: Phone, color: 'text-blue-500' },
-  email: { label: 'Email', icon: Mail, color: 'text-amber-500' },
+  whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-success' },
+  sms: { label: 'SMS', icon: Phone, color: 'text-info' },
+  email: { label: 'Email', icon: Mail, color: 'text-warning' },
 };
 
 export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channelProp, prefilledEvents }: Props) {
@@ -234,7 +234,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-violet-500" />
+            <Sparkles className="h-5 w-5 text-primary" />
             AI Template Generator
           </SheetTitle>
           <SheetDescription>
@@ -272,7 +272,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
               <p className="text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">{missingEvents.length}</span> missing
                 · <span className="font-semibold text-foreground">{picked.size}</span> selected
-                · {candidates.length} total · <span className="text-amber-600">max 60 per run</span>
+                · {candidates.length} total · <span className="text-warning">max 60 per run</span>
               </p>
               <div className="flex gap-2">
                 <Button
@@ -323,7 +323,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
           <div className="py-4 space-y-4">
             {proposals.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-success" />
                 All proposals saved.
               </div>
             )}
@@ -355,14 +355,14 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                       <select
                         value={p.category}
                         onChange={(e) => updateProposal(i, { category: e.target.value })}
-                        className={`mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs ${categoryMismatch ? 'border-amber-500' : ''}`}
+                        className={`mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs ${categoryMismatch ? 'border-warning' : ''}`}
                       >
                         <option value="MARKETING">MARKETING</option>
                         <option value="UTILITY">UTILITY</option>
                         <option value="AUTHENTICATION">AUTHENTICATION</option>
                       </select>
                       {categoryMismatch && (
-                        <p className="text-[10px] text-amber-600 mt-1">Event looks promotional — Meta usually requires MARKETING.</p>
+                        <p className="text-[10px] text-warning mt-1">Event looks promotional — Meta usually requires MARKETING.</p>
                       )}
                     </div>
                     <div>
@@ -422,7 +422,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 {channel === 'email' && p.body_html && (
                   <details className="text-xs">
                     <summary className="cursor-pointer text-muted-foreground">HTML preview</summary>
-                    <div className="mt-2 rounded border bg-white p-2 max-h-60 overflow-auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
+                    <div className="mt-2 rounded border bg-card p-2 max-h-60 overflow-auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
                   </details>
                 )}
                 {p.rationale && <p className="text-xs text-muted-foreground italic">{p.rationale}</p>}

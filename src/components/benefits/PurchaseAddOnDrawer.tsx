@@ -235,7 +235,7 @@ export function PurchaseAddOnDrawer({
         key={p.id}
         onClick={() => setSelectedBenefitPkg(p.id)}
         className={`cursor-pointer transition-all rounded-xl ${
-          selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-indigo-500/10' : 'border-border/60 hover:border-primary/40'
+          selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-primary/20' : 'border-border/60 hover:border-primary/40'
         }`}
       >
         <CardContent className="p-4 space-y-2">
@@ -278,7 +278,7 @@ export function PurchaseAddOnDrawer({
         key={p.id}
         onClick={() => setSelectedPtPkg(p.id)}
         className={`cursor-pointer transition-all rounded-xl ${
-          selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-indigo-500/10' : 'border-border/60 hover:border-primary/40'
+          selected ? 'border-primary ring-2 ring-primary/30 shadow-lg shadow-primary/20' : 'border-border/60 hover:border-primary/40'
         }`}
       >
         <CardContent className="p-4 space-y-2">

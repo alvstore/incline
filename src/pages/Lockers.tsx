@@ -247,7 +247,7 @@ export default function LockersPage() {
 
         {/* Stats Row */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
+          <Card className="bg-card border border-border/50 shadow-lg shadow/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center justify-between">
                 <div>

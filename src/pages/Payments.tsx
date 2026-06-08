@@ -217,11 +217,11 @@ export default function PaymentsPage() {
   const pendingTotal = filteredPayments.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
 
   const getMethodColor = (method: string) => {
-    const colors: Record<string, string> = { cash: 'bg-emerald-500/10 text-emerald-600', card: 'bg-sky-500/10 text-sky-600', upi: 'bg-violet-500/10 text-violet-600', wallet: 'bg-amber-500/10 text-amber-600', bank_transfer: 'bg-cyan-500/10 text-cyan-600', online: 'bg-indigo-500/10 text-indigo-600' };
+    const colors: Record<string, string> = { cash: 'bg-success/10 text-success', card: 'bg-info/10 text-info', upi: 'bg-primary/10 text-primary', wallet: 'bg-warning/10 text-warning', bank_transfer: 'bg-info/10 text-info', online: 'bg-primary/10 text-primary' };
     return colors[method] || 'bg-muted text-muted-foreground';
   };
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = { completed: 'bg-emerald-500/10 text-emerald-600', pending: 'bg-amber-500/10 text-amber-600', failed: 'bg-destructive/10 text-destructive', refunded: 'bg-orange-500/10 text-orange-600', voided: 'bg-destructive/10 text-destructive line-through' };
+    const colors: Record<string, string> = { completed: 'bg-success/10 text-success', pending: 'bg-warning/10 text-warning', failed: 'bg-destructive/10 text-destructive', refunded: 'bg-warning/10 text-warning', voided: 'bg-destructive/10 text-destructive line-through' };
     return colors[status] || 'bg-muted text-muted-foreground';
   };
   const clearFilters = () => { setSearchTerm(''); setMethodFilter('all'); setStatusFilter('all'); setDateRange(undefined); };
@@ -264,7 +264,7 @@ export default function PaymentsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-success to-success text-primary-foreground">
                 <CreditCard className="h-6 w-6" />
               </div>
               Payments
@@ -376,7 +376,7 @@ export default function PaymentsPage() {
           </Collapsible>
         )}
 
-        <Card className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl border-border/50 shadow-lg shadow/50">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2"><Filter className="h-4 w-4" />Filters</CardTitle>
@@ -590,7 +590,7 @@ export default function PaymentsPage() {
                             <p className="font-semibold text-destructive">₹{dueAmount.toLocaleString()}</p>
                             <Badge className={`text-[10px] ${
                               inv.status === 'overdue' ? 'bg-destructive/10 text-destructive' :
-                              inv.status === 'partial' ? 'bg-amber-500/10 text-amber-600' :
+                              inv.status === 'partial' ? 'bg-warning/10 text-warning' :
                               'bg-warning/10 text-warning'
                             }`}>
                               {inv.status}

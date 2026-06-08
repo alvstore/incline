@@ -117,7 +117,7 @@ export function LeadKanban({ leads, onSelectLead, onFollowup, onConvert }: LeadK
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
                     {statusLeads.map((lead: any, index: number) => {
                       const TempIcon = lead.temperature === 'hot' ? Flame : lead.temperature === 'cold' ? Snowflake : Sun;
-                      const tempColor = lead.temperature === 'hot' ? 'text-red-500' : lead.temperature === 'cold' ? 'text-blue-500' : 'text-amber-500';
+                      const tempColor = lead.temperature === 'hot' ? 'text-destructive' : lead.temperature === 'cold' ? 'text-info' : 'text-warning';
                       const isOverdue = lead.next_action_at && new Date(lead.next_action_at) < new Date();
                       const ACTIVE = ['new', 'contacted', 'qualified', 'negotiation'];
                       const ref = lead.last_contacted_at || lead.created_at;
@@ -170,7 +170,7 @@ export function LeadKanban({ leads, onSelectLead, onFollowup, onConvert }: LeadK
                                   </p>
                                 )}
                                 {!isOverdue && isStale && (
-                                  <p className="text-[10px] text-amber-700 font-medium bg-amber-50 rounded px-1.5 py-0.5 inline-block">
+                                  <p className="text-[10px] text-warning font-medium bg-warning/10 rounded px-1.5 py-0.5 inline-block">
                                     Stale · no contact in 3+ days
                                   </p>
                                 )}
@@ -228,12 +228,12 @@ export function LeadKanban({ leads, onSelectLead, onFollowup, onConvert }: LeadK
                                   <div className="flex items-center gap-1">
                                     {lead.phone && (
                                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => handleWhatsApp(e, lead.phone, lead.full_name)}>
-                                        <MessageSquare className="h-3 w-3 text-emerald-500" />
+                                        <MessageSquare className="h-3 w-3 text-success" />
                                       </Button>
                                     )}
                                     {lead.phone && (
                                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); window.open(`tel:${lead.phone}`); }}>
-                                        <Phone className="h-3 w-3 text-sky-500" />
+                                        <Phone className="h-3 w-3 text-info" />
                                       </Button>
                                     )}
                                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onFollowup(lead); }}>

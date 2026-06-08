@@ -14,13 +14,13 @@ export interface KpiCounts {
 }
 
 const items = [
-  { key: 'total', label: 'All', icon: Users, accent: 'from-slate-500 to-slate-700', text: 'text-slate-50', sub: 'Total contacts' },
-  { key: 'sent', label: 'Sent', icon: Send, accent: 'from-emerald-500 to-emerald-600', text: 'text-emerald-50', sub: 'success rate' },
-  { key: 'failed', label: 'Failed', icon: XCircle, accent: 'from-rose-500 to-rose-600', text: 'text-rose-50', sub: 'failure rate' },
-  { key: 'delivered', label: 'Delivered', icon: CheckCircle2, accent: 'from-sky-500 to-sky-600', text: 'text-sky-50', sub: 'delivery rate' },
-  { key: 'read', label: 'Read', icon: Eye, accent: 'from-violet-500 to-violet-600', text: 'text-violet-50', sub: 'read rate' },
-  { key: 'replied', label: 'Replied', icon: MessageSquareReply, accent: 'from-indigo-500 to-indigo-600', text: 'text-indigo-50', sub: 'reply rate' },
-  { key: 'pending', label: 'Pending', icon: Clock, accent: 'from-amber-500 to-amber-600', text: 'text-amber-50', sub: 'in queue' },
+  { key: 'total', label: 'All', icon: Users, accent: 'from-muted to-muted', text: 'text-muted-foreground', sub: 'Total contacts' },
+  { key: 'sent', label: 'Sent', icon: Send, accent: 'from-success to-success', text: 'text-success', sub: 'success rate' },
+  { key: 'failed', label: 'Failed', icon: XCircle, accent: 'from-destructive to-destructive', text: 'text-destructive', sub: 'failure rate' },
+  { key: 'delivered', label: 'Delivered', icon: CheckCircle2, accent: 'from-info to-info', text: 'text-info', sub: 'delivery rate' },
+  { key: 'read', label: 'Read', icon: Eye, accent: 'from-primary to-primary', text: 'text-primary', sub: 'read rate' },
+  { key: 'replied', label: 'Replied', icon: MessageSquareReply, accent: 'from-primary to-primary', text: 'text-primary', sub: 'reply rate' },
+  { key: 'pending', label: 'Pending', icon: Clock, accent: 'from-warning to-warning', text: 'text-warning', sub: 'in queue' },
 ] as const;
 
 export function KpiStrip({ counts, activeKey, onSelect }: { counts: KpiCounts; activeKey?: string; onSelect?: (key: string) => void }) {
@@ -47,8 +47,8 @@ export function KpiStrip({ counts, activeKey, onSelect }: { counts: KpiCounts; a
               `bg-gradient-to-br ${it.accent}`,
               'shadow-black/5'
             )}>
-              <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/10" />
-              <div className="absolute -bottom-8 -left-4 w-16 h-16 rounded-full bg-white/5" />
+              <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-card/10" />
+              <div className="absolute -bottom-8 -left-4 w-16 h-16 rounded-full bg-card/5" />
               <CardContent className="p-4 relative z-10">
                 <div className="flex items-center justify-between">
                   <span className={cn('text-xs font-medium uppercase tracking-wider', it.text, 'opacity-90')}>{it.label}</span>

@@ -103,14 +103,14 @@ export function ReconciliationFindingsCard() {
   const totalOpen = grouped.length;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             {totalOpen === 0 ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
             ) : (
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
             )}
             Reconciliation findings
           </span>
@@ -119,16 +119,16 @@ export function ReconciliationFindingsCard() {
           </Badge>
         </CardTitle>
         {totalOpen > 0 && (
-          <p className="pt-1 text-xs text-slate-500">
+          <p className="pt-1 text-xs text-muted-foreground">
             Issues detected by the daily ledger reconciliation. Repeats per day are grouped.
           </p>
         )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : totalOpen === 0 ? (
-          <p className="text-sm text-emerald-700">All ledgers reconciled.</p>
+          <p className="text-sm text-success">All ledgers reconciled.</p>
         ) : (
           <ul className="space-y-3 text-sm">
             {grouped.slice(0, 12).map((g) => {
@@ -144,17 +144,17 @@ export function ReconciliationFindingsCard() {
               return (
                 <li
                   key={g.latest.id}
-                  className="rounded-xl bg-amber-50/60 ring-1 ring-amber-100 px-3 py-3"
+                  className="rounded-xl bg-warning/10 ring-1 ring-warning/15 px-3 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-amber-700 shrink-0" />
-                        <span className="font-semibold text-slate-900">{meta.title}</span>
+                        <FileText className="h-4 w-4 text-warning shrink-0" />
+                        <span className="font-semibold text-foreground">{meta.title}</span>
                       </div>
-                      <div className="text-slate-700">{meta.explain(f.details)}</div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                        <span className="font-medium text-slate-700">{label}</span>
+                      <div className="text-foreground">{meta.explain(f.details)}</div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{label}</span>
                         {inv?.customer_name && <span>· {inv.customer_name}</span>}
                         {inv?.status && <span>· {inv.status}</span>}
                         <span>· first seen {format(new Date(g.firstSeen), "d MMM")}</span>
@@ -168,7 +168,7 @@ export function ReconciliationFindingsCard() {
                       {f.reference_type === "invoice" && f.reference_id && (
                         <Link
                           to={`/invoices?focus=${f.reference_id}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
                         >
                           Open <ExternalLink className="h-3 w-3" />
                         </Link>
@@ -179,7 +179,7 @@ export function ReconciliationFindingsCard() {
               );
             })}
             {grouped.length > 12 && (
-              <li className="text-center text-xs text-slate-500">
+              <li className="text-center text-xs text-muted-foreground">
                 +{grouped.length - 12} more findings
               </li>
             )}

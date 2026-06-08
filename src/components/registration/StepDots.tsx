@@ -18,10 +18,10 @@ export function StepDots({ total, current, labels }: StepDotsProps) {
               className={cn(
                 "flex items-center justify-center rounded-full transition-all duration-300",
                 active
-                  ? "h-2.5 w-8 bg-gradient-to-r from-primary to-violet-400"
+                  ? "h-2.5 w-8 bg-gradient-to-r from-primary to-primary"
                   : done
                   ? "h-2.5 w-2.5 bg-primary/70"
-                  : "h-2.5 w-2.5 bg-white/20"
+                  : "h-2.5 w-2.5 bg-card/20"
               )}
               aria-label={labels?.[i] ?? `Step ${i + 1}`}
             />

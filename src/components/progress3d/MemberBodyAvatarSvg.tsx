@@ -30,7 +30,7 @@ export function MemberBodyAvatarSvg({ measurement, label, memberGender }: Member
   const hipScale = 0.85 + (snapshot.morphs.hipWidth || 0.5) * 0.3;
 
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-border/40 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 shadow-xl shadow-primary/10">
+    <Card className="relative overflow-hidden rounded-2xl border-border/40 bg-gradient-to-br from-muted via-muted to-muted shadow-xl shadow-primary/10">
       {/* Subtle grid backdrop */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.07]"
         style={{
@@ -46,10 +46,10 @@ export function MemberBodyAvatarSvg({ measurement, label, memberGender }: Member
 
       <div className="relative z-10 flex items-start justify-between p-4">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.32em] text-white/50">Body view</p>
-          <h3 className="text-base font-semibold text-white mt-0.5">{label}</h3>
+          <p className="text-[10px] uppercase tracking-[0.32em] text-primary-foreground/50">Body view</p>
+          <h3 className="text-base font-semibold text-primary-foreground mt-0.5">{label}</h3>
         </div>
-        <Badge className="bg-white/10 text-white/80 border-white/10 text-[10px] uppercase tracking-wider">
+        <Badge className="bg-card/10 text-primary-foreground/80 border-primary-foreground/10 text-[10px] uppercase tracking-wider">
           {isFemale ? 'Female silhouette' : 'Male silhouette'}
         </Badge>
       </div>

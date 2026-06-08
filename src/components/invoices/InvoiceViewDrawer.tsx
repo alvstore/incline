@@ -65,7 +65,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
     const colors: Record<string, string> = {
       paid: 'bg-success/10 text-success',
       pending: 'bg-warning/10 text-warning',
-      partial: 'bg-blue-500/10 text-blue-500',
+      partial: 'bg-info/10 text-info',
       overdue: 'bg-destructive/10 text-destructive',
       cancelled: 'bg-muted text-muted-foreground',
     };
@@ -308,7 +308,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
                     Wallet Used
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">Wallet</Badge>
                   </span>
-                  <span className="text-blue-600 dark:text-blue-400">-₹{walletDisplay.toLocaleString()}</span>
+                  <span className="text-info dark:text-info">-₹{walletDisplay.toLocaleString()}</span>
                 </div>
               )}
               {otherPaid > 0 && (

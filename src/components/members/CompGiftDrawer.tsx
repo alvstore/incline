@@ -311,14 +311,14 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
         {/* Role Notice */}
         <div className={`mt-3 flex items-center gap-2 p-3 rounded-lg border ${
           isManagerOrAbove
-            ? 'bg-emerald-500/5 border-emerald-500/20'
+            ? 'bg-success/5 border-success/20'
             : 'bg-primary/5 border-primary/20'
         }`}>
           {isManagerOrAbove ? (
             <>
-              <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+              <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
               <p className="text-xs text-muted-foreground">
-                You have <span className="font-semibold text-emerald-600">direct execution</span> privileges. Changes apply immediately.
+                You have <span className="font-semibold text-success">direct execution</span> privileges. Changes apply immediately.
               </p>
             </>
           ) : (
@@ -375,10 +375,10 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                     {activeComps.map((c: any) => (
                       <div key={c.id} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5">
-                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          <Sparkles className="h-3 w-3 text-warning" />
                           <span className="font-medium">{c.benefit_types?.name || 'Benefit'}</span>
                         </div>
-                        <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] h-5">
+                        <Badge className="bg-warning/10 text-warning border-warning/30 text-[10px] h-5">
                           {c.comp_sessions - c.used_sessions} remaining
                         </Badge>
                       </div>

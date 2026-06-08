@@ -66,10 +66,10 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
 
   return (
     <>
-      <Card className="border-amber-500/30 bg-amber-500/5">
+      <Card className="border-warning/30 bg-warning/5">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
+            <AlertCircle className="h-4 w-4 text-warning" />
             Pending Dues ({pendingInvoices.length})
           </CardTitle>
         </CardHeader>
@@ -400,12 +400,12 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                     const hasComp = (b.compTotal || 0) > 0;
                     const isGiftOnly = !!b.isGiftOnly;
                     const barColor = b.isUnlimited
-                      ? 'bg-blue-500'
+                      ? 'bg-info'
                       : isExhausted
                         ? 'bg-destructive'
                         : isGiftOnly
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500';
+                          ? 'bg-warning'
+                          : 'bg-success';
                     const borderColor = b.isUnlimited
                       ? 'border-l-blue-500'
                       : isExhausted
@@ -418,22 +418,22 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                       <div key={idx} className={`p-3 rounded-lg bg-muted/50 border-l-4 ${borderColor}`}>
                         <div className="flex items-center justify-between mb-1.5 gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <Heart className={`h-4 w-4 ${isGiftOnly ? 'text-amber-600' : 'text-primary'}`} />
+                            <Heart className={`h-4 w-4 ${isGiftOnly ? 'text-warning' : 'text-primary'}`} />
                             <span className="font-medium text-sm truncate">{b.name}</span>
                             {hasComp && !isGiftOnly && (
-                              <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] gap-1 shrink-0">
+                              <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] gap-1 shrink-0">
                                 <Gift className="h-3 w-3" /> +{b.compRemaining} gift
                               </Badge>
                             )}
                             {isGiftOnly && (
-                              <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] gap-1 shrink-0">
+                              <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] gap-1 shrink-0">
                                 <Gift className="h-3 w-3" /> Gift
                               </Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {b.isUnlimited ? (
-                              <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/30 text-xs">
+                              <Badge className="bg-info/10 text-info border-info/30 text-xs">
                                 ∞ Unlimited{hasComp ? ` + ${b.compRemaining}` : ''}
                               </Badge>
                             ) : (
@@ -443,7 +443,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                                 </span>
                                 {hasComp && !isGiftOnly && (
                                   <div className="text-[10px] text-muted-foreground leading-tight">
-                                    {b.limit_count || 0} plan + <span className="text-amber-700 font-medium">{b.compTotal} gift</span>
+                                    {b.limit_count || 0} plan + <span className="text-warning font-medium">{b.compTotal} gift</span>
                                   </div>
                                 )}
                               </div>
@@ -459,8 +459,8 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                           </div>
                         )}
                         {b.isUnlimited && (
-                          <div className="h-2 bg-blue-500/20 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500 w-full animate-pulse opacity-40" />
+                          <div className="h-2 bg-info/20 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-info w-full animate-pulse opacity-40" />
                           </div>
                         )}
                         {isExhausted && b.benefit_type_id && !isGiftOnly && (
@@ -1060,7 +1060,7 @@ export function MemberProfileDrawer({
                       {freeDaysTotal > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant="outline" className="mt-1 bg-amber-100 text-amber-700 border-amber-300 text-[10px] gap-1">
+                            <Badge variant="outline" className="mt-1 bg-warning/15 text-warning border-warning/40 text-[10px] gap-1">
                               <Gift className="h-3 w-3" />
                               +{freeDaysTotal}d gift
                             </Badge>

@@ -166,8 +166,8 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} asChild>
       <Card
-        className={`rounded-2xl shadow-lg shadow-slate-200/50 transition-all ${
-          open ? 'ring-1 ring-indigo-200' : 'hover:shadow-xl hover:shadow-indigo-500/10'
+        className={`rounded-2xl shadow-lg shadow/50 transition-all ${
+          open ? 'ring-1 ring-primary/25' : 'hover:shadow-xl hover:shadow-primary/20'
         }`}
       >
         <CollapsibleTrigger asChild>
@@ -178,21 +178,21 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
             <div
               className={`shrink-0 p-2.5 rounded-xl ${
                 enabled
-                  ? 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20'
-                  : 'bg-slate-100 text-slate-500'
+                  ? 'bg-gradient-to-br from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               <Bot className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-slate-900">{meta.title}</h3>
+                <h3 className="font-semibold text-foreground">{meta.title}</h3>
                 {enabled ? (
-                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  <Badge className="bg-success/15 text-success hover:bg-success/15">
                     Live
                   </Badge>
                 ) : (
-                  <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100">
+                  <Badge className="bg-muted text-muted-foreground hover:bg-muted">
                     Disabled
                   </Badge>
                 )}
@@ -200,18 +200,18 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                   {meta.channel}
                 </Badge>
                 <Badge variant="outline" className="text-[10px] font-mono gap-1">
-                  <Zap className="h-3 w-3 text-violet-600" />
+                  <Zap className="h-3 w-3 text-primary" />
                   {model || selectedProvider?.default_model || 'provider default'}
                 </Badge>
                 {dirty && (
-                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px]">
+                  <Badge className="bg-warning/15 text-warning hover:bg-warning/15 text-[10px]">
                     Unsaved
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-1">{meta.desc}</p>
+              <p className="text-xs text-muted-foreground mt-1">{meta.desc}</p>
             </div>
-            <div className="hidden sm:flex items-center gap-1 shrink-0 text-slate-400">
+            <div className="hidden sm:flex items-center gap-1 shrink-0 text-muted-foreground">
               {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
             </div>
           </button>
@@ -220,7 +220,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
         <CollapsibleContent>
           <div className="px-4 sm:px-5 pb-5 space-y-6 border-t pt-5">
             {/* Status row */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted">
               <div className="flex items-center gap-2">
                 <Switch
                   id={`enabled-${row.id}`}
@@ -231,7 +231,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                   Handle is {enabled ? 'live' : 'disabled'}
                 </Label>
               </div>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-muted-foreground">
                 Last updated {new Date(row.updated_at).toLocaleString()}
               </span>
             </div>
@@ -239,11 +239,11 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
             {/* Persona & tone — inline editor */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
                   Persona & tone
                 </Label>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-muted-foreground">
                   {systemPrompt.length} chars
                 </span>
               </div>
@@ -254,11 +254,11 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                 placeholder="Voice, tone and behavioural rules unique to this handle. Keep it short — facts live in Knowledge."
                 className="font-mono text-xs leading-relaxed"
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-muted-foreground">
                 Keep this short. Offers, FAQs and shared rules belong in the{' '}
                 <button
                   type="button"
-                  className="underline text-indigo-600 hover:text-indigo-700"
+                  className="underline text-primary hover:text-primary"
                   onClick={onJumpToKnowledge}
                 >
                   Knowledge tab
@@ -270,7 +270,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
             {/* Model & sampling */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Provider</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Provider</Label>
                 <Select
                   value={providerId ?? '__default__'}
                   onValueChange={(v) => setProviderId(v === '__default__' ? null : v)}
@@ -290,7 +290,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Model</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Model</Label>
                 <Input
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
@@ -299,7 +299,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Temperature</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Temperature</Label>
                 <Input
                   type="number"
                   min={0}
@@ -318,7 +318,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
             {/* Operational settings — only handles that own one render here */}
             {opsSlot && (
               <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Operational settings
                 </Label>
                 {opsSlot}
@@ -332,7 +332,7 @@ export function HandleCard({ row, meta, open, onOpenChange, onJumpToKnowledge, o
                 variant="ghost"
                 onClick={handleTest}
                 disabled={testing}
-                className="gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                className="gap-1.5 text-primary hover:text-primary hover:bg-primary/10"
               >
                 {testing ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

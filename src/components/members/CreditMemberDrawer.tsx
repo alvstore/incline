@@ -86,7 +86,7 @@ export function CreditMemberDrawer({
         <div className="mt-6 space-y-5">
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-sm">
-              <Wallet className="h-4 w-4 text-emerald-600" /> Wallet Amount (₹)
+              <Wallet className="h-4 w-4 text-success" /> Wallet Amount (₹)
             </Label>
             <div className="relative">
               <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -131,7 +131,7 @@ export function CreditMemberDrawer({
               {wAmt > 0 && (
                 <div className="flex justify-between">
                   <span>Wallet credit</span>
-                  <span className="font-semibold text-emerald-600">+₹{wAmt.toLocaleString('en-IN')}</span>
+                  <span className="font-semibold text-success">+₹{wAmt.toLocaleString('en-IN')}</span>
                 </div>
               )}
               {pPts > 0 && (

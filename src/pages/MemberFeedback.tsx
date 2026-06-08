@@ -124,20 +124,20 @@ export default function MemberFeedback() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge className="bg-yellow-500/10 text-yellow-500"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+        return <Badge className="bg-warning/10 text-warning"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
       case 'reviewed':
-        return <Badge className="bg-blue-500/10 text-blue-500"><MessageSquare className="w-3 h-3 mr-1" />Reviewed</Badge>;
+        return <Badge className="bg-info/10 text-info"><MessageSquare className="w-3 h-3 mr-1" />Reviewed</Badge>;
       case 'resolved':
-        return <Badge className="bg-green-500/10 text-green-500"><CheckCircle className="w-3 h-3 mr-1" />Resolved</Badge>;
+        return <Badge className="bg-success/10 text-success"><CheckCircle className="w-3 h-3 mr-1" />Resolved</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
   const getRatingColor = (rating: number) => {
-    if (rating >= 4) return 'text-green-500';
-    if (rating >= 3) return 'text-yellow-500';
-    return 'text-red-500';
+    if (rating >= 4) return 'text-success';
+    if (rating >= 3) return 'text-warning';
+    return 'text-destructive';
   };
 
   if (memberLoading) {
@@ -204,7 +204,7 @@ export default function MemberFeedback() {
                         <Star
                           className={`h-8 w-8 transition-colors ${
                             star <= (hoverRating || rating)
-                              ? 'fill-yellow-400 text-yellow-400'
+                              ? 'fill-warning text-warning'
                               : 'text-muted-foreground'
                           }`}
                         />
@@ -266,7 +266,7 @@ export default function MemberFeedback() {
                 >
                   {submitFeedback.isPending ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground mr-2"></div>
                       Submitting...
                     </>
                   ) : (
@@ -279,17 +279,17 @@ export default function MemberFeedback() {
               </form>
 
               {lastSubmission && lastSubmission.rating >= 4 && branchInfo?.google_review_link && (
-                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="mt-4 rounded-xl border border-success/25 bg-success/10 p-4">
                   <div className="flex items-start gap-3">
-                    <Globe className="h-5 w-5 text-emerald-700 mt-0.5" />
+                    <Globe className="h-5 w-5 text-success mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-emerald-900">Loved it? Help others find us</p>
-                      <p className="text-sm text-emerald-800/80 mt-0.5">
+                      <p className="font-medium text-success">Loved it? Help others find us</p>
+                      <p className="text-sm text-success/80 mt-0.5">
                         A quick Google review takes 30 seconds and means the world to {branchInfo.name}.
                       </p>
                       <Button
                         size="sm"
-                        className="mt-3 bg-emerald-600 hover:bg-emerald-700"
+                        className="mt-3 bg-success hover:bg-success"
                         onClick={() => window.open(branchInfo.google_review_link!, '_blank', 'noopener')}
                       >
                         Leave a Google review
@@ -300,12 +300,12 @@ export default function MemberFeedback() {
               )}
 
               {lastSubmission && lastSubmission.rating <= 3 && (
-                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mt-4 rounded-xl border border-warning/25 bg-warning/10 p-4">
                   <div className="flex items-start gap-3">
-                    <HeartHandshake className="h-5 w-5 text-amber-700 mt-0.5" />
+                    <HeartHandshake className="h-5 w-5 text-warning mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium text-amber-900">Thank you — we hear you</p>
-                      <p className="text-sm text-amber-800/80 mt-0.5">
+                      <p className="font-medium text-warning">Thank you — we hear you</p>
+                      <p className="text-sm text-warning/80 mt-0.5">
                         A manager will reach out shortly to make this right.
                       </p>
                     </div>

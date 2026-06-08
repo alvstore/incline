@@ -18,14 +18,14 @@ const ACTIVITY_ICONS: Record<string, any> = {
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
-  call: 'bg-sky-500/10 text-sky-600 border-sky-200',
-  whatsapp: 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
-  email: 'bg-violet-500/10 text-violet-600 border-violet-200',
-  visit: 'bg-amber-500/10 text-amber-600 border-amber-200',
+  call: 'bg-info/10 text-info border-info/25',
+  whatsapp: 'bg-success/10 text-success border-success/25',
+  email: 'bg-primary/10 text-primary border-primary/25',
+  visit: 'bg-warning/10 text-warning border-warning/25',
   note: 'bg-muted text-muted-foreground border-border',
   status_change: 'bg-primary/10 text-primary border-primary/20',
-  assignment: 'bg-indigo-500/10 text-indigo-600 border-indigo-200',
-  conversion: 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+  assignment: 'bg-primary/10 text-primary border-primary/25',
+  conversion: 'bg-success/10 text-success border-success/25',
   created: 'bg-muted text-muted-foreground border-border',
 };
 

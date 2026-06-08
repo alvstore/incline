@@ -290,7 +290,7 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
               </div>
 
               {testResult && (
-                <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${testResult.success ? "bg-green-500/10 text-green-700" : "bg-destructive/10 text-destructive"}`}>
+                <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${testResult.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                   {testResult.success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                   {testResult.message}
                 </div>
@@ -298,9 +298,9 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
             </CardContent>
           </Card>
 
-          <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
-            <Fingerprint className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-sm text-blue-800 dark:text-blue-300">
+          <Alert className="border-info/25 bg-info/10 dark:border-info dark:bg-info/30">
+            <Fingerprint className="h-4 w-4 text-info" />
+            <AlertDescription className="text-sm text-info dark:text-info">
               Fingerprints cannot be captured via the web browser. Please register fingerprints directly on the physical gym terminal.
             </AlertDescription>
           </Alert>

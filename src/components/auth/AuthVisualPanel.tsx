@@ -13,7 +13,7 @@ export function AuthVisualPanel() {
   return (
     <aside
       aria-hidden="true"
-      className="auth-visual absolute inset-0 overflow-hidden text-white"
+      className="auth-visual absolute inset-0 overflow-hidden text-primary-foreground"
     >
       {/* Base gradient */}
       <div
@@ -34,7 +34,7 @@ export function AuthVisualPanel() {
 
       {/* Floating tagline words — kept in right margin away from main content */}
       <span
-        className="absolute font-oswald font-bold tracking-widest text-white/55 select-none pointer-events-none"
+        className="absolute font-oswald font-bold tracking-widest text-primary-foreground/55 select-none pointer-events-none"
         style={{
           top: "12%",
           right: "8%",
@@ -45,7 +45,7 @@ export function AuthVisualPanel() {
         RISE
       </span>
       <span
-        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-cyan-200/60 select-none pointer-events-none"
+        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-info/60 select-none pointer-events-none"
         style={{
           top: "40%",
           right: "6%",
@@ -56,7 +56,7 @@ export function AuthVisualPanel() {
         REFLECT
       </span>
       <span
-        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-white/50 select-none pointer-events-none"
+        className="hidden lg:block absolute font-oswald font-bold tracking-widest text-primary-foreground/50 select-none pointer-events-none"
         style={{
           top: "70%",
           right: "14%",
@@ -80,8 +80,8 @@ export function AuthVisualPanel() {
             />
           ) : (
             <div className="leading-tight">
-              <div className="text-white font-extrabold text-xl lg:text-2xl tracking-tight">Incline</div>
-              <div className="text-white/60 text-[11px] tracking-wider uppercase">The Incline Life</div>
+              <div className="text-primary-foreground font-extrabold text-xl lg:text-2xl tracking-tight">Incline</div>
+              <div className="text-primary-foreground/60 text-[11px] tracking-wider uppercase">The Incline Life</div>
             </div>
           )}
         </div>
@@ -89,32 +89,32 @@ export function AuthVisualPanel() {
         {/* Tagline + value props */}
         <div className="space-y-6 lg:space-y-8 max-w-md">
           <div className="space-y-3 lg:space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-xs text-white/85">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-200" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-card/10 border border-primary-foreground/15 backdrop-blur-md text-xs text-primary-foreground/85">
+              <Sparkles className="h-3.5 w-3.5 text-info" />
               Built for serious gyms
             </div>
             <h2 className="font-oswald font-bold text-2xl sm:text-3xl lg:text-5xl xl:text-6xl leading-[1.05] tracking-tight">
               Climb higher.
               <br />
-              <span className="bg-gradient-to-r from-cyan-200 via-white to-cyan-100 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-info/25 via-white to-info/15 bg-clip-text text-transparent">
                 Every. Single. Day.
               </span>
             </h2>
-            <p className="hidden lg:block text-white/70 text-base leading-relaxed">
+            <p className="hidden lg:block text-primary-foreground/70 text-base leading-relaxed">
               One platform for memberships, billing, classes, recovery, biometrics and growth — across every Incline branch.
             </p>
           </div>
 
-          <ul className="hidden lg:block space-y-3 text-sm text-white/80">
+          <ul className="hidden lg:block space-y-3 text-sm text-primary-foreground/80">
             <li className="flex items-center gap-3">
-              <span className="h-8 w-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center">
-                <Zap className="h-4 w-4 text-cyan-200" />
+              <span className="h-8 w-8 rounded-lg bg-card/10 border border-primary-foreground/15 grid place-items-center">
+                <Zap className="h-4 w-4 text-info" />
               </span>
               Lightning-fast check-ins & POS
             </li>
             <li className="flex items-center gap-3">
-              <span className="h-8 w-8 rounded-lg bg-white/10 border border-white/15 grid place-items-center">
-                <Dumbbell className="h-4 w-4 text-cyan-200" />
+              <span className="h-8 w-8 rounded-lg bg-card/10 border border-primary-foreground/15 grid place-items-center">
+                <Dumbbell className="h-4 w-4 text-info" />
               </span>
               Smarter training, recovery & progress tracking
             </li>
@@ -122,7 +122,7 @@ export function AuthVisualPanel() {
         </div>
 
         {/* Footer (desktop only) */}
-        <div className="hidden lg:flex items-center justify-end text-xs text-white/55">
+        <div className="hidden lg:flex items-center justify-end text-xs text-primary-foreground/55">
           <span>© Incline · The Incline Life by Incline</span>
         </div>
       </div>

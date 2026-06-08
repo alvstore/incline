@@ -28,10 +28,10 @@ type TopRoute = { route: string; total: number; open_count: number };
 type RlsRow = { table_name: string; rls_enabled: boolean; policy_count: number };
 
 const sevClass = (s: string) =>
-  s === 'critical' ? 'bg-rose-100 text-rose-700' :
-  s === 'error' ? 'bg-red-100 text-red-700' :
-  s === 'warning' ? 'bg-amber-100 text-amber-700' :
-  'bg-slate-100 text-slate-700';
+  s === 'critical' ? 'bg-destructive/15 text-destructive' :
+  s === 'error' ? 'bg-destructive/15 text-destructive' :
+  s === 'warning' ? 'bg-warning/15 text-warning' :
+  'bg-muted text-foreground';
 
 export function SystemAuditTab() {
   const [days, setDays] = useState('7');
@@ -93,7 +93,7 @@ export function SystemAuditTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-violet-600" />
+          <Shield className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">Audit Insights</h2>
         </div>
         <div className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export function SystemAuditTab() {
       <Card className="rounded-2xl border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-sky-600" /> Daily Error Trend (last 14 days)
+            <TrendingUp className="h-4 w-4 text-info" /> Daily Error Trend (last 14 days)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -126,7 +126,7 @@ export function SystemAuditTab() {
             <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
           ) : !trend.data?.length ? (
             <div className="text-center py-8">
-              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+              <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">No errors in this window.</p>
             </div>
           ) : (
@@ -137,7 +137,7 @@ export function SystemAuditTab() {
                 return (
                   <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={`${d.day}: ${d.total} (${d.critical_count} critical)`}>
                     <div
-                      className={`w-full rounded-t-md transition-all ${crit ? 'bg-rose-500' : 'bg-sky-500'}`}
+                      className={`w-full rounded-t-md transition-all ${crit ? 'bg-destructive' : 'bg-info'}`}
                       style={{ height: `${Math.max(h, 4)}%` }}
                     />
                     <span className="text-[10px] text-muted-foreground">{format(new Date(d.day), 'd/M')}</span>
@@ -153,7 +153,7 @@ export function SystemAuditTab() {
       <Card className="rounded-2xl border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="h-4 w-4 text-rose-600" /> Top Recurring Errors
+            <AlertTriangle className="h-4 w-4 text-destructive" /> Top Recurring Errors
             <Badge variant="secondary" className="text-xs ml-1">last {days}d</Badge>
           </CardTitle>
         </CardHeader>
@@ -248,7 +248,7 @@ export function SystemAuditTab() {
         <Card className="rounded-2xl border-border/50 shadow-lg">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <RouteIcon className="h-4 w-4 text-indigo-600" /> Top Noisy Frontend Routes
+              <RouteIcon className="h-4 w-4 text-primary" /> Top Noisy Frontend Routes
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -284,7 +284,7 @@ export function SystemAuditTab() {
       <Card className="rounded-2xl border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Database className="h-4 w-4 text-amber-600" /> Database RLS Sweep
+            <Database className="h-4 w-4 text-warning" /> Database RLS Sweep
             {rlsIssues.length > 0 ? (
               <Badge variant="destructive" className="text-xs">{rlsIssues.length} issues</Badge>
             ) : (
@@ -297,7 +297,7 @@ export function SystemAuditTab() {
             <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>
           ) : rlsIssues.length === 0 ? (
             <div className="text-center py-8">
-              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2" />
+              <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Every public table has RLS enabled with at least one policy.</p>
             </div>
           ) : (

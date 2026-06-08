@@ -130,7 +130,7 @@ export function HowbodyDeviceDrawer({ open, onOpenChange, device }: Props) {
               disabled={isEdit}
               maxLength={64}
             />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Printed on the back of the device. Cannot be changed after creation.
             </p>
           </div>
@@ -187,21 +187,21 @@ export function HowbodyDeviceDrawer({ open, onOpenChange, device }: Props) {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+          <div className="flex items-center justify-between rounded-xl bg-muted p-3">
             <div>
               <p className="text-sm font-medium">Active</p>
-              <p className="text-xs text-slate-500">Disable to stop accepting scans from this device.</p>
+              <p className="text-xs text-muted-foreground">Disable to stop accepting scans from this device.</p>
             </div>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={handleSave} disabled={saving} className="flex-1 bg-primary hover:bg-primary">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {isEdit ? "Save changes" : "Add device"}
             </Button>
             {isEdit && (
-              <Button variant="outline" onClick={handleDelete} disabled={deleting} className="text-rose-600 hover:bg-rose-50">
+              <Button variant="outline" onClick={handleDelete} disabled={deleting} className="text-destructive hover:bg-destructive/10">
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               </Button>
             )}

@@ -41,13 +41,13 @@ export function KnowledgeForHandle({ purpose, onOpenKnowledge }: KnowledgeForHan
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <Brain className="h-4 w-4 text-violet-600" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Brain className="h-4 w-4 text-primary" />
           Knowledge available to this handle
-          {rows && <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100">{rows.length}</Badge>}
+          {rows && <Badge className="bg-primary/15 text-primary hover:bg-primary/15">{rows.length}</Badge>}
         </div>
         {onOpenKnowledge && (
-          <Button variant="ghost" size="sm" onClick={onOpenKnowledge} className="gap-1 text-indigo-600">
+          <Button variant="ghost" size="sm" onClick={onOpenKnowledge} className="gap-1 text-primary">
             <ExternalLink className="h-3.5 w-3.5" /> Manage Knowledge
           </Button>
         )}
@@ -55,7 +55,7 @@ export function KnowledgeForHandle({ purpose, onOpenKnowledge }: KnowledgeForHan
       {isLoading ? (
         <Skeleton className="h-16 rounded-lg" />
       ) : !rows || rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-slate-50 p-4 text-center text-xs text-slate-500">
+        <div className="rounded-lg border border-dashed bg-muted p-4 text-center text-xs text-muted-foreground">
           No knowledge entries apply to this handle yet. Add facts, offers, FAQs or behavioural rules in
           the <b>Knowledge</b> tab and scope them to <code className="font-mono">{purpose}</code> or{' '}
           <code className="font-mono">all</code>.
@@ -66,10 +66,10 @@ export function KnowledgeForHandle({ purpose, onOpenKnowledge }: KnowledgeForHan
             <Badge
               key={r.id}
               variant="outline"
-              className="bg-white text-xs gap-1 max-w-[260px] truncate"
+              className="bg-card text-xs gap-1 max-w-[260px] truncate"
               title={`${r.topic} · priority ${r.priority}`}
             >
-              <span className="text-slate-400 text-[10px]">{r.topic}</span>
+              <span className="text-muted-foreground text-[10px]">{r.topic}</span>
               <span className="truncate">{r.title}</span>
             </Badge>
           ))}

@@ -10,12 +10,12 @@ const liquidButtonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-br from-primary via-primary to-violet-600 text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.6)] ring-1 ring-inset ring-white/15 hover:brightness-110",
+          "bg-gradient-to-br from-primary via-primary to-primary text-primary-foreground shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.6)] ring-1 ring-inset ring-white/15 hover:brightness-110",
         glass:
-          "bg-white/10 backdrop-blur-xl text-white ring-1 ring-inset ring-white/20 hover:bg-white/15",
+          "bg-card/10 backdrop-blur-xl text-primary-foreground ring-1 ring-inset ring-white/20 hover:bg-card/15",
         outline:
-          "border border-white/30 bg-transparent text-white hover:bg-white/10",
-        ghost: "text-white hover:bg-white/10",
+          "border border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-card/10",
+        ghost: "text-primary-foreground hover:bg-card/10",
       },
       size: {
         sm: "h-10 px-4",

@@ -24,12 +24,12 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { format } from 'date-fns';
 
 const accentColors = [
-  { border: 'border-l-violet-500', gradient: 'from-violet-600 to-indigo-600', bg: 'bg-violet-500' },
-  { border: 'border-l-emerald-500', gradient: 'from-emerald-600 to-teal-600', bg: 'bg-emerald-500' },
-  { border: 'border-l-amber-500', gradient: 'from-amber-500 to-orange-500', bg: 'bg-amber-500' },
-  { border: 'border-l-rose-500', gradient: 'from-rose-600 to-pink-600', bg: 'bg-rose-500' },
-  { border: 'border-l-sky-500', gradient: 'from-sky-600 to-blue-600', bg: 'bg-sky-500' },
-  { border: 'border-l-fuchsia-500', gradient: 'from-fuchsia-600 to-purple-600', bg: 'bg-fuchsia-500' },
+  { border: 'border-l-violet-500', gradient: 'from-primary to-primary', bg: 'bg-primary' },
+  { border: 'border-l-emerald-500', gradient: 'from-success to-success', bg: 'bg-success' },
+  { border: 'border-l-amber-500', gradient: 'from-warning to-warning', bg: 'bg-warning' },
+  { border: 'border-l-rose-500', gradient: 'from-destructive to-destructive', bg: 'bg-destructive' },
+  { border: 'border-l-sky-500', gradient: 'from-info to-info', bg: 'bg-info' },
+  { border: 'border-l-fuchsia-500', gradient: 'from-primary to-primary', bg: 'bg-primary' },
 ];
 
 interface PlanListItemProps {
@@ -83,7 +83,7 @@ function PlanListItem({
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
       )}
 
-      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${accent.gradient} flex items-center justify-center text-white shrink-0`}>
+      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${accent.gradient} flex items-center justify-center text-primary-foreground shrink-0`}>
         <Crown className="h-4 w-4" />
       </div>
 
@@ -91,7 +91,7 @@ function PlanListItem({
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-semibold text-sm text-foreground truncate">{plan.name}</span>
           {isPopular && (
-            <Badge className="bg-amber-500 text-white border-0 gap-1 text-[10px] px-1.5 py-0 shrink-0" data-testid={`badge-popular-${plan.id}`}>
+            <Badge className="bg-warning text-primary-foreground border-0 gap-1 text-[10px] px-1.5 py-0 shrink-0" data-testid={`badge-popular-${plan.id}`}>
               <Star className="h-2.5 w-2.5 fill-current" />
               ⭐ Popular Choice
             </Badge>
@@ -165,24 +165,24 @@ function PlanDetailPanel({
       className={`h-full flex flex-col transition-all duration-200 ${animIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
     >
       {/* Hero banner */}
-      <div className={`relative bg-gradient-to-br ${accent.gradient} rounded-2xl p-6 text-white overflow-hidden mb-6`}>
-        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-8 -translate-x-8" />
+      <div className={`relative bg-gradient-to-br ${accent.gradient} rounded-2xl p-6 text-primary-foreground overflow-hidden mb-6`}>
+        <div className="absolute top-0 right-0 w-40 h-40 bg-card/10 rounded-full -translate-y-16 translate-x-16" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-card/5 rounded-full translate-y-8 -translate-x-8" />
         <div className="relative z-10">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-white/70 text-sm font-medium uppercase tracking-wider mb-1">Membership Plan</p>
+              <p className="text-primary-foreground/70 text-sm font-medium uppercase tracking-wider mb-1">Membership Plan</p>
               <h2 className="text-2xl font-bold leading-tight">{plan.name}</h2>
               {plan.description && (
-                <p className="text-white/80 text-sm mt-1.5 max-w-xs">{plan.description}</p>
+                <p className="text-primary-foreground/80 text-sm mt-1.5 max-w-xs">{plan.description}</p>
               )}
             </div>
             <div className="flex flex-col gap-1 items-end">
               {!plan.is_active && (
-                <Badge className="bg-white/20 text-white border-white/30 shrink-0">Inactive</Badge>
+                <Badge className="bg-card/20 text-primary-foreground border-primary-foreground/30 shrink-0">Inactive</Badge>
               )}
               {benefits.some((b: any) => ['3d_body_scanning', 'howbody_posture'].includes(b.benefit_types?.code)) && (
-                <Badge className="bg-white/20 text-white border-white/30 shrink-0 text-[10px]">
+                <Badge className="bg-card/20 text-primary-foreground border-primary-foreground/30 shrink-0 text-[10px]">
                   Body Scan
                 </Badge>
               )}
@@ -193,16 +193,16 @@ function PlanDetailPanel({
               {formatPrice(plan.discounted_price ?? plan.price)}
             </span>
             {plan.discounted_price && (
-              <span className="text-white/60 text-lg line-through">{formatPrice(plan.price)}</span>
+              <span className="text-primary-foreground/60 text-lg line-through">{formatPrice(plan.price)}</span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-2 flex-wrap">
-            <span className="flex items-center gap-1 text-white/80 text-sm">
+            <span className="flex items-center gap-1 text-primary-foreground/80 text-sm">
               <Clock className="h-4 w-4" />
               {getDurationLabel(plan.duration_days)}
             </span>
             {discountPct > 0 && (
-              <Badge className="bg-white/20 text-white border-0">
+              <Badge className="bg-card/20 text-primary-foreground border-0">
                 <Tag className="h-3 w-3 mr-1" />
                 {discountPct}% OFF
               </Badge>
@@ -257,10 +257,10 @@ function PlanDetailPanel({
               <div
                 key={b.id}
                 data-testid={`benefit-${b.id}`}
-                className="flex items-start gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2"
+                className="flex items-start gap-2 rounded-xl bg-success/10 dark:bg-success/10 px-3 py-2"
               >
                 <div className="mt-0.5 shrink-0">
-                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="h-4 w-4 text-success dark:text-success" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground leading-snug">
@@ -450,27 +450,27 @@ export default function PlansPage() {
 
         {/* Stats Row */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <Card className="bg-gradient-to-br from-violet-600 to-indigo-600 text-white border-0 shadow-lg shadow-indigo-500/20 rounded-2xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-6 translate-x-6" />
+          <Card className="bg-gradient-to-br from-primary to-primary text-primary-foreground border-0 shadow-lg shadow-primary/20 rounded-2xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-card/10 rounded-full -translate-y-6 translate-x-6" />
             <CardContent className="pt-6 pb-5 relative z-10">
               <Crown className="h-5 w-5 opacity-80 mb-2" />
               <div className="text-3xl font-bold" data-testid="stat-active-plans">{activePlans.length}</div>
               <p className="text-sm opacity-80 mt-0.5">Active Plans</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/20 rounded-2xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-6 translate-x-6" />
+          <Card className="bg-gradient-to-br from-success to-success text-primary-foreground border-0 shadow-lg shadow-success/20 rounded-2xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-card/10 rounded-full -translate-y-6 translate-x-6" />
             <CardContent className="pt-6 pb-5 relative z-10">
               <Users className="h-5 w-5 opacity-80 mb-2" />
               <div className="text-3xl font-bold" data-testid="stat-total-members">{totalMembers}</div>
               <p className="text-sm opacity-80 mt-0.5">Active Members</p>
             </CardContent>
           </Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
+          <Card className="bg-card border border-border/50 shadow-lg shadow/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10">
-                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                <div className="p-1.5 rounded-lg bg-warning/10 dark:bg-warning/10">
+                  <TrendingUp className="h-4 w-4 text-warning" />
                 </div>
               </div>
               <div className="text-2xl font-bold text-foreground truncate" data-testid="stat-popular-plan">{mostPopularPlan?.name || 'N/A'}</div>
@@ -479,7 +479,7 @@ export default function PlansPage() {
               </p>
             </CardContent>
           </Card>
-          <Card className="bg-card border border-border/50 shadow-lg shadow-slate-200/50 rounded-2xl">
+          <Card className="bg-card border border-border/50 shadow-lg shadow/50 rounded-2xl">
             <CardContent className="pt-6 pb-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 rounded-lg bg-primary/10">
@@ -506,7 +506,7 @@ export default function PlansPage() {
           <TabsContent value="membership" className="mt-5 space-y-6">
         {/* Two-panel area */}
         {isLoading ? (
-          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden">
+          <div className="bg-card/60 dark:bg-foreground/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden">
             <div className="p-4 space-y-3">
               {[1, 2, 3, 4].map((i) => (
                 <Skeleton key={i} className="h-14 w-full rounded-xl" />
@@ -514,7 +514,7 @@ export default function PlansPage() {
             </div>
           </div>
         ) : plans?.length === 0 ? (
-          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden">
+          <div className="bg-card/60 dark:bg-foreground/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden">
             <div className="py-20 text-center px-8">
               <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
                 <Sparkles className="h-10 w-10 text-primary" />
@@ -528,7 +528,7 @@ export default function PlansPage() {
             </div>
           </div>
         ) : (
-          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden flex min-h-[520px]">
+          <div className="bg-card/60 dark:bg-foreground/60 backdrop-blur-xl ring-1 ring-white/20 shadow-2xl rounded-3xl overflow-hidden flex min-h-[520px]">
             {/* Left panel — plan list (35%) */}
             <div className="w-[35%] bg-muted/30 flex flex-col overflow-y-auto border-r border-border/40">
               {/* Search */}

@@ -81,14 +81,14 @@ export function SignedContractViewer({ open, onOpenChange, contract }: SignedCon
           <div className="flex items-center justify-between gap-3">
             <div>
               <SheetTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                <ShieldCheck className="h-5 w-5 text-success" />
                 Signed Contract
               </SheetTitle>
               <SheetDescription>
                 Full agreement with digital signature record
               </SheetDescription>
             </div>
-            <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">
+            <Badge className="bg-success/15 text-success border border-success/25">
               {contract.signature_status || 'signed'}
             </Badge>
           </div>
@@ -145,10 +145,10 @@ export function SignedContractViewer({ open, onOpenChange, contract }: SignedCon
           <Separator />
 
           {/* Signature panel */}
-          <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-5 shadow-sm">
+          <div className="rounded-xl border-2 border-success/25 bg-success/10 p-5 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
-              <FileSignature className="h-5 w-5 text-emerald-700" />
-              <h3 className="font-semibold text-emerald-900">Digital Signature</h3>
+              <FileSignature className="h-5 w-5 text-success" />
+              <h3 className="font-semibold text-success">Digital Signature</h3>
             </div>
 
             {loadingSig ? (
@@ -166,9 +166,9 @@ export function SignedContractViewer({ open, onOpenChange, contract }: SignedCon
 
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Signature</div>
-                  <div className="bg-white border-2 border-dashed border-emerald-300 rounded-lg p-4 text-center">
+                  <div className="bg-card border-2 border-dashed border-success/40 rounded-lg p-4 text-center">
                     <span
-                      className="text-2xl text-emerald-800"
+                      className="text-2xl text-success"
                       style={{ fontFamily: 'Brush Script MT, cursive' }}
                     >
                       {signature.signature_text}
@@ -226,7 +226,7 @@ export function SignedContractViewer({ open, onOpenChange, contract }: SignedCon
             )}
 
             {request && (
-              <div className="mt-4 pt-4 border-t border-emerald-200/60 text-xs text-muted-foreground">
+              <div className="mt-4 pt-4 border-t border-success/25 text-xs text-muted-foreground">
                 Signing link issued {formatTimestamp(request.created_at)} • Expires {formatTimestamp(request.expires_at)}
               </div>
             )}

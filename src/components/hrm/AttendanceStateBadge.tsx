@@ -18,7 +18,7 @@ export function AttendanceStateBadge({ attendanceRecorded, manualOverride }: Pro
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success ring-1 ring-success/25 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap">
               <CheckCircle2 className="h-3 w-3" />
               Manually marked
             </span>
@@ -35,7 +35,7 @@ export function AttendanceStateBadge({ attendanceRecorded, manualOverride }: Pro
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning ring-1 ring-warning/25 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap">
             <AlertTriangle className="h-3 w-3" />
             No attendance
           </span>

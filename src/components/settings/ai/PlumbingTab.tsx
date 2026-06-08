@@ -25,7 +25,7 @@ export function PlumbingTab({ toolsPanel }: { toolsPanel: React.ReactNode }) {
         <AIProvidersSettings />
       </TabsContent>
       <TabsContent value="tools">
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50 p-4">{toolsPanel}</Card>
+        <Card className="rounded-2xl shadow-lg shadow/50 p-4">{toolsPanel}</Card>
       </TabsContent>
       <TabsContent value="logs">
         <AILogsTab />

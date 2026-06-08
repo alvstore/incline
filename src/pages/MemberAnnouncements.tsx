@@ -55,7 +55,7 @@ export default function MemberAnnouncements() {
   const renderAnnouncementBadges = (announcement: any) => (
     <div className="flex flex-wrap items-center gap-2">
       {Number(announcement.priority) > 0 && (
-        <Badge className="rounded-full border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 gap-1.5">
+        <Badge className="rounded-full border-transparent bg-warning/15 text-warning dark:text-warning hover:bg-warning/15 gap-1.5">
           <ShieldAlert className="h-3 w-3" />
           Important
         </Badge>
@@ -110,60 +110,60 @@ export default function MemberAnnouncements() {
   return (
     <AppLayout>
       <div className="space-y-6 pb-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-border/60 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl shadow-slate-950/20">
+        <section className="relative overflow-hidden rounded-[2rem] border border-border/60 bg-gradient-to-br from-muted via-muted to-muted text-primary-foreground shadow-2xl shadow/20">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(249,115,22,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(255,255,255,0.08),_transparent_28%)]" />
           <div className="relative grid gap-8 p-6 md:p-8 lg:grid-cols-[1.35fr_0.85fr] lg:p-10">
             <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.22em] text-white/80 backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5 text-orange-300" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/15 bg-card/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.22em] text-primary-foreground/80 backdrop-blur">
+                <Sparkles className="h-3.5 w-3.5 text-warning" />
                 Live bulletin
               </div>
               <div className="space-y-3">
                 <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-balance md:text-4xl lg:text-5xl">
                   Announcements for {branchName}
                 </h1>
-                <p className="max-w-2xl text-sm leading-6 text-white/72 md:text-base">
+                <p className="max-w-2xl text-sm leading-6 text-primary-foreground/72 md:text-base">
                   Read the latest updates, urgent notices, and branch-wide messages in one clean feed.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge className="rounded-full border-white/15 bg-white/10 px-3 py-1 text-white hover:bg-white/15">
+                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
                   {announcements.length} live updates
                 </Badge>
-                <Badge className="rounded-full border-white/15 bg-white/10 px-3 py-1 text-white hover:bg-white/15">
+                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
                   {importantCount} important
                 </Badge>
-                <Badge className="rounded-full border-white/15 bg-white/10 px-3 py-1 text-white hover:bg-white/15">
+                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
                   {expiringSoonCount} expiring soon
                 </Badge>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/55">Visible now</p>
+              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Visible now</p>
                 <div className="mt-2 text-3xl font-semibold tabular-nums">{announcements.length}</div>
-                <p className="mt-1 text-sm text-white/65">messages for members</p>
+                <p className="mt-1 text-sm text-primary-foreground/65">messages for members</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/55">Priority</p>
+              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Priority</p>
                 <div className="mt-2 text-3xl font-semibold tabular-nums">{importantCount}</div>
-                <p className="mt-1 text-sm text-white/65">urgent or important notices</p>
+                <p className="mt-1 text-sm text-primary-foreground/65">urgent or important notices</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/55">Branch</p>
+              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Branch</p>
                 <div className="mt-2 text-lg font-semibold leading-tight">{branchName}</div>
-                <p className="mt-1 text-sm text-white/65">personalized for your membership</p>
+                <p className="mt-1 text-sm text-primary-foreground/65">personalized for your membership</p>
               </div>
             </div>
           </div>
         </section>
 
         {announcements.length === 0 ? (
-          <Card className="overflow-hidden border-border/60 bg-card/90 shadow-xl shadow-slate-950/5">
+          <Card className="overflow-hidden border-border/60 bg-card/90 shadow-xl shadow/5">
             <CardContent className="grid gap-6 p-8 md:grid-cols-[0.75fr_1.25fr] md:p-10">
               <div className="flex items-center justify-center rounded-[1.75rem] border border-dashed border-border bg-muted/30 p-10">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-slate-950 to-slate-700 text-white shadow-lg">
+                <div className="flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-muted to-muted text-primary-foreground shadow-lg">
                   <Megaphone className="h-9 w-9" />
                 </div>
               </div>
@@ -187,8 +187,8 @@ export default function MemberAnnouncements() {
         ) : (
           <div className="space-y-6">
             {featuredAnnouncement && (
-              <Card className="overflow-hidden border-border/60 bg-card shadow-xl shadow-slate-950/5">
-                <div className="h-1 bg-gradient-to-r from-slate-950 via-accent to-orange-400" />
+              <Card className="overflow-hidden border-border/60 bg-card shadow-xl shadow/5">
+                <div className="h-1 bg-gradient-to-r from-muted via-accent to-warning" />
                 <CardHeader className="space-y-4 p-6 md:p-7">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-3">
@@ -204,7 +204,7 @@ export default function MemberAnnouncements() {
                       </p>
                     </div>
                     {Number(featuredAnnouncement.priority) > 0 ? (
-                      <Badge className="rounded-full bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300">
+                      <Badge className="rounded-full bg-warning/15 text-warning hover:bg-warning/15 dark:text-warning">
                         Important
                       </Badge>
                     ) : (
@@ -260,7 +260,7 @@ export default function MemberAnnouncements() {
                   >
                     <CardContent className="p-5 md:p-6">
                       <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-950 to-slate-700 text-white shadow-sm">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-muted to-muted text-primary-foreground shadow-sm">
                           <Megaphone className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1 space-y-3">
@@ -272,7 +272,7 @@ export default function MemberAnnouncements() {
                               </p>
                             </div>
                             {Number(announcement.priority) > 0 ? (
-                              <Badge className="rounded-full bg-amber-500/15 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300">
+                              <Badge className="rounded-full bg-warning/15 text-warning hover:bg-warning/15 dark:text-warning">
                                 Important
                               </Badge>
                             ) : (

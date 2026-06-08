@@ -113,7 +113,7 @@ export default function BranchesPage() {
                         <div className="text-sm text-muted-foreground">{branch.email}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={branch.is_active ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}>
+                        <Badge className={branch.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}>
                           {branch.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>

@@ -33,7 +33,7 @@ export function SetPasswordForm() {
     { met: /[0-9]/.test(password), text: 'One number' },
   ];
   const metCount = requirements.filter((r) => r.met).length;
-  const strengthColors = ['bg-muted', 'bg-destructive', 'bg-amber-500', 'bg-amber-400', 'bg-emerald-500'];
+  const strengthColors = ['bg-muted', 'bg-destructive', 'bg-warning', 'bg-warning', 'bg-success'];
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'][metCount];
 
   const handleSubmit = async (e: React.FormEvent) => {

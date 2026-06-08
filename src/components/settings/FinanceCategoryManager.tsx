@@ -232,11 +232,11 @@ export function FinanceCategoryManager() {
       <Tabs defaultValue="income">
         <TabsList>
           <TabsTrigger value="income" className="gap-2">
-            <ArrowUpRight className="h-4 w-4 text-green-500" />
+            <ArrowUpRight className="h-4 w-4 text-success" />
             Income Categories
           </TabsTrigger>
           <TabsTrigger value="expense" className="gap-2">
-            <ArrowDownRight className="h-4 w-4 text-red-500" />
+            <ArrowDownRight className="h-4 w-4 text-destructive" />
             Expense Categories
           </TabsTrigger>
         </TabsList>
