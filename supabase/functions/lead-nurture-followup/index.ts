@@ -1,16 +1,14 @@
-// v8.0.0 — Freeform-only inside 24h window + DB-driven retry schedule.
+// v8.1.0 — Honour UI ops fields (delay_hours / max_retries / cooldown_hours).
 //
-// What changed vs v7.0.0:
-//   • Cadence is now `ops_config.schedule_minutes` (array of per-retry waits)
-//     instead of a single delay/cooldown pair. A nudge fires when
-//     `now - last_outbound_at >= schedule_minutes[retry_count]`.
-//   • `ops_config.window_hours` (default 24) — outside the WhatsApp 24h
-//     freeform window we SKIP silently and stamp `last_nurture_at` so we
-//     don't loop. Re-engagement of cold leads is a campaign concern, not a
-//     nurture concern. No template fallback path remains.
-//   • Brain prompt now receives `attempt: N/MAX` so the angle can scale
-//     intensity across retries (warm welcome → soft check → soft urgency).
+// Cadence is driven ONLY by fields exposed in HandleOpsSettings:
+//   • delay_hours   — wait before the first nudge after last outbound
+//   • cooldown_hours — wait between subsequent nudges
+//   • max_retries   — total nudges per lead
+// The WhatsApp 24h freeform window is a protocol constant (not tunable);
+// outside it we skip silently and stamp `last_nurture_at`. No template path.
+// Brain prompt still receives `attempt: N/MAX` so tone scales across retries.
 //
+// v8.0.0 — Freeform-only + schedule_minutes/window_hours (replaced by v8.1.0).
 // v7.0.0 — DB-driven angle rotation + similarity dedupe + dynamic content.
 // v6.1.0 — service-role auth gate added (cron-only).
 // v6.0.0 — SSOT from ai_purposes.ops_config.
