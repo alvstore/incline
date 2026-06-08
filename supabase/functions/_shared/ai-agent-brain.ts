@@ -732,7 +732,31 @@ ADVANCE RULE: always move to the FIRST missing field in order name → email →
     }
   }
 
-  if (!replyText) return skip("no_reply_text");
+  // v3.6.0 — silent-drop fix. The model occasionally returns only a tool_call
+  // (with empty `content`) and the follow-up `callAI` also yields empty
+  // content. Previously this hit `skip("no_reply_text")` and the user got
+  // nothing. We now (a) write a diagnostic to error_logs so we can see it
+  // happen, and (b) compose a deterministic next-step reply from `memory` so
+  // the conversation never stalls silently.
+  if (!replyText) {
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "ai_agent_brain",
+        p_severity: "warning",
+        p_message: `Empty reply from AI for ${ctx.platform} ${ctx.senderId} — falling back to deterministic next-step`,
+        p_context: {
+          branch_id: ctx.branchId,
+          platform: ctx.platform,
+          sender: ctx.senderId,
+          had_tool_calls: Array.isArray((choice as any)?.message?.tool_calls) && (choice as any).message.tool_calls.length > 0,
+          message_id: ctx.messageId ?? null,
+        },
+      });
+    } catch { /* noop */ }
+    const fallback = buildNoReplyFallback(memory, shouldCaptureLead);
+    if (!fallback) return skip("no_reply_text");
+    replyText = fallback;
+  }
 
   // 9b. OUTBOUND GUARDS — strip / replace interactive blocks the LLM emitted that
   // would violate the hard onboarding gate or duplicate a question already asked.
