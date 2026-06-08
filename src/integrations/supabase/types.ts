@@ -6170,6 +6170,56 @@ export type Database = {
           },
         ]
       }
+      lead_nurture_angles: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          fallback_template: string
+          id: string
+          is_active: boolean
+          label: string
+          prompt_hint: string
+          slug: string
+          tone: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          fallback_template: string
+          id?: string
+          is_active?: boolean
+          label: string
+          prompt_hint: string
+          slug: string
+          tone: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          fallback_template?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          prompt_hint?: string
+          slug?: string
+          tone?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_nurture_angles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           ad_id: string | null
@@ -12249,6 +12299,9 @@ export type Database = {
           id: string
           is_unread: boolean | null
           last_nurture_at: string | null
+          last_nurture_hash: string | null
+          last_nurture_text: string | null
+          nurture_angle_history: Json
           nurture_retry_count: number | null
           partial_lead_data: Json | null
           paused_at: string | null
@@ -12282,6 +12335,9 @@ export type Database = {
           id?: string
           is_unread?: boolean | null
           last_nurture_at?: string | null
+          last_nurture_hash?: string | null
+          last_nurture_text?: string | null
+          nurture_angle_history?: Json
           nurture_retry_count?: number | null
           partial_lead_data?: Json | null
           paused_at?: string | null
@@ -12315,6 +12371,9 @@ export type Database = {
           id?: string
           is_unread?: boolean | null
           last_nurture_at?: string | null
+          last_nurture_hash?: string | null
+          last_nurture_text?: string | null
+          nurture_angle_history?: Json
           nurture_retry_count?: number | null
           partial_lead_data?: Json | null
           paused_at?: string | null
@@ -13999,6 +14058,16 @@ export type Database = {
           attendance: Json
           base: number
           ot_hours: number
+        }[]
+      }
+      pick_next_nurture_angle: {
+        Args: { _chat_id: string }
+        Returns: {
+          fallback_template: string
+          label: string
+          prompt_hint: string
+          slug: string
+          tone: string
         }[]
       }
       process_approval_request: {
