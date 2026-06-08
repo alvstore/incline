@@ -448,10 +448,6 @@ serve(async (req) => {
         fallbackUsed = true;
       }
 
-      // ── Time-bucketed dedupe key ──
-      const bucket = Math.floor(Date.now() / 1000 / Math.max(cooldownSeconds, 60));
-      const dedupeKey = `lead_nurture:${chat.id}:${bucket}`;
-
       // Freeform-only send (inside 24h window). No template path.
       try {
         const { data: msgData, error: msgErr } = await supabase
@@ -518,7 +514,7 @@ serve(async (req) => {
         })
         .eq("id", chat.id);
 
-      decisions.push({ phone: chat.phone_number, angle: angle?.slug, regenerated, fallback: fallbackUsed });
+      decisions.push({ phone: chat.phone_number, attempt, angle: angle?.slug, regenerated, fallback: fallbackUsed });
       nudgedCount++;
     }
 
