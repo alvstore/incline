@@ -675,6 +675,32 @@ async function sendAiReply(
     }
   }
 
+  // LAST-MILE RESIDUE GUARD: if any JSON / ```fence``` snuck through (e.g. LLM
+  // emitted a Meta-native interactive shape our extractor couldn't normalise),
+  // scrub it so we never send raw JSON as a WhatsApp text body.
+  if (/```|"type"\s*:\s*"interactive/i.test(replyText)) {
+    const original = replyText;
+    replyText = replyText
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/\{[\s\S]*?"type"\s*:\s*"interactive[\s\S]*?\}\s*\}?/gi, "")
+      .trim();
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_webhook",
+        p_severity: "warning",
+        p_message: "interactive JSON leaked past extractor — scrubbed",
+        p_context: {
+          branch_id: branchId,
+          phone: inboundMsg.phone_number,
+          had_payload: !!interactivePayload,
+          sample: original.slice(0, 240),
+        },
+      });
+    } catch { /* noop */ }
+  }
+  if (!replyText && !interactivePayload) {
+    replyText = "Got it — one moment.";
+  }
 
   // v6.2.0: acquire the send-lock BEFORE inserting the outbound row. Meta
   // re-delivers inbound webhooks frequently; without lock-first ordering, the
