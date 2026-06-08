@@ -7,6 +7,7 @@ import { CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CommConsentCheckbox, buildConsentPayload } from '@/components/consent/CommConsentCheckbox';
 import { deriveLeadSource } from '@/lib/leads/sourceFromReferrer';
+import { getFirstTouch, captureFirstTouch } from '@/lib/leads/firstTouch';
 
 import { useNoindex } from '@/lib/seo/useNoindex';
 export default function EmbedLeadForm() {
@@ -20,13 +21,15 @@ export default function EmbedLeadForm() {
   const [error, setError] = useState('');
 
   // Extract UTM params from URL + referrer
+  // Prefer first-touch (original referrer/UTMs persisted from landing).
+  const firstTouch = getFirstTouch() || captureFirstTouch();
   const params = new URLSearchParams(window.location.search);
-  const utmSource = params.get('utm_source') || '';
-  const utmMedium = params.get('utm_medium') || '';
-  const utmCampaign = params.get('utm_campaign') || '';
-  const referrerUrl = typeof document !== 'undefined' ? document.referrer : '';
-  const landingPage = typeof window !== 'undefined' ? window.location.href : '';
-  const resolvedSource = deriveLeadSource(utmSource, referrerUrl, 'website');
+  const utmSource = firstTouch?.utm_source || params.get('utm_source') || '';
+  const utmMedium = firstTouch?.utm_medium || params.get('utm_medium') || '';
+  const utmCampaign = firstTouch?.utm_campaign || params.get('utm_campaign') || '';
+  const referrerUrl = firstTouch?.referrer_url || (typeof document !== 'undefined' ? document.referrer : '');
+  const landingPage = firstTouch?.landing_page || (typeof window !== 'undefined' ? window.location.href : '');
+  const resolvedSource = firstTouch?.source || deriveLeadSource(utmSource, referrerUrl, 'website');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

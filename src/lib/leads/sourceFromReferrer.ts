@@ -15,6 +15,25 @@ const HOST_MAP: Array<{ test: RegExp; source: string }> = [
   { test: /threads\.net/i, source: 'threads' },
 ];
 
+// Hosts that are "us" — referrers from these should be treated as no-referrer
+// so internal SPA navigations never collapse the source to "website" by mistake.
+const SAME_ORIGIN_HOSTS = [
+  'theincline.in',
+  'www.theincline.in',
+  'incline.lovable.app',
+  'localhost',
+  '127.0.0.1',
+];
+
+function isSameOrigin(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return SAME_ORIGIN_HOSTS.some((h) => u.hostname === h) || u.hostname.endsWith('.lovable.app');
+  } catch {
+    return false;
+  }
+}
+
 /** Returns the canonical source given an optional utmSource + referrer URL.
  *  Falls back to `defaultSource` (default: 'website'). */
 export function deriveLeadSource(
@@ -30,7 +49,7 @@ export function deriveLeadSource(
     return utm.replace(/[^a-z0-9_-]/g, '').slice(0, 32) || defaultSource;
   }
   const ref = (referrerUrl || '').trim();
-  if (ref) {
+  if (ref && !isSameOrigin(ref)) {
     for (const { test, source } of HOST_MAP) if (test.test(ref)) return source;
   }
   return defaultSource;
