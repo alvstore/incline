@@ -4,6 +4,11 @@ import App from "./App.tsx";
 import "./index.css";
 import { initGlobalErrorLogging } from "./services/errorLogService";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { captureFirstTouch } from "./lib/leads/firstTouch";
+
+// Capture first-touch attribution (UTMs + external referrer) BEFORE React mounts,
+// so SPA navigations can't clobber document.referrer before a lead form reads it.
+try { captureFirstTouch(); } catch { /* non-fatal */ }
 
 // Defer non-critical error-capture wiring off the critical path.
 // (Errors thrown before this runs are still surfaced by the browser.)
