@@ -306,8 +306,8 @@ serve(async (req) => {
       if (retryCount >= maxRetries) continue;
 
       // Per-retry wait: schedule_minutes[retryCount] minutes since last outbound.
-      const waitMinutes = scheduleMinutes[Math.min(retryCount, scheduleMinutes.length - 1)];
-      const dueAt = new Date(new Date(lastMsg.created_at).getTime() + waitMinutes * 60 * 1000);
+      const waitHours = retryCount === 0 ? delayHours : cooldownHours;
+      const dueAt = new Date(new Date(lastMsg.created_at).getTime() + waitHours * 3600 * 1000);
       if (dueAt > new Date()) continue;
       // Defensive: never re-send inside the same 30-minute bucket.
       if (chat.last_nurture_at) {
