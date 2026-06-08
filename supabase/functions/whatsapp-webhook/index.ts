@@ -524,28 +524,57 @@ async function sendAiReply(
   // v2 — fixes a bug where the prior regex `[^{}]*` could not match nested objects
   // (e.g. interactive_list with sections[].rows[]) so payloads leaked as raw text.
   function tryExtractInteractiveJson(text: string): { parsed: any; cleanText: string } | null {
+    // v3 — also normalises Meta Cloud API's NATIVE envelope:
+    //   { type:"interactive", interactive:{ type:"list"|"button", body:{text}, action:{...} } }
+    // The LLM occasionally emits that shape instead of our canonical brain shape;
+    // without this normaliser the payload leaked as raw text into WhatsApp.
+    function normalizeMetaNative(p: any): any {
+      if (!p || typeof p !== "object") return p;
+      if (p.type === "interactive" && p.interactive && !p.buttons && !p.sections) {
+        const inner = p.interactive;
+        const bodyText = typeof inner?.body === "string" ? inner.body : (inner?.body?.text || "");
+        if (inner?.type === "list" && Array.isArray(inner?.action?.sections)) {
+          return {
+            type: "interactive_list",
+            body: bodyText,
+            button: inner.action.button || "Select",
+            sections: inner.action.sections,
+          };
+        }
+        if (inner?.type === "button" && Array.isArray(inner?.action?.buttons)) {
+          return {
+            type: "interactive",
+            body: bodyText,
+            buttons: inner.action.buttons
+              .map((b: any) => b?.reply?.title || b?.title)
+              .filter(Boolean),
+          };
+        }
+      }
+      return p;
+    }
+    const tryParse = (s: string) => {
+      try { return normalizeMetaNative(JSON.parse(s)); } catch { return null; }
+    };
+
     // Try 1: whole string is the JSON
     const trimmed = text.trim();
     if (trimmed.startsWith("{") && trimmed.includes('"type"')) {
-      try {
-        const p = JSON.parse(trimmed);
-        if (p.type === "interactive" || p.type === "interactive_list") return { parsed: p, cleanText: p.body || "" };
-      } catch {}
+      const p = tryParse(trimmed);
+      if (p && (p.type === "interactive" || p.type === "interactive_list")) {
+        return { parsed: p, cleanText: typeof p.body === "string" ? p.body : "" };
+      }
     }
     // Try 2: JSON block in markdown fences
     const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     if (fenceMatch) {
-      try {
-        const p = JSON.parse(fenceMatch[1]);
-        if (p.type === "interactive" || p.type === "interactive_list") {
-          const prose = text.replace(fenceMatch[0], "").trim();
-          return { parsed: p, cleanText: prose || p.body || "" };
-        }
-      } catch {}
+      const p = tryParse(fenceMatch[1]);
+      if (p && (p.type === "interactive" || p.type === "interactive_list")) {
+        const prose = text.replace(fenceMatch[0], "").trim();
+        return { parsed: p, cleanText: prose || (typeof p.body === "string" ? p.body : "") };
+      }
     }
     // Try 3: brace-balanced extractor — finds an embedded {"type":"interactive…"} object
-    // even when it contains nested objects/arrays. Walks the string tracking string
-    // literals + escapes so braces inside strings don't fool the counter.
     const typeMarkerRe = /\{[\s\n]*"type"\s*:\s*"interactive(?:_list)?"/;
     const m = text.match(typeMarkerRe);
     if (m && typeof m.index === "number") {
@@ -564,13 +593,11 @@ async function sendAiReply(
           depth--;
           if (depth === 0) {
             const slice = text.slice(start, i + 1);
-            try {
-              const p = JSON.parse(slice);
-              if (p.type === "interactive" || p.type === "interactive_list") {
-                const prose = (text.slice(0, start) + text.slice(i + 1)).trim();
-                return { parsed: p, cleanText: prose || p.body || "" };
-              }
-            } catch {}
+            const p = tryParse(slice);
+            if (p && (p.type === "interactive" || p.type === "interactive_list")) {
+              const prose = (text.slice(0, start) + text.slice(i + 1)).trim();
+              return { parsed: p, cleanText: prose || (typeof p.body === "string" ? p.body : "") };
+            }
             break;
           }
         }
