@@ -487,8 +487,10 @@ async function classifyOne(inbound_id: string) {
   if (true) {
     // Use AI to classify + draft reply
     try {
+      // v2 — persona ("you are a customer-service AI…") comes from
+      // ai_purposes.review_reply.system_prompt (Settings → AI Brain). Only
+      // the output-contract for this call lives here.
       const sysOverride =
-        "You are a gym customer-service AI helping owners triage Google reviews. " +
         "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
         "Then draft a polite, professional reply (≤500 chars). Use the 'classify_review' tool. " +
         "Never accuse the reviewer of being a competitor.";
