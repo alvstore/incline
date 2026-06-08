@@ -79,10 +79,9 @@ serve(async (req: Request) => {
         .order("created_at", { ascending: false })
         .limit(20);
 
-      const prompt = `You are a gym CRM lead scoring assistant. Analyze this lead and return a JSON object with:
-- score: number 0-100 (likelihood to convert to paying gym member)
-- reasoning: brief 1-2 sentence explanation
-- next_best_action: specific actionable suggestion
+      // v2 — persona/rules come from ai_purposes.lead_score.system_prompt
+      // (managed in Settings → AI Brain). Only the lead-data context lives here.
+      const prompt = `Analyze this lead and call the score_lead tool.
 
 Lead data:
 - Name: ${lead.full_name || "Unknown"}

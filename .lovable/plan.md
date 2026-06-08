@@ -1,39 +1,21 @@
-## Problem
+# AI Brain — JSON Leak & SSOT Audit (shipped)
 
-Catalog rows (Plans, PT packages, Facilities, Branches) keep re-appearing in **AI Brain → Knowledge** after you delete them, and all 13 of them show "Embed failed".
+## What landed
+- New `supabase/functions/_shared/chatEnvelope.ts` — single source of truth for parsing brain envelopes (`interactive_list`, `interactive`, `lead_captured`) and rendering them as plain text. Exports `parseChatEnvelope`, `renderInteractiveAsText`, `stripStrayJson`, `flattenReplyForPlainText`.
+- `meta-webhook` (v5.7.0) now flattens `result.replyText` via `flattenReplyForPlainText()` before insert + send. IG/Messenger DMs can no longer leak raw `{"type":"interactive_list",…}` or `{"status":"lead_captured",…}` JSON to users.
+- WhatsApp path unchanged — still uses its existing extractor for native interactive rendering.
+- Persona/rules duplication removed from auxiliary edge fns; all now rely on `ai_purposes.<purpose>.system_prompt` from the AI Brain UI:
+  - `score-leads` — stripped "You are a gym CRM lead scoring assistant…"
+  - `google-reviews-brain` — stripped "You are a gym customer-service AI…"
+  - `generate-fitness-plan` — stripped "You are an expert fitness trainer/nutritionist…", kept only OUTPUT-CONTRACT JSON schema (needed for parsing)
+  - `_shared/ig-comment-automation.generateAiReplyEphemeral` — routed through `generateOnce({purpose:"whatsapp_reply"})` so IG comment→DM uses the Ananya brain. Callers (`process-ig-comment-runs`, `meta-admin`) now pass `supabase` + `branchId`.
+- All 9 `ai_purposes` rows already had non-empty personas — no DB seed required.
 
-**Root cause (confirmed):**
-- Automation rule `sync_ai_knowledge` runs **every hour** (`cron 0 * * * *`) and calls the `sync-ai-knowledge` edge function, which upserts those rows back using a stable `source_ref`.
-- Their content is intentionally stripped of prices / session counts (Founder's Phase rule), so they add noise but no usable info — and they fail to embed reliably, hurting retrieval quality for the rows that *do* matter (persona, rules, canonical facts).
-
-**Why removing them is safe:**
-- The 8 hand-authored rows (Ananya persona, identity rules, anti-parrot, grounding, reply shape, formatting, canonical facts, answer-first) already cover everything the AI is *allowed* to say during Founder's Phase.
-- Plans / PT / facilities / branches data is still queryable by AI tools at runtime when needed — it does not need to live in the RAG corpus.
-
-## Changes
-
-1. **Disable the automation rule** `sync_ai_knowledge` (set `is_active = false`) so it stops re-seeding hourly. Keep the row so it can be re-enabled later if Founder's Phase ends.
-2. **Delete the 13 existing catalog rows** from `ai_knowledge` (those with `source_ref` starting with `plan:`, `pt:`, `facility:`, `branch:`).
-3. **Leave the `sync-ai-knowledge` edge function in place** but unused — it's the future-ready path for when you *do* want pricing/sessions in the brain (post-launch). No code deleted.
-4. **Tighten the UI:** in `AIBrainTab.tsx`, hide the "Embed failed" badge when a row's `source_ref` indicates it's a sync-seeded row that has been disabled — only shown if the sync rule is currently active. (Cosmetic; prevents the misleading red badge from coming back if someone re-enables the rule later.)
-
-## Out of scope
-
-- Not touching the persona / rules / facts rows.
-- Not changing the sync function itself — its content rules (no prices, no session counts) are already correct per Founder's Phase. We just don't want it running yet.
-- Not changing the embed-knowledge function or model — that's a separate investigation if you decide to re-enable sync later.
+## Out of scope (kept as-is on purpose)
+- `_shared/ai-agent-brain.ts` inline blocks (tool usage / post-capture nurture / Founder's Phase). They interpolate per-turn runtime facts (KNOWN-SO-FAR fields, sender ID, gym name) and are the safety path when Gemini stalls. Moving them to DB would need a templating layer and risk re-introducing the crashes the user just got past. The `whatsapp_reply` system prompt in DB still drives persona; these blocks are additive runtime context.
+- Deterministic onboarding short-circuits in `ai-agent-brain.ts` lines 533–611 — they still emit `JSON.stringify({type:"interactive_list",…})`. WhatsApp renders natively; meta-webhook now flattens to plain text.
 
 ## Verification
-
-After applying:
-- Knowledge tab shows only the 8 hand-authored rows, all green ("Ready").
-- `automation_rules` row for `sync_ai_knowledge` shows `is_active = false`; `last_run_at` stops advancing.
-- Send a test WhatsApp like "what plans do you have?" — AI should reply per Founder's Phase script (capture interest, don't quote prices) using the canonical facts row, no change in behaviour.
-
-## Technical details
-
-- Migration:
-  - `UPDATE automation_rules SET is_active = false WHERE key = 'sync_ai_knowledge';`
-  - `DELETE FROM ai_knowledge WHERE source_ref ~ '^(plan|pt|facility|branch):';`
-- UI file edited: `src/components/settings/AIBrainTab.tsx` (badge guard only).
-- No edge function deploys, no schema change, no embed model change.
+- IG DM goal/plan step → user sees `1. Weight Loss\n2. Muscle Gain\n…` instead of raw JSON.
+- WhatsApp interactive list still renders natively (no regression — code path untouched).
+- `grep -E '"You are |systemPrompt\s*\+=' supabase/functions/` returns only the `defaultPersona` safety string in `ai-agent-brain.ts` and the runtime blocks documented above.

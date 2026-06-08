@@ -1,3 +1,10 @@
+// v5.7.0 — Flatten chat envelopes for IG/Messenger DMs. Brain replies that are
+//          structured JSON ({"type":"interactive_list",…} for goal/plan steps,
+//          or {"status":"lead_captured",…} control payloads) used to be sent
+//          verbatim — IG users literally saw raw JSON in chat. We now route
+//          result.replyText through flattenReplyForPlainText() before persist +
+//          send, rendering interactive lists as numbered text and stripping
+//          control payloads silently.
 // v5.6.0 — Permanent IG thumbnail caching: download Meta CDN preview into
 //   public `template-media/ig-cache/{media_id}.jpg` so the comment card
 //   survives the ~24h Meta URL expiry. Falls back to ephemeral URL on failure.
@@ -52,6 +59,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "../_shared/ai-tools.ts";
 import { executeSharedToolCall } from "../_shared/ai-tool-executor.ts";
 import { META_API_BASE, IG_API_BASE, detectMetaHost, metaFetchWithFallback, verifyXHubSignature } from "../_shared/meta-config.ts";
+import { flattenReplyForPlainText } from "../_shared/chatEnvelope.ts";
 import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 import { persistMetaAvatar, isConsentBlockedError, type MetaPlatform } from "../_shared/metaAvatar.ts";
 
@@ -1319,6 +1327,17 @@ async function triggerAiReply(
     console.log(`[AI:${platform}] skipped: ${result.skipReason || "no_reply"}`);
     return;
   }
+
+  // v5.7.0 — Meta IG/Messenger DMs do NOT support WhatsApp-style interactive
+  // lists/buttons. Flatten any structured envelope from the brain into plain
+  // text BEFORE persist+send so users never see raw JSON in chat.
+  const flatReply = flattenReplyForPlainText(result.replyText);
+  if (flatReply !== result.replyText) {
+    console.log(`[AI:${platform}] flattened envelope → plain text (${flatReply.length} chars)`);
+  }
+  result.replyText = flatReply;
+
+
 
   // ── OUTBOUND DEDUPE: if we already sent the same content to this contact in
   // the last 3 minutes (e.g. retried envelope slipped past the claim), do not

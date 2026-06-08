@@ -121,6 +121,8 @@ async function generateAiMessage(opts: { campaign: any; run: any }): Promise<str
     campaignName: opts.campaign.name || "Instagram",
     instruction: opts.campaign.ai_instruction || null,
     tone: opts.campaign.ai_tone || null,
+    supabase,
+    branchId: opts.campaign.branch_id ?? null,
   });
 }
 

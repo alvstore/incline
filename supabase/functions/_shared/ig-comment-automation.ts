@@ -408,9 +408,11 @@ export async function ensureLeadFromIgComment(
 }
 
 /**
- * One-shot Instagram DM generation via Lovable AI Gateway. Stateless — does NOT
- * write to or read from any DM conversation memory. Returns null on failure so
- * the executor can fall back to template / fallback_message.
+ * One-shot Instagram DM generation. v2 — routed through `generateOnce` so
+ * persona/rules come from `ai_purposes.whatsapp_reply.system_prompt` (the
+ * shared Ananya brain managed in Settings → AI Brain). Stateless — does NOT
+ * read or write any DM conversation memory. Returns null on failure so the
+ * executor can fall back to template / fallback_message.
  */
 export async function generateAiReplyEphemeral(args: {
   comment: string;
@@ -418,42 +420,33 @@ export async function generateAiReplyEphemeral(args: {
   campaignName: string;
   instruction: string | null;
   tone: string | null;
+  supabase?: SupabaseClient;
+  branchId?: string | null;
 }): Promise<string | null> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) return null;
   try {
-    const system = [
-      `You are an Instagram DM assistant for the campaign "${args.campaignName}".`,
+    const { generateOnce } = await import("./ai-runtime.ts");
+    // Per-call output contract only — persona lives in ai_purposes.whatsapp_reply.
+    const sysOverride = [
+      `Campaign: "${args.campaignName}".`,
       args.instruction ? `Goal: ${args.instruction}` : "",
       `Tone: ${args.tone || "friendly, concise"}.`,
       "Write ONE Instagram DM reply (max 3 short sentences).",
       "Do not ask for personal data unless the user volunteered it.",
-      "Output the message text only — no quotes, no preamble.",
+      "Output the message text only — no quotes, no preamble, no JSON.",
     ].filter(Boolean).join("\n");
     const user = `Instagram comment from ${args.username || "user"}:\n"${args.comment}"`;
-
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        temperature: 0.7,
-      }),
+    const r = await generateOnce({
+      purpose: "whatsapp_reply",
+      branchId: args.branchId ?? null,
+      userMessage: user,
+      systemOverride: sysOverride,
+      supabase: args.supabase,
     });
-    if (!r.ok) {
-      console.error("[ig-auto] AI gateway HTTP", r.status, await r.text().catch(() => ""));
-      return null;
-    }
-    const data = await r.json();
-    const msg = data?.choices?.[0]?.message?.content?.toString().trim();
-    return msg || null;
+    const msg = (r?.content || "").toString().trim();
+    if (!msg) return null;
+    // Defensive: even though the override forbids JSON, scrub any stray envelope.
+    const { flattenReplyForPlainText } = await import("./chatEnvelope.ts");
+    return flattenReplyForPlainText(msg);
   } catch (e) {
     console.error("[ig-auto] generateAiReplyEphemeral failed:", e instanceof Error ? e.message : e);
     return null;
