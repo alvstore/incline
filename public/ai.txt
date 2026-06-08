@@ -1,6 +1,6 @@
 # ai.txt — AI access policy for The Incline Life
 # https://theincline.in/ai.txt
-# Updated: 2026-06-02
+# Updated: 2026-06-08
 
 # This site explicitly welcomes AI / LLM crawlers for the purpose of
 # generative search (AEO / GEO). See robots.txt for the full allowlist.
