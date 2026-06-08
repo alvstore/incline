@@ -1,16 +1,14 @@
-// v8.0.0 — Freeform-only inside 24h window + DB-driven retry schedule.
+// v8.1.0 — Honour UI ops fields (delay_hours / max_retries / cooldown_hours).
 //
-// What changed vs v7.0.0:
-//   • Cadence is now `ops_config.schedule_minutes` (array of per-retry waits)
-//     instead of a single delay/cooldown pair. A nudge fires when
-//     `now - last_outbound_at >= schedule_minutes[retry_count]`.
-//   • `ops_config.window_hours` (default 24) — outside the WhatsApp 24h
-//     freeform window we SKIP silently and stamp `last_nurture_at` so we
-//     don't loop. Re-engagement of cold leads is a campaign concern, not a
-//     nurture concern. No template fallback path remains.
-//   • Brain prompt now receives `attempt: N/MAX` so the angle can scale
-//     intensity across retries (warm welcome → soft check → soft urgency).
+// Cadence is driven ONLY by fields exposed in HandleOpsSettings:
+//   • delay_hours   — wait before the first nudge after last outbound
+//   • cooldown_hours — wait between subsequent nudges
+//   • max_retries   — total nudges per lead
+// The WhatsApp 24h freeform window is a protocol constant (not tunable);
+// outside it we skip silently and stamp `last_nurture_at`. No template path.
+// Brain prompt still receives `attempt: N/MAX` so tone scales across retries.
 //
+// v8.0.0 — Freeform-only + schedule_minutes/window_hours (replaced by v8.1.0).
 // v7.0.0 — DB-driven angle rotation + similarity dedupe + dynamic content.
 // v6.1.0 — service-role auth gate added (cron-only).
 // v6.0.0 — SSOT from ai_purposes.ops_config.
@@ -215,11 +213,15 @@ serve(async (req) => {
       .maybeSingle();
 
     const ops = ((purposeRow?.ops_config as Record<string, any>) ?? {});
-    const scheduleMinutes: number[] = Array.isArray(ops.schedule_minutes) && ops.schedule_minutes.length
-      ? ops.schedule_minutes.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0)
-      : [120, 360, 1200]; // default: +2h, +6h, +20h
-    const maxRetries: number = Number(ops.max_retries) > 0 ? Number(ops.max_retries) : scheduleMinutes.length;
-    const windowHours: number = Number(ops.window_hours) > 0 ? Number(ops.window_hours) : 24;
+    // UI-driven cadence (HandleOpsSettings → ai_purposes.ops_config):
+    //   delay_hours    — wait before the first nudge (retryCount === 0)
+    //   cooldown_hours — wait between subsequent nudges (retryCount >= 1)
+    //   max_retries    — total nudges per lead
+    const delayHours: number = Number(ops.delay_hours) > 0 ? Number(ops.delay_hours) : 2;
+    const cooldownHours: number = Number(ops.cooldown_hours) > 0 ? Number(ops.cooldown_hours) : 6;
+    const maxRetries: number = Number(ops.max_retries) > 0 ? Number(ops.max_retries) : 3;
+    // WhatsApp 24h freeform window is a protocol constant — not user-tunable.
+    const WHATSAPP_FREEFORM_WINDOW_HOURS = 24;
     const config = {
       enabled: ops.enabled ?? purposeRow?.enabled ?? true,
     };
@@ -229,8 +231,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const _earliestWaitMs = Math.min(...scheduleMinutes) * 60 * 1000; // kept for log/diag
 
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
@@ -306,8 +306,8 @@ serve(async (req) => {
       if (retryCount >= maxRetries) continue;
 
       // Per-retry wait: schedule_minutes[retryCount] minutes since last outbound.
-      const waitMinutes = scheduleMinutes[Math.min(retryCount, scheduleMinutes.length - 1)];
-      const dueAt = new Date(new Date(lastMsg.created_at).getTime() + waitMinutes * 60 * 1000);
+      const waitHours = retryCount === 0 ? delayHours : cooldownHours;
+      const dueAt = new Date(new Date(lastMsg.created_at).getTime() + waitHours * 3600 * 1000);
       if (dueAt > new Date()) continue;
       // Defensive: never re-send inside the same 30-minute bucket.
       if (chat.last_nurture_at) {
@@ -347,7 +347,7 @@ serve(async (req) => {
 
       // ── 24h freeform window check (WhatsApp only). Outside = skip silently. ──
       if (chatPlatform === "whatsapp") {
-        const sinceIso = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
+        const sinceIso = new Date(Date.now() - WHATSAPP_FREEFORM_WINDOW_HOURS * 3600 * 1000).toISOString();
         const recipientDigits = chat.phone_number.replace(/\D/g, "");
         const { data: lastInbound } = await supabase
           .from("whatsapp_messages")
