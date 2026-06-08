@@ -230,8 +230,7 @@ serve(async (req) => {
       });
     }
 
-    const earliestWaitMs = Math.min(...scheduleMinutes) * 60 * 1000;
-    const cutoffTime = new Date(Date.now() - earliestWaitMs).toISOString();
+    const _earliestWaitMs = Math.min(...scheduleMinutes) * 60 * 1000; // kept for log/diag
 
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
