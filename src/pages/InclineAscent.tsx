@@ -182,62 +182,64 @@ const InclineAscent = () => {
         layer once ready, so users see no change. The H1 text matches the
         Scroll overlay exactly to avoid any visual mismatch during handoff.
       */}
-      <section
-        aria-hidden={mountScene}
-        className="fixed inset-0 -z-10 flex items-center px-4 pointer-events-none"
-        style={{ height: '100dvh' }}
-      >
-        <div className="w-full max-w-7xl mx-auto flex justify-end">
-          <div className="max-w-md text-right mr-8 md:mr-32">
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
-              WHERE <span className="text-primary">GLOBAL STRENGTH</span>
-              <br />
-              MEETS <span className="text-primary">CLINICAL SERENITY.</span>
-            </h1>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              Rajasthan's new benchmark for excellence. An elevated sanctuary designed for the driven—delivering Italian
-              biomechanics in every rep, and advanced restoration in every recovery.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {mountScene && (
-        <Suspense fallback={null}>
-          <Scene3D onScrollProgress={onScrollProgress} />
-        </Suspense>
-      )}
-
-      {/* Crawlable, static branches & FAQ. Visually hidden from the 3D
-          experience but available to bots, screen readers, and AI crawlers. */}
-      <div className="sr-only" aria-hidden="false">
-        <section aria-labelledby="branches-heading">
-          <h2 id="branches-heading">Our Branches & Services</h2>
-          {PUBLIC_BRANCHES.map(b => (
-            <article key={b.slug}>
-              <h3>{b.name}</h3>
-              <p>{b.address}</p>
-              <p>Hours: {b.hours}</p>
-              <h4>Facilities</h4>
-              <ul>{b.facilities.map(f => <li key={f}>{f}</li>)}</ul>
-              <h4>Group Classes</h4>
-              <ul>{b.classes.map(c => <li key={c}>{c}</li>)}</ul>
-              {b.pt && <p>Personal training available.</p>}
-              <h4>Premium Add-ons</h4>
-              <ul>{b.addOns.map(a => <li key={a}>{a}</li>)}</ul>
-            </article>
-          ))}
-        </section>
-        <section aria-labelledby="faq-heading">
-          <h2 id="faq-heading">Frequently Asked Questions</h2>
-          {PUBLIC_FAQS.map(f => (
-            <div key={f.q}>
-              <h3>{f.q}</h3>
-              <p>{f.a}</p>
+      <main>
+        <section
+          aria-hidden={mountScene}
+          className="fixed inset-0 -z-10 flex items-center px-4 pointer-events-none"
+          style={{ height: '100dvh' }}
+        >
+          <div className="w-full max-w-7xl mx-auto flex justify-end">
+            <div className="max-w-md text-right mr-8 md:mr-32">
+              <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
+                WHERE <span className="text-primary">GLOBAL STRENGTH</span>
+                <br />
+                MEETS <span className="text-primary">CLINICAL SERENITY.</span>
+              </h1>
+              <p className="text-muted-foreground text-base leading-relaxed">
+                Rajasthan's new benchmark for excellence. An elevated sanctuary designed for the driven—delivering Italian
+                biomechanics in every rep, and advanced restoration in every recovery.
+              </p>
             </div>
-          ))}
+          </div>
         </section>
-      </div>
+
+        {mountScene && (
+          <Suspense fallback={null}>
+            <Scene3D onScrollProgress={onScrollProgress} />
+          </Suspense>
+        )}
+
+        {/* Crawlable, static branches & FAQ. Visually hidden from the 3D
+            experience but available to bots, screen readers, and AI crawlers. */}
+        <div className="sr-only" aria-hidden="false">
+          <section aria-labelledby="branches-heading">
+            <h2 id="branches-heading">Our Branches & Services</h2>
+            {PUBLIC_BRANCHES.map(b => (
+              <article key={b.slug}>
+                <h3>{b.name}</h3>
+                <p>{b.address}</p>
+                <p>Hours: {b.hours}</p>
+                <h4>Facilities</h4>
+                <ul>{b.facilities.map(f => <li key={f}>{f}</li>)}</ul>
+                <h4>Group Classes</h4>
+                <ul>{b.classes.map(c => <li key={c}>{c}</li>)}</ul>
+                {b.pt && <p>Personal training available.</p>}
+                <h4>Premium Add-ons</h4>
+                <ul>{b.addOns.map(a => <li key={a}>{a}</li>)}</ul>
+              </article>
+            ))}
+          </section>
+          <section aria-labelledby="faq-heading">
+            <h2 id="faq-heading">Frequently Asked Questions</h2>
+            {PUBLIC_FAQS.map(f => (
+              <div key={f.q}>
+                <h3>{f.q}</h3>
+                <p>{f.a}</p>
+              </div>
+            ))}
+          </section>
+        </div>
+      </main>
 
       {mountModals && (
         <Suspense fallback={null}>
