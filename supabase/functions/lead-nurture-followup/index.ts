@@ -396,6 +396,8 @@ serve(async (req) => {
       let fallbackUsed = false;
       let candidateHash = "";
 
+      const attempt = retryCount + 1;
+
       if (angle) {
         candidate = await generateNurture({
           supabase,
@@ -406,6 +408,8 @@ serve(async (req) => {
           leadKnown: !!lead,
           recentHashes,
           recentTexts,
+          attempt,
+          maxAttempts: maxRetries,
         });
         if (candidate) {
           candidateHash = await hashMessage(candidate);
@@ -420,7 +424,8 @@ serve(async (req) => {
               leadKnown: !!lead,
               recentHashes,
               recentTexts,
-              temperature: 0.9,
+              attempt,
+              maxAttempts: maxRetries,
               extraDiversityHint:
                 "The previous candidate matched a past message — phrase this COMPLETELY differently: different opener, different verb, different rhythm.",
             });
@@ -447,66 +452,38 @@ serve(async (req) => {
       const bucket = Math.floor(Date.now() / 1000 / Math.max(cooldownSeconds, 60));
       const dedupeKey = `lead_nurture:${chat.id}:${bucket}`;
 
+      // Freeform-only send (inside 24h window). No template path.
       try {
-        if (chatPlatform === "whatsapp" && outsideWindow && templateRow) {
-          // Dynamic template vars (no hard-coded USPs)
-          const usps = await pickDynamicUsps(supabase, chat.branch_id, 2);
-          const dispatchRes = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              branch_id: chat.branch_id,
-              channel: "whatsapp",
-              category: "retention_nudge",
-              recipient: chat.phone_number,
-              template_id: templateRow.id,
-              payload: {
-                body: candidate,
-                variables: {
-                  prospect_name: prospectName,
-                  popular_feature_1: usps[0] || "personal training",
-                  popular_feature_2: usps[1] || "recovery zone",
-                },
-              },
-              dedupe_key: dedupeKey,
-              force: true,
-            }),
-          });
-          if (!dispatchRes.ok) {
-            console.error(`[lead-nurture] dispatch failed for ${chat.phone_number}: ${dispatchRes.status}`);
-          }
-        } else {
-          const { data: msgData, error: msgErr } = await supabase
-            .from("whatsapp_messages")
-            .insert({
-              branch_id: chat.branch_id,
-              phone_number: chat.phone_number,
-              contact_name: contactName,
-              content: candidate,
-              direction: "outbound",
-              status: "pending",
-              message_type: "text",
-              platform: chatPlatform,
-            })
-            .select()
-            .single();
-          if (msgErr) {
-            console.error(`[lead-nurture] insert failed for ${chat.phone_number}:`, msgErr.message);
-            continue;
-          }
-          const sendUrl = chatPlatform === "whatsapp"
-            ? `${supabaseUrl}/functions/v1/send-whatsapp`
-            : `${supabaseUrl}/functions/v1/send-meta-dm`;
-          const body = chatPlatform === "whatsapp"
-            ? { message_id: msgData.id, phone_number: chat.phone_number, content: candidate, branch_id: chat.branch_id }
-            : { message_id: msgData.id, platform: chatPlatform, recipient_id: chat.phone_number, content: candidate, branch_id: chat.branch_id };
-          const sendRes = await fetch(sendUrl, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          if (!sendRes.ok) console.error(`[lead-nurture] send failed for ${chat.phone_number}: ${sendRes.status}`);
+        const { data: msgData, error: msgErr } = await supabase
+          .from("whatsapp_messages")
+          .insert({
+            branch_id: chat.branch_id,
+            phone_number: chat.phone_number,
+            contact_name: contactName,
+            content: candidate,
+            direction: "outbound",
+            status: "pending",
+            message_type: "text",
+            platform: chatPlatform,
+          })
+          .select()
+          .single();
+        if (msgErr) {
+          console.error(`[lead-nurture] insert failed for ${chat.phone_number}:`, msgErr.message);
+          continue;
         }
+        const sendUrl = chatPlatform === "whatsapp"
+          ? `${supabaseUrl}/functions/v1/send-whatsapp`
+          : `${supabaseUrl}/functions/v1/send-meta-dm`;
+        const body = chatPlatform === "whatsapp"
+          ? { message_id: msgData.id, phone_number: chat.phone_number, content: candidate, branch_id: chat.branch_id }
+          : { message_id: msgData.id, platform: chatPlatform, recipient_id: chat.phone_number, content: candidate, branch_id: chat.branch_id };
+        const sendRes = await fetch(sendUrl, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!sendRes.ok) console.error(`[lead-nurture] send failed for ${chat.phone_number}: ${sendRes.status}`);
       } catch (sendErr) {
         console.error(`[lead-nurture] send error for ${chat.phone_number}:`, (sendErr as Error).message);
         continue;
