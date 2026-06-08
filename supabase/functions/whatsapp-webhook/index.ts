@@ -1,3 +1,7 @@
+// v6.3.0 — Observability: every silent sendAiReply / triggerAiAutoReply early
+//          return (skipReason, send-lock-held, missing integration, missing
+//          credentials) now writes to error_logs so we can audit why the AI
+//          ever stopped replying mid-conversation.
 // v6.1.0 — Hardened sendAiReply: try/catch around Meta send (no more stuck `pending`
 //          on cold shutdown), fixed silent column bug (`error_message` → `failure_reason`)
 //          on send-lock duplicate path, mirror every AI outbound into communication_logs
