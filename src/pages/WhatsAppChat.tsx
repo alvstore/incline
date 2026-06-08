@@ -1100,9 +1100,9 @@ export default function WhatsAppChatPage() {
                 {/* Chat Header */}
                 <div className={`px-5 py-3 border-b flex items-center justify-between bg-card flex-shrink-0 ${
                   selectedContact.platform === 'instagram' 
-                    ? 'border-b-pink-500/30' 
+                    ? 'border-b-destructive/30' 
                     : selectedContact.platform === 'messenger'
-                    ? 'border-b-blue-500/30'
+                    ? 'border-b-info/30'
                     : 'border-b-border/30'
                 }`}>
                   <div className="flex items-center gap-3">

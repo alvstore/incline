@@ -407,12 +407,12 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                           ? 'bg-warning'
                           : 'bg-success';
                     const borderColor = b.isUnlimited
-                      ? 'border-l-blue-500'
+                      ? 'border-l-info'
                       : isExhausted
                         ? 'border-l-destructive'
                         : isGiftOnly
-                          ? 'border-l-amber-500'
-                          : 'border-l-emerald-500';
+                          ? 'border-l-warning'
+                          : 'border-l-success';
 
                     return (
                       <div key={idx} className={`p-3 rounded-lg bg-muted/50 border-l-4 ${borderColor}`}>

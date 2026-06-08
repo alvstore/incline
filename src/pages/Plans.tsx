@@ -24,12 +24,12 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { format } from 'date-fns';
 
 const accentColors = [
-  { border: 'border-l-violet-500', gradient: 'from-primary to-primary', bg: 'bg-primary' },
-  { border: 'border-l-emerald-500', gradient: 'from-success to-success', bg: 'bg-success' },
-  { border: 'border-l-amber-500', gradient: 'from-warning to-warning', bg: 'bg-warning' },
-  { border: 'border-l-rose-500', gradient: 'from-destructive to-destructive', bg: 'bg-destructive' },
-  { border: 'border-l-sky-500', gradient: 'from-info to-info', bg: 'bg-info' },
-  { border: 'border-l-fuchsia-500', gradient: 'from-primary to-primary', bg: 'bg-primary' },
+  { border: 'border-l-primary', gradient: 'from-primary to-primary', bg: 'bg-primary' },
+  { border: 'border-l-success', gradient: 'from-success to-success', bg: 'bg-success' },
+  { border: 'border-l-warning', gradient: 'from-warning to-warning', bg: 'bg-warning' },
+  { border: 'border-l-destructive', gradient: 'from-destructive to-destructive', bg: 'bg-destructive' },
+  { border: 'border-l-info', gradient: 'from-info to-info', bg: 'bg-info' },
+  { border: 'border-l-primary', gradient: 'from-primary to-primary', bg: 'bg-primary' },
 ];
 
 interface PlanListItemProps {

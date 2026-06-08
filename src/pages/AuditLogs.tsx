@@ -397,7 +397,7 @@ export default function AuditLogsPage() {
                         const target = log.target_name || (log.record_id ? log.record_id.substring(0, 8) : '—');
                         const route = deepLinkFor(log.table_name, log.record_id);
                         const isNew = newRowIds.has(log.id);
-                        const accent = log.action === 'DELETE' ? 'border-l-2 border-l-red-500' : log.action === 'INSERT' ? 'border-l-2 border-l-emerald-500' : 'border-l-2 border-l-blue-500';
+                        const accent = log.action === 'DELETE' ? 'border-l-2 border-l-destructive' : log.action === 'INSERT' ? 'border-l-2 border-l-success' : 'border-l-2 border-l-info';
                         const padY = density === 'compact' ? 'p-2' : 'p-3';
 
                         return (
