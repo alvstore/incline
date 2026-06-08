@@ -148,23 +148,24 @@ async function upsertAll(cards: KbCard[]) {
   let upserted = 0;
   for (const c of cards) {
     const safeContent = sanitize(c.content);
-    const { error } = await supabase
-      .from("ai_knowledge")
-      .upsert({
-        source: "catalog",
-        source_ref: c.source_ref,
-        branch_id: c.branch_id,
-        topic: c.topic,
-        title: c.title,
-        content: safeContent,
-        tags: c.tags,
-        applies_to: c.applies_to,
-        priority: c.priority,
-        is_active: true,
-        status: "active",
-      }, { onConflict: "source_ref" });
+    // Partial unique index on source_ref (WHERE NOT NULL) means PostgREST
+    // upsert onConflict can't target it. Use explicit delete-then-insert.
+    await supabase.from("ai_knowledge").delete().eq("source_ref", c.source_ref);
+    const { error } = await supabase.from("ai_knowledge").insert({
+      source: "catalog",
+      source_ref: c.source_ref,
+      branch_id: c.branch_id,
+      topic: c.topic,
+      title: c.title,
+      content: safeContent,
+      tags: c.tags,
+      applies_to: c.applies_to,
+      priority: c.priority,
+      is_active: true,
+      status: "active",
+    });
     if (error) {
-      console.warn("[sync-ai-knowledge] upsert failed", c.source_ref, error.message);
+      console.warn("[sync-ai-knowledge] insert failed", c.source_ref, error.message);
       continue;
     }
     upserted++;
