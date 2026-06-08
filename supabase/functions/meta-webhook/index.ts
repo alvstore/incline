@@ -1328,6 +1328,17 @@ async function triggerAiReply(
     return;
   }
 
+  // v5.7.0 — Meta IG/Messenger DMs do NOT support WhatsApp-style interactive
+  // lists/buttons. Flatten any structured envelope from the brain into plain
+  // text BEFORE persist+send so users never see raw JSON in chat.
+  const flatReply = flattenReplyForPlainText(result.replyText);
+  if (flatReply !== result.replyText) {
+    console.log(`[AI:${platform}] flattened envelope → plain text (${flatReply.length} chars)`);
+  }
+  result.replyText = flatReply;
+
+
+
   // ── OUTBOUND DEDUPE: if we already sent the same content to this contact in
   // the last 3 minutes (e.g. retried envelope slipped past the claim), do not
   // insert / send again. This is the last line of defence before Meta.
