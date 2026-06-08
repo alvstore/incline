@@ -347,7 +347,7 @@ serve(async (req) => {
 
       // ── 24h freeform window check (WhatsApp only). Outside = skip silently. ──
       if (chatPlatform === "whatsapp") {
-        const sinceIso = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
+        const sinceIso = new Date(Date.now() - WHATSAPP_FREEFORM_WINDOW_HOURS * 3600 * 1000).toISOString();
         const recipientDigits = chat.phone_number.replace(/\D/g, "");
         const { data: lastInbound } = await supabase
           .from("whatsapp_messages")
