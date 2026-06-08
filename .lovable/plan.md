@@ -1,71 +1,107 @@
-# Audit & Fix — `/register` flow + DB error backlog
+## Problem
 
-## What's broken (root cause)
+Pallavi (lead `+91 88548 69672`) received a message with a literal ` ```json … ``` ` block containing a Meta-style interactive list payload instead of an actual tappable list.
 
-**`/register` self-onboarding is completely broken since June 8 05:26 UTC.**
+## Root cause
 
-`error_logs` shows 7 consecutive `23514` failures in 2 minutes from the `register-member` edge function. All identical:
+`whatsapp-webhook/index.ts → tryExtractInteractiveJson()` (lines 526-580) and the brain's outbound guards only recognise the project's own two shapes:
 
-```
-new row for relation "members" violates check constraint "members_lifecycle_state_check"
-```
+- `{ "type": "interactive",       "buttons": [...] , "body": "…" }`
+- `{ "type": "interactive_list",  "sections": [...], "button": "…", "body": "…" }`
 
-- `register-member/index.ts:421` inserts `lifecycle_state: "pending_plan"`.
-- The CHECK constraint (migration `20260503131220`) only allows: `created · pending_verification · verified · active · onboarded · suspended · archived`.
-- Result: every self-registration auth user gets created, then the member insert fails, the edge fn deletes the orphaned auth user — user sees a 500, no member created, no signed waiver, no CRM handoff.
+But Gemini occasionally emits Meta Cloud API's **native** envelope instead:
 
-`pending_plan` IS a real domain state per project memory ("Public Self-Onboarding → pending_plan CRM handoff") and the Members UI already pins/styles it (`Members.tsx:160-169`, badge `pending_plan: 'bg-warning/15…animate-pulse'`). It was simply never added to the constraint or the lifecycle state machine.
-
-## Other findings in last 24h `error_logs`
-
-| Source | Count | Verdict |
-|---|---|---|
-| `edge_function` / `23514` | **7** | The bug above — fix below |
-| `ai_lead_loss` warning on `+918854869672` | 3 | Real — separate WhatsApp 24h-window issue, not this loop |
-| `frontend` Network error | 4 | Transient client offline blips, not actionable |
-
-No other DB constraint, RLS, or trigger errors in 24h. System otherwise green.
-
-## Fix plan
-
-### 1. Extend the lifecycle constraint to include `pending_plan`
-One migration that drops + re-adds `members_lifecycle_state_check` with `pending_plan` appended, and teaches `transition_member_lifecycle` that `pending_plan → active` and `pending_plan → archived` are valid moves (so reception's "assign plan" still passes the state machine).
-
-```text
-allowed states (new): created · pending_verification · verified ·
-                      pending_plan · active · onboarded · suspended · archived
+```json
+{ "type": "interactive",
+  "interactive": {
+    "type": "list",
+    "header": {...},
+    "body": { "text": "…" },
+    "action": { "button": "…", "sections": [...] }
+  } }
 ```
 
-This is the minimal-surface fix. It preserves every existing reference (`Members.tsx`, the badge, the pin-to-top sort, the edge fn) without renaming.
+The extractor matches `parsed.type === "interactive"`, sees no `parsed.buttons`, falls through the `if` without setting `interactivePayload`, and **leaves `replyText` untouched** — so the fenced JSON block is sent verbatim as the WhatsApp text body. That is exactly what Pallavi saw.
 
-### 2. Backfill: nothing to clean
-Those 7 inserts were rolled back atomically; no orphan member rows, no orphan auth users (the edge fn already deletes them on failure). Confirmed by row count check at the end of this plan.
+A secondary safety hole: even after extraction, the function never asserts that `replyText` is free of ```` ``` ```` fences or stray `{"type":"interactive…` substrings before sending.
 
-### 3. Surface DB constraint failures in System Health
-Add `database` + `edge_function` severity=`error` rows to the new AI Reply SLA tile area as a small "DB Integrity (24h)" card so the next constraint violation isn't only visible by querying psql. Uses existing `error_logs` table — no new tables.
+## Fix (3 changes, scoped, no business-logic changes)
 
-### 4. Prevent recurrence
-Add a one-line CI lint (`scripts/post-merge.sh` already exists) that greps every edge fn for `lifecycle_state:\s*['"]` and fails the build if the value isn't in the allowed-set constant. Cheap, no new tooling.
+### 1. Extend `tryExtractInteractiveJson` to normalise Meta-native shape
 
-## Files touched
+In `supabase/functions/whatsapp-webhook/index.ts` (right before the `return null` at line 579), add a normaliser that detects the Meta envelope and rewrites it into the brain's canonical shape so the existing `parsed.type === "interactive_list"` branch handles it.
 
-| File | Change |
-|---|---|
-| `supabase/migrations/<new>.sql` | Drop + re-add `members_lifecycle_state_check` with `pending_plan`; update `transition_member_lifecycle` allowed transitions; `NOTIFY pgrst`. |
-| `src/components/system/DbIntegrityCard.tsx` | **NEW.** 24h roll-up of `error_logs` where source IN ('edge_function','database','trigger') AND severity='error'. |
-| `src/pages/SystemHealth.tsx` | Mount `<DbIntegrityCard />` next to `<AiReplySlaCard />`. |
-| `scripts/post-merge.sh` | Add lifecycle-state lint. |
+Pseudocode:
+```ts
+function normalizeMetaNative(p: any): any {
+  if (p?.type === "interactive" && p.interactive && !p.buttons && !p.sections) {
+    const inner = p.interactive;
+    const bodyText = inner.body?.text || inner.body || "";
+    if (inner.type === "list" && inner.action?.sections) {
+      return { type: "interactive_list", body: bodyText,
+               button: inner.action.button || "Select",
+               sections: inner.action.sections };
+    }
+    if (inner.type === "button" && inner.action?.buttons) {
+      return { type: "interactive",
+               body: bodyText,
+               buttons: inner.action.buttons.map((b: any) =>
+                 b?.reply?.title || b?.title).filter(Boolean) };
+    }
+  }
+  return p;
+}
+```
+Call `parsed = normalizeMetaNative(parsed)` in all 3 extraction branches (whole-string, fenced, brace-balanced) before the `interactive` / `interactive_list` checks.
 
-## Verification
+### 2. Final residue guard inside `sendAiReply`
 
-1. Hit `/register` end-to-end with a throwaway phone → expect 200, member row with `lifecycle_state='pending_plan'`, waiver PDF in storage, lead row updated.
-2. `psql` → `SELECT lifecycle_state, count(*) FROM members GROUP BY 1` shows `pending_plan` rows present.
-3. From Members page, click "Assign Plan" on a pending_plan member → state moves to `active` without RPC error.
-4. `SELECT count(*) FROM error_logs WHERE error_message ILIKE '%members_lifecycle_state_check%' AND created_at > now() - interval '1h'` = 0.
-5. DbIntegrityCard renders "Healthy" on the System Health page.
+After the existing extraction block (around line 629), add a last-mile sanitiser:
+
+```ts
+// If anything resembling JSON / fences slipped through, scrub it.
+if (/```|"type"\s*:\s*"interactive/i.test(replyText)) {
+  replyText = replyText
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\{[\s\S]*?"type"\s*:\s*"interactive[\s\S]*?\}\s*\}?/gi, "")
+    .trim();
+  // Telemetry so we know the LLM mis-shaped a payload
+  await supabase.rpc("log_error_event", {
+    p_source: "whatsapp_webhook",
+    p_severity: "warning",
+    p_message: "interactive JSON leaked past extractor — scrubbed",
+    p_context: { branch_id: branchId, phone: cleanPhone,
+                 had_payload: !!interactivePayload },
+  }).catch(() => {});
+}
+if (!replyText && !interactivePayload) {
+  replyText = "Got it — one moment.";   // never send an empty WA message
+}
+```
+
+### 3. Tighten the prompt contract (defensive)
+
+In `_shared/ai-agent-brain.ts` near lines 571-578 (the goal/duration HARD GATE block), append one explicit anti-example:
+
+> "Emit the canonical brain shape ONLY: `{ "type": "interactive_list", "body": "...", "button": "...", "sections": [ { "title": "...", "rows": [...] } ] }`. NEVER wrap it in Meta's `{type:'interactive', interactive:{...}}` envelope. NEVER wrap any JSON in markdown ```json fences."
+
+No prompt rewrite — single appended paragraph.
 
 ## Out of scope
 
-- `ai_lead_loss` warning for `+918854869672` (separate WhatsApp 24h-window thread; will track in its own loop).
-- Re-architecting member states (the 8-state machine is fine; only one value was missing).
+- Pallavi's existing thread: no retro-send. Next inbound message will work correctly.
+- `ai_lead_loss` monitor / SystemHealth — already shipped last turn.
+- `meta-webhook` Instagram signature_mismatch (separate IG App Secret issue, unrelated).
 
+## Verification
+
+1. Unit-style: feed `tryExtractInteractiveJson` the exact JSON from Pallavi's thread (fenced) and assert it returns a normalised `interactive_list` with 4 rows.
+2. End-to-end: send a fresh inbound from a test number through the same goal turn; confirm WhatsApp renders a list (not text) and `whatsapp_messages.outbound` row's `payload` has `type=list`.
+3. `error_logs` shows zero `"interactive JSON leaked"` warnings within 1h of redeploy.
+
+## Files touched
+
+- `supabase/functions/whatsapp-webhook/index.ts` — `tryExtractInteractiveJson` + `sendAiReply` residue guard.
+- `supabase/functions/_shared/ai-agent-brain.ts` — 1 added paragraph in the founder-phase prompt.
+
+Used the senior-architect skill.
