@@ -732,7 +732,31 @@ ADVANCE RULE: always move to the FIRST missing field in order name → email →
     }
   }
 
-  if (!replyText) return skip("no_reply_text");
+  // v3.6.0 — silent-drop fix. The model occasionally returns only a tool_call
+  // (with empty `content`) and the follow-up `callAI` also yields empty
+  // content. Previously this hit `skip("no_reply_text")` and the user got
+  // nothing. We now (a) write a diagnostic to error_logs so we can see it
+  // happen, and (b) compose a deterministic next-step reply from `memory` so
+  // the conversation never stalls silently.
+  if (!replyText) {
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "ai_agent_brain",
+        p_severity: "warning",
+        p_message: `Empty reply from AI for ${ctx.platform} ${ctx.senderId} — falling back to deterministic next-step`,
+        p_context: {
+          branch_id: ctx.branchId,
+          platform: ctx.platform,
+          sender: ctx.senderId,
+          had_tool_calls: Array.isArray((choice as any)?.message?.tool_calls) && (choice as any).message.tool_calls.length > 0,
+          message_id: ctx.messageId ?? null,
+        },
+      });
+    } catch { /* noop */ }
+    const fallback = buildNoReplyFallback(memory, shouldCaptureLead);
+    if (!fallback) return skip("no_reply_text");
+    replyText = fallback;
+  }
 
   // 9b. OUTBOUND GUARDS — strip / replace interactive blocks the LLM emitted that
   // would violate the hard onboarding gate or duplicate a question already asked.
@@ -1090,6 +1114,40 @@ function sanitizeFoundersPhaseText(input: {
     ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough closer to opening. ✨`
     : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
 }
+
+// Deterministic fallback when the model returns no text. Mirrors the
+// onboarding sequence (Name → Email → Goal → Plan) so a missing field always
+// gets re-asked instead of leaving the user with silence.
+function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string | null {
+  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+  const firstName = realName ? realName.split(/\s+/)[0] : "";
+  const knownName = !!realName;
+  const knownEmail = !!memory?.profile?.email;
+  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
+  const knownPlan = !!memory?.facts?.plan_interest;
+
+  if (leadCaptureEnabled) {
+    if (!knownName) return "Sure — may I have your name first? ✨";
+    if (!knownEmail) {
+      return firstName
+        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
+        : "Could you share your email for your Founding Member invite? ✨";
+    }
+    if (!knownGoal) {
+      return firstName
+        ? `Got it, ${firstName} — what's your main fitness goal? ✨`
+        : "What's your main fitness goal? ✨";
+    }
+    if (!knownPlan) {
+      return firstName
+        ? `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`
+        : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
+    }
+  }
+  return firstName
+    ? `Got it, ${firstName} — give me one sec while our team picks this up. ✨`
+    : "Got it — give me one sec while our team picks this up. ✨";
 
 
 

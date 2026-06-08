@@ -1,3 +1,7 @@
+// v6.3.0 — Observability: every silent sendAiReply / triggerAiAutoReply early
+//          return (skipReason, send-lock-held, missing integration, missing
+//          credentials) now writes to error_logs so we can audit why the AI
+//          ever stopped replying mid-conversation.
 // v6.1.0 — Hardened sendAiReply: try/catch around Meta send (no more stuck `pending`
 //          on cold shutdown), fixed silent column bug (`error_message` → `failure_reason`)
 //          on send-lock duplicate path, mirror every AI outbound into communication_logs
@@ -481,9 +485,18 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     );
 
     if (result.skipped || !result.replyText) {
-      if (result.skipReason) {
-        console.log(`[whatsapp-webhook] AI skipped: ${result.skipReason}`);
-      }
+      // v6.3.0 — promote silent skips to error_logs so we can audit why the
+      // AI stopped replying to a live conversation.
+      const reason = result.skipReason || "no_reply_text";
+      console.log(`[whatsapp-webhook] AI skipped: ${reason}`);
+      try {
+        await supabase.rpc("log_error_event", {
+          p_source: "whatsapp_webhook",
+          p_severity: "warning",
+          p_message: `AI reply skipped (${reason}) for ${phoneNumber}`,
+          p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, reason },
+        });
+      } catch { /* noop */ }
       return;
     }
 
@@ -648,6 +661,14 @@ async function sendAiReply(
     });
     if (gotLock === false) {
       console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone} (no row inserted)`);
+      try {
+        await supabase.rpc("log_error_event", {
+          p_source: "whatsapp_webhook",
+          p_severity: "warning",
+          p_message: `sendAiReply skipped: send-lock held for ${cleanPhone}`,
+          p_context: { branch_id: branchId, phone: cleanPhone, reason: "send_lock_held" },
+        });
+      } catch { /* noop */ }
       return;
     }
   } catch (lockErr) {
@@ -655,12 +676,36 @@ async function sendAiReply(
   }
 
   const integration = await getWhatsAppIntegration(branchId);
-  if (!integration) return;
+  if (!integration) {
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_webhook",
+        p_severity: "error",
+        p_message: `sendAiReply aborted: no WhatsApp integration for branch ${branchId}`,
+        p_context: { branch_id: branchId, phone: cleanPhone, reason: "no_integration" },
+      });
+    } catch { /* noop */ }
+    return;
+  }
 
   const accessToken = integration.credentials?.access_token as string;
   const phoneNumberId = integration.config?.phone_number_id as string;
   const appSecret = (integration.credentials?.app_secret as string) || null;
-  if (!accessToken || !phoneNumberId) return;
+  if (!accessToken || !phoneNumberId) {
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_webhook",
+        p_severity: "error",
+        p_message: `sendAiReply aborted: missing access_token or phone_number_id (branch ${branchId})`,
+        p_context: {
+          branch_id: branchId, phone: cleanPhone,
+          has_token: !!accessToken, has_phone_id: !!phoneNumberId,
+          reason: "missing_credentials",
+        },
+      });
+    } catch { /* noop */ }
+    return;
+  }
 
   const { data: aiMsg, error: insertErr } = await supabase
     .from("whatsapp_messages")
