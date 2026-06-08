@@ -808,9 +808,11 @@ export default function WhatsAppChatPage() {
       case 'read': return <CheckCheck className="h-3.5 w-3.5 text-info" />;
       case 'delivered': return <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/50" />;
       case 'sent': return <Check className="h-3.5 w-3.5 text-primary-foreground/50" />;
+      case 'failed': return <AlertTriangle className="h-3.5 w-3.5 text-red-500" aria-label="Failed to send" />;
       default: return <Clock className="h-3.5 w-3.5 text-primary-foreground/40" />;
     }
   };
+
 
   // Auto-read: mark as read when selecting a contact
   const handleSelectContact = async (contact: ChatContact) => {
