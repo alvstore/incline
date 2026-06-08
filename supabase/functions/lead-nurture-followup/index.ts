@@ -1,23 +1,17 @@
+// v8.0.0 — Freeform-only inside 24h window + DB-driven retry schedule.
+//
+// What changed vs v7.0.0:
+//   • Cadence is now `ops_config.schedule_minutes` (array of per-retry waits)
+//     instead of a single delay/cooldown pair. A nudge fires when
+//     `now - last_outbound_at >= schedule_minutes[retry_count]`.
+//   • `ops_config.window_hours` (default 24) — outside the WhatsApp 24h
+//     freeform window we SKIP silently and stamp `last_nurture_at` so we
+//     don't loop. Re-engagement of cold leads is a campaign concern, not a
+//     nurture concern. No template fallback path remains.
+//   • Brain prompt now receives `attempt: N/MAX` so the angle can scale
+//     intensity across retries (warm welcome → soft check → soft urgency).
+//
 // v7.0.0 — DB-driven angle rotation + similarity dedupe + dynamic content.
-//
-// What changed vs v6.1.0:
-//   • Angle pick via `pick_next_nurture_angle(chat_id)` RPC. Catalogue lives
-//     in `lead_nurture_angles` (no hard-coded strings in this file).
-//   • AI generation now runs for BOTH inside-24h freeform AND outside-24h
-//     template paths. The selected angle's tone + prompt_hint is injected
-//     into <runtime> so each send reads differently.
-//   • Similarity guard: sha1 of normalised candidate is compared against
-//     `last_nurture_hash` + the hashes of the last 3 outbound nurtures. On
-//     collision we regenerate once with a stronger differentiation prompt;
-//     on second collision we fall through to the angle's DB-stored
-//     `fallback_template`.
-//   • Template path popular_feature_{1,2} vars are now pulled from
-//     `ai_knowledge` (rows tagged 'usp' or 'offering'), not hard-coded.
-//   • dedupe_key is time-bucketed (`floor(now/cooldown)`) so two cron ticks
-//     inside the same cooldown collapse to one send.
-//   • Persists `{angle, hash, text, sent_at}` into `nurture_angle_history`
-//     and stamps `last_nurture_text` / `last_nurture_hash`.
-//
 // v6.1.0 — service-role auth gate added (cron-only).
 // v6.0.0 — SSOT from ai_purposes.ops_config.
 // v5.0.0 — persona/brain via buildSystemPrompt().
@@ -125,18 +119,28 @@ async function generateNurture(opts: {
   leadKnown: boolean;
   recentHashes: string[];
   recentTexts: string[];
-  temperature?: number;
+  attempt: number;       // 1-indexed retry number for this lead
+  maxAttempts: number;
   extraDiversityHint?: string;
 }): Promise<string | null> {
-  const { supabase, branchId, angle, prospectName, partialData, leadKnown, recentTexts, extraDiversityHint } = opts;
+  const { supabase, branchId, angle, prospectName, partialData, leadKnown, recentTexts, attempt, maxAttempts, extraDiversityHint } = opts;
 
   const missing: string[] = [];
   if (!partialData?.email && !leadKnown) missing.push("email");
   if (!partialData?.name && !leadKnown) missing.push("name");
   if (!partialData?.goal) missing.push("fitness goal");
 
+  // Intensity ladder by attempt — DB angle still drives content; this just
+  // tells the model how warm vs how direct to be.
+  const intensityHint = attempt === 1
+    ? "This is the FIRST follow-up — keep it light, welcoming, almost no ask."
+    : attempt === 2
+      ? "This is the SECOND follow-up — slightly more direct, one clear soft CTA."
+      : "This is the FINAL follow-up — kind but more deliberate; offer a concrete next step (tour / callback).";
+
   const ctx = [
     `Prospect: ${prospectName}.`,
+    `Attempt: ${attempt} of ${maxAttempts}. ${intensityHint}`,
     partialData ? `Partial lead data: ${JSON.stringify(partialData)}` : "",
     missing.length ? `Missing fields: ${missing.join(", ")}.` : "",
     `\nAngle: ${angle.label} (slug=${angle.slug}, tone=${angle.tone}).`,
@@ -145,7 +149,7 @@ async function generateNurture(opts: {
     "Hard rules for this nurture message:",
     "- ONE short WhatsApp message, max 320 characters.",
     "- Use the prospect's first name once if available.",
-    "- One soft CTA only (tour, callback, reply with question).",
+    "- One soft CTA only (tour, callback, reply with question) — and only if attempt > 1.",
     "- Never quote prices, plan names, PT package names, or session counts.",
     "- Plain conversational tone — no emoji spam, no bullet lists.",
     "- Do NOT repeat any of the previous nurture messages listed below — pick a different angle/opening/wording.",
@@ -155,6 +159,7 @@ async function generateNurture(opts: {
     "",
     "Generate the nurture message body only (no greeting prefix beyond a natural opener, no signature).",
   ].filter(Boolean).join("\n");
+
 
   try {
     const built = await buildSystemPrompt({
@@ -210,11 +215,13 @@ serve(async (req) => {
       .maybeSingle();
 
     const ops = ((purposeRow?.ops_config as Record<string, any>) ?? {});
+    const scheduleMinutes: number[] = Array.isArray(ops.schedule_minutes) && ops.schedule_minutes.length
+      ? ops.schedule_minutes.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0)
+      : [120, 360, 1200]; // default: +2h, +6h, +20h
+    const maxRetries: number = Number(ops.max_retries) > 0 ? Number(ops.max_retries) : scheduleMinutes.length;
+    const windowHours: number = Number(ops.window_hours) > 0 ? Number(ops.window_hours) : 24;
     const config = {
       enabled: ops.enabled ?? purposeRow?.enabled ?? true,
-      delay_hours: ops.delay_hours ?? 4,
-      max_retries: ops.max_retries ?? 2,
-      cooldown_hours: ops.cooldown_hours ?? ops.delay_hours ?? 4,
     };
     if (!config.enabled) {
       return new Response(JSON.stringify({ message: "Lead nurture disabled" }), {
@@ -223,11 +230,8 @@ serve(async (req) => {
       });
     }
 
-    const delayHours = config.delay_hours;
-    const maxRetries = config.max_retries;
-    const cooldownHours = config.cooldown_hours;
-    const cooldownSeconds = cooldownHours * 3600;
-    const cutoffTime = new Date(Date.now() - delayHours * 3600 * 1000).toISOString();
+    const earliestWaitMs = Math.min(...scheduleMinutes) * 60 * 1000;
+    const cutoffTime = new Date(Date.now() - earliestWaitMs).toISOString();
 
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
@@ -299,11 +303,17 @@ serve(async (req) => {
         continue;
       }
 
-      if ((chat.nurture_retry_count || 0) >= maxRetries) continue;
-      if (lastMsg.created_at > cutoffTime) continue;
+      const retryCount = chat.nurture_retry_count || 0;
+      if (retryCount >= maxRetries) continue;
+
+      // Per-retry wait: schedule_minutes[retryCount] minutes since last outbound.
+      const waitMinutes = scheduleMinutes[Math.min(retryCount, scheduleMinutes.length - 1)];
+      const dueAt = new Date(new Date(lastMsg.created_at).getTime() + waitMinutes * 60 * 1000);
+      if (dueAt > new Date()) continue;
+      // Defensive: never re-send inside the same 30-minute bucket.
       if (chat.last_nurture_at) {
-        const cooldownCutoff = new Date(Date.now() - cooldownHours * 3600 * 1000).toISOString();
-        if (chat.last_nurture_at > cooldownCutoff) continue;
+        const minGap = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        if (chat.last_nurture_at > minGap) continue;
       }
 
       const cleanPhone = chat.phone_number.replace(/^\+/, "");
@@ -336,11 +346,9 @@ serve(async (req) => {
         console.warn("[lead-nurture] channel-toggle check failed:", (e as Error).message);
       }
 
-      // Meta 24h window check
-      let outsideWindow = false;
-      let templateRow: { id: string; meta_template_name: string | null } | null = null;
+      // ── 24h freeform window check (WhatsApp only). Outside = skip silently. ──
       if (chatPlatform === "whatsapp") {
-        const sinceIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const sinceIso = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
         const recipientDigits = chat.phone_number.replace(/\D/g, "");
         const { data: lastInbound } = await supabase
           .from("whatsapp_messages")
@@ -350,32 +358,21 @@ serve(async (req) => {
           .gte("created_at", sinceIso)
           .limit(1)
           .maybeSingle();
-        outsideWindow = !lastInbound;
-
-        if (outsideWindow) {
-          const { data: trig } = await supabase
-            .from("whatsapp_triggers")
-            .select("template_id, templates:template_id(id, meta_template_name)")
-            .or(`branch_id.eq.${chat.branch_id},branch_id.is.null`)
-            .eq("event_name", "lead_nurture_followup")
-            .eq("is_active", true)
-            .order("branch_id", { ascending: false, nullsFirst: false })
-            .limit(1)
-            .maybeSingle();
-          const tpl = Array.isArray((trig as any)?.templates)
-            ? (trig as any).templates[0]
-            : (trig as any)?.templates;
-          if (tpl?.meta_template_name) {
-            templateRow = { id: tpl.id, meta_template_name: tpl.meta_template_name };
-          } else {
-            await supabase
-              .from("whatsapp_chat_settings")
-              .update({ last_nurture_at: new Date().toISOString() })
-              .eq("id", chat.id);
-            continue;
-          }
+        if (!lastInbound) {
+          // Outside the WhatsApp 24h freeform window — nurture cannot reach
+          // them without a template, and we explicitly DO NOT use templates
+          // for nurture. Stamp last_nurture_at so we stop scanning this row
+          // until they reply again. Re-engagement is a campaign concern.
+          await supabase
+            .from("whatsapp_chat_settings")
+            .update({ last_nurture_at: new Date().toISOString() })
+            .eq("id", chat.id);
+          decisions.push({ phone: chat.phone_number, skipped: "outside_24h_window" });
+          continue;
         }
       }
+
+
 
       // ── Pick angle + previous hashes ──
       const angle = await pickAngle(supabase, chat.id);
