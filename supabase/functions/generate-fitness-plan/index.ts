@@ -117,9 +117,12 @@ serve(async (req) => {
       : 0;
     // Provider/key resolved via ai-runtime → ai-dispatcher per active provider config.
 
-    const systemPrompt = type === "workout" 
-      ? `You are an expert fitness trainer creating personalized workout plans. Generate detailed, safe, and effective workout programs.
-         Return a JSON object with the following structure:
+    // v2 — persona ("expert fitness trainer / nutritionist") comes from
+    // ai_purposes.fitness_plan.system_prompt (Settings → AI Brain). Only the
+    // strict OUTPUT-SHAPE contract lives here because the JSON schema is what
+    // we parse downstream — it is not persona.
+    const systemPrompt = type === "workout"
+      ? `OUTPUT CONTRACT — Return a JSON object with the following structure (no prose, no markdown):
          {
            "name": "Plan name",
            "description": "Brief description",
@@ -157,9 +160,8 @@ serve(async (req) => {
            "notes": "General advice and precautions"
          }
          IMPORTANT: Only include the "rotation" key if the user explicitly requested rotation. Otherwise omit it entirely.`
-      : `You are an expert nutritionist creating personalized diet plans. Generate detailed, balanced, and practical meal plans.
-         For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
-         Return a JSON object with the following structure:
+      : `OUTPUT CONTRACT — For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
+         Return a JSON object with the following structure (no prose, no markdown):
          {
            "name": "Diet plan name",
            "description": "Brief description",
