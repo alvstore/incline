@@ -504,20 +504,35 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
       result.replyText,
       { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name },
       branchId,
+      messageId,
     );
   } catch (err) {
     console.error("[whatsapp-webhook] runUnifiedAgent failed:", err);
+    // v6.4.0 — promote brain / send exceptions so SystemHealth surfaces them
+    // instead of the user thinking the AI silently quit mid-conversation.
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_webhook",
+        p_severity: "error",
+        p_message: `AI reply pipeline crashed for ${phoneNumber}: ${(err as Error)?.message?.slice(0, 300) || "unknown"}`,
+        p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "runUnifiedAgent_or_send" },
+      });
+    } catch { /* noop */ }
   }
 }
 
 
 // ─── Send AI Reply via Meta API ────────────────────────────────────────────────
+// v6.4.0 — inboundMessageId added so the send-lock can be scoped per inbound
+// (was phone-only, which suppressed legitimate replies to back-to-back messages).
 
 async function sendAiReply(
   replyText: string,
   inboundMsg: { phone_number: string; contact_name: string | null },
   branchId: string,
+  inboundMessageId?: string,
 ) {
+  try {
   let interactivePayload: any = null;
 
   // Extract interactive JSON from mixed prose — handles nested JSON via brace-balanced scan.
