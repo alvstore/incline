@@ -96,9 +96,9 @@ export default function DiscountCouponsPage() {
 
   const stats = [
     { label: 'Total Coupons', value: totalCoupons, icon: Tags, color: 'text-primary' },
-    { label: 'Active Coupons', value: activeCoupons, icon: TicketPercent, color: 'text-emerald-600' },
+    { label: 'Active Coupons', value: activeCoupons, icon: TicketPercent, color: 'text-success' },
     { label: 'Expired', value: expiredCoupons, icon: Clock, color: 'text-destructive' },
-    { label: 'Total Redemptions', value: totalRedemptions, icon: TrendingUp, color: 'text-amber-600' },
+    { label: 'Total Redemptions', value: totalRedemptions, icon: TrendingUp, color: 'text-warning' },
   ];
 
   return (
@@ -198,7 +198,7 @@ export default function DiscountCouponsPage() {
                         </TableCell>
                         <TableCell>
                           {c.valid_until ? (
-                            <span className={`text-sm ${status === 'expired' ? 'text-destructive' : daysLeft !== null && daysLeft <= 7 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                            <span className={`text-sm ${status === 'expired' ? 'text-destructive' : daysLeft !== null && daysLeft <= 7 ? 'text-warning' : 'text-muted-foreground'}`}>
                               {format(new Date(c.valid_until), 'dd MMM yyyy')}
                             </span>
                           ) : (
@@ -206,7 +206,7 @@ export default function DiscountCouponsPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {status === 'active' && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>}
+                          {status === 'active' && <Badge className="bg-success/15 text-success border-success/25">Active</Badge>}
                           {status === 'expired' && <Badge variant="destructive">Expired</Badge>}
                           {status === 'inactive' && <Badge variant="secondary">Inactive</Badge>}
                         </TableCell>

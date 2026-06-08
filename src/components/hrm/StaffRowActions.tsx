@@ -118,7 +118,7 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className={person.is_active && !isOffboarded ? 'text-amber-700 focus:text-amber-700' : ''}
+            className={person.is_active && !isOffboarded ? 'text-warning focus:text-warning' : ''}
           >
             {person.is_active
               ? <><UserMinus className="h-3.5 w-3.5 mr-2" /> Soft deactivate</>
@@ -129,7 +129,7 @@ export function StaffRowActions({ person, onEdit, onContract }: Props) {
           {isOffboarded ? (
             <DropdownMenuItem
               onClick={() => { setOffboardMode('reinstate'); setOffboardOpen(true); }}
-              className="text-emerald-700 focus:text-emerald-700"
+              className="text-success focus:text-success"
             >
               <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reinstate…
             </DropdownMenuItem>

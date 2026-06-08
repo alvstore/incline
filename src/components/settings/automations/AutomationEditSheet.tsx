@@ -63,7 +63,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
       <SheetContent className="sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-violet-600" /> Edit automation
+            <Bot className="h-5 w-5 text-primary" /> Edit automation
           </SheetTitle>
           <SheetDescription>
             Adjust schedule, enable AI personalisation, or rename. Changes apply on the next tick.
@@ -72,7 +72,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
 
         <div className="space-y-6 py-5">
           <section className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Identity</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Identity</p>
             <div>
               <Label>Name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl" />
@@ -84,7 +84,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
           </section>
 
           <section className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Schedule</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Schedule</p>
             <div>
               <Label>Preset</Label>
               <Select value={cron} onValueChange={setCron}>
@@ -92,7 +92,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
                 <SelectContent>
                   {CRON_PRESETS.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
-                      {p.label} <span className="text-slate-400 ml-2 font-mono text-xs">{p.value}</span>
+                      {p.label} <span className="text-muted-foreground ml-2 font-mono text-xs">{p.value}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -101,10 +101,10 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
             <div>
               <Label>Custom cron expression</Label>
               <Input value={cron} onChange={(e) => setCron(e.target.value)} className="rounded-xl font-mono" placeholder="m h dom mon dow" />
-              <p className="text-xs text-slate-500 mt-1">{describeCron(cron)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{describeCron(cron)}</p>
             </div>
             {preview.length > 0 && (
-              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
                 <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (UTC)</p>
                 <ul className="mt-1.5 space-y-0.5 font-mono">
                   {preview.map((d, i) => (
@@ -116,13 +116,13 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
           </section>
 
           <section className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">AI personalisation</p>
-            <div className="flex items-center justify-between rounded-xl bg-violet-50/60 p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI personalisation</p>
+            <div className="flex items-center justify-between rounded-xl bg-primary/10 p-4">
               <div className="flex-1">
-                <p className="font-semibold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-600" /> Use AI Brain
+                <p className="font-semibold text-foreground flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Use AI Brain
                 </p>
-                <p className="text-xs text-slate-600 mt-1">Personalise message copy per recipient.</p>
+                <p className="text-xs text-muted-foreground mt-1">Personalise message copy per recipient.</p>
               </div>
               <Switch checked={useAi} onCheckedChange={setUseAi} />
             </div>
@@ -142,11 +142,11 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
             )}
           </section>
 
-          <div className="rounded-xl bg-slate-50 p-4 text-xs text-slate-600 space-y-1">
+          <div className="rounded-xl bg-muted p-4 text-xs text-muted-foreground space-y-1">
             <p><span className="font-semibold">Worker:</span> <span className="font-mono">{rule.worker}</span></p>
             <p><span className="font-semibold">Key:</span> <span className="font-mono">{rule.key}</span></p>
             {rule.is_system && (
-              <p className="text-amber-700 flex items-center gap-1 mt-1">
+              <p className="text-warning flex items-center gap-1 mt-1">
                 <Lock className="h-3 w-3" />
                 System automation — worker cannot be changed.
               </p>
@@ -156,7 +156,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
 
         <SheetFooter className="gap-2">
           <Button variant="outline" onClick={onClose} className="rounded-xl">Cancel</Button>
-          <Button onClick={save} disabled={saving} className="rounded-xl bg-violet-600 hover:bg-violet-700">
+          <Button onClick={save} disabled={saving} className="rounded-xl bg-primary hover:bg-primary">
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </SheetFooter>

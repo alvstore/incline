@@ -259,11 +259,11 @@ export default function AllBookingsPage() {
   };
 
   const SOURCE_BADGE: Record<string, string> = {
-    member_portal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    concierge: 'bg-violet-50 text-violet-700 border-violet-200',
-    whatsapp_ai: 'bg-sky-50 text-sky-700 border-sky-200',
-    admin: 'bg-amber-50 text-amber-700 border-amber-200',
-    system: 'bg-slate-100 text-slate-700 border-slate-200',
+    member_portal: 'bg-success/10 text-success border-success/25',
+    concierge: 'bg-primary/10 text-primary border-primary/25',
+    whatsapp_ai: 'bg-info/10 text-info border-info/25',
+    admin: 'bg-warning/10 text-warning border-warning/25',
+    system: 'bg-muted text-foreground border-border',
   };
   const renderSourceBadge = (source?: string) => {
     const s = source || 'member_portal';
@@ -582,7 +582,7 @@ ${rows.map(r => `<tr>
                                   <TableCell>
                                     <div className="font-medium flex items-center gap-1.5">
                                       {b.member_name}
-                                      {b.force_added && <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />}
+                                      {b.force_added && <ShieldAlert className="h-3.5 w-3.5 text-warning" />}
                                     </div>
                                     <div className="text-sm text-muted-foreground">{b.member_code}</div>
                                   </TableCell>

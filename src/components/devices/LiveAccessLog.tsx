@@ -47,13 +47,13 @@ interface LiveAccessLogProps {
 }
 
 const resultConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
-  member: { color: "bg-green-500", icon: <User className="h-3 w-3" />, label: "Member" },
-  staff: { color: "bg-blue-500", icon: <Shield className="h-3 w-3" />, label: "Staff" },
-  stranger: { color: "bg-orange-500", icon: <AlertTriangle className="h-3 w-3" />, label: "Stranger" },
+  member: { color: "bg-success", icon: <User className="h-3 w-3" />, label: "Member" },
+  staff: { color: "bg-info", icon: <Shield className="h-3 w-3" />, label: "Staff" },
+  stranger: { color: "bg-warning", icon: <AlertTriangle className="h-3 w-3" />, label: "Stranger" },
   not_found: { color: "bg-destructive", icon: <AlertTriangle className="h-3 w-3" />, label: "Not Found" },
   member_denied: { color: "bg-destructive", icon: <User className="h-3 w-3" />, label: "Denied" },
   ignored: { color: "bg-muted-foreground", icon: <Activity className="h-3 w-3" />, label: "Ignored" },
-  accepted: { color: "bg-green-500", icon: <Activity className="h-3 w-3" />, label: "Accepted" },
+  accepted: { color: "bg-success", icon: <Activity className="h-3 w-3" />, label: "Accepted" },
 };
 
 function getBillingBadge(memberships: Array<{ status: string; end_date: string }> | undefined) {
@@ -67,7 +67,7 @@ function getBillingBadge(memberships: Array<{ status: string; end_date: string }
   const daysLeft = differenceInDays(new Date(active.end_date), new Date());
   if (daysLeft < 0) return <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/20">Overdue</Badge>;
   if (daysLeft <= 7) return <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">Due in {daysLeft}d</Badge>;
-  return <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-700 border-green-500/20">{daysLeft}d left</Badge>;
+  return <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/20">{daysLeft}d left</Badge>;
 }
 
 /** Dedup: collapse same member_id + result within 60s into one entry */
@@ -267,7 +267,7 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                               variant="outline"
                               className={`text-[10px] px-1.5 py-0 ${
                                 isSuccessfulEntry || isStaffEntry
-                                  ? "bg-green-500/10 text-green-700 border-green-500/20"
+                                  ? "bg-success/10 text-success border-success/20"
                                   : isDenied
                                   ? "bg-destructive/10 text-destructive border-destructive/20"
                                   : "bg-muted"

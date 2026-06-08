@@ -50,9 +50,9 @@ function getIconComponent(iconName: string | null) {
 }
 
 function genderBadgeClass(g: string) {
-  if (g === "male") return "bg-blue-50 text-blue-700 border-blue-200";
-  if (g === "female") return "bg-pink-50 text-pink-700 border-pink-200";
-  return "bg-slate-50 text-slate-700 border-slate-200";
+  if (g === "male") return "bg-info/10 text-info border-info/25";
+  if (g === "female") return "bg-destructive/10 text-destructive border-destructive/25";
+  return "bg-muted text-foreground border-border";
 }
 
 export function FacilitiesManager() {
@@ -220,9 +220,9 @@ export function FacilitiesManager() {
         <Button onClick={() => setIsDrawerOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Facility</Button>
       </div>
 
-      <Alert className="bg-indigo-50/50 border-indigo-200">
-        <Info className="h-4 w-4 text-indigo-600" />
-        <AlertDescription className="text-sm text-slate-700">
+      <Alert className="bg-primary/10 border-primary/25">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertDescription className="text-sm text-foreground">
           Have separate male and female rooms for the same benefit? Add <strong>two facilities under the same Benefit Type</strong>
           {" "}(e.g. one Ice Bath benefit, two rooms with different gender access). Don't duplicate the benefit type itself.
         </AlertDescription>
@@ -354,7 +354,7 @@ export function FacilitiesManager() {
             <div key={key} className="space-y-2">
               <div className="flex items-center gap-2 px-1">
                 <div className="p-1.5 bg-primary/10 rounded-lg text-primary">{getIconComponent(g.icon)}</div>
-                <h3 className="font-semibold text-slate-800">{g.name}</h3>
+                <h3 className="font-semibold text-foreground">{g.name}</h3>
                 <Badge variant="outline" className="text-xs">{g.rows.length} room{g.rows.length !== 1 ? "s" : ""}</Badge>
                 <Badge variant="outline" className="text-xs">total cap {g.totalCap}</Badge>
               </div>
@@ -365,7 +365,7 @@ export function FacilitiesManager() {
                       <div className="flex items-center gap-4 min-w-0">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-slate-900">{f.name}</span>
+                            <span className="font-medium text-foreground">{f.name}</span>
                             <Badge variant="outline" className={`text-xs capitalize ${genderBadgeClass(f.gender_access)}`}>{f.gender_access}</Badge>
                             <Badge variant="outline" className="text-xs">cap {f.capacity}</Badge>
                             {f.under_maintenance && <Badge variant="destructive" className="text-xs">🔧 Maintenance</Badge>}

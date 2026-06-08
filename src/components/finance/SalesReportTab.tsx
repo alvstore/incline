@@ -71,7 +71,7 @@ export function SalesReportTab({ branchId, formatCurrency }: { branchId: string 
       ) : (
         <>
           {/* Hero KPIs */}
-          <Card className="rounded-2xl border-none bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30">
+          <Card className="rounded-2xl border-none bg-gradient-to-r from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20">
             <CardContent className="grid grid-cols-2 gap-6 p-6 md:grid-cols-6">
               <Kpi label="Gross Sales" value={formatCurrency(data.totals.gross)} highlight />
               <Kpi label="Net (ex-GST)" value={formatCurrency(data.totals.net)} />
@@ -257,8 +257,8 @@ export function SalesReportTab({ branchId, formatCurrency }: { branchId: string 
                           <TableCell className="text-right">{formatCurrency(d.net)}</TableCell>
                           <TableCell className="text-right">
                             {d.gross > 0 && (trendUp
-                              ? <TrendingUp className="ml-auto h-4 w-4 text-emerald-500" />
-                              : <TrendingDown className="ml-auto h-4 w-4 text-red-500" />)}
+                              ? <TrendingUp className="ml-auto h-4 w-4 text-success" />
+                              : <TrendingDown className="ml-auto h-4 w-4 text-destructive" />)}
                           </TableCell>
                         </TableRow>
                       );
@@ -277,8 +277,8 @@ export function SalesReportTab({ branchId, formatCurrency }: { branchId: string 
 function Kpi({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
-      <p className={`mt-1 ${highlight ? 'text-2xl font-bold' : 'text-xl font-semibold'} text-white`}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/70">{label}</p>
+      <p className={`mt-1 ${highlight ? 'text-2xl font-bold' : 'text-xl font-semibold'} text-primary-foreground`}>{value}</p>
     </div>
   );
 }

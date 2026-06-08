@@ -13,14 +13,14 @@ export type PtSessionStatus =
   | 'late';
 
 const STYLES: Record<string, { label: string; cls: string; Icon: any }> = {
-  completed:   { label: 'Present',   cls: 'bg-emerald-100 text-emerald-700 border-emerald-200',  Icon: CheckCircle2 },
-  late:        { label: 'Late',      cls: 'bg-amber-100 text-amber-700 border-amber-200',         Icon: Clock },
-  absent:      { label: 'Absent',    cls: 'bg-red-100 text-red-700 border-red-200',               Icon: XCircle },
-  holiday:     { label: 'Holiday',   cls: 'bg-blue-100 text-blue-700 border-blue-200',            Icon: Sun },
-  cancelled:   { label: 'Cancelled', cls: 'bg-slate-100 text-slate-600 border-slate-200',         Icon: Ban },
-  no_show:     { label: 'No-show',   cls: 'bg-red-50 text-red-600 border-red-200',                Icon: Ban },
-  scheduled:   { label: 'Scheduled', cls: 'bg-slate-100 text-slate-700 border-slate-200',         Icon: Clock },
-  rescheduled: { label: 'Rescheduled', cls: 'bg-violet-100 text-violet-700 border-violet-200',    Icon: CalendarOff },
+  completed:   { label: 'Present',   cls: 'bg-success/15 text-success border-success/25',  Icon: CheckCircle2 },
+  late:        { label: 'Late',      cls: 'bg-warning/15 text-warning border-warning/25',         Icon: Clock },
+  absent:      { label: 'Absent',    cls: 'bg-destructive/15 text-destructive border-destructive/25',               Icon: XCircle },
+  holiday:     { label: 'Holiday',   cls: 'bg-info/15 text-info border-info/25',            Icon: Sun },
+  cancelled:   { label: 'Cancelled', cls: 'bg-muted text-muted-foreground border-border',         Icon: Ban },
+  no_show:     { label: 'No-show',   cls: 'bg-destructive/10 text-destructive border-destructive/25',                Icon: Ban },
+  scheduled:   { label: 'Scheduled', cls: 'bg-muted text-foreground border-border',         Icon: Clock },
+  rescheduled: { label: 'Rescheduled', cls: 'bg-primary/15 text-primary border-primary/25',    Icon: CalendarOff },
 };
 
 export function PtStatusBadge({ status, className }: { status: string; className?: string }) {

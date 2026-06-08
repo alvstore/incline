@@ -9,13 +9,13 @@ interface BookingStatusTimelineProps {
 }
 
 const EVENT_META: Record<string, { icon: any; color: string; label: string }> = {
-  created: { icon: Plus, color: 'text-emerald-600 bg-emerald-50', label: 'Created' },
-  force_added: { icon: ShieldAlert, color: 'text-amber-600 bg-amber-50', label: 'Force-added' },
-  cancelled: { icon: XCircle, color: 'text-rose-600 bg-rose-50', label: 'Cancelled' },
-  no_show: { icon: AlertTriangle, color: 'text-orange-600 bg-orange-50', label: 'No-show' },
-  checked_in: { icon: UserCheck, color: 'text-indigo-600 bg-indigo-50', label: 'Checked-in' },
-  completed: { icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50', label: 'Completed' },
-  status_change: { icon: Clock, color: 'text-slate-600 bg-slate-100', label: 'Status change' },
+  created: { icon: Plus, color: 'text-success bg-success/10', label: 'Created' },
+  force_added: { icon: ShieldAlert, color: 'text-warning bg-warning/10', label: 'Force-added' },
+  cancelled: { icon: XCircle, color: 'text-destructive bg-destructive/10', label: 'Cancelled' },
+  no_show: { icon: AlertTriangle, color: 'text-warning bg-warning/10', label: 'No-show' },
+  checked_in: { icon: UserCheck, color: 'text-primary bg-primary/10', label: 'Checked-in' },
+  completed: { icon: CheckCircle2, color: 'text-success bg-success/10', label: 'Completed' },
+  status_change: { icon: Clock, color: 'text-muted-foreground bg-muted', label: 'Status change' },
 };
 
 export function BookingStatusTimeline({ bookingId }: BookingStatusTimelineProps) {

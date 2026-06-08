@@ -16,9 +16,9 @@ interface Insight {
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
-  info: 'bg-sky-500/10 text-sky-600 border-sky-200',
-  warning: 'bg-amber-500/10 text-amber-600 border-amber-200',
-  success: 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+  info: 'bg-info/10 text-info border-info/25',
+  warning: 'bg-warning/10 text-warning border-warning/25',
+  success: 'bg-success/10 text-success border-success/25',
   critical: 'bg-destructive/10 text-destructive border-destructive/20',
 };
 
@@ -108,8 +108,8 @@ export function AIInsightsWidget({ branchId }: { branchId?: string }) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-500/10 to-indigo-500/10">
-              <Sparkles className="h-4 w-4 text-violet-600" />
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-primary/10 to-primary/10">
+              <Sparkles className="h-4 w-4 text-primary" />
             </div>
             AI Insights
           </CardTitle>
@@ -172,8 +172,8 @@ export function AIInsightsWidget({ branchId }: { branchId?: string }) {
           </div>
         ) : (
           <div className="text-center py-6">
-            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center mb-3">
-              <Sparkles className="h-6 w-6 text-violet-500/50" />
+            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary/10 flex items-center justify-center mb-3">
+              <Sparkles className="h-6 w-6 text-primary/50" />
             </div>
             <p className="text-sm text-muted-foreground">Click "Generate" to get AI-powered insights about your gym's performance</p>
           </div>

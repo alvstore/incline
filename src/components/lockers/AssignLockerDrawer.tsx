@@ -287,7 +287,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
               <p className="font-medium">Selected: {(selectedMember.profiles as any)?.full_name}</p>
               <p className="text-sm text-muted-foreground">{selectedMember.member_code}</p>
               {memberHasFreeLocker && (
-                <Badge variant="outline" className="mt-2 text-emerald-600 border-emerald-200">
+                <Badge variant="outline" className="mt-2 text-success border-success/25">
                   <Gift className="w-3 h-3 mr-1" /> Free locker included in plan
                 </Badge>
               )}
@@ -353,11 +353,11 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
 
           {/* Total Amount or Free Assignment Message */}
           {effectivelyFree ? (
-            <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+            <div className="p-4 rounded-lg bg-success/10 dark:bg-success/10 border border-success/25 dark:border-success/20">
               <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <CheckCircle className="w-5 h-5 text-success" />
                 <div>
-                  <p className="font-medium text-emerald-700 dark:text-emerald-400">Free Assignment</p>
+                  <p className="font-medium text-success dark:text-success">Free Assignment</p>
                   <p className="text-sm text-muted-foreground">
                     {memberHasFreeLocker ? 'Included in membership plan' : 'No invoice will be generated'}
                   </p>

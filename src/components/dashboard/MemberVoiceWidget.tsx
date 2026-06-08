@@ -55,11 +55,11 @@ export function MemberVoiceWidget() {
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Approved</Badge>;
+        return <Badge className="bg-success/15 text-success border-0 text-xs">Approved</Badge>;
       case 'rejected':
-        return <Badge className="bg-red-100 text-red-700 border-0 text-xs">Rejected</Badge>;
+        return <Badge className="bg-destructive/15 text-destructive border-0 text-xs">Rejected</Badge>;
       default:
-        return <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">Pending</Badge>;
+        return <Badge className="bg-warning/15 text-warning border-0 text-xs">Pending</Badge>;
     }
   };
 
@@ -99,7 +99,7 @@ export function MemberVoiceWidget() {
                     <span className="text-sm font-medium truncate">{item.memberName}</span>
                     <div className="flex items-center gap-0.5">
                       {Array.from({ length: item.rating || 0 }).map((_, i) => (
-                        <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <Star key={i} className="h-3 w-3 fill-warning text-warning" />
                       ))}
                     </div>
                   </div>

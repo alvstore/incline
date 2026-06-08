@@ -125,8 +125,8 @@ export default function EquipmentMaintenancePage() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      operational: 'bg-green-500/10 text-green-500',
-      maintenance: 'bg-yellow-500/10 text-yellow-500',
+      operational: 'bg-success/10 text-success',
+      maintenance: 'bg-warning/10 text-warning',
       out_of_order: 'bg-destructive/10 text-destructive',
       retired: 'bg-muted text-muted-foreground',
     };
@@ -135,8 +135,8 @@ export default function EquipmentMaintenancePage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'operational': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'maintenance': return <Wrench className="h-4 w-4 text-yellow-500" />;
+      case 'operational': return <CheckCircle className="h-4 w-4 text-success" />;
+      case 'maintenance': return <Wrench className="h-4 w-4 text-warning" />;
       case 'out_of_order': return <XCircle className="h-4 w-4 text-destructive" />;
       default: return null;
     }
@@ -279,7 +279,7 @@ export default function EquipmentMaintenancePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Operational</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500">{stats?.operational || 0}</div>
+              <div className="text-2xl font-bold text-success">{stats?.operational || 0}</div>
             </CardContent>
           </Card>
           <Card>
@@ -287,7 +287,7 @@ export default function EquipmentMaintenancePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">In Maintenance</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-500">{stats?.maintenance || 0}</div>
+              <div className="text-2xl font-bold text-warning">{stats?.maintenance || 0}</div>
             </CardContent>
           </Card>
           <Card>
@@ -303,7 +303,7 @@ export default function EquipmentMaintenancePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Due This Week</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600 flex items-center gap-2">
+              <div className="text-2xl font-bold text-warning flex items-center gap-2">
                 <Calendar className="h-5 w-5" /> {dueThisWeek}
               </div>
             </CardContent>
@@ -313,7 +313,7 @@ export default function EquipmentMaintenancePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Overdue</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600 flex items-center gap-2">
+              <div className="text-2xl font-bold text-destructive flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" /> {overdue}
               </div>
             </CardContent>
@@ -323,7 +323,7 @@ export default function EquipmentMaintenancePage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Warranty Expiring (30d)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+              <div className="text-2xl font-bold text-info flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" /> {warrantyExpiring}
               </div>
             </CardContent>
@@ -466,7 +466,7 @@ export default function EquipmentMaintenancePage() {
                           <TableCell>
                             {item.warranty_expiry ? (
                               new Date(item.warranty_expiry) > new Date() ? (
-                                <span className="text-green-500">{new Date(item.warranty_expiry).toLocaleDateString()}</span>
+                                <span className="text-success">{new Date(item.warranty_expiry).toLocaleDateString()}</span>
                               ) : (
                                 <span className="text-muted-foreground">Expired</span>
                               )
@@ -643,11 +643,11 @@ export default function EquipmentMaintenancePage() {
                         <TableCell>{record.scheduled_date ? new Date(record.scheduled_date).toLocaleDateString() : '-'}</TableCell>
                         <TableCell>
                           {record.completed_date ? (
-                            <Badge className="bg-green-500/10 text-green-500">
+                            <Badge className="bg-success/10 text-success">
                               {new Date(record.completed_date).toLocaleDateString()}
                             </Badge>
                           ) : (
-                            <Badge className="bg-yellow-500/10 text-yellow-500">Pending</Badge>
+                            <Badge className="bg-warning/10 text-warning">Pending</Badge>
                           )}
                         </TableCell>
                         <TableCell>₹{(record.cost || 0).toLocaleString()}</TableCell>

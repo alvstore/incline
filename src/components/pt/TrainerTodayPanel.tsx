@@ -34,14 +34,14 @@ export function TrainerTodayPanel({ trainerId, ptClients }: TrainerTodayPanelPro
           return (
             <div
               key={client.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors"
+              className="flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-muted transition-colors"
             >
               <Avatar className="h-10 w-10 shrink-0">
                 <AvatarImage src={client.member?.profile?.avatar_url} />
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate text-slate-900">{name}</p>
+                <p className="font-medium truncate text-foreground">{name}</p>
                 <p className="text-xs text-muted-foreground truncate">{client.package?.name}</p>
               </div>
               <PtPackageBadge

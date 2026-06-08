@@ -38,21 +38,21 @@ export function IgApprovalQueueDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-2xl w-full overflow-y-auto p-0">
-        <SheetHeader className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-6 py-4 backdrop-blur">
+        <SheetHeader className="sticky top-0 z-10 border-b border-border bg-card/95 px-6 py-4 backdrop-blur">
           <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-50 p-2.5 text-amber-600 ring-1 ring-amber-100">
+            <div className="rounded-xl bg-warning/10 p-2.5 text-warning ring-1 ring-warning/15">
               <ShieldAlert className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <SheetTitle className="text-base font-bold text-slate-900">
+              <SheetTitle className="text-base font-bold text-foreground">
                 Awaiting human review
                 {campaignName ? ` · ${campaignName}` : ""}
               </SheetTitle>
-              <SheetDescription className="text-xs text-slate-500">
+              <SheetDescription className="text-xs text-muted-foreground">
                 These Instagram DMs are paused until you approve or reject them. Edit the text before sending if needed.
               </SheetDescription>
             </div>
-            <Badge className="rounded-full bg-amber-100 text-amber-700">
+            <Badge className="rounded-full bg-warning/15 text-warning">
               {runs.length}
             </Badge>
           </div>
@@ -113,24 +113,24 @@ function ReviewCard({
   );
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm shadow-slate-200/60 ring-1 ring-slate-100 transition-shadow hover:shadow-md">
+    <div className="rounded-2xl bg-card p-4 shadow-sm shadow/60 ring-1 ring-border transition-shadow hover:shadow-md">
       {/* Meta */}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <Badge className="rounded-full bg-indigo-50 text-indigo-700">{campaign?.name ?? "Campaign"}</Badge>
-        <span className="text-slate-700 font-medium truncate max-w-[160px]">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <Badge className="rounded-full bg-primary/10 text-primary">{campaign?.name ?? "Campaign"}</Badge>
+        <span className="text-foreground font-medium truncate max-w-[160px]">
           @{run.ig_username || run.ig_user_id}
         </span>
         {run.matched_keyword && (
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+          <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
             kw: {run.matched_keyword}
           </span>
         )}
-        <span className="ml-auto text-slate-400">{ageLabel}</span>
+        <span className="ml-auto text-muted-foreground">{ageLabel}</span>
       </div>
 
       {/* Comment quote */}
       {run.comment_text && (
-        <blockquote className="mt-3 rounded-lg border-l-2 border-indigo-200 bg-slate-50/70 px-3 py-2 text-xs italic text-slate-600">
+        <blockquote className="mt-3 rounded-lg border-l-2 border-primary/25 bg-muted/70 px-3 py-2 text-xs italic text-muted-foreground">
           "{run.comment_text}"
         </blockquote>
       )}
@@ -138,10 +138,10 @@ function ReviewCard({
       {/* Editable DM */}
       <div className="mt-3">
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             DM to send
           </label>
-          <span className={`text-[11px] tabular-nums ${charCount > 950 ? "text-red-600" : "text-slate-400"}`}>
+          <span className={`text-[11px] tabular-nums ${charCount > 950 ? "text-destructive" : "text-muted-foreground"}`}>
             {charCount} / 1000
           </span>
         </div>
@@ -150,11 +150,11 @@ function ReviewCard({
           onChange={(e) => setBody(e.target.value)}
           rows={4}
           maxLength={1000}
-          className="resize-none rounded-xl border-slate-200 text-sm"
+          className="resize-none rounded-xl border-border text-sm"
           placeholder="DM body…"
         />
         {isEdited && (
-          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-indigo-600">
+          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary">
             <Sparkles className="h-3 w-3" /> Edited — your changes will be sent
           </p>
         )}
@@ -162,7 +162,7 @@ function ReviewCard({
 
       {/* Reject panel */}
       {rejecting && (
-        <div className="mt-3 rounded-xl bg-red-50/60 p-3 ring-1 ring-red-100">
+        <div className="mt-3 rounded-xl bg-destructive/10 p-3 ring-1 ring-destructive/15">
           <div className="flex flex-wrap gap-1.5">
             {REJECT_REASONS.map((r) => (
               <button
@@ -171,8 +171,8 @@ function ReviewCard({
                 onClick={() => setReasonChip(r)}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition-colors ${
                   reasonChip === r
-                    ? "bg-red-600 text-white ring-red-600"
-                    : "bg-white text-slate-600 ring-slate-200 hover:bg-red-100"
+                    ? "bg-destructive text-primary-foreground ring-destructive"
+                    : "bg-card text-muted-foreground ring-border hover:bg-destructive/15"
                 }`}
               >
                 {r}
@@ -184,7 +184,7 @@ function ReviewCard({
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Optional note for the audit log…"
-            className="mt-2 resize-none rounded-lg border-red-100 text-xs"
+            className="mt-2 resize-none rounded-lg border-destructive/15 text-xs"
           />
         </div>
       )}
@@ -194,7 +194,7 @@ function ReviewCard({
         {run.lead_id && (
           <Link
             to={`/leads/${run.lead_id}`}
-            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             <UserPlus className="h-3 w-3" /> Lead
           </Link>
@@ -204,7 +204,7 @@ function ReviewCard({
             href={campaign.ig_media_permalink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             <ExternalLink className="h-3 w-3" /> Post
           </a>
@@ -221,7 +221,7 @@ function ReviewCard({
               </Button>
               <Button
                 size="sm"
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="bg-destructive text-primary-foreground hover:bg-destructive"
                 disabled={busy}
                 onClick={() => {
                   const finalNotes = [reasonChip, notes.trim()].filter(Boolean).join(" — ");
@@ -235,7 +235,7 @@ function ReviewCard({
             <>
               <Button
                 size="sm" variant="outline"
-                className="rounded-lg border-slate-200 hover:bg-red-50 hover:text-red-600"
+                className="rounded-lg border-border hover:bg-destructive/10 hover:text-destructive"
                 disabled={busy}
                 onClick={() => setRejecting(true)}
               >
@@ -243,7 +243,7 @@ function ReviewCard({
               </Button>
               <Button
                 size="sm"
-                className="rounded-lg bg-emerald-600 text-white shadow-sm shadow-emerald-500/20 hover:bg-emerald-700"
+                className="rounded-lg bg-success text-primary-foreground shadow-sm shadow-success/20 hover:bg-success"
                 disabled={busy || !body.trim()}
                 onClick={() => onSubmit("approved", isEdited ? body : null, null)}
               >
@@ -262,7 +262,7 @@ function SkeletonList() {
   return (
     <div className="space-y-3">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+        <div key={i} className="rounded-2xl bg-card p-4 ring-1 ring-border">
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-24 rounded-full" />
             <Skeleton className="h-4 w-32" />
@@ -282,12 +282,12 @@ function SkeletonList() {
 
 function EmptyState() {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 py-14 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30">
+    <div className="rounded-2xl border-2 border-dashed border-border bg-muted/40 py-14 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-success to-success text-primary-foreground shadow-lg shadow-success/20">
         <ShieldCheck className="h-6 w-6" />
       </div>
-      <p className="text-sm font-semibold text-slate-900">All caught up</p>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="text-sm font-semibold text-foreground">All caught up</p>
+      <p className="mt-1 text-xs text-muted-foreground">
         No Instagram DMs waiting for review right now.
       </p>
     </div>

@@ -217,7 +217,7 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
 
             <div className="space-y-2 md:col-span-2">
               <Label>
-                Lab Test Report (CoA) {product.requires_lab_report && <span className="text-red-600">*</span>}
+                Lab Test Report (CoA) {product.requires_lab_report && <span className="text-destructive">*</span>}
               </Label>
               <div
                 className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
@@ -226,7 +226,7 @@ export function AddBatchDrawer({ open, onOpenChange, product }: Props) {
                 {labFile ? (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm">
-                      <FileText className="h-5 w-5 text-indigo-600" />
+                      <FileText className="h-5 w-5 text-primary" />
                       <span className="truncate">{labFile.name}</span>
                       <span className="text-xs text-muted-foreground">({(labFile.size / 1024).toFixed(0)} KB)</span>
                     </div>

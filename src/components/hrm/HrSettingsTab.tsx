@@ -132,9 +132,9 @@ export default function HrSettingsTab() {
     <div className="space-y-6">
       <EmployerSummaryCard branchId={branchId} />
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><IdCard className="h-4 w-4 text-indigo-600" /> Statutory identity (HR-only)</CardTitle>
+          <CardTitle className="flex items-center gap-2"><IdCard className="h-4 w-4 text-primary" /> Statutory identity (HR-only)</CardTitle>
           <CardDescription>Used on signed contracts and payslip footers. PAN and proprietor identity are statutory employer fields and live with HR — branch GSTIN is the per-location billing identity.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -144,9 +144,9 @@ export default function HrSettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Scale className="h-4 w-4 text-indigo-600" /> Statutory & contractual defaults</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Scale className="h-4 w-4 text-primary" /> Statutory & contractual defaults</CardTitle>
           <CardDescription>Applied to all new contracts. Tiered notice per role complies with 2026 Labour Codes.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -164,18 +164,18 @@ export default function HrSettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-indigo-600" /> Statutory payroll deductions</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-primary" /> Statutory payroll deductions</CardTitle>
           <CardDescription>All deductions are <strong>OFF by default</strong>. Enable individually when your establishment is registered. Changes apply to the next payroll run.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* PF */}
-          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+          <div className="rounded-xl border border-border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-semibold text-slate-900">Provident Fund (PF)</div>
-                <div className="text-xs text-slate-500">EPFO employee contribution. Capped at statutory wage ceiling unless cleared.</div>
+                <div className="font-semibold text-foreground">Provident Fund (PF)</div>
+                <div className="text-xs text-muted-foreground">EPFO employee contribution. Capped at statutory wage ceiling unless cleared.</div>
               </div>
               <Switch checked={form.pf_enabled} onCheckedChange={(v) => patch('pf_enabled', v)} />
             </div>
@@ -188,11 +188,11 @@ export default function HrSettingsTab() {
           </div>
 
           {/* ESI */}
-          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+          <div className="rounded-xl border border-border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-semibold text-slate-900">Employee State Insurance (ESI)</div>
-                <div className="text-xs text-slate-500">Applies to staff earning ≤ ₹21,000 / month when establishment is ESIC registered.</div>
+                <div className="font-semibold text-foreground">Employee State Insurance (ESI)</div>
+                <div className="text-xs text-muted-foreground">Applies to staff earning ≤ ₹21,000 / month when establishment is ESIC registered.</div>
               </div>
               <Switch checked={form.esi_enabled} onCheckedChange={(v) => patch('esi_enabled', v)} />
             </div>
@@ -204,11 +204,11 @@ export default function HrSettingsTab() {
           </div>
 
           {/* Professional Tax */}
-          <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+          <div className="rounded-xl border border-border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-semibold text-slate-900">Professional Tax</div>
-                <div className="text-xs text-slate-500">State levy — Rajasthan currently has no PT. Enable only if state requires it.</div>
+                <div className="font-semibold text-foreground">Professional Tax</div>
+                <div className="text-xs text-muted-foreground">State levy — Rajasthan currently has no PT. Enable only if state requires it.</div>
               </div>
               <Switch checked={form.pt_enabled} onCheckedChange={(v) => patch('pt_enabled', v)} />
             </div>
@@ -221,14 +221,14 @@ export default function HrSettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-indigo-600" /> POSH Internal Committee</CardTitle>
+          <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> POSH Internal Committee</CardTitle>
           <CardDescription>Mandatory under the Sexual Harassment of Women at Workplace Act, 2013. Minimum 4 members; presiding officer must be a senior woman; one external member required.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {(form.posh_ic || []).length === 0 && (
-            <p className="text-sm text-slate-500">No committee members configured yet.</p>
+            <p className="text-sm text-muted-foreground">No committee members configured yet.</p>
           )}
           {(form.posh_ic || []).map((m, i) => (
             <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
@@ -245,7 +245,7 @@ export default function HrSettingsTab() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={() => save.mutate()} disabled={save.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+        <Button onClick={() => save.mutate()} disabled={save.isPending} className="bg-primary hover:bg-primary">
           <Save className="h-4 w-4 mr-2" />
           {save.isPending ? 'Saving...' : 'Save HR settings'}
         </Button>
@@ -257,7 +257,7 @@ export default function HrSettingsTab() {
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`space-y-1.5 ${className ?? ''}`}>
-      <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</Label>
+      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</Label>
       {children}
     </div>
   );

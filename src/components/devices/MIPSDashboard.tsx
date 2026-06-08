@@ -136,39 +136,39 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
   return (
     <div className="space-y-6">
       {/* Hero Card with glassmorphism */}
-      <Card className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xl overflow-hidden relative">
+      <Card className="rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground shadow-xl overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.15)_0%,_transparent_60%)]" />
         <CardContent className="p-6 relative z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10">
+              <div className="p-3 rounded-2xl bg-card/10 backdrop-blur-sm border border-primary-foreground/10">
                 <Server className="h-8 w-8" />
               </div>
               <div>
                 <h3 className="text-lg font-bold">MIPS Middleware Server</h3>
-                <p className="text-sm text-white/70">Smart Pass v3 • RuoYi Cloud Integration</p>
+                <p className="text-sm text-primary-foreground/70">Smart Pass v3 • RuoYi Cloud Integration</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Badge
                 variant="outline"
-                className={`border-white/30 ${
+                className={`border-primary-foreground/30 ${
                   mipsConnection?.success
-                    ? "bg-green-500/20 text-green-200"
-                    : "bg-destructive/20 text-red-200"
+                    ? "bg-success/20 text-success"
+                    : "bg-destructive/20 text-destructive"
                 }`}
               >
                 <div className={`h-2 w-2 rounded-full mr-1.5 ${
                   mipsConnection?.success
-                    ? "bg-green-400 shadow-[0_0_6px_2px_rgba(34,197,94,0.5)] animate-pulse"
-                    : "bg-red-400 shadow-[0_0_6px_2px_rgba(239,68,68,0.5)]"
+                    ? "bg-success shadow-[0_0_6px_2px_rgba(34,197,94,0.5)] animate-pulse"
+                    : "bg-destructive shadow-[0_0_6px_2px_rgba(239,68,68,0.5)]"
                 }`} />
                 {isTestingConnection ? "Testing..." : mipsConnection?.success ? "Connected" : "Disconnected"}
               </Badge>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white/70 hover:text-white hover:bg-white/10"
+                className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-card/10"
                 onClick={() => retestConnection()}
               >
                 <RefreshCw className={`h-4 w-4 ${isTestingConnection ? "animate-spin" : ""}`} />
@@ -176,16 +176,16 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-xs text-white/50">
-              <Heart className={`h-3 w-3 transition-transform ${heartbeatPulse ? "scale-150 text-red-300" : "scale-100"}`} />
+            <div className="flex items-center gap-2 text-xs text-primary-foreground/50">
+              <Heart className={`h-3 w-3 transition-transform ${heartbeatPulse ? "scale-150 text-destructive" : "scale-100"}`} />
               <span>Last checked: {formatDistanceToNow(lastChecked, { addSuffix: true })}</span>
-              <span className="text-white/30">• Auto-refresh 15s</span>
+              <span className="text-primary-foreground/30">• Auto-refresh 15s</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5 text-xs"
+                className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-card/10 gap-1.5 text-xs"
                 onClick={handleFleetSync}
                 disabled={syncingFleet}
               >
@@ -195,7 +195,7 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5 text-xs"
+                className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-card/10 gap-1.5 text-xs"
                 onClick={handleCheckExpiredAccess}
                 disabled={checkingExpired}
               >
@@ -226,11 +226,11 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
         <Card className="rounded-2xl shadow-lg shadow-muted/20 relative overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-green-500/10 relative">
+              <div className="p-2.5 rounded-full bg-success/10 relative">
                 {mipsOnline > 0 ? (
                   <>
-                    <Wifi className="h-5 w-5 text-green-500" />
-                    <span className="absolute inset-0 rounded-full border-2 border-green-400 animate-ping opacity-30" />
+                    <Wifi className="h-5 w-5 text-success" />
+                    <span className="absolute inset-0 rounded-full border-2 border-success animate-ping opacity-30" />
                   </>
                 ) : (
                   <WifiOff className="h-5 w-5 text-destructive" />
@@ -238,7 +238,7 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Online</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success">
                   {mipsOnline}
                   <span className="text-sm font-normal text-muted-foreground">/{mipsTotal}</span>
                 </p>
@@ -250,8 +250,8 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
         <Card className="rounded-2xl shadow-lg shadow-muted/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-blue-500/10">
-                <Fingerprint className="h-5 w-5 text-blue-500" />
+              <div className="p-2.5 rounded-full bg-info/10">
+                <Fingerprint className="h-5 w-5 text-info" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Faces Enrolled</p>
@@ -264,8 +264,8 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
         <Card className="rounded-2xl shadow-lg shadow-muted/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-orange-500/10">
-                <Users className="h-5 w-5 text-orange-500" />
+              <div className="p-2.5 rounded-full bg-warning/10">
+                <Users className="h-5 w-5 text-warning" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Persons Registered</p>

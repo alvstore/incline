@@ -17,11 +17,11 @@ export function OnlinePresencePill({ compact = false }: { compact?: boolean }) {
       <PopoverTrigger asChild>
         <button
           aria-label={`${count} users online`}
-          className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="inline-flex items-center gap-2 rounded-full border border-success/20 bg-success/10 px-3 py-1.5 text-xs font-medium text-success transition hover:bg-success/15 focus:outline-none focus:ring-2 focus:ring-success"
         >
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
           </span>
           <span>{count} online{compact ? '' : ' now'}</span>
         </button>
@@ -41,7 +41,7 @@ export function OnlinePresencePill({ compact = false }: { compact?: boolean }) {
                   <AvatarImage src={u.avatar_url ?? undefined} />
                   <AvatarFallback className="text-xs">{initials(u.full_name)}</AvatarFallback>
                 </Avatar>
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-success" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-foreground">

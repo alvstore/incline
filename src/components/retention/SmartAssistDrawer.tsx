@@ -274,7 +274,7 @@ export function SmartAssistDrawer({ open, onOpenChange, member, branchId }: Smar
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {nudgeHistory.map((nudge: any) => (
                     <div key={nudge.id} className="flex items-center gap-3 p-2.5 bg-muted/50 rounded-lg text-sm">
-                      <div className={`h-2 w-2 rounded-full shrink-0 ${nudge.resolved_at ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${nudge.resolved_at ? 'bg-success' : 'bg-warning'}`} />
                       <div className="flex-1 min-w-0">
                         <span className="font-medium">
                           {nudge.stage_level > 0
@@ -289,7 +289,7 @@ export function SmartAssistDrawer({ open, onOpenChange, member, branchId }: Smar
                         {format(new Date(nudge.sent_at), 'dd MMM')}
                       </span>
                       {nudge.resolved_at && (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                       )}
                     </div>
                   ))}
@@ -308,8 +308,8 @@ export function SmartAssistDrawer({ open, onOpenChange, member, branchId }: Smar
               {/* Channel Selector */}
               <div className="flex gap-2 mb-3">
                 {[
-                  { id: 'whatsapp' as ChannelType, label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-500' },
-                  { id: 'sms' as ChannelType, label: 'SMS', icon: Phone, color: 'text-sky-500' },
+                  { id: 'whatsapp' as ChannelType, label: 'WhatsApp', icon: MessageSquare, color: 'text-success' },
+                  { id: 'sms' as ChannelType, label: 'SMS', icon: Phone, color: 'text-info' },
                   { id: 'email' as ChannelType, label: 'Email', icon: Mail, color: 'text-primary' },
                 ].map(ch => {
                   const ChIcon = ch.icon;
@@ -343,7 +343,7 @@ export function SmartAssistDrawer({ open, onOpenChange, member, branchId }: Smar
               </RadioGroup>
 
               <Button
-                className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="w-full mt-3 bg-success hover:bg-success text-primary-foreground"
                 disabled={sending}
                 onClick={handleSendMessage}
               >

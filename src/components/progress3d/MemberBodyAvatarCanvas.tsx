@@ -49,23 +49,23 @@ export function MemberBodyAvatarCanvas({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 shadow-xl shadow-indigo-500/20">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-muted via-muted to-primary shadow-xl shadow-primary/20">
       <div className="flex items-center justify-between gap-2 px-4 pt-3">
         <div className="flex items-center gap-2">
-          <Badge className="border-0 bg-white/15 text-white">
+          <Badge className="border-0 bg-card/15 text-primary-foreground">
             <Sparkles className="mr-1 h-3 w-3" /> {label}
           </Badge>
           {scan?.posture?.test_time && (
-            <span className="text-[11px] text-slate-300">
+            <span className="text-[11px] text-muted-foreground">
               {new Date(scan.posture.test_time).toLocaleString()}
             </span>
           )}
         </div>
-        <div className="flex gap-1 rounded-full bg-white/10 p-1">
+        <div className="flex gap-1 rounded-full bg-card/10 p-1">
           <button
             onClick={() => setView("3d")}
             className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              view === "3d" ? "bg-white text-slate-900" : "text-white/80 hover:text-white"
+              view === "3d" ? "bg-card text-foreground" : "text-primary-foreground/80 hover:text-primary-foreground"
             }`}
           >
             3D Model
@@ -73,7 +73,7 @@ export function MemberBodyAvatarCanvas({
           <button
             onClick={() => setView("photos")}
             className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              view === "photos" ? "bg-white text-slate-900" : "text-white/80 hover:text-white"
+              view === "photos" ? "bg-card text-foreground" : "text-primary-foreground/80 hover:text-primary-foreground"
             }`}
           >
             <Camera className="mr-1 inline h-3 w-3" /> Photos
@@ -84,7 +84,7 @@ export function MemberBodyAvatarCanvas({
       <div className="relative h-[480px] w-full">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary-foreground/70" />
           </div>
         ) : view === "3d" && modelUrl ? (
           <Canvas
@@ -112,7 +112,7 @@ export function MemberBodyAvatarCanvas({
             />
           </Canvas>
         ) : view === "3d" && !modelUrl ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-white/70">
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-primary-foreground/70">
             <Activity className="h-10 w-10" />
             <p className="text-sm">No 3D model yet — body composition only</p>
           </div>
@@ -122,14 +122,14 @@ export function MemberBodyAvatarCanvas({
 
         {/* Metrics overlay */}
         {(scan?.body || scan?.posture) && (
-          <div className="pointer-events-none absolute inset-y-3 right-3 hidden w-56 rounded-2xl bg-white/10 p-4 text-white shadow-2xl backdrop-blur-md md:block">
+          <div className="pointer-events-none absolute inset-y-3 right-3 hidden w-56 rounded-2xl bg-card/10 p-4 text-primary-foreground shadow-2xl backdrop-blur-md md:block">
             <MetricsList scan={scan} />
           </div>
         )}
       </div>
 
       {/* Mobile metrics panel */}
-      <div className="border-t border-white/10 bg-white/5 p-3 text-white md:hidden">
+      <div className="border-t border-primary-foreground/10 bg-card/5 p-3 text-primary-foreground md:hidden">
         <MetricsList scan={scan} compact />
       </div>
     </div>
@@ -178,7 +178,7 @@ function PhotoGrid({ posture }: { posture: { front_img: string | null; left_img:
   const present = items.filter((i) => i.url);
   if (!present.length) {
     return (
-      <div className="flex h-full items-center justify-center text-white/60">
+      <div className="flex h-full items-center justify-center text-primary-foreground/60">
         <p>No posture photos available</p>
       </div>
     );
@@ -186,9 +186,9 @@ function PhotoGrid({ posture }: { posture: { front_img: string | null; left_img:
   return (
     <div className="grid h-full grid-cols-2 gap-2 p-3">
       {present.map((it) => (
-        <div key={it.label} className="relative overflow-hidden rounded-xl bg-black/20">
+        <div key={it.label} className="relative overflow-hidden rounded-xl bg-foreground/20">
           <img src={it.url!} alt={it.label} className="h-full w-full object-contain" loading="lazy" />
-          <div className="absolute bottom-1 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white">
+          <div className="absolute bottom-1 left-2 rounded-full bg-foreground/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary-foreground">
             {it.label}
           </div>
         </div>
@@ -201,17 +201,17 @@ function MetricsList({ scan, compact }: { scan: { body: any; posture: any } | un
   if (!scan) return null;
   const rows: { label: string; value: string | null; tone?: string }[] = [];
   if (scan.body) {
-    if (scan.body.health_score != null) rows.push({ label: "Health Score", value: `${Math.round(scan.body.health_score)}`, tone: "text-emerald-300" });
+    if (scan.body.health_score != null) rows.push({ label: "Health Score", value: `${Math.round(scan.body.health_score)}`, tone: "text-success" });
     if (scan.body.weight != null) rows.push({ label: "Weight", value: `${scan.body.weight} kg` });
     if (scan.body.bmi != null) rows.push({ label: "BMI", value: `${scan.body.bmi}` });
-    if (scan.body.pbf != null) rows.push({ label: "Body Fat %", value: `${scan.body.pbf}%`, tone: "text-amber-300" });
-    if (scan.body.smm != null) rows.push({ label: "Skeletal Muscle", value: `${scan.body.smm} kg`, tone: "text-indigo-300" });
+    if (scan.body.pbf != null) rows.push({ label: "Body Fat %", value: `${scan.body.pbf}%`, tone: "text-warning" });
+    if (scan.body.smm != null) rows.push({ label: "Skeletal Muscle", value: `${scan.body.smm} kg`, tone: "text-primary" });
     if (scan.body.bmr != null) rows.push({ label: "BMR", value: `${scan.body.bmr} kcal` });
     if (scan.body.vfr != null) rows.push({ label: "Visceral Fat", value: `${scan.body.vfr}` });
     if (scan.body.metabolic_age != null) rows.push({ label: "Metabolic Age", value: `${scan.body.metabolic_age}` });
   }
   if (scan.posture) {
-    if (scan.posture.score != null) rows.push({ label: "Posture Score", value: `${Math.round(scan.posture.score)}`, tone: "text-emerald-300" });
+    if (scan.posture.score != null) rows.push({ label: "Posture Score", value: `${Math.round(scan.posture.score)}`, tone: "text-success" });
     if (scan.posture.head_forward != null) rows.push({ label: "Head Forward", value: `${scan.posture.head_forward}°` });
     if (scan.posture.shoulder_left != null && scan.posture.shoulder_right != null) {
       rows.push({ label: "Shoulder L/R", value: `${scan.posture.shoulder_left}° / ${scan.posture.shoulder_right}°` });
@@ -222,9 +222,9 @@ function MetricsList({ scan, compact }: { scan: { body: any; posture: any } | un
   return (
     <div className={compact ? "grid grid-cols-2 gap-2" : "space-y-2"}>
       {rows.slice(0, compact ? 6 : 12).map((r) => (
-        <div key={r.label} className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1.5 text-xs">
-          <span className="text-white/70">{r.label}</span>
-          <span className={`font-semibold ${r.tone || "text-white"}`}>{r.value}</span>
+        <div key={r.label} className="flex items-center justify-between rounded-lg bg-card/5 px-2 py-1.5 text-xs">
+          <span className="text-primary-foreground/70">{r.label}</span>
+          <span className={`font-semibold ${r.tone || "text-primary-foreground"}`}>{r.value}</span>
         </div>
       ))}
     </div>

@@ -30,25 +30,25 @@ const EVENT_PREFILLS: Record<string, TemplatePrefill> = {
 };
 
 const CHANNEL_HEAD: Record<Channel, { label: string; icon: any; gradient: string; description: string }> = {
-  whatsapp: { label: 'WhatsApp', icon: MessageSquare, gradient: 'from-emerald-500 to-teal-500', description: 'Author CRM templates, sync the Meta-approved catalog, map them to system events, and audit deliverability — all in one place.' },
-  sms: { label: 'SMS', icon: Phone, gradient: 'from-sky-500 to-blue-500', description: 'Manage transactional and promotional SMS templates with DLT-friendly limits and AI-assisted drafting.' },
-  email: { label: 'Email', icon: Mail, gradient: 'from-amber-500 to-orange-500', description: 'Design transactional and marketing emails with subject, HTML body, attachments and AI generation.' },
+  whatsapp: { label: 'WhatsApp', icon: MessageSquare, gradient: 'from-success to-success', description: 'Author CRM templates, sync the Meta-approved catalog, map them to system events, and audit deliverability — all in one place.' },
+  sms: { label: 'SMS', icon: Phone, gradient: 'from-info to-info', description: 'Manage transactional and promotional SMS templates with DLT-friendly limits and AI-assisted drafting.' },
+  email: { label: 'Email', icon: Mail, gradient: 'from-warning to-warning', description: 'Design transactional and marketing emails with subject, HTML body, attachments and AI generation.' },
 };
 
 function ChannelHero({ channel, onAi }: { channel: Channel; onAi: () => void }) {
   const meta = CHANNEL_HEAD[channel];
   const Icon = meta.icon;
   return (
-    <div className={`rounded-2xl p-5 bg-gradient-to-r ${meta.gradient} text-white shadow-lg flex items-start justify-between gap-4`}>
+    <div className={`rounded-2xl p-5 bg-gradient-to-r ${meta.gradient} text-primary-foreground shadow-lg flex items-start justify-between gap-4`}>
       <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-white/15 p-2.5"><Icon className="h-6 w-6" /></div>
+        <div className="rounded-xl bg-card/15 p-2.5"><Icon className="h-6 w-6" /></div>
         <div>
           <h3 className="text-lg font-bold">{meta.label} Templates</h3>
-          <p className="text-sm text-white/80 max-w-2xl">{meta.description}</p>
+          <p className="text-sm text-primary-foreground/80 max-w-2xl">{meta.description}</p>
         </div>
       </div>
-      <Button variant="secondary" onClick={onAi} className="gap-2 shrink-0 bg-white/95 text-slate-900 hover:bg-white">
-        <Sparkles className="h-4 w-4 text-violet-600" /> AI Generate
+      <Button variant="secondary" onClick={onAi} className="gap-2 shrink-0 bg-card/95 text-foreground hover:bg-card">
+        <Sparkles className="h-4 w-4 text-primary" /> AI Generate
       </Button>
     </div>
   );
@@ -94,7 +94,7 @@ export function CommunicationTemplatesHub() {
             </TabsList>
 
             <TabsContent value="crm" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
                 <CardContent className="pt-6">
                   <TemplateManager
                     filterType="whatsapp"
@@ -111,13 +111,13 @@ export function CommunicationTemplatesHub() {
             </TabsContent>
 
             <TabsContent value="auto" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
                 <CardContent className="pt-6"><WhatsAppAutomations /></CardContent>
               </Card>
             </TabsContent>
 
             <TabsContent value="routing" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
                 <CardContent className="pt-6"><WhatsAppRoutingSettings /></CardContent>
               </Card>
             </TabsContent>
@@ -132,7 +132,7 @@ export function CommunicationTemplatesHub() {
               <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
             </TabsList>
             <TabsContent value="templates" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
                 <CardContent className="pt-6"><TemplateManager filterType="sms" hideHeader /></CardContent>
               </Card>
             </TabsContent>
@@ -150,7 +150,7 @@ export function CommunicationTemplatesHub() {
               <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
             </TabsList>
             <TabsContent value="templates" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-primary/10">
+              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
                 <CardContent className="pt-6"><TemplateManager filterType="email" hideHeader /></CardContent>
               </Card>
             </TabsContent>
@@ -161,9 +161,9 @@ export function CommunicationTemplatesHub() {
         </TabsContent>
 
         <TabsContent value="ai" className="mt-4 space-y-5">
-          <Card className="rounded-2xl shadow-lg shadow-slate-200/40 border-violet-500/20 bg-gradient-to-br from-violet-50 to-white">
+          <Card className="rounded-2xl shadow-lg shadow/40 border-primary/20 bg-gradient-to-br from-primary/10 to-white">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-violet-600" /> AI Template Studio</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> AI Template Studio</CardTitle>
               <CardDescription>
                 Generate brand-safe, deduplicated templates for any channel. Pick events, review proposals,
                 and save individually or in bulk. WhatsApp proposals are also submitted to Meta automatically.
@@ -178,11 +178,11 @@ export function CommunicationTemplatesHub() {
                     key={c}
                     type="button"
                     onClick={() => openAi(c)}
-                    className={`group rounded-2xl bg-gradient-to-br ${M.gradient} p-5 text-white text-left shadow-md hover:shadow-xl transition-all`}
+                    className={`group rounded-2xl bg-gradient-to-br ${M.gradient} p-5 text-primary-foreground text-left shadow-md hover:shadow-xl transition-all`}
                   >
                     <div className="flex items-center gap-2"><I className="h-5 w-5" /><span className="font-semibold">{M.label}</span></div>
-                    <p className="mt-2 text-xs text-white/85">Generate {M.label} templates with AI</p>
-                    <div className="mt-3 inline-flex items-center gap-1 text-xs bg-white/15 rounded-full px-2.5 py-1">
+                    <p className="mt-2 text-xs text-primary-foreground/85">Generate {M.label} templates with AI</p>
+                    <div className="mt-3 inline-flex items-center gap-1 text-xs bg-card/15 rounded-full px-2.5 py-1">
                       <Sparkles className="h-3 w-3" /> Open generator
                     </div>
                   </button>

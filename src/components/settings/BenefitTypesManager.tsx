@@ -58,9 +58,9 @@ function getIconComponent(iconName: string) {
 }
 
 function genderBadgeClass(g: string) {
-  if (g === "male") return "bg-blue-50 text-blue-700 border-blue-200";
-  if (g === "female") return "bg-pink-50 text-pink-700 border-pink-200";
-  return "bg-slate-50 text-slate-700 border-slate-200";
+  if (g === "male") return "bg-info/10 text-info border-info/25";
+  if (g === "female") return "bg-destructive/10 text-destructive border-destructive/25";
+  return "bg-muted text-foreground border-border";
 }
 
 export function BenefitTypesManager() {
@@ -232,10 +232,10 @@ export function BenefitTypesManager() {
         </div>
       </div>
 
-      <Alert className="bg-indigo-50/50 border-indigo-200">
-        <Info className="h-4 w-4 text-indigo-600" />
-        <AlertDescription className="text-sm text-slate-700">
-          <strong className="text-slate-900">One category per benefit, multiple rooms per category.</strong> Don't create
+      <Alert className="bg-primary/10 border-primary/25">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertDescription className="text-sm text-foreground">
+          <strong className="text-foreground">One category per benefit, multiple rooms per category.</strong> Don't create
           "Ice Bath Male" and "Ice Bath Female" as separate types — create one <strong>Ice Bath</strong> benefit, then add
           two facilities (rooms) under <em>Facilities &amp; Rooms</em> with different gender access. Members buy one entitlement
           and the system routes them to the room their gender allows.
@@ -345,7 +345,7 @@ export function BenefitTypesManager() {
                       <div className="p-2.5 bg-primary/10 rounded-xl text-primary">{getIconComponent(bt.icon || "Sparkles")}</div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-slate-900">{bt.name}</span>
+                          <span className="font-semibold text-foreground">{bt.name}</span>
                           <Badge variant="outline" className="text-xs font-mono">{bt.code}</Badge>
                           {bt.is_bookable && <Badge variant="secondary" className="text-xs">Bookable</Badge>}
                           {!bt.is_active && <Badge variant="destructive" className="text-xs">Inactive</Badge>}
@@ -360,7 +360,7 @@ export function BenefitTypesManager() {
                   </div>
 
                   {/* Dependency strip */}
-                  <div className="flex items-center gap-3 text-xs text-slate-500 pt-2 border-t">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
                     <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{deps.facilities.length} room{deps.facilities.length !== 1 ? "s" : ""}</span>
                     <span className="flex items-center gap-1.5"><Package className="h-3.5 w-3.5" />{deps.plan_count} plan{deps.plan_count !== 1 ? "s" : ""}</span>
                     <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{deps.member_credit_count} member credit{deps.member_credit_count !== 1 ? "s" : ""}</span>
@@ -370,12 +370,12 @@ export function BenefitTypesManager() {
                   {deps.facilities.length > 0 && (
                     <div className="grid sm:grid-cols-2 gap-2 pt-1">
                       {deps.facilities.map((f) => (
-                        <div key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 rounded-lg text-sm">
+                        <div key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-muted rounded-lg text-sm">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-medium text-slate-800 truncate">{f.name}</span>
+                            <span className="font-medium text-foreground truncate">{f.name}</span>
                             <Badge variant="outline" className={`text-[10px] capitalize ${genderBadgeClass(f.gender_access)}`}>{f.gender_access}</Badge>
                           </div>
-                          <span className="text-xs text-slate-500 shrink-0">cap {f.capacity}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">cap {f.capacity}</span>
                         </div>
                       ))}
                     </div>

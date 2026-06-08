@@ -65,23 +65,23 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
   const isGiftOnly = !!balance.isGiftOnly;
 
   return (
-    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-amber-500/40 bg-amber-50/30' : ''}`}>
+    <Card className={`rounded-xl shadow-sm transition-all hover:shadow-md ${isExhausted ? 'opacity-70' : ''} ${isGiftOnly ? 'border-warning/40 bg-warning/10' : ''}`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <Icon className={`h-5 w-5 ${isGiftOnly ? 'text-amber-600' : 'text-primary'}`} />
+            <Icon className={`h-5 w-5 ${isGiftOnly ? 'text-warning' : 'text-primary'}`} />
             <CardTitle className="text-base truncate">
               {balance.label || benefitTypeLabels[balance.benefit_type]}
             </CardTitle>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {hasComp && !isGiftOnly && (
-              <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] gap-1 hover:bg-amber-500/20">
+              <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] gap-1 hover:bg-warning/20">
                 <Gift className="h-3 w-3" /> +{compRemaining}
               </Badge>
             )}
             {isGiftOnly && (
-              <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] gap-1">
+              <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] gap-1">
                 <Gift className="h-3 w-3" /> Complimentary
               </Badge>
             )}
@@ -94,7 +94,7 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
       <CardContent className="space-y-3">
         {balance.isUnlimited ? (
           <div className="text-sm text-muted-foreground">
-            Unlimited access{hasComp && <span className="ml-1 text-amber-700 font-medium">+ {compRemaining} gift</span>}
+            Unlimited access{hasComp && <span className="ml-1 text-warning font-medium">+ {compRemaining} gift</span>}
           </div>
         ) : (
           <>
@@ -109,7 +109,7 @@ export function BenefitBalanceCard({ balance, showRecordButton, onRecordUsage }:
               {hasComp && (
                 <div className="text-right text-xs text-muted-foreground leading-tight">
                   <div>{planRemaining ?? 0} plan</div>
-                  <div className="text-amber-700 font-medium">+ {compRemaining} gift</div>
+                  <div className="text-warning font-medium">+ {compRemaining} gift</div>
                 </div>
               )}
             </div>

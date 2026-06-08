@@ -522,8 +522,8 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                           className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                             active
                               ? v === 'yes'
-                                ? 'bg-amber-500 text-white shadow-sm'
-                                : 'bg-emerald-500 text-white shadow-sm'
+                                ? 'bg-warning text-primary-foreground shadow-sm'
+                                : 'bg-success text-primary-foreground shadow-sm'
                               : 'bg-muted text-muted-foreground ring-1 ring-inset ring-border hover:bg-muted/70'
                           }`}
                         >

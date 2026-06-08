@@ -61,7 +61,7 @@ export function CombinedCreditsSummary({ credits, onBuyAddon, disabled }: Props)
   }, {});
 
   return (
-    <Card className="rounded-2xl border-border/50 bg-gradient-to-br from-primary/5 via-background to-accent/5 shadow-lg shadow-slate-200/40">
+    <Card className="rounded-2xl border-border/50 bg-gradient-to-br from-primary/5 via-background to-accent/5 shadow-lg shadow/40">
       <CardContent className="p-6 space-y-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -117,9 +117,9 @@ export function CombinedCreditsSummary({ credits, onBuyAddon, disabled }: Props)
         </div>
 
         {(lowBalance || expiringSoon) && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40">
-            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-            <div className="text-xs text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 dark:bg-warning/20 border border-warning/25 dark:border-warning/40">
+            <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+            <div className="text-xs text-warning dark:text-warning">
               {lowBalance && <div><strong>Low balance:</strong> only {totalRemaining} of {totalGranted} credits left.</div>}
               {expiringSoon && (
                 <div>
@@ -130,7 +130,7 @@ export function CombinedCreditsSummary({ credits, onBuyAddon, disabled }: Props)
               {onBuyAddon && (
                 <Button
                   variant="link"
-                  className="h-auto p-0 text-amber-700 dark:text-amber-300 text-xs mt-1"
+                  className="h-auto p-0 text-warning dark:text-warning text-xs mt-1"
                   onClick={onBuyAddon}
                   disabled={disabled}
                 >

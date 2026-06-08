@@ -138,7 +138,7 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                   {(form.keywords || []).map((k) => (
                     <Badge key={k} variant="secondary" className="rounded-full pr-1">
                       {k}
-                      <button onClick={() => removeKeyword(k)} className="ml-1 rounded-full p-0.5 hover:bg-slate-200">
+                      <button onClick={() => removeKeyword(k)} className="ml-1 rounded-full p-0.5 hover:bg-muted">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -219,11 +219,11 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                   placeholder="Sent you a DM! 📩" />
               </Field>
 
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
-                <div className="text-xs font-semibold text-slate-500 uppercase mb-1 flex items-center gap-1">
+              <div className="rounded-xl bg-muted p-3 border border-border">
+                <div className="text-xs font-semibold text-muted-foreground uppercase mb-1 flex items-center gap-1">
                   <Eye className="h-3 w-3" /> DM Preview
                 </div>
-                <div className="text-sm text-slate-800 whitespace-pre-wrap">{preview}</div>
+                <div className="text-sm text-foreground whitespace-pre-wrap">{preview}</div>
               </div>
             </TabsContent>
 
@@ -278,7 +278,7 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
             </TabsContent>
 
             <TabsContent value="review" className="px-6 py-4 space-y-3">
-              <div className="rounded-xl border bg-white p-4 space-y-2">
+              <div className="rounded-xl border bg-card p-4 space-y-2">
                 <Row k="Name" v={form.name || "—"} />
                 <Row k="Keywords" v={(form.keywords || []).join(", ") || "—"} />
                 <Row k="Match" v={`${form.match_type || "contains"}${form.case_sensitive ? " (case-sensitive)" : ""}`} />
@@ -288,8 +288,8 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
                 <Row k="Notify staff" v={form.notify_staff ? "Yes" : "No"} />
                 <Row k="Allow repeat" v={form.allow_repeat ? "Yes" : "No"} />
               </div>
-              <p className="text-xs text-slate-500 flex items-start gap-1.5">
-                <Sparkles className="h-3 w-3 mt-0.5 text-amber-500 shrink-0" />
+              <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                <Sparkles className="h-3 w-3 mt-0.5 text-warning shrink-0" />
                 Instagram only allows DMing users within 7 days of their comment.
                 The system honors this automatically.
               </p>
@@ -297,17 +297,17 @@ export function IgCampaignDrawer({ open, onOpenChange, campaign, branchId }: Pro
           </Tabs>
         </div>
 
-        <div className="border-t px-6 py-3 flex items-center justify-between gap-3 bg-white">
+        <div className="border-t px-6 py-3 flex items-center justify-between gap-3 bg-card">
           <div className="flex items-center gap-2">
             <Switch checked={form.is_active ?? true} onCheckedChange={(v) => update({ is_active: v })} />
-            <span className="text-sm text-slate-700">{form.is_active ?? true ? "Active" : "Paused"}</span>
+            <span className="text-sm text-foreground">{form.is_active ?? true ? "Active" : "Paused"}</span>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button
               onClick={handleSave}
               disabled={!canSave || upsert.isPending}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="bg-primary hover:bg-primary"
             >
               {upsert.isPending ? "Saving…" : campaign ? "Save changes" : "Create campaign"}
             </Button>
@@ -323,11 +323,11 @@ function Field({
 }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-slate-700">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      <Label className="text-sm font-medium text-foreground">
+        {label}{required && <span className="text-destructive ml-0.5">*</span>}
       </Label>
       {children}
-      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -338,8 +338,8 @@ function ToggleRow({
   return (
     <div className="flex items-start justify-between gap-3 py-2">
       <div>
-        <div className="text-sm font-medium text-slate-700">{label}</div>
-        {hint && <div className="text-xs text-slate-500">{hint}</div>}
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
     </div>
@@ -349,8 +349,8 @@ function ToggleRow({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-slate-500">{k}</span>
-      <span className="text-slate-900 font-medium text-right">{v}</span>
+      <span className="text-muted-foreground">{k}</span>
+      <span className="text-foreground font-medium text-right">{v}</span>
     </div>
   );
 }
@@ -389,7 +389,7 @@ function IgAccountPicker({
           </SelectTrigger>
           <SelectContent>
             {accounts.length === 0 && !isLoading && (
-              <div className="px-3 py-6 text-xs text-slate-500 text-center">
+              <div className="px-3 py-6 text-xs text-muted-foreground text-center">
                 No connected IG accounts found for this branch.
               </div>
             )}
@@ -398,9 +398,9 @@ function IgAccountPicker({
                 <div className="flex items-center gap-2">
                   {a.profile_picture_url
                     ? <img src={a.profile_picture_url} alt="" className="h-5 w-5 rounded-full object-cover" />
-                    : <div className="h-5 w-5 rounded-full bg-slate-200" />}
+                    : <div className="h-5 w-5 rounded-full bg-muted" />}
                   <span className="font-medium">@{a.username || "unknown"}</span>
-                  {a.name && <span className="text-slate-500 text-xs">— {a.name}</span>}
+                  {a.name && <span className="text-muted-foreground text-xs">— {a.name}</span>}
                 </div>
               </SelectItem>
             ))}
@@ -410,7 +410,7 @@ function IgAccountPicker({
           {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
       </div>
-      {isError && <p className="text-xs text-red-500">Could not load accounts. Check Settings → Integrations → Instagram.</p>}
+      {isError && <p className="text-xs text-destructive">Could not load accounts. Check Settings → Integrations → Instagram.</p>}
     </Field>
   );
 }
@@ -434,7 +434,7 @@ function IgPostPicker({
         <button type="button"
           onClick={() => onChange(null, null)}
           className={`text-xs px-3 py-1.5 rounded-full border transition ${
-            !value ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+            !value ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"
           }`}
         >All posts</button>
         <Button type="button" variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching || !integrationId}>
@@ -443,18 +443,18 @@ function IgPostPicker({
         </Button>
       </div>
       {!integrationId && (
-        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 text-center">
+        <div className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground text-center">
           Pick an Instagram account first.
         </div>
       )}
       {integrationId && isLoading && (
-        <div className="py-6 text-center text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Loading recent posts…</div>
+        <div className="py-6 text-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-1" /> Loading recent posts…</div>
       )}
       {integrationId && isError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 space-y-1">
+        <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
           <div className="font-medium">Could not load posts.</div>
           <div className="opacity-90">{(error as any)?.message || "Unknown error from Instagram Graph."}</div>
-          <a href="/settings?tab=integrations" className="underline text-red-800 inline-block mt-1">
+          <a href="/settings?tab=integrations" className="underline text-destructive inline-block mt-1">
             Open Settings → Integrations → Instagram to reconnect
           </a>
         </div>
@@ -467,21 +467,21 @@ function IgPostPicker({
             return (
               <button key={m.id} type="button" onClick={() => onChange(m.id, m.permalink ?? null)}
                 className={`relative aspect-square rounded-lg overflow-hidden border-2 transition group ${
-                  selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-transparent hover:border-slate-300"
+                  selected ? "border-primary ring-2 ring-primary/25" : "border-transparent hover:border-border"
                 }`}
                 title={m.caption?.slice(0, 80) || m.id}
               >
                 {thumb
                   ? <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
+                  : <div className="w-full h-full bg-muted flex items-center justify-center"><ImageIcon className="h-5 w-5 text-muted-foreground" /></div>}
                 {m.media_type === "VIDEO" && (
-                  <span className="absolute top-1 right-1 bg-black/60 text-white text-[10px] rounded px-1">VIDEO</span>
+                  <span className="absolute top-1 right-1 bg-foreground/60 text-primary-foreground text-[10px] rounded px-1">VIDEO</span>
                 )}
-                <span className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] p-1 text-left">
+                <span className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent text-primary-foreground text-[10px] p-1 text-left">
                   💬 {m.comments_count ?? 0}
                 </span>
                 {selected && (
-                  <span className="absolute top-1 left-1 bg-indigo-600 text-white rounded-full p-0.5">
+                  <span className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full p-0.5">
                     <CheckCircle2 className="h-3 w-3" />
                   </span>
                 )}
@@ -505,45 +505,45 @@ function IgTestPanel({
   };
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-indigo-50/60 border border-indigo-100 p-3 text-xs text-indigo-900">
+      <div className="rounded-xl bg-primary/10 border border-primary/15 p-3 text-xs text-primary">
         Simulate an Instagram comment against ALL active campaigns on this branch (including unsaved changes are not yet included — save first).
       </div>
       <Field label="Sample comment text">
         <Textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
           placeholder="Type a comment as a user would write it…" />
       </Field>
-      <Button onClick={run} disabled={!branchId || !text.trim() || test.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+      <Button onClick={run} disabled={!branchId || !text.trim() || test.isPending} className="bg-primary hover:bg-primary">
         {test.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-1" />}
         Run test
       </Button>
 
       {test.data && (
         <div className="space-y-2">
-          <div className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Results</div>
+          <div className="text-xs uppercase font-semibold text-muted-foreground tracking-wider">Results</div>
           {test.data.length === 0 && (
-            <div className="text-sm text-slate-500">No active campaigns on this branch.</div>
+            <div className="text-sm text-muted-foreground">No active campaigns on this branch.</div>
           )}
           {test.data.map((r) => (
             <div key={r.campaign_id}
-              className={`rounded-xl border p-3 ${r.would_fire ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 bg-white"}`}>
+              className={`rounded-xl border p-3 ${r.would_fire ? "border-success/25 bg-success/10" : "border-border bg-card"}`}>
               <div className="flex items-center gap-2">
                 {r.would_fire
-                  ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  : <XCircle className="h-4 w-4 text-slate-400" />}
-                <span className="font-medium text-slate-900">{r.name}</span>
+                  ? <CheckCircle2 className="h-4 w-4 text-success" />
+                  : <XCircle className="h-4 w-4 text-muted-foreground" />}
+                <span className="font-medium text-foreground">{r.name}</span>
                 {activeCampaignName && r.name === activeCampaignName && (
                   <Badge variant="outline" className="rounded-full text-[10px]">this one</Badge>
                 )}
-                <span className="ml-auto text-xs text-slate-500">
+                <span className="ml-auto text-xs text-muted-foreground">
                   {r.would_fire ? `keyword: ${r.matched_keyword}` : r.skip_reason ?? "no keyword match"}
                 </span>
               </div>
               {r.preview && (
-                <div className="mt-2 text-xs text-slate-700 italic bg-white rounded-lg p-2 border border-slate-100">
+                <div className="mt-2 text-xs text-foreground italic bg-card rounded-lg p-2 border border-border">
                   "{r.preview}"
                 </div>
               )}
-              <div className="mt-1 text-[11px] text-slate-400">
+              <div className="mt-1 text-[11px] text-muted-foreground">
                 mode: {r.reply_mode} · delay: {r.delay_seconds}s
               </div>
             </div>

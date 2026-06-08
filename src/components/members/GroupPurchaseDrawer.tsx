@@ -160,7 +160,7 @@ export function GroupPurchaseDrawer({ open, onOpenChange, branchId }: Props) {
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-violet-100 text-violet-700">
+            <span className="p-2 rounded-xl bg-primary/15 text-primary">
               <Users className="h-5 w-5" />
             </span>
             Group / Couple Purchase
@@ -208,14 +208,14 @@ export function GroupPurchaseDrawer({ open, onOpenChange, branchId }: Props) {
                       <button
                         key={m.id} type="button"
                         onClick={() => addMember(m)}
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-3"
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted flex items-center gap-3"
                       >
                         <Avatar className="h-7 w-7"><AvatarFallback className="text-xs">{m.profiles?.full_name?.[0] || '?'}</AvatarFallback></Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{m.profiles?.full_name}</p>
                           <p className="text-xs text-muted-foreground">{m.profiles?.phone} · {m.member_code}</p>
                         </div>
-                        <UserPlus className="h-4 w-4 text-indigo-600" />
+                        <UserPlus className="h-4 w-4 text-primary" />
                       </button>
                     ))}
                   </CardContent>
@@ -311,22 +311,22 @@ export function GroupPurchaseDrawer({ open, onOpenChange, branchId }: Props) {
 
           {/* Pricing summary */}
           {pricing && (
-            <Alert className="bg-indigo-50 border-indigo-200">
+            <Alert className="bg-primary/10 border-primary/25">
               <AlertDescription className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Per member</span>
+                  <span className="text-sm text-muted-foreground">Per member</span>
                   <span className="text-sm">
-                    <span className="line-through text-slate-400 mr-2">₹{pricing.grossPer.toFixed(2)}</span>
-                    <span className="font-semibold text-indigo-700">₹{pricing.finalPer.toFixed(2)}</span>
+                    <span className="line-through text-muted-foreground mr-2">₹{pricing.grossPer.toFixed(2)}</span>
+                    <span className="font-semibold text-primary">₹{pricing.finalPer.toFixed(2)}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Group total ({memberCount} members)</span>
-                  <span className="font-bold text-lg flex items-center text-slate-900">
+                  <span className="text-sm text-muted-foreground">Group total ({memberCount} members)</span>
+                  <span className="font-bold text-lg flex items-center text-foreground">
                     <IndianRupee className="h-4 w-4" />{pricing.groupTotal.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-emerald-700">
+                <div className="flex items-center justify-between text-xs text-success">
                   <span>Total discount applied</span>
                   <span>−₹{pricing.groupDiscount.toFixed(2)}</span>
                 </div>

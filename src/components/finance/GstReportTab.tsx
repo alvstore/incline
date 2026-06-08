@@ -45,7 +45,7 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
   return (
     <div className="space-y-6">
       {/* Hero KPI strip */}
-      <Card className="rounded-2xl border-none bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
+      <Card className="rounded-2xl border-none bg-gradient-to-r from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20">
         <CardContent className="grid grid-cols-2 gap-6 p-6 md:grid-cols-6">
           <Kpi label="Taxable Value" value={formatCurrency(totals.taxable)} />
           <Kpi label="CGST" value={formatCurrency(totals.cgst)} />
@@ -269,8 +269,8 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
 function Kpi({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
-      <p className={`mt-1 ${highlight ? 'text-2xl font-bold' : 'text-xl font-semibold'} text-white`}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/70">{label}</p>
+      <p className={`mt-1 ${highlight ? 'text-2xl font-bold' : 'text-xl font-semibold'} text-primary-foreground`}>{value}</p>
     </div>
   );
 }

@@ -25,10 +25,10 @@ import { WebhookActivityPanel, GatewayLastReceivedBadge } from '@/components/int
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger';
 
 const PAYMENT_PROVIDERS = [
-  { id: 'razorpay', name: 'Razorpay', abbr: 'Rp', bgColor: 'bg-blue-600', textColor: 'text-white' },
-  { id: 'phonepe', name: 'PhonePe', abbr: 'Pe', bgColor: 'bg-purple-600', textColor: 'text-white' },
-  { id: 'ccavenue', name: 'CCAvenue', abbr: 'CC', bgColor: 'bg-emerald-600', textColor: 'text-white' },
-  { id: 'payu', name: 'PayU', abbr: 'PU', bgColor: 'bg-amber-500', textColor: 'text-white' },
+  { id: 'razorpay', name: 'Razorpay', abbr: 'Rp', bgColor: 'bg-info', textColor: 'text-primary-foreground' },
+  { id: 'phonepe', name: 'PhonePe', abbr: 'Pe', bgColor: 'bg-primary', textColor: 'text-primary-foreground' },
+  { id: 'ccavenue', name: 'CCAvenue', abbr: 'CC', bgColor: 'bg-success', textColor: 'text-primary-foreground' },
+  { id: 'payu', name: 'PayU', abbr: 'PU', bgColor: 'bg-warning', textColor: 'text-primary-foreground' },
 ];
 
 const SMS_PROVIDERS = [
@@ -473,7 +473,7 @@ function IntegrationConfigSheet({ open, onOpenChange, type, provider, existing, 
             <Label>{field.label}</Label>
             {hasStored && !isTouched && (
               <Badge variant="outline" className="text-[10px] gap-1 rounded-full">
-                <CheckCircle className="h-3 w-3 text-green-600" /> Saved
+                <CheckCircle className="h-3 w-3 text-success" /> Saved
               </Badge>
             )}
           </div>

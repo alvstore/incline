@@ -64,10 +64,10 @@ export function SlotAvailabilityTimeline({ branchId, date, onSlotClick }: SlotAv
   const fillClass = (slot: any) => {
     if (!slot.is_active) return 'bg-muted text-muted-foreground border-border line-through';
     const pct = slot.capacity ? slot.booked_count / slot.capacity : 0;
-    if (slot.booked_count >= slot.capacity) return 'bg-rose-100 text-rose-700 border-rose-200';
-    if (pct >= 0.9) return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (pct >= 0.6) return 'bg-amber-50 text-amber-700 border-amber-200';
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (slot.booked_count >= slot.capacity) return 'bg-destructive/15 text-destructive border-destructive/25';
+    if (pct >= 0.9) return 'bg-destructive/10 text-destructive border-destructive/25';
+    if (pct >= 0.6) return 'bg-warning/10 text-warning border-warning/25';
+    return 'bg-success/10 text-success border-success/25';
   };
 
   if (isLoading) {

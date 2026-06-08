@@ -49,16 +49,16 @@ interface ErrorLog {
 }
 
 const SOURCE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  frontend: { label: 'Frontend', icon: Monitor, color: 'text-sky-600' },
-  edge_function: { label: 'Backend Function', icon: Server, color: 'text-violet-600' },
-  database: { label: 'Database', icon: Database, color: 'text-amber-600' },
-  trigger: { label: 'Trigger', icon: Zap, color: 'text-emerald-600' },
-  automation_brain: { label: 'Automation Brain', icon: Zap, color: 'text-indigo-600' },
-  cron: { label: 'Cron Job', icon: Clock, color: 'text-orange-600' },
-  worker: { label: 'Worker', icon: Server, color: 'text-teal-600' },
+  frontend: { label: 'Frontend', icon: Monitor, color: 'text-info' },
+  edge_function: { label: 'Backend Function', icon: Server, color: 'text-primary' },
+  database: { label: 'Database', icon: Database, color: 'text-warning' },
+  trigger: { label: 'Trigger', icon: Zap, color: 'text-success' },
+  automation_brain: { label: 'Automation Brain', icon: Zap, color: 'text-primary' },
+  cron: { label: 'Cron Job', icon: Clock, color: 'text-warning' },
+  worker: { label: 'Worker', icon: Server, color: 'text-success' },
 };
 
-const FALLBACK_SOURCE = { label: 'Other', icon: Layers, color: 'text-slate-500' } as const;
+const FALLBACK_SOURCE = { label: 'Other', icon: Layers, color: 'text-muted-foreground' } as const;
 const getSourceConfig = (s?: string | null) => SOURCE_CONFIG[s || 'frontend'] || FALLBACK_SOURCE;
 
 const EMPTY_TABLE_CANDIDATES = [
@@ -97,7 +97,7 @@ function DatabaseAuditCard() {
     <Card className="rounded-2xl border-border/50 shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Database className="h-5 w-5 text-amber-600" />
+          <Database className="h-5 w-5 text-warning" />
           Database Audit — Empty/Unused Tables
           {emptyTables.length > 0 && (
             <Badge variant="secondary" className="text-xs">{emptyTables.length} empty</Badge>
@@ -311,11 +311,11 @@ export default function SystemHealth() {
 
   const stats = [
     { label: 'Open Errors', value: openErrors.length, icon: AlertTriangle, color: 'text-destructive' },
-    { label: 'Critical Open', value: criticalOpen, icon: Zap, color: 'text-rose-600' },
-    { label: 'Today', value: todayErrors.length, icon: Clock, color: 'text-amber-600' },
-    { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-violet-600' },
-    { label: 'Frontend', value: frontendErrors.length, icon: Monitor, color: 'text-sky-600' },
-    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-emerald-600' },
+    { label: 'Critical Open', value: criticalOpen, icon: Zap, color: 'text-destructive' },
+    { label: 'Today', value: todayErrors.length, icon: Clock, color: 'text-warning' },
+    { label: 'Total Occurrences', value: totalOccurrences, icon: Layers, color: 'text-primary' },
+    { label: 'Frontend', value: frontendErrors.length, icon: Monitor, color: 'text-info' },
+    { label: 'Backend', value: backendErrors.length, icon: Server, color: 'text-success' },
   ];
 
   return (
@@ -324,7 +324,7 @@ export default function SystemHealth() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-600 to-pink-600 text-white">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-destructive to-destructive text-primary-foreground">
                 <Activity className="h-6 w-6" />
               </div>
               System Health
@@ -366,7 +366,7 @@ export default function SystemHealth() {
           <TabsContent value="overview" className="space-y-6 mt-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {stats.map((s) => (
-                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow-slate-200/50">
+                <Card key={s.label} className="rounded-2xl border-border/50 shadow-lg shadow/50">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className={`p-2 rounded-xl bg-muted ${s.color}`}>
                       <s.icon className="h-5 w-5" />
@@ -489,10 +489,10 @@ export default function SystemHealth() {
                               const src = getSourceConfig(err.source);
                               const sev = (err.severity || 'error').toLowerCase();
                               const sevBadgeClass =
-                                sev === 'critical' ? 'bg-rose-100 text-rose-700' :
-                                sev === 'error' ? 'bg-red-100 text-red-700' :
-                                sev === 'warning' ? 'bg-amber-100 text-amber-700' :
-                                'bg-slate-100 text-slate-700';
+                                sev === 'critical' ? 'bg-destructive/15 text-destructive' :
+                                sev === 'error' ? 'bg-destructive/15 text-destructive' :
+                                sev === 'warning' ? 'bg-warning/15 text-warning' :
+                                'bg-muted text-foreground';
                               const lastTime = err.last_seen || err.created_at;
                               return (
                                 <TableRow key={err.id} data-state={selectedIds.has(err.id) ? 'selected' : undefined}>

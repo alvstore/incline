@@ -17,11 +17,11 @@ import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Penc
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
 const STATUS_BADGE: Record<Status, string> = {
-  draft: 'bg-slate-100 text-slate-700',
-  reviewed: 'bg-blue-100 text-blue-700',
-  approved: 'bg-violet-100 text-violet-700',
-  processed: 'bg-amber-100 text-amber-700',
-  paid: 'bg-emerald-100 text-emerald-700',
+  draft: 'bg-muted text-foreground',
+  reviewed: 'bg-info/15 text-info',
+  approved: 'bg-primary/15 text-primary',
+  processed: 'bg-warning/15 text-warning',
+  paid: 'bg-success/15 text-success',
 };
 
 interface Props {
@@ -166,7 +166,7 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const activeRun = runs.find((r: any) => r.id === activeRunId);
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div>
           <CardTitle className="text-base">Payroll Run — {periodStart} → {periodEnd}</CardTitle>

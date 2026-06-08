@@ -23,11 +23,11 @@ interface Props {
 
 function statusPill(status: string) {
   switch (status) {
-    case 'sent': return { c: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2, label: 'Sent' };
-    case 'failed': return { c: 'bg-red-100 text-red-700', icon: AlertTriangle, label: 'Failed' };
-    case 'queued': return { c: 'bg-slate-100 text-slate-700', icon: Clock, label: 'Queued' };
-    case 'skipped': return { c: 'bg-amber-100 text-amber-700', icon: AlertTriangle, label: 'Skipped' };
-    case 'suppressed': return { c: 'bg-amber-100 text-amber-700', icon: AlertTriangle, label: 'Suppressed' };
+    case 'sent': return { c: 'bg-success/15 text-success', icon: CheckCircle2, label: 'Sent' };
+    case 'failed': return { c: 'bg-destructive/15 text-destructive', icon: AlertTriangle, label: 'Failed' };
+    case 'queued': return { c: 'bg-muted text-foreground', icon: Clock, label: 'Queued' };
+    case 'skipped': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Skipped' };
+    case 'suppressed': return { c: 'bg-warning/15 text-warning', icon: AlertTriangle, label: 'Suppressed' };
     default: return { c: 'bg-muted text-muted-foreground', icon: Clock, label: status };
   }
 }
@@ -99,7 +99,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
     <ResponsiveSheet open={open} onOpenChange={onOpenChange}>
       <ResponsiveSheetHeader>
         <ResponsiveSheetTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-violet-600" /> Campaign report
+          <FileText className="h-5 w-5 text-primary" /> Campaign report
         </ResponsiveSheetTitle>
         <ResponsiveSheetDescription>{campaign.name}</ResponsiveSheetDescription>
       </ResponsiveSheetHeader>
@@ -108,26 +108,26 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
         {/* Totals */}
         <div className="grid grid-cols-4 gap-2">
           <Stat label="Total" value={totals.total} color="text-foreground" />
-          <Stat label="Delivered" value={totals.sent} color="text-emerald-600" />
-          <Stat label="Failed" value={totals.failed} color="text-red-600" />
-          <Stat label="Read" value={totals.read} color="text-violet-600" icon={MessageCircle} />
+          <Stat label="Delivered" value={totals.sent} color="text-success" />
+          <Stat label="Failed" value={totals.failed} color="text-destructive" />
+          <Stat label="Read" value={totals.read} color="text-primary" icon={MessageCircle} />
         </div>
 
         {/* Failure groups */}
         {groups.length > 0 && (
-          <div className="rounded-2xl border border-red-200 bg-red-50/50 dark:bg-red-500/5 p-3 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-red-700 flex items-center gap-1.5">
+          <div className="rounded-2xl border border-destructive/25 bg-destructive/10 dark:bg-destructive/5 p-3 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" /> Failure breakdown
             </p>
             <ul className="space-y-1.5">
               {groups.map((g, i) => (
                 <li key={i} className="text-sm">
                   <div className="flex items-baseline gap-2">
-                    <span className="font-bold text-red-700">{g.count}×</span>
-                    <span className="font-mono text-[11px] text-red-600 bg-red-100 rounded px-1.5 py-0.5">{g.code}</span>
+                    <span className="font-bold text-destructive">{g.count}×</span>
+                    <span className="font-mono text-[11px] text-destructive bg-destructive/15 rounded px-1.5 py-0.5">{g.code}</span>
                     <span className="text-foreground truncate">{g.reason}</span>
                   </div>
-                  {g.hint && <p className="text-[11px] text-red-700/80 mt-0.5 ml-6">→ {g.hint}</p>}
+                  {g.hint && <p className="text-[11px] text-destructive/80 mt-0.5 ml-6">→ {g.hint}</p>}
                 </li>
               ))}
             </ul>
@@ -168,7 +168,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
 
         {/* Recipient list */}
         {isLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>
+          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted-foreground">No recipients match this filter.</div>
         ) : (
@@ -194,7 +194,7 @@ export function CampaignReportDrawer({ open, onOpenChange, campaign }: Props) {
                     </Badge>
                   </div>
                   {r.status === 'failed' && (r.error_reason || r.error_code) && (
-                    <div className="mt-1.5 text-[11px] text-red-700 bg-red-50 rounded-lg px-2 py-1">
+                    <div className="mt-1.5 text-[11px] text-destructive bg-destructive/10 rounded-lg px-2 py-1">
                       {r.error_code && <span className="font-mono mr-1.5">[{r.error_code}]</span>}
                       {r.error_reason || 'Unknown error'}
                     </div>

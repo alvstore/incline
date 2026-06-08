@@ -138,7 +138,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
               <Separator />
               <div>
                 <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <FlaskConical className="h-4 w-4 text-emerald-600" />
+                  <FlaskConical className="h-4 w-4 text-success" />
                   Batch & Lab Reports
                 </h4>
                 <div className="space-y-2">

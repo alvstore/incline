@@ -232,7 +232,7 @@ export const LeadNotificationCards = forwardRef<LeadNotificationCardsHandle, Pro
                 checked={form.email_to_managers}
                 onChange={() => toggle('email_to_managers')}
               />
-              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+              <p className="rounded-lg bg-success/10 px-3 py-2 text-xs leading-relaxed text-success dark:bg-success/30 dark:text-success">
                 <strong>Delivery:</strong> Team WhatsApp alerts are sent via the approved
                 Meta template <code>internal_new_lead_alert</code>, so they deliver to
                 admins/managers even outside the 24-hour customer-service window. SMS and

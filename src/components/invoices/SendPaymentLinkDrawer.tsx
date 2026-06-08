@@ -252,7 +252,7 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
                     className="h-auto py-3 flex flex-col gap-1.5 rounded-xl"
                     onClick={handleShareWhatsApp}
                   >
-                    <MessageSquare className="h-5 w-5 text-green-600" />
+                    <MessageSquare className="h-5 w-5 text-success" />
                     <span className="text-xs">Share via WhatsApp</span>
                   </Button>
                   <Button
@@ -260,7 +260,7 @@ export function SendPaymentLinkDrawer({ open, onOpenChange, invoice }: SendPayme
                     className="h-auto py-3 flex flex-col gap-1.5 rounded-xl"
                     onClick={() => window.open(generatedLink, '_blank')}
                   >
-                    <ExternalLink className="h-5 w-5 text-blue-600" />
+                    <ExternalLink className="h-5 w-5 text-info" />
                     <span className="text-xs">Open Link</span>
                   </Button>
                 </div>

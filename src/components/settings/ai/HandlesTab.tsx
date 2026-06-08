@@ -61,16 +61,16 @@ export function HandlesTab({ onJumpToKnowledge }: { onJumpToKnowledge?: () => vo
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
-        <Info className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
-        <p className="text-xs text-slate-600">
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/15">
+        <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+        <p className="text-xs text-muted-foreground">
           One card per AI handle, one editor inside. Edit <b>persona, model and operational
           settings</b> here. Shared facts, offers and rules live in the <b>Knowledge</b> tab and
           apply to every handle.
         </p>
       </div>
 
-      {isLoading && <div className="text-sm text-slate-500">Loading handles…</div>}
+      {isLoading && <div className="text-sm text-muted-foreground">Loading handles…</div>}
 
       <div className="space-y-3">
         {ordered.map((row) => (

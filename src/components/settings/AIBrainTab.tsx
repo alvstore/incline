@@ -81,10 +81,10 @@ interface HealthRow {
 }
 
 const HEALTH_LABEL: Record<HealthRow['health_flag'], { label: string; cls: string }> = {
-  healthy: { label: 'Healthy', cls: 'bg-emerald-100 text-emerald-700' },
-  disabled: { label: 'Disabled', cls: 'bg-slate-100 text-slate-600' },
-  prompt_too_short: { label: 'Prompt too short', cls: 'bg-amber-100 text-amber-700' },
-  high_error_rate: { label: 'High error rate', cls: 'bg-red-100 text-red-700' },
+  healthy: { label: 'Healthy', cls: 'bg-success/15 text-success' },
+  disabled: { label: 'Disabled', cls: 'bg-muted text-muted-foreground' },
+  prompt_too_short: { label: 'Prompt too short', cls: 'bg-warning/15 text-warning' },
+  high_error_rate: { label: 'High error rate', cls: 'bg-destructive/15 text-destructive' },
 };
 
 const EMPTY_ROW: Omit<BrainRow, 'id' | 'updated_at'> = {
@@ -197,11 +197,11 @@ export function AIBrainTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary to-primary text-primary-foreground shadow-lg shadow-primary/20">
                 <Brain className="h-5 w-5" />
               </div>
               <div>
@@ -224,7 +224,7 @@ export function AIBrainTab() {
 
       {/* Health */}
       {health && health.length > 0 && (
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Handle Health (last 24h)</CardTitle>
             <CardDescription>
@@ -240,13 +240,13 @@ export function AIBrainTab() {
                 return (
                   <div
                     key={`${h.purpose}-${h.branch_id ?? 'g'}-${i}`}
-                    className="rounded-xl border bg-slate-50/60 p-3 flex items-start justify-between gap-3"
+                    className="rounded-xl border bg-muted/60 p-3 flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">
+                      <p className="text-sm font-semibold text-foreground truncate">
                         {h.purpose}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {h.branch_id ? branchName(h.branch_id) : 'Global'} · prompt{' '}
                         {h.prompt_len} chars · {h.calls_24h} calls · {h.error_rate_pct}% errors
                       </p>
@@ -263,7 +263,7 @@ export function AIBrainTab() {
       )}
 
       {/* Entries table */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-2">
@@ -293,8 +293,8 @@ export function AIBrainTab() {
                 </TableHeader>
                 <TableBody>
                   {rows.map((r) => (
-                    <TableRow key={r.id} className="hover:bg-slate-50">
-                      <TableCell className="font-medium text-slate-900 max-w-[260px] truncate">
+                    <TableRow key={r.id} className="hover:bg-muted">
+                      <TableCell className="font-medium text-foreground max-w-[260px] truncate">
                         {r.title}
                       </TableCell>
                       <TableCell>
@@ -303,19 +303,19 @@ export function AIBrainTab() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {r.applies_to.slice(0, 3).map((p) => (
-                            <Badge key={p} className="bg-indigo-50 text-indigo-700 text-xs">
+                            <Badge key={p} className="bg-primary/10 text-primary text-xs">
                               {p === 'all' ? 'All handles' : titleFor(p, registry)}
                             </Badge>
                           ))}
                           {r.applies_to.length > 3 && (
-                            <Badge className="bg-slate-100 text-slate-600 text-xs">
+                            <Badge className="bg-muted text-muted-foreground text-xs">
                               +{r.applies_to.length - 3}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           {r.branch_id ? (
                             <>
                               <MapPin className="h-3 w-3" /> {branchName(r.branch_id)}
@@ -327,16 +327,16 @@ export function AIBrainTab() {
                           )}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-xs text-slate-500">
+                      <TableCell className="text-right text-xs text-muted-foreground">
                         {r.priority}
                       </TableCell>
                       <TableCell>
                         {r.status === 'active' && r.is_active ? (
-                          <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+                          <Badge className="bg-success/15 text-success">Active</Badge>
                         ) : r.status === 'suggested' ? (
-                          <Badge className="bg-amber-100 text-amber-700">Suggested</Badge>
+                          <Badge className="bg-warning/15 text-warning">Suggested</Badge>
                         ) : (
-                          <Badge className="bg-slate-100 text-slate-600">Inactive</Badge>
+                          <Badge className="bg-muted text-muted-foreground">Inactive</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -359,7 +359,7 @@ export function AIBrainTab() {
                             size="icon"
                             variant="ghost"
                             aria-label="Delete entry"
-                            className="text-red-600 hover:bg-red-50"
+                            className="text-destructive hover:bg-destructive/10"
                             onClick={() => {
                               if (confirm(`Delete "${r.title}"?`)) deleteMutation.mutate(r.id);
                             }}
@@ -501,7 +501,7 @@ export function AIBrainTab() {
             </div>
           </div>
 
-          <SheetFooter className="px-6 py-4 border-t bg-white">
+          <SheetFooter className="px-6 py-4 border-t bg-card">
             <div className="flex items-center justify-end gap-2 w-full">
               <Button variant="ghost" onClick={() => setEditing(null)}>
                 Cancel
@@ -532,7 +532,7 @@ function EmbeddingPill({
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+            <Badge className="bg-success/15 text-success gap-1">
               <Sparkles className="h-3 w-3" /> Ready
             </Badge>
           </TooltipTrigger>
@@ -547,7 +547,7 @@ function EmbeddingPill({
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge className="bg-amber-100 text-amber-700 gap-1">
+            <Badge className="bg-warning/15 text-warning gap-1">
               <Loader2 className="h-3 w-3 animate-spin" /> Embedding…
             </Badge>
           </TooltipTrigger>
@@ -560,7 +560,7 @@ function EmbeddingPill({
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge className="bg-red-100 text-red-700 gap-1">
+          <Badge className="bg-destructive/15 text-destructive gap-1">
             <AlertCircle className="h-3 w-3" /> Embed failed
           </Badge>
         </TooltipTrigger>

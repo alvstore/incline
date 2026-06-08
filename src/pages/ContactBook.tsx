@@ -191,11 +191,11 @@ export default function ContactBookPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
-            { label: 'Total', value: counts.total, cls: 'bg-slate-50 text-slate-700' },
-            { label: 'Members', value: counts.member, cls: 'bg-emerald-50 text-emerald-700' },
-            { label: 'Leads', value: counts.lead, cls: 'bg-amber-50 text-amber-700' },
-            { label: 'AI / Marketing', value: counts.ai, cls: 'bg-violet-50 text-violet-700' },
-            { label: 'Manual', value: counts.manual, cls: 'bg-indigo-50 text-indigo-700' },
+            { label: 'Total', value: counts.total, cls: 'bg-muted text-foreground' },
+            { label: 'Members', value: counts.member, cls: 'bg-success/10 text-success' },
+            { label: 'Leads', value: counts.lead, cls: 'bg-warning/10 text-warning' },
+            { label: 'AI / Marketing', value: counts.ai, cls: 'bg-primary/10 text-primary' },
+            { label: 'Manual', value: counts.manual, cls: 'bg-primary/10 text-primary' },
           ].map((s) => (
             <div key={s.label} className={`rounded-2xl p-3 ${s.cls}`}>
               <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{s.label}</p>
@@ -239,7 +239,7 @@ export default function ContactBookPage() {
         </div>
 
         {/* Table */}
-        <div className="rounded-2xl bg-card shadow-md shadow-slate-200/50 overflow-hidden">
+        <div className="rounded-2xl bg-card shadow-md shadow/50 overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -273,19 +273,19 @@ export default function ContactBookPage() {
                 filtered.map((c) => {
                   const sourceMeta = (() => {
                     switch (c.source_type) {
-                      case 'member': return { label: 'Member', icon: UserCircle2, cls: 'bg-emerald-100 text-emerald-700' };
-                      case 'lead':   return { label: 'Lead',   icon: UserPlus,    cls: 'bg-amber-100 text-amber-700' };
-                      case 'ai':     return { label: 'AI',     icon: Sparkles,    cls: 'bg-violet-100 text-violet-700' };
-                      default:       return { label: 'Manual', icon: BookUser,    cls: 'bg-slate-100 text-slate-700' };
+                      case 'member': return { label: 'Member', icon: UserCircle2, cls: 'bg-success/15 text-success' };
+                      case 'lead':   return { label: 'Lead',   icon: UserPlus,    cls: 'bg-warning/15 text-warning' };
+                      case 'ai':     return { label: 'AI',     icon: Sparkles,    cls: 'bg-primary/15 text-primary' };
+                      default:       return { label: 'Manual', icon: BookUser,    cls: 'bg-muted text-foreground' };
                     }
                   })();
                   const SourceIcon = sourceMeta.icon;
                   return (
-                  <TableRow key={c.id} className="hover:bg-slate-50">
+                  <TableRow key={c.id} className="hover:bg-muted">
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
-                          <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs font-bold">
+                          <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">
                             {initials(c.full_name)}
                           </AvatarFallback>
                         </Avatar>
@@ -320,7 +320,7 @@ export default function ContactBookPage() {
                             variant="ghost" size="icon" aria-label="Open member"
                             onClick={() => navigate(`/members?member=${c.source_id}`)}
                           >
-                            <ExternalLink className="h-4 w-4 text-emerald-600" />
+                            <ExternalLink className="h-4 w-4 text-success" />
                           </Button>
                         )}
                         {c.source_type === 'lead' && c.source_id && (
@@ -328,7 +328,7 @@ export default function ContactBookPage() {
                             variant="ghost" size="icon" aria-label="Open lead"
                             onClick={() => navigate(`/leads?lead=${c.source_id}`)}
                           >
-                            <ExternalLink className="h-4 w-4 text-amber-600" />
+                            <ExternalLink className="h-4 w-4 text-warning" />
                           </Button>
                         )}
                         <Button
@@ -337,7 +337,7 @@ export default function ContactBookPage() {
                           aria-label="Open chat"
                           onClick={() => navigate(`/whatsapp-chat?phone=${encodeURIComponent(c.phone)}`)}
                         >
-                          <MessageSquare className="h-4 w-4 text-emerald-600" />
+                          <MessageSquare className="h-4 w-4 text-success" />
                         </Button>
                         <Button
                           variant="ghost"

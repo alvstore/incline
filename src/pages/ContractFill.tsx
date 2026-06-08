@@ -123,12 +123,12 @@ export default function ContractFillPage() {
       : fields.every((f) => !f.required || (mergedVars[f.key] ?? '').toString().trim() !== '');
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4">
+    <div className="min-h-screen bg-muted py-10 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-indigo-600" />
+              <ClipboardCheck className="h-5 w-5 text-primary" />
               Complete your contract details
             </CardTitle>
             <CardDescription>
@@ -146,8 +146,8 @@ export default function ContractFillPage() {
               <div><strong>Role:</strong> <Badge variant="outline" className="capitalize">{role.replace('_', ' ')}</Badge></div>
               <div><strong>Required remaining:</strong>{' '}
                 {remainingRequired.length === 0
-                  ? <Badge className="bg-emerald-100 text-emerald-700">All set</Badge>
-                  : <Badge className="bg-amber-100 text-amber-700">{remainingRequired.length} pending</Badge>}
+                  ? <Badge className="bg-success/15 text-success">All set</Badge>
+                  : <Badge className="bg-warning/15 text-warning">{remainingRequired.length} pending</Badge>}
               </div>
             </div>
 
@@ -158,10 +158,10 @@ export default function ContractFillPage() {
                 <div key={f.key} className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor={f.key}>
-                      {f.label} {f.required && <span className="text-red-500">*</span>}
+                      {f.label} {f.required && <span className="text-destructive">*</span>}
                     </Label>
                     {(mergedVars[f.key] ?? '').toString().trim() !== '' && (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-label="filled" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-label="filled" />
                     )}
                   </div>
                   {f.input === 'textarea' ? (
@@ -181,7 +181,7 @@ export default function ContractFillPage() {
                       placeholder={f.placeholder}
                     />
                   )}
-                  {f.helper && <p className="text-xs text-slate-500">{f.helper}</p>}
+                  {f.helper && <p className="text-xs text-muted-foreground">{f.helper}</p>}
                 </div>
               ))}
             </div>
@@ -198,7 +198,7 @@ export default function ContractFillPage() {
                 </Button>
               )}
               <Button
-                className="bg-indigo-600 hover:bg-indigo-700"
+                className="bg-primary hover:bg-primary"
                 onClick={() => fillMutation.mutate()}
                 disabled={fillMutation.isPending}
               >

@@ -575,7 +575,7 @@ export default function POSPage() {
                             ? new Date(info.nextBatch.exp_date).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
                             : '—';
                           return (
-                            <p className={`text-[10px] mt-0.5 truncate ${info.expiringSoon ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                            <p className={`text-[10px] mt-0.5 truncate ${info.expiringSoon ? 'text-warning font-medium' : 'text-muted-foreground'}`}>
                               Batch {info.nextBatch.batch_number} · EXP {expLabel}{info.expiringSoon ? ' ⚠' : ''}
                             </p>
                           );
@@ -735,7 +735,7 @@ export default function POSPage() {
                                 ? new Date(info.nextBatch.exp_date).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
                                 : '—';
                               return (
-                                <p className={`text-[10px] ${info.expiringSoon ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                <p className={`text-[10px] ${info.expiringSoon ? 'text-warning font-medium' : 'text-muted-foreground'}`}>
                                   FEFO: {info.nextBatch.batch_number} · EXP {expLabel}
                                 </p>
                               );
@@ -969,7 +969,7 @@ export default function POSPage() {
       <ResponsiveSheet open={showInvoice} onOpenChange={setShowInvoice} width="md">
         <ResponsiveSheetHeader>
           <ResponsiveSheetTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-green-500" />
+            <Receipt className="h-5 w-5 text-success" />
             Sale Complete!
           </ResponsiveSheetTitle>
           <ResponsiveSheetDescription>

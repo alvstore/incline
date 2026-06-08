@@ -150,11 +150,11 @@ export default function ContractSignPage() {
 
   if (signed) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <Card className="max-w-lg w-full rounded-2xl shadow-lg shadow-slate-200/50">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-6">
+        <Card className="max-w-lg w-full rounded-2xl shadow-lg shadow/50">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-2 h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            <div className="mx-auto mb-2 h-14 w-14 rounded-full bg-success/15 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-success" />
             </div>
             <CardTitle>Contract signed</CardTitle>
             <CardDescription>
@@ -177,12 +177,12 @@ export default function ContractSignPage() {
   const hasEmail = !!contract.employee_email_masked;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4">
+    <div className="min-h-screen bg-muted py-10 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileSignature className="h-5 w-5 text-indigo-600" />
+              <FileSignature className="h-5 w-5 text-primary" />
               Employment Agreement — Signature
             </CardTitle>
             <CardDescription>
@@ -209,15 +209,15 @@ export default function ContractSignPage() {
                   <ScrollText className="h-4 w-4" /> Contract Terms
                 </h3>
                 {reachedBottom ? (
-                  <Badge className="bg-emerald-100 text-emerald-700">Read</Badge>
+                  <Badge className="bg-success/15 text-success">Read</Badge>
                 ) : (
-                  <Badge className="bg-amber-100 text-amber-700">Scroll to bottom to enable signing</Badge>
+                  <Badge className="bg-warning/15 text-warning">Scroll to bottom to enable signing</Badge>
                 )}
               </div>
               <div
                 ref={termsScrollRef}
                 onScroll={onTermsScroll}
-                className="rounded-md border bg-white p-4 max-h-[420px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed"
+                className="rounded-md border bg-card p-4 max-h-[420px] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed"
               >
                 {termsText}
               </div>
@@ -226,14 +226,14 @@ export default function ContractSignPage() {
             <Separator />
 
             {/* OTP block */}
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+            <div className="rounded-xl border border-primary/15 bg-primary/10 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-indigo-600" />
+                <KeyRound className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-sm">Verify with one-time code</h3>
               </div>
               {!otpSent ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-600">Send a 6-digit code to your registered contact to confirm it's really you.</p>
+                  <p className="text-xs text-muted-foreground">Send a 6-digit code to your registered contact to confirm it's really you.</p>
                   <div className="flex flex-wrap gap-2">
                     {hasPhone && (
                       <Button size="sm" variant="outline" disabled={otpMutation.isPending}
@@ -254,18 +254,18 @@ export default function ContractSignPage() {
                       </Button>
                     )}
                     {!hasPhone && !hasEmail && (
-                      <p className="text-xs text-red-600">No phone or email on record. Please contact HR.</p>
+                      <p className="text-xs text-destructive">No phone or email on record. Please contact HR.</p>
                     )}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-600">
+                  <p className="text-xs text-muted-foreground">
                     Code sent via <strong className="capitalize">{otpSent.channel}</strong> to <strong>{otpSent.recipient_masked}</strong>. It expires in 10 minutes.
                   </p>
                   <div className="flex gap-2 items-end">
                     <div className="space-y-1 flex-1 max-w-[200px]">
-                      <Label htmlFor="otp" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">6-digit code</Label>
+                      <Label htmlFor="otp" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">6-digit code</Label>
                       <Input
                         id="otp"
                         inputMode="numeric"
@@ -316,14 +316,14 @@ export default function ContractSignPage() {
                     <Eraser className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 </div>
-                <div className="rounded-md border-2 border-dashed border-indigo-200 bg-white">
+                <div className="rounded-md border-2 border-dashed border-primary/25 bg-card">
                   <SignatureCanvas
                     ref={(r) => { sigRef.current = r; }}
                     penColor="#1e1b4b"
                     canvasProps={{ className: 'w-full h-40 rounded-md' }}
                   />
                 </div>
-                <p className="text-xs text-slate-500">Use mouse, stylus or finger on touch devices.</p>
+                <p className="text-xs text-muted-foreground">Use mouse, stylus or finger on touch devices.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -339,7 +339,7 @@ export default function ContractSignPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 rounded-md border p-3 bg-white">
+              <div className="flex items-start gap-2 rounded-md border p-3 bg-card">
                 <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
                 <Label htmlFor="consent" className="text-sm leading-relaxed">
                   I confirm I have read and agree to this contract and the linked policies. I consent
@@ -349,7 +349,7 @@ export default function ContractSignPage() {
               </div>
 
               <Button
-                className="w-full bg-indigo-600 hover:bg-indigo-700"
+                className="w-full bg-primary hover:bg-primary"
                 disabled={!canSubmit}
                 onClick={() => signMutation.mutate()}
                 aria-label="Sign contract"

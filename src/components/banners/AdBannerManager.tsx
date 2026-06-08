@@ -100,9 +100,9 @@ export function AdBannerManager({ branchId }: AdBannerManagerProps) {
   const resetForm = () => { setTitle(''); setImageUrl(''); setRedirectUrl(''); setIsActive(true); };
 
   return (
-    <Card className="rounded-2xl border-none shadow-lg shadow-indigo-100">
+    <Card className="rounded-2xl border-none shadow-lg shadow-primary/20">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+        <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
           <Image className="h-5 w-5 text-accent" /> Ad Banners
         </CardTitle>
         <Button size="sm" onClick={() => setDrawerOpen(true)}>

@@ -71,36 +71,36 @@ export function AppliesToPicker({ value, onChange }: Props) {
     <TooltipProvider delayDuration={150}>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Pick which AI handles consume this entry.
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={selectAllNonWildcard}
-              className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+              className="text-[11px] font-medium text-primary hover:text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
             >
               Select all
             </button>
-            <span className="text-slate-300">·</span>
+            <span className="text-muted-foreground">·</span>
             <button
               type="button"
               onClick={clearAll}
-              className="text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+              className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
             >
               Reset to wildcard
             </button>
           </div>
         </div>
 
-        <div className="rounded-xl border bg-slate-50/60 p-3 space-y-3 max-h-[360px] overflow-y-auto">
+        <div className="rounded-xl border bg-muted/60 p-3 space-y-3 max-h-[360px] overflow-y-auto">
           {isLoading && (
-            <p className="text-xs text-slate-400">Loading handles…</p>
+            <p className="text-xs text-muted-foreground">Loading handles…</p>
           )}
 
           {groups.map(({ group, items }) => (
             <div key={group} className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {group}
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -117,8 +117,8 @@ export function AppliesToPicker({ value, onChange }: Props) {
           ))}
 
           {unknownKeys.length > 0 && (
-            <div className="space-y-1.5 pt-2 border-t border-amber-200">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+            <div className="space-y-1.5 pt-2 border-t border-warning/25">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-warning">
                 Unknown keys (legacy)
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -128,7 +128,7 @@ export function AppliesToPicker({ value, onChange }: Props) {
                       <button
                         type="button"
                         onClick={() => onChange(selected.filter((s) => s !== k))}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-warning/40 bg-warning/10 text-warning hover:bg-warning/15 focus:outline-none focus:ring-2 focus:ring-warning"
                       >
                         <AlertTriangle className="h-3 w-3" />
                         <span className="font-mono">{k}</span>
@@ -145,8 +145,8 @@ export function AppliesToPicker({ value, onChange }: Props) {
           )}
         </div>
 
-        <p className="text-xs text-slate-600">
-          <span className="font-semibold text-slate-900">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">
             Applies to {matchedHandles} of {totalHandles} handles
           </span>
           {summaryTitles.length > 0 && (
@@ -173,14 +173,14 @@ function PurposeChip({
 }) {
   const disabled = !meta.enabled && !meta.isWildcard;
   const base =
-    'text-xs px-2.5 py-1 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500';
+    'text-xs px-2.5 py-1 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-primary';
   const cls = active
     ? meta.isWildcard
-      ? 'bg-violet-600 text-white border-violet-600'
-      : 'bg-indigo-600 text-white border-indigo-600'
+      ? 'bg-primary text-primary-foreground border-primary'
+      : 'bg-primary text-primary-foreground border-primary'
     : disabled
-      ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100';
+      ? 'bg-muted text-muted-foreground border-border hover:bg-muted'
+      : 'bg-card text-foreground border-border hover:bg-muted';
 
   const chip = (
     <button type="button" onClick={onToggle} className={`${base} ${cls}`}>
@@ -195,10 +195,10 @@ function PurposeChip({
       <TooltipTrigger asChild>{chip}</TooltipTrigger>
       <TooltipContent className="max-w-[260px]">
         <div className="space-y-0.5">
-          <p className="text-xs font-mono text-slate-300">{meta.key}</p>
+          <p className="text-xs font-mono text-muted-foreground">{meta.key}</p>
           {meta.description && <p className="text-xs">{meta.description}</p>}
           {disabled && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-warning">
               Handle disabled — entry will not be consumed until enabled.
             </p>
           )}

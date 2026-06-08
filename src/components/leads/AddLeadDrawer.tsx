@@ -110,9 +110,9 @@ export function AddLeadDrawer({ open, onOpenChange, defaultBranchId, prefill }: 
   });
 
   const TEMP_OPTIONS = [
-    { value: 'hot', label: 'Hot', icon: Flame, color: 'text-red-500' },
-    { value: 'warm', label: 'Warm', icon: Sun, color: 'text-amber-500' },
-    { value: 'cold', label: 'Cold', icon: Snowflake, color: 'text-blue-500' },
+    { value: 'hot', label: 'Hot', icon: Flame, color: 'text-destructive' },
+    { value: 'warm', label: 'Warm', icon: Sun, color: 'text-warning' },
+    { value: 'cold', label: 'Cold', icon: Snowflake, color: 'text-info' },
   ];
 
   return (

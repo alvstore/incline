@@ -30,18 +30,18 @@ export type AutomationRun = {
 };
 
 export const CATEGORY_COLOR: Record<string, string> = {
-  billing: 'bg-amber-100 text-amber-700',
-  booking: 'bg-sky-100 text-sky-700',
-  engagement: 'bg-violet-100 text-violet-700',
-  lifecycle: 'bg-emerald-100 text-emerald-700',
-  system: 'bg-slate-100 text-slate-700',
+  billing: 'bg-warning/15 text-warning',
+  booking: 'bg-info/15 text-info',
+  engagement: 'bg-primary/15 text-primary',
+  lifecycle: 'bg-success/15 text-success',
+  system: 'bg-muted text-foreground',
 };
 
 export const STATUS_COLOR: Record<string, string> = {
-  success: 'bg-emerald-100 text-emerald-700',
-  error: 'bg-rose-100 text-rose-700',
-  running: 'bg-sky-100 text-sky-700',
-  skipped: 'bg-slate-100 text-slate-600',
+  success: 'bg-success/15 text-success',
+  error: 'bg-destructive/15 text-destructive',
+  running: 'bg-info/15 text-info',
+  skipped: 'bg-muted text-muted-foreground',
 };
 
 // Deep-links: clicking the rule's "Open target" jumps to the page that owns its content.

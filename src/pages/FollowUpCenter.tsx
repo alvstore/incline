@@ -170,9 +170,9 @@ export default function FollowUpCenter() {
               <p className="text-xs text-muted-foreground">Pending Payments</p>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border-amber-500/20">
+          <Card className="rounded-2xl border-warning/20">
             <CardContent className="pt-4 pb-3 text-center">
-              <RefreshCw className="h-6 w-6 mx-auto text-amber-500 mb-1" />
+              <RefreshCw className="h-6 w-6 mx-auto text-warning mb-1" />
               <p className="text-2xl font-bold">{renewals.length}</p>
               <p className="text-xs text-muted-foreground">Renewals Due</p>
             </CardContent>
@@ -191,9 +191,9 @@ export default function FollowUpCenter() {
               <p className="text-xs text-muted-foreground">Open Tasks</p>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border-orange-500/20">
+          <Card className="rounded-2xl border-warning/20">
             <CardContent className="pt-4 pb-3 text-center">
-              <Users className="h-6 w-6 mx-auto text-orange-500 mb-1" />
+              <Users className="h-6 w-6 mx-auto text-warning mb-1" />
               <p className="text-2xl font-bold">{inactiveMembers.length}</p>
               <p className="text-xs text-muted-foreground">Inactive Members</p>
             </CardContent>
@@ -241,7 +241,7 @@ export default function FollowUpCenter() {
                             {inv.member?.profiles?.phone && (
                               <Button size="icon" variant="ghost" className="h-8 w-8"
                                 onClick={() => communicationService.sendWhatsApp(inv.member.profiles.phone, `Hi ${inv.member.profiles.full_name}, this is a reminder for your pending payment of ₹${due}. Invoice: ${inv.invoice_number}. Please visit the gym to settle.`)}>
-                                <MessageSquare className="h-4 w-4 text-emerald-500" />
+                                <MessageSquare className="h-4 w-4 text-success" />
                               </Button>
                             )}
                           </div>
@@ -258,7 +258,7 @@ export default function FollowUpCenter() {
           <TabsContent value="renewals">
             <Card className="rounded-2xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-amber-500" />Membership Renewals (Next 7 Days)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-warning" />Membership Renewals (Next 7 Days)</CardTitle>
               </CardHeader>
               <CardContent>
                 {renewals.length === 0 ? (
@@ -280,7 +280,7 @@ export default function FollowUpCenter() {
                             {ms.member?.profiles?.phone && (
                               <Button size="icon" variant="ghost" className="h-8 w-8"
                                 onClick={() => communicationService.sendWhatsApp(ms.member.profiles.phone, `Hi ${ms.member.profiles.full_name}, your membership (${ms.plan?.name || 'plan'}) expires on ${format(new Date(ms.end_date), 'dd MMM yyyy')}. Please visit us to renew!`)}>
-                                <MessageSquare className="h-4 w-4 text-emerald-500" />
+                                <MessageSquare className="h-4 w-4 text-success" />
                               </Button>
                             )}
                           </div>
@@ -313,7 +313,7 @@ export default function FollowUpCenter() {
                             <p className="font-medium">{lead.full_name}</p>
                             <p className="text-sm text-muted-foreground">{lead.phone || lead.email || 'No contact'} • Source: {lead.source || 'Direct'}</p>
                             {lead.follow_up_date && (
-                              <p className={`text-xs mt-0.5 ${isOverdue ? 'text-destructive font-medium' : 'text-amber-500'}`}>
+                              <p className={`text-xs mt-0.5 ${isOverdue ? 'text-destructive font-medium' : 'text-warning'}`}>
                                 Follow-up: {format(new Date(lead.follow_up_date), 'dd MMM yyyy')} {isOverdue ? '(OVERDUE)' : ''}
                               </p>
                             )}
@@ -324,11 +324,11 @@ export default function FollowUpCenter() {
                             {lead.phone && (
                               <>
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(`tel:${lead.phone}`)}>
-                                  <PhoneCall className="h-4 w-4 text-sky-500" />
+                                  <PhoneCall className="h-4 w-4 text-info" />
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-8 w-8"
                                   onClick={() => communicationService.sendWhatsApp(lead.phone, `Hi ${lead.full_name}, we'd love to welcome you to our gym! Would you like to schedule a tour?`)}>
-                                  <MessageSquare className="h-4 w-4 text-emerald-500" />
+                                  <MessageSquare className="h-4 w-4 text-success" />
                                 </Button>
                               </>
                             )}
@@ -383,7 +383,7 @@ export default function FollowUpCenter() {
           <TabsContent value="inactive">
             <Card className="rounded-2xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-orange-500" />Requires Follow-Up (21+ Days Absent)</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-warning" />Requires Follow-Up (21+ Days Absent)</CardTitle>
               </CardHeader>
               <CardContent>
                 {inactiveMembers.length === 0 ? (
@@ -411,11 +411,11 @@ export default function FollowUpCenter() {
                             {member.phone && (
                               <>
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(`tel:${member.phone}`)}>
-                                  <PhoneCall className="h-4 w-4 text-sky-500" />
+                                  <PhoneCall className="h-4 w-4 text-info" />
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-8 w-8"
                                   onClick={() => communicationService.sendWhatsApp(member.phone, `Hi ${member.full_name}, we miss you at the gym! Come visit us today.`)}>
-                                  <MessageSquare className="h-4 w-4 text-emerald-500" />
+                                  <MessageSquare className="h-4 w-4 text-success" />
                                 </Button>
                               </>
                             )}

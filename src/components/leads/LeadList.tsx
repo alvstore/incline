@@ -168,7 +168,7 @@ export function LeadList({ leads, isLoading, page, onPageChange, onSelectLead, o
               <TableBody>
                 {paginatedLeads.map((lead: any) => {
                   const TempIcon = lead.temperature === 'hot' ? Flame : lead.temperature === 'cold' ? Snowflake : Sun;
-                  const tempColor = lead.temperature === 'hot' ? 'text-red-500' : lead.temperature === 'cold' ? 'text-blue-500' : 'text-amber-500';
+                  const tempColor = lead.temperature === 'hot' ? 'text-destructive' : lead.temperature === 'cold' ? 'text-info' : 'text-warning';
                   const isOverdue = lead.next_action_at && new Date(lead.next_action_at) < new Date();
                   const isSelected = selectedIds.has(lead.id);
 
@@ -282,11 +282,11 @@ export function LeadList({ leads, isLoading, page, onPageChange, onSelectLead, o
                         <div className="flex items-center gap-1">
                           {lead.phone && (
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => communicationService.sendWhatsApp(lead.phone, `Hi ${lead.full_name}!`)}>
-                              <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
+                              <MessageSquare className="h-3.5 w-3.5 text-success" />
                             </Button>
                           )}
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => window.open(`tel:${lead.phone}`)}>
-                            <Phone className="h-3.5 w-3.5 text-sky-500" />
+                            <Phone className="h-3.5 w-3.5 text-info" />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onFollowup(lead)}>
                             <Calendar className="h-3.5 w-3.5" />

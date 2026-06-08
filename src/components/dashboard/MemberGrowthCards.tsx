@@ -101,7 +101,7 @@ function GrowthCard({ title, value, previous, icon: Icon, subtitle }: { title: s
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between">
-          <div className={cn('flex items-center gap-1 text-xs font-semibold', isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
+          <div className={cn('flex items-center gap-1 text-xs font-semibold', isUp ? 'text-success dark:text-success' : 'text-destructive')}>
             <DeltaIcon className="h-3.5 w-3.5" />
             <span>{isUp ? '+' : ''}{diff.toLocaleString()}</span>
             <span className="opacity-80">({isUp ? '+' : ''}{pct.toFixed(2)}%)</span>

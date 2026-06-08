@@ -23,10 +23,10 @@ interface Props {
 }
 
 const OPTIONS: Array<{ value: PtSessionStatusInput; label: string; Icon: any; cls: string }> = [
-  { value: 'present', label: 'Present', Icon: CheckCircle2, cls: 'text-emerald-600' },
-  { value: 'late',    label: 'Late',    Icon: Clock,        cls: 'text-amber-600' },
-  { value: 'absent',  label: 'Absent',  Icon: XCircle,      cls: 'text-red-600' },
-  { value: 'holiday', label: 'Holiday', Icon: Sun,          cls: 'text-blue-600' },
+  { value: 'present', label: 'Present', Icon: CheckCircle2, cls: 'text-success' },
+  { value: 'late',    label: 'Late',    Icon: Clock,        cls: 'text-warning' },
+  { value: 'absent',  label: 'Absent',  Icon: XCircle,      cls: 'text-destructive' },
+  { value: 'holiday', label: 'Holiday', Icon: Sun,          cls: 'text-info' },
 ];
 
 export function MarkPtStatusMenu({
@@ -114,7 +114,7 @@ export function MarkPtStatusMenu({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-600">Notes (optional)</label>
+            <label className="text-xs font-medium text-muted-foreground">Notes (optional)</label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

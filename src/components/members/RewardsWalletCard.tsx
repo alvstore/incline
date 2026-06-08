@@ -92,15 +92,15 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10">
+        <Card className="border-success/30 bg-gradient-to-br from-success/5 to-success/10">
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-500/10">
-                <Wallet className="h-5 w-5 text-emerald-600" />
+              <div className="p-2.5 rounded-xl bg-success/10">
+                <Wallet className="h-5 w-5 text-success" />
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Wallet Balance</p>
-                <p className="text-2xl font-bold text-emerald-600">₹{(Number(walletData?.balance) || 0).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-success">₹{(Number(walletData?.balance) || 0).toLocaleString()}</p>
               </div>
             </div>
             <p className="text-[10px] text-muted-foreground mt-3 text-center">
@@ -149,9 +149,9 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
                   {ledger.map((entry: any) => (
                     <div key={entry.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-full ${entry.points > 0 ? 'bg-emerald-500/10' : 'bg-destructive/10'}`}>
+                        <div className={`p-1.5 rounded-full ${entry.points > 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
                           {entry.points > 0 ? (
-                            <ArrowUp className="h-3 w-3 text-emerald-600" />
+                            <ArrowUp className="h-3 w-3 text-success" />
                           ) : (
                             <ArrowDown className="h-3 w-3 text-destructive" />
                           )}
@@ -163,7 +163,7 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
                           </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={entry.points > 0 ? 'text-emerald-600 border-emerald-500/20' : 'text-destructive border-destructive/20'}>
+                      <Badge variant="outline" className={entry.points > 0 ? 'text-success border-success/20' : 'text-destructive border-destructive/20'}>
                         {entry.points > 0 ? '+' : ''}{entry.points}
                       </Badge>
                     </div>
@@ -184,9 +184,9 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
                   {walletTxns.map((txn: any) => (
                     <div key={txn.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-full ${txn.amount > 0 ? 'bg-emerald-500/10' : 'bg-destructive/10'}`}>
+                        <div className={`p-1.5 rounded-full ${txn.amount > 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
                           {txn.amount > 0 ? (
-                            <ArrowUp className="h-3 w-3 text-emerald-600" />
+                            <ArrowUp className="h-3 w-3 text-success" />
                           ) : (
                             <ArrowDown className="h-3 w-3 text-destructive" />
                           )}
@@ -198,7 +198,7 @@ export function RewardsWalletCard({ memberId, memberName, branchId, rewardPoints
                           </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={txn.amount > 0 ? 'text-emerald-600 border-emerald-500/20' : 'text-destructive border-destructive/20'}>
+                      <Badge variant="outline" className={txn.amount > 0 ? 'text-success border-success/20' : 'text-destructive border-destructive/20'}>
                         {txn.amount > 0 ? '+' : ''}₹{Math.abs(txn.amount).toLocaleString()}
                       </Badge>
                     </div>

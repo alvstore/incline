@@ -41,16 +41,16 @@ export function WhatsAppDeliveryHealthCard() {
     totals.sent === 0 ? 0 : Math.round((totals.delivered / totals.sent) * 100);
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+    <Card className="rounded-2xl shadow-lg shadow/50">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <MessageSquare className="h-5 w-5 text-indigo-600" />
+          <MessageSquare className="h-5 w-5 text-primary" />
           WhatsApp delivery (24h)
         </CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
             <Stat label="Sent" value={totals.sent} />
@@ -58,8 +58,8 @@ export function WhatsAppDeliveryHealthCard() {
             <Stat label="Read" value={totals.read} accent="indigo" />
             <Stat label="Failed" value={totals.failed} accent="red" />
             <Stat label="Stuck" value={totals.stuck} accent="amber" />
-            <div className="col-span-2 md:col-span-5 mt-2 text-xs text-slate-500">
-              Delivery rate: <span className="font-semibold text-slate-900">{deliveryRate}%</span>
+            <div className="col-span-2 md:col-span-5 mt-2 text-xs text-muted-foreground">
+              Delivery rate: <span className="font-semibold text-foreground">{deliveryRate}%</span>
             </div>
           </div>
         )}
@@ -78,16 +78,16 @@ function Stat({
   accent?: "slate" | "emerald" | "indigo" | "red" | "amber";
 }) {
   const color = {
-    slate: "text-slate-900",
-    emerald: "text-emerald-600",
-    indigo: "text-indigo-600",
-    red: "text-red-600",
-    amber: "text-amber-600",
+    slate: "text-foreground",
+    emerald: "text-success",
+    indigo: "text-primary",
+    red: "text-destructive",
+    amber: "text-warning",
   }[accent];
   return (
-    <div className="rounded-lg bg-slate-50 p-3">
+    <div className="rounded-lg bg-muted p-3">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
   );
 }

@@ -51,23 +51,23 @@ const WINDOWS: { value: WindowKey; label: string; days: number | null }[] = [
 ];
 
 const PLATFORM_CHIPS: { value: PlatformFilter; label: string; className: string }[] = [
-  { value: "all", label: "All channels", className: "bg-slate-100 text-slate-700" },
-  { value: "whatsapp", label: "WhatsApp", className: "bg-emerald-100 text-emerald-700" },
-  { value: "instagram", label: "Instagram", className: "bg-pink-100 text-pink-700" },
-  { value: "messenger", label: "Messenger", className: "bg-sky-100 text-sky-700" },
+  { value: "all", label: "All channels", className: "bg-muted text-foreground" },
+  { value: "whatsapp", label: "WhatsApp", className: "bg-success/15 text-success" },
+  { value: "instagram", label: "Instagram", className: "bg-destructive/15 text-destructive" },
+  { value: "messenger", label: "Messenger", className: "bg-info/15 text-info" },
 ];
 
 const PLATFORM_BADGE: Record<string, string> = {
-  whatsapp: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  instagram: "bg-pink-50 text-pink-700 border-pink-200",
-  messenger: "bg-sky-50 text-sky-700 border-sky-200",
+  whatsapp: "bg-success/10 text-success border-success/25",
+  instagram: "bg-destructive/10 text-destructive border-destructive/25",
+  messenger: "bg-info/10 text-info border-info/25",
 };
 
 const STATUS_CHIPS: { value: StatusFilter; label: string; className: string }[] = [
-  { value: "all", label: "All", className: "bg-slate-100 text-slate-700" },
-  { value: "success", label: "Success", className: "bg-emerald-100 text-emerald-700" },
-  { value: "fallback", label: "Fallback", className: "bg-amber-100 text-amber-700" },
-  { value: "error", label: "Error", className: "bg-red-100 text-red-700" },
+  { value: "all", label: "All", className: "bg-muted text-foreground" },
+  { value: "success", label: "Success", className: "bg-success/15 text-success" },
+  { value: "fallback", label: "Fallback", className: "bg-warning/15 text-warning" },
+  { value: "error", label: "Error", className: "bg-destructive/15 text-destructive" },
 ];
 
 const STREAM_META: Record<Stream, { label: string; table: string; sub: string; icon: typeof Activity }> = {
@@ -185,10 +185,10 @@ export function AILogsTab() {
   const StreamIcon = STREAM_META[stream].icon;
 
   return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
+    <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
       {/* Stream selector */}
-      <div className="p-4 border-b bg-slate-50/50 space-y-3">
-        <div className="flex items-center gap-2 p-1 bg-white rounded-xl border w-fit">
+      <div className="p-4 border-b bg-muted/50 space-y-3">
+        <div className="flex items-center gap-2 p-1 bg-card rounded-xl border w-fit">
           {(Object.keys(STREAM_META) as Stream[]).map((s) => {
             const Icon = STREAM_META[s].icon;
             const isActive = stream === s;
@@ -202,8 +202,8 @@ export function AILogsTab() {
                 }}
                 className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-all ${
                   isActive
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -212,15 +212,15 @@ export function AILogsTab() {
             );
           })}
         </div>
-        <p className="text-xs text-slate-500 flex items-center gap-1.5">
-          <StreamIcon className="h-3.5 w-3.5 text-slate-400" />
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <StreamIcon className="h-3.5 w-3.5 text-muted-foreground" />
           {STREAM_META[stream].sub}
         </p>
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-sm text-slate-600">
+          <div className="text-sm text-muted-foreground">
             Showing{" "}
-            <span className="font-semibold text-slate-900">{visibleLogs.length}</span>{" "}
+            <span className="font-semibold text-foreground">{visibleLogs.length}</span>{" "}
             of {logs.length}
           </div>
           <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export function AILogsTab() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="cursor-pointer text-red-600 border-red-200 hover:bg-red-50"
+                  className="cursor-pointer text-destructive border-destructive/25 hover:bg-destructive/10"
                   disabled={clearMutation.isPending}
                 >
                   <Trash2 className="h-4 w-4 mr-1.5" />
@@ -270,7 +270,7 @@ export function AILogsTab() {
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    className="bg-red-600 hover:bg-red-700"
+                    className="bg-destructive hover:bg-destructive"
                     onClick={() => clearMutation.mutate()}
                   >
                     Delete logs
@@ -298,8 +298,8 @@ export function AILogsTab() {
                 onClick={() => setStatusFilter(chip.value)}
                 className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
                   isActive
-                    ? chip.className + " ring-2 ring-offset-1 ring-indigo-300"
-                    : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                    ? chip.className + " ring-2 ring-offset-1 ring-primary/40"
+                    : "bg-card text-muted-foreground border border-border hover:bg-muted"
                 }`}
               >
                 {chip.label} <span className="opacity-70">{count}</span>
@@ -322,8 +322,8 @@ export function AILogsTab() {
                 onClick={() => setPlatformFilter(chip.value)}
                 className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
                   isActive
-                    ? chip.className + " ring-2 ring-offset-1 ring-indigo-300"
-                    : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                    ? chip.className + " ring-2 ring-offset-1 ring-primary/40"
+                    : "bg-card text-muted-foreground border border-border hover:bg-muted"
                 }`}
               >
                 {chip.label} <span className="opacity-70">{count}</span>
@@ -334,10 +334,10 @@ export function AILogsTab() {
       </div>
 
       <div className="divide-y">
-        {active.isLoading && <div className="p-6 text-sm text-slate-500">Loading…</div>}
+        {active.isLoading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
         {!active.isLoading && visibleLogs.length === 0 && (
-          <div className="p-8 text-center text-sm text-slate-500 flex flex-col items-center gap-2">
-            <StreamIcon className="h-8 w-8 text-slate-300" />
+          <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+            <StreamIcon className="h-8 w-8 text-muted-foreground" />
             {logs.length === 0 ? "Nothing logged yet." : "No entries match this filter."}
           </div>
         )}
@@ -347,7 +347,7 @@ export function AILogsTab() {
             const isOpen = expanded.has(l.id);
             const hasDetails = !!l.error_message;
             return (
-              <div key={l.id} className="hover:bg-slate-50 transition-colors">
+              <div key={l.id} className="hover:bg-muted transition-colors">
                 <button
                   type="button"
                   onClick={() => hasDetails && toggleExpanded(l.id)}
@@ -358,45 +358,45 @@ export function AILogsTab() {
                 >
                   {hasDetails ? (
                     isOpen ? (
-                      <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+                      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     )
                   ) : (
                     <span className="w-4 shrink-0" />
                   )}
                   {l.status === "success" ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                   ) : l.status === "fallback" ? (
-                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                    <AlertCircle className="h-4 w-4 text-warning shrink-0" />
                   ) : (
-                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+                    <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                   )}
                   <Badge variant="outline" className="text-xs shrink-0">
                     {l.purpose ?? "—"}
                   </Badge>
                   {l.platform && (
-                    <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                    <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-muted text-muted-foreground border-border"}`}>
                       {l.platform}
                     </span>
                   )}
-                  <span className="text-slate-600 truncate flex-1">
+                  <span className="text-muted-foreground truncate flex-1">
                     {l.provider} · {l.model ?? "—"}
-                    {l.fallback_used && <span className="ml-2 text-amber-600">(fallback)</span>}
+                    {l.fallback_used && <span className="ml-2 text-warning">(fallback)</span>}
                     {l.error_message && (
-                      <span className="ml-2 text-red-600 truncate">— {l.error_message}</span>
+                      <span className="ml-2 text-destructive truncate">— {l.error_message}</span>
                     )}
                   </span>
-                  <span className="text-xs text-slate-400 shrink-0">{l.duration_ms}ms</span>
-                  <span className="text-xs text-slate-400 shrink-0">
+                  <span className="text-xs text-muted-foreground shrink-0">{l.duration_ms}ms</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {new Date(l.created_at).toLocaleString()}
                   </span>
                 </button>
                 {isOpen && hasDetails && (
                   <div className="px-3 pb-3 pl-10">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Full error
                         </span>
                         <Button
@@ -409,7 +409,7 @@ export function AILogsTab() {
                           <Copy className="h-3 w-3 mr-1" /> Copy
                         </Button>
                       </div>
-                      <pre className="text-[11px] text-slate-700 whitespace-pre-wrap break-all font-mono max-h-72 overflow-auto">
+                      <pre className="text-[11px] text-foreground whitespace-pre-wrap break-all font-mono max-h-72 overflow-auto">
                         {l.error_message}
                       </pre>
                     </div>
@@ -421,28 +421,28 @@ export function AILogsTab() {
 
         {stream === "tools" &&
           visibleLogs.map((l: any) => (
-            <div key={l.id} className="p-3 flex items-center gap-3 text-sm hover:bg-slate-50">
+            <div key={l.id} className="p-3 flex items-center gap-3 text-sm hover:bg-muted">
               {l.status === "success" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
               ) : (
-                <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
               )}
               <Badge variant="outline" className="text-xs shrink-0">
                 {l.tool_name ?? "—"}
               </Badge>
               {l.platform && (
-                <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full border px-1.5 py-0.5 shrink-0 ${PLATFORM_BADGE[l.platform] ?? "bg-muted text-muted-foreground border-border"}`}>
                   {l.platform}
                 </span>
               )}
-              <span className="text-slate-600 truncate flex-1">
-                {l.phone_number && <span className="text-slate-400">{l.phone_number}</span>}
+              <span className="text-muted-foreground truncate flex-1">
+                {l.phone_number && <span className="text-muted-foreground">{l.phone_number}</span>}
                 {l.error_message && (
-                  <span className="ml-2 text-red-600 truncate">— {l.error_message}</span>
+                  <span className="ml-2 text-destructive truncate">— {l.error_message}</span>
                 )}
               </span>
-              <span className="text-xs text-slate-400 shrink-0">{l.execution_time_ms}ms</span>
-              <span className="text-xs text-slate-400 shrink-0">
+              <span className="text-xs text-muted-foreground shrink-0">{l.execution_time_ms}ms</span>
+              <span className="text-xs text-muted-foreground shrink-0">
                 {new Date(l.created_at).toLocaleString()}
               </span>
             </div>

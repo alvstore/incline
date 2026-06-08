@@ -50,7 +50,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Membership & Account',
     description: 'Status, plans, dues and member identity',
     icon: IdCard,
-    accent: 'bg-violet-50 text-violet-600 ring-violet-100',
+    accent: 'bg-primary/10 text-primary ring-primary/15',
     tools: [
       { name: 'get_membership_status', label: 'Membership Status', description: 'Check plan, expiry date, days remaining and pending dues', icon: IdCard, risk: 'read' },
       { name: 'get_member_profile', label: 'Member Profile', description: 'Fetch member details, contact, branch and join date', icon: UserCog, risk: 'read' },
@@ -64,7 +64,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Benefits & Bookings',
     description: 'Sauna, ice bath, classes and facility slots',
     icon: Gift,
-    accent: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
+    accent: 'bg-success/10 text-success ring-success/15',
     tools: [
       { name: 'get_benefit_balance', label: 'Benefit Balance', description: 'Remaining credits for sauna, ice bath, classes', icon: Gift, risk: 'read' },
       { name: 'get_available_slots', label: 'Available Slots', description: 'List bookable facility slots by date', icon: CalendarDays, risk: 'read' },
@@ -78,7 +78,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Personal Training',
     description: 'PT sessions, trainers and bookings',
     icon: Dumbbell,
-    accent: 'bg-orange-50 text-orange-600 ring-orange-100',
+    accent: 'bg-warning/10 text-warning ring-warning/15',
     tools: [
       { name: 'get_pt_balance', label: 'PT Balance', description: 'Personal training session balance and expiry', icon: Dumbbell, risk: 'read' },
       { name: 'list_trainers', label: 'List Trainers', description: 'Available trainers at the member’s branch', icon: Users, risk: 'read' },
@@ -91,7 +91,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Payments & Billing',
     description: 'Invoices, dues, payment links and wallet',
     icon: CreditCard,
-    accent: 'bg-sky-50 text-sky-600 ring-sky-100',
+    accent: 'bg-info/10 text-info ring-info/15',
     tools: [
       { name: 'get_outstanding_dues', label: 'Outstanding Dues', description: 'Total pending invoice amount for the member', icon: Receipt, risk: 'read' },
       { name: 'list_invoices', label: 'List Invoices', description: 'Recent invoices with status (paid / due / overdue)', icon: FileText, risk: 'read' },
@@ -106,7 +106,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Engagement & Loyalty',
     description: 'Rewards, referrals, store and announcements',
     icon: Star,
-    accent: 'bg-amber-50 text-amber-600 ring-amber-100',
+    accent: 'bg-warning/10 text-warning ring-warning/15',
     tools: [
       { name: 'get_rewards_balance', label: 'Rewards Balance', description: 'Loyalty points and tier status', icon: Star, risk: 'read' },
       { name: 'redeem_reward', label: 'Redeem Reward', description: 'Redeem points against a benefit or store credit', icon: Gift, risk: 'write' },
@@ -120,7 +120,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Branch Info',
     description: 'Hours, location and class schedules',
     icon: MapPin,
-    accent: 'bg-slate-100 text-slate-600 ring-slate-200',
+    accent: 'bg-muted text-muted-foreground ring-border',
     tools: [
       { name: 'get_branch_info', label: 'Branch Info', description: 'Address, phone, opening hours and amenities', icon: MapPin, risk: 'read' },
       { name: 'get_class_schedule', label: 'Class Schedule', description: 'Group class timings by day or trainer', icon: CalendarDays, risk: 'read' },
@@ -131,7 +131,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Escalation',
     description: 'Hand off to humans when needed',
     icon: MessageSquare,
-    accent: 'bg-rose-50 text-rose-600 ring-rose-100',
+    accent: 'bg-destructive/10 text-destructive ring-destructive/15',
     tools: [
       { name: 'transfer_to_human', label: 'Transfer to Human', description: 'Hand off conversation to gym staff', icon: MessageSquare, risk: 'escalation' },
     ],
@@ -142,10 +142,10 @@ const TOOL_CATEGORIES: ToolCategory[] = [
 const AI_TOOLS = TOOL_CATEGORIES.flatMap((c) => c.tools.map((t) => ({ name: t.name, description: t.description })));
 
 const RISK_BADGE: Record<ToolDef['risk'], { label: string; className: string }> = {
-  read: { label: 'Read', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  write: { label: 'Write', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  payment: { label: 'Payment', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  escalation: { label: 'Escalation', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  read: { label: 'Read', className: 'bg-muted text-foreground border-border' },
+  write: { label: 'Write', className: 'bg-warning/10 text-warning border-warning/25' },
+  payment: { label: 'Payment', className: 'bg-info/10 text-info border-info/25' },
+  escalation: { label: 'Escalation', className: 'bg-destructive/10 text-destructive border-destructive/25' },
 };
 
 export function AIAgentControlCenter() {
@@ -153,7 +153,7 @@ export function AIAgentControlCenter() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="bg-gradient-to-br from-violet-500 to-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-violet-500/20">
+        <div className="bg-gradient-to-br from-primary to-primary text-primary-foreground p-2.5 rounded-xl shadow-lg shadow-primary/20">
           <Bot className="h-6 w-6" />
         </div>
         <div>
@@ -242,27 +242,27 @@ function DashboardTab() {
     <div className="space-y-6">
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-xl shadow-lg shadow/50">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
+            <div className="bg-success/10 text-success p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
             <div>
               <p className="text-2xl font-bold text-foreground">{totalCalls}</p>
               <p className="text-xs text-muted-foreground">Tool Calls (Last 50)</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-xl shadow-lg shadow/50">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
+            <div className="bg-primary/10 text-primary p-2.5 rounded-full"><Activity className="h-5 w-5" /></div>
             <div>
               <p className="text-2xl font-bold text-foreground">{successRate}%</p>
               <p className="text-xs text-muted-foreground">Success Rate</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-xl shadow-lg shadow/50">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="bg-amber-50 text-amber-600 p-2.5 rounded-full"><Clock className="h-5 w-5" /></div>
+            <div className="bg-warning/10 text-warning p-2.5 rounded-full"><Clock className="h-5 w-5" /></div>
             <div>
               <p className="text-2xl font-bold text-foreground">{avgDuration}ms</p>
               <p className="text-xs text-muted-foreground">Avg Duration</p>
@@ -272,7 +272,7 @@ function DashboardTab() {
       </div>
 
       {/* Live Activity Feed */}
-      <Card className="rounded-xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-xl shadow-lg shadow/50">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
@@ -334,8 +334,8 @@ function DashboardTab() {
                             </TableCell>
                             <TableCell>
                               <Badge className={log.status === 'success'
-                                ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/20'
-                                : 'bg-red-500/15 text-red-700 border-red-500/30 hover:bg-red-500/20'
+                                ? 'bg-success/15 text-success border-success/30 hover:bg-success/20'
+                                : 'bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/20'
                               }>
                                 {log.status}
                               </Badge>
@@ -346,7 +346,7 @@ function DashboardTab() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="gap-1 text-xs h-7 text-amber-600 hover:text-amber-700"
+                                  className="gap-1 text-xs h-7 text-warning hover:text-warning"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     navigate(`/whatsapp-chat?phone=${encodeURIComponent(log.phone_number || '')}`);
@@ -371,11 +371,11 @@ function DashboardTab() {
                                 </div>
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground mb-1">Result</p>
-                                  <pre className={`text-xs rounded-lg p-3 overflow-auto max-h-40 border ${log.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
+                                  <pre className={`text-xs rounded-lg p-3 overflow-auto max-h-40 border ${log.status === 'error' ? 'bg-destructive/10 border-destructive/25' : 'bg-background'}`}>
                                     {JSON.stringify(log.result, null, 2)}
                                   </pre>
                                   {log.error_message && (
-                                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
                                       <AlertTriangle className="h-3 w-3" /> {log.error_message}
                                     </p>
                                   )}
@@ -510,16 +510,16 @@ function ToolsTab() {
   return (
     <div className="space-y-6">
       {/* Hero summary */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden border-0">
-        <div className="bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 text-white p-5 md:p-6">
+      <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden border-0">
+        <div className="bg-gradient-to-br from-primary via-primary to-info text-primary-foreground p-5 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="bg-white/15 backdrop-blur p-3 rounded-2xl ring-1 ring-white/20">
+              <div className="bg-card/15 backdrop-blur p-3 rounded-2xl ring-1 ring-white/20">
                 <ToggleLeft className="h-6 w-6" />
               </div>
               <div>
                 <h3 className="text-lg md:text-xl font-bold">AI Tool Library</h3>
-                <p className="text-sm text-white/80">
+                <p className="text-sm text-primary-foreground/80">
                   {enabledCount} of {totalCount} tools enabled across {TOOL_CATEGORIES.length} categories
                 </p>
               </div>
@@ -528,7 +528,7 @@ function ToolsTab() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="rounded-lg bg-white/15 hover:bg-white/25 text-white border-0 backdrop-blur gap-1.5"
+                className="rounded-lg bg-card/15 hover:bg-card/25 text-primary-foreground border-0 backdrop-blur gap-1.5"
                 onClick={() => bulkToggle.mutate({ toolNames: allTools.map((t) => t.name), enabled: true })}
                 disabled={bulkToggle.isPending}
               >
@@ -537,7 +537,7 @@ function ToolsTab() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="rounded-lg bg-white/15 hover:bg-white/25 text-white border-0 backdrop-blur gap-1.5"
+                className="rounded-lg bg-card/15 hover:bg-card/25 text-primary-foreground border-0 backdrop-blur gap-1.5"
                 onClick={() => bulkToggle.mutate({ toolNames: allTools.map((t) => t.name), enabled: false })}
                 disabled={bulkToggle.isPending}
               >
@@ -546,22 +546,22 @@ function ToolsTab() {
             </div>
           </div>
           {/* Progress bar */}
-          <div className="mt-4 h-1.5 w-full bg-white/15 rounded-full overflow-hidden">
+          <div className="mt-4 h-1.5 w-full bg-card/15 rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-300 rounded-full transition-all"
+              className="h-full bg-success/40 rounded-full transition-all"
               style={{ width: `${totalCount ? (enabledCount / totalCount) * 100 : 0}%` }}
             />
           </div>
         </div>
         {/* Search bar */}
-        <CardContent className="p-4 bg-white">
+        <CardContent className="p-4 bg-card">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tools by name or description..."
-              className="w-full h-10 pl-9 pr-3 rounded-lg bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+              className="w-full h-10 pl-9 pr-3 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
             />
           </div>
         </CardContent>
@@ -573,7 +573,7 @@ function ToolsTab() {
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
         </div>
       ) : filteredCategories.length === 0 ? (
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardContent className="py-12 text-center text-muted-foreground">
             <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No tools match "{search}"</p>
@@ -585,7 +585,7 @@ function ToolsTab() {
           const catEnabled = category.tools.filter((t) => toolEnabled(t.name)).length;
           const catTotal = category.tools.length;
           return (
-            <Card key={category.id} className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
+            <Card key={category.id} className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
@@ -626,8 +626,8 @@ function ToolsTab() {
                         key={tool.name}
                         className={`group flex items-start gap-3 p-3 rounded-xl border transition-all ${
                           isEnabled
-                            ? 'bg-white border-slate-200 hover:border-primary/30 hover:shadow-md hover:shadow-slate-200/60'
-                            : 'bg-slate-50/60 border-slate-200/60 opacity-70'
+                            ? 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow/60'
+                            : 'bg-muted/60 border-border/60 opacity-70'
                         }`}
                       >
                         <div className={`p-2 rounded-lg ${category.accent} shrink-0`}>
@@ -659,10 +659,10 @@ function ToolsTab() {
       )}
 
       {/* Manual Test Lab */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg ring-1 ring-emerald-100">
+            <div className="bg-success/10 text-success p-2 rounded-lg ring-1 ring-success/15">
               <FlaskConical className="h-4 w-4" />
             </div>
             Manual Test Lab
@@ -714,7 +714,7 @@ function ToolsTab() {
           {testResult && (
             <div className="mt-4">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Result</p>
-              <pre className={`text-xs rounded-lg p-4 overflow-auto max-h-60 border ${testResult.error ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+              <pre className={`text-xs rounded-lg p-4 overflow-auto max-h-60 border ${testResult.error ? 'bg-destructive/10 border-destructive/25' : 'bg-success/10 border-success/25'}`}>
                 {JSON.stringify(testResult, null, 2)}
               </pre>
             </div>

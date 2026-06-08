@@ -400,10 +400,10 @@ export function AddProductDrawer({ open, onOpenChange, product }: AddProductDraw
           </div>
 
           {/* Batch & Compliance */}
-          <div className="space-y-3 rounded-xl border bg-slate-50/60 p-4">
+          <div className="space-y-3 rounded-xl border bg-muted/60 p-4">
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Batch & Compliance</h4>
-              <p className="text-xs text-slate-500">
+              <h4 className="text-sm font-semibold text-foreground">Batch & Compliance</h4>
+              <p className="text-xs text-muted-foreground">
                 Turn on for proteins, supplements and any product that needs expiry & lab reports.
               </p>
             </div>

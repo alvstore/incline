@@ -172,11 +172,11 @@ export default function StaffDashboard() {
 
         {/* Quick Actions */}
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <Link to="/attendance"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><UserCheck className="h-8 w-8 text-emerald-500" /><span className="font-medium text-center">Check In Member</span></CardContent></Card></Link>
+          <Link to="/attendance"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><UserCheck className="h-8 w-8 text-success" /><span className="font-medium text-center">Check In Member</span></CardContent></Card></Link>
           <Link to="/pos"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><ShoppingCart className="h-8 w-8 text-accent" /><span className="font-medium text-center">Open POS</span></CardContent></Card></Link>
-          <Link to="/leads"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><UserPlus className="h-8 w-8 text-amber-500" /><span className="font-medium text-center">Add Lead</span></CardContent></Card></Link>
+          <Link to="/leads"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><UserPlus className="h-8 w-8 text-warning" /><span className="font-medium text-center">Add Lead</span></CardContent></Card></Link>
           <Link to="/invoices"><Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl"><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><FileText className="h-8 w-8 text-primary" /><span className="font-medium text-center">View Invoices</span></CardContent></Card></Link>
-          <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl" onClick={() => setPricingOpen(true)}><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><TrendingUp className="h-8 w-8 text-violet-500" /><span className="font-medium text-center">View Pricing</span></CardContent></Card>
+          <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full rounded-2xl" onClick={() => setPricingOpen(true)}><CardContent className="flex flex-col items-center justify-center py-6 gap-2"><TrendingUp className="h-8 w-8 text-primary" /><span className="font-medium text-center">View Pricing</span></CardContent></Card>
         </div>
 
         {/* My shift this week + Birthdays */}
@@ -234,10 +234,10 @@ export default function StaffDashboard() {
                             {member.phone && (
                               <>
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(`tel:${member.phone}`)}>
-                                  <PhoneCall className="h-4 w-4 text-sky-500" />
+                                  <PhoneCall className="h-4 w-4 text-info" />
                                 </Button>
                                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => communicationService.sendWhatsApp(member.phone, `Hi ${member.full_name}, we miss you at the gym! Come visit us today.`)}>
-                                  <MessageSquare className="h-4 w-4 text-emerald-500" />
+                                  <MessageSquare className="h-4 w-4 text-success" />
                                 </Button>
                               </>
                             )}
@@ -324,7 +324,7 @@ export default function StaffDashboard() {
           {/* Expiring Memberships */}
           <Card className="border-border/50 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-500" />Expiring Soon</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning" />Expiring Soon</CardTitle>
               <Button variant="ghost" size="sm" asChild><Link to="/members">View All</Link></Button>
             </CardHeader>
             <CardContent>

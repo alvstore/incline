@@ -14,10 +14,10 @@ interface CampaignDetailDrawerProps {
 
 const statusPill = (s: string) => {
   const k = (s || '').toLowerCase();
-  if (['sent', 'delivered', 'read', 'success'].includes(k)) return 'bg-emerald-100 text-emerald-700';
-  if (['failed', 'error', 'bounced'].includes(k)) return 'bg-red-100 text-red-700';
-  if (['queued', 'pending', 'sending'].includes(k)) return 'bg-amber-100 text-amber-700';
-  return 'bg-slate-100 text-slate-700';
+  if (['sent', 'delivered', 'read', 'success'].includes(k)) return 'bg-success/15 text-success';
+  if (['failed', 'error', 'bounced'].includes(k)) return 'bg-destructive/15 text-destructive';
+  if (['queued', 'pending', 'sending'].includes(k)) return 'bg-warning/15 text-warning';
+  return 'bg-muted text-foreground';
 };
 
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: CampaignDetailDrawerProps) {
@@ -77,31 +77,31 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: CampaignD
         <div className="mt-6 space-y-5">
           {/* Summary cards */}
           <div className="grid grid-cols-4 gap-2">
-            <div className="rounded-xl bg-slate-50 p-3 text-center">
-              <Users className="h-4 w-4 mx-auto text-slate-500 mb-1" />
-              <p className="text-xl font-bold text-slate-900">{total}</p>
-              <p className="text-[10px] uppercase text-slate-500">Total</p>
+            <div className="rounded-xl bg-muted p-3 text-center">
+              <Users className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+              <p className="text-xl font-bold text-foreground">{total}</p>
+              <p className="text-[10px] uppercase text-muted-foreground">Total</p>
             </div>
-            <div className="rounded-xl bg-emerald-50 p-3 text-center">
-              <CheckCircle2 className="h-4 w-4 mx-auto text-emerald-600 mb-1" />
-              <p className="text-xl font-bold text-emerald-700">{sent}</p>
-              <p className="text-[10px] uppercase text-emerald-600">Delivered</p>
+            <div className="rounded-xl bg-success/10 p-3 text-center">
+              <CheckCircle2 className="h-4 w-4 mx-auto text-success mb-1" />
+              <p className="text-xl font-bold text-success">{sent}</p>
+              <p className="text-[10px] uppercase text-success">Delivered</p>
             </div>
-            <div className="rounded-xl bg-red-50 p-3 text-center">
-              <AlertTriangle className="h-4 w-4 mx-auto text-red-600 mb-1" />
-              <p className="text-xl font-bold text-red-700">{failed}</p>
-              <p className="text-[10px] uppercase text-red-600">Failed</p>
+            <div className="rounded-xl bg-destructive/10 p-3 text-center">
+              <AlertTriangle className="h-4 w-4 mx-auto text-destructive mb-1" />
+              <p className="text-xl font-bold text-destructive">{failed}</p>
+              <p className="text-[10px] uppercase text-destructive">Failed</p>
             </div>
-            <div className="rounded-xl bg-amber-50 p-3 text-center">
-              <Clock className="h-4 w-4 mx-auto text-amber-600 mb-1" />
-              <p className="text-xl font-bold text-amber-700">{queued}</p>
-              <p className="text-[10px] uppercase text-amber-600">Queued</p>
+            <div className="rounded-xl bg-warning/10 p-3 text-center">
+              <Clock className="h-4 w-4 mx-auto text-warning mb-1" />
+              <p className="text-xl font-bold text-warning">{queued}</p>
+              <p className="text-[10px] uppercase text-warning">Queued</p>
             </div>
           </div>
 
           {/* Conversion strip */}
           {campaign.sent_at && (
-            <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white p-4 flex items-center justify-between">
+            <div className="rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground p-4 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider opacity-80">
                   <TrendingUp className="h-3.5 w-3.5" /> Conversions
@@ -124,7 +124,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: CampaignD
               Recipients ({total})
             </h4>
             {isLoading ? (
-              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>
+              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
             ) : total === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">No recipients yet.</p>
             ) : (
@@ -136,7 +136,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: CampaignD
                         {r.recipient_phone || r.recipient_email || '—'}
                       </p>
                       {r.error && (
-                        <p className="text-xs text-red-600 truncate" title={r.error}>{r.error}</p>
+                        <p className="text-xs text-destructive truncate" title={r.error}>{r.error}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

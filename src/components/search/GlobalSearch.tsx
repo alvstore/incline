@@ -23,15 +23,15 @@ import {
 interface GlobalSearchProps { className?: string }
 
 function statusBadgeClass(s?: string) {
-  if (!s) return 'bg-slate-100 text-slate-600';
+  if (!s) return 'bg-muted text-muted-foreground';
   const v = s.toLowerCase();
-  if (['active','paid','completed','confirmed','converted','booked','attended'].includes(v)) return 'bg-emerald-100 text-emerald-700';
-  if (['frozen','paused','draft','pending'].includes(v)) return 'bg-blue-100 text-blue-700';
-  if (['overdue','expired','cancelled','no_show','failed','lost'].includes(v)) return 'bg-red-100 text-red-700';
-  if (['partial','negotiation','warm','contacted'].includes(v)) return 'bg-amber-100 text-amber-700';
-  if (['hot'].includes(v)) return 'bg-red-100 text-red-700';
-  if (['cold','new'].includes(v)) return 'bg-slate-100 text-slate-600';
-  return 'bg-slate-100 text-slate-600';
+  if (['active','paid','completed','confirmed','converted','booked','attended'].includes(v)) return 'bg-success/15 text-success';
+  if (['frozen','paused','draft','pending'].includes(v)) return 'bg-info/15 text-info';
+  if (['overdue','expired','cancelled','no_show','failed','lost'].includes(v)) return 'bg-destructive/15 text-destructive';
+  if (['partial','negotiation','warm','contacted'].includes(v)) return 'bg-warning/15 text-warning';
+  if (['hot'].includes(v)) return 'bg-destructive/15 text-destructive';
+  if (['cold','new'].includes(v)) return 'bg-muted text-muted-foreground';
+  return 'bg-muted text-muted-foreground';
 }
 
 function ResultRow({
@@ -46,12 +46,12 @@ function ResultRow({
   color?: 'indigo'|'amber'|'emerald'|'rose'|'sky'|'violet';
 }) {
   const tone: Record<string,string> = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    amber:  'bg-amber-50 text-amber-600',
-    emerald:'bg-emerald-50 text-emerald-600',
-    rose:   'bg-rose-50 text-rose-600',
-    sky:    'bg-sky-50 text-sky-600',
-    violet: 'bg-violet-50 text-violet-600',
+    indigo: 'bg-primary/10 text-primary',
+    amber:  'bg-warning/10 text-warning',
+    emerald:'bg-success/10 text-success',
+    rose:   'bg-destructive/10 text-destructive',
+    sky:    'bg-info/10 text-info',
+    violet: 'bg-primary/10 text-primary',
   };
   return (
     <CommandItem onSelect={onSelect} className="flex items-center gap-3 cursor-pointer rounded-lg" value={`${title} ${subtitle ?? ''} ${branchName ?? ''}`}>

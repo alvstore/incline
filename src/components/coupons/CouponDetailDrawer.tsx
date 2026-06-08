@@ -40,7 +40,7 @@ export function CouponDetailDrawer({ open, onOpenChange, coupon, onShare }: Coup
   const getStatusBadge = () => {
     if (!coupon.is_active) return <Badge variant="secondary">Inactive</Badge>;
     if (isExpired) return <Badge variant="destructive">Expired</Badge>;
-    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>;
+    return <Badge className="bg-success/15 text-success border-success/25">Active</Badge>;
   };
 
   return (
@@ -79,7 +79,7 @@ export function CouponDetailDrawer({ open, onOpenChange, coupon, onShare }: Coup
                 </div>
               )}
               {coupon.valid_until && (
-                <div className={`flex items-center gap-2 ${isExpired ? 'text-destructive' : daysLeft !== null && daysLeft <= 7 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                <div className={`flex items-center gap-2 ${isExpired ? 'text-destructive' : daysLeft !== null && daysLeft <= 7 ? 'text-warning' : 'text-muted-foreground'}`}>
                   <Calendar className="h-3.5 w-3.5" />
                   {isExpired ? 'Expired' : `${daysLeft}d left`}
                 </div>
@@ -116,7 +116,7 @@ export function CouponDetailDrawer({ open, onOpenChange, coupon, onShare }: Coup
                     <div className="text-right">
                       <p className="font-medium text-foreground">₹{inv.total_amount}</p>
                       {inv.discount_amount > 0 && (
-                        <p className="text-xs text-emerald-600">-₹{inv.discount_amount} saved</p>
+                        <p className="text-xs text-success">-₹{inv.discount_amount} saved</p>
                       )}
                     </div>
                   </div>

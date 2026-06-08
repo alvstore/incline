@@ -24,11 +24,11 @@ const typeIcons = {
 };
 
 const typeColors = {
-  info: 'text-blue-500',
-  success: 'text-green-500',
-  warning: 'text-yellow-500',
-  error: 'text-red-500',
-  reminder: 'text-purple-500',
+  info: 'text-info',
+  success: 'text-success',
+  warning: 'text-warning',
+  error: 'text-destructive',
+  reminder: 'text-primary',
 };
 
 export function NotificationBell() {

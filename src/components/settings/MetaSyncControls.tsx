@@ -118,7 +118,7 @@ export function MetaSyncControls() {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 gap-1 rounded-full text-xs border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              className="h-7 gap-1 rounded-full text-xs border-warning/40 bg-warning/10 text-warning hover:bg-warning/15"
               aria-label={`${staleTemplates.length} template(s) missing in Meta`}
             >
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -126,7 +126,7 @@ export function MetaSyncControls() {
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 text-xs space-y-2">
-            <div className="font-semibold text-sm flex items-center gap-1.5 text-amber-700">
+            <div className="font-semibold text-sm flex items-center gap-1.5 text-warning">
               <AlertTriangle className="h-4 w-4" /> Templates missing in Meta
             </div>
             <p className="text-muted-foreground">
@@ -135,10 +135,10 @@ export function MetaSyncControls() {
             </p>
             <ul className="max-h-48 overflow-y-auto space-y-1 border-t pt-2">
               {staleTemplates.map((t) => (
-                <li key={t.id} className="rounded-md bg-amber-50 p-1.5">
-                  <div className="font-medium text-amber-900">{t.name}</div>
+                <li key={t.id} className="rounded-md bg-warning/10 p-1.5">
+                  <div className="font-medium text-warning">{t.name}</div>
                   {t.meta_last_error && (
-                    <div className="text-[10px] text-amber-700 truncate" title={t.meta_last_error}>
+                    <div className="text-[10px] text-warning truncate" title={t.meta_last_error}>
                       {t.meta_last_error}
                     </div>
                   )}
@@ -210,7 +210,7 @@ export function MetaSyncControls() {
             </div>
           )}
           {!hasConfig && (
-            <div className="rounded-md bg-amber-50 p-2 text-amber-800">
+            <div className="rounded-md bg-warning/10 p-2 text-warning">
               No WhatsApp integration configured. Add one in Settings → Integrations.
             </div>
           )}

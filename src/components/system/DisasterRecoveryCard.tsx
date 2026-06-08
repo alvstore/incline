@@ -154,7 +154,7 @@ export function DisasterRecoveryCard() {
     <Card className="rounded-2xl border-border/50 shadow-lg">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+          <div className="p-2 rounded-xl bg-success/10 text-success">
             <ShieldCheck className="h-5 w-5" />
           </div>
           Disaster Recovery
@@ -198,12 +198,12 @@ export function DisasterRecoveryCard() {
             <div className="flex items-center gap-2 font-medium">
               {lastReport.ok ? (
                 <>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <CheckCircle2 className="h-4 w-4 text-success" />
                   Last {lastReport.mode ?? "sync"} succeeded
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTriangle className="h-4 w-4 text-warning" />
                   Last {lastReport.mode ?? "sync"} had {lastReport.errors.length} issue(s)
                 </>
               )}
@@ -261,15 +261,15 @@ export function DisasterRecoveryCard() {
                 <div className="flex items-center gap-2">
                   {v.allInSync ? (
                     <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span className="text-emerald-700 font-medium">
+                      <CheckCircle2 className="h-4 w-4 text-success" />
+                      <span className="text-success font-medium">
                         Primary and fallback are 1:1
                       </span>
                     </>
                   ) : (
                     <>
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <span className="text-amber-700 font-medium">
+                      <AlertTriangle className="h-4 w-4 text-warning" />
+                      <span className="text-warning font-medium">
                         {tableDrift.length} table(s) + {storageDrift.length} bucket(s) drifting
                       </span>
                     </>
@@ -278,7 +278,7 @@ export function DisasterRecoveryCard() {
                 {(tableDrift.length > 0 || storageDrift.length > 0) && (
                   <details className="text-xs">
                     <summary className="cursor-pointer">View drift</summary>
-                    <ul className="mt-2 space-y-1 list-disc pl-4 text-amber-800">
+                    <ul className="mt-2 space-y-1 list-disc pl-4 text-warning">
                       {tableDrift.slice(0, 20).map((t) => (
                         <li key={t.table}>
                           {t.table}: primary {t.primary} vs fallback {t.standby} (Δ {t.delta})
@@ -297,7 +297,7 @@ export function DisasterRecoveryCard() {
             )}
 
             {lastReport.errors.length > 0 && (
-              <details className="text-xs text-amber-700">
+              <details className="text-xs text-warning">
                 <summary className="cursor-pointer">View errors</summary>
                 <ul className="mt-2 space-y-1 list-disc pl-4">
                   {lastReport.errors.slice(0, 10).map((e, i) => (

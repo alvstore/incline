@@ -83,8 +83,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">Welcome back</h2>
-        <p className="text-sm text-slate-500">Sign in to your Incline account to continue</p>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
+        <p className="text-sm text-muted-foreground">Sign in to your Incline account to continue</p>
       </div>
 
       <Form {...form}>
@@ -94,16 +94,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             name="identifier"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-slate-700 font-medium text-sm">Email or mobile</FormLabel>
+                <FormLabel className="text-foreground font-medium text-sm">Email or mobile</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       type="text"
                       placeholder="you@example.com  or  9876543210"
                       autoComplete="username"
                       data-testid="input-identifier"
-                      className="h-12 pl-10 text-base rounded-xl bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
+                      className="h-12 pl-10 text-base rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
                       {...field}
                     />
                   </div>
@@ -118,16 +118,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-slate-700 font-medium text-sm">Password</FormLabel>
+                <FormLabel className="text-foreground font-medium text-sm">Password</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       autoComplete="current-password"
                       data-testid="input-password"
-                      className="h-12 pl-10 pr-11 text-base rounded-xl bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
+                      className="h-12 pl-10 pr-11 text-base rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 focus:border-primary"
                       {...field}
                     />
                     <button
@@ -164,13 +164,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <Link
           to="/auth/forgot-password"
           data-testid="link-forgot-password"
-          className="text-sm text-slate-500 hover:text-primary font-medium transition-colors"
+          className="text-sm text-muted-foreground hover:text-primary font-medium transition-colors"
         >
           Forgot your password?
         </Link>
       </div>
 
-      <p className="text-center text-xs text-slate-400">
+      <p className="text-center text-xs text-muted-foreground">
         First time signing in? Use the temporary password your gym admin shared with you. You'll be asked to set a new password right after.
       </p>
     </div>

@@ -120,10 +120,10 @@ const DeviceManagement = () => {
             <TabsContent value="debug">
               <div className="space-y-4">
                 {/* Webhook URL Guidance — field-by-field */}
-                <Card className="rounded-2xl border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-indigo-500/5">
+                <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-primary/5 to-primary/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Server className="h-5 w-5 text-violet-600" />
+                      <Server className="h-5 w-5 text-primary" />
                       MIPS Device Callback Configuration
                     </CardTitle>
                     <CardDescription>
@@ -134,7 +134,7 @@ const DeviceManagement = () => {
                     {/* Recognition Record Upload URL */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700 text-[10px] font-bold">1</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-success text-[10px] font-bold">1</span>
                         Recognition Record Upload URL <span className="text-destructive">*</span>
                       </label>
                       <p className="text-[11px] text-muted-foreground">Face scan events — this is the <strong>critical</strong> URL for attendance</p>
@@ -150,14 +150,14 @@ const DeviceManagement = () => {
                         </Button>
                       </div>
                       {mipsUrls?.isOverridden && (
-                        <p className="text-[10px] text-amber-600">Using override from integration settings.</p>
+                        <p className="text-[10px] text-warning">Using override from integration settings.</p>
                       )}
                     </div>
 
                     {/* Register Person Data Upload URL */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">2</span>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-info/15 text-info text-[10px] font-bold">2</span>
                         Register Person Data Upload URL
                       </label>
                       <p className="text-[11px] text-muted-foreground">Captured registration photos from the device</p>
@@ -191,15 +191,15 @@ const DeviceManagement = () => {
                     {/* Relay diagram */}
                     <div className="rounded-xl border bg-background p-3 space-y-2">
                       <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                        <Activity className="h-3.5 w-3.5 text-violet-600" /> Data Flow (Relay Mode)
+                        <Activity className="h-3.5 w-3.5 text-primary" /> Data Flow (Relay Mode)
                       </h4>
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
-                        <span className="px-2 py-1 rounded bg-violet-100 text-violet-700 font-medium">Device</span>
+                        <span className="px-2 py-1 rounded bg-primary/15 text-primary font-medium">Device</span>
                         <span>→</span>
-                        <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">Our Webhook</span>
+                        <span className="px-2 py-1 rounded bg-success/15 text-success font-medium">Our Webhook</span>
                         <span className="text-[10px]">(log + attendance)</span>
                         <span>→</span>
-                        <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">MIPS Server</span>
+                        <span className="px-2 py-1 rounded bg-info/15 text-info font-medium">MIPS Server</span>
                         <span className="text-[10px]">(auto-forwarded)</span>
                       </div>
                       <p className="text-[11px] text-muted-foreground">

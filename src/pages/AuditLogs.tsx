@@ -136,9 +136,9 @@ export default function AuditLogsPage() {
 
   const getActionStyle = (action: string) => {
     switch (action) {
-      case 'INSERT': return { bg: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', icon: Plus, label: 'Created' };
-      case 'UPDATE': return { bg: 'bg-blue-500/10 text-blue-600 border-blue-500/20', icon: Pencil, label: 'Updated' };
-      case 'DELETE': return { bg: 'bg-red-500/10 text-red-600 border-red-500/20', icon: Trash2, label: 'Deleted' };
+      case 'INSERT': return { bg: 'bg-success/10 text-success border-success/20', icon: Plus, label: 'Created' };
+      case 'UPDATE': return { bg: 'bg-info/10 text-info border-info/20', icon: Pencil, label: 'Updated' };
+      case 'DELETE': return { bg: 'bg-destructive/10 text-destructive border-destructive/20', icon: Trash2, label: 'Deleted' };
       default: return { bg: 'bg-muted text-muted-foreground', icon: Activity, label: action };
     }
   };
@@ -206,11 +206,11 @@ export default function AuditLogsPage() {
           <div key={key} className="flex items-start gap-2 text-sm">
             <span className="font-medium text-foreground min-w-[120px] shrink-0">{key}</span>
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-600 font-mono text-xs truncate max-w-[200px]">
+              <span className="px-2 py-0.5 rounded bg-destructive/10 text-destructive font-mono text-xs truncate max-w-[200px]">
                 {old !== undefined ? JSON.stringify(old) : '—'}
               </span>
               <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 font-mono text-xs truncate max-w-[200px]">
+              <span className="px-2 py-0.5 rounded bg-success/10 text-success font-mono text-xs truncate max-w-[200px]">
                 {newVal !== undefined ? JSON.stringify(newVal) : '—'}
               </span>
             </div>
@@ -397,21 +397,21 @@ export default function AuditLogsPage() {
                         const target = log.target_name || (log.record_id ? log.record_id.substring(0, 8) : '—');
                         const route = deepLinkFor(log.table_name, log.record_id);
                         const isNew = newRowIds.has(log.id);
-                        const accent = log.action === 'DELETE' ? 'border-l-2 border-l-red-500' : log.action === 'INSERT' ? 'border-l-2 border-l-emerald-500' : 'border-l-2 border-l-blue-500';
+                        const accent = log.action === 'DELETE' ? 'border-l-2 border-l-destructive' : log.action === 'INSERT' ? 'border-l-2 border-l-success' : 'border-l-2 border-l-info';
                         const padY = density === 'compact' ? 'p-2' : 'p-3';
 
                         return (
                           <Collapsible key={log.id} open={expandedRows.has(log.id)}>
                             <div className="relative">
                               <div className={`absolute -left-6 top-4 h-[22px] w-[22px] rounded-full border-2 border-background flex items-center justify-center ${
-                                log.action === 'INSERT' ? 'bg-emerald-500' : log.action === 'DELETE' ? 'bg-red-500' : 'bg-blue-500'
+                                log.action === 'INSERT' ? 'bg-success' : log.action === 'DELETE' ? 'bg-destructive' : 'bg-info'
                               }`}>
-                                <ActionIcon className="h-3 w-3 text-white" />
+                                <ActionIcon className="h-3 w-3 text-primary-foreground" />
                               </div>
 
                               <CollapsibleTrigger asChild>
                                 <div
-                                  className={`ml-2 border ${accent} rounded-lg mb-2 cursor-pointer transition-all hover:bg-muted/50 hover:shadow-sm ${isNew ? 'ring-2 ring-emerald-400/60 animate-in fade-in' : ''}`}
+                                  className={`ml-2 border ${accent} rounded-lg mb-2 cursor-pointer transition-all hover:bg-muted/50 hover:shadow-sm ${isNew ? 'ring-2 ring-success/60 animate-in fade-in' : ''}`}
                                   onClick={() => toggleRow(log.id)}
                                 >
                                   <div className={`flex items-start justify-between ${padY} gap-3`}>
@@ -422,7 +422,7 @@ export default function AuditLogsPage() {
                                           <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">{initials}</AvatarFallback>
                                         </Avatar>
                                         {isOnline && (
-                                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500" title="Online now" />
+                                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-success" title="Online now" />
                                         )}
                                       </div>
                                       <div className="flex-1 min-w-0">
@@ -432,7 +432,7 @@ export default function AuditLogsPage() {
                                             <span className="text-muted-foreground"> {style.label.toLowerCase()} </span>
                                             <span className="font-medium">{target}</span>
                                           </span>
-                                          {isNew && <Badge className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 border-emerald-500/20">New</Badge>}
+                                          {isNew && <Badge className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-success/20">New</Badge>}
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap mt-1">
                                           <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 capitalize">{CATEGORY_LABEL[categoryOf(log.table_name)]}</Badge>

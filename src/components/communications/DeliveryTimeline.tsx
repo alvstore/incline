@@ -17,13 +17,13 @@ const stageOrder = ['queued', 'sent', 'delivered', 'read', 'replied'] as const;
 type Stage = (typeof stageOrder)[number] | 'failed' | 'bounced';
 
 const stageMeta: Record<Stage, { icon: any; dotBg: string; dotRing: string; text: string; label: string }> = {
-  queued:    { icon: Clock,              dotBg: 'bg-amber-500',   dotRing: 'ring-amber-300/60',   text: 'text-amber-600',   label: 'Queued' },
-  sent:      { icon: Send,               dotBg: 'bg-sky-500',     dotRing: 'ring-sky-300/60',     text: 'text-sky-600',     label: 'Sent' },
-  delivered: { icon: CheckCircle2,       dotBg: 'bg-emerald-500', dotRing: 'ring-emerald-300/60', text: 'text-emerald-600', label: 'Delivered' },
-  read:      { icon: Eye,                dotBg: 'bg-violet-500',  dotRing: 'ring-violet-300/60',  text: 'text-violet-600',  label: 'Read' },
-  replied:   { icon: MessageSquareReply, dotBg: 'bg-indigo-500',  dotRing: 'ring-indigo-300/60',  text: 'text-indigo-600',  label: 'Replied' },
-  failed:    { icon: XCircle,            dotBg: 'bg-rose-500',    dotRing: 'ring-rose-300/60',    text: 'text-rose-600',    label: 'Failed' },
-  bounced:   { icon: AlertTriangle,      dotBg: 'bg-rose-500',    dotRing: 'ring-rose-300/60',    text: 'text-rose-600',    label: 'Bounced' },
+  queued:    { icon: Clock,              dotBg: 'bg-warning',   dotRing: 'ring-warning/40',   text: 'text-warning',   label: 'Queued' },
+  sent:      { icon: Send,               dotBg: 'bg-info',     dotRing: 'ring-info/40',     text: 'text-info',     label: 'Sent' },
+  delivered: { icon: CheckCircle2,       dotBg: 'bg-success', dotRing: 'ring-success/40', text: 'text-success', label: 'Delivered' },
+  read:      { icon: Eye,                dotBg: 'bg-primary',  dotRing: 'ring-primary/40',  text: 'text-primary',  label: 'Read' },
+  replied:   { icon: MessageSquareReply, dotBg: 'bg-primary',  dotRing: 'ring-primary/40',  text: 'text-primary',  label: 'Replied' },
+  failed:    { icon: XCircle,            dotBg: 'bg-destructive',    dotRing: 'ring-destructive/40',    text: 'text-destructive',    label: 'Failed' },
+  bounced:   { icon: AlertTriangle,      dotBg: 'bg-destructive',    dotRing: 'ring-destructive/40',    text: 'text-destructive',    label: 'Bounced' },
 };
 
 // Friendly explanations for the most common Meta WhatsApp error codes so
@@ -169,11 +169,11 @@ export function DeliveryTimeline({
       (logDeliveryStatus || '').toLowerCase() === 'queued' ||
       (logStatus || '').toLowerCase() === 'queued';
     return (
-      <div className="mx-4 my-3 rounded-2xl border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-br from-amber-50/60 via-card to-amber-50/30 dark:from-amber-500/5 dark:via-card dark:to-amber-500/5 px-5 py-4 shadow-sm">
+      <div className="mx-4 my-3 rounded-2xl border border-warning/25 dark:border-warning/20 bg-gradient-to-br from-warning/10 via-card to-warning/10 dark:from-warning/5 dark:via-card dark:to-warning/5 px-5 py-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="relative h-9 w-9 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center ring-4 ring-background">
+          <div className="relative h-9 w-9 rounded-full bg-warning/15 text-warning flex items-center justify-center ring-4 ring-background">
             <Hourglass className="h-4 w-4" />
-            <span className="absolute inset-0 rounded-full bg-amber-500/15 animate-ping opacity-50" />
+            <span className="absolute inset-0 rounded-full bg-warning/15 animate-ping opacity-50" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-foreground">
@@ -227,7 +227,7 @@ export function DeliveryTimeline({
       className={cn(
         'mx-4 my-3 rounded-2xl border px-5 py-4 transition-colors',
         hasFailure
-          ? 'bg-gradient-to-br from-rose-50/80 via-card to-rose-50/40 dark:from-rose-500/10 dark:via-card dark:to-rose-500/5 border-rose-200/70 dark:border-rose-500/20 shadow-sm shadow-rose-500/10'
+          ? 'bg-gradient-to-br from-destructive/10 via-card to-destructive/10 dark:from-destructive/10 dark:via-card dark:to-destructive/5 border-destructive/25 dark:border-destructive/20 shadow-sm shadow-destructive/20'
           : 'bg-gradient-to-br from-muted/40 via-card to-muted/20 border-border/40 shadow-sm',
       )}
     >
@@ -239,8 +239,8 @@ export function DeliveryTimeline({
           className={cn(
             'absolute left-5 top-4 h-1 rounded-full transition-all duration-700 ease-out',
             hasFailure
-              ? 'bg-gradient-to-r from-sky-500 via-emerald-500 to-rose-500'
-              : 'bg-gradient-to-r from-sky-500 via-emerald-500 to-violet-500',
+              ? 'bg-gradient-to-r from-info via-success to-destructive'
+              : 'bg-gradient-to-r from-info via-success to-primary',
           )}
           style={{ width: `calc((100% - 2.5rem) * ${fillPct / 100})` }}
         />
@@ -259,7 +259,7 @@ export function DeliveryTimeline({
                   className={cn(
                     'relative z-10 h-9 w-9 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ring-4 ring-background',
                     reached
-                      ? `${meta.dotBg} text-white shadow-lg shadow-black/10`
+                      ? `${meta.dotBg} text-primary-foreground shadow-lg shadow-black/10`
                       : 'bg-background text-muted-foreground/40 border-2 border-dashed border-border',
                   )}
                 >
@@ -268,7 +268,7 @@ export function DeliveryTimeline({
                     <span className={cn('absolute inset-0 rounded-full opacity-60 animate-ping', meta.dotBg)} />
                   )}
                   {isFailureStage && (
-                    <span className="absolute inset-0 rounded-full opacity-50 animate-ping bg-rose-500" />
+                    <span className="absolute inset-0 rounded-full opacity-50 animate-ping bg-destructive" />
                   )}
                 </div>
                 <div className="mt-2 text-center leading-tight">
@@ -291,14 +291,14 @@ export function DeliveryTimeline({
       </div>
 
       {hasFailure && errorInfo && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-rose-100/70 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-3 py-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-rose-600 mt-0.5 shrink-0" />
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-destructive/15 dark:bg-destructive/10 border border-destructive/25 dark:border-destructive/20 px-3 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] font-semibold text-rose-700 dark:text-rose-300 leading-snug">
+            <div className="text-[12px] font-semibold text-destructive dark:text-destructive leading-snug">
               {errorInfo.code ? `Meta error ${errorInfo.code}: ` : ''}{errorInfo.title}
             </div>
             {errorInfo.hint && (
-              <div className="mt-1 flex items-start gap-1.5 text-[11px] text-rose-700/80 dark:text-rose-300/80 leading-snug">
+              <div className="mt-1 flex items-start gap-1.5 text-[11px] text-destructive/80 dark:text-destructive/80 leading-snug">
                 <Info className="h-3 w-3 shrink-0 mt-0.5" />
                 <span>{errorInfo.hint}</span>
               </div>

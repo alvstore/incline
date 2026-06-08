@@ -487,14 +487,14 @@ export default function FinancePage() {
                   const Icon = getPaymentIcon(tx.method);
                   return (
                     <div key={tx.id} className="flex items-center gap-3">
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tx.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tx.type === 'income' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
                         <p className="text-xs text-muted-foreground">{tx.member || tx.method}</p>
                       </div>
-                      <span className={`text-sm font-bold ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
+                      <span className={`text-sm font-bold ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                       </span>
                     </div>
@@ -512,11 +512,11 @@ export default function FinancePage() {
             <Tabs defaultValue="income" className="space-y-4">
               <TabsList>
                 <TabsTrigger value="income" className="gap-2">
-                  <ArrowUpRight className="h-4 w-4 text-green-500" />
+                  <ArrowUpRight className="h-4 w-4 text-success" />
                   Income ({combinedIncomeData.length})
                 </TabsTrigger>
                 <TabsTrigger value="expenses" className="gap-2">
-                  <ArrowDownRight className="h-4 w-4 text-red-500" />
+                  <ArrowDownRight className="h-4 w-4 text-destructive" />
                   Expenses ({expenseData.length})
                 </TabsTrigger>
                 <TabsTrigger value="gst" className="gap-2">
@@ -565,7 +565,7 @@ export default function FinancePage() {
                             <TableCell>
                               <Badge variant="outline">{payment.payment_method?.replace('_', ' ')}</Badge>
                             </TableCell>
-                            <TableCell className="text-right font-medium text-green-600">
+                            <TableCell className="text-right font-medium text-success">
                               +{formatCurrency(payment.amount)}
                             </TableCell>
                           </TableRow>
@@ -682,7 +682,7 @@ export default function FinancePage() {
                               </TableCell>
                               <TableCell>{expense.description}</TableCell>
                               <TableCell>{expense.vendor || '-'}</TableCell>
-                              <TableCell className="text-right font-medium text-red-600">
+                              <TableCell className="text-right font-medium text-destructive">
                                 -{formatCurrency(expense.amount)}
                               </TableCell>
                             </TableRow>

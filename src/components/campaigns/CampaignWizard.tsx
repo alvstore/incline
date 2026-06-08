@@ -504,7 +504,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     <ResponsiveSheet open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
       <ResponsiveSheetHeader>
         <ResponsiveSheetTitle className="flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-violet-600" /> Create Marketing Campaign
+          <Megaphone className="h-5 w-5 text-primary" /> Create Marketing Campaign
         </ResponsiveSheetTitle>
         <ResponsiveSheetDescription>Reach the right members with the right message</ResponsiveSheetDescription>
       </ResponsiveSheetHeader>
@@ -515,7 +515,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           {stepLabels.map((label, i) => (
             <div key={label} className="flex-1 flex items-center">
               <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                step > i + 1 ? 'bg-emerald-500 text-white' : step === i + 1 ? 'bg-violet-600 text-white' : 'bg-muted text-muted-foreground'
+                step > i + 1 ? 'bg-success text-primary-foreground' : step === i + 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
               }`}>{i + 1}</div>
               <span className={`ml-2 text-sm ${step === i + 1 ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
               {i < stepLabels.length - 1 && <div className="flex-1 h-px bg-border mx-3" />}
@@ -587,18 +587,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             )}
 
             {channel === 'whatsapp' && requiresTemplate && !templatePicked && (
-              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-500/10 p-3 flex gap-2.5">
-                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-900 dark:text-amber-100">
+              <div className="rounded-2xl border-2 border-warning/40 bg-warning/10 dark:bg-warning/10 p-3 flex gap-2.5">
+                <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="text-sm text-warning dark:text-warning">
                   <p className="font-semibold mb-0.5">{coldCount} of {totalCount} recipient(s) are outside the 24h WhatsApp window.</p>
                   <p className="text-[12px]">WhatsApp will reject freeform messages to them (Meta error 131047). <b>Pick an APPROVED Meta template below</b>, or narrow the audience.</p>
                 </div>
               </div>
             )}
             {channel === 'whatsapp' && requiresTemplate && templatePicked && (
-              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 p-3 flex gap-2.5">
-                <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="text-sm text-emerald-900 dark:text-emerald-100">
+              <div className="rounded-2xl border-2 border-success/40 bg-success/10 dark:bg-success/10 p-3 flex gap-2.5">
+                <ShieldCheck className="h-5 w-5 text-success shrink-0 mt-0.5" />
+                <div className="text-sm text-success dark:text-success">
                   <p className="font-semibold mb-0.5">Approved template will be used for {coldCount} cold recipient(s).</p>
                   <p className="text-[12px]">In-window recipients ({Math.max(0, totalCount - coldCount)}) get your freeform message; cold recipients get the approved template.</p>
                 </div>
@@ -606,13 +606,13 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             )}
 
             {channel === 'whatsapp' && (
-              <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 space-y-2">
+              <div className="rounded-2xl border-2 border-success/25 bg-success/10 dark:bg-success/5 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <ShieldCheck className="h-4 w-4 text-success shrink-0" />
                     <div className="min-w-0">
-                      <Label className="text-xs font-semibold text-emerald-900 block">Send via approved Meta template</Label>
-                      <p className="text-[11px] text-emerald-700">Required for cold leads / contacts outside the 24h messaging window.</p>
+                      <Label className="text-xs font-semibold text-success block">Send via approved Meta template</Label>
+                      <p className="text-[11px] text-success">Required for cold leads / contacts outside the 24h messaging window.</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -639,7 +639,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 {useApprovedTemplate && (
                   <div className="space-y-2">
                     {approvedTemplates.length === 0 ? (
-                      <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 space-y-1">
+                      <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-lg p-2 space-y-1">
                         <p className="font-semibold">No approved Meta templates yet.</p>
                         <p>Generate one in <strong>Settings → Communication Templates → AI Studio</strong>, or click <strong>Sync from Meta</strong> above to pull the latest approval list.</p>
                       </div>
@@ -655,7 +655,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                           }
                         }}
                       >
-                        <SelectTrigger className="rounded-xl bg-white"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
+                        <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
                         <SelectContent>
                           {approvedTemplates.map((t: any) => (
                             <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
@@ -669,12 +669,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       </Select>
                     )}
                     {selectedTemplateId && selectedTemplateId.startsWith('__meta__:') && (
-                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      <p className="text-[11px] text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
                         This Meta template has no local CRM row yet. Click <strong>Sync from Meta</strong> once to materialize it before sending.
                       </p>
                     )}
                     {selectedTemplateId && !selectedTemplateId.startsWith('__meta__:') && (
-                      <p className="text-[11px] text-emerald-800">
+                      <p className="text-[11px] text-success">
                         Body is locked to the approved template content. You can still personalize variables and attach the required header media below.
                       </p>
                     )}
@@ -684,9 +684,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             )}
 
             {evergreenPickedName && (
-              <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/60 dark:bg-indigo-500/10 p-3 flex items-start gap-2.5">
-                <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
-                <div className="text-sm text-indigo-900 dark:text-indigo-100 flex-1">
+              <div className="rounded-2xl border-2 border-primary/25 bg-primary/10 dark:bg-primary/10 p-3 flex items-start gap-2.5">
+                <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="text-sm text-primary dark:text-primary flex-1">
                   <p className="font-semibold mb-0.5">Evergreen template applied: <span className="font-mono text-[12px]">{evergreenPickedName}</span></p>
                   <p className="text-[11px]">Reusable Meta-friendly base for <b>{campaignType.replace('_', ' ')}</b> campaigns. Edit freely or pick a different evergreen below.</p>
                   {evergreenTemplates.length > 1 && (
@@ -703,7 +703,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                         }
                       }}
                     >
-                      <SelectTrigger className="rounded-lg bg-white mt-2 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="rounded-lg bg-card mt-2 h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {(evergreenTemplates as any[]).map((t: any) => (
                           <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
@@ -727,17 +727,17 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   variant="outline"
                   size="sm"
                   onClick={() => setAiOpen((o) => !o)}
-                  className="rounded-full h-7 px-3 text-xs gap-1.5 border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700"
+                  className="rounded-full h-7 px-3 text-xs gap-1.5 border-primary/25 bg-primary/10 hover:bg-primary/15 text-primary"
                 >
                   <Sparkles className="h-3 w-3" /> Draft with AI
                 </Button>
               </div>
 
               {aiOpen && (
-                <div className="rounded-2xl border-2 border-violet-200 bg-violet-50/50 p-3 mb-3 space-y-2">
-                  <Label className="text-[11px] uppercase tracking-wider text-violet-800 font-semibold">Describe what you want to say</Label>
+                <div className="rounded-2xl border-2 border-primary/25 bg-primary/10 p-3 mb-3 space-y-2">
+                  <Label className="text-[11px] uppercase tracking-wider text-primary font-semibold">Describe what you want to say</Label>
                   <Textarea
-                    className="rounded-xl bg-white min-h-[80px]"
+                    className="rounded-xl bg-card min-h-[80px]"
                     placeholder={channel === 'email'
                       ? 'e.g. Announce 30% off annual memberships, ends Sunday, free shaker on signup'
                       : 'e.g. Reminder about Sunday HIIT bootcamp at 7am, bring a friend free'}
@@ -751,13 +751,13 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       size="sm"
                       onClick={handleAiDraft}
                       disabled={aiLoading}
-                      className="rounded-full bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+                      className="rounded-full bg-primary hover:bg-primary text-primary-foreground gap-1.5"
                     >
                       {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                       Generate
                     </Button>
                   </div>
-                  <p className="text-[10px] text-violet-700">
+                  <p className="text-[10px] text-primary">
                     AI uses your campaign type{campaignType === 'event' ? ', event details' : ''} and channel rules{channel === 'email' ? ' (subject + responsive HTML)' : ''}. Always review before sending.
                   </p>
                 </div>
@@ -785,7 +785,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                     size="sm"
                     onClick={handleSubmitMetaTemplate}
                     disabled={submittingMeta}
-                    className="rounded-full h-7 px-3 text-xs gap-1.5 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
+                    className="rounded-full h-7 px-3 text-xs gap-1.5 border-success/25 bg-success/10 hover:bg-success/15 text-success"
                     title="Submit this body to Meta as a reusable WhatsApp template (PENDING approval)"
                   >
                     {submittingMeta ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
@@ -803,16 +803,16 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 {attachment ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-muted/30">
-                      {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-emerald-500" /> :
-                       attachment.kind === 'video' ? <Film className="h-4 w-4 text-violet-500" /> :
-                       <FileText className="h-4 w-4 text-amber-500" />}
+                      {attachment.kind === 'image' ? <ImageIcon className="h-4 w-4 text-success" /> :
+                       attachment.kind === 'video' ? <Film className="h-4 w-4 text-primary" /> :
+                       <FileText className="h-4 w-4 text-warning" />}
                       <span className="text-sm flex-1 truncate">{attachment.filename}</span>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setAttachment(null)} aria-label="Remove">
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                     {attachment.kind === 'video' && (
-                      <video src={attachment.url} controls playsInline className="rounded-xl border w-full max-h-56 bg-black" />
+                      <video src={attachment.url} controls playsInline className="rounded-xl border w-full max-h-56 bg-foreground" />
                     )}
                     {attachment.kind === 'image' && (
                       <img src={attachment.url} alt={attachment.filename} className="rounded-xl border w-full max-h-56 object-cover" />
@@ -854,7 +854,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   Image (JPG/PNG), PDF or MP4 video (H.264 / AAC, ≤16MB). WhatsApp limit: 16MB.
                 </p>
                 {channel === 'whatsapp' && attachment?.kind === 'video' && (filter.audience_kind === 'leads' || filter.audience_kind === 'mixed' || filter.audience_kind === 'contacts') && (
-                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                  <div className="mt-2 rounded-xl border border-warning/25 bg-warning/10 dark:bg-warning/10 p-3 text-xs text-warning dark:text-warning">
                     <strong>Heads up:</strong> WhatsApp blocks freeform marketing video to leads/contacts who haven&apos;t messaged you in the last 24 hours (Meta error 131047). For cold outreach, use an approved Meta video-header template instead.
                   </div>
                 )}
@@ -888,9 +888,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">RSVP / Booking link</Label>
               <Input className="rounded-xl" placeholder="https://…" value={eventRsvpUrl} onChange={(e) => setEventRsvpUrl(e.target.value)} />
             </div>
-            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-amber-800 font-semibold mb-1">Preview append</p>
-              <pre className="text-xs whitespace-pre-wrap text-amber-900">{buildFinalMessage().slice(message.length).trim() || '— fill the fields above —'}</pre>
+            <div className="rounded-2xl bg-warning/10 border border-warning/25 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-warning font-semibold mb-1">Preview append</p>
+              <pre className="text-xs whitespace-pre-wrap text-warning">{buildFinalMessage().slice(message.length).trim() || '— fill the fields above —'}</pre>
             </div>
           </div>
         )}
@@ -907,7 +907,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   trigger === t.id ? `border-${t.color}-500 bg-${t.color}-50 dark:bg-${t.color}-500/10 shadow-md shadow-${t.color}-200/40` : 'border-border bg-card'
                 }`}>
                 <div className="flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${trigger === t.id ? `bg-${t.color}-600 text-white` : 'bg-muted text-muted-foreground'}`}>
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${trigger === t.id ? `bg-${t.color}-600 text-primary-foreground` : 'bg-muted text-muted-foreground'}`}>
                     <t.icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
@@ -919,22 +919,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             ))}
 
             {trigger === 'scheduled' && (
-              <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 p-4 space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-amber-800 font-semibold">Send at (Asia/Kolkata)</Label>
+              <div className="rounded-2xl border-2 border-warning/25 bg-warning/10 p-4 space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-warning font-semibold">Send at (Asia/Kolkata)</Label>
                 <Input
                   type="datetime-local"
-                  className="rounded-xl bg-white"
+                  className="rounded-xl bg-card"
                   value={scheduledAt}
                   min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
                   onChange={(e) => setScheduledAt(e.target.value)}
                 />
-                <p className="text-[11px] text-amber-700">A background worker checks every minute and sends the campaign at the chosen time.</p>
+                <p className="text-[11px] text-warning">A background worker checks every minute and sends the campaign at the chosen time.</p>
               </div>
             )}
 
             {trigger === 'automated' && (
-              <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 p-4 space-y-3">
-                <Label className="text-xs uppercase tracking-wider text-blue-800 font-semibold">Repeat schedule</Label>
+              <div className="rounded-2xl border-2 border-info/25 bg-info/10 p-4 space-y-3">
+                <Label className="text-xs uppercase tracking-wider text-info font-semibold">Repeat schedule</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {([
                     { id: 'daily',        label: 'Daily 10am' },
@@ -945,7 +945,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                   ] as const).map((p) => (
                     <button key={p.id} type="button" onClick={() => setRecurrence(p.id as RecurrencePreset)}
                       className={`text-left rounded-xl px-3 py-2 text-sm border-2 transition-all ${
-                        recurrence === p.id ? 'border-blue-500 bg-white text-blue-900 font-medium' : 'border-transparent bg-white/60 text-blue-800 hover:border-blue-300'
+                        recurrence === p.id ? 'border-info bg-card text-info font-medium' : 'border-transparent bg-card/60 text-info hover:border-info/40'
                       }`}>
                       {p.label}
                     </button>
@@ -954,15 +954,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 {recurrence === 'custom' && (
                   <div>
                     <Input
-                      className="rounded-xl bg-white font-mono text-sm"
+                      className="rounded-xl bg-card font-mono text-sm"
                       value={customCron}
                       onChange={(e) => setCustomCron(e.target.value)}
                       placeholder="0 10 * * 1"
                     />
-                    <p className="text-[11px] text-blue-700 mt-1">5-field UTC cron · m h dom mon dow</p>
+                    <p className="text-[11px] text-info mt-1">5-field UTC cron · m h dom mon dow</p>
                   </div>
                 )}
-                <p className="text-[11px] text-blue-700">
+                <p className="text-[11px] text-info">
                   Audience is re-resolved on every run, so new members/leads matching the filter get included automatically. Manage in Settings → Automation Brain.
                 </p>
               </div>
@@ -976,7 +976,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{channel.toUpperCase()}</span></div>
                 <div><span className="text-muted-foreground">Recipients:</span> <span className="font-medium">{totalCount}{coldCount > 0 ? ` · ${coldCount} cold` : ''}</span></div>
                 {requiresTemplate && (
-                  <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-emerald-700' : 'text-amber-700'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
+                  <div><span className="text-muted-foreground">Template:</span> <span className={`font-medium ${templatePicked ? 'text-success' : 'text-warning'}`}>{templatePicked ? 'Approved Meta template selected' : 'Required — not selected'}</span></div>
                 )}
                 {isEvent && eventName && <div><span className="text-muted-foreground">Event:</span> <span className="font-medium">{eventName}{eventDate ? ` · ${eventDate}` : ''}</span></div>}
               </div>
@@ -992,11 +992,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
             </Button>
           ) : <div />}
           {step < totalSteps ? (
-            <Button onClick={() => setStep(step + 1)} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={() => setStep(step + 1)} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={handleSubmit} disabled={submitting || blockedByTemplate} title={blockedByTemplate ? 'Pick an approved Meta template — cold recipients require it' : undefined} className="rounded-xl bg-primary hover:bg-primary text-primary-foreground">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> :
                 trigger === 'send_now' ? <><Send className="h-4 w-4" /> Send Campaign</> :
                 trigger === 'scheduled' ? <><Clock className="h-4 w-4" /> Schedule Campaign</> :

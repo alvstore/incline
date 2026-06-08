@@ -130,7 +130,7 @@ const MIPSConnectionCard = ({ branchId, branchName }: MIPSConnectionCardProps) =
             <Badge variant="outline" className="ml-auto text-[10px]">{branchName}</Badge>
           )}
           {connection && (
-            <Badge variant="secondary" className="text-[10px] bg-green-500/10 text-green-700">Configured</Badge>
+            <Badge variant="secondary" className="text-[10px] bg-success/10 text-success">Configured</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -185,7 +185,7 @@ const MIPSConnectionCard = ({ branchId, branchName }: MIPSConnectionCardProps) =
 
         {testResult && (
           <div className={`flex items-center gap-2 text-xs p-2.5 rounded-lg ${
-            testResult.success ? "bg-green-500/10 text-green-700" : "bg-destructive/10 text-destructive"
+            testResult.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
           }`}>
             {testResult.success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
             {testResult.message}

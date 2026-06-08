@@ -103,13 +103,13 @@ export default function PoliciesTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-indigo-600" /> Policy Library</CardTitle>
+            <CardTitle className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" /> Policy Library</CardTitle>
             <CardDescription>Versioned, role-scoped, e-sign ready policies. All employees must acknowledge applicable policies.</CardDescription>
           </div>
-          <Button onClick={() => setEditing({ code: '', title: '', version: 1, body_markdown: '', applicable_roles: ['owner', 'admin', 'manager', 'staff', 'trainer'] })} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button onClick={() => setEditing({ code: '', title: '', version: 1, body_markdown: '', applicable_roles: ['owner', 'admin', 'manager', 'staff', 'trainer'] })} className="bg-primary hover:bg-primary">
             <Plus className="h-4 w-4 mr-1" /> New policy
           </Button>
         </CardHeader>
@@ -117,21 +117,21 @@ export default function PoliciesTab() {
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
           ) : list.length === 0 ? (
-            <div className="text-center py-10 text-slate-500">
+            <div className="text-center py-10 text-muted-foreground">
               <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-50" />
               No policies yet.
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-border">
               {list.map((p) => (
                 <div key={p.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 truncate">{p.title}</span>
+                      <span className="font-semibold text-foreground truncate">{p.title}</span>
                       <Badge variant="outline" className="text-[10px]">{p.code}</Badge>
-                      <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px]">v{p.version}</Badge>
+                      <Badge className="bg-primary/10 text-primary border border-primary/15 text-[10px]">v{p.version}</Badge>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3">
+                    <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
                       <span>Effective {p.effective_from}</span>
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" />{p.applicable_roles.join(', ')}</span>
                       <span>{ackCounts[p.id] ?? 0} acknowledgements</span>
@@ -183,7 +183,7 @@ export default function PoliciesTab() {
           )}
           <SheetFooter>
             <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => editing && save.mutate(editing)} disabled={save.isPending}>{save.isPending ? 'Saving...' : 'Save policy'}</Button>
+            <Button className="bg-primary hover:bg-primary" onClick={() => editing && save.mutate(editing)} disabled={save.isPending}>{save.isPending ? 'Saving...' : 'Save policy'}</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>

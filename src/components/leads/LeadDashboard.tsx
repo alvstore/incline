@@ -33,9 +33,9 @@ export function LeadDashboard({ stats }: LeadDashboardProps) {
   ];
 
   const tempCards = [
-    { label: 'Hot', value: stats.hot, icon: Flame, color: 'text-red-500' },
-    { label: 'Warm', value: stats.warm, icon: Sun, color: 'text-amber-500' },
-    { label: 'Cold', value: stats.cold, icon: Snowflake, color: 'text-blue-500' },
+    { label: 'Hot', value: stats.hot, icon: Flame, color: 'text-destructive' },
+    { label: 'Warm', value: stats.warm, icon: Sun, color: 'text-warning' },
+    { label: 'Cold', value: stats.cold, icon: Snowflake, color: 'text-info' },
     { label: 'Unassigned', value: stats.unassigned, icon: UserX, color: 'text-muted-foreground' },
     ...(stats.overdue !== undefined ? [{ label: 'Overdue', value: stats.overdue, icon: Clock, color: 'text-destructive' }] : []),
   ];

@@ -130,12 +130,12 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-lg p-4 sm:p-5">
       {/* Decorative halo */}
-      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-indigo-500/20 via-violet-500/15 to-fuchsia-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-primary/20 via-primary/15 to-primary/10 blur-3xl" />
 
       {/* Header */}
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/30">
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary text-primary-foreground shadow-md shadow-primary/20">
             <Users className="h-4 w-4" />
           </div>
           <div>
@@ -171,9 +171,9 @@ export function JoinedSummaryStrip({ branchFilter }: Props) {
           <div
             className={cn(
               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold mb-1',
-              deltaPositive && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-              deltaNegative && 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-              !deltaPositive && !deltaNegative && 'bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400',
+              deltaPositive && 'bg-success/15 text-success dark:bg-success/15 dark:text-success',
+              deltaNegative && 'bg-destructive/15 text-destructive dark:bg-destructive/15 dark:text-destructive',
+              !deltaPositive && !deltaNegative && 'bg-muted text-muted-foreground dark:bg-muted-foreground/15 dark:text-muted-foreground',
             )}
             title={`Previous period: ${stats.previous}`}
           >

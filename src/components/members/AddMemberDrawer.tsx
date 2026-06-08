@@ -319,7 +319,7 @@ export function AddMemberDrawer({ open, onOpenChange, branchId }: AddMemberDrawe
               </Button>
             </div>
             {referrerInfo && (
-              <p className="text-sm text-green-600 flex items-center gap-1">
+              <p className="text-sm text-success flex items-center gap-1">
                 <Gift className="h-3 w-3" />
                 Referred by: {referrerInfo.name}
               </p>

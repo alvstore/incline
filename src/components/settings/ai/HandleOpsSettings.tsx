@@ -93,16 +93,16 @@ export function HandleOpsSettings({ purposeId, purpose, opsConfig }: Props) {
   });
 
   if (fields.length === 0) {
-    return <p className="text-xs text-slate-500">No operational settings for this handle.</p>;
+    return <p className="text-xs text-muted-foreground">No operational settings for this handle.</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {fields.map((f) => (
-          <div key={f.key} className="p-3 rounded-xl bg-slate-50 space-y-1.5">
+          <div key={f.key} className="p-3 rounded-xl bg-muted space-y-1.5">
             <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs font-semibold text-slate-700">{f.label}</Label>
+              <Label className="text-xs font-semibold text-foreground">{f.label}</Label>
               {f.type === 'switch' ? (
                 <Switch
                   checked={readSwitch(state, f.key)}
@@ -123,7 +123,7 @@ export function HandleOpsSettings({ purposeId, purpose, opsConfig }: Props) {
               )}
 
             </div>
-            {f.help && <p className="text-[11px] text-slate-500">{f.help}</p>}
+            {f.help && <p className="text-[11px] text-muted-foreground">{f.help}</p>}
           </div>
         ))}
       </div>

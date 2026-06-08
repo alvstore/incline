@@ -21,11 +21,11 @@ interface Props {
 
 const statusBadge = (s: BatchStatus) => {
   const map: Record<BatchStatus, string> = {
-    active: 'bg-emerald-100 text-emerald-700',
-    depleted: 'bg-slate-100 text-slate-600',
-    expired: 'bg-red-100 text-red-700',
-    recalled: 'bg-red-100 text-red-700',
-    quarantined: 'bg-amber-100 text-amber-700',
+    active: 'bg-success/15 text-success',
+    depleted: 'bg-muted text-muted-foreground',
+    expired: 'bg-destructive/15 text-destructive',
+    recalled: 'bg-destructive/15 text-destructive',
+    quarantined: 'bg-warning/15 text-warning',
   };
   return <Badge className={`${map[s]} rounded-full font-medium`}>{s}</Badge>;
 };
@@ -58,35 +58,35 @@ export function ProductBatchesTab({ product }: Props) {
   };
 
   const expiryChip = (b: ProductBatch) => {
-    if (!b.exp_date) return <span className="text-slate-400">—</span>;
+    if (!b.exp_date) return <span className="text-muted-foreground">—</span>;
     const days = differenceInDays(parseISO(b.exp_date), new Date());
     const date = format(parseISO(b.exp_date), 'dd MMM yyyy');
-    if (days < 0) return <span className="text-red-600 font-medium">{date} · expired</span>;
-    if (days <= 30) return <span className="text-amber-600 font-medium">{date} · {days}d left</span>;
-    return <span className="text-slate-700">{date}</span>;
+    if (days < 0) return <span className="text-destructive font-medium">{date} · expired</span>;
+    if (days <= 30) return <span className="text-warning font-medium">{date} · {days}d left</span>;
+    return <span className="text-foreground">{date}</span>;
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Batches</h3>
-          <p className="text-xs text-slate-500">FEFO — earliest expiry sells first.</p>
+          <h3 className="text-base font-semibold text-foreground">Batches</h3>
+          <p className="text-xs text-muted-foreground">FEFO — earliest expiry sells first.</p>
         </div>
         <Button onClick={() => setOpen(true)} size="sm">
           <Plus className="h-4 w-4 mr-2" /> Add Batch
         </Button>
       </div>
 
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50 overflow-hidden">
+      <Card className="rounded-2xl shadow-lg shadow/50 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 flex items-center justify-center text-slate-400">
+          <div className="p-8 flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading batches…
           </div>
         ) : batches.length === 0 ? (
           <div className="p-10 text-center">
-            <AlertTriangle className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">No batches yet. Add the first batch to start tracking expiry & CoA.</p>
+            <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No batches yet. Add the first batch to start tracking expiry & CoA.</p>
           </div>
         ) : (
           <Table>
@@ -103,32 +103,32 @@ export function ProductBatchesTab({ product }: Props) {
             </TableHeader>
             <TableBody>
               {batches.map((b) => (
-                <TableRow key={b.id} className="hover:bg-slate-50">
-                  <TableCell className="font-medium text-slate-900">
+                <TableRow key={b.id} className="hover:bg-muted">
+                  <TableCell className="font-medium text-foreground">
                     {b.batch_number}
-                    {b.supplier && <div className="text-xs text-slate-500">{b.supplier}</div>}
+                    {b.supplier && <div className="text-xs text-muted-foreground">{b.supplier}</div>}
                   </TableCell>
-                  <TableCell className="text-slate-600">
+                  <TableCell className="text-muted-foreground">
                     {b.mfg_date ? format(parseISO(b.mfg_date), 'dd MMM yyyy') : '—'}
                   </TableCell>
                   <TableCell>{expiryChip(b)}</TableCell>
                   <TableCell className="text-right font-medium">
                     {b.quantity_remaining}
-                    <span className="text-xs text-slate-400"> / {b.quantity_received}</span>
+                    <span className="text-xs text-muted-foreground"> / {b.quantity_received}</span>
                   </TableCell>
                   <TableCell>{statusBadge(b.status)}</TableCell>
                   <TableCell>
                     {b.lab_report_url ? (
                       <button
                         onClick={() => openLab(b.lab_report_url!)}
-                        className="inline-flex items-center gap-1 text-indigo-600 hover:underline text-sm"
+                        className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
                       >
                         <FileText className="h-4 w-4" />
-                        {b.lab_verified ? <ShieldCheck className="h-4 w-4 text-emerald-600" /> : null}
+                        {b.lab_verified ? <ShieldCheck className="h-4 w-4 text-success" /> : null}
                         View
                       </button>
                     ) : (
-                      <span className="text-xs text-slate-400">Not uploaded</span>
+                      <span className="text-xs text-muted-foreground">Not uploaded</span>
                     )}
                   </TableCell>
                   <TableCell>

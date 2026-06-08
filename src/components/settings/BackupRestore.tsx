@@ -109,25 +109,25 @@ export function BackupRestore() {
       <DisasterRecoveryCard />
 
       {/* Hero */}
-      <Card className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xl overflow-hidden relative">
+      <Card className="rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground shadow-xl overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.15)_0%,_transparent_60%)]" />
         <CardContent className="p-6 relative z-10">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10">
+            <div className="p-3 rounded-2xl bg-card/10 backdrop-blur-sm border border-primary-foreground/10">
               <Database className="h-8 w-8" />
             </div>
             <div>
               <h3 className="text-lg font-bold">Backup & Restore</h3>
-              <p className="text-sm text-white/70">Full database JSON snapshots — owners & admins only</p>
+              <p className="text-sm text-primary-foreground/70">Full database JSON snapshots — owners & admins only</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Export */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Download className="h-5 w-5 text-indigo-600" /> Export full backup</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Download className="h-5 w-5 text-primary" /> Export full backup</CardTitle>
           <CardDescription>
             Download a complete JSON snapshot of every CRM table. Auth users and storage files are not included.
           </CardDescription>
@@ -141,9 +141,9 @@ export function BackupRestore() {
       </Card>
 
       {/* Import */}
-      <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+      <Card className="rounded-2xl shadow-lg shadow/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-emerald-600" /> Restore from backup</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5 text-success" /> Restore from backup</CardTitle>
           <CardDescription>
             Restore a previously exported JSON file. Run a dry-run first to preview changes.
           </CardDescription>
@@ -211,7 +211,7 @@ export function BackupRestore() {
 
       {/* Summary */}
       {lastSummary && (
-        <Card className="rounded-2xl shadow-lg shadow-slate-200/50">
+        <Card className="rounded-2xl shadow-lg shadow/50">
           <CardHeader>
             <CardTitle>Restore summary</CardTitle>
           </CardHeader>
@@ -221,8 +221,8 @@ export function BackupRestore() {
                 <div key={table} className="flex items-center justify-between rounded-lg border p-2 text-sm">
                   <span className="font-medium">{table}</span>
                   <div className="flex items-center gap-2">
-                    {stat.inserted > 0 && <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">+{stat.inserted}</Badge>}
-                    {stat.updated > 0 && <Badge variant="secondary" className="bg-indigo-100 text-indigo-700">~{stat.updated}</Badge>}
+                    {stat.inserted > 0 && <Badge variant="secondary" className="bg-success/15 text-success">+{stat.inserted}</Badge>}
+                    {stat.updated > 0 && <Badge variant="secondary" className="bg-primary/15 text-primary">~{stat.updated}</Badge>}
                     {stat.skipped > 0 && <Badge variant="outline">skipped {stat.skipped}</Badge>}
                     {stat.errors?.length > 0 && <Badge variant="destructive">{stat.errors.length} err</Badge>}
                   </div>

@@ -197,7 +197,7 @@ export function EditEmployeeDrawer({ open, onOpenChange, employee }: EditEmploye
 
             {/* PERSONAL TAB */}
             <TabsContent value="personal" className="space-y-4 mt-4">
-              <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+              <div className="rounded-lg border border-primary/25 bg-primary/10 p-3 text-xs text-primary">
                 Personal details are shared across Employee, Trainer, HRM and Contracts. Editing here updates the master profile everywhere.
               </div>
               <div className="grid grid-cols-2 gap-4">

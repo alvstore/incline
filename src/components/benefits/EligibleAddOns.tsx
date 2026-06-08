@@ -118,7 +118,7 @@ export function EligibleAddOns({
           {visible.map((p) => (
             <Card
               key={p.id}
-              className="rounded-xl border-border/60 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-indigo-500/10"
+              className="rounded-xl border-border/60 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/20"
             >
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">

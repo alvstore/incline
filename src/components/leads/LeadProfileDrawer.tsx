@@ -107,7 +107,7 @@ export function LeadProfileDrawer({ open, onOpenChange, lead, onFollowup, onConv
   if (!lead) return null;
 
   const TempIcon = lead.temperature === 'hot' ? Flame : lead.temperature === 'cold' ? Snowflake : Sun;
-  const tempColor = lead.temperature === 'hot' ? 'text-red-500' : lead.temperature === 'cold' ? 'text-blue-500' : 'text-amber-500';
+  const tempColor = lead.temperature === 'hot' ? 'text-destructive' : lead.temperature === 'cold' ? 'text-info' : 'text-warning';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -145,7 +145,7 @@ export function LeadProfileDrawer({ open, onOpenChange, lead, onFollowup, onConv
                   <Phone className="h-3.5 w-3.5" /> Call
                 </Button>
                 <Button size="sm" variant="outline" className="rounded-lg gap-1.5" onClick={() => communicationService.sendWhatsApp(lead.phone, `Hi ${lead.full_name}!`)}>
-                  <MessageSquare className="h-3.5 w-3.5 text-emerald-500" /> WhatsApp
+                  <MessageSquare className="h-3.5 w-3.5 text-success" /> WhatsApp
                 </Button>
               </>
             )}

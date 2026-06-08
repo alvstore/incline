@@ -210,7 +210,7 @@ export default function MemberDashboard() {
           </div>
           {isFrozen ? (
             <div className="text-right">
-              <Badge className="w-fit bg-blue-500/10 text-blue-600 border-blue-500/30 hover:bg-blue-500/20">
+              <Badge className="w-fit bg-info/10 text-info border-info/30 hover:bg-info/20">
                 <Snowflake className="h-3.5 w-3.5 mr-1" />
                 FROZEN — {activeMembership?.plan?.name || 'Plan'}
               </Badge>
@@ -251,12 +251,12 @@ export default function MemberDashboard() {
 
         {/* Frozen Alert */}
         {isFrozen && (
-          <Alert className="border-blue-500/30 bg-blue-500/5">
-            <Snowflake className="h-4 w-4 text-blue-500" />
-            <AlertTitle className="text-blue-600">Membership Frozen — {activeMembership?.plan?.name}</AlertTitle>
+          <Alert className="border-info/30 bg-info/5">
+            <Snowflake className="h-4 w-4 text-info" />
+            <AlertTitle className="text-info">Membership Frozen — {activeMembership?.plan?.name}</AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
               <span className="text-muted-foreground">Your membership is currently paused. Gym access and bookings are disabled.</span>
-              <Button size="sm" variant="outline" className="w-fit border-blue-500/30 text-blue-600 hover:bg-blue-500/10" asChild>
+              <Button size="sm" variant="outline" className="w-fit border-info/30 text-info hover:bg-info/10" asChild>
                 <Link to="/my-requests">Request Unfreeze</Link>
               </Button>
             </AlertDescription>
@@ -294,7 +294,7 @@ export default function MemberDashboard() {
               variant={totalPendingAmount > 0 ? "warning" : "success"}
             />
             {totalPendingAmount > 0 && pendingInvoices[0]?.id && (
-              <Button asChild size="sm" className="mt-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white">
+              <Button asChild size="sm" className="mt-2 rounded-xl bg-gradient-to-r from-warning to-warning hover:from-warning hover:to-warning text-primary-foreground">
                 <Link to={`/member/pay?invoice=${pendingInvoices[0].id}`}>
                   <CreditCard className="h-3.5 w-3.5 mr-1.5" /> Pay Now
                 </Link>
@@ -406,7 +406,7 @@ export default function MemberDashboard() {
                               <p className="text-xs text-muted-foreground capitalize">{ent.periodLabel}</p>
                             )}
                             {addOnRemaining > 0 && totalRemaining !== null && (
-                              <p className="text-[10px] text-rose-600 font-medium mt-0.5">
+                              <p className="text-[10px] text-destructive font-medium mt-0.5">
                                 Includes +{addOnRemaining} add-on credit{addOnRemaining !== 1 ? 's' : ''}
                               </p>
                             )}
@@ -431,22 +431,22 @@ export default function MemberDashboard() {
                   {benefitCredits.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <Heart className="h-3 w-3 text-rose-500" /> Add-On Credits
+                        <Heart className="h-3 w-3 text-destructive" /> Add-On Credits
                       </p>
                       {benefitCredits.map((credit: any) => {
                         const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                         return (
-                          <div key={credit.id} className="flex items-center justify-between p-2.5 bg-rose-50 dark:bg-rose-500/10 rounded-lg">
+                          <div key={credit.id} className="flex items-center justify-between p-2.5 bg-destructive/10 dark:bg-destructive/10 rounded-lg">
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="h-7 w-7 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
-                                <Sparkles className="h-3.5 w-3.5 text-rose-600" />
+                              <div className="h-7 w-7 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                                <Sparkles className="h-3.5 w-3.5 text-destructive" />
                               </div>
                               <div className="min-w-0">
                                 <p className="text-xs font-medium truncate">{credit.benefit_type?.name || 'Add-On'}</p>
                                 <p className="text-[10px] text-muted-foreground">Exp. {format(new Date(credit.expires_at), 'dd MMM')} · {daysLeft}d left</p>
                               </div>
                             </div>
-                            <span className="text-sm font-bold text-rose-600 shrink-0">
+                            <span className="text-sm font-bold text-destructive shrink-0">
                               {credit.credits_remaining}<span className="text-[10px] font-normal text-muted-foreground">/{credit.credits_total}</span>
                             </span>
                           </div>
@@ -465,7 +465,7 @@ export default function MemberDashboard() {
                         size="sm"
                         onClick={() => setAddOnOpen(true)}
                         disabled={!activeMembership}
-                        className="border-rose-500/30 text-rose-600 hover:bg-rose-500/10"
+                        className="border-destructive/30 text-destructive hover:bg-destructive/10"
                       >
                         <Plus className="h-3.5 w-3.5 mr-1" /> Buy Add-On
                       </Button>
@@ -480,7 +480,7 @@ export default function MemberDashboard() {
           <Card className="border-border/50">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                {isFrozen ? <Snowflake className="h-5 w-5 text-blue-500" /> : <CreditCard className="h-5 w-5" />}
+                {isFrozen ? <Snowflake className="h-5 w-5 text-info" /> : <CreditCard className="h-5 w-5" />}
                 Membership Details
               </CardTitle>
             </CardHeader>
@@ -494,7 +494,7 @@ export default function MemberDashboard() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status</span>
                     {isFrozen ? (
-                      <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/30"><Snowflake className="h-3 w-3 mr-1" />Frozen</Badge>
+                      <Badge className="bg-info/10 text-info border-info/30"><Snowflake className="h-3 w-3 mr-1" />Frozen</Badge>
                     ) : (
                       <Badge variant="default">Active</Badge>
                     )}

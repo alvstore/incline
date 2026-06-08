@@ -295,8 +295,8 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
 
   const getGenderBadge = (access: string) => {
     const a = (access || 'unisex').toLowerCase();
-    if (a === 'male') return <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">♂ Male</Badge>;
-    if (a === 'female') return <Badge variant="outline" className="text-xs bg-pink-50 text-pink-700 border-pink-200">♀ Female</Badge>;
+    if (a === 'male') return <Badge variant="outline" className="text-xs bg-info/10 text-info border-info/25">♂ Male</Badge>;
+    if (a === 'female') return <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/25">♀ Female</Badge>;
     return <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">Unisex</Badge>;
   };
 
@@ -405,7 +405,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                   {/* Recovery */}
                   <TabsContent value="recovery" className="space-y-3 mt-3">
                     {memberGender && allFacilities.length > facilities.length && (
-                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-warning/10 border border-warning/25 text-sm text-warning">
                         <ShieldAlert className="h-4 w-4 flex-shrink-0" />
                         <span>{allFacilities.length - facilities.length} facility(ies) hidden — gender restricted for {memberGender} members</span>
                       </div>
