@@ -168,6 +168,20 @@ function buildEndpoint(cfg: ProviderConfig): string {
   }
 }
 
+// v2 — Transient-failure retry with jittered backoff. AI gateways occasionally
+// return 429/5xx; a single blip used to silently break a WhatsApp reply.
+// Now retries up to 2 times (3 total attempts) on 429/5xx/Abort/network errors.
+function isTransientError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/HTTP\s+(429|5\d\d)/i.test(msg)) return true;
+  if (/abort|timeout|ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|network/i.test(msg)) return true;
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function executeCall(
   cfg: ProviderConfig,
   opts: CallAIOptions,
@@ -194,8 +208,6 @@ async function executeCall(
   if (opts.response_format) body.response_format = opts.response_format;
   if (opts.reasoning) body.reasoning = opts.reasoning;
   // OpenAI's newer models reject `max_tokens` and ignore non-default temperature.
-  // Always use `max_completion_tokens` for OpenAI; gate temperature behind a
-  // best-effort check on legacy chat models only.
   const isOpenAI = cfg.provider === "openai";
   const isLegacyOpenAIChat = isOpenAI && /^(gpt-3|gpt-4(?!\.))/i.test(model);
   if (opts.temperature !== undefined && (!isOpenAI || isLegacyOpenAIChat)) {
@@ -206,32 +218,43 @@ async function executeCall(
     else body.max_tokens = opts.max_tokens;
   }
 
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 60000);
-
-  try {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: ac.signal,
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`${cfg.provider} HTTP ${resp.status}: ${text.slice(0, 400)}`);
+  const maxAttempts = 3;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 60000);
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: ac.signal,
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`${cfg.provider} HTTP ${resp.status}: ${text.slice(0, 400)}`);
+      }
+      const json = await resp.json();
+      const content =
+        json?.choices?.[0]?.message?.content ??
+        json?.choices?.[0]?.text ??
+        "";
+      return { content: typeof content === "string" ? content : JSON.stringify(content), raw: json, model };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts && isTransientError(err)) {
+        const base = attempt === 1 ? 250 : 750;
+        const jitter = Math.floor(Math.random() * 250);
+        console.warn(`[ai-dispatcher] transient ${cfg.provider} fail (attempt ${attempt}/${maxAttempts}) — retrying in ${base + jitter}ms`);
+        await sleep(base + jitter);
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-
-    const json = await resp.json();
-    const content =
-      json?.choices?.[0]?.message?.content ??
-      json?.choices?.[0]?.text ??
-      "";
-
-    return { content: typeof content === "string" ? content : JSON.stringify(content), raw: json, model };
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastErr ?? new Error("ai-dispatcher: exhausted retries");
 }
 
 // NOTE: This used to insert a row into ai_call_logs on every provider call,
