@@ -1,107 +1,89 @@
-## Problem
+## Audit findings
 
-Pallavi (lead `+91 88548 69672`) received a message with a literal ` ```json … ``` ` block containing a Meta-style interactive list payload instead of an actual tappable list.
+Pallavi’s thread shows three important signals:
 
-## Root cause
+- The first AI reply was sent as plain text containing a raw interactive JSON block instead of a real WhatsApp list.
+- Pallavi then replied: `Weight loss and body maintained`.
+- The AI provider did run successfully for that reply, but no outbound WhatsApp row was created afterward. The lead-loss monitor correctly flagged: `No AI reply within 5m`.
 
-`whatsapp-webhook/index.ts → tryExtractInteractiveJson()` (lines 526-580) and the brain's outbound guards only recognise the project's own two shapes:
+So this is not just an AI model issue. It is a send-pipeline reliability issue after the AI generates a response.
 
-- `{ "type": "interactive",       "buttons": [...] , "body": "…" }`
-- `{ "type": "interactive_list",  "sections": [...], "button": "…", "body": "…" }`
+## Root-cause areas to fix
 
-But Gemini occasionally emits Meta Cloud API's **native** envelope instead:
+1. **Interactive payload normalization is incomplete**
+   - The sender now recognizes Meta-native JSON, but canonical list payloads can still carry `body: { text: ... }` instead of `body: "..."`.
+   - That can produce invalid Meta payloads or broken stored text.
 
-```json
-{ "type": "interactive",
-  "interactive": {
-    "type": "list",
-    "header": {...},
-    "body": { "text": "…" },
-    "action": { "button": "…", "sections": [...] }
-  } }
-```
+2. **Post-AI send errors are not fully persisted**
+   - If `sendAiReply()` throws before inserting the outbound message, the conversation appears dead: AI call succeeded, but chat has no reply row.
+   - This matches Pallavi’s second inbound symptom.
 
-The extractor matches `parsed.type === "interactive"`, sees no `parsed.buttons`, falls through the `if` without setting `interactivePayload`, and **leaves `replyText` untouched** — so the fenced JSON block is sent verbatim as the WhatsApp text body. That is exactly what Pallavi saw.
+3. **Send lock is too broad**
+   - Current lock is phone-based, so close-together messages from the same lead can suppress a legitimate reply.
+   - It should be keyed by inbound message id, not only by phone.
 
-A secondary safety hole: even after extraction, the function never asserts that `replyText` is free of ```` ``` ```` fences or stray `{"type":"interactive…` substrings before sending.
+4. **Lead-loss monitor only alerts; it does not recover**
+   - It detected Pallavi’s stuck inbound but intentionally did not send a safe recovery reply.
+   - For live lead capture, alert-only is not enough.
 
-## Fix (3 changes, scoped, no business-logic changes)
+5. **Free-text answers to interactive prompts need deterministic continuation**
+   - Pallavi answered the goal in free text. The brain learned `fitness_goal=weight_loss`, but the system must always advance to plan-duration capture rather than relying only on the model.
 
-### 1. Extend `tryExtractInteractiveJson` to normalise Meta-native shape
+## Implementation plan
 
-In `supabase/functions/whatsapp-webhook/index.ts` (right before the `return null` at line 579), add a normaliser that detects the Meta envelope and rewrites it into the brain's canonical shape so the existing `parsed.type === "interactive_list"` branch handles it.
+### 1. Harden WhatsApp interactive sending
+- Normalize both supported shapes before building Meta payloads:
+  - Native Meta envelope: `{ type: "interactive", interactive: { type: "list", ... } }`
+  - Canonical app shape: `{ type: "interactive_list", body: "..." | { text: "..." }, sections: [...] }`
+- Always convert list/button body to a plain string.
+- Store a clean human-readable fallback in `whatsapp_messages.content`, never raw JSON or `[object Object]`.
+- Keep raw payload out of user-visible chat content.
 
-Pseudocode:
-```ts
-function normalizeMetaNative(p: any): any {
-  if (p?.type === "interactive" && p.interactive && !p.buttons && !p.sections) {
-    const inner = p.interactive;
-    const bodyText = inner.body?.text || inner.body || "";
-    if (inner.type === "list" && inner.action?.sections) {
-      return { type: "interactive_list", body: bodyText,
-               button: inner.action.button || "Select",
-               sections: inner.action.sections };
-    }
-    if (inner.type === "button" && inner.action?.buttons) {
-      return { type: "interactive",
-               body: bodyText,
-               buttons: inner.action.buttons.map((b: any) =>
-                 b?.reply?.title || b?.title).filter(Boolean) };
-    }
-  }
-  return p;
-}
-```
-Call `parsed = normalizeMetaNative(parsed)` in all 3 extraction branches (whole-string, fenced, brace-balanced) before the `interactive` / `interactive_list` checks.
+### 2. Add no-silent-fail logging around the send path
+- Split `runUnifiedAgent()` and `sendAiReply()` error handling so send failures are logged as send failures, not generic AI failures.
+- If `sendAiReply()` fails before row insert, write a warning/error event with:
+  - inbound message id
+  - phone
+  - branch
+  - generated reply sample
+  - failure stage
+- This makes future System Health audits show the exact stop reason.
 
-### 2. Final residue guard inside `sendAiReply`
+### 3. Scope send locks by inbound message
+- Pass the inbound message id into `sendAiReply()`.
+- Use a lock key like `ai_reply:<phone>:<inbound_message_id>`.
+- This prevents duplicate webhook replays for the same inbound while allowing replies to separate messages from the same person.
 
-After the existing extraction block (around line 629), add a last-mile sanitiser:
+### 4. Add deterministic lead-capture continuation
+- After auto-learning captures `fitness_goal` and `plan_interest` is still missing, force the next reply to the membership-duration list.
+- If `plan_interest` is captured, force the next reply to the correct Founding Member handoff/confirmation.
+- This covers cases where the user replies in free text instead of tapping the list.
 
-```ts
-// If anything resembling JSON / fences slipped through, scrub it.
-if (/```|"type"\s*:\s*"interactive/i.test(replyText)) {
-  replyText = replyText
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/\{[\s\S]*?"type"\s*:\s*"interactive[\s\S]*?\}\s*\}?/gi, "")
-    .trim();
-  // Telemetry so we know the LLM mis-shaped a payload
-  await supabase.rpc("log_error_event", {
-    p_source: "whatsapp_webhook",
-    p_severity: "warning",
-    p_message: "interactive JSON leaked past extractor — scrubbed",
-    p_context: { branch_id: branchId, phone: cleanPhone,
-                 had_payload: !!interactivePayload },
-  }).catch(() => {});
-}
-if (!replyText && !interactivePayload) {
-  replyText = "Got it — one moment.";   // never send an empty WA message
-}
-```
+### 5. Upgrade the lead-loss monitor from alert-only to safe recovery
+- For a stuck inbound older than the SLA with no outbound after it:
+  - Acquire an idempotent recovery lock for that inbound message id.
+  - Generate a deterministic next-step reply from memory.
+  - Send it once through the same WhatsApp send path.
+  - Log `recovered=true` in the error context.
+- For Pallavi’s current state, the safe recovery reply should ask for membership duration, because name/email/goal are known and `plan_interest` is missing.
 
-### 3. Tighten the prompt contract (defensive)
+### 6. Validate with Pallavi’s exact scenario
+- Test the exact raw JSON message shape from Pallavi’s chat.
+- Test free-text goal reply: `Weight loss and body maintained`.
+- Confirm:
+  - outbound row is created
+  - message type is `interactive` for lists
+  - no raw JSON appears in chat content
+  - lead-loss warning stops after recovery
+  - System Health shows the incident as recoverable instead of unresolved
 
-In `_shared/ai-agent-brain.ts` near lines 571-578 (the goal/duration HARD GATE block), append one explicit anti-example:
+## Files expected to change
 
-> "Emit the canonical brain shape ONLY: `{ "type": "interactive_list", "body": "...", "button": "...", "sections": [ { "title": "...", "rows": [...] } ] }`. NEVER wrap it in Meta's `{type:'interactive', interactive:{...}}` envelope. NEVER wrap any JSON in markdown ```json fences."
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/_shared/ai-agent-brain.ts`
+- `supabase/functions/monitor-ai-lead-loss/index.ts`
+- Possibly one small shared helper if needed to avoid duplicating deterministic recovery logic
 
-No prompt rewrite — single appended paragraph.
+## Expected outcome
 
-## Out of scope
-
-- Pallavi's existing thread: no retro-send. Next inbound message will work correctly.
-- `ai_lead_loss` monitor / SystemHealth — already shipped last turn.
-- `meta-webhook` Instagram signature_mismatch (separate IG App Secret issue, unrelated).
-
-## Verification
-
-1. Unit-style: feed `tryExtractInteractiveJson` the exact JSON from Pallavi's thread (fenced) and assert it returns a normalised `interactive_list` with 4 rows.
-2. End-to-end: send a fresh inbound from a test number through the same goal turn; confirm WhatsApp renders a list (not text) and `whatsapp_messages.outbound` row's `payload` has `type=list`.
-3. `error_logs` shows zero `"interactive JSON leaked"` warnings within 1h of redeploy.
-
-## Files touched
-
-- `supabase/functions/whatsapp-webhook/index.ts` — `tryExtractInteractiveJson` + `sendAiReply` residue guard.
-- `supabase/functions/_shared/ai-agent-brain.ts` — 1 added paragraph in the founder-phase prompt.
-
-Used the senior-architect skill.
+A lead can no longer be left mid-conversation because of malformed interactive JSON, a send-path exception, a broad send lock, or a missed free-text answer to an interactive prompt.

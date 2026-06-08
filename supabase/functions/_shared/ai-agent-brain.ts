@@ -525,6 +525,49 @@ GENERAL RULES:
 
   const shouldCaptureLead = !memberCtx.isMember && !inPostCaptureNurture && leadCaptureConfig?.enabled && (leadCaptureConfig.target_fields?.length ?? 0) > 0;
 
+  // v4.0.0 — Deterministic onboarding short-circuit. The LLM occasionally
+  // stalls or emits malformed JSON when a lead replies in free text to an
+  // interactive prompt (e.g. "Weight loss and body maintained" instead of
+  // tapping the goal list). Once auto-learn has captured the missing fact,
+  // we force the next deterministic step so the funnel never stops.
+  if (shouldCaptureLead) {
+    const _fn =
+      memory?.profile?.first_name ||
+      firstNameOf(memory?.profile?.full_name) ||
+      "";
+    if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
+      const reply = JSON.stringify({
+        type: "interactive_list",
+        body: _fn
+          ? `Perfect, ${_fn} — which membership duration are you thinking about?`
+          : "Which membership duration are you thinking about?",
+        button: "Choose duration",
+        sections: [{
+          title: "Membership Duration",
+          rows: [
+            { id: "monthly", title: "Monthly" },
+            { id: "quarterly", title: "Quarterly" },
+            { id: "half_yearly", title: "Half-Yearly" },
+            { id: "annual", title: "Annual — Founding Member" },
+          ],
+        }],
+      });
+      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+    }
+    if (hasName && hasEmail && hasGoal && hasPlanInterest && !chatSettings?.captured_lead_id) {
+      const plan = String(memory?.facts?.plan_interest || "").toLowerCase();
+      const isAnnual = /annual|yearly|12\s*month/.test(plan);
+      const reply = isAnnual
+        ? (_fn
+            ? `Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
+            : "Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨")
+        : (_fn
+            ? `Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
+            : "Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨");
+      return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+    }
+  }
+
   if (inPostCaptureNurture) {
     const fn = memory?.profile?.first_name || firstNameOf(memory?.profile?.full_name) || "there";
     const planInt = memory?.facts?.plan_interest || leadCtx?.facts?.plan_interest || "—";
