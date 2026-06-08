@@ -1,13 +1,27 @@
-// v6.1.0 — service-role auth gate added (cron-only): accepts
-//          Authorization: Bearer <service-role-key> OR
-//          apikey=<service-role-key> + x-system-call=automation-brain.
-//          Mirrors run-retention-nudges v2.2.0 pattern.
-// v6.0.0 — SSOT: all operational toggles (enabled/delay/retries/cooldown) come
-//          from ai_purposes.ops_config for purpose='lead_nurture'. The legacy
-//          organization_settings.lead_nurture_config column has been dropped.
-// v5.0.0 — persona + brain come from ai_purposes + ai_knowledge via buildSystemPrompt().
-// v4.0.0 — AI nudge text generated via shared ai-runtime.generateOnce.
-// v3.4.0 — Enforce Meta 24h customer-service window.
+// v7.0.0 — DB-driven angle rotation + similarity dedupe + dynamic content.
+//
+// What changed vs v6.1.0:
+//   • Angle pick via `pick_next_nurture_angle(chat_id)` RPC. Catalogue lives
+//     in `lead_nurture_angles` (no hard-coded strings in this file).
+//   • AI generation now runs for BOTH inside-24h freeform AND outside-24h
+//     template paths. The selected angle's tone + prompt_hint is injected
+//     into <runtime> so each send reads differently.
+//   • Similarity guard: sha1 of normalised candidate is compared against
+//     `last_nurture_hash` + the hashes of the last 3 outbound nurtures. On
+//     collision we regenerate once with a stronger differentiation prompt;
+//     on second collision we fall through to the angle's DB-stored
+//     `fallback_template`.
+//   • Template path popular_feature_{1,2} vars are now pulled from
+//     `ai_knowledge` (rows tagged 'usp' or 'offering'), not hard-coded.
+//   • dedupe_key is time-bucketed (`floor(now/cooldown)`) so two cron ticks
+//     inside the same cooldown collapse to one send.
+//   • Persists `{angle, hash, text, sent_at}` into `nurture_angle_history`
+//     and stamps `last_nurture_text` / `last_nurture_hash`.
+//
+// v6.1.0 — service-role auth gate added (cron-only).
+// v6.0.0 — SSOT from ai_purposes.ops_config.
+// v5.0.0 — persona/brain via buildSystemPrompt().
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { buildSystemPrompt } from "../_shared/ai-prompt.ts";
@@ -19,18 +33,162 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-system-call",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+function normaliseForHash(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N} ]+/gu, "")
+    .trim();
+}
+
+async function sha1(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hashMessage(s: string): Promise<string> {
+  return sha1(normaliseForHash(s));
+}
+
+interface Angle {
+  slug: string;
+  label: string;
+  tone: string;
+  prompt_hint: string;
+  fallback_template: string;
+}
+
+function renderFallback(tpl: string, name: string): string {
+  return tpl.replace(/\{name\}/g, name);
+}
+
+async function pickAngle(supabase: any, chatId: string): Promise<Angle | null> {
+  const { data, error } = await supabase.rpc("pick_next_nurture_angle", { _chat_id: chatId });
+  if (error) {
+    console.warn("[lead-nurture] pick_next_nurture_angle failed:", error.message);
+    return null;
   }
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? (row as Angle) : null;
+}
+
+async function lastNurtureHashes(
+  supabase: any,
+  branchId: string | null,
+  phone: string,
+  limit = 3,
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("whatsapp_messages")
+    .select("content")
+    .eq("phone_number", phone)
+    .eq("branch_id", branchId)
+    .eq("direction", "outbound")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!data?.length) return [];
+  return Promise.all(data.map((r: { content: string }) => hashMessage(r.content || "")));
+}
+
+async function pickDynamicUsps(
+  supabase: any,
+  branchId: string | null,
+  count = 2,
+): Promise<string[]> {
+  // Look for ai_knowledge rows tagged 'usp' / 'offering' / 'facility'.
+  const { data } = await supabase
+    .from("ai_knowledge")
+    .select("title, tags, branch_id")
+    .eq("is_active", true)
+    .eq("status", "active")
+    .or(branchId ? `branch_id.is.null,branch_id.eq.${branchId}` : "branch_id.is.null")
+    .overlaps("tags", ["usp", "offering", "facility"]);
+  const titles = (data ?? [])
+    .map((r: { title: string }) => (r.title || "").trim().toLowerCase())
+    .filter((t: string) => t.length > 0 && t.length < 60);
+  if (!titles.length) return ["personal training", "recovery zone"];
+  // shuffle and take `count`
+  const shuffled = [...titles].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+async function generateNurture(opts: {
+  supabase: any;
+  branchId: string | null;
+  angle: Angle;
+  prospectName: string;
+  partialData: Record<string, unknown> | null;
+  leadKnown: boolean;
+  recentHashes: string[];
+  recentTexts: string[];
+  temperature?: number;
+  extraDiversityHint?: string;
+}): Promise<string | null> {
+  const { supabase, branchId, angle, prospectName, partialData, leadKnown, recentTexts, extraDiversityHint } = opts;
+
+  const missing: string[] = [];
+  if (!partialData?.email && !leadKnown) missing.push("email");
+  if (!partialData?.name && !leadKnown) missing.push("name");
+  if (!partialData?.goal) missing.push("fitness goal");
+
+  const ctx = [
+    `Prospect: ${prospectName}.`,
+    partialData ? `Partial lead data: ${JSON.stringify(partialData)}` : "",
+    missing.length ? `Missing fields: ${missing.join(", ")}.` : "",
+    `\nAngle: ${angle.label} (slug=${angle.slug}, tone=${angle.tone}).`,
+    `Angle instruction: ${angle.prompt_hint}`,
+    "",
+    "Hard rules for this nurture message:",
+    "- ONE short WhatsApp message, max 320 characters.",
+    "- Use the prospect's first name once if available.",
+    "- One soft CTA only (tour, callback, reply with question).",
+    "- Never quote prices, plan names, PT package names, or session counts.",
+    "- Plain conversational tone — no emoji spam, no bullet lists.",
+    "- Do NOT repeat any of the previous nurture messages listed below — pick a different angle/opening/wording.",
+    extraDiversityHint ? `- ${extraDiversityHint}` : "",
+    "",
+    recentTexts.length ? `Previously sent nurture messages to AVOID repeating:\n${recentTexts.map((t, i) => `${i + 1}. ${t}`).join("\n")}` : "",
+    "",
+    "Generate the nurture message body only (no greeting prefix beyond a natural opener, no signature).",
+  ].filter(Boolean).join("\n");
+
+  try {
+    const built = await buildSystemPrompt({
+      supabase,
+      purpose: "lead_nurture",
+      branchId,
+      userMessage: `${angle.label} nurture for ${prospectName}: ${angle.prompt_hint}`,
+      identity: { role: "lead", senderId: prospectName, name: prospectName },
+      dynamicContext: ctx,
+    });
+    const r = await generateOnce({
+      purpose: "lead_nurture",
+      branchId,
+      userMessage: ctx,
+      systemOverride: built.prompt,
+      supabase,
+    });
+    const txt = r.content?.trim();
+    return txt || null;
+  } catch (e) {
+    console.warn("[lead-nurture] generateNurture failed:", (e as Error).message);
+    return null;
+  }
+}
+
+// ─── handler ────────────────────────────────────────────────────────────────
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth gate: cron-only. Accept either:
-    //   1. Authorization: Bearer <service-role-key>, OR
-    //   2. apikey: <service-role-key> + x-system-call: automation-brain
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const apikey = req.headers.get("apikey") || "";
     const sysCall = req.headers.get("x-system-call") || "";
@@ -44,7 +202,6 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // SSOT: read ops_config from ai_purposes (global row).
     const { data: purposeRow } = await supabase
       .from("ai_purposes")
       .select("enabled, ops_config")
@@ -59,7 +216,6 @@ serve(async (req) => {
       max_retries: ops.max_retries ?? 2,
       cooldown_hours: ops.cooldown_hours ?? ops.delay_hours ?? 4,
     };
-
     if (!config.enabled) {
       return new Response(JSON.stringify({ message: "Lead nurture disabled" }), {
         status: 200,
@@ -70,19 +226,19 @@ serve(async (req) => {
     const delayHours = config.delay_hours;
     const maxRetries = config.max_retries;
     const cooldownHours = config.cooldown_hours;
-    const cutoffTime = new Date(Date.now() - delayHours * 60 * 60 * 1000).toISOString();
+    const cooldownSeconds = cooldownHours * 3600;
+    const cutoffTime = new Date(Date.now() - delayHours * 3600 * 1000).toISOString();
 
-    // Find chats where bot is active AND the contact hasn't asked us to stop
-    // AND the chat is not flagged as a non-membership/PR/handoff conversation.
     const { data: staleChats, error: chatErr } = await supabase
       .from("whatsapp_chat_settings")
-      .select("id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until, handoff_reason")
+      .select(
+        "id, phone_number, branch_id, nurture_retry_count, partial_lead_data, last_nurture_at, platform, do_not_contact, do_not_contact_until, handoff_reason, last_nurture_hash",
+      )
       .eq("bot_active", true)
       .eq("do_not_contact", false)
       .is("handoff_reason", null);
 
     if (chatErr) {
-      console.error("Failed to query stale chats:", chatErr);
       return new Response(JSON.stringify({ error: chatErr.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,15 +247,14 @@ serve(async (req) => {
 
     let nudgedCount = 0;
     let resetCount = 0;
+    const decisions: any[] = [];
 
     for (const chat of staleChats || []) {
-      // Defence-in-depth: respect snooze-until window if the row has one.
       if (chat.do_not_contact) continue;
       if (chat.do_not_contact_until && new Date(chat.do_not_contact_until) > new Date()) continue;
       if (chat.handoff_reason) continue;
 
-      // Skip when AI memory has marked this contact as a non-membership intent
-      // (PR, vendor, media, careers, etc.) — never nurture them with sales copy.
+      // Skip non-fitness intents.
       try {
         const { data: mem } = await supabase
           .from("ai_memory")
@@ -108,7 +263,6 @@ serve(async (req) => {
           .eq("contact_key", chat.phone_number)
           .maybeSingle();
         if (mem?.current_intent === "non_fitness") {
-          // Also pause this chat so future cron runs short-circuit on the SQL filter above.
           await supabase
             .from("whatsapp_chat_settings")
             .update({
@@ -120,8 +274,8 @@ serve(async (req) => {
             .eq("id", chat.id);
           continue;
         }
-      } catch (memErr) {
-        console.warn("lead-nurture: ai_memory lookup failed (continuing):", (memErr as Error).message);
+      } catch (e) {
+        console.warn("[lead-nurture] ai_memory lookup failed:", (e as Error).message);
       }
 
       const { data: lastMsg } = await supabase
@@ -132,10 +286,8 @@ serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-
       if (!lastMsg) continue;
 
-      // If last message is INBOUND, the user has re-engaged — reset retry counter
       if (lastMsg.direction === "inbound") {
         if ((chat.nurture_retry_count || 0) > 0) {
           await supabase
@@ -144,28 +296,20 @@ serve(async (req) => {
             .eq("id", chat.id);
           resetCount++;
         }
-        // User replied, no need to nudge
         continue;
       }
 
-      // Last message is outbound — check if we should nudge
-      // Skip if retry count maxed
       if ((chat.nurture_retry_count || 0) >= maxRetries) continue;
-
-      // Skip if last message is too recent (not past cutoff)
       if (lastMsg.created_at > cutoffTime) continue;
-
-      // Cooldown: skip if last nurture was within cooldown window
       if (chat.last_nurture_at) {
-        const cooldownCutoff = new Date(Date.now() - cooldownHours * 60 * 60 * 1000).toISOString();
+        const cooldownCutoff = new Date(Date.now() - cooldownHours * 3600 * 1000).toISOString();
         if (chat.last_nurture_at > cooldownCutoff) continue;
       }
 
-      // Check if there's an existing lead
       const cleanPhone = chat.phone_number.replace(/^\+/, "");
       const { data: lead } = await supabase
         .from("leads")
-        .select("id, full_name")
+        .select("id, full_name, status")
         .or(`phone.eq.${chat.phone_number},phone.eq.${cleanPhone},phone.eq.+${cleanPhone}`)
         .eq("branch_id", chat.branch_id)
         .limit(1)
@@ -173,8 +317,6 @@ serve(async (req) => {
 
       const partialData = chat.partial_lead_data as Record<string, any> | null;
 
-      // v3.1.0 guard: if a lead already exists for this phone+branch OR the
-      // chat is linked to an existing member, do not nurture further.
       if (lead?.id) continue;
       const { data: linkedMember } = await supabase
         .from("members")
@@ -183,32 +325,22 @@ serve(async (req) => {
         .maybeSingle();
       if (linkedMember?.id) continue;
 
-      // Determine platform for send routing (must be defined BEFORE we insert
-      // the outbound row that references it — earlier versions had a TDZ bug).
       const chatPlatform = chat.platform || "whatsapp";
 
-      // ── Per-channel AI kill-switch (Settings → AI Agent Control Center) ──
+      // Per-channel AI kill-switch
       try {
         const { isAiChannelEnabled } = await import("../_shared/ai-channel-toggle.ts");
         const channelOn = await isAiChannelEnabled(supabase, chat.branch_id, chatPlatform);
-        if (!channelOn) {
-          console.log(`[lead-nurture] skipping ${chat.phone_number} — AI channel '${chatPlatform}' is disabled`);
-          continue;
-        }
+        if (!channelOn) continue;
       } catch (e) {
-        console.warn("[lead-nurture] channel-toggle check failed (continuing fail-open):", e);
+        console.warn("[lead-nurture] channel-toggle check failed:", (e as Error).message);
       }
 
-
-      // ── Meta 24h customer-service window guard (WhatsApp only) ──
-      // If the most recent INBOUND WhatsApp message from this number is older
-      // than 24h, freeform messages will be rejected (Meta 131047). In that
-      // case, route through dispatch-communication with the approved
-      // `lead_nurture_followup` template — or skip the nudge and cool down.
+      // Meta 24h window check
       let outsideWindow = false;
       let templateRow: { id: string; meta_template_name: string | null } | null = null;
       if (chatPlatform === "whatsapp") {
-        const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const sinceIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
         const recipientDigits = chat.phone_number.replace(/\D/g, "");
         const { data: lastInbound } = await supabase
           .from("whatsapp_messages")
@@ -221,7 +353,6 @@ serve(async (req) => {
         outsideWindow = !lastInbound;
 
         if (outsideWindow) {
-          // Look up the configured template for this branch (or global fallback).
           const { data: trig } = await supabase
             .from("whatsapp_triggers")
             .select("template_id, templates:template_id(id, meta_template_name)")
@@ -237,10 +368,6 @@ serve(async (req) => {
           if (tpl?.meta_template_name) {
             templateRow = { id: tpl.id, meta_template_name: tpl.meta_template_name };
           } else {
-            // No template available → cool down and skip to avoid Meta rejection.
-            console.warn(
-              `lead-nurture: skipping ${chat.phone_number} — outside 24h window and no approved template configured.`,
-            );
             await supabase
               .from("whatsapp_chat_settings")
               .update({ last_nurture_at: new Date().toISOString() })
@@ -250,79 +377,83 @@ serve(async (req) => {
         }
       }
 
-      // Generate contextual nudge message via SSOT (persona + shared brain).
-      let nudgeMessage: string | undefined;
-
-      if ((partialData || lead) && !outsideWindow) {
-        const missingFields: string[] = [];
-        if (!partialData?.email && !lead) missingFields.push("email address");
-        if (!partialData?.name && !lead?.full_name) missingFields.push("full name");
-        if (!partialData?.goal) missingFields.push("fitness goal");
-
-        const contextInfo = partialData
-          ? `Partial data collected so far: ${JSON.stringify(partialData)}. Missing: ${missingFields.join(", ") || "none"}.`
-          : lead
-            ? `Lead exists: ${lead.full_name}. This is a re-engagement nudge.`
-            : "No data collected yet.";
-
-        const userMsg = [
-          contextInfo,
-          missingFields.length > 0
-            ? `Naturally ask for their ${missingFields[0]} in the message.`
-            : "Just encourage them to visit or reply.",
-          "Generate the follow-up message.",
-        ].filter(Boolean).join("\n");
-
-        try {
-          // Build the full system prompt the same way ai-agent-brain does, so
-          // both handles share persona + brain knowledge.
-          const built = await buildSystemPrompt({
-            supabase,
-            purpose: "lead_nurture",
-            branchId: chat.branch_id,
-            userMessage: userMsg,
-            identity: lead?.id
-              ? {
-                  role: "lead",
-                  senderId: chat.phone_number,
-                  leadId: lead.id,
-                  name: lead.full_name ?? null,
-                  funnelStage: (lead as any).status ?? null,
-                }
-              : { role: "unknown", senderId: chat.phone_number },
-          });
-          const r = await generateOnce({
-            purpose: "lead_nurture",
-            branchId: chat.branch_id,
-            userMessage: userMsg,
-            systemOverride: built.knowledge.length || built.persona
-              ? built.prompt.slice(built.persona.length).trim()
-              : undefined,
-            supabase,
-          });
-          const generated = r.content?.trim();
-          if (generated) nudgeMessage = generated;
-        } catch (aiErr) {
-          console.warn("AI nudge generation failed, using fallback:", aiErr);
-        }
-      }
-
+      // ── Pick angle + previous hashes ──
+      const angle = await pickAngle(supabase, chat.id);
+      const recentHashes = await lastNurtureHashes(supabase, chat.branch_id, chat.phone_number, 3);
+      const { data: recentRows } = await supabase
+        .from("whatsapp_messages")
+        .select("content")
+        .eq("phone_number", chat.phone_number)
+        .eq("branch_id", chat.branch_id)
+        .eq("direction", "outbound")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      const recentTexts = (recentRows ?? []).map((r: any) => r.content || "");
 
       const contactName = lead?.full_name || partialData?.name || partialData?.whatsapp_name || null;
       const prospectName = contactName || "there";
 
-      // Fallback message (also used as the rendered body when sending the
-      // approved template — dispatcher infers variable values from this).
-      if (!nudgeMessage) {
-        nudgeMessage = `Hi ${prospectName}! 👋 Just checking in — we'd love to help you get started on your fitness journey at Incline. Feel free to reply anytime with your questions! 💪`;
+      // ── AI generation with similarity guard ──
+      let candidate: string | null = null;
+      let regenerated = false;
+      let fallbackUsed = false;
+      let candidateHash = "";
+
+      if (angle) {
+        candidate = await generateNurture({
+          supabase,
+          branchId: chat.branch_id,
+          angle,
+          prospectName,
+          partialData,
+          leadKnown: !!lead,
+          recentHashes,
+          recentTexts,
+        });
+        if (candidate) {
+          candidateHash = await hashMessage(candidate);
+          if (recentHashes.includes(candidateHash) || candidateHash === chat.last_nurture_hash) {
+            regenerated = true;
+            const retry = await generateNurture({
+              supabase,
+              branchId: chat.branch_id,
+              angle,
+              prospectName,
+              partialData,
+              leadKnown: !!lead,
+              recentHashes,
+              recentTexts,
+              temperature: 0.9,
+              extraDiversityHint:
+                "The previous candidate matched a past message — phrase this COMPLETELY differently: different opener, different verb, different rhythm.",
+            });
+            if (retry) {
+              candidate = retry;
+              candidateHash = await hashMessage(retry);
+            }
+          }
+        }
+        // Still colliding or AI failed → DB fallback template (per-angle)
+        if (!candidate || recentHashes.includes(candidateHash) || candidateHash === chat.last_nurture_hash) {
+          fallbackUsed = true;
+          candidate = renderFallback(angle.fallback_template, prospectName);
+          candidateHash = await hashMessage(candidate);
+        }
+      } else {
+        // No angles configured → last-ditch safe line (kept minimal; should not happen post-seed)
+        candidate = `Hi ${prospectName}! Just checking in from Incline — happy to answer any questions or set up a quick tour whenever you're ready.`;
+        candidateHash = await hashMessage(candidate);
+        fallbackUsed = true;
       }
+
+      // ── Time-bucketed dedupe key ──
+      const bucket = Math.floor(Date.now() / 1000 / Math.max(cooldownSeconds, 60));
+      const dedupeKey = `lead_nurture:${chat.id}:${bucket}`;
 
       try {
         if (chatPlatform === "whatsapp" && outsideWindow && templateRow) {
-          // ── Approved-template path via dispatch-communication ──
-          // Stable per-retry dedupe key so a cron rerun within the same window
-          // can never produce a duplicate dispatch.
-          const dedupeKey = `lead_nurture:${chat.id}:${(chat.nurture_retry_count || 0) + 1}`;
+          // Dynamic template vars (no hard-coded USPs)
+          const usps = await pickDynamicUsps(supabase, chat.branch_id, 2);
           const dispatchRes = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
             method: "POST",
             headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
@@ -333,11 +464,11 @@ serve(async (req) => {
               recipient: chat.phone_number,
               template_id: templateRow.id,
               payload: {
-                body: nudgeMessage,
+                body: candidate,
                 variables: {
                   prospect_name: prospectName,
-                  popular_feature_1: "personal training",
-                  popular_feature_2: "recovery zone",
+                  popular_feature_1: usps[0] || "personal training",
+                  popular_feature_2: usps[1] || "recovery zone",
                 },
               },
               dedupe_key: dedupeKey,
@@ -345,17 +476,16 @@ serve(async (req) => {
             }),
           });
           if (!dispatchRes.ok) {
-            console.error(`Dispatch (template) failed for ${chat.phone_number}: ${dispatchRes.status}`);
+            console.error(`[lead-nurture] dispatch failed for ${chat.phone_number}: ${dispatchRes.status}`);
           }
         } else {
-          // ── Inside 24h window: legacy freeform path is safe ──
           const { data: msgData, error: msgErr } = await supabase
             .from("whatsapp_messages")
             .insert({
               branch_id: chat.branch_id,
               phone_number: chat.phone_number,
               contact_name: contactName,
-              content: nudgeMessage,
+              content: candidate,
               direction: "outbound",
               status: "pending",
               message_type: "text",
@@ -363,52 +493,69 @@ serve(async (req) => {
             })
             .select()
             .single();
-
           if (msgErr) {
-            console.error(`Failed to insert nudge for ${chat.phone_number}:`, msgErr);
+            console.error(`[lead-nurture] insert failed for ${chat.phone_number}:`, msgErr.message);
             continue;
           }
-
-          if (chatPlatform === "whatsapp") {
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ message_id: msgData.id, phone_number: chat.phone_number, content: nudgeMessage, branch_id: chat.branch_id }),
-            });
-            if (!sendRes.ok) console.error(`Send failed for ${chat.phone_number}: ${sendRes.status}`);
-          } else {
-            // Instagram or Messenger — use send-meta-dm
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-meta-dm`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ message_id: msgData.id, platform: chatPlatform, recipient_id: chat.phone_number, content: nudgeMessage, branch_id: chat.branch_id }),
-            });
-            if (!sendRes.ok) console.error(`Send (${chatPlatform}) failed for ${chat.phone_number}: ${sendRes.status}`);
-          }
+          const sendUrl = chatPlatform === "whatsapp"
+            ? `${supabaseUrl}/functions/v1/send-whatsapp`
+            : `${supabaseUrl}/functions/v1/send-meta-dm`;
+          const body = chatPlatform === "whatsapp"
+            ? { message_id: msgData.id, phone_number: chat.phone_number, content: candidate, branch_id: chat.branch_id }
+            : { message_id: msgData.id, platform: chatPlatform, recipient_id: chat.phone_number, content: candidate, branch_id: chat.branch_id };
+          const sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!sendRes.ok) console.error(`[lead-nurture] send failed for ${chat.phone_number}: ${sendRes.status}`);
         }
       } catch (sendErr) {
-        console.error(`Send error for ${chat.phone_number}:`, sendErr);
+        console.error(`[lead-nurture] send error for ${chat.phone_number}:`, (sendErr as Error).message);
+        continue;
       }
+
+      // Persist history + hash
+      const nowIso = new Date().toISOString();
+      const historyEntry = {
+        angle: angle?.slug ?? null,
+        hash: candidateHash,
+        regenerated,
+        fallback: fallbackUsed,
+        sent_at: nowIso,
+      };
+      // Read current history, append, cap at 20.
+      const { data: cur } = await supabase
+        .from("whatsapp_chat_settings")
+        .select("nurture_angle_history")
+        .eq("id", chat.id)
+        .maybeSingle();
+      const history = Array.isArray(cur?.nurture_angle_history) ? cur!.nurture_angle_history : [];
+      const newHistory = [...history, historyEntry].slice(-20);
 
       await supabase
         .from("whatsapp_chat_settings")
         .update({
           nurture_retry_count: (chat.nurture_retry_count || 0) + 1,
-          last_nurture_at: new Date().toISOString(),
+          last_nurture_at: nowIso,
+          last_nurture_text: candidate,
+          last_nurture_hash: candidateHash,
+          nurture_angle_history: newHistory,
         })
         .eq("id", chat.id);
 
+      decisions.push({ phone: chat.phone_number, angle: angle?.slug, regenerated, fallback: fallbackUsed });
       nudgedCount++;
     }
 
     return new Response(
-      JSON.stringify({ success: true, nudged: nudgedCount, retries_reset: resetCount }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, nudged: nudgedCount, retries_reset: resetCount, decisions }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: unknown) {
     console.error("lead-nurture-followup error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
