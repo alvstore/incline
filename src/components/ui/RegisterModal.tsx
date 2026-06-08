@@ -15,6 +15,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import { CommConsentCheckbox, buildConsentPayload } from "@/components/consent/CommConsentCheckbox";
+import { getFirstTouch, captureFirstTouch } from "@/lib/leads/firstTouch";
 
 const leadSchema = z.object({
   full_name: z.string().trim().min(2, "Name must be at least 2 characters").max(100),
@@ -38,20 +39,22 @@ const WEBHOOK_URL =
   "https://iyqqpbvnszyrrgerniog.supabase.co/functions/v1/webhook-lead-capture?slug=545d8df4-4ea0-4bed-a060-0d6ef7beaffc";
 
 const getSource = (): string => {
-  return "website";
+  const ft = getFirstTouch() || captureFirstTouch();
+  return ft?.source || "website";
 };
 
 const getAttribution = () => {
   try {
+    const ft = getFirstTouch() || captureFirstTouch();
     const params = new URLSearchParams(window.location.search);
     return {
-      utm_source: params.get("utm_source") || null,
-      utm_medium: params.get("utm_medium") || null,
-      utm_campaign: params.get("utm_campaign") || null,
-      utm_content: params.get("utm_content") || null,
-      utm_term: params.get("utm_term") || null,
-      landing_page: `${window.location.origin}${window.location.pathname}`,
-      referrer_url: document.referrer || null,
+      utm_source: ft?.utm_source ?? params.get("utm_source") ?? null,
+      utm_medium: ft?.utm_medium ?? params.get("utm_medium") ?? null,
+      utm_campaign: ft?.utm_campaign ?? params.get("utm_campaign") ?? null,
+      utm_content: ft?.utm_content ?? params.get("utm_content") ?? null,
+      utm_term: ft?.utm_term ?? params.get("utm_term") ?? null,
+      landing_page: ft?.landing_page ?? `${window.location.origin}${window.location.pathname}`,
+      referrer_url: ft?.referrer_url ?? (document.referrer || null),
     };
   } catch {
     return {
