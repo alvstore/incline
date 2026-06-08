@@ -1,60 +1,90 @@
+# AI Brain / Memory / Knowledge — Audit & Hardening Plan
 
-## What we observed
+## Audit findings (what's actually wrong today)
 
-Two contacts (Gaurav +91 96603 12254 and Ravindra +91 80055 43139) sent inbound messages that the AI processed successfully — but no outbound message was ever sent.
+**Knowledge base (RAG)**
+- `ai_knowledge` has only **8 manual rows** (all global, none branch-scoped). Memory note says "Catalog→brain sync TODO" — plans, PT packages, facilities, trainers, hours, FAQs are **not** in the brain. RAG retrieves at threshold 0.75 but there's nothing rich to retrieve.
+- No automatic refresh when catalogs (plans, PT, branches, hours, classes) change.
 
-Evidence from the database:
+**AI Brain (`_shared/ai-agent-brain.ts`, 1852 LOC)**
+- Two parallel AI entry paths: `generateOnce` (SSOT in `ai-runtime.ts`) vs direct `callAI` (used by brain). Duplicate call-log writes, drift risk.
+- Tool follow-up call has **no retry / no jitter** on transient gateway failures (429/5xx); falls straight to deterministic fallback (better than silence but a lost real reply).
+- `ai_purposes.whatsapp_reply` row has `provider_id=NULL` and `model=NULL` — purpose config is effectively unused for the most critical surface.
+- Onboarding prompt is rebuilt inline every turn (~1.5KB); duplicated logic between webhook prompt and `ai-prompt.ts`.
 
-| Contact | Last inbound | `ai_call_logs` for that turn | Outbound in `whatsapp_messages` |
-|---|---|---|---|
-| Ravindra | "weight loss and body build" — 06:45:23 | `whatsapp_reply` status=`success` at 06:45:32 | **None after 06:26** |
-| Gaurav | "Sure" — 07:11:34 | `whatsapp_reply` status=`success` at 07:11:44 | **None after 07:11:12** |
+**Memory (`ai_memory`)**
+- Hydrated + patched correctly, but `summary` is rarely written → after ~20 turns, history trimming drops early context.
+- No TTL / compaction job.
 
-- `ai_memory` confirms the brain updated facts (Ravindra: `fitness_goal=weight_loss`; Gaurav: `plan_interest=Founding memberships`) — so the brain ran to completion.
-- `whatsapp_send_locks` shows the **old** outbound's lock row, but no new lock row from the post-AI send attempt → `sendAiReply` either never reached `try_whatsapp_send_lock`, or returned before insertion.
-- `whatsapp_chat_settings`: `bot_active=true`, `do_not_contact=false` for both — not paused.
-- `error_logs` has zero WhatsApp/AI errors in the last 24h → the failure path is **silent**.
+**Send path** — already hardened in v6.3.0 (error_logs on every silent return). ✅
 
-## Root-cause hypothesis
+**Lead-loss observability**
+- No SLO monitor. We only see failures when a human notices. Need a cron that flags `inbound_without_reply_within_5m`.
 
-The brain (`_shared/ai-agent-brain.ts`) returned `{ skipped: true, skipReason: "no_reply_text" }` *after* a successful `ai_call_logs` row was written. This happens at line 735:
+**Tech check (web)** — current best practice for LLM agent reliability is: structured retries w/ jittered backoff, semantic-cache + fact-grounded RAG, periodic memory summarization, and a DLQ for unrecoverable turns (LangGraph / AI SDK patterns). Implement minimally without adding new frameworks.
 
-```
-if (!replyText) return skip("no_reply_text");
-```
+---
 
-The `callAI` call logs `status=success` as soon as the model responds with **any** payload — including a tool_call with no text, or a follow-up tool call whose content is empty. After tools resolve, the second `callAI` (lines 723-728) may return empty `content` and we silently fall through to `skip("no_reply_text")`. The webhook then returns early at lines 483-488 with only a `console.log`, never inserting an outbound row and never logging to `error_logs`.
+## Plan (6 focused changes, no new frameworks)
 
-Less likely but possible secondary causes (will be ruled out by the diagnostic step):
-- `enforceOutboundInteractiveGuards` strips an interactive JSON without re-injecting plain text in an edge case.
-- `getWhatsAppIntegration(branchId)` returns null inside `sendAiReply` (line 657-658) — would also silently `return;`.
-- Tool-loop crashed inside `try/catch` (line 730) and `replyText` stayed at the pre-tool value (could be empty).
+### 1. Single SSOT for AI calls
+- Migrate the brain's two `callAI` sites in `ai-agent-brain.ts` (primary + tool-follow-up) to call `generateOnce({ purpose: "whatsapp_reply", … })` from `ai-runtime.ts`.
+- Drop the manual `ai_call_logs` insert in brain — `generateOnce` already logs.
+- Wire `ai_purposes.whatsapp_reply` with explicit `provider_id` + `model` (default `google/gemini-3-flash-preview`).
 
-## Plan
+### 2. Retry with jittered backoff on gateway failures
+- Inside `generateOnce` (so all 13 callers benefit): on `429`, `5xx`, network errors → 2 retries with 250ms + 750ms jittered backoff before throwing.
+- On final failure, log `error_logs` (severity=error, source=`ai_gateway`) with purpose + branch + contact.
 
-### 1. Add observability (do this first — non-breaking)
-Promote the four silent `return` paths into `error_logs` entries (severity=`warning`, source=`whatsapp_webhook`) with the inbound `message_id`, phone, branch and reason:
+### 3. Knowledge-base catalog sync
+- New cron-driven edge fn `sync-ai-knowledge` (runs hourly + on-demand) that upserts `ai_knowledge` rows with `source='catalog'` from:
+  - `membership_plans` (active, founder phase ⇒ duration + benefits only, no prices)
+  - `pt_packages` (names only, no prices/sessions during founder phase)
+  - `branches` (name, address, hours, contact)
+  - `classes` (name, schedule overview)
+  - `facilities` (name, hours, capacity)
+  - `system_events`/FAQ from `src/lib/templates/systemEvents.ts`
+- Uses stable `source_ref` (e.g. `plan:<id>`) for idempotent upsert; existing trigger embeds.
+- Respects Founder's Phase sanitizer rules (no ₹, no PT session counts).
 
-- `whatsapp-webhook/index.ts` → `triggerAiAutoReply`: when `result.skipped`, write a warning with `result.skipReason` (today it's only `console.log`).
-- `whatsapp-webhook/index.ts` → `sendAiReply`: warning when send-lock denies, when `getWhatsAppIntegration` is null, and when `accessToken`/`phoneNumberId` missing.
-- `_shared/ai-agent-brain.ts` → before `return skip("no_reply_text")` (line 735), log the raw `choice.message` payload + tool-call presence so we can see whether the model returned only a tool call or truly empty.
+### 4. Memory summarization
+- After every 10 turns OR when history > 4KB, brain calls `generateOnce({ purpose:"context_extract", … })` to produce a 3-sentence `summary` and writes to `ai_memory.summary`.
+- Brain prepends summary to system prompt instead of full early history → context never lost.
 
-### 2. Fix the tool-loop empty-content fallback
-In `ai-agent-brain.ts` lines 700-733, if the tool follow-up `callAI` returns empty content **and** there was no pre-tool text, generate a deterministic fallback based on the captured tool result (e.g. "Got it — give me one sec to wrap this up." or, for lead-capture tools, the canonical next-missing-field ask from the sanitizer's helpers). Never let the function reach `skip("no_reply_text")` for a user who actually sent a real message after onboarding has started.
+### 5. Lead-loss SLO monitor
+- New cron edge fn `monitor-ai-lead-loss` (every 5 min, dispatched by `automation-brain`):
+  - Finds `whatsapp_messages.direction='inbound'` in last 30 min with no outbound reply within 5 min AND `whatsapp_chat_settings.bot_active=true`.
+  - Writes `error_logs` (severity=`warning`, source=`ai_lead_loss`) per affected contact (dedup by fingerprint = phone).
+  - Triggers retry: re-invokes `triggerAiAutoReply` once with original message_id.
+- New SystemHealth tile: "AI reply SLA — last 24h" using this signal.
 
-### 3. Verify against the live cases
-After deploy, ask the user to reply once more from each affected number and confirm:
-- A new row appears in `whatsapp_messages` with `direction='outbound'`.
-- A new row appears in `whatsapp_send_locks` for that phone.
-- If `result.skipped` ever fires again, an `error_logs` row exists pinpointing the reason.
+### 6. Code cleanup (no behavior change)
+- Delete the inline onboarding prompt block from brain; move into `ai-prompt.ts` (already the SSOT per memory).
+- Remove the manual log insert (step 1).
+- Mark legacy comments referencing the deleted 800-line webhook brain (already gone) as resolved.
 
-## Out of scope (not changing now)
-- The send-lock RPC itself (v6.2.0 logic is correct).
-- The Founder's-Phase sanitizer (cannot return empty by construction).
-- The `whatsapp_chat_settings` schema and per-channel toggles.
+---
 
-## Files to touch
-- `supabase/functions/whatsapp-webhook/index.ts` — diagnostics in `triggerAiAutoReply` and `sendAiReply`.
-- `supabase/functions/_shared/ai-agent-brain.ts` — diagnostic before `skip("no_reply_text")` + tool-loop empty-content fallback.
+## Technical details
 
-No DB schema changes. No frontend changes.
+| File | Change |
+|---|---|
+| `supabase/functions/_shared/ai-runtime.ts` | Add `retryOnTransient` (default true), jittered 2-retry; log final failure to `error_logs`. |
+| `supabase/functions/_shared/ai-agent-brain.ts` | Replace 2× `callAI` with `generateOnce`; drop manual `ai_call_logs` insert; extract onboarding prompt to `ai-prompt.ts`; add 10-turn summarization hook. |
+| `supabase/functions/_shared/ai-prompt.ts` | Add `buildOnboardingPrompt(memory, ctx)` returning the WA founder-phase block. |
+| `supabase/functions/sync-ai-knowledge/index.ts` | **NEW.** Catalog → `ai_knowledge` upsert with `source='catalog'`. |
+| `supabase/functions/monitor-ai-lead-loss/index.ts` | **NEW.** SLO cron + auto-retry. |
+| Migration | Seed `ai_purposes.whatsapp_reply` with `provider_id`, `model='google/gemini-3-flash-preview'`. Register both crons in `automation_rules`. |
+| `src/pages/Settings.tsx` (SystemHealth) | Add "AI Reply SLA (24h)" tile reading `error_logs` source=`ai_lead_loss`. |
+
+## Verification
+- Replay Ravindra + Gaurav last inbound → confirm outbound row created within 10s, `ai_call_logs` shows single (not duplicate) row, no `error_logs.warning`.
+- Manually drop one network packet via `provider_id='invalid'` → confirm 2 retries, fallback to default provider, single `error_logs` entry.
+- After 11 turns in a test thread → confirm `ai_memory.summary` populated.
+- Run `sync-ai-knowledge` once → confirm ~30+ `source='catalog'` rows with embeddings.
+- Pause bot + send inbound → `monitor-ai-lead-loss` does NOT alert (bot disabled). Re-enable → alert fires + retry succeeds.
+
+## Out of scope
+- WhatsApp send-lock RPC (v6.2.0 correct).
+- Founder-phase sanitizer (correct).
+- Frontend redesign of Settings → AI Agent (separate request).
