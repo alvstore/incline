@@ -1,60 +1,90 @@
 ## Goal
 
-Audit and refactor the three pages shown in the screenshots so every color comes from the semantic design tokens (`primary`, `foreground`, `muted-foreground`, `card`, `accent`, `destructive`, `success`, `warning`, `info`, `border`) instead of raw Tailwind palette classes (`indigo-600`, `violet-600`, `slate-900`, `emerald-500`, `amber-500`, etc.). This is required so the Theme Picker + light/dark mode actually change the look.
+Make every page respect the active theme (Theme Picker + light/dark) by removing hardcoded Tailwind palette classes (`slate-*`, `indigo-*`, `violet-*`, `emerald-*`, `amber-*`, `red-*`, `sky-*`, `rose-*`, `gray-*`, etc.) and routing all color through semantic tokens (`background`, `foreground`, `card`, `muted`, `primary`, `accent`, `success`, `warning`, `destructive`, `info`, `border`, `ring`).
+
+The two pages explicitly called out (`/staff-roster`, `/admin-roles`) get a focused refactor. Then a project-wide sweep handles the rest in waves so we don't ship one massive unreviewable change.
 
 ## Scope
 
-Pages in scope:
-1. **Trainers** — `src/pages/Trainers.tsx`
-   - Plus drawers: `src/components/trainers/TrainerProfileDrawer.tsx`, `EditTrainerDrawer.tsx`
-2. **Tasks (Mission Control)** — `src/pages/Tasks.tsx` (already clean) + all `src/components/tasks/*` files that flagged in the audit:
-   - `TasksHeader.tsx`, `TaskStatsBento.tsx`, `TaskFilterPills.tsx`, `TaskBoard.tsx`, `TaskCard.tsx`, `TaskListView.tsx`, `TaskCalendarView.tsx`, `DueDatePill.tsx`, `AssigneeAvatar.tsx`, `taskTokens.ts`
-3. **PT Packages** — `src/pages/PTSessions.tsx` (~140 hardcoded usages including the big hero/stat cards, "Top Performer", "Package Type Split", "Revenue by Trainer", tier gradients, status pills)
+### Wave 1 — Explicitly requested pages (this round)
+1. **Staff Roster** — `src/pages/StaffRoster.tsx` + child components used by day/week/month views:
+   - `src/components/roster/*` (whatever the page imports — day grid, week grid, shift cells, legend, filters, shift drawers).
+   - Tokens for shift sources (planned / override / off / late / on-time) must map to `primary`, `warning`, `muted`, `destructive`, `success` respectively so theme + dark mode re-skin properly.
+2. **Admin Roles** — `src/pages/AdminRoles.tsx` + any role-matrix / capability-grid / drawer components it imports.
+   - Role pills, capability check/cross indicators, "owner-locked" banners → semantic tokens.
 
-Out of scope: any other page, any business logic, any data-fetching code, drawers other than the ones above.
-
-## Token Mapping (applied everywhere)
+### Wave 2 — Project-wide audit (separate follow-up rounds)
+A grep across `src/pages` + `src/components` shows ~181 files still using raw palette classes. We bucket them into shippable waves:
 
 ```text
-bg-white, bg-slate-50           → bg-card / bg-background
-text-slate-900                  → text-foreground
-text-slate-700/600              → text-foreground / text-muted-foreground
-text-slate-500/400              → text-muted-foreground
-border-slate-200, border-*-200  → border-border
-shadow-slate-200/50             → shadow-md (keep soft shadow, drop color)
-bg-indigo-600, bg-violet-600,
-gradient from-indigo to-violet  → bg-primary  (or gradient from-primary to-primary with brightness variation via /80)
-text-indigo-700, text-violet-700→ text-primary
-bg-indigo-50, bg-violet-50      → bg-primary/10
-ring-indigo-500                 → ring-ring / ring-primary
-bg-emerald-* / text-emerald-*   → bg-success / text-success (token exists in tailwind.config.ts)
-bg-amber-* / text-amber-*       → bg-warning / text-warning
-bg-red-* / text-red-*           → bg-destructive / text-destructive
-bg-sky-* / text-sky-*           → bg-info / text-info
-bg-rose-500 (cancelled bar)     → bg-destructive
+Wave 2a — High-traffic operational pages
+  Members, Leads, Plans, Payments, POS, Finance, Lockers, MemberCheckout,
+  EquipmentMaintenance, FollowUpCenter, Integrations, Referrals
+
+Wave 2b — Member-facing portal
+  MemberStore, MemberClassBooking, MemberAnnouncements, MemberFeedback,
+  MyScanReport, HowbodyPublicReport, HowbodyLogin, Feedback
+
+Wave 2c — HRM + Roster ecosystem (already partly in Wave 1)
+  HRM.tsx, hrm/* components, PayrollRunPanel, PoliciesTab, HrSettingsTab,
+  CreateContractDrawer, OffboardStaffSheet, SignedContractViewer, etc.
+
+Wave 2d — Comms + Campaigns + IG + WhatsApp
+  WhatsAppChat, communications/*, campaigns/*, ig-automations/*,
+  whatsapp/*, invoices/* (payment-link drawers)
+
+Wave 2e — Fitness + Bookings + Misc
+  fitness/*, bookings/*, products/*, profile/CommunicationPreferences,
+  consent/*, ui/* low-level (toast, alert-dialog, live-pill, liquid-button)
 ```
 
-For the gradient hero cards (Trainers "Active Trainers", PT "Top Performer", Tasks "Today's Focus") use `bg-gradient-to-br from-primary to-primary/70 text-primary-foreground` so the brand gradient follows the active theme.
+Each wave runs as its own approved task so reviewers can sanity-check 10–25 files at a time instead of 181.
 
-For tier palettes in `PTSessions.tsx` (silver / gold / platinum) keep distinct hues but swap to token-aware equivalents:
-- silver → `from-muted to-muted-foreground/40`
-- gold   → `from-warning/80 to-warning`
-- platinum / default → `from-primary to-primary/70`
+## Token Mapping (canonical, reused across all waves)
 
-## Approach
+```text
+bg-white / bg-slate-50 / bg-gray-50         → bg-card / bg-background
+text-slate-900 / text-gray-900              → text-foreground
+text-slate-700 / text-slate-600             → text-foreground / text-muted-foreground
+text-slate-500 / text-slate-400             → text-muted-foreground
+border-slate-200 / border-gray-200          → border-border
+shadow-slate-200/50                         → shadow-md (drop colored shadow)
+bg-indigo-* / bg-violet-* / brand gradient  → bg-primary  (gradient: from-primary to-primary/70)
+text-indigo-700 / text-violet-700           → text-primary
+bg-indigo-50 / bg-violet-50                 → bg-primary/10
+ring-indigo-500                             → ring-ring
+bg-emerald-* / text-emerald-*               → bg-success / text-success
+bg-amber-* / text-amber-*                   → bg-warning / text-warning
+bg-red-* / text-red-* / bg-rose-*           → bg-destructive / text-destructive
+bg-sky-* / text-sky-* / bg-blue-*           → bg-info / text-info
+bg-blue-400 (frozen pill)                   → bg-info  (keep "frozen" semantic)
+```
 
-1. Read each target file once, then do a careful search-and-replace per file using the mapping table above. Group edits per file into a single `code--line_replace` where possible.
-2. Preserve all layout/spacing/typography classes — only swap color tokens.
-3. After edits, run the build (auto) and visually verify the three pages in light + one dark theme via the preview.
+Tier / category palettes that need multiple distinct hues keep their hue families but route through token-aware variants (`primary`, `warning`, `info`, `success`) so they still re-skin.
 
-## Non-goals / constraints
+## Approach (per wave)
 
-- No changes to copy, layout, icons, or data.
-- Status semantics stay the same (success=green, warning=amber, destructive=red, info=sky) — they just route through tokens so themes can re-skin.
+1. List the files in the wave with `rg -l`.
+2. For each file: read once → single `code--line_replace` (or `code--write` only if the whole file is replaced) that swaps colors only, preserves layout/spacing/typography classes.
+3. Re-grep the wave's files to confirm zero hardcoded palette classes remain.
+4. Visual spot-check in preview: toggle Theme Picker + dark mode on 2–3 representative pages from the wave.
+
+## Constraints
+
+- Color-only changes. Do not touch copy, layout, data fetching, business logic, RBAC, or query keys.
 - Keep `rounded-2xl`, soft shadows, and Vuexy density unchanged.
+- Status semantics preserved (success=green, warning=amber, destructive=red, info=sky/blue, frozen=info).
+- Keep `bg-gradient-to-br from-primary to-primary/70 text-primary-foreground` for hero/KPI cards.
+- Do NOT touch auto-generated files (`integrations/supabase/client.ts`, `types.ts`, `supabase/config.toml`, `.env`).
+- `src/components/ui/*` primitives are only touched where the hardcoded color is the bug (toast, alert-dialog, live-pill). Otherwise leave shadcn primitives alone.
 
 ## Validation
 
-- Toggle Settings → Appearance theme + dark mode; confirm Trainers, Tasks, and PT Packages re-skin instead of staying indigo/slate.
+- After each wave: open Settings → Appearance, switch theme + dark mode, confirm the wave's pages re-skin instead of staying indigo/slate.
 - Confirm contrast on hero gradient cards in both modes.
-- No regressions in drawers opened from these pages.
+- Confirm status pills (active/frozen/overdue/partial/pending) keep their meaning across themes.
+- No regressions in drawers opened from each page.
+
+## Deliverable for THIS approval
+
+Wave 1 only: refactor `StaffRoster.tsx` + its child roster components, and `AdminRoles.tsx` + its role/capability child components. Waves 2a–2e are listed here for visibility and will be requested as separate approvals after Wave 1 ships.
