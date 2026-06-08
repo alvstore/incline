@@ -1,4 +1,4 @@
-// v1.2.0 — phoneVariants dedupe (leads + members)
+// v1.3.0 — first-touch source derivation from referrer (defense-in-depth)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { normalizePhone, phoneVariants } from '../_shared/phone.ts';
 
@@ -43,7 +43,23 @@ Deno.serve(async (req) => {
     const phoneRaw = (body.phone || body.phone_number || body.mobile || '').replace(/[\s\-\(\)]/g, '').slice(0, 20);
     const phone = normalizePhone(phoneRaw) || phoneRaw;
     const email = (body.email || '').trim().slice(0, 255) || null;
-    const source = (body.source || body.utm_source || body.platform || 'api').toLowerCase().slice(0, 50);
+    const sourceRaw = (body.source || body.utm_source || body.platform || 'api').toLowerCase().slice(0, 50);
+    const referrerForDerive = (body.referrer_url || body.referrer || '').toString();
+    // If client says "website" but referrer is actually an external platform, re-derive.
+    function deriveFromRef(s: string, ref: string): string {
+      if (s && s !== 'website' && s !== 'api') return s;
+      if (/linktr\.ee|linktree/i.test(ref)) return 'linktree';
+      if (/instagram\.com|ig\.me/i.test(ref)) return 'instagram';
+      if (/facebook\.com|fb\.me|fb\.com/i.test(ref)) return 'facebook';
+      if (/wa\.me|whatsapp\.com|api\.whatsapp/i.test(ref)) return 'whatsapp';
+      if (/youtube\.com|youtu\.be/i.test(ref)) return 'youtube';
+      if (/google\./i.test(ref)) return 'google';
+      if (/t\.co|twitter\.com|x\.com/i.test(ref)) return 'twitter';
+      if (/linkedin\.com|lnkd\.in/i.test(ref)) return 'linkedin';
+      if (/tiktok\.com/i.test(ref)) return 'tiktok';
+      return s || 'website';
+    }
+    const source = deriveFromRef(sourceRaw, referrerForDerive);
     const notes = (body.notes || body.message || '').slice(0, 500);
 
     // UTM data
