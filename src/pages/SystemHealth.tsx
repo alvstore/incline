@@ -393,6 +393,8 @@ export default function SystemHealth() {
               <WhatsAppDeliveryHealthCard />
             </div>
 
+            <StalledConversationsCard />
+
             <div className="grid gap-4 md:grid-cols-2">
               <AiReplySlaCard />
               <DbIntegrityCard />
