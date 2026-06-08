@@ -19,6 +19,7 @@ import { exportToCSV } from '@/lib/csvExport';
 import { CommunicationFunnelCard } from '@/components/system/CommunicationFunnelCard';
 import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFindingsCard';
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
+import { AiReplySlaCard } from '@/components/system/AiReplySlaCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
 import { SystemAuditTab } from '@/components/system/SystemAuditTab';
 import { BulkAIPromptDialog } from '@/components/system/BulkAIPromptDialog';
@@ -56,6 +57,9 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: any; color: string }>
   automation_brain: { label: 'Automation Brain', icon: Zap, color: 'text-primary' },
   cron: { label: 'Cron Job', icon: Clock, color: 'text-warning' },
   worker: { label: 'Worker', icon: Server, color: 'text-success' },
+  ai_lead_loss: { label: 'AI Lead-Loss', icon: AlertTriangle, color: 'text-warning' },
+  ai_agent_brain: { label: 'AI Brain', icon: Zap, color: 'text-primary' },
+  ai_gateway: { label: 'AI Gateway', icon: Zap, color: 'text-primary' },
 };
 
 const FALLBACK_SOURCE = { label: 'Other', icon: Layers, color: 'text-muted-foreground' } as const;
@@ -386,6 +390,8 @@ export default function SystemHealth() {
               <ReconciliationFindingsCard />
               <WhatsAppDeliveryHealthCard />
             </div>
+
+            <AiReplySlaCard />
 
             <PolicyAuditCard />
           </TabsContent>
