@@ -776,6 +776,7 @@ async function handleTestIgCommentMatch(body: any) {
         preview = await generateAiReplyEphemeral({
           comment: text, username: "@alex",
           campaignName: c.name, instruction: c.ai_instruction, tone: c.ai_tone,
+          supabase, branchId: c.branch_id ?? null,
         });
         if (!preview && c.reply_mode === "hybrid" && c.dm_template) {
           preview = renderTemplate(c.dm_template, {
