@@ -481,9 +481,18 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     );
 
     if (result.skipped || !result.replyText) {
-      if (result.skipReason) {
-        console.log(`[whatsapp-webhook] AI skipped: ${result.skipReason}`);
-      }
+      // v6.3.0 — promote silent skips to error_logs so we can audit why the
+      // AI stopped replying to a live conversation.
+      const reason = result.skipReason || "no_reply_text";
+      console.log(`[whatsapp-webhook] AI skipped: ${reason}`);
+      try {
+        await supabase.rpc("log_error_event", {
+          p_source: "whatsapp_webhook",
+          p_severity: "warning",
+          p_message: `AI reply skipped (${reason}) for ${phoneNumber}`,
+          p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, reason },
+        });
+      } catch { /* noop */ }
       return;
     }
 
