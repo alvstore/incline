@@ -636,6 +636,32 @@ async function sendAiReply(
   }
 
 
+  // v6.2.0: acquire the send-lock BEFORE inserting the outbound row. Meta
+  // re-delivers inbound webhooks frequently; without lock-first ordering, the
+  // losing parallel invocation would still insert a row and then mark it
+  // `failed (duplicate suppressed)` — leaving a ghost in the chat history.
+  const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
+  try {
+    const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
+      _phone: cleanPhone,
+      _ttl_seconds: 8,
+    });
+    if (gotLock === false) {
+      console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone} (no row inserted)`);
+      return;
+    }
+  } catch (lockErr) {
+    console.warn("send-lock RPC failed, proceeding without lock:", lockErr);
+  }
+
+  const integration = await getWhatsAppIntegration(branchId);
+  if (!integration) return;
+
+  const accessToken = integration.credentials?.access_token as string;
+  const phoneNumberId = integration.config?.phone_number_id as string;
+  const appSecret = (integration.credentials?.app_secret as string) || null;
+  if (!accessToken || !phoneNumberId) return;
+
   const { data: aiMsg, error: insertErr } = await supabase
     .from("whatsapp_messages")
     .insert({
@@ -655,37 +681,6 @@ async function sendAiReply(
     return;
   }
 
-  const integration = await getWhatsAppIntegration(branchId);
-  if (!integration) return;
-
-  const accessToken = integration.credentials?.access_token as string;
-  const phoneNumberId = integration.config?.phone_number_id as string;
-  const appSecret = (integration.credentials?.app_secret as string) || null;
-  if (!accessToken || !phoneNumberId) return;
-
-  const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
-
-  // Send-time race lock: prevents two parallel webhook invocations from
-  // sending duplicate replies to the same phone within 8 seconds.
-  try {
-    const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
-      _phone: cleanPhone,
-      _ttl_seconds: 8,
-    });
-    if (gotLock === false) {
-      console.log(`[sendAiReply] skip — another send in flight for ${cleanPhone}`);
-      // v6.1.0 fix: was writing to non-existent column `error_message` on
-      // whatsapp_messages; that silently failed and left the row stuck pending.
-      await supabase.from("whatsapp_messages").update({
-        status: "failed",
-        failure_reason: "duplicate suppressed (send-lock held)",
-        failed_at: new Date().toISOString(),
-      }).eq("id", aiMsg.id);
-      return;
-    }
-  } catch (lockErr) {
-    console.warn("send-lock RPC failed, proceeding without lock:", lockErr);
-  }
 
   let metaUrl = `${META_API_BASE}/${phoneNumberId}/messages`;
   if (appSecret) {
