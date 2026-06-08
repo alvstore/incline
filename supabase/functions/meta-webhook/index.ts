@@ -1,3 +1,10 @@
+// v5.7.0 — Flatten chat envelopes for IG/Messenger DMs. Brain replies that are
+//          structured JSON ({"type":"interactive_list",…} for goal/plan steps,
+//          or {"status":"lead_captured",…} control payloads) used to be sent
+//          verbatim — IG users literally saw raw JSON in chat. We now route
+//          result.replyText through flattenReplyForPlainText() before persist +
+//          send, rendering interactive lists as numbered text and stripping
+//          control payloads silently.
 // v5.6.0 — Permanent IG thumbnail caching: download Meta CDN preview into
 //   public `template-media/ig-cache/{media_id}.jpg` so the comment card
 //   survives the ~24h Meta URL expiry. Falls back to ephemeral URL on failure.
