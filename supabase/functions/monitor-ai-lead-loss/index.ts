@@ -94,40 +94,17 @@ async function logLeadLoss(row: StuckRow) {
   }
 }
 
-async function attemptRecovery(row: StuckRow): Promise<{ recovered: boolean; reason?: string }> {
-  if (!row.content || !row.content.trim()) return { recovered: false, reason: "no_content" };
-  try {
-    const result = await runUnifiedAgent(supabase, SUPABASE_URL, SERVICE_KEY, {
-      senderId: row.phone_number,
-      branchId: row.branch_id,
-      platform: (row.platform as any) || "whatsapp",
-      messageId: row.id,
-      messageContent: row.content,
-      contactName: row.contact_name,
-    });
-    return { recovered: !!result?.replyText, reason: result?.replyText ? "ok" : "brain_no_reply" };
-  } catch (e) {
-    return { recovered: false, reason: (e as Error).message.slice(0, 200) };
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const started = Date.now();
   try {
     const stuck = await findStuckInbounds();
-    let recovered = 0;
-    for (const row of stuck) {
-      await logLeadLoss(row);
-      const r = await attemptRecovery(row);
-      if (r.recovered) recovered++;
-    }
+    for (const row of stuck) await logLeadLoss(row);
     const summary = {
       ok: true,
       took_ms: Date.now() - started,
       sla_min: REPLY_SLA_MIN,
       stuck: stuck.length,
-      recovered,
     };
     console.log("[monitor-ai-lead-loss]", JSON.stringify(summary));
     return new Response(JSON.stringify(summary), {
