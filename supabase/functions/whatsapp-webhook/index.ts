@@ -468,6 +468,21 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
     console.warn("[whatsapp-webhook] opt-out gate failed (continuing to AI):", gateErr);
   }
 
+  // v6.5.0 — BRAIN HEARTBEAT. Worker reaps mid-LLM-call had been silently
+  // swallowing failures (no catch could fire). We now insert a `start` row
+  // BEFORE invoking the brain and an `end`/`error` row AFTER. A start without
+  // a matching end after 90s is conclusive proof of a worker kill and is
+  // surfaced by the System Health "Stalled Conversations" card.
+  const brainStartedAt = Date.now();
+  try {
+    await supabase.rpc("log_error_event", {
+      p_source: "whatsapp_brain",
+      p_severity: "info",
+      p_message: `brain_start ${phoneNumber}`,
+      p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "start" },
+    });
+  } catch { /* noop */ }
+
   try {
     const result = await runUnifiedAgent(
       supabase,
@@ -494,7 +509,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
           p_source: "whatsapp_webhook",
           p_severity: "warning",
           p_message: `AI reply skipped (${reason}) for ${phoneNumber}`,
-          p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, reason },
+          p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, reason, took_ms: Date.now() - brainStartedAt },
         });
       } catch { /* noop */ }
       return;
@@ -506,16 +521,26 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
       branchId,
       messageId,
     );
+
+    // v6.5.0 — heartbeat END
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "whatsapp_brain",
+        p_severity: "info",
+        p_message: `brain_end ${phoneNumber}`,
+        p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "end", took_ms: Date.now() - brainStartedAt },
+      });
+    } catch { /* noop */ }
   } catch (err) {
     console.error("[whatsapp-webhook] runUnifiedAgent failed:", err);
     // v6.4.0 — promote brain / send exceptions so SystemHealth surfaces them
     // instead of the user thinking the AI silently quit mid-conversation.
     try {
       await supabase.rpc("log_error_event", {
-        p_source: "whatsapp_webhook",
+        p_source: "whatsapp_brain",
         p_severity: "error",
         p_message: `AI reply pipeline crashed for ${phoneNumber}: ${(err as Error)?.message?.slice(0, 300) || "unknown"}`,
-        p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "runUnifiedAgent_or_send" },
+        p_context: { branch_id: branchId, phone: phoneNumber, message_id: messageId, stage: "error", took_ms: Date.now() - brainStartedAt },
       });
     } catch { /* noop */ }
   }
@@ -729,7 +754,7 @@ async function sendAiReply(
   try {
     const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
       _phone: lockKey,
-      _ttl_seconds: 8,
+      _ttl_seconds: 60,
     });
     if (gotLock === false) {
       console.log(`[sendAiReply] skip — duplicate webhook for ${lockKey} (no row inserted)`);

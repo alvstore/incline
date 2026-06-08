@@ -21,6 +21,7 @@ import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFi
 import { WhatsAppDeliveryHealthCard } from '@/components/system/WhatsAppDeliveryHealthCard';
 import { AiReplySlaCard } from '@/components/system/AiReplySlaCard';
 import { DbIntegrityCard } from '@/components/system/DbIntegrityCard';
+import { StalledConversationsCard } from '@/components/system/StalledConversationsCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
 import { SystemAuditTab } from '@/components/system/SystemAuditTab';
 import { BulkAIPromptDialog } from '@/components/system/BulkAIPromptDialog';
@@ -391,6 +392,8 @@ export default function SystemHealth() {
               <ReconciliationFindingsCard />
               <WhatsAppDeliveryHealthCard />
             </div>
+
+            <StalledConversationsCard />
 
             <div className="grid gap-4 md:grid-cols-2">
               <AiReplySlaCard />
