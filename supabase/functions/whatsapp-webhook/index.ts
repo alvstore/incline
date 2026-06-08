@@ -754,7 +754,7 @@ async function sendAiReply(
   try {
     const { data: gotLock } = await supabase.rpc("try_whatsapp_send_lock", {
       _phone: lockKey,
-      _ttl_seconds: 8,
+      _ttl_seconds: 60,
     });
     if (gotLock === false) {
       console.log(`[sendAiReply] skip — duplicate webhook for ${lockKey} (no row inserted)`);
