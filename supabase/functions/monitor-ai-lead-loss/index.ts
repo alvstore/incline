@@ -1,13 +1,13 @@
-// v1.0.0 — AI Reply SLA monitor. Detects inbound WhatsApp/IG/Messenger
-// messages where the bot is active but no outbound reply was sent within
-// the SLA window. Writes a deduped error_logs warning per contact so the
-// SystemHealth dashboard surfaces silent lead-loss, and re-invokes the
-// unified brain ONCE per stuck inbound to attempt recovery.
+// v1.0.1 — AI Reply SLA monitor (observability-only). Detects inbound
+// WhatsApp/IG/Messenger messages where the bot is active but no outbound
+// reply was sent within the SLA window. Writes a deduped error_logs warning
+// per stuck contact so SystemHealth surfaces silent lead-loss in near real-time.
+// Auto-recovery via re-invoke is intentionally NOT done here to avoid
+// duplicate replies — operators see the alert and can manually re-engage.
 //
 // Dispatched by automation-brain every 5 min (rule: monitor_ai_lead_loss).
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { runUnifiedAgent } from "../_shared/ai-agent-brain.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
