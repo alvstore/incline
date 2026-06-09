@@ -332,6 +332,10 @@ serve(async (req) => {
         } catch (_) { /* best-effort */ }
       }
 
+      // v: Downgrade terminal template-config errors to 'warning' — the local
+      // mirror is auto-marked stale above so subsequent sends are suppressed.
+      // Spamming `severity=error` for the same fbtrace adds no signal.
+      const terminalTemplateIssue = category_issue || recipient_unreachable;
       await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status} (${metaCode ?? '?'})`, metaErrorMsg, {
         template_name: template_name ?? null,
         recipient_last4: String(phone_number || '').slice(-4),
@@ -341,7 +345,7 @@ serve(async (req) => {
         message_type,
         source_caller: body.source_caller ?? null,
         source_log_id: body.source_log_id ?? null,
-      });
+      }, terminalTemplateIssue ? "warning" : "error");
 
       return new Response(
         JSON.stringify({
@@ -405,11 +409,12 @@ async function logError(
   title: string,
   details: string,
   ctx: Record<string, unknown> = {},
+  severity: "info" | "warning" | "error" | "critical" = "error",
 ) {
   // Try the unified RPC first (fingerprint dedup + structured context).
   try {
     await supabase.rpc("log_error_event", {
-      p_severity: "error",
+      p_severity: severity,
       p_source: "edge_function",
       p_message: `${title}: ${details}`,
       p_function_name: component,
