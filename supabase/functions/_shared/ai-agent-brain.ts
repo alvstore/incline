@@ -448,6 +448,8 @@ export async function runUnifiedAgent(
           senderId: ctx.senderId,
           memberId: memberCtx.memberId ?? null,
           name: memberCtx.memberName ?? null,
+          phone: memberCtx.memberPhone ?? null,
+          email: memberCtx.memberEmail ?? null,
           planLabel: memberCtx.planName ?? null,
           planEndsAt: memberCtx.planEndsAt ?? null,
           branchName: orgConfig?.name ?? null,
@@ -458,6 +460,8 @@ export async function runUnifiedAgent(
             senderId: ctx.senderId,
             leadId: memberCtx.leadId,
             name: memberCtx.leadName ?? null,
+            phone: memberCtx.leadPhone ?? null,
+            email: memberCtx.leadEmail ?? null,
             funnelStage: memberCtx.leadStage ?? null,
             branchName: orgConfig?.name ?? null,
           }
