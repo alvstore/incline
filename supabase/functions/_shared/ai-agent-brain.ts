@@ -1380,6 +1380,8 @@ interface MemberResolveResult {
   isMember: boolean;
   memberId?: string;
   memberName?: string;
+  memberPhone?: string;
+  memberEmail?: string;
   membershipId?: string;
   planId?: string;
   planName?: string;
@@ -1389,6 +1391,8 @@ interface MemberResolveResult {
   leadId?: string;
   leadName?: string;
   leadStage?: string;
+  leadPhone?: string;
+  leadEmail?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
