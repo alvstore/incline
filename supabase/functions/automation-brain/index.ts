@@ -72,35 +72,44 @@ function nextCron(expr: string, after: Date): Date {
 }
 
 // ---------- Worker dispatch ----------
-async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string }> {
+async function callEdge(name: string, payload: unknown): Promise<{ ok: boolean; status: number; body: string; gateway5xx: boolean }> {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  // New signing-keys gateway rejects when both `apikey` and `Authorization`
-  // are sb_ keys ("Conflicting API keys"). Send SERVICE_KEY in `apikey` only;
-  // child functions detect the system call via a custom header.
-  // v1.5.0 — one retry on 5xx / network failure (cold-start mitigation).
-  const doFetch = async () =>
-    fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SERVICE_KEY,
-        "x-system-call": "automation-brain",
-      },
-      body: JSON.stringify(payload ?? {}),
-    });
-  let r: Response;
-  try {
-    r = await doFetch();
-    if (r.status >= 500 && r.status <= 599) {
-      await new Promise((res) => setTimeout(res, 300));
-      r = await doFetch();
+  // v2.1.0 — retry 502/503/504 (cold-boot gateway failures) with backoff.
+  //          Per-attempt 60s timeout via AbortController to avoid hanging the tick.
+  const BACKOFFS = [0, 800, 2000];
+  let r: Response | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < BACKOFFS.length; attempt++) {
+    if (BACKOFFS[attempt] > 0) await new Promise((res) => setTimeout(res, BACKOFFS[attempt]));
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 60_000);
+    try {
+      r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SERVICE_KEY,
+          "x-system-call": "automation-brain",
+        },
+        body: JSON.stringify(payload ?? {}),
+        signal: ctrl.signal,
+      });
+      clearTimeout(tm);
+      // Retry on gateway 5xx; otherwise return immediately.
+      if (r.status === 502 || r.status === 503 || r.status === 504) continue;
+      const body = await r.text();
+      return { ok: r.ok, status: r.status, body: body.slice(0, 500), gateway5xx: false };
+    } catch (e) {
+      clearTimeout(tm);
+      lastErr = e;
+      // Network/abort — fall through to next attempt.
     }
-  } catch (_e) {
-    await new Promise((res) => setTimeout(res, 300));
-    r = await doFetch();
   }
-  const body = await r.text();
-  return { ok: r.ok, status: r.status, body: body.slice(0, 500) };
+  if (r) {
+    const body = await r.text().catch(() => "");
+    return { ok: false, status: r.status, body: body.slice(0, 500), gateway5xx: r.status >= 502 && r.status <= 504 };
+  }
+  return { ok: false, status: 0, body: String((lastErr as Error)?.message ?? "network error"), gateway5xx: true };
 }
 
 async function callRpc(fn: string): Promise<{ ok: boolean; body: string }> {
