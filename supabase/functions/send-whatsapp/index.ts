@@ -409,11 +409,12 @@ async function logError(
   title: string,
   details: string,
   ctx: Record<string, unknown> = {},
+  severity: "info" | "warning" | "error" | "critical" = "error",
 ) {
   // Try the unified RPC first (fingerprint dedup + structured context).
   try {
     await supabase.rpc("log_error_event", {
-      p_severity: "error",
+      p_severity: severity,
       p_source: "edge_function",
       p_message: `${title}: ${details}`,
       p_function_name: component,
