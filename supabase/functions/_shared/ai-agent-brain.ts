@@ -1832,18 +1832,28 @@ async function extractContextDelta(
     }
   }
 
-  // Plan interest — capture from interactive list_reply titles (e.g. "🏆 Annual").
-  // Only fires when prior bot turn was the duration prompt OR memory lacks it.
+  // Plan interest — capture ONLY from explicit tap/short-reply (e.g. interactive
+  // list_reply title "Annual") OR a tap-style short message after the duration
+  // prompt. Mentions like "Founding memberships" / "annual cost?" must NOT
+  // auto-capture. v1.2.0 (2026-06-09) — gate by message length + intent verbs.
   if (!memory?.facts?.plan_interest) {
-    for (const [plan, re] of Object.entries(PLAN_HINTS)) {
-      if (re.test(lastUser)) {
-        delta.facts!.plan_interest = plan;
-        delta.do_not_ask_add!.push("plan_interest");
-        break;
+    const wordCount = lastUser.split(/\s+/).filter(Boolean).length;
+    const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
+    const prevWasDurationPrompt = /which membership duration|choose duration|duration works best/i.test(lastBot);
+    const explicitChoiceRe = /\b(i\s*(?:want|prefer|need|'?ll\s*take|am\s*interested\s*in)|interested\s*in|go\s*with|take\s*the|sign\s*me\s*up\s*for|opt\s*for)\b/i;
+    const isTapStyle = wordCount <= 4 || prevWasDurationPrompt || explicitChoiceRe.test(lastUser);
+    if (isTapStyle) {
+      for (const [plan, re] of Object.entries(PLAN_HINTS)) {
+        if (re.test(lastUser)) {
+          delta.facts!.plan_interest = plan;
+          delta.facts!.plan_interest_confirmed = true;
+          delta.do_not_ask_add!.push("plan_interest");
+          break;
+        }
       }
     }
-  } else {
-    // Already known — make sure it stays in do_not_ask going forward.
+  } else if (memory?.facts?.plan_interest_confirmed) {
+    // Already known AND user-confirmed — keep in do_not_ask.
     delta.do_not_ask_add!.push("plan_interest");
   }
 
