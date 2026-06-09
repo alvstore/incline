@@ -1,4 +1,8 @@
-// automation-brain v2.0.0 — SSOT: AI message generation routed via ai-runtime (purpose='automation_rule')
+// automation-brain v2.1.0 — Cold-start tolerant worker dispatch:
+//                            • retries 502/503/504 with 800ms + 2000ms backoff
+//                            • 60s per-attempt AbortController timeout
+//                            • final gateway 5xx downgraded to 'warning' (worker still runs once warm)
+// v2.0.0 — SSOT: AI message generation routed via ai-runtime (purpose='automation_rule')
 // v1.4.0 — apikey must be ANON_KEY (gateway requirement); Authorization stays SERVICE_KEY for service-role bypass.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
