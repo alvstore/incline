@@ -582,11 +582,19 @@ GENERAL RULES:
     }
 
     if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
+      // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
+      // inferred "annual" from "Founding"), soften the prompt to a confirm ask
+      // so the user explicitly taps one of the four durations.
+      const bodyText = hasUnconfirmedPlanInterest
+        ? (_fn
+            ? `Just to confirm, ${_fn} — which duration works best for you?`
+            : "Just to confirm — which duration works best for you?")
+        : (_fn
+            ? `Perfect, ${_fn} — which membership duration are you thinking about?`
+            : "Which membership duration are you thinking about?");
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: _fn
-          ? `Perfect, ${_fn} — which membership duration are you thinking about?`
-          : "Which membership duration are you thinking about?",
+        body: bodyText,
         button: "Choose duration",
         sections: [{
           title: "Membership Duration",
