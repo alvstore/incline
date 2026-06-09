@@ -1885,8 +1885,20 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     const jsonStr = raw.startsWith("{") ? raw : raw.match(/\{[\s\S]*\}/)?.[0];
     if (jsonStr) {
       const parsed = JSON.parse(jsonStr);
-      if (parsed.profile && typeof parsed.profile === "object") Object.assign(delta.profile!, parsed.profile);
-      if (parsed.facts && typeof parsed.facts === "object") Object.assign(delta.facts!, parsed.facts);
+      // v1.2.0 — STRIP fields the LLM must never set on its own. Contact info
+      // (email/phone) comes from auth/webhook. plan_interest must come from an
+      // explicit tap/short-reply (handled deterministically above) so a passing
+      // mention of "Founding" / "annual" can't skip the duration prompt.
+      if (parsed.profile && typeof parsed.profile === "object") {
+        delete parsed.profile.email;
+        delete parsed.profile.phone;
+        Object.assign(delta.profile!, parsed.profile);
+      }
+      if (parsed.facts && typeof parsed.facts === "object") {
+        delete parsed.facts.plan_interest;
+        delete parsed.facts.plan_interest_confirmed;
+        Object.assign(delta.facts!, parsed.facts);
+      }
       if (parsed.consent && typeof parsed.consent === "object") {
         delta.facts!.consent = { ...(memory?.facts?.consent || {}), ...(delta.facts!.consent || {}), ...parsed.consent };
         if (parsed.consent.push_contact_ask === "declined") delta.do_not_ask_add!.push("phone", "email", "callback");
