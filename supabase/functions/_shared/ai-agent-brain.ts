@@ -1,3 +1,7 @@
+// v4.0.0 — Pre-Fetch Identity Injection: <user_context> now carries name/phone/email
+//          across WhatsApp + IG + Messenger. resolveMemberContext falls back to
+//          whatsapp_chat_settings.captured_lead_id and ai_memory.profile.phone so
+//          a lead captured on one channel is recognised on every other channel.
 // v3.9.0 — Lead hydration: brain now reads existing leads row by phone variants
 //          and seeds ai_memory + do_not_ask BEFORE the auto-learn pass, so a
 //          contact already captured via website/Meta-Ads/prior chat is NOT
