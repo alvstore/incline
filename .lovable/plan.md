@@ -1,46 +1,60 @@
+
 ## Goal
-Make the AI **always** ask the 4-option duration list explicitly, even when a lead mentions "Founding" / "annual" / etc. in their first message. Keep the existing name → email → goal → plan_interest backfill ladder; just stop the silent inference that bypasses it.
+Stop the AI concierge from re-asking name/phone for anyone we already know, on any channel, and block duplicate lead creation — by reusing the **existing** Pre-Fetch Injection pipeline (no new files).
 
-## Why this fixes the Hitangi transcript
-- She had `name + email + phone` from the website form. ✅ Correct that AI didn't re-ask.
-- She had no `fitness_goal` or `plan_interest`. The brain *should* have run Step 3 (goal list) → Step 4 (duration list) → Step 5 (close).
-- It ran Step 3, then **skipped Step 4** because the LLM extractor pre-filled `plan_interest=annual` from the word "Founding" in her opener.
-- After Weight Loss tap → it jumped straight to "Would you like a call?" (Step 5 annual pitch).
+## Current state (confirmed by scan)
+The pattern the user is asking for is **already implemented**, but with two gaps:
 
-## Changes (all in one file: `supabase/functions/_shared/ai-agent-brain.ts`)
+- `supabase/functions/_shared/ai-agent-brain.ts` already calls `resolveMemberContext(senderId, branchId, platform)` before the LLM (line 284), builds an `identity` object (lines 443-468), and passes it to `buildSystemPrompt({ identity, ... })`.
+- `supabase/functions/_shared/ai-prompt.ts` already renders `<user_context role="member|lead|unknown">` (lines 184-208) and a matching `<role_objective>` into the system prompt.
+- `leads.phone` is indexed (`idx_leads_phone`, two partial uniques). Lookup latency is well under 50ms.
+- Duplicate-lead protection already exists in `captureLeadAndNotify` (lines 1629-1717): variant-aware phone + email dedupe before insert.
 
-**1. Stop LLM from inferring `plan_interest` (lines ~1876–1887, `extractContextDelta`)**
-- After `JSON.parse`, strip `parsed.facts.plan_interest` before `Object.assign`. Only the deterministic `PLAN_HINTS` regex block (lines 1837–1848) is allowed to set it — and that block already requires a plain duration word (`monthly` / `quarterly` / `half[-]year` / `annual|yearly|12 month`) in the message, not "Founding".
-- Same defensive strip for `parsed.profile.email` / `parsed.profile.phone` (LLM should never hallucinate contact info — these come from auth/webhook).
+## Gaps to fix
 
-**2. Tighten the duration regex (lines 1768–1773)**
-- Replace `Annual: /\b(annual|yearly|12\s*month)\b/i` with a stricter version that requires the word to appear as a standalone *choice* — i.e. short message (`≤ 6 words`) **or** preceded by "I want / prefer / interested in / take the / go with". Mentions like "Founding memberships" or "annual membership cost?" no longer auto-capture.
-- Add a guard: only deterministic-capture `plan_interest` when the previous bot turn was the duration prompt **or** the user's message is ≤ 6 words (a tap-style reply). Pull last bot turn from `history`.
+1. **IG / Messenger identity is lost.** `resolveMemberContext` does `phoneVariants(senderId)`, but on IG/Messenger `senderId` is an IGSID (numeric), not a phone — so even leads we **already captured on website/WhatsApp** show as `unknown` when they later DM on Instagram. We do hydrate `whatsapp_chat_settings.captured_lead_id` for WhatsApp (`hydrateBrainFromExistingLead`), but `resolveMemberContext` never reads it back.
+2. **`<user_context>` lacks phone + email.** User explicitly asked for "Name, Phone, Stage". Today the block only has name, lead_id, funnel_stage, branch.
+3. **Lead branch doesn't explicitly tell the LLM "Execute lead capture"** for `unknown`. The role_objective implies it, but a one-liner cue prevents the LLM from re-asking known facts during the deterministic backfill ladder.
 
-**3. Add explicit "tap to confirm" gate (lines ~580–598, Step 4)**
-- Even if `memory?.facts?.plan_interest` is present **but** there's no record of an interactive `list_reply` having delivered it, re-emit the duration list once with a softer prefix: *"Just to confirm, ${first_name} — which duration works best?"*.
-- Record the explicit choice with a new marker `facts.plan_interest_confirmed = true` (written from the deterministic capture in step 1 only). Step 5 / post-capture nurture / `lead_captured` JSON only fire when `plan_interest_confirmed === true`.
+## Changes (4 spots, 2 existing files only)
 
-**4. Email backfill safety (lines ~552–558, Step 2)**
-- Already works: when `hasEmail` is false (no website capture), AI asks "what's the best email for your Founding Member invite?".
-- Add one extra guard: if `memory.profile.email` exists but looks malformed (no `@` or domain), treat as missing and ask again.
+### A. `supabase/functions/_shared/ai-agent-brain.ts` — extend `resolveMemberContext` (lines 1394-1450)
+- Step 1 (unchanged): try `phoneVariants(senderId)` against `profiles.phone` then `leads.phone`.
+- **New Step 1b**: if no phone match AND `platform !== 'whatsapp'`, look up `whatsapp_chat_settings` by `(branch_id, phone_number=senderId)` and read `captured_lead_id`. If present, fetch that lead row (id, full_name, phone, email, status, fitness_goal) and return as `leadId/leadName/leadStage/leadPhone/leadEmail`.
+- **New Step 1c**: if still nothing, query `ai_memory` for `(branch_id, platform, contact_key=senderId)` and pull `profile.phone` / `profile.email`. If a phone is present, run one more variant lookup on `leads` and `profiles` — this auto-links the next time the same person messages us anywhere.
+- Single round-trip per step, all bounded `.limit(1).maybeSingle()`. Budget ≤ 60ms (3 indexed lookups; we already do 2).
 
-**5. CRM display (no code change, just note)**
-- Sales sidebar already shows `leads.plan_interest`. After this fix, that field is populated **only** when the user explicitly taps a row, so the value is trustworthy.
+### B. `supabase/functions/_shared/ai-agent-brain.ts` — extend the `identity` payload (lines 443-468)
+Add `phone` and `email` to both the `member` and `lead` branches (the prompt assembler already accepts an `Identity` record). Source from `memberCtx.leadPhone/leadEmail` (new fields) or the resolved profile.
 
-## Out of scope
-- No DB migration, no UI changes, no new tables.
-- No changes to the post-capture nurture, member persona, IG/Messenger envelope handling, or AI Brain knowledge-base seeding.
-- `fitness_goal` keyword inference stays (lower-stakes, doesn't drive call CTA).
+### C. `supabase/functions/_shared/ai-prompt.ts` — extend `<user_context>` (lines 184-208) and `Identity` type
+Add `phone` and `email` lines for member + lead. For unknown, append the explicit cue:
+```
+<user_context role="unknown">
+- channel_id: ${id.senderId}
+- branch: ${id.branchName ?? "(default)"}
+- directive: Execute lead capture — ask for name → email → fitness goal → plan interest (deterministic order).
+</user_context>
+```
+For member/lead, append:
+```
+- IMPORTANT: name, phone and email above are already known. Never re-ask. Use them in greetings and when calling tools.
+```
+
+### D. `MemberResolveResult` type (line 119 region) — add optional `leadPhone`, `leadEmail`, `memberPhone`, `memberEmail` so TypeScript stays clean.
+
+## Out of scope (intentionally)
+- No new files. No edge function changes outside the two listed.
+- No DB migration — existing indexes (`idx_leads_phone`, `profiles.phone` lookups via PK-joined IDs) are sufficient.
+- No change to `captureLeadAndNotify` dedupe — already correct.
+- No change to `meta-webhook` / `whatsapp-webhook` entry points — they already call the AI brain which calls `resolveMemberContext`.
+- No JSON envelopes leak to chat (already fixed in v5.7.0 via `chatEnvelope.ts`).
 
 ## Verification
-After deploy, simulate Hitangi's flow via `supabase--curl_edge_functions` to `whatsapp-webhook` with the same opener:
-1. *"Hi, I'd like to know more about Incline Fitness Founding memberships."* → expect goal list (no plan_interest inference).
-2. Tap *Weight Loss* → expect duration list (Monthly / Quarterly / Half-Yearly / Annual).
-3. Tap *Annual* → expect Founding confirm + "want a call?" close.
-4. Verify `leads.plan_interest = 'Annual'` and a new fact `plan_interest_confirmed=true` in `ai_memory`.
-5. Re-run with a returning lead whose `plan_interest` is already filled but `plan_interest_confirmed` is false → expect one "just to confirm" list, then proceed normally.
+1. `supabase--curl_edge_functions` against `meta-webhook` simulating an Instagram DM from a phone-captured lead → confirm `<user_context role="lead">` block now includes Name + Phone + Stage and AI greets by name without asking phone.
+2. Re-run Hitangi's flow on WhatsApp → confirm no regression (still member/lead routed correctly).
+3. `psql` spot-check: `SELECT count(*) FROM leads WHERE phone IS NOT NULL AND created_at > now() - interval '1 day' GROUP BY phone HAVING count(*) > 1;` → expect 0.
 
 ## Files touched
-- `supabase/functions/_shared/ai-agent-brain.ts` (single file, ~30 lines changed across 4 spots)
-- Redeploy edge functions that import the brain: `whatsapp-webhook`, `meta-webhook`, `ai-agent-brain` (auto via deploy).
+- `supabase/functions/_shared/ai-agent-brain.ts` (resolveMemberContext + identity build + type)
+- `supabase/functions/_shared/ai-prompt.ts` (Identity type + renderUserContext)

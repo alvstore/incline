@@ -1,3 +1,7 @@
+// v4.0.0 — Pre-Fetch Identity Injection: <user_context> now carries name/phone/email
+//          across WhatsApp + IG + Messenger. resolveMemberContext falls back to
+//          whatsapp_chat_settings.captured_lead_id and ai_memory.profile.phone so
+//          a lead captured on one channel is recognised on every other channel.
 // v3.9.0 — Lead hydration: brain now reads existing leads row by phone variants
 //          and seeds ai_memory + do_not_ask BEFORE the auto-learn pass, so a
 //          contact already captured via website/Meta-Ads/prior chat is NOT
@@ -448,6 +452,8 @@ export async function runUnifiedAgent(
           senderId: ctx.senderId,
           memberId: memberCtx.memberId ?? null,
           name: memberCtx.memberName ?? null,
+          phone: memberCtx.memberPhone ?? null,
+          email: memberCtx.memberEmail ?? null,
           planLabel: memberCtx.planName ?? null,
           planEndsAt: memberCtx.planEndsAt ?? null,
           branchName: orgConfig?.name ?? null,
@@ -458,6 +464,8 @@ export async function runUnifiedAgent(
             senderId: ctx.senderId,
             leadId: memberCtx.leadId,
             name: memberCtx.leadName ?? null,
+            phone: memberCtx.leadPhone ?? null,
+            email: memberCtx.leadEmail ?? null,
             funnelStage: memberCtx.leadStage ?? null,
             branchName: orgConfig?.name ?? null,
           }
@@ -1380,6 +1388,8 @@ interface MemberResolveResult {
   isMember: boolean;
   memberId?: string;
   memberName?: string;
+  memberPhone?: string;
+  memberEmail?: string;
   membershipId?: string;
   planId?: string;
   planName?: string;
@@ -1389,6 +1399,8 @@ interface MemberResolveResult {
   leadId?: string;
   leadName?: string;
   leadStage?: string;
+  leadPhone?: string;
+  leadEmail?: string;
 }
 
 async function resolveMemberContext(supabase: any, senderId: string, branchId: string, platform: Platform): Promise<MemberResolveResult> {
@@ -1399,36 +1411,45 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
   const variants = phoneVariants(senderId);
 
   let memberMatch: any = null;
+  let memberPhone: string | undefined;
+  let memberEmail: string | undefined;
 
   // Resolve member via profiles.phone → members.user_id
   if (variants.length > 0) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, phone, email")
       .in("phone", variants)
       .limit(1)
       .maybeSingle();
     if (profile?.id) {
       const { data: member } = await supabase
         .from("members")
-        .select("id, branch_id, member_code, profiles!inner(full_name)")
+        .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
         .eq("user_id", profile.id)
         .limit(1)
         .maybeSingle();
-      if (member) memberMatch = member;
+      if (member) {
+        memberMatch = member;
+        memberPhone = (profile as any).phone || undefined;
+        memberEmail = (profile as any).email || undefined;
+      }
     }
   }
 
   if (!memberMatch) {
-    // Check existing lead for context (variant-aware)
     let leadContext = "";
     let leadId: string | undefined;
     let leadName: string | undefined;
     let leadStage: string | undefined;
+    let leadPhone: string | undefined;
+    let leadEmail: string | undefined;
+
+    // Step 1: variant-aware phone lookup (works for WhatsApp; usually misses on IG/Messenger).
     if (variants.length > 0) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("id, full_name, status, fitness_goal")
+        .select("id, full_name, status, fitness_goal, phone, email")
         .in("phone", variants)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -1437,17 +1458,119 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         leadId = (lead as any).id;
         leadName = (lead as any).full_name || undefined;
         leadStage = (lead as any).status || undefined;
+        leadPhone = (lead as any).phone || undefined;
+        leadEmail = (lead as any).email || undefined;
         leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
       }
     }
-    return {
-      isMember: false,
-      contextPrompt: leadContext || "Speaking to a guest/lead.",
-      leadId,
-      leadName,
-      leadStage,
-    };
+
+    // Step 1b (IG/Messenger only): fall back to whatsapp_chat_settings.captured_lead_id
+    // so a lead captured via website/WhatsApp is still recognised on Instagram.
+    if (!leadId && platform !== "whatsapp") {
+      try {
+        const { data: chat } = await supabase
+          .from("whatsapp_chat_settings")
+          .select("captured_lead_id")
+          .eq("branch_id", branchId)
+          .eq("phone_number", senderId)
+          .limit(1)
+          .maybeSingle();
+        const linkedId = (chat as any)?.captured_lead_id;
+        if (linkedId) {
+          const { data: lead } = await supabase
+            .from("leads")
+            .select("id, full_name, status, fitness_goal, phone, email")
+            .eq("id", linkedId)
+            .limit(1)
+            .maybeSingle();
+          if (lead) {
+            leadId = (lead as any).id;
+            leadName = (lead as any).full_name || undefined;
+            leadStage = (lead as any).status || undefined;
+            leadPhone = (lead as any).phone || undefined;
+            leadEmail = (lead as any).email || undefined;
+            leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
+          }
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+
+    // Step 1c: if still unknown, peek at ai_memory.profile for a previously
+    // collected phone/email and re-run member + lead lookups against it.
+    if (!leadId && !memberMatch) {
+      try {
+        const { data: mem } = await supabase
+          .from("ai_memory")
+          .select("profile")
+          .eq("branch_id", branchId)
+          .eq("platform", platform)
+          .eq("contact_key", senderId)
+          .limit(1)
+          .maybeSingle();
+        const memPhone = (mem as any)?.profile?.phone as string | undefined;
+        const memEmail = (mem as any)?.profile?.email as string | undefined;
+        if (memPhone) {
+          const memVariants = phoneVariants(memPhone);
+          if (memVariants.length > 0) {
+            const { data: prof2 } = await supabase
+              .from("profiles")
+              .select("id, full_name, phone, email")
+              .in("phone", memVariants)
+              .limit(1)
+              .maybeSingle();
+            if (prof2?.id) {
+              const { data: member2 } = await supabase
+                .from("members")
+                .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
+                .eq("user_id", prof2.id)
+                .limit(1)
+                .maybeSingle();
+              if (member2) {
+                memberMatch = member2;
+                memberPhone = (prof2 as any).phone || undefined;
+                memberEmail = (prof2 as any).email || undefined;
+              }
+            }
+            if (!memberMatch) {
+              const { data: lead2 } = await supabase
+                .from("leads")
+                .select("id, full_name, status, fitness_goal, phone, email")
+                .in("phone", memVariants)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (lead2) {
+                leadId = (lead2 as any).id;
+                leadName = (lead2 as any).full_name || undefined;
+                leadStage = (lead2 as any).status || undefined;
+                leadPhone = (lead2 as any).phone || memPhone;
+                leadEmail = (lead2 as any).email || memEmail || undefined;
+                leadContext = `[Lead] ${lead2.full_name || "Unknown"}, Status: ${lead2.status || "-"}, Goal: ${lead2.fitness_goal || "-"}`;
+              }
+            }
+          }
+        }
+        // If we still haven't found a lead but ai_memory has at least an email,
+        // surface it so the prompt won't re-ask.
+        if (!leadId && !memberMatch && memEmail) {
+          leadEmail = memEmail;
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+
+    if (!memberMatch) {
+      return {
+        isMember: false,
+        contextPrompt: leadContext || "Speaking to a guest/lead.",
+        leadId,
+        leadName,
+        leadStage,
+        leadPhone,
+        leadEmail,
+      };
+    }
   }
+
 
   const memberName = (memberMatch as any).profiles?.full_name || "Member";
   let membershipId: string | undefined;
@@ -1520,6 +1643,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     isMember: true,
     memberId: memberMatch.id,
     memberName,
+    memberPhone: memberPhone || ((memberMatch as any).profiles?.phone) || undefined,
+    memberEmail: memberEmail || ((memberMatch as any).profiles?.email) || undefined,
     membershipId,
     planId,
     planName,
