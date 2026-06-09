@@ -515,9 +515,13 @@ GENERAL RULES:
   // (from leads row hydrated in 5b.1 OR from prior ai_memory). Skip onboarding
   // and switch to post-capture nurture persona. v1.0.0 (2026-06-06)
   const hasName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
-  const hasEmail = !!memory?.profile?.email;
+  const rawEmail = String(memory?.profile?.email || "").trim();
+  const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail);
   const hasGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-  const hasPlanInterest = !!memory?.facts?.plan_interest;
+  // Only treat plan_interest as captured when the user explicitly confirmed it.
+  // v1.2.0 — prevents LLM-inferred "annual" from skipping the duration prompt.
+  const hasPlanInterest = !!memory?.facts?.plan_interest && memory?.facts?.plan_interest_confirmed === true;
+  const hasUnconfirmedPlanInterest = !!memory?.facts?.plan_interest && !hasPlanInterest;
   const fullyCaptured = hasName && hasEmail && hasGoal && hasPlanInterest;
   // Treat a non-'new' lead status (contacted/qualified/won/lost) as captured too.
   const leadAlreadyEngaged = !!(leadCtx && leadCtx.status && leadCtx.status !== "new");
