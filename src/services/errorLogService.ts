@@ -51,6 +51,19 @@ function shouldDrop(msg: string): boolean {
   if (msg.includes('Failed to fetch dynamically imported module')) return true;
   // Browser extension noise.
   if (msg.includes('ResizeObserver loop') || msg.includes('Non-Error promise rejection captured')) return true;
+  // AbortController cancellations (e.g., Supabase JS abort on route unmount).
+  if (msg.includes('signal is aborted') || msg.includes('AbortError') || msg.includes('The user aborted a request')) return true;
+  return false;
+}
+
+// v: Dedup across the in-flight queue, not just the tail entry, so a burst of
+// identical "Failed to fetch" calls from different components collapses to one.
+function isDuplicateInQueue(message: string, windowMs = 30_000): boolean {
+  const cutoff = Date.now() - windowMs;
+  for (let i = errorQueue.length - 1; i >= 0; i--) {
+    const e: any = errorQueue[i];
+    if (e.error_message === message && (!e._t || e._t >= cutoff)) return true;
+  }
   return false;
 }
 
