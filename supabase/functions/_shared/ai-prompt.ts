@@ -40,6 +40,8 @@ export type Identity =
       senderId: string;
       memberId?: string | null;
       name?: string | null;
+      phone?: string | null;
+      email?: string | null;
       planLabel?: string | null;
       planEndsAt?: string | null;
       branchName?: string | null;
@@ -49,6 +51,8 @@ export type Identity =
       senderId: string;
       leadId?: string | null;
       name?: string | null;
+      phone?: string | null;
+      email?: string | null;
       funnelStage?: string | null;
       branchName?: string | null;
     }
@@ -186,25 +190,32 @@ function renderUserContext(id: Identity | undefined): string {
   if (id.role === "member") {
     return `<user_context role="member">
 - name: ${id.name ?? "(unknown)"}
+- phone: ${id.phone ?? "(unknown)"}
+- email: ${id.email ?? "(unknown)"}
 - member_id: ${id.memberId ?? "(n/a)"}
 - plan: ${id.planLabel ?? "(no active plan)"}
 - plan_ends_at: ${id.planEndsAt ?? "(n/a)"}
 - branch: ${id.branchName ?? "(default)"}
 - channel_id: ${id.senderId}
+- IMPORTANT: name, phone and email above are already on file. NEVER re-ask for them. Greet by first name on your first reply.
 </user_context>`;
   }
   if (id.role === "lead") {
     return `<user_context role="lead">
 - name: ${id.name ?? "(unknown)"}
+- phone: ${id.phone ?? "(unknown)"}
+- email: ${id.email ?? "(unknown)"}
 - lead_id: ${id.leadId ?? "(n/a)"}
 - funnel_stage: ${id.funnelStage ?? "new"}
 - branch: ${id.branchName ?? "(default)"}
 - channel_id: ${id.senderId}
+- IMPORTANT: any field above that is NOT "(unknown)" is already on file. NEVER re-ask for it. Only ask for fields whose value is "(unknown)", in this order: name → email → goal → plan interest.
 </user_context>`;
   }
   return `<user_context role="unknown">
 - channel_id: ${id.senderId}
 - branch: ${id.branchName ?? "(default)"}
+- directive: Execute lead capture. Ask for name → email → fitness goal → plan interest (one at a time, deterministic order).
 </user_context>`;
 }
 
