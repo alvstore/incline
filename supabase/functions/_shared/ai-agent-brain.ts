@@ -515,9 +515,13 @@ GENERAL RULES:
   // (from leads row hydrated in 5b.1 OR from prior ai_memory). Skip onboarding
   // and switch to post-capture nurture persona. v1.0.0 (2026-06-06)
   const hasName = !!(memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name);
-  const hasEmail = !!memory?.profile?.email;
+  const rawEmail = String(memory?.profile?.email || "").trim();
+  const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail);
   const hasGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-  const hasPlanInterest = !!memory?.facts?.plan_interest;
+  // Only treat plan_interest as captured when the user explicitly confirmed it.
+  // v1.2.0 — prevents LLM-inferred "annual" from skipping the duration prompt.
+  const hasPlanInterest = !!memory?.facts?.plan_interest && memory?.facts?.plan_interest_confirmed === true;
+  const hasUnconfirmedPlanInterest = !!memory?.facts?.plan_interest && !hasPlanInterest;
   const fullyCaptured = hasName && hasEmail && hasGoal && hasPlanInterest;
   // Treat a non-'new' lead status (contacted/qualified/won/lost) as captured too.
   const leadAlreadyEngaged = !!(leadCtx && leadCtx.status && leadCtx.status !== "new");
@@ -578,11 +582,19 @@ GENERAL RULES:
     }
 
     if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
+      // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
+      // inferred "annual" from "Founding"), soften the prompt to a confirm ask
+      // so the user explicitly taps one of the four durations.
+      const bodyText = hasUnconfirmedPlanInterest
+        ? (_fn
+            ? `Just to confirm, ${_fn} — which duration works best for you?`
+            : "Just to confirm — which duration works best for you?")
+        : (_fn
+            ? `Perfect, ${_fn} — which membership duration are you thinking about?`
+            : "Which membership duration are you thinking about?");
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: _fn
-          ? `Perfect, ${_fn} — which membership duration are you thinking about?`
-          : "Which membership duration are you thinking about?",
+        body: bodyText,
         button: "Choose duration",
         sections: [{
           title: "Membership Duration",
@@ -1832,18 +1844,28 @@ async function extractContextDelta(
     }
   }
 
-  // Plan interest — capture from interactive list_reply titles (e.g. "🏆 Annual").
-  // Only fires when prior bot turn was the duration prompt OR memory lacks it.
+  // Plan interest — capture ONLY from explicit tap/short-reply (e.g. interactive
+  // list_reply title "Annual") OR a tap-style short message after the duration
+  // prompt. Mentions like "Founding memberships" / "annual cost?" must NOT
+  // auto-capture. v1.2.0 (2026-06-09) — gate by message length + intent verbs.
   if (!memory?.facts?.plan_interest) {
-    for (const [plan, re] of Object.entries(PLAN_HINTS)) {
-      if (re.test(lastUser)) {
-        delta.facts!.plan_interest = plan;
-        delta.do_not_ask_add!.push("plan_interest");
-        break;
+    const wordCount = lastUser.split(/\s+/).filter(Boolean).length;
+    const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
+    const prevWasDurationPrompt = /which membership duration|choose duration|duration works best/i.test(lastBot);
+    const explicitChoiceRe = /\b(i\s*(?:want|prefer|need|'?ll\s*take|am\s*interested\s*in)|interested\s*in|go\s*with|take\s*the|sign\s*me\s*up\s*for|opt\s*for)\b/i;
+    const isTapStyle = wordCount <= 4 || prevWasDurationPrompt || explicitChoiceRe.test(lastUser);
+    if (isTapStyle) {
+      for (const [plan, re] of Object.entries(PLAN_HINTS)) {
+        if (re.test(lastUser)) {
+          delta.facts!.plan_interest = plan;
+          delta.facts!.plan_interest_confirmed = true;
+          delta.do_not_ask_add!.push("plan_interest");
+          break;
+        }
       }
     }
-  } else {
-    // Already known — make sure it stays in do_not_ask going forward.
+  } else if (memory?.facts?.plan_interest_confirmed) {
+    // Already known AND user-confirmed — keep in do_not_ask.
     delta.do_not_ask_add!.push("plan_interest");
   }
 
@@ -1875,8 +1897,20 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     const jsonStr = raw.startsWith("{") ? raw : raw.match(/\{[\s\S]*\}/)?.[0];
     if (jsonStr) {
       const parsed = JSON.parse(jsonStr);
-      if (parsed.profile && typeof parsed.profile === "object") Object.assign(delta.profile!, parsed.profile);
-      if (parsed.facts && typeof parsed.facts === "object") Object.assign(delta.facts!, parsed.facts);
+      // v1.2.0 — STRIP fields the LLM must never set on its own. Contact info
+      // (email/phone) comes from auth/webhook. plan_interest must come from an
+      // explicit tap/short-reply (handled deterministically above) so a passing
+      // mention of "Founding" / "annual" can't skip the duration prompt.
+      if (parsed.profile && typeof parsed.profile === "object") {
+        delete parsed.profile.email;
+        delete parsed.profile.phone;
+        Object.assign(delta.profile!, parsed.profile);
+      }
+      if (parsed.facts && typeof parsed.facts === "object") {
+        delete parsed.facts.plan_interest;
+        delete parsed.facts.plan_interest_confirmed;
+        Object.assign(delta.facts!, parsed.facts);
+      }
       if (parsed.consent && typeof parsed.consent === "object") {
         delta.facts!.consent = { ...(memory?.facts?.consent || {}), ...(delta.facts!.consent || {}), ...parsed.consent };
         if (parsed.consent.push_contact_ask === "declined") delta.do_not_ask_add!.push("phone", "email", "callback");
