@@ -1635,6 +1635,8 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     isMember: true,
     memberId: memberMatch.id,
     memberName,
+    memberPhone: memberPhone || ((memberMatch as any).profiles?.phone) || undefined,
+    memberEmail: memberEmail || ((memberMatch as any).profiles?.email) || undefined,
     membershipId,
     planId,
     planName,
