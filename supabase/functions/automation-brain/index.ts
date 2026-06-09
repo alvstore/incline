@@ -200,16 +200,22 @@ async function processRule(rule: any) {
     .select("id")
     .single();
 
-  let status: "success" | "error" = "success";
+  let status: "success" | "error" | "warning" = "success";
   let dispatched = 0;
   let errorMsg: string | null = null;
+  let gatewayColdStart = false;
 
   try {
     if (rule.worker.startsWith("edge:")) {
       const fn = rule.worker.slice(5);
       const r = await callEdge(fn, rule.worker_payload ?? {});
-      if (!r.ok) { status = "error"; errorMsg = `HTTP ${r.status}: ${r.body}`; }
-      else dispatched = 1;
+      if (!r.ok) {
+        // v2.1.0 — Gateway 5xx after retries = cold-start, not data loss.
+        // Downgrade so SystemHealth doesn't flag it as a hard error.
+        status = r.gateway5xx ? "warning" : "error";
+        gatewayColdStart = r.gateway5xx;
+        errorMsg = `HTTP ${r.status}: ${r.body}`;
+      } else dispatched = 1;
     } else if (rule.worker.startsWith("rpc:")) {
       const fn = rule.worker.slice(4);
       const r = await callRpc(fn);
@@ -246,13 +252,13 @@ async function processRule(rule: any) {
     last_dispatched_count: dispatched,
   }).eq("id", rule.id);
 
-  if (status === "error" && errorMsg) {
+  if ((status === "error" || status === "warning") && errorMsg) {
     try {
       await admin.rpc("log_error_event", {
         p_source: "automation_brain",
-        p_severity: "error",
-        p_message: `Automation rule "${rule.key}" failed: ${errorMsg}`.slice(0, 1000),
-        p_context: { rule_id: rule.id, rule_key: rule.key, worker: rule.worker, branch_id: rule.branch_id },
+        p_severity: status === "warning" ? "warning" : "error",
+        p_message: `Automation rule "${rule.key}" ${gatewayColdStart ? "cold-start gateway 5xx" : "failed"}: ${errorMsg}`.slice(0, 1000),
+        p_context: { rule_id: rule.id, rule_key: rule.key, worker: rule.worker, branch_id: rule.branch_id, gateway_cold_start: gatewayColdStart },
       });
     } catch (_) { /* swallow logging failures */ }
   }
