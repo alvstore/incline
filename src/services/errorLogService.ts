@@ -69,12 +69,12 @@ function isDuplicateInQueue(message: string, windowMs = 30_000): boolean {
 
 function queueError(entry: typeof errorQueue[0]) {
   if (shouldDrop(entry.error_message)) return;
-  // Dedup: skip if last error has same message within 5s
-  const last = errorQueue[errorQueue.length - 1];
-  if (last && last.error_message === entry.error_message) return;
+  // Dedup across in-flight queue (30s window), not just the tail.
+  if (isDuplicateInQueue(entry.error_message)) return;
 
+  (entry as any)._t = Date.now();
   errorQueue.push(entry);
-  
+
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(flushErrors, 2000);
 
