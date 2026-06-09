@@ -63,6 +63,11 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
       toast.error('Please fill in required fields');
       return;
     }
+    // Defensive backstop — DB trigger also enforces this, but a UI toast is friendlier.
+    if (isDurationBased && (!formData.duration_months || formData.duration_months <= 0)) {
+      toast.error('Monthly packages require a duration (months) greater than 0');
+      return;
+    }
 
     try {
       const payload: any = {
