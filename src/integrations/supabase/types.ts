@@ -12282,6 +12282,9 @@ export type Database = {
           avatar_source: string | null
           avatar_synced_at: string | null
           bot_active: boolean | null
+          bot_paused_by: string | null
+          bot_paused_reason: string | null
+          bot_paused_until: string | null
           branch_id: string | null
           captured_lead_id: string | null
           contact_avatar_url: string | null
@@ -12318,6 +12321,9 @@ export type Database = {
           avatar_source?: string | null
           avatar_synced_at?: string | null
           bot_active?: boolean | null
+          bot_paused_by?: string | null
+          bot_paused_reason?: string | null
+          bot_paused_until?: string | null
           branch_id?: string | null
           captured_lead_id?: string | null
           contact_avatar_url?: string | null
@@ -12354,6 +12360,9 @@ export type Database = {
           avatar_source?: string | null
           avatar_synced_at?: string | null
           bot_active?: boolean | null
+          bot_paused_by?: string | null
+          bot_paused_reason?: string | null
+          bot_paused_until?: string | null
           branch_id?: string | null
           captured_lead_id?: string | null
           contact_avatar_url?: string | null
@@ -13829,6 +13838,10 @@ export type Database = {
       howbody_touch_device: {
         Args: { _equipment_no: string }
         Returns: undefined
+      }
+      is_bot_paused: {
+        Args: { p_branch_id: string; p_phone: string }
+        Returns: boolean
       }
       is_branch_member: { Args: { p_branch_id: string }; Returns: boolean }
       is_dr_readonly: { Args: never; Returns: boolean }
