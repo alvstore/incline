@@ -611,18 +611,23 @@ export default function WhatsAppChatPage() {
           }
         }
 
-        // Auto-pause bot when staff sends a manual message
+        // Auto-pause bot for 24h when staff sends a manual message (timed shut-up switch)
         if (selectedBranch !== 'all') {
+          const until = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
           await supabase.from('whatsapp_chat_settings').upsert(
             {
               branch_id: selectedBranch,
               phone_number: selectedContact.phone_number,
               bot_active: false,
               paused_at: new Date().toISOString(),
-            },
+              bot_paused_until: until,
+              bot_paused_by: user?.id ?? null,
+              bot_paused_reason: 'staff_reply',
+            } as any,
             { onConflict: 'branch_id,phone_number' }
           );
           setBotActive(false);
+          setBotPausedUntil(until);
         }
       } catch (apiErr) {
         console.warn('send-whatsapp invocation error:', apiErr);
