@@ -77,7 +77,14 @@ Deno.serve(async (req) => {
 
 
     // Query mode: caller wants a vector back for a one-shot user message.
+    // Service-role only — this can embed arbitrary text and is called server-side.
     if (body?.mode === "query") {
+      if (!SERVICE_ROLE || bearer !== SERVICE_ROLE) {
+        return new Response(JSON.stringify({ error: "Unauthorized: query mode requires service role" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const text = String(body.text || "").trim();
       if (!text) {
         return new Response(JSON.stringify({ error: "missing text" }), {
