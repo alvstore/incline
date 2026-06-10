@@ -1257,11 +1257,12 @@ async function triggerAiReply(
   try {
     const { data: cs } = await supabase
       .from("whatsapp_chat_settings")
-      .select("bot_active, do_not_contact, handoff_reason")
+      .select("bot_active, bot_paused_until, do_not_contact, handoff_reason")
       .eq("branch_id", branchId)
       .eq("phone_number", senderId)
       .maybeSingle();
-    if (cs && (cs.bot_active === false || cs.do_not_contact === true || cs.handoff_reason)) {
+    const isTimedPause = cs?.bot_paused_until && new Date(cs.bot_paused_until).getTime() > Date.now();
+    if (cs && (cs.bot_active === false || isTimedPause || cs.do_not_contact === true || cs.handoff_reason)) {
       console.log(`[AI:${platform}] suppressed — chat paused/DNC/handoff for ${senderId}`);
       return;
     }
