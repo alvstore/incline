@@ -108,7 +108,7 @@ export function WebhookActivityPanel() {
       let q = supabase
         .from('payment_transactions')
         .select(
-          `*,
+          `id, branch_id, gateway, gateway_order_id, gateway_payment_id, amount, status, signature_verified, http_status, error_message, event_type, source, received_at, created_at, updated_at, invoice_id, member_id,
            invoice:invoices!payment_transactions_invoice_id_fkey(invoice_number, member_id, members(member_code, profiles:user_id(full_name))),
            member:members!payment_transactions_member_id_fkey(member_code, profiles:user_id(full_name))`,
           { count: 'exact' },
