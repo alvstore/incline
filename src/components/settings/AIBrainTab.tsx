@@ -316,7 +316,14 @@ export function AIBrainTab() {
                         {r.title}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">{r.topic}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="text-xs">{r.topic}</Badge>
+                          {r.priority <= 10 && (
+                            <Badge className="bg-violet-100 text-violet-700 text-[10px] uppercase tracking-wide">
+                              {r.topic === 'persona' ? 'Persona' : 'Rule'}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -365,6 +372,22 @@ export function AIBrainTab() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 justify-end">
+                          {!embeddedIds?.has(r.id) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Re-embed entry"
+                              title="Re-embed now"
+                              disabled={reembedMutation.isPending}
+                              onClick={() => reembedMutation.mutate(r.id)}
+                            >
+                              {reembedMutation.isPending && reembedMutation.variables === r.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -386,6 +409,7 @@ export function AIBrainTab() {
                           </Button>
                         </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
