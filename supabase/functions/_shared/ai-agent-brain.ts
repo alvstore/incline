@@ -170,15 +170,18 @@ export async function runUnifiedAgent(
   }
 
 
-  // 2. Check bot_active
+  // 2. Check pause state — bot_active OR bot_paused_until (timed shut-up switch).
+  //    Single source of truth: is_bot_paused() SQL helper.
   const { data: chatSettings } = await supabase
     .from("whatsapp_chat_settings")
-    .select("bot_active, captured_lead_id, conversation_summary")
+    .select("bot_active, bot_paused_until, captured_lead_id, conversation_summary")
     .eq("branch_id", ctx.branchId)
     .eq("phone_number", ctx.senderId)
     .maybeSingle();
-  if (chatSettings?.bot_active === false) {
-    return skip("bot_paused");
+  const pausedUntilMs = chatSettings?.bot_paused_until ? new Date(chatSettings.bot_paused_until).getTime() : 0;
+  const isTimedPause = pausedUntilMs > Date.now();
+  if (chatSettings?.bot_active === false || isTimedPause) {
+    return skip(isTimedPause ? "bot_paused_timed" : "bot_paused");
   }
 
   // 3. Story reply guard
