@@ -268,6 +268,21 @@ async function processRule(rule: any) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // v2.2.0 — Auth gate: only service-role bearer or the system cron header is allowed.
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const apikey = req.headers.get("apikey") || "";
+  const sysCall = req.headers.get("x-system-call") || "";
+  const isSystem =
+    (bearer && bearer === SERVICE_KEY) ||
+    (apikey === SERVICE_KEY && sysCall === "automation-brain");
+  if (!isSystem) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const { data: rules, error } = await admin
       .from("automation_rules")
