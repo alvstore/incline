@@ -1,119 +1,87 @@
+# AI Guardrails: Human Collision + Tour Boundaries + Pricing Embargo
 
-# Error Cluster Audit & Fix Plan
-
-Grouped by **root cause** (not cluster ID) so we ship the smallest, highest-leverage set of changes. Severity legend: P0 ship now · P1 next · P2 hygiene · INFO no-op.
-
----
-
-## Group A — Edge worker 502s on cold start (P0)
-
-**Clusters:** 1 (monitor_ai_lead_loss), 20 (benefit_t2h_reminders → send-reminders), 21 (lead_nurture_followup), 22 (process_whatsapp_retry_queue) — **20 occurrences**
-
-**Root cause.** `automation-brain/index.ts` invokes worker functions with `apikey: SERVICE_KEY` only and a single in-flight 300ms retry. Recent logs show the workers themselves return 200 OK once booted (e.g. `[monitor-ai-lead-loss] {"ok":true,...}`). The 502s come from the **gateway** while the worker container is cold-booting past the gateway's short upstream-read deadline. The current retry fires immediately and hits the same cold container.
-
-**Fix** (one file): `supabase/functions/automation-brain/index.ts` → in `callEdge`:
-1. Treat HTTP **502/503/504** as retryable (not just `>=500`).
-2. Do **two** retries with backoff `800ms`, `2000ms` (not one at 300ms) — gives the container time to finish booting.
-3. On final 5xx, downgrade the row to `last_status='warning'` + log severity `warning` (not `error`) so a single cold-boot doesn't show up as a hard failure. We already have `last_dispatched_count` to detect actual data loss.
-4. Add a 60s timeout `AbortController` per attempt so a hung gateway socket doesn't burn the whole tick.
-
-No worker-side change needed — they already succeed once warm.
+Three independent vulnerabilities, one consolidated rollout. Nothing is hardcoded in edge functions — operational rules live in `ai_knowledge` (already wired through `match_ai_knowledge` RAG) and tour hours live in a `settings` row so they're editable from the UI.
 
 ---
 
-## Group B — `send-whatsapp` template `internal_lead_alert` not in Meta (P0)
+## 1. Human Collision — Timed "Shut-Up Switch"
 
-**Clusters:** 13 (2 occ), 15 (**56 occ**) — biggest volume in the report.
+Today `whatsapp_chat_settings.bot_active` is a hard on/off boolean. We need a **time-boxed** pause so the bot auto-resumes, plus auto-pause whenever a human sends a manual reply.
 
-**Root cause.** Caller is passing the literal template name `internal_lead_alert` to `send-whatsapp`, but that template was never approved (or was deleted) in this WA Business account. `notify-lead-created` v3.1 already guards against this by resolving via `v_template_with_meta_status` and skipping when no APPROVED row exists. The 56 hits are from **other call sites** still hard-coding the template name, plus dispatcher retries that don't honor a terminal-error code.
+### Schema (migration)
+- Add `bot_paused_until timestamptz null` to `public.whatsapp_chat_settings`.
+- Add `bot_paused_by uuid null` (FK `auth.users`) + `bot_paused_reason text` (`manual_toggle` | `staff_reply` | `handoff`).
+- Backfill: where `bot_active=false AND paused_at IS NOT NULL`, set `bot_paused_until = paused_at + 24h` so existing pauses don't become permanent.
+- Helper SQL function `is_bot_paused(branch uuid, phone text) returns boolean` — checks `bot_active=false OR bot_paused_until > now() OR do_not_contact=true`. Single source of truth.
 
-**Fix** (two surgical edits):
-1. `supabase/functions/_shared/dispatch-communication` (or wherever WA send is invoked) — make Meta code **132001** (and **132000**, **132005**, **132012**, **132015**) **terminal**: mark queue row `abandoned`, do **not** re-enqueue, do **not** log as `error` (use `warning` with dedupe). This already exists for some codes per the WA 24h memory; extend the list.
-2. `rg "template_name.*internal_lead_alert"` across the project and route every caller through `notify-lead-created`-style resolution (`v_template_with_meta_status` → APPROVED + not stale; skip if none). Confirmed in this audit that `notify-lead-created` is the only resolver; legacy direct calls remain in older internal-alert paths — grep + replace.
-3. Frontend / `WhatsAppAutomations` UI: when a trigger references a template whose `whatsapp_meta_status != 'APPROVED'`, render an inline warning chip so admins notice before the next send. (Strictly UI/UX, satisfies the "respect knowledge base from frontend" directive.)
+### Edge functions (no business rules, just gate)
+Replace every `bot_active === false` check with `is_bot_paused(...)` RPC (or inline the same OR) in:
+- `supabase/functions/_shared/ai-agent-brain.ts` (line ~180 skip("bot_paused"))
+- `supabase/functions/meta-webhook/index.ts` (line ~1260)
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/lead-nurture-followup/index.ts`
+- `supabase/functions/process-ig-comment-runs/index.ts`
 
----
+Auto-resume is automatic — once `now() > bot_paused_until`, gate returns false.
 
-## Group C — `dr-replicate` 150s wall-clock timeout (P1)
+### Auto-pause on staff manual reply
+In `send-message` / `send-meta-dm` / outbound paths used by the admin inbox: when a message originates from a human staff user (not the AI brain), upsert `bot_paused_until = now() + interval '24 hours'`, `bot_paused_reason='staff_reply'`, `bot_paused_by = auth.uid()`. Skip if message metadata flags `source='ai'`.
 
-**Cluster:** 9 (1 occ).
-
-**Root cause.** Full schema+rows+storage replication is synchronous in a single Deno.serve handler; on large branches it busts the 150s edge limit.
-
-**Fix.** `supabase/functions/dr-replicate/index.ts`:
-- Split into **resumable chunks** keyed by `(table, last_pk_cursor)` persisted in a `dr_replication_state` row (already exists per DR v2 memory).
-- Wrap heavy work in `EdgeRuntime.waitUntil(...)` and return `202 {job_id, cursor}` immediately. The DR control-room UI polls `dr_replication_state` (already wired).
-- Per-table soft budget of 90s; on budget exhaust, save cursor + `status='resumable'` and exit 200.
-
----
-
-## Group D — Frontend "Failed to fetch" noise (P1)
-
-**Clusters:** 7 (/analytics), 8 (/settings, 5 occ), 10 (/dashboard), 11 (/auth), 12 (/leads), 14 (/system-health), 16 (/pt-sessions **11 occ**) — **25 occurrences**, all `TypeError: Failed to fetch`.
-
-**Root cause.** These are **secondary effects** of Groups A + C (gateway 5xx + replicate timeouts) plus genuine offline blips. `src/services/errorLogService.ts` already drops them when `navigator.onLine === false`, but the conditional only drops `Load failed` / generic `Failed to fetch`, not Supabase REST `Failed to fetch` while the gateway briefly 5xx's.
-
-**Fix** (one file): `src/services/errorLogService.ts`:
-- In the `window.fetch` wrap, when the URL is a Supabase host AND the response is `502/503/504`, log as `warning` (not `error`) and **collapse** by URL pathname so 11 fetches of `/pt-sessions` ≠ 11 unique errors.
-- For `TypeError: Failed to fetch` on Supabase host within 30s of a prior identical fetch failure, dedupe (already partly done — extend the dedupe window from "last entry" to "any in queue within 30s").
-- Once Group A & C land, this noise drops naturally.
+### Admin UI — `src/pages/WhatsAppChat.tsx`
+- Replace existing on/off `Switch` (line ~1226) with a **Popover** containing:
+  - Pause for: `1h` · `4h` · `24h` · `Until I resume` · `Resume now`
+  - Live countdown chip ("AI paused · resumes in 3h 12m") in the conversation header.
+- "Needs human" filter (line 645) uses the new helper: paused OR handoff.
+- Match Vuexy: `rounded-2xl`, amber badge `bg-amber-100 text-amber-700` while paused, emerald when active.
 
 ---
 
-## Group E — PT package enum mismatch (P2)
+## 2 & 3. Tour Scheduling Rules + Pricing Embargo — via `ai_knowledge` (no hardcoding)
 
-**Clusters:** 17, 18 (1 occ each, 2026-05-28).
+Both are **knowledge rows**, not edge-function code. The existing RAG (`buildSystemPrompt` → `match_ai_knowledge`, threshold 0.75, plus all `priority<=10` rules) already injects priority rules into every reply. We piggyback on that.
 
-**Root cause.** Single old client build still sending legacy `package_type='duration_based'` after the `pt_package_type` enum was migrated to `('session_based','monthly')` in migration `20260517145246`. Verified current `src/components/pt/*` + `src/services/ptService.ts` only emit `session_based`/`monthly`. The "duration_months > 0" trigger error is the DB correctly enforcing the new contract.
+### A. Seed two new `ai_knowledge` rows (data insert, not migration)
+- topic=`booking_rules`, title=`VIP Tour Scheduling Window`, priority=`5` (rule tier), applies_to=`['whatsapp_ai_lead_capture','meta_ai_lead_capture','all']`. Content: tours only Mon–Sat 09:00–20:00 IST; never confirm Sundays or out-of-window times; offer the nearest valid slot; never invent confirmation — must call the booking tool.
+- topic=`pricing_rules`, title=`Pricing Embargo & Founder's Reservation Protocol`, priority=`4` (above format rules). Content = the user's exact embargo block (English + Hinglish examples), explicit "NEVER quote prices/fees/tiers"; on price questions pivot to Founder's Waitlist; only CTA = reserve a spot (no day pass / trial).
 
-**Fix.** No code change needed — already resolved by the May 17 migration + UI cutover. **Add a one-line backstop** in `src/components/pt/EditPTPackageDrawer.tsx` `onSubmit`: if `package_type==='monthly' && !duration_months`, block the submit with a toast (currently relies on DB error). Defensive only; closes the cluster permanently.
+These two rows are `is_rule=true` style (priority ≤ 10) so `retrieveKnowledge` injects them on **every** message regardless of semantic match — exactly how the existing "Anti-parrot" and "Grounding" rules work today. Zero code change in the brain.
 
----
+### B. Make tour hours editable (no redeploy to change hours)
+- Add row to `public.settings` (`branch_id NULL`, `key='tour_window'`, value JSONB `{start:"09:00", end:"20:00", days:[1,2,3,4,5,6], tz:"Asia/Kolkata"}`).
+- Add a small admin card under **Settings → AI Brain** to edit it; on save, also upsert the matching `ai_knowledge` row's `source_data` so the prompt always reflects current hours (renderer already dumps `source_data` as markdown bullets — verified in `ai-prompt.ts` `renderSourceDataMarkdown`).
+- No edge fn logic needed — the LLM reads the rule + hours from the prompt.
 
-## Group F — Informational logs leaking into error counts (INFO / hygiene)
-
-**Clusters:** 2, 3, 5, 6 (whatsapp_brain `brain_start` / `brain_end`), 4 (bot_paused) — **12 entries, all `severity: info`/`warning`**.
-
-**Root cause.** These are normal lifecycle logs. They appear in the audit because the SystemHealth view doesn't pre-filter `severity in ('info','warning')` when computing "error clusters".
-
-**Fix.** UI-only: `src/pages/SystemHealth*` (whichever lists clusters) — default the cluster grid filter to `severity in ('error','critical')` with a chip to opt-in to warnings/info. No backend change. (Aligns with "AI must respect UI/UX knowledge base" — surface, don't suppress.)
-
----
-
-## Group G — `AbortError: signal is aborted without reason` on `/auth` (P2)
-
-**Cluster:** 19 (1 occ).
-
-**Root cause.** Supabase JS internally aborts an in-flight `getSession` when the route unmounts during the initial auth bootstrap (user clicked away from `/auth` before the request settled). Benign.
-
-**Fix.** `src/services/errorLogService.ts` `shouldDrop()` — add `if (msg.includes('signal is aborted'))` to the drop list.
+### C. Strengthen existing sanitizer (defense-in-depth)
+`ai-agent-brain.ts` already has a Founder's-Phase price sanitizer (v3.5.0). Extend its regex/keyword list to also strip any line that confirms a Sunday tour or a time outside the configured window (parse hours from the same `settings` row at boot). One-line cache; no per-message DB read.
 
 ---
 
-## Severity & sequencing
+## Files Touched
 
-| Order | Group | Files touched | Why first |
-| --- | --- | --- | --- |
-| 1 | **B** template hygiene | `_shared/dispatch-communication`, send-whatsapp callers, WA automations UI chip | 58/119 occurrences |
-| 2 | **A** cold-start retry | `automation-brain/index.ts` | 20 occurrences, recurring daily |
-| 3 | **C** dr-replicate chunking | `dr-replicate/index.ts` | unblocks DR runbook |
-| 4 | **D** + **F** + **G** noise reduction | `errorLogService.ts`, SystemHealth filter | makes the next audit usable |
-| 5 | **E** PT defensive guard | `EditPTPackageDrawer.tsx` | tiny |
+**Migration**
+- `supabase/migrations/<ts>_bot_pause_until.sql` — new columns + `is_bot_paused()` + backfill.
 
----
+**Data inserts (separate, after migration approved)**
+- 2 rows in `ai_knowledge` (tour + pricing).
+- 1 row in `settings` (`tour_window`).
 
-## Verification checklist
+**Edge functions**
+- `_shared/ai-agent-brain.ts` — swap pause check, extend sanitizer.
+- `meta-webhook/index.ts`, `whatsapp-webhook/index.ts`, `lead-nurture-followup/index.ts`, `process-ig-comment-runs/index.ts` — swap pause check.
+- `send-message/index.ts` (+ `send-meta-dm`) — auto-pause on human send.
 
-- After A: re-run `automation-brain` 10× via Run Now; expect zero `severity=error` rows for the four rule keys.
-- After B: pick one branch missing `internal_lead_alert`, fire a fake lead → confirm one `severity=warning` log with `reason='no_approved_team_alert_template'` and SMS/email still delivered.
-- After C: trigger DR replicate on full branch; confirm 202 + `dr_replication_state.status='resumable'` and final `completed` within 3 ticks.
-- After D/F/G: load `/system-health`, confirm error count drops from 22 clusters → ≤ 5 (Group B residual until templates re-approved + Group E historical).
-- Run `psql` `select source, severity, count(*) from error_events where created_at > now()-interval '24h' group by 1,2 order by 3 desc;` to confirm.
+**Frontend**
+- `src/pages/WhatsAppChat.tsx` — pause-duration popover, countdown chip, filter update.
+- `src/pages/Settings.tsx` (or AI Brain section) — tour-window editor card.
 
----
+## Out of Scope
+- No changes to existing `ai-prompt.ts` retrieval logic (already RAG-correct).
+- No changes to identity injection (v4.0.0 stays as is).
+- No new edge functions.
 
-## Out of scope (explicitly not touched)
-
-- AI Brain prompt / knowledge base (separate request, already on v4.0.0 pre-fetch injection).
-- `bot_paused` behaviour (intentional, per memory).
-- Adding new files — this plan edits **5 existing files** + 1 UI filter; zero new files.
+## Verification
+1. Toggle "Pause 1h" in chat UI → inbound IG/WA message within the hour returns `skip("bot_paused")` in `ai_tool_logs`; after 60min, AI replies again.
+2. Staff types "hello" manually → `bot_paused_until` row written; AI silent for 24h.
+3. Ask "what's the price?" → reply contains the Founder's Waitlist pivot, no ₹ amount (verify in `whatsapp_messages`).
+4. Ask "can I tour Sunday 11:30 PM?" → AI declines and proposes Mon–Sat 09:00–20:00 slot.
+5. Edit tour hours in Settings → next AI reply uses the new window (no redeploy).
