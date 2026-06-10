@@ -286,18 +286,27 @@ export default function WhatsAppChatPage() {
   useEffect(() => {
     if (!selectedContact || !selectedBranch || selectedBranch === 'all') {
       setBotActive(true);
+      setBotPausedUntil(null);
       return;
     }
     supabase
       .from('whatsapp_chat_settings')
-      .select('bot_active')
+      .select('bot_active, bot_paused_until')
       .eq('branch_id', selectedBranch)
       .eq('phone_number', selectedContact.phone_number)
       .maybeSingle()
       .then(({ data }) => {
         setBotActive(data?.bot_active ?? true);
+        setBotPausedUntil((data as any)?.bot_paused_until ?? null);
       });
   }, [selectedContact, selectedBranch]);
+
+  // Tick every 30s to refresh pause countdown display
+  useEffect(() => {
+    if (!botPausedUntil) return;
+    const t = setInterval(() => setPauseCountdownTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [botPausedUntil]);
 
   // Realtime subscription: refresh messages + contacts + chat settings on any change
   useEffect(() => {
