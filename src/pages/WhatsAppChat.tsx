@@ -1208,62 +1208,110 @@ export default function WhatsAppChatPage() {
                     {/* Convert to Lead button removed — use the prominent CTA in the right sidebar instead. */}
                     {(() => {
                       // Effective AI state: per-chat ON AND global master ON AND channel ON.
-                      // If per-chat is ON but the global master/channel is OFF, render
-                      // amber so staff aren't misled into thinking the bot will reply.
-                      const masterMisaligned = botActive && (!aiMasterOn || !aiChannelOn);
-                      const pillTone = masterMisaligned
-                        ? 'bg-warning/10 ring-1 ring-warning/40'
-                        : 'bg-muted/50';
-                      const iconTone = masterMisaligned ? 'text-warning' : 'text-muted-foreground';
-                      const labelTone = masterMisaligned ? 'text-warning font-medium' : 'text-muted-foreground';
-                      const tooltipMsg = masterMisaligned
-                        ? `Per-chat AI is on, but the global ${!aiMasterOn ? 'auto-reply master' : 'WhatsApp channel'} is OFF in AI Control Center. No replies will be sent.`
-                        : 'AI auto-reply for this conversation';
+                      const pausedUntilMs = botPausedUntil ? new Date(botPausedUntil).getTime() : 0;
+                      const isTimedPause = pausedUntilMs > Date.now();
+                      const effectivelyPaused = !botActive || isTimedPause;
+                      const masterMisaligned = !effectivelyPaused && (!aiMasterOn || !aiChannelOn);
+
+                      // Countdown label
+                      let countdown = '';
+                      if (isTimedPause) {
+                        const ms = pausedUntilMs - Date.now();
+                        const mins = Math.round(ms / 60000);
+                        if (mins < 60) countdown = `${mins}m`;
+                        else if (mins < 60 * 24) countdown = `${Math.round(mins / 60)}h ${mins % 60}m`;
+                        else countdown = `${Math.round(mins / 60 / 24)}d`;
+                        void pauseCountdownTick;
+                      }
+
+                      const pillTone = effectivelyPaused
+                        ? 'bg-amber-100 ring-1 ring-amber-300'
+                        : masterMisaligned
+                          ? 'bg-warning/10 ring-1 ring-warning/40'
+                          : 'bg-emerald-50 ring-1 ring-emerald-200';
+                      const iconTone = effectivelyPaused ? 'text-amber-700' : masterMisaligned ? 'text-warning' : 'text-emerald-700';
+                      const labelTone = effectivelyPaused ? 'text-amber-800 font-medium' : masterMisaligned ? 'text-warning font-medium' : 'text-emerald-800 font-medium';
+
+                      const applyPause = async (hours: number | null) => {
+                        if (!selectedContact || !selectedBranch || selectedBranch === 'all') return;
+                        const until = hours ? new Date(Date.now() + hours * 3600 * 1000).toISOString() : null;
+                        await supabase.from('whatsapp_chat_settings').upsert(
+                          {
+                            branch_id: selectedBranch,
+                            phone_number: selectedContact.phone_number,
+                            bot_active: hours === null ? true : false,
+                            paused_at: hours === null ? null : new Date().toISOString(),
+                            bot_paused_until: until,
+                            bot_paused_by: hours === null ? null : (user?.id ?? null),
+                            bot_paused_reason: hours === null ? null : 'manual_toggle',
+                          } as any,
+                          { onConflict: 'branch_id,phone_number' }
+                        );
+                        setBotActive(hours === null);
+                        setBotPausedUntil(until);
+                        toast.success(
+                          hours === null
+                            ? 'AI Bot resumed'
+                            : `AI paused for ${hours < 1 ? `${Math.round(hours * 60)}m` : `${hours}h`}`
+                        );
+                      };
+
                       return (
-                        <TooltipProvider delayDuration={150}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${pillTone}`}>
-                                {masterMisaligned ? (
-                                  <AlertTriangle className={`h-3.5 w-3.5 ${iconTone}`} />
-                                ) : (
-                                  <Bot className={`h-3.5 w-3.5 ${iconTone}`} />
-                                )}
-                                <span className={`text-xs ${labelTone}`}>AI Bot</span>
-                                <Switch
-                                  checked={botActive}
-                                  onCheckedChange={async (checked) => {
-                                    setBotActive(checked);
-                                    if (selectedContact && selectedBranch && selectedBranch !== 'all') {
-                                      await supabase.from('whatsapp_chat_settings').upsert(
-                                        {
-                                          branch_id: selectedBranch,
-                                          phone_number: selectedContact.phone_number,
-                                          bot_active: checked,
-                                          ...(!checked ? { paused_at: new Date().toISOString() } : { paused_at: null }),
-                                        },
-                                        { onConflict: 'branch_id,phone_number' }
-                                      );
-                                      toast.success(checked ? 'AI Bot enabled' : 'AI Bot paused for this contact');
-                                    }
-                                  }}
-                                  className="scale-75"
-                                />
-                                {masterMisaligned && (
-                                  <Link
-                                    to="/settings?tab=ai-agent"
-                                    className="text-[11px] font-medium text-warning hover:text-warning underline underline-offset-2"
-                                  >
-                                    Fix
-                                  </Link>
-                                )}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="AI pause control"
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer hover:opacity-90 transition ${pillTone}`}
+                            >
+                              {effectivelyPaused ? (
+                                <AlertTriangle className={`h-3.5 w-3.5 ${iconTone}`} />
+                              ) : (
+                                <Bot className={`h-3.5 w-3.5 ${iconTone}`} />
+                              )}
+                              <span className={`text-xs ${labelTone}`}>
+                                {effectivelyPaused
+                                  ? (countdown ? `AI paused · ${countdown}` : 'AI paused')
+                                  : 'AI Bot On'}
+                              </span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-64 p-2 rounded-2xl">
+                            <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              Pause AI for this chat
+                            </div>
+                            {[
+                              { label: 'Pause 1 hour', h: 1 },
+                              { label: 'Pause 4 hours', h: 4 },
+                              { label: 'Pause 24 hours', h: 24 },
+                              { label: 'Pause until I resume', h: 24 * 365 },
+                            ].map((opt) => (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => applyPause(opt.h)}
+                                className="w-full text-left px-2 py-2 text-sm rounded-lg hover:bg-slate-100 cursor-pointer"
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                            <div className="my-1 h-px bg-slate-200" />
+                            <button
+                              type="button"
+                              onClick={() => applyPause(null)}
+                              disabled={!effectivelyPaused}
+                              className="w-full text-left px-2 py-2 text-sm rounded-lg text-emerald-700 font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              Resume AI now
+                            </button>
+                            {masterMisaligned && (
+                              <div className="mt-2 px-2 py-1.5 text-[11px] text-warning bg-warning/10 rounded-lg">
+                                Global AI master is OFF.{' '}
+                                <Link to="/settings?tab=ai-agent" className="underline">Fix in AI Control Center</Link>
                               </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="max-w-xs text-xs">
-                              {tooltipMsg}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                            )}
+                          </PopoverContent>
+                        </Popover>
                       );
                     })()}
                     <Button
