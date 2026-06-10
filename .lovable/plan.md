@@ -1,73 +1,90 @@
-# AI Knowledge — "Embed failed" Audit & Fix
+## Why we're doing this
 
-## Part 1 — Why three rows (persona + pricing_rules + booking_rules) is correct
+Right now Ananya's behavior comes from two places:
 
-You're not creating "duplicate Ananya personas". The three rows have different jobs in the RAG pipeline:
+1. **Database** (`ai_knowledge` + `ai_purposes.guards`) — the editable brain. Already has persona, pricing embargo, tour rules, canonical facts, identity rule, formatting rules.
+2. **Hardcoded TypeScript** in `supabase/functions/_shared/ai-agent-brain.ts` — duplicates the non-fitness redirect copy, the plan-interest list (monthly/quarterly/half-yearly/annual), the PT/Velvet-Rope wording, and the opening date.
 
-| Row | Topic | Priority | Purpose |
-|---|---|---|---|
-| Ananya — Member Concierge | `persona` | 2 | **Voice/identity** — always injected as the system persona |
-| Pricing Embargo & Founder's Reservation Protocol | `pricing_rules` | 4 | **Hard rule** — what to say when price/fees come up |
-| VIP Tour Scheduling Window | `booking_rules` | 5 | **Hard rule** — valid tour days/times |
+Result: editing the DB does nothing because the inline strings always win, and the "Embed failed" audit you just ran is hiding the real problem — half the brain is invisible to the AI Brain UI.
 
-All three have `priority ≤ 10`, so `retrieveKnowledge` injects **all of them into every reply** — Ananya already "knows" the pricing embargo and tour window on every message. The split exists so you can edit pricing without touching her voice (and vice-versa), and so the tour window can be re-generated from the editable `settings.tour_window` row.
+Also: `public/llms-full.txt` and `public/llms.txt` still say "22 June 2026" / "June 22, 2026"; you've now told me the real opening is **July 2026**.
 
-Merging them into one giant persona row would (a) make the prompt brittle to edit, (b) break the planned "edit hours in Settings → auto-update knowledge row" flow, and (c) violate the existing `is_rule` convention used by Anti-parrot / Grounding rules. **Recommendation: keep the 3 rows. No data change needed.**
+---
 
-If you want the UI to make this clearer, we can add a small "Persona" / "Rule" badge next to the topic column so it's obvious at a glance that pricing_rules and booking_rules are rules attached to Ananya, not separate personas.
+## Plan
 
-## Part 2 — Root cause of "Embed failed"
+### A. Backfill hardcoded rules into `ai_knowledge` (single migration)
 
-The two new rows show `Embed failed` because of an **auth mismatch between the DB trigger and the edge function**:
+New / updated rows, all `branch_id = NULL`, `is_active = true`, `applies_to` chosen so the retrieval RPC always pulls them for WhatsApp + Meta lead capture:
 
-- `embed-knowledge/index.ts` (line 63) requires `Authorization: Bearer <SERVICE_ROLE_KEY>`.
-- The DB trigger `tg_ai_knowledge_enqueue_embed` calls it with `Bearer <ANON_KEY>` (hardcoded in the migration `20260522142530_*.sql`).
-- Result: every trigger-fired embed returns **401 Unauthorized**, the row never gets an `embedding`, UI shows "Embed failed".
+| topic                 | title                                          | priority | applies_to                                                              | replaces                                                  |
+|-----------------------|------------------------------------------------|----------|-------------------------------------------------------------------------|-----------------------------------------------------------|
+| `lead_capture_flow`   | Founder's Phase Onboarding Sequence            | 3        | `whatsapp_ai_lead_capture, meta_ai_lead_capture`                        | Inline "ONBOARDING ORDER" block (brain L671–L740)         |
+| `pricing_rules`       | Pricing Embargo & Founder's Reservation (v2)   | 4        | `whatsapp_ai_lead_capture, meta_ai_lead_capture, whatsapp_reply, all`   | Existing row + inline "PRICING VELVET ROPE"               |
+| `pt_rules`            | Personal Training — Velvet Rope                | 4        | `whatsapp_ai_lead_capture, meta_ai_lead_capture, whatsapp_reply, all`   | Inline "DO NOT emit any PT-package…" lines                |
+| `non_membership_intent` | Non-Membership Inquiry Redirect              | 5        | `all`                                                                   | Inline `NON_FITNESS_MESSAGE` + L720 prompt copy           |
+| `facts` (update)      | Incline Fitness — canonical facts              | 11       | `all`                                                                   | Bump opening to **July 2026** verbatim, fix support email |
 
-The persona row shows "Ready" because it was embedded **before** the service-role gate was added (its `updated_at` is 2026-05-29; the gate was tightened after).
+The non-fitness DB row uses the exact corrected wording you sent (`info@theinclinelife.com`, "front desk", 🙏).
 
-`pg_net.http_post` is fire-and-forget so the trigger never sees the 401 — the `exception when others` block also swallows it. That's why it silently fails.
+### B. Update `ai_purposes.guards` in the same migration
 
-## Part 3 — Fix Plan
+- Set `guards.non_fitness_message` on the `whatsapp_reply` row to the new canonical copy (it's already DB-driven; we just refresh the value so the deterministic short-circuit at L213 stops using the inline default).
+- Add `guards.opening_label = "July 2026"` so the prompt assembler can read it once (future use; no behavior change this turn).
 
-### A. Fix the auth mismatch (one migration, no code change to edge fn)
+### C. Strip duplication from `supabase/functions/_shared/ai-agent-brain.ts`
 
-1. Store the service-role key once in Vault: `select vault.create_secret('<service_role_jwt>', 'embed_knowledge_key');`
-2. Rewrite `tg_ai_knowledge_enqueue_embed` to read the key from Vault at call time (instead of the hardcoded anon key) and pass it as the Bearer.
-3. Add `RAISE LOG` (not just `WARNING`) on dispatch so future failures are visible.
-4. Backfill the two stuck rows: re-touch them (`update ai_knowledge set updated_at=now() where embedding is null and is_active`) so the trigger re-fires with the correct key.
+- Delete the inline `DEFAULT_NON_FITNESS_MESSAGE` literal (lines 205–206) and fall back to a short generic message only if the DB row is somehow missing. Pattern stays inline as defense-in-depth (regex isn't user-editable copy).
+- Delete the inline `NON-FITNESS INTENTS …` block (L712–L722) — that content now lives in `ai_knowledge` and reaches the LLM through `<knowledge_base>` via `buildSystemPrompt`.
+- Replace the inline plan-interest / PT / pricing prose (L671–L702) with a compact procedural scaffold (3–4 lines: "follow `lead_capture_flow` from knowledge_base; emit interactive_list shapes per spec; never invent prices") and rely on the DB rows for the actual policy text.
+- Keep the JSON-shape contract for `interactive_list` and the final `lead_captured` payload inline — those are protocol, not editable copy.
 
-Why Vault and not env: triggers can't read edge-function env; Vault is the standard Supabase pattern for server-side secrets in SQL.
+### D. Re-prioritize the brain (deep audit)
 
-### B. Add a manual "Re-embed" escape hatch in the UI (`AIBrainTab.tsx`)
+After the migration the priority ladder becomes:
 
-- In the row-action menu (pencil column), add **"Re-embed now"** for any row with `embedding IS NULL`.
-- It calls `embed-knowledge` via `supabase.functions.invoke` (which uses the user's session JWT → fine, but the edge fn must also accept owner/admin JWTs).
-- Update `embed-knowledge` auth gate to allow EITHER `bearer === SERVICE_ROLE` OR a verified owner/admin user JWT. Trigger path stays service-role; admin click stays user-JWT.
+```
+2  persona            Ananya — Member Concierge          (voice)
+3  lead_capture_flow  Founder's Phase Onboarding         (NEW — what to ask, in what order)
+4  pricing_rules      Pricing Embargo                    (refined)
+4  pt_rules           PT Velvet Rope                     (NEW — split from pricing for editability)
+5  identity_rules     Member-first identity              (existing)
+5  booking_rules      VIP Tour Scheduling Window         (existing)
+5  non_membership_intent  Redirect copy                  (NEW)
+6  rules              Anti-parrot & anti-repeat          (existing)
+7  rules              Grounding — never invent           (existing)
+8  rules              Reply shape                        (existing)
+10 format_rules       Formatting & length                (existing)
+11 facts              Canonical facts (July 2026)        (updated)
+20 behavior_rules     Answer-first behavior              (existing)
+```
 
-### C. UI polish on the knowledge table (Vuexy)
+All ≤10 stay in the always-injected "rules" set; `facts` and `behavior_rules` ride retrieval. No rows deleted — only updated/added.
 
-- Replace "Embed failed" plain badge with `bg-red-100 text-red-700 rounded-full` + AlertCircle icon + a tooltip explaining "Last embed attempt: 401 from embed-knowledge. Click Re-embed."
-- Add a "Rule" vs "Persona" pill next to the topic so the 3-row architecture is self-documenting.
+### E. Update public LLM/SEO files to July 2026
 
-## Files Touched
+- `public/llms-full.txt`: change "Opens to public: 22 June 2026" and "before the 22 June 2026 public opening" → "July 2026".
+- `public/llms.txt`: change "Opening: June 22, 2026" → "Opening: July 2026".
+- No other date-bearing public copy was found.
 
-**Migration**
-- `supabase/migrations/<ts>_fix_embed_trigger_auth.sql` — Vault secret read, rewritten trigger, backfill UPDATE.
+### F. Verification (after migration)
 
-**Edge function**
-- `supabase/functions/embed-knowledge/index.ts` — accept service-role OR owner/admin user JWT.
+1. `select id, title, priority, embedding is not null from ai_knowledge order by priority` — confirm 3 new rows + updated rows show `Ready` (the trigger will auto-embed; if any stay null, use the "Re-embed now" button you just shipped).
+2. In WhatsApp test chat:
+   - "what's the price?" → reply contains "Founder's Waitlist" pivot (proves pricing rule reached the LLM via RAG).
+   - "I want a job at Incline" → deterministic guard fires, exact new copy from DB, lead is marked DNC.
+   - "monthly plan?" → AI captures interest as `plan_interest=monthly`, does NOT refuse, does NOT quote ₹.
+   - "when do you open?" → "July 2026".
+3. Open AI Brain UI → confirm new rows render with "Rule" badge and the editable copy matches what's in chat.
 
-**Frontend**
-- `src/components/settings/AIBrainTab.tsx` — "Re-embed now" action, role/rule pill, improved failure tooltip.
+### Out of scope
 
-## Verification
-1. Run migration → both `pricing_rules` and `booking_rules` rows show `Ready` within ~10s.
-2. `select id, embedding is null from ai_knowledge where is_active` → all false.
-3. Click "Re-embed now" on any row as owner → toast success, badge flips to Ready.
-4. Send "what's the price?" via WhatsApp → reply contains Founder's Waitlist pivot (proves the pricing rule reached the LLM via RAG).
+- No changes to `ai-prompt.ts`, `match_ai_knowledge` RPC, or the 3-row vs N-row architecture beyond adding 3 new rows.
+- No changes to embed-knowledge auth (already fixed last turn).
+- No edits to other edge functions, frontend pages, or the Brand context email (already correct).
 
-## Out of Scope
-- No changes to the 3-row data model.
-- No changes to `ai-prompt.ts` retrieval or `match_ai_knowledge` RPC.
-- No changes to Ananya's persona content.
+### Files touched
+
+- **New migration** — upserts 3 new `ai_knowledge` rows, updates `facts` content, updates `ai_purposes.guards.non_fitness_message`.
+- `supabase/functions/_shared/ai-agent-brain.ts` — remove duplicated inline copy, replace with thin procedural scaffold.
+- `public/llms-full.txt`, `public/llms.txt` — date fix.
