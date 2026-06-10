@@ -532,11 +532,11 @@ export function WebhookActivityPanel() {
                                 )}
                                 <details className="mb-2">
                                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">View raw payload (received)</summary>
-                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{JSON.stringify(r.webhook_data, null, 2)}</pre>
+                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{expandedId === r.id && expandedPayload ? JSON.stringify(expandedPayload.webhook_data, null, 2) : '— expand row to load payload —'}</pre>
                                 </details>
                                 <details>
                                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">View response sent to gateway</summary>
-                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{r.response_body ? JSON.stringify(r.response_body, null, 2) : '— no response body recorded —'}</pre>
+                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{expandedId === r.id && expandedPayload?.response_body ? JSON.stringify(expandedPayload.response_body, null, 2) : '— no response body recorded —'}</pre>
                                 </details>
                               </div>
                             </div>
