@@ -51,8 +51,8 @@ interface WebhookRow {
   updated_at: string;
   invoice_id: string | null;
   member_id: string | null;
-  webhook_data: unknown;
-  response_body: unknown;
+  webhook_data?: unknown;
+  response_body?: unknown;
   invoice?: {
     invoice_number: string | null;
     member_id: string | null;
