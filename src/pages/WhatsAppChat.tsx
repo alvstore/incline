@@ -249,6 +249,8 @@ export default function WhatsAppChatPage() {
   const [newChatPhone, setNewChatPhone] = useState('');
   const [newChatName, setNewChatName] = useState('');
   const [botActive, setBotActive] = useState(true);
+  const [botPausedUntil, setBotPausedUntil] = useState<string | null>(null);
+  const [pauseCountdownTick, setPauseCountdownTick] = useState(0);
   const [convertLeadOpen, setConvertLeadOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
