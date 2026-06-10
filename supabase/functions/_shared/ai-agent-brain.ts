@@ -1,3 +1,10 @@
+// v4.1.0 — Brain SSOT cleanup. Removed hardcoded copy for non-fitness redirect,
+//          pricing/PT velvet rope, and the onboarding-order prose. All of that
+//          now lives in ai_knowledge (rows: lead_capture_flow / pricing_rules /
+//          pt_rules / non_membership_intent / facts) and reaches the LLM via
+//          buildSystemPrompt → <knowledge_base>. Inline scaffold only enforces
+//          protocol shape (interactive_list JSON contract + lead_captured
+//          payload + known-fields gate). Opening date corrected to July 2026.
 // v4.0.0 — Pre-Fetch Identity Injection: <user_context> now carries name/phone/email
 //          across WhatsApp + IG + Messenger. resolveMemberContext falls back to
 //          whatsapp_chat_settings.captured_lead_id and ai_memory.profile.phone so
@@ -200,10 +207,13 @@ export async function runUnifiedAgent(
   //     ai_purposes.guards so copy/regex/window/pause can be tuned without redeploy.
   const guards = (purposeRow?.guards ?? {}) as Record<string, unknown>;
   const nonFitnessGuardOn = (guards.non_fitness_redirect ?? true) === true;
+  // Regex stays inline (defense-in-depth — not user-editable copy). All
+  // user-visible wording (REDIRECT) is sourced from ai_purposes.guards, which
+  // mirrors the ai_knowledge `non_membership_intent` rule.
   const DEFAULT_NON_FITNESS_PATTERN =
-    "\\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\\s]?data|interview\\s+for|i(?:'?m)?\\s+(?:looking\\s+(?:for|out)\\s+)?(?:a\\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\\s+(?:at|with|in)\\s+(?:your|incline)|sales\\s+(?:job|department|position)|trainer\\s+(?:job|position|vacancy)|front\\s*desk\\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\\s]?up)\\b";
-  const DEFAULT_NON_FITNESS_MESSAGE =
-    "Thanks for reaching out! For careers, partnerships, vendor, media, or other non-membership inquiries please email *info@theinclinelife.com* or call our front desk. This channel is for membership and fitness queries only. 🙏";
+    "\\b(job|jobs|vacancy|vacancies|hir(?:e|ing)|career|careers|cv|resume|biodata|bio[-\\s]?data|interview\\s+for|i(?:'?m)?\\s+(?:looking\\s+(?:for|out)\\s+)?(?:a\\s+)?(?:job|work|position|role|vacancy)|work(?:ing)?\\s+(?:at|with|in)\\s+(?:your|incline)|sales\\s+(?:job|department|position)|trainer\\s+(?:job|position|vacancy)|front\\s*desk\\s+(?:job|position)|vendor|supplier|wholesale|b2b|press|media|influencer|sponsor(?:ship)?|collaborat(?:e|ion)|partnership|franchise|tie[-\\s]?up|physio(?:therapist|therapy)?|sports\\s+physio|doctor|nutritionist|dietician|yoga\\s+teacher|instructor\\s+job)\\b";
+  const FALLBACK_NON_FITNESS_MESSAGE =
+    "Thanks for reaching out! This channel is for membership and fitness queries — for anything else, please email info@theinclinelife.com or call our front desk. 🙏";
   let NON_FITNESS_RE: RegExp;
   try {
     NON_FITNESS_RE = new RegExp((guards.non_fitness_pattern as string) || DEFAULT_NON_FITNESS_PATTERN, "i");
@@ -211,7 +221,7 @@ export async function runUnifiedAgent(
     NON_FITNESS_RE = new RegExp(DEFAULT_NON_FITNESS_PATTERN, "i");
   }
   if (nonFitnessGuardOn && NON_FITNESS_RE.test(ctx.messageContent || "")) {
-    const REDIRECT = (guards.non_fitness_message as string) || DEFAULT_NON_FITNESS_MESSAGE;
+    const REDIRECT = (guards.non_fitness_message as string) || FALLBACK_NON_FITNESS_MESSAGE;
     const pauseNurture = (guards.non_fitness_pause_nurture ?? true) === true;
     const dedupeWindowHours = Number(guards.non_fitness_dedupe_window_hours ?? 24) || 24;
 
