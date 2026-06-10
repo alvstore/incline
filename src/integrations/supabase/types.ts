@@ -13702,12 +13702,38 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_contract_financials: {
+        Args: { _contract_id: string }
+        Returns: {
+          base_salary: number
+          commission_percentage: number
+          contract_variables: Json
+          id: string
+          salary: number
+          terms: Json
+        }[]
+      }
       get_db_audit_rls_status: {
         Args: never
         Returns: {
           policy_count: number
           rls_enabled: boolean
           table_name: string
+        }[]
+      }
+      get_employee_sensitive: {
+        Args: { _employee_id: string }
+        Returns: {
+          aadhaar_last4: string
+          bank_account: string
+          bank_name: string
+          esic_ip_number: string
+          id: string
+          pan_number: string
+          salary: number
+          salary_type: string
+          tax_id: string
+          uan_number: string
         }[]
       }
       get_employer_profile: { Args: { _branch_id: string }; Returns: Json }
@@ -13755,6 +13781,45 @@ export type Database = {
         Args: { _report_type: string; _token: string }
         Returns: Json
       }
+      get_hr_settings_admin: {
+        Args: { _branch_id: string }
+        Returns: {
+          arbitration_seat: string
+          basic_pct_of_ctc: number
+          branch_id: string | null
+          created_at: string
+          daily_hour_cap: number
+          employer_firm_registration_no: string | null
+          employer_pan: string | null
+          employer_proprietor_name: string | null
+          esi_employee_pct: number
+          esi_enabled: boolean
+          governing_jurisdiction: string
+          id: string
+          lawyer_reviewed_at: string | null
+          lawyer_reviewed_by: string | null
+          notice_period_manager_days: number
+          notice_period_staff_days: number
+          notice_period_trainer_days: number
+          ot_multiplier: number
+          pf_employee_pct: number
+          pf_enabled: boolean
+          pf_wage_ceiling: number | null
+          posh_ic: Json | null
+          pt_amount: number | null
+          pt_commission_clawback_on_refund: boolean
+          pt_enabled: boolean
+          tds_enabled: boolean
+          updated_at: string
+          weekly_hour_cap: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "hr_settings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_inactive_members: {
         Args: { p_branch_id: string; p_days?: number; p_limit?: number }
         Returns: {
@@ -13779,6 +13844,15 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_profile_government_id: {
+        Args: { _profile_id: string }
+        Returns: {
+          government_id_number: string
+          government_id_type: string
+          government_id_verified: boolean
+          id: string
+        }[]
+      }
       get_public_branches: {
         Args: never
         Returns: {
@@ -13796,6 +13870,14 @@ export type Database = {
         Returns: {
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
+        }[]
+      }
+      get_trainer_government_id: {
+        Args: { _trainer_id: string }
+        Returns: {
+          government_id_number: string
+          government_id_type: string
+          id: string
         }[]
       }
       get_upcoming_birthdays: {

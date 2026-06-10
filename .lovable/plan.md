@@ -1,90 +1,106 @@
-## Why we're doing this
+# Security Hardening — PII & Secret Exposure Fix
 
-Right now Ananya's behavior comes from two places:
+Branch managers still need to manage staff/trainers/skills, so we keep their operational access but strip them (and staff) from reading **sensitive columns** by routing reads through safe views and revoking direct column SELECT privileges. RLS row-rules stay; column GRANTs do the column-level work (Postgres-native, RLS-compatible).
 
-1. **Database** (`ai_knowledge` + `ai_purposes.guards`) — the editable brain. Already has persona, pricing embargo, tour rules, canonical facts, identity rule, formatting rules.
-2. **Hardcoded TypeScript** in `supabase/functions/_shared/ai-agent-brain.ts` — duplicates the non-fitness redirect copy, the plan-interest list (monthly/quarterly/half-yearly/annual), the PT/Velvet-Rope wording, and the opening date.
+## Pattern (applied per table)
 
-Result: editing the DB does nothing because the inline strings always win, and the "Embed failed" audit you just ran is hiding the real problem — half the brain is invisible to the AI Brain UI.
-
-Also: `public/llms-full.txt` and `public/llms.txt` still say "22 June 2026" / "June 22, 2026"; you've now told me the real opening is **July 2026**.
-
----
-
-## Plan
-
-### A. Backfill hardcoded rules into `ai_knowledge` (single migration)
-
-New / updated rows, all `branch_id = NULL`, `is_active = true`, `applies_to` chosen so the retrieval RPC always pulls them for WhatsApp + Meta lead capture:
-
-| topic                 | title                                          | priority | applies_to                                                              | replaces                                                  |
-|-----------------------|------------------------------------------------|----------|-------------------------------------------------------------------------|-----------------------------------------------------------|
-| `lead_capture_flow`   | Founder's Phase Onboarding Sequence            | 3        | `whatsapp_ai_lead_capture, meta_ai_lead_capture`                        | Inline "ONBOARDING ORDER" block (brain L671–L740)         |
-| `pricing_rules`       | Pricing Embargo & Founder's Reservation (v2)   | 4        | `whatsapp_ai_lead_capture, meta_ai_lead_capture, whatsapp_reply, all`   | Existing row + inline "PRICING VELVET ROPE"               |
-| `pt_rules`            | Personal Training — Velvet Rope                | 4        | `whatsapp_ai_lead_capture, meta_ai_lead_capture, whatsapp_reply, all`   | Inline "DO NOT emit any PT-package…" lines                |
-| `non_membership_intent` | Non-Membership Inquiry Redirect              | 5        | `all`                                                                   | Inline `NON_FITNESS_MESSAGE` + L720 prompt copy           |
-| `facts` (update)      | Incline Fitness — canonical facts              | 11       | `all`                                                                   | Bump opening to **July 2026** verbatim, fix support email |
-
-The non-fitness DB row uses the exact corrected wording you sent (`info@theinclinelife.com`, "front desk", 🙏).
-
-### B. Update `ai_purposes.guards` in the same migration
-
-- Set `guards.non_fitness_message` on the `whatsapp_reply` row to the new canonical copy (it's already DB-driven; we just refresh the value so the deterministic short-circuit at L213 stops using the inline default).
-- Add `guards.opening_label = "July 2026"` so the prompt assembler can read it once (future use; no behavior change this turn).
-
-### C. Strip duplication from `supabase/functions/_shared/ai-agent-brain.ts`
-
-- Delete the inline `DEFAULT_NON_FITNESS_MESSAGE` literal (lines 205–206) and fall back to a short generic message only if the DB row is somehow missing. Pattern stays inline as defense-in-depth (regex isn't user-editable copy).
-- Delete the inline `NON-FITNESS INTENTS …` block (L712–L722) — that content now lives in `ai_knowledge` and reaches the LLM through `<knowledge_base>` via `buildSystemPrompt`.
-- Replace the inline plan-interest / PT / pricing prose (L671–L702) with a compact procedural scaffold (3–4 lines: "follow `lead_capture_flow` from knowledge_base; emit interactive_list shapes per spec; never invent prices") and rely on the DB rows for the actual policy text.
-- Keep the JSON-shape contract for `interactive_list` and the final `lead_captured` payload inline — those are protocol, not editable copy.
-
-### D. Re-prioritize the brain (deep audit)
-
-After the migration the priority ladder becomes:
-
-```
-2  persona            Ananya — Member Concierge          (voice)
-3  lead_capture_flow  Founder's Phase Onboarding         (NEW — what to ask, in what order)
-4  pricing_rules      Pricing Embargo                    (refined)
-4  pt_rules           PT Velvet Rope                     (NEW — split from pricing for editability)
-5  identity_rules     Member-first identity              (existing)
-5  booking_rules      VIP Tour Scheduling Window         (existing)
-5  non_membership_intent  Redirect copy                  (NEW)
-6  rules              Anti-parrot & anti-repeat          (existing)
-7  rules              Grounding — never invent           (existing)
-8  rules              Reply shape                        (existing)
-10 format_rules       Formatting & length                (existing)
-11 facts              Canonical facts (July 2026)        (updated)
-20 behavior_rules     Answer-first behavior              (existing)
+```text
+base table:  REVOKE SELECT on sensitive cols from authenticated
+             GRANT SELECT (safe cols only) to authenticated
+             keep existing UPDATE/INSERT/DELETE RLS so managers can still edit
+safe view:   public.<table>_safe  (security_invoker=on, excludes sensitive cols)
+             GRANT SELECT to authenticated
+admin view:  public.<table>_admin (owner/admin only via RLS-equivalent SECURITY DEFINER fn or policy)
+client code: switch list/detail reads to *_safe view
 ```
 
-All ≤10 stay in the always-injected "rules" set; `facts` and `behavior_rules` ride retrieval. No rows deleted — only updated/added.
+## Per-finding fixes
 
-### E. Update public LLM/SEO files to July 2026
+### 1. `employees` — PAN, Aadhaar, bank, UAN, ESIC, salary, tax_id
+- Revoke `SELECT` on: `pan_number, aadhaar_last4, aadhaar_hash, bank_account, bank_ifsc, bank_name, uan_number, esic_ip_number, salary, tax_id, emergency_contact` from `authenticated`.
+- Re-grant column SELECT on the remaining (safe) columns to `authenticated`.
+- Create `employees_safe` view (excludes the above) for manager/staff reads.
+- Create `employees_sensitive` view restricted via policy `has_any_role(owner|admin)` for HR/payroll screens.
+- Update services: `hrmService`, payroll, employee list/detail UI → read from `employees_safe`; payroll/HR settings owner screens → `employees_sensitive`.
 
-- `public/llms-full.txt`: change "Opens to public: 22 June 2026" and "before the 22 June 2026 public opening" → "July 2026".
-- `public/llms.txt`: change "Opening: June 22, 2026" → "Opening: July 2026".
-- No other date-bearing public copy was found.
+### 2. `contracts` — salary, base_salary, commission_percentage, terms, contract_variables
+- Same pattern. Manager keeps row visibility for non-financial fields (title, dates, status, signature meta).
+- `contracts_safe` (no $ columns) for branch HR ops; `contracts_financial` view owner/admin only.
+- Update contract list/detail components.
 
-### F. Verification (after migration)
+### 3. `hr_settings` — employer_pan, employer_firm_registration_no, posh_ic
+- Drop manager from `hr_settings_staff_read` SELECT.
+- Add `hr_settings_safe` view (no PAN / registration / POSH committee personal details) for manager read of operational settings (leave types, work hours, etc.).
+- Owner/admin-only policy for full row.
 
-1. `select id, title, priority, embedding is not null from ai_knowledge order by priority` — confirm 3 new rows + updated rows show `Ready` (the trigger will auto-embed; if any stay null, use the "Re-embed now" button you just shipped).
-2. In WhatsApp test chat:
-   - "what's the price?" → reply contains "Founder's Waitlist" pivot (proves pricing rule reached the LLM via RAG).
-   - "I want a job at Incline" → deterministic guard fires, exact new copy from DB, lead is marked DNC.
-   - "monthly plan?" → AI captures interest as `plan_interest=monthly`, does NOT refuse, does NOT quote ₹.
-   - "when do you open?" → "July 2026".
-3. Open AI Brain UI → confirm new rows render with "Rule" badge and the editable copy matches what's in chat.
+### 4. `mips_connections` — plaintext passwords
+- Move secret → Supabase Vault (`vault.secrets`) keyed by `branch_id`.
+- Add `vault_secret_id uuid` column to `mips_connections`; backfill by writing existing `password` to vault then NULL the column.
+- `DROP COLUMN password`. Keep `mips_connections_safe` view (already used in UI) for read.
+- Update `mips-proxy` edge function to fetch password via `vault.decrypted_secrets` (service role).
+- UI (`AddDeviceDrawer`, `MIPSConnectionCard`) already writes via service / never reads password back — keep "leave blank to keep" UX, write path now upserts into vault.
 
-### Out of scope
+### 5. `otp_verifications` — missing INSERT policy
+- Explicit `CREATE POLICY otp_insert_service_only ON otp_verifications FOR INSERT TO authenticated WITH CHECK (false);` (and same for `anon`).
+- Service role bypasses RLS, so edge functions continue to work.
 
-- No changes to `ai-prompt.ts`, `match_ai_knowledge` RPC, or the 3-row vs N-row architecture beyond adding 3 new rows.
-- No changes to embed-knowledge auth (already fixed last turn).
-- No edits to other edge functions, frontend pages, or the Brand context email (already correct).
+### 6. `payment_transactions` — gateway_signature, webhook_data, response_body
+- Revoke SELECT of those 3 columns + `gateway_payment_id`, `gateway_order_id` from manager/staff.
+- `payment_transactions_safe` view exposes amount, status, method, member_id, branch_id, created_at, reference_id.
+- Reconciliation/admin screens → owner/admin-only view `payment_transactions_admin`.
 
-### Files touched
+### 7. `profiles` — government_id_number, government_id_type
+- Revoke SELECT of those 2 cols from manager/staff/trainer.
+- Existing `profiles` SELECT policy unchanged for other cols.
+- Owner/admin can read full row.
 
-- **New migration** — upserts 3 new `ai_knowledge` rows, updates `facts` content, updates `ai_purposes.guards.non_fitness_message`.
-- `supabase/functions/_shared/ai-agent-brain.ts` — remove duplicated inline copy, replace with thin procedural scaffold.
-- `public/llms-full.txt`, `public/llms.txt` — date fix.
+### 8. `trainers` — government_id_number, government_id_type
+- Same column REVOKE pattern. `trainers_safe` excludes gov IDs.
+- Update `Trainers.tsx`, trainer list/detail, scheduling components to read `trainers_safe`.
+
+### 9. `campaign_recipients` — phone/email
+- Drop phone/email columns from manager/staff column GRANTs (keep `id, campaign_id, member_id/lead_id, status, sent_at, error`).
+- For send/audit visibility, resolve phone/email at send-time inside edge fn (service role). UI shows masked phone (last 4 digits) via SQL function `mask_phone()` in `campaign_recipients_safe`.
+
+### 10. (Warn) `contacts`, `leads` — add role check
+- `contacts_select_staff` → add `has_any_role(manager|staff|owner|admin)`.
+- `leads` policies: revoke SELECT on `comm_consent_ip, comm_consent_user_agent` from manager/staff (owner/admin only).
+
+## Migration order (single migration file)
+
+```text
+1. Create vault entries + mips_connections schema swap
+2. Column REVOKE/GRANTs (employees, contracts, hr_settings, payment_transactions, profiles, trainers, campaign_recipients, leads)
+3. Create *_safe and *_sensitive views (security_invoker=on)
+4. GRANT SELECT on views to authenticated; tighten sensitive views with policies or wrapping security-definer fn
+5. otp_verifications explicit INSERT deny policies
+6. contacts policy role check
+```
+
+## Code touch-list (after migration runs & types regenerate)
+
+- `src/services/hrmService.ts`, employee list/detail pages → `employees_safe`
+- Contract list components → `contracts_safe`
+- Trainer pages (`Trainers.tsx`, schedule pickers) → `trainers_safe`
+- Payment list / reconciliation UI → `payment_transactions_safe`
+- Campaign recipients UI (Campaigns page detail) → `campaign_recipients_safe`
+- HR settings page → `hr_settings_safe` for managers; admin tab uses base table
+- Profiles consumers (member/staff directory) → drop gov_id from selects
+- `mips-proxy` edge fn → vault read
+- `AddDeviceDrawer` / `MIPSConnectionCard` write paths → unchanged UX, server stores in vault
+
+## Verification
+
+- Re-run security scan; all 9 critical findings expected to clear.
+- Manual role checks: manager session — cannot SELECT salary/PAN/gov_id/gateway_signature/password (returns null/permission denied); can still UPDATE allowed columns.
+- OTP table: anon/auth INSERT returns 42501; service role still works.
+- MIPS proxy still connects (vault path).
+- `supabase--linter` clean.
+
+## Out of scope
+
+- Realtime members channel scoping warning (separate task).
+- Public membership_plans / announcements visibility (intentional per business rules — will mark ignored with rationale).
+- Refactoring existing role model.
+
+Approve to proceed; I'll ship one migration + the code switches in a single build pass.
