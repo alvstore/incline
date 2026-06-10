@@ -607,8 +607,9 @@ function EmbeddingPill({
           </Badge>
         </TooltipTrigger>
         <TooltipContent>
-          No embedding after 5 min. Falls back to keyword retrieval.
+          No embedding after 5 min. Click the sparkles icon to re-embed manually — falls back to keyword retrieval until fixed.
         </TooltipContent>
+
       </Tooltip>
     </TooltipProvider>
   );
