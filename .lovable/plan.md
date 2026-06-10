@@ -1,106 +1,81 @@
-# Security Hardening — PII & Secret Exposure Fix
+## Goal
 
-Branch managers still need to manage staff/trainers/skills, so we keep their operational access but strip them (and staff) from reading **sensitive columns** by routing reads through safe views and revoking direct column SELECT privileges. RLS row-rules stay; column GRANTs do the column-level work (Postgres-native, RLS-compatible).
+1. Confirm branch managers can manage HR/Payroll for their branch's staff (employees, contracts, trainers, payroll) — but **never themselves**.
+2. Owner/Admin retain full cross-branch access.
+3. Drop the unused `role_permissions` and `permissions` tables; `role_capabilities` + `has_role()` remain the SSOT.
+4. Re-run security scan and update memory.
 
-## Pattern (applied per table)
+## Current state (audited)
 
-```text
-base table:  REVOKE SELECT on sensitive cols from authenticated
-             GRANT SELECT (safe cols only) to authenticated
-             keep existing UPDATE/INSERT/DELETE RLS so managers can still edit
-safe view:   public.<table>_safe  (security_invoker=on, excludes sensitive cols)
-             GRANT SELECT to authenticated
-admin view:  public.<table>_admin (owner/admin only via RLS-equivalent SECURITY DEFINER fn or policy)
-client code: switch list/detail reads to *_safe view
+| Table | Manager access today | Self-edit blocked? |
+|---|---|---|
+| `employees` | ALL on `branch_id IN user_visible_branch_ids` | NO |
+| `contracts` | ALL same scope | NO |
+| `trainers` | ALL same scope | NO |
+| `hr_settings` | SELECT only (admin manages) | n/a (org-level) |
+| `payroll_runs` / `payroll_run_lines` | ALL (not branch-scoped) | NO |
+| `payroll_items` | ALL via `run.branch_id` scope | NO |
+| `payroll_rules` | admin/owner only | n/a |
+| `profiles` | SELECT for branch members | NO |
+
+Gaps: (a) manager can edit/payroll themselves; (b) `payroll_runs`/`payroll_run_lines` not branch-scoped for manager; (c) two dead tables.
+
+## Plan
+
+### Step 1 — Self-edit guard (DB triggers, mirrors `src/lib/auth/permissions.ts`)
+
+Add `tg_block_manager_self_hr` BEFORE INSERT/UPDATE/DELETE on `employees`, `contracts`, `trainers`, `payroll_items`, `payroll_run_lines`:
+
+```
+IF current actor has 'manager' role
+   AND NOT has_any_role(actor, ['owner','admin'])
+   AND row.user_id = auth.uid()
+THEN RAISE EXCEPTION 'Managers cannot modify their own HR/payroll record'
 ```
 
-## Per-finding fixes
+(Owners/admins exempt; self-row READ still allowed via existing `*_self_select` policies.)
 
-### 1. `employees` — PAN, Aadhaar, bank, UAN, ESIC, salary, tax_id
-- Revoke `SELECT` on: `pan_number, aadhaar_last4, aadhaar_hash, bank_account, bank_ifsc, bank_name, uan_number, esic_ip_number, salary, tax_id, emergency_contact` from `authenticated`.
-- Re-grant column SELECT on the remaining (safe) columns to `authenticated`.
-- Create `employees_safe` view (excludes the above) for manager/staff reads.
-- Create `employees_sensitive` view restricted via policy `has_any_role(owner|admin)` for HR/payroll screens.
-- Update services: `hrmService`, payroll, employee list/detail UI → read from `employees_safe`; payroll/HR settings owner screens → `employees_sensitive`.
+### Step 2 — Tighten `payroll_runs` / `payroll_run_lines` to manager's branch
 
-### 2. `contracts` — salary, base_salary, commission_percentage, terms, contract_variables
-- Same pattern. Manager keeps row visibility for non-financial fields (title, dates, status, signature meta).
-- `contracts_safe` (no $ columns) for branch HR ops; `contracts_financial` view owner/admin only.
-- Update contract list/detail components.
+Replace the broad `payroll_runs_admin_all` and `payroll_run_lines_admin_all` policies with:
+- Owner/Admin: full access.
+- Manager: `branch_id IN user_visible_branch_ids(auth.uid())` (for `payroll_run_lines`, join through `payroll_runs`).
 
-### 3. `hr_settings` — employer_pan, employer_firm_registration_no, posh_ic
-- Drop manager from `hr_settings_staff_read` SELECT.
-- Add `hr_settings_safe` view (no PAN / registration / POSH committee personal details) for manager read of operational settings (leave types, work hours, etc.).
-- Owner/admin-only policy for full row.
+### Step 3 — Mirror self-block in client permission registry
 
-### 4. `mips_connections` — plaintext passwords
-- Move secret → Supabase Vault (`vault.secrets`) keyed by `branch_id`.
-- Add `vault_secret_id uuid` column to `mips_connections`; backfill by writing existing `password` to vault then NULL the column.
-- `DROP COLUMN password`. Keep `mips_connections_safe` view (already used in UI) for read.
-- Update `mips-proxy` edge function to fetch password via `vault.decrypted_secrets` (service role).
-- UI (`AddDeviceDrawer`, `MIPSConnectionCard`) already writes via service / never reads password back — keep "leave blank to keep" UX, write path now upserts into vault.
+In `src/lib/auth/permissions.ts` add `canManageOwnHR = false` for manager, and a `canManageEmployeeRow(actorRoles, targetUserId, currentUserId)` helper analogous to `canEditRosterRow`. UI components that render edit/payroll buttons (`Employees.tsx`, `Trainers.tsx`, payroll runs UI) call the helper to hide actions on the manager's own row. Server trigger from Step 1 is the actual enforcement.
 
-### 5. `otp_verifications` — missing INSERT policy
-- Explicit `CREATE POLICY otp_insert_service_only ON otp_verifications FOR INSERT TO authenticated WITH CHECK (false);` (and same for `anon`).
-- Service role bypasses RLS, so edge functions continue to work.
+### Step 4 — Drop dead tables
 
-### 6. `payment_transactions` — gateway_signature, webhook_data, response_body
-- Revoke SELECT of those 3 columns + `gateway_payment_id`, `gateway_order_id` from manager/staff.
-- `payment_transactions_safe` view exposes amount, status, method, member_id, branch_id, created_at, reference_id.
-- Reconciliation/admin screens → owner/admin-only view `payment_transactions_admin`.
-
-### 7. `profiles` — government_id_number, government_id_type
-- Revoke SELECT of those 2 cols from manager/staff/trainer.
-- Existing `profiles` SELECT policy unchanged for other cols.
-- Owner/admin can read full row.
-
-### 8. `trainers` — government_id_number, government_id_type
-- Same column REVOKE pattern. `trainers_safe` excludes gov IDs.
-- Update `Trainers.tsx`, trainer list/detail, scheduling components to read `trainers_safe`.
-
-### 9. `campaign_recipients` — phone/email
-- Drop phone/email columns from manager/staff column GRANTs (keep `id, campaign_id, member_id/lead_id, status, sent_at, error`).
-- For send/audit visibility, resolve phone/email at send-time inside edge fn (service role). UI shows masked phone (last 4 digits) via SQL function `mask_phone()` in `campaign_recipients_safe`.
-
-### 10. (Warn) `contacts`, `leads` — add role check
-- `contacts_select_staff` → add `has_any_role(manager|staff|owner|admin)`.
-- `leads` policies: revoke SELECT on `comm_consent_ip, comm_consent_user_agent` from manager/staff (owner/admin only).
-
-## Migration order (single migration file)
-
-```text
-1. Create vault entries + mips_connections schema swap
-2. Column REVOKE/GRANTs (employees, contracts, hr_settings, payment_transactions, profiles, trainers, campaign_recipients, leads)
-3. Create *_safe and *_sensitive views (security_invoker=on)
-4. GRANT SELECT on views to authenticated; tighten sensitive views with policies or wrapping security-definer fn
-5. otp_verifications explicit INSERT deny policies
-6. contacts policy role check
+```
+DROP TABLE IF EXISTS public.role_permissions;
+DROP TABLE IF EXISTS public.permissions;
 ```
 
-## Code touch-list (after migration runs & types regenerate)
+Both have 0 rows and 0 code references (confirmed by ripgrep). `role_capabilities` + `has_role()` + `has_capability()` remain the SSOT.
 
-- `src/services/hrmService.ts`, employee list/detail pages → `employees_safe`
-- Contract list components → `contracts_safe`
-- Trainer pages (`Trainers.tsx`, schedule pickers) → `trainers_safe`
-- Payment list / reconciliation UI → `payment_transactions_safe`
-- Campaign recipients UI (Campaigns page detail) → `campaign_recipients_safe`
-- HR settings page → `hr_settings_safe` for managers; admin tab uses base table
-- Profiles consumers (member/staff directory) → drop gov_id from selects
-- `mips-proxy` edge fn → vault read
-- `AddDeviceDrawer` / `MIPSConnectionCard` write paths → unchanged UX, server stores in vault
+### Step 5 — Verify & document
 
-## Verification
-
-- Re-run security scan; all 9 critical findings expected to clear.
-- Manual role checks: manager session — cannot SELECT salary/PAN/gov_id/gateway_signature/password (returns null/permission denied); can still UPDATE allowed columns.
-- OTP table: anon/auth INSERT returns 42501; service role still works.
-- MIPS proxy still connects (vault path).
-- `supabase--linter` clean.
+- Re-run `security--run_security_scan` and `supabase--linter`.
+- Manual checks (psql with `SET role authenticated; SET request.jwt.claim.sub = '<manager-uuid>'`):
+  - Manager UPDATE on own `employees` row → must raise exception.
+  - Manager UPDATE on staff row in their branch → succeeds.
+  - Manager UPDATE on row in other branch → blocked by RLS.
+  - Manager SELECT on `payroll_runs` of foreign branch → 0 rows.
+- Update `mem://architecture/p4-app-layer-hardening` with the self-edit rule and removal of the dead permission tables.
+- Update **Security Memory** to note: managers have branch-scoped HR/Payroll but cannot modify their own row; `role_permissions`/`permissions` are gone.
 
 ## Out of scope
 
-- Realtime members channel scoping warning (separate task).
-- Public membership_plans / announcements visibility (intentional per business rules — will mark ignored with rationale).
-- Refactoring existing role model.
+- The earlier-discussed column-level revocation on salary/PAN for managers. User has confirmed managers need HR data to do their job — keeping row-level access. Sensitive columns remain accessible to manager within their branch.
+- Refactoring the role model itself.
+- Realtime channel scoping (separate finding).
 
-Approve to proceed; I'll ship one migration + the code switches in a single build pass.
+## Files / migrations
+
+1. `supabase/migrations/<ts>_hr_self_edit_guard.sql` — triggers (Step 1) + payroll scope tightening (Step 2) + DROP TABLE (Step 4).
+2. `src/lib/auth/permissions.ts` — helper + export.
+3. `src/pages/Employees.tsx`, `src/pages/Trainers.tsx`, payroll list UI — hide edit on own row.
+4. Security memory update via tool.
+
+Approve to implement.
