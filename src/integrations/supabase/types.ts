@@ -9425,33 +9425,6 @@ export type Database = {
         }
         Relationships: []
       }
-      permissions: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          id: string
-          module: string
-          name: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          module: string
-          name: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          module?: string
-          name?: string
-        }
-        Relationships: []
-      }
       plan_benefits: {
         Row: {
           benefit_type: Database["public"]["Enums"]["benefit_type"]
@@ -10829,35 +10802,6 @@ export type Database = {
           target_user_id?: string
         }
         Relationships: []
-      }
-      role_permissions: {
-        Row: {
-          created_at: string
-          id: string
-          permission_id: string
-          role: Database["public"]["Enums"]["app_role"]
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          permission_id: string
-          role: Database["public"]["Enums"]["app_role"]
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          permission_id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "role_permissions_permission_id_fkey"
-            columns: ["permission_id"]
-            isOneToOne: false
-            referencedRelation: "permissions"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       saved_lead_views: {
         Row: {
