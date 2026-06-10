@@ -51,8 +51,8 @@ interface WebhookRow {
   updated_at: string;
   invoice_id: string | null;
   member_id: string | null;
-  webhook_data: unknown;
-  response_body: unknown;
+  webhook_data?: unknown;
+  response_body?: unknown;
   invoice?: {
     invoice_number: string | null;
     member_id: string | null;
@@ -108,7 +108,7 @@ export function WebhookActivityPanel() {
       let q = supabase
         .from('payment_transactions')
         .select(
-          `*,
+          `id, branch_id, gateway, gateway_order_id, gateway_payment_id, amount, status, signature_verified, http_status, error_message, event_type, source, received_at, created_at, updated_at, invoice_id, member_id,
            invoice:invoices!payment_transactions_invoice_id_fkey(invoice_number, member_id, members(member_code, profiles:user_id(full_name))),
            member:members!payment_transactions_member_id_fkey(member_code, profiles:user_id(full_name))`,
           { count: 'exact' },
@@ -155,6 +155,21 @@ export function WebhookActivityPanel() {
       return map;
     },
     enabled: invoiceIds.length > 0,
+  });
+
+  // Lazy-load sensitive webhook payload + response_body for the currently expanded row
+  // via SECURITY DEFINER RPC (owner/admin only). Keeps these columns out of the main query.
+  const { data: expandedPayload } = useQuery<{ webhook_data: unknown; response_body: unknown } | null>({
+    queryKey: ['webhook-activity-payload', expandedId],
+    queryFn: async () => {
+      if (!expandedId) return null;
+      const { data, error } = await supabase.rpc('get_payment_webhook_payload' as any, { p_id: expandedId });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row ? { webhook_data: row.webhook_data, response_body: row.response_body } : null;
+    },
+    enabled: !!expandedId,
+    staleTime: 60_000,
   });
 
   // Realtime subscription for live updates
@@ -517,11 +532,11 @@ export function WebhookActivityPanel() {
                                 )}
                                 <details className="mb-2">
                                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">View raw payload (received)</summary>
-                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{JSON.stringify(r.webhook_data, null, 2)}</pre>
+                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{expandedId === r.id && expandedPayload ? JSON.stringify(expandedPayload.webhook_data, null, 2) : '— expand row to load payload —'}</pre>
                                 </details>
                                 <details>
                                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">View response sent to gateway</summary>
-                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{r.response_body ? JSON.stringify(r.response_body, null, 2) : '— no response body recorded —'}</pre>
+                                  <pre className="mt-2 rounded-lg bg-muted/60 p-3 text-[11px] overflow-x-auto max-h-64">{expandedId === r.id && expandedPayload?.response_body ? JSON.stringify(expandedPayload.response_body, null, 2) : '— no response body recorded —'}</pre>
                                 </details>
                               </div>
                             </div>

@@ -13788,6 +13788,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_payment_webhook_payload: {
+        Args: { p_id: string }
+        Returns: {
+          gateway_signature: string
+          response_body: Json
+          webhook_data: Json
+        }[]
+      }
       get_profile_government_id: {
         Args: { _profile_id: string }
         Returns: {
