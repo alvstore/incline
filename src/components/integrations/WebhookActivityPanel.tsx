@@ -157,6 +157,21 @@ export function WebhookActivityPanel() {
     enabled: invoiceIds.length > 0,
   });
 
+  // Lazy-load sensitive webhook payload + response_body for the currently expanded row
+  // via SECURITY DEFINER RPC (owner/admin only). Keeps these columns out of the main query.
+  const { data: expandedPayload } = useQuery<{ webhook_data: unknown; response_body: unknown } | null>({
+    queryKey: ['webhook-activity-payload', expandedId],
+    queryFn: async () => {
+      if (!expandedId) return null;
+      const { data, error } = await supabase.rpc('get_payment_webhook_payload' as any, { p_id: expandedId });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row ? { webhook_data: row.webhook_data, response_body: row.response_body } : null;
+    },
+    enabled: !!expandedId,
+    staleTime: 60_000,
+  });
+
   // Realtime subscription for live updates
   useEffect(() => {
     const ch = supabase
