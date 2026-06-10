@@ -98,6 +98,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // v1.2.0 — SSRF guard: endpoint must be a relative path, no host overrides.
+    if (typeof endpoint !== "string" || !endpoint.startsWith("/") || /@|\.\.|\/\/|https?:/i.test(endpoint)) {
+      return new Response(JSON.stringify({ error: "Invalid endpoint — must be a relative path starting with /" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // Look up per-branch MIPS connection (fall back to env vars)
     let mipsServerUrl = Deno.env.get("MIPS_SERVER_URL")!;
     let mipsUsername = Deno.env.get("MIPS_USERNAME")!;
