@@ -191,6 +191,24 @@ export function AIBrainTab() {
     onError: (e: any) => toast.error(e.message || 'Delete failed'),
   });
 
+  // Manual re-embed escape hatch — used when the trigger silently failed
+  // (e.g. previous auth gate mismatch). Calls embed-knowledge with the user's JWT.
+  const reembedMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke('embed-knowledge', {
+        body: { id },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.reason || data?.error || 'Embed failed');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Re-embedded — refreshing status');
+      queryClient.invalidateQueries({ queryKey: ['ai_knowledge_embedded_ids'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Re-embed failed'),
+  });
+
   const branchName = (id: string | null) =>
     !id ? 'Global' : branches.find((b) => b.id === id)?.name || id.slice(0, 8);
 
