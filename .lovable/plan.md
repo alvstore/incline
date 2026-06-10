@@ -1,87 +1,73 @@
-# AI Guardrails: Human Collision + Tour Boundaries + Pricing Embargo
+# AI Knowledge — "Embed failed" Audit & Fix
 
-Three independent vulnerabilities, one consolidated rollout. Nothing is hardcoded in edge functions — operational rules live in `ai_knowledge` (already wired through `match_ai_knowledge` RAG) and tour hours live in a `settings` row so they're editable from the UI.
+## Part 1 — Why three rows (persona + pricing_rules + booking_rules) is correct
 
----
+You're not creating "duplicate Ananya personas". The three rows have different jobs in the RAG pipeline:
 
-## 1. Human Collision — Timed "Shut-Up Switch"
+| Row | Topic | Priority | Purpose |
+|---|---|---|---|
+| Ananya — Member Concierge | `persona` | 2 | **Voice/identity** — always injected as the system persona |
+| Pricing Embargo & Founder's Reservation Protocol | `pricing_rules` | 4 | **Hard rule** — what to say when price/fees come up |
+| VIP Tour Scheduling Window | `booking_rules` | 5 | **Hard rule** — valid tour days/times |
 
-Today `whatsapp_chat_settings.bot_active` is a hard on/off boolean. We need a **time-boxed** pause so the bot auto-resumes, plus auto-pause whenever a human sends a manual reply.
+All three have `priority ≤ 10`, so `retrieveKnowledge` injects **all of them into every reply** — Ananya already "knows" the pricing embargo and tour window on every message. The split exists so you can edit pricing without touching her voice (and vice-versa), and so the tour window can be re-generated from the editable `settings.tour_window` row.
 
-### Schema (migration)
-- Add `bot_paused_until timestamptz null` to `public.whatsapp_chat_settings`.
-- Add `bot_paused_by uuid null` (FK `auth.users`) + `bot_paused_reason text` (`manual_toggle` | `staff_reply` | `handoff`).
-- Backfill: where `bot_active=false AND paused_at IS NOT NULL`, set `bot_paused_until = paused_at + 24h` so existing pauses don't become permanent.
-- Helper SQL function `is_bot_paused(branch uuid, phone text) returns boolean` — checks `bot_active=false OR bot_paused_until > now() OR do_not_contact=true`. Single source of truth.
+Merging them into one giant persona row would (a) make the prompt brittle to edit, (b) break the planned "edit hours in Settings → auto-update knowledge row" flow, and (c) violate the existing `is_rule` convention used by Anti-parrot / Grounding rules. **Recommendation: keep the 3 rows. No data change needed.**
 
-### Edge functions (no business rules, just gate)
-Replace every `bot_active === false` check with `is_bot_paused(...)` RPC (or inline the same OR) in:
-- `supabase/functions/_shared/ai-agent-brain.ts` (line ~180 skip("bot_paused"))
-- `supabase/functions/meta-webhook/index.ts` (line ~1260)
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/lead-nurture-followup/index.ts`
-- `supabase/functions/process-ig-comment-runs/index.ts`
+If you want the UI to make this clearer, we can add a small "Persona" / "Rule" badge next to the topic column so it's obvious at a glance that pricing_rules and booking_rules are rules attached to Ananya, not separate personas.
 
-Auto-resume is automatic — once `now() > bot_paused_until`, gate returns false.
+## Part 2 — Root cause of "Embed failed"
 
-### Auto-pause on staff manual reply
-In `send-message` / `send-meta-dm` / outbound paths used by the admin inbox: when a message originates from a human staff user (not the AI brain), upsert `bot_paused_until = now() + interval '24 hours'`, `bot_paused_reason='staff_reply'`, `bot_paused_by = auth.uid()`. Skip if message metadata flags `source='ai'`.
+The two new rows show `Embed failed` because of an **auth mismatch between the DB trigger and the edge function**:
 
-### Admin UI — `src/pages/WhatsAppChat.tsx`
-- Replace existing on/off `Switch` (line ~1226) with a **Popover** containing:
-  - Pause for: `1h` · `4h` · `24h` · `Until I resume` · `Resume now`
-  - Live countdown chip ("AI paused · resumes in 3h 12m") in the conversation header.
-- "Needs human" filter (line 645) uses the new helper: paused OR handoff.
-- Match Vuexy: `rounded-2xl`, amber badge `bg-amber-100 text-amber-700` while paused, emerald when active.
+- `embed-knowledge/index.ts` (line 63) requires `Authorization: Bearer <SERVICE_ROLE_KEY>`.
+- The DB trigger `tg_ai_knowledge_enqueue_embed` calls it with `Bearer <ANON_KEY>` (hardcoded in the migration `20260522142530_*.sql`).
+- Result: every trigger-fired embed returns **401 Unauthorized**, the row never gets an `embedding`, UI shows "Embed failed".
 
----
+The persona row shows "Ready" because it was embedded **before** the service-role gate was added (its `updated_at` is 2026-05-29; the gate was tightened after).
 
-## 2 & 3. Tour Scheduling Rules + Pricing Embargo — via `ai_knowledge` (no hardcoding)
+`pg_net.http_post` is fire-and-forget so the trigger never sees the 401 — the `exception when others` block also swallows it. That's why it silently fails.
 
-Both are **knowledge rows**, not edge-function code. The existing RAG (`buildSystemPrompt` → `match_ai_knowledge`, threshold 0.75, plus all `priority<=10` rules) already injects priority rules into every reply. We piggyback on that.
+## Part 3 — Fix Plan
 
-### A. Seed two new `ai_knowledge` rows (data insert, not migration)
-- topic=`booking_rules`, title=`VIP Tour Scheduling Window`, priority=`5` (rule tier), applies_to=`['whatsapp_ai_lead_capture','meta_ai_lead_capture','all']`. Content: tours only Mon–Sat 09:00–20:00 IST; never confirm Sundays or out-of-window times; offer the nearest valid slot; never invent confirmation — must call the booking tool.
-- topic=`pricing_rules`, title=`Pricing Embargo & Founder's Reservation Protocol`, priority=`4` (above format rules). Content = the user's exact embargo block (English + Hinglish examples), explicit "NEVER quote prices/fees/tiers"; on price questions pivot to Founder's Waitlist; only CTA = reserve a spot (no day pass / trial).
+### A. Fix the auth mismatch (one migration, no code change to edge fn)
 
-These two rows are `is_rule=true` style (priority ≤ 10) so `retrieveKnowledge` injects them on **every** message regardless of semantic match — exactly how the existing "Anti-parrot" and "Grounding" rules work today. Zero code change in the brain.
+1. Store the service-role key once in Vault: `select vault.create_secret('<service_role_jwt>', 'embed_knowledge_key');`
+2. Rewrite `tg_ai_knowledge_enqueue_embed` to read the key from Vault at call time (instead of the hardcoded anon key) and pass it as the Bearer.
+3. Add `RAISE LOG` (not just `WARNING`) on dispatch so future failures are visible.
+4. Backfill the two stuck rows: re-touch them (`update ai_knowledge set updated_at=now() where embedding is null and is_active`) so the trigger re-fires with the correct key.
 
-### B. Make tour hours editable (no redeploy to change hours)
-- Add row to `public.settings` (`branch_id NULL`, `key='tour_window'`, value JSONB `{start:"09:00", end:"20:00", days:[1,2,3,4,5,6], tz:"Asia/Kolkata"}`).
-- Add a small admin card under **Settings → AI Brain** to edit it; on save, also upsert the matching `ai_knowledge` row's `source_data` so the prompt always reflects current hours (renderer already dumps `source_data` as markdown bullets — verified in `ai-prompt.ts` `renderSourceDataMarkdown`).
-- No edge fn logic needed — the LLM reads the rule + hours from the prompt.
+Why Vault and not env: triggers can't read edge-function env; Vault is the standard Supabase pattern for server-side secrets in SQL.
 
-### C. Strengthen existing sanitizer (defense-in-depth)
-`ai-agent-brain.ts` already has a Founder's-Phase price sanitizer (v3.5.0). Extend its regex/keyword list to also strip any line that confirms a Sunday tour or a time outside the configured window (parse hours from the same `settings` row at boot). One-line cache; no per-message DB read.
+### B. Add a manual "Re-embed" escape hatch in the UI (`AIBrainTab.tsx`)
 
----
+- In the row-action menu (pencil column), add **"Re-embed now"** for any row with `embedding IS NULL`.
+- It calls `embed-knowledge` via `supabase.functions.invoke` (which uses the user's session JWT → fine, but the edge fn must also accept owner/admin JWTs).
+- Update `embed-knowledge` auth gate to allow EITHER `bearer === SERVICE_ROLE` OR a verified owner/admin user JWT. Trigger path stays service-role; admin click stays user-JWT.
+
+### C. UI polish on the knowledge table (Vuexy)
+
+- Replace "Embed failed" plain badge with `bg-red-100 text-red-700 rounded-full` + AlertCircle icon + a tooltip explaining "Last embed attempt: 401 from embed-knowledge. Click Re-embed."
+- Add a "Rule" vs "Persona" pill next to the topic so the 3-row architecture is self-documenting.
 
 ## Files Touched
 
 **Migration**
-- `supabase/migrations/<ts>_bot_pause_until.sql` — new columns + `is_bot_paused()` + backfill.
+- `supabase/migrations/<ts>_fix_embed_trigger_auth.sql` — Vault secret read, rewritten trigger, backfill UPDATE.
 
-**Data inserts (separate, after migration approved)**
-- 2 rows in `ai_knowledge` (tour + pricing).
-- 1 row in `settings` (`tour_window`).
-
-**Edge functions**
-- `_shared/ai-agent-brain.ts` — swap pause check, extend sanitizer.
-- `meta-webhook/index.ts`, `whatsapp-webhook/index.ts`, `lead-nurture-followup/index.ts`, `process-ig-comment-runs/index.ts` — swap pause check.
-- `send-message/index.ts` (+ `send-meta-dm`) — auto-pause on human send.
+**Edge function**
+- `supabase/functions/embed-knowledge/index.ts` — accept service-role OR owner/admin user JWT.
 
 **Frontend**
-- `src/pages/WhatsAppChat.tsx` — pause-duration popover, countdown chip, filter update.
-- `src/pages/Settings.tsx` (or AI Brain section) — tour-window editor card.
-
-## Out of Scope
-- No changes to existing `ai-prompt.ts` retrieval logic (already RAG-correct).
-- No changes to identity injection (v4.0.0 stays as is).
-- No new edge functions.
+- `src/components/settings/AIBrainTab.tsx` — "Re-embed now" action, role/rule pill, improved failure tooltip.
 
 ## Verification
-1. Toggle "Pause 1h" in chat UI → inbound IG/WA message within the hour returns `skip("bot_paused")` in `ai_tool_logs`; after 60min, AI replies again.
-2. Staff types "hello" manually → `bot_paused_until` row written; AI silent for 24h.
-3. Ask "what's the price?" → reply contains the Founder's Waitlist pivot, no ₹ amount (verify in `whatsapp_messages`).
-4. Ask "can I tour Sunday 11:30 PM?" → AI declines and proposes Mon–Sat 09:00–20:00 slot.
-5. Edit tour hours in Settings → next AI reply uses the new window (no redeploy).
+1. Run migration → both `pricing_rules` and `booking_rules` rows show `Ready` within ~10s.
+2. `select id, embedding is null from ai_knowledge where is_active` → all false.
+3. Click "Re-embed now" on any row as owner → toast success, badge flips to Ready.
+4. Send "what's the price?" via WhatsApp → reply contains Founder's Waitlist pivot (proves the pricing rule reached the LLM via RAG).
+
+## Out of Scope
+- No changes to the 3-row data model.
+- No changes to `ai-prompt.ts` retrieval or `match_ai_knowledge` RPC.
+- No changes to Ananya's persona content.

@@ -191,6 +191,24 @@ export function AIBrainTab() {
     onError: (e: any) => toast.error(e.message || 'Delete failed'),
   });
 
+  // Manual re-embed escape hatch — used when the trigger silently failed
+  // (e.g. previous auth gate mismatch). Calls embed-knowledge with the user's JWT.
+  const reembedMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.functions.invoke('embed-knowledge', {
+        body: { id },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.reason || data?.error || 'Embed failed');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Re-embedded — refreshing status');
+      queryClient.invalidateQueries({ queryKey: ['ai_knowledge_embedded_ids'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Re-embed failed'),
+  });
+
   const branchName = (id: string | null) =>
     !id ? 'Global' : branches.find((b) => b.id === id)?.name || id.slice(0, 8);
 
@@ -298,7 +316,14 @@ export function AIBrainTab() {
                         {r.title}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">{r.topic}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="text-xs">{r.topic}</Badge>
+                          {r.priority <= 10 && (
+                            <Badge className="bg-violet-100 text-violet-700 text-[10px] uppercase tracking-wide">
+                              {r.topic === 'persona' ? 'Persona' : 'Rule'}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -347,6 +372,22 @@ export function AIBrainTab() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 justify-end">
+                          {!embeddedIds?.has(r.id) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Re-embed entry"
+                              title="Re-embed now"
+                              disabled={reembedMutation.isPending}
+                              onClick={() => reembedMutation.mutate(r.id)}
+                            >
+                              {reembedMutation.isPending && reembedMutation.variables === r.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -368,6 +409,7 @@ export function AIBrainTab() {
                           </Button>
                         </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
@@ -565,8 +607,9 @@ function EmbeddingPill({
           </Badge>
         </TooltipTrigger>
         <TooltipContent>
-          No embedding after 5 min. Falls back to keyword retrieval.
+          No embedding after 5 min. Click the sparkles icon to re-embed manually — falls back to keyword retrieval until fixed.
         </TooltipContent>
+
       </Tooltip>
     </TooltipProvider>
   );

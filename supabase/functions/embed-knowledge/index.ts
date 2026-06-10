@@ -58,10 +58,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // Auth gate: service-role only. Called by DB trigger and server-side ai-prompt.ts.
+    // v1.1.0 — Tiered auth gate:
+    //   • mode=query  → service-role only (called server-side from ai-prompt.ts).
+    //   • row-id mode → any non-empty bearer (DB trigger uses anon key; UI re-embed
+    //                   uses user JWT). Writeback is service-role inside this fn,
+    //                   and the only mutation is `embedding` on an existing row.
     const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (!SERVICE_ROLE || bearer !== SERVICE_ROLE) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    if (!bearer) {
+      return new Response(JSON.stringify({ error: "Unauthorized: missing bearer" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -73,7 +77,14 @@ Deno.serve(async (req) => {
 
 
     // Query mode: caller wants a vector back for a one-shot user message.
+    // Service-role only — this can embed arbitrary text and is called server-side.
     if (body?.mode === "query") {
+      if (!SERVICE_ROLE || bearer !== SERVICE_ROLE) {
+        return new Response(JSON.stringify({ error: "Unauthorized: query mode requires service role" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const text = String(body.text || "").trim();
       if (!text) {
         return new Response(JSON.stringify({ error: "missing text" }), {
