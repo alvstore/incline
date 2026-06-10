@@ -88,6 +88,23 @@ export function canEditRosterRow(
   return false;
 }
 
+/**
+ * Manager cannot manage their OWN HR / payroll / trainer / contract row.
+ * Owners and admins can edit anyone (including themselves).
+ * Mirrored on the server by trigger `tg_block_manager_self_hr` on
+ * employees, contracts, trainers, payroll_items, payroll_run_lines.
+ */
+export function canManageHrRow(
+  roles: string[] | undefined,
+  targetUserId: string | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!roles || !targetUserId) return false;
+  if (roles.some((r) => r === 'owner' || r === 'admin')) return true;
+  if (roles.includes('manager')) return targetUserId !== currentUserId;
+  return false;
+}
+
 export function canExportRoster(roles?: string[]): boolean {
   if (!roles) return false;
   return roles.some((r) => r === 'owner' || r === 'admin' || r === 'manager' || r === 'staff');
