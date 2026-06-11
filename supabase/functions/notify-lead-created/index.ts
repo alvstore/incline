@@ -1,14 +1,12 @@
-// v3.1.0 — Resolve the team-alert template by trigger_event='lead_created' first,
-//          then fall back to either of the known Meta names (internal_lead_alert,
-//          internal_new_lead_alert, lead_alert). Only use the template when the
-//          live Meta status is APPROVED and the row is not stale, so a Meta
-//          category drift (UTILITY → MARKETING reclassification) does not
-//          silently break sends. WhatsApp team alerts are SKIPPED (not failed)
-//          when no safe template exists — SMS/email still attempted.
-// v3.0.0 — Full SSOT cutover. ALL channels (whatsapp / sms / email) now route
-//          through dispatch-communication. Team WhatsApp alerts use an approved
-//          Meta template (resolved via templates table by trigger/meta_template_name),
-//          eliminating silent drops outside the 24h customer-service window.
+// v3.2.0 — Enriched team-alert variables (plan_interest, fitness_goal, goals,
+//          budget, preferred_time, fitness_experience, expected_start_date,
+//          temperature, score, notes, utm_*, landing_page, referrer_url,
+//          campaign_name, ad_id, preferred_contact_channel, captured_at,
+//          lead_url). When the configured team_alert_email_body is blank we
+//          now auto-render a clean HTML summary listing every non-empty field
+//          so the email is never missing context.
+// v3.1.0 — Resolve team-alert template by trigger_event='lead_created' first.
+// v3.0.0 — Full SSOT cutover — all channels route via dispatch-communication.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
