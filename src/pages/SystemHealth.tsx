@@ -456,6 +456,15 @@ export default function SystemHealth() {
                         <SelectItem value="trigger">Triggers</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Button
+                      size="sm"
+                      variant={showInfo ? 'default' : 'outline'}
+                      className="rounded-xl"
+                      onClick={() => setShowInfo((v) => !v)}
+                      title="Toggle info-severity rows (e.g. WhatsApp brain heartbeats)"
+                    >
+                      {showInfo ? 'Hiding nothing' : 'Hide heartbeats'}
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
