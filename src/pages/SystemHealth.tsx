@@ -155,6 +155,9 @@ export default function SystemHealth() {
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [statusTab, setStatusTab] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  // v: hide info-severity rows (e.g. WhatsApp brain heartbeats) from the
+  // default view — they are telemetry, not errors. Toggle to inspect.
+  const [showInfo, setShowInfo] = useState(false);
   const [clearResolvedDialog, setClearResolvedDialog] = useState(false);
   const [resolveAllDialog, setResolveAllDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -164,7 +167,7 @@ export default function SystemHealth() {
   const queryClient = useQueryClient();
 
   const { data: errors = [], isLoading } = useQuery({
-    queryKey: ['error-logs', statusTab, sourceFilter],
+    queryKey: ['error-logs', statusTab, sourceFilter, showInfo],
     queryFn: async () => {
       let query = (supabase.from('error_logs') as any)
         .select('*')
@@ -174,6 +177,7 @@ export default function SystemHealth() {
       if (statusTab === 'open') query = query.eq('status', 'open');
       if (statusTab === 'resolved') query = query.eq('status', 'resolved');
       if (sourceFilter !== 'all') query = query.eq('source', sourceFilter);
+      if (!showInfo) query = query.neq('severity', 'info');
 
       const { data, error } = await query;
       if (error) throw error;
