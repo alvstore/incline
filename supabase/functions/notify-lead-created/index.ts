@@ -329,8 +329,14 @@ Deno.serve(async (req) => {
     // 7) Helper: send team-alert bundle to one user profile (honours per-user prefs)
     const teamAlertSmsBody = render(rules.team_alert_sms);
     const teamAlertWaFreeformBody = render(rules.team_alert_whatsapp); // fallback if no template
-    const teamAlertEmailSubject = render(rules.team_alert_email_subject || "New Lead: {{lead_name}}");
-    const teamAlertEmailBody = render(rules.team_alert_email_body || "");
+    const teamAlertEmailSubject = render(
+      rules.team_alert_email_subject ||
+        "New Lead: {{lead_name}}{{plan_interest}} — {{lead_source}}",
+    ).replace(/\s+—\s+$/, "").replace(/:\s+—/, ":");
+    const configuredEmailBody = (rules.team_alert_email_body || "").trim();
+    const teamAlertEmailBody = configuredEmailBody
+      ? render(configuredEmailBody)
+      : buildAutoEmailBody();
 
     const sendTeamBundle = async (
       profile: { id?: string; phone: string | null; email?: string | null },
