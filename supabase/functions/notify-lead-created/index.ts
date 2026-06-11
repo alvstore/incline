@@ -1,14 +1,12 @@
-// v3.1.0 — Resolve the team-alert template by trigger_event='lead_created' first,
-//          then fall back to either of the known Meta names (internal_lead_alert,
-//          internal_new_lead_alert, lead_alert). Only use the template when the
-//          live Meta status is APPROVED and the row is not stale, so a Meta
-//          category drift (UTILITY → MARKETING reclassification) does not
-//          silently break sends. WhatsApp team alerts are SKIPPED (not failed)
-//          when no safe template exists — SMS/email still attempted.
-// v3.0.0 — Full SSOT cutover. ALL channels (whatsapp / sms / email) now route
-//          through dispatch-communication. Team WhatsApp alerts use an approved
-//          Meta template (resolved via templates table by trigger/meta_template_name),
-//          eliminating silent drops outside the 24h customer-service window.
+// v3.2.0 — Enriched team-alert variables (plan_interest, fitness_goal, goals,
+//          budget, preferred_time, fitness_experience, expected_start_date,
+//          temperature, score, notes, utm_*, landing_page, referrer_url,
+//          campaign_name, ad_id, preferred_contact_channel, captured_at,
+//          lead_url). When the configured team_alert_email_body is blank we
+//          now auto-render a clean HTML summary listing every non-empty field
+//          so the email is never missing context.
+// v3.1.0 — Resolve team-alert template by trigger_event='lead_created' first.
+// v3.0.0 — Full SSOT cutover — all channels route via dispatch-communication.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -43,7 +41,13 @@ Deno.serve(async (req) => {
       .update({ notified_at: new Date().toISOString() })
       .eq("id", lead_id)
       .is("notified_at", null)
-      .select("id, full_name, phone, email, source, branch_id")
+      .select(
+        "id, full_name, phone, email, source, branch_id, created_at, " +
+        "plan_interest, fitness_goal, goals, budget, preferred_time, " +
+        "fitness_experience, expected_start_date, temperature, score, notes, " +
+        "preferred_contact_channel, utm_source, utm_medium, utm_campaign, " +
+        "utm_content, utm_term, landing_page, referrer_url, campaign_name, ad_id",
+      )
       .maybeSingle();
 
     if (claimErr) {
@@ -53,7 +57,7 @@ Deno.serve(async (req) => {
     if (!claimed) {
       return json({ success: true, sent: 0, skipped: true, reason: "already_claimed" });
     }
-    const lead = claimed;
+    const lead: any = claimed;
 
     // 2) Branch name
     const { data: branch } = await supabase
@@ -131,6 +135,23 @@ Deno.serve(async (req) => {
     }
 
     // 5) Variable bag + simple {{token}} renderer for SMS/email bodies
+    const appBase =
+      Deno.env.get("APP_BASE_URL") ||
+      Deno.env.get("PUBLIC_APP_URL") ||
+      "https://incline.lovable.app";
+    const capturedAtIso = lead.created_at || new Date().toISOString();
+    let capturedAtHuman = capturedAtIso;
+    try {
+      capturedAtHuman = new Date(capturedAtIso).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch (_) { /* ignore */ }
+
+    const fitnessGoalCombined = [lead.fitness_goal, lead.goals]
+      .filter((v: any) => v && String(v).trim()).join(" • ");
+
     const vars: Record<string, string> = {
       lead_name: lead.full_name || "Guest",
       lead_phone: lead.phone || "",
@@ -138,9 +159,90 @@ Deno.serve(async (req) => {
       lead_source: lead.source || "direct",
       source: lead.source || "direct",
       branch_name: branchName,
+      plan_interest: lead.plan_interest || "",
+      fitness_goal: fitnessGoalCombined,
+      goals: lead.goals || "",
+      budget: lead.budget || "",
+      preferred_time: lead.preferred_time || "",
+      fitness_experience: lead.fitness_experience || "",
+      expected_start_date: lead.expected_start_date || "",
+      temperature: lead.temperature || "",
+      score: lead.score != null ? String(lead.score) : "",
+      notes: lead.notes || "",
+      preferred_contact_channel: lead.preferred_contact_channel || "",
+      utm_source: lead.utm_source || "",
+      utm_medium: lead.utm_medium || "",
+      utm_campaign: lead.utm_campaign || "",
+      utm_content: lead.utm_content || "",
+      utm_term: lead.utm_term || "",
+      landing_page: lead.landing_page || "",
+      referrer_url: lead.referrer_url || "",
+      campaign_name: lead.campaign_name || "",
+      ad_id: lead.ad_id || "",
+      captured_at: capturedAtHuman,
+      lead_url: `${appBase}/leads/${lead.id}`,
     };
     const render = (tpl: string): string =>
       String(tpl || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => vars[k] ?? "");
+
+    // Auto-render a rich HTML email body when the configured body is blank,
+    // so admins/managers never receive a context-less alert.
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const buildAutoEmailBody = (): string => {
+      const rows: Array<[string, string]> = [
+        ["Name", vars.lead_name],
+        ["Phone", vars.lead_phone],
+        ["Email", vars.lead_email],
+        ["Source", vars.lead_source],
+        ["Branch", vars.branch_name],
+        ["Plan Interest", vars.plan_interest],
+        ["Fitness Goal", vars.fitness_goal],
+        ["Budget", vars.budget],
+        ["Preferred Time", vars.preferred_time],
+        ["Fitness Experience", vars.fitness_experience],
+        ["Expected Start", vars.expected_start_date],
+        ["Preferred Channel", vars.preferred_contact_channel],
+        ["Temperature", vars.temperature],
+        ["Score", vars.score],
+        ["Campaign", vars.campaign_name],
+        ["UTM Source", vars.utm_source],
+        ["UTM Medium", vars.utm_medium],
+        ["UTM Campaign", vars.utm_campaign],
+        ["UTM Content", vars.utm_content],
+        ["UTM Term", vars.utm_term],
+        ["Ad ID", vars.ad_id],
+        ["Landing Page", vars.landing_page],
+        ["Referrer", vars.referrer_url],
+        ["Notes", vars.notes],
+        ["Captured At", vars.captured_at],
+      ].filter(([, v]) => v && v.trim().length);
+
+      const tableRows = rows
+        .map(
+          ([k, v]) =>
+            `<tr><td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;white-space:nowrap;vertical-align:top">${esc(k)}</td><td style="padding:8px 14px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:14px;font-weight:500;word-break:break-word">${esc(v)}</td></tr>`,
+        )
+        .join("");
+
+      return `
+<div style="font-family:Inter,Arial,sans-serif;color:#0f172a">
+  <p style="font-size:15px;line-height:1.55;margin:0 0 16px">
+    A new lead was captured. Please follow up at the earliest.
+  </p>
+  <table style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:12px;overflow:hidden">
+    ${tableRows}
+  </table>
+  <p style="margin:20px 0 0">
+    <a href="${esc(vars.lead_url)}"
+       style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">
+      Open lead in CRM →
+    </a>
+  </p>
+</div>`.trim();
+    };
+
+
 
     const results: DispatchSummary[] = [];
 
@@ -227,8 +329,14 @@ Deno.serve(async (req) => {
     // 7) Helper: send team-alert bundle to one user profile (honours per-user prefs)
     const teamAlertSmsBody = render(rules.team_alert_sms);
     const teamAlertWaFreeformBody = render(rules.team_alert_whatsapp); // fallback if no template
-    const teamAlertEmailSubject = render(rules.team_alert_email_subject || "New Lead: {{lead_name}}");
-    const teamAlertEmailBody = render(rules.team_alert_email_body || "");
+    const teamAlertEmailSubject = render(
+      rules.team_alert_email_subject ||
+        "New Lead: {{lead_name}}{{plan_interest}} — {{lead_source}}",
+    ).replace(/\s+—\s+$/, "").replace(/:\s+—/, ":");
+    const configuredEmailBody = (rules.team_alert_email_body || "").trim();
+    const teamAlertEmailBody = configuredEmailBody
+      ? render(configuredEmailBody)
+      : buildAutoEmailBody();
 
     const sendTeamBundle = async (
       profile: { id?: string; phone: string | null; email?: string | null },
