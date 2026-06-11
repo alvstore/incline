@@ -41,7 +41,13 @@ Deno.serve(async (req) => {
       .update({ notified_at: new Date().toISOString() })
       .eq("id", lead_id)
       .is("notified_at", null)
-      .select("id, full_name, phone, email, source, branch_id")
+      .select(
+        "id, full_name, phone, email, source, branch_id, created_at, " +
+        "plan_interest, fitness_goal, goals, budget, preferred_time, " +
+        "fitness_experience, expected_start_date, temperature, score, notes, " +
+        "preferred_contact_channel, utm_source, utm_medium, utm_campaign, " +
+        "utm_content, utm_term, landing_page, referrer_url, campaign_name, ad_id",
+      )
       .maybeSingle();
 
     if (claimErr) {
@@ -51,7 +57,7 @@ Deno.serve(async (req) => {
     if (!claimed) {
       return json({ success: true, sent: 0, skipped: true, reason: "already_claimed" });
     }
-    const lead = claimed;
+    const lead: any = claimed;
 
     // 2) Branch name
     const { data: branch } = await supabase
