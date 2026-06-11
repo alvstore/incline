@@ -463,7 +463,7 @@ export default function SystemHealth() {
                       onClick={() => setShowInfo((v) => !v)}
                       title="Toggle info-severity rows (e.g. WhatsApp brain heartbeats)"
                     >
-                      {showInfo ? 'Hiding nothing' : 'Hide heartbeats'}
+                      {showInfo ? 'Hide info / heartbeats' : 'Show info / heartbeats'}
                     </Button>
                   </div>
                 </div>
