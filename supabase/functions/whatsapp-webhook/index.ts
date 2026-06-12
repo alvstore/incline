@@ -422,7 +422,7 @@ async function processStatusUpdates(value: any, branchId: string | null) {
 async function triggerAiAutoReply(messageId: string, phoneNumber: string, branchId: string) {
   const { data: inboundMsg } = await supabase
     .from("whatsapp_messages")
-    .select("phone_number, contact_name, content")
+    .select("phone_number, contact_name, content, created_at")
     .eq("id", messageId)
     .single();
 
