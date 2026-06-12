@@ -1925,6 +1925,40 @@ async function extractContextDelta(
     delta.do_not_ask_add!.push("phone", "email", "callback");
   }
 
+  // v4.2.0 — Deterministic inbound EMAIL capture. The previous flow only
+  // extracted email from the bot's reply text (never the user's inbound),
+  // so chats like "Ankit3093@gmail.com" stayed unrecorded and the brain
+  // re-asked the same email question on every turn. Capture here so memory
+  // is updated even when the LLM enrichment call below fails or returns nothing.
+  if (!memory?.profile?.email) {
+    const emailMatch = lastUser.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    if (emailMatch) {
+      delta.profile!.email = emailMatch[0].trim();
+      delta.do_not_ask_add!.push("email");
+    }
+  }
+
+  // v4.2.0 — Deterministic inbound FIRST-NAME capture when the prior bot turn
+  // explicitly asked for the user's name and the user replied with a short
+  // alpha-only message (1–3 tokens). Mirrors the same conservative gate the
+  // LLM enrichment uses, so we don't promote "ok" or "hey" to a name.
+  if (!memory?.profile?.first_name && !memory?.profile?.full_name) {
+    const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
+    const prevWasNamePrompt = /may I have your name|what's your name|what is your name|your name to get started/i.test(lastBot);
+    if (prevWasNamePrompt) {
+      const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
+      const tokens = trimmed.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 1 && tokens.length <= 3 && /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])) {
+        const fn = tokens[0];
+        if (looksLikeRealName(fn, memory?.profile?.phone)) {
+          delta.profile!.first_name = fn;
+          if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
+          delta.do_not_ask_add!.push("name");
+        }
+      }
+    }
+  }
+
   for (const [goal, re] of Object.entries(GOAL_HINTS)) {
     if (re.test(lastUser) && !memory?.facts?.fitness_goal) {
       delta.facts!.fitness_goal = goal;
