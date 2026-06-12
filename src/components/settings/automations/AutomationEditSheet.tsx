@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Bot, Sparkles, Lock, Clock } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatIST } from '@/lib/utils/datetime';
 import { toast } from 'sonner';
 import { CRON_PRESETS, describeCron, nextRuns } from '@/lib/automations/cronHumanize';
 import type { AutomationRule } from './types';
