@@ -1,4 +1,6 @@
-// Tiny 5-field cron helpers (UTC). Shared by Automation Brain UI.
+// Tiny 5-field cron helpers. Cron expressions are stored in UTC (pg_cron),
+// but human-facing labels are rendered in IST (Asia/Kolkata) for Indian users.
+import { utcHmToIstHm, istHmToUtcHm } from '@/lib/utils/datetime';
 
 function parseField(field: string, min: number, max: number): number[] {
   const out = new Set<number>();
