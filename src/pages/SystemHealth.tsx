@@ -662,7 +662,7 @@ export default function SystemHealth() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Time</p>
-                  <p className="text-sm">{format(new Date(selectedError.created_at), 'PPpp')}</p>
+                  <p className="text-sm">{formatISTFull(selectedError.created_at)}</p>
                 </div>
               </div>
 
