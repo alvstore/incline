@@ -105,10 +105,10 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
             </div>
             {preview.length > 0 && (
               <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-                <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (UTC)</p>
+                <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (IST)</p>
                 <ul className="mt-1.5 space-y-0.5 font-mono">
                   {preview.map((d, i) => (
-                    <li key={i}>{format(d, 'MMM d HH:mm')}</li>
+                    <li key={i}>{formatIST(d, 'MMM d HH:mm')} IST</li>
                   ))}
                 </ul>
               </div>
