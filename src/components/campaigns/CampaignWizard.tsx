@@ -959,7 +959,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       onChange={(e) => setCustomCron(e.target.value)}
                       placeholder="0 10 * * 1"
                     />
-                    <p className="text-[11px] text-info mt-1">5-field UTC cron · m h dom mon dow</p>
+                    <p className="text-[11px] text-info mt-1">5-field cron (IST) · m h dom mon dow</p>
                   </div>
                 )}
                 <p className="text-[11px] text-info">
