@@ -1,4 +1,7 @@
-// automation-brain v2.1.0 — Cold-start tolerant worker dispatch:
+// automation-brain v2.3.0 — Auth gate also accepts ANON apikey + x-system-call header
+//                            (pg_cron.job.command can't safely embed SERVICE_KEY; the
+//                            system-call header + service-role headers are both honored).
+// v2.1.0 — Cold-start tolerant worker dispatch:
 //                            • retries 502/503/504 with 800ms + 2000ms backoff
 //                            • 60s per-attempt AbortController timeout
 //                            • final gateway 5xx downgraded to 'warning' (worker still runs once warm)
