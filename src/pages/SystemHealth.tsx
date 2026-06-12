@@ -539,8 +539,8 @@ export default function SystemHealth() {
                                       }}
                                     />
                                   </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {format(new Date(lastTime), 'MMM d, HH:mm')}
+                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={formatISTFull(lastTime)}>
+                                    {formatIST(lastTime)}
                                   </TableCell>
                                   <TableCell>
                                     <Badge className={`${sevBadgeClass} rounded-full text-xs font-medium`} variant="secondary">{sev}</Badge>
