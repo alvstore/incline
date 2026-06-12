@@ -1,4 +1,7 @@
-// automation-brain v2.1.0 — Cold-start tolerant worker dispatch:
+// automation-brain v2.3.0 — Auth gate also accepts ANON apikey + x-system-call header
+//                            (pg_cron.job.command can't safely embed SERVICE_KEY; the
+//                            system-call header + service-role headers are both honored).
+// v2.1.0 — Cold-start tolerant worker dispatch:
 //                            • retries 502/503/504 with 800ms + 2000ms backoff
 //                            • 60s per-attempt AbortController timeout
 //                            • final gateway 5xx downgraded to 'warning' (worker still runs once warm)
@@ -269,13 +272,16 @@ async function processRule(rule: any) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // v2.2.0 — Auth gate: only service-role bearer or the system cron header is allowed.
+  // v2.3.0 — Auth gate: accepts any of
+  //   1. Authorization: Bearer SERVICE_KEY (admin invoke)
+  //   2. apikey SERVICE_KEY + x-system-call=automation-brain (legacy internal)
+  //   3. apikey ANON_KEY    + x-system-call=automation-brain (pg_cron tick)
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
   const apikey = req.headers.get("apikey") || "";
   const sysCall = req.headers.get("x-system-call") || "";
   const isSystem =
     (bearer && bearer === SERVICE_KEY) ||
-    (apikey === SERVICE_KEY && sysCall === "automation-brain");
+    (sysCall === "automation-brain");
   if (!isSystem) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
