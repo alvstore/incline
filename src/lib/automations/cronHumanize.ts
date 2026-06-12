@@ -37,9 +37,21 @@ export function describeCron(expr: string): string {
   if (h === '*' && dom === '*' && mon === '*' && dow === '*') return `At minute ${m} of every hour`;
   if (h.startsWith('*/') && dom === '*' && mon === '*' && dow === '*')
     return `Every ${h.slice(2)} hours at :${m.padStart(2, '0')}`;
-  if (dom === '*' && mon === '*' && dow === '*')
-    return `Every day at ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} UTC`;
+  if (dom === '*' && mon === '*' && dow === '*') {
+    const hUtc = parseInt(h, 10);
+    const mUtc = parseInt(m, 10);
+    if (Number.isFinite(hUtc) && Number.isFinite(mUtc)) {
+      const { h: hI, m: mI } = utcHmToIstHm(hUtc, mUtc);
+      return `Every day at ${String(hI).padStart(2, '0')}:${String(mI).padStart(2, '0')} IST`;
+    }
+    return `Every day at ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
   return expr;
+}
+
+function istCron(hIst: number, mIst: number) {
+  const { h, m } = istHmToUtcHm(hIst, mIst);
+  return `${m} ${h} * * *`;
 }
 
 export function nextRuns(expr: string, after: Date, count = 3): Date[] {
