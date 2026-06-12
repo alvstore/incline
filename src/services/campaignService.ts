@@ -361,17 +361,33 @@ export async function sendCampaignNow(
 // ---------- Recurring automation rule ----------
 export type RecurrencePreset = 'daily' | 'weekly_mon' | 'weekly_fri' | 'monthly_1st' | 'custom';
 
+// Presets are authored in IST (10:00 AM IST) and converted to UTC because pg_cron runs in UTC.
+// 10:00 IST = 04:30 UTC.
 const PRESET_TO_CRON: Record<Exclude<RecurrencePreset, 'custom'>, string> = {
-  daily:        '0 10 * * *',
-  weekly_mon:   '0 10 * * 1',
-  weekly_fri:   '0 10 * * 5',
-  monthly_1st:  '0 10 1 * *',
+  daily:        '30 4 * * *',
+  weekly_mon:   '30 4 * * 1',
+  weekly_fri:   '30 4 * * 5',
+  monthly_1st:  '30 4 1 * *',
 };
 
+import { istHmToUtcHm } from '@/lib/utils/datetime';
+
+/** Custom expressions from the wizard are entered in IST; convert the H/M fields to UTC. */
+function customIstToUtc(expr: string): string {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return expr;
+  const m = parseInt(parts[0], 10);
+  const h = parseInt(parts[1], 10);
+  if (Number.isNaN(m) || Number.isNaN(h)) return expr;
+  const { h: hU, m: mU } = istHmToUtcHm(h, m);
+  return `${mU} ${hU} ${parts[2]} ${parts[3]} ${parts[4]}`;
+}
+
 export function recurrencePresetToCron(preset: RecurrencePreset, custom?: string): string {
-  if (preset === 'custom') return custom?.trim() || '0 10 * * *';
+  if (preset === 'custom') return customIstToUtc(custom?.trim() || '0 10 * * *');
   return PRESET_TO_CRON[preset];
 }
+
 
 export async function createRecurringCampaignRule(input: {
   branch_id: string;
