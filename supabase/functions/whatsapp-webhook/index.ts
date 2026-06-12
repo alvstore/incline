@@ -422,7 +422,7 @@ async function processStatusUpdates(value: any, branchId: string | null) {
 async function triggerAiAutoReply(messageId: string, phoneNumber: string, branchId: string) {
   const { data: inboundMsg } = await supabase
     .from("whatsapp_messages")
-    .select("phone_number, contact_name, content")
+    .select("phone_number, contact_name, content, created_at")
     .eq("id", messageId)
     .single();
 
@@ -517,7 +517,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
     await sendAiReply(
       result.replyText,
-      { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name },
+      { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name, created_at: (inboundMsg as any).created_at ?? null },
       branchId,
       messageId,
     );
@@ -553,7 +553,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
 async function sendAiReply(
   replyText: string,
-  inboundMsg: { phone_number: string; contact_name: string | null },
+  inboundMsg: { phone_number: string; contact_name: string | null; created_at?: string | null },
   branchId: string,
   inboundMessageId?: string,
 ) {
@@ -747,6 +747,43 @@ async function sendAiReply(
   // losing parallel invocation would still insert a row and then mark it
   // `failed (duplicate suppressed)` — leaving a ghost in the chat history.
   const cleanPhone = inboundMsg.phone_number.replace(/[\s\-\+]/g, "");
+
+  // v6.5.0 — Burst coalesce. When a lead sends 2+ inbounds within seconds,
+  // Meta delivers them as separate webhooks; each previously ran the brain
+  // and sent its own reply (duplicate-feeling "Hi I'm Ananya…" 10 s apart).
+  // If an outbound was already sent to this phone in the last 8 s AFTER the
+  // current inbound arrived, skip — the prior reply still answers the burst.
+  try {
+    const inboundAt = inboundMsg.created_at ? new Date(inboundMsg.created_at as any).getTime() : Date.now();
+    const since = new Date(Date.now() - 8000).toISOString();
+    const { data: recentOut } = await supabase
+      .from("whatsapp_messages")
+      .select("id, created_at")
+      .eq("branch_id", branchId)
+      .eq("phone_number", inboundMsg.phone_number)
+      .eq("direction", "outbound")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (recentOut && recentOut.length > 0) {
+      const outAt = new Date(recentOut[0].created_at as any).getTime();
+      if (outAt >= inboundAt) {
+        console.log(`[sendAiReply] coalesced — outbound at ${recentOut[0].created_at} already covers inbound burst for ${cleanPhone}`);
+        try {
+          await supabase.rpc("log_error_event", {
+            p_source: "whatsapp_webhook",
+            p_severity: "info",
+            p_message: `sendAiReply coalesced (burst) for ${cleanPhone}`,
+            p_context: { branch_id: branchId, phone: cleanPhone, inbound_message_id: inboundMessageId ?? null, reason: "burst_coalesce" },
+          });
+        } catch { /* noop */ }
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("burst-coalesce check failed (continuing):", (e as Error).message);
+  }
+
   // v6.4.0 — lock key scoped per inbound so back-to-back messages from the same
   // lead are not silently suppressed. Falls back to phone-only when no inbound
   // context (opt-out confirmations, manual recovery sends).

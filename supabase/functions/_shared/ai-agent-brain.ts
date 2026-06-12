@@ -406,6 +406,26 @@ export async function runUnifiedAgent(
         summary: delta.summary ?? undefined,
       });
       memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+      // v4.2.0 — Write-through newly captured email/name into the existing
+      // lead row so future turns hydrate from CRM and the onboarding short-
+      // circuit advances. Without this, ai_memory has the email but the
+      // leads.email column stays NULL and the next session re-asks it.
+      const newEmail = (delta.profile?.email || "").toString().trim();
+      const newName = (delta.profile?.full_name || delta.profile?.first_name || "").toString().trim();
+      if (leadCtx?.leadId && (newEmail || newName)) {
+        try {
+          const patch: Record<string, any> = { updated_at: new Date().toISOString() };
+          if (newEmail && !leadCtx.profile.email) patch.email = newEmail;
+          if (newName && !leadCtx.profile.full_name) patch.full_name = newName;
+          if (Object.keys(patch).length > 1) {
+            await supabase.from("leads").update(patch).eq("id", leadCtx.leadId);
+            console.log(`[AI:${ctx.platform}] lead ${leadCtx.leadId} backfilled from chat:`, Object.keys(patch).filter(k => k !== "updated_at"));
+          }
+        } catch (e) {
+          console.warn(`[AI:${ctx.platform}] lead backfill failed (non-fatal):`, (e as Error).message);
+        }
+      }
     }
   } catch (e) {
     console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
@@ -1925,6 +1945,40 @@ async function extractContextDelta(
     delta.do_not_ask_add!.push("phone", "email", "callback");
   }
 
+  // v4.2.0 — Deterministic inbound EMAIL capture. The previous flow only
+  // extracted email from the bot's reply text (never the user's inbound),
+  // so chats like "Ankit3093@gmail.com" stayed unrecorded and the brain
+  // re-asked the same email question on every turn. Capture here so memory
+  // is updated even when the LLM enrichment call below fails or returns nothing.
+  if (!memory?.profile?.email) {
+    const emailMatch = lastUser.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    if (emailMatch) {
+      delta.profile!.email = emailMatch[0].trim();
+      delta.do_not_ask_add!.push("email");
+    }
+  }
+
+  // v4.2.0 — Deterministic inbound FIRST-NAME capture when the prior bot turn
+  // explicitly asked for the user's name and the user replied with a short
+  // alpha-only message (1–3 tokens). Mirrors the same conservative gate the
+  // LLM enrichment uses, so we don't promote "ok" or "hey" to a name.
+  if (!memory?.profile?.first_name && !memory?.profile?.full_name) {
+    const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
+    const prevWasNamePrompt = /may I have your name|what's your name|what is your name|your name to get started/i.test(lastBot);
+    if (prevWasNamePrompt) {
+      const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
+      const tokens = trimmed.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 1 && tokens.length <= 3 && /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])) {
+        const fn = tokens[0];
+        if (looksLikeRealName(fn, memory?.profile?.phone)) {
+          delta.profile!.first_name = fn;
+          if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
+          delta.do_not_ask_add!.push("name");
+        }
+      }
+    }
+  }
+
   for (const [goal, re] of Object.entries(GOAL_HINTS)) {
     if (re.test(lastUser) && !memory?.facts?.fitness_goal) {
       delta.facts!.fitness_goal = goal;
@@ -1988,12 +2042,12 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     if (jsonStr) {
       const parsed = JSON.parse(jsonStr);
       // v1.2.0 — STRIP fields the LLM must never set on its own. Contact info
-      // (email/phone) comes from auth/webhook. plan_interest must come from an
-      // explicit tap/short-reply (handled deterministically above) so a passing
-      // mention of "Founding" / "annual" can't skip the duration prompt.
+      // (phone) comes from auth/webhook. Email is OK to set ONLY when memory
+      // doesn't already have one (deterministic regex above is preferred).
+      // plan_interest must come from an explicit tap/short-reply.
       if (parsed.profile && typeof parsed.profile === "object") {
-        delete parsed.profile.email;
         delete parsed.profile.phone;
+        if (memory?.profile?.email) delete parsed.profile.email;
         Object.assign(delta.profile!, parsed.profile);
       }
       if (parsed.facts && typeof parsed.facts === "object") {
