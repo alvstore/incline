@@ -1,68 +1,64 @@
-# Audit: Ankit Sisodia (+91 99822 06401) WhatsApp chat
+# Restore Lead Nurture Follow-up
 
-## What actually happened (from DB)
+## Root cause recap
+1. **Brain dead since Jun 11 09:50 UTC.** `automation-brain` v2.2.0 added an auth gate requiring `Authorization: Bearer <SERVICE_KEY>` (or `apikey=SERVICE_KEY` + `x-system-call=automation-brain`). The pg_cron job `automation-brain-tick` (jobid 14) still posts only the ANON key, so every tick returns 401. All 15 automation rules have been silently frozen for ~29 hours — including `lead_nurture_followup`, `monitor_ai_lead_loss`, `process_whatsapp_retry_queue`, `process_scheduled_campaigns`, `process_ig_comment_runs`, `daily_send_reminders`, etc.
+2. **Rahul's lead row is empty.** His conversation predates the deterministic email/name capture fix, so `leads.c33b3f77…` has `email=NULL`, `plan_interest=NULL`, `last_contacted_at=NULL`. Even with the brain restored, the nurture worker won't message a lead with no email or with no prior outbound timestamp depending on its eligibility filter.
 
-Timeline from `whatsapp_messages` (only one row per send — these are NOT UI duplicates, the bot really sent each one):
+## Plan
 
-| time | dir | content |
-|---|---|---|
-| 23:33:07 | in  | Hey |
-| 23:33:14 | in  | Where r u located |
-| 23:33:16 | out | Hi! I'm Ananya … name? |
-| 23:33:26 | out | Hi! I'm Ananya … name?  ← duplicate-feeling |
-| 23:33:33 | in  | Ankit |
-| 23:33:41 | out | Thanks, Ankit — what's the best email? |
-| 23:34:08 | in  | Ankit3093@gmail.com |
-| 23:34:17 | out | Thanks, Ankit — what's the best email?  ← re-ask |
-| 23:34:40 | in  | Ankit3093@gmail.com |
-| 23:34:52 | out | Thanks, Ankit — what's the best email?  ← re-ask |
+### Step 1 — Fix the cron auth headers (migration)
+Re-schedule `automation-brain-tick` (jobid 14) so the HTTP POST includes the service-role bearer and the system-call marker the brain expects:
 
-`ai_memory` for this contact: `profile = { first_name: "Ankit" }` — **email was never persisted**. `leads` row was only created the next day at 13:48 UTC by a separate path with a different email (`ankit@aashatours.com`), not by the chat.
+```sql
+SELECT cron.unschedule('automation-brain-tick');
+SELECT cron.schedule(
+  'automation-brain-tick',
+  '*/5 * * * *',
+  $$ SELECT net.http_post(
+    url := 'https://<project>.supabase.co/functions/v1/automation-brain',
+    headers := jsonb_build_object(
+      'Content-Type','application/json',
+      'apikey', '<SERVICE_ROLE_KEY>',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'x-system-call', 'automation-brain'
+    ),
+    body := '{"source":"cron"}'::jsonb,
+    timeout_milliseconds := 55000
+  ); $$
+);
+```
 
-## Root causes
+Same pattern audited for the other cron-driven edge functions (`dr-health-probe-db`, `google-reviews-brain-fetch`, `reconcile-whatsapp-pending`, etc.) — if any of them also enforce service-role auth in code but receive only anon, fix in the same migration.
 
-1. **Email is stripped from memory updates.** `supabase/functions/_shared/ai-agent-brain.ts` line ~1995 runs `delete parsed.profile.email` on the LLM enrichment output ("comes from auth/webhook"). For an AI-only WhatsApp lead there is no auth/webhook source, so `memory.profile.email` stays empty forever.
-2. **No deterministic inbound extraction.** The fallback lead-capture path (~line 1650) regex-matches against the *bot's reply text*, not the user's last inbound message, so `Ankit3093@gmail.com` is never picked up.
-3. **Onboarding short-circuit re-asks** the next-missing field on every turn. Because `memory.profile.email` is forever empty, "what's the best email?" is sent on every reply.
-4. **No burst coalescing.** Send-lock key is `phone:inboundMessageId`, which is unique per inbound. Two inbounds 7 s apart each fire an independent brain run and reply — feels like duplicates to the user.
+### Step 2 — Force-due all frozen rules
+After the migration, `UPDATE automation_rules SET next_run_at = now() WHERE is_active = true AND next_run_at < now() - interval '1 hour';` so the next tick immediately processes the backlog instead of waiting for each rule's own cron.
 
-## Fix plan (frontend = none; all backend in ai-agent-brain + webhook)
+### Step 3 — Backfill Rahul's lead (one-off SQL, no migration)
+```sql
+UPDATE leads
+SET email = 'Rahulchaudhary872@gmail.com',
+    full_name = COALESCE(NULLIF(full_name,''), 'Rahul'),
+    last_contacted_at = '2026-06-10 17:25:32+00',
+    updated_at = now()
+WHERE id = 'c33b3f77-305f-4999-acdc-af96a7de4d2e'
+  AND email IS NULL;
+```
+This makes him eligible for `lead_nurture_followup` on the next tick.
 
-### 1. Persist email/name from the user's inbound message (deterministic)
-In `supabase/functions/_shared/ai-agent-brain.ts`, in the memory-delta builder (around the LLM enrichment block, ~1962–2010):
-- Before the LLM call, run regex on `lastUser`:
-  - email: `/[\w.+-]+@[\w-]+\.[\w.]+/i`
-  - first-name when state is "asked name" and inbound is 1–3 word alpha tokens (looksLikeRealName guard already exists).
-- Merge into `delta.profile` (`email`, optionally `full_name`/`first_name`) so memory is updated even if the LLM call returns nothing.
-- Remove the unconditional `delete parsed.profile.email` strip; keep the strip only when an authoritative lead row already has a different email on file (compare against `leadCtx.profile.email`).
+### Step 4 — Verify
+- After ~5 min, confirm `automation_rules.last_run_at > now() - interval '10 min'` for every active rule.
+- Check `automation_runs` for fresh `success` rows.
+- Confirm `lead_nurture_followup` dispatched a message to +917737300273 (and other backlogged leads), and that `monitor_ai_lead_loss` didn't fire false-positive alerts on the 29-hour gap.
+- Add a SystemHealth assertion: alert if `max(automation_rules.last_run_at) < now() - 30 min` so a future broken cron is caught within half an hour instead of days.
 
-### 2. Upsert the captured email into the lead row immediately
-After (1) sets `delta.profile.email`, write through to `leads`:
-- If `leadCtx.id` exists → `update leads set email = coalesce(email, $email), full_name = coalesce(full_name, $name) where id = leadCtx.id`.
-- If no lead yet AND we now have name + email → call the existing lead-create path with `{ name, email, phone, source: whatsapp_ai, branch_id }` directly (do not wait for the LLM to emit a `lead_captured` JSON envelope).
-
-This makes onboarding state advance on the *next* turn — the deterministic "ask email" short-circuit will no longer trigger.
-
-### 3. Coalesce inbound bursts to one reply
-In `supabase/functions/whatsapp-webhook/index.ts` (`sendAiReply`, just before the send-lock acquisition at ~line 749):
-- Query `whatsapp_messages` for any `direction='outbound'` row with `created_at > now() - interval '8 seconds'` matching `phone_number = cleanPhone`.
-- If one exists AND the inbound that triggered this run arrived before that outbound's `created_at`, log `coalesced` and return (no second reply).
-- Keep the existing per-`inboundMessageId` lock for true webhook retries.
-
-This stops the "two ‘Hi I'm Ananya' messages 10 s apart" pattern when a user fires two messages in quick succession.
-
-### 4. Throttle the deterministic onboarding ask
-In the short-circuit that emits "Thanks, X — what's the best email?" (~ai-agent-brain.ts 576–581), check the last 2 outbound messages for the same prompt within 60 s. If duplicate, skip sending (return null/no-op) instead of re-asking. Belt-and-braces in case (1)+(2) miss.
-
-### 5. Backfill this lead's email (one-off SQL, no migration)
-Optional and only with user OK: update `leads.be59a311-…` so `email = 'Ankit3093@gmail.com'` (the value the contact actually typed) instead of the unrelated `ankit@aashatours.com`. Out of scope unless confirmed.
-
-## Files touched
-- `supabase/functions/_shared/ai-agent-brain.ts` — items 1, 2, 4
-- `supabase/functions/whatsapp-webhook/index.ts` — item 3
-- `mem://integrations/whatsapp-transactional-ai-agent` — note the new "deterministic inbound extraction + 8 s burst coalesce" rules
+### Step 5 — Document the contract
+Update mem `architecture/p3-workflow-hardening` (or `automation-brain` memory) with the required cron-call header contract so the next brain auth tightening can't desync from the cron command again.
 
 ## Out of scope
-- Refactor of `tryCaptureLeadFromAi` (only minimal change to source partialData from inbound).
-- UI changes in WhatsAppChat — no frontend code touched.
-- IG/Messenger paths — same fixes apply structurally but are not the reported defect; will be covered because the changes are in shared brain code.
+- Refactoring `lead-nurture-followup` worker logic itself.
+- Backfilling other historical leads with missing email (only Rahul requested).
+- UI changes to Automation Control Room.
+
+## Files touched
+- `supabase/migrations/<ts>_fix_automation_cron_auth.sql` (re-schedule + force-due + Rahul backfill)
+- `mem://architecture/automation-brain-cron-auth-contract` (new or appended)
