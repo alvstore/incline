@@ -517,7 +517,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
     await sendAiReply(
       result.replyText,
-      { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name },
+      { phone_number: inboundMsg.phone_number, contact_name: inboundMsg.contact_name, created_at: (inboundMsg as any).created_at ?? null },
       branchId,
       messageId,
     );
