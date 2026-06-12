@@ -2022,12 +2022,12 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
     if (jsonStr) {
       const parsed = JSON.parse(jsonStr);
       // v1.2.0 — STRIP fields the LLM must never set on its own. Contact info
-      // (email/phone) comes from auth/webhook. plan_interest must come from an
-      // explicit tap/short-reply (handled deterministically above) so a passing
-      // mention of "Founding" / "annual" can't skip the duration prompt.
+      // (phone) comes from auth/webhook. Email is OK to set ONLY when memory
+      // doesn't already have one (deterministic regex above is preferred).
+      // plan_interest must come from an explicit tap/short-reply.
       if (parsed.profile && typeof parsed.profile === "object") {
-        delete parsed.profile.email;
         delete parsed.profile.phone;
+        if (memory?.profile?.email) delete parsed.profile.email;
         Object.assign(delta.profile!, parsed.profile);
       }
       if (parsed.facts && typeof parsed.facts === "object") {
