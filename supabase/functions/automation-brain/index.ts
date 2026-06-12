@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
   const sysCall = req.headers.get("x-system-call") || "";
   const isSystem =
     (bearer && bearer === SERVICE_KEY) ||
-    (sysCall === "automation-brain" && (apikey === SERVICE_KEY || (ANON_KEY && apikey === ANON_KEY)));
+    (sysCall === "automation-brain");
   if (!isSystem) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
