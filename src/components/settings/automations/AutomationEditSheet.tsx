@@ -108,7 +108,7 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
                 <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (IST)</p>
                 <ul className="mt-1.5 space-y-0.5 font-mono">
                   {preview.map((d, i) => (
-                    <li key={i}>{formatIST(d, 'MMM d HH:mm')} IST</li>
+                    <li key={i}>{formatIST(d, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} IST</li>
                   ))}
                 </ul>
               </div>
