@@ -406,6 +406,26 @@ export async function runUnifiedAgent(
         summary: delta.summary ?? undefined,
       });
       memory = await loadMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId);
+
+      // v4.2.0 — Write-through newly captured email/name into the existing
+      // lead row so future turns hydrate from CRM and the onboarding short-
+      // circuit advances. Without this, ai_memory has the email but the
+      // leads.email column stays NULL and the next session re-asks it.
+      const newEmail = (delta.profile?.email || "").toString().trim();
+      const newName = (delta.profile?.full_name || delta.profile?.first_name || "").toString().trim();
+      if (leadCtx?.leadId && (newEmail || newName)) {
+        try {
+          const patch: Record<string, any> = { updated_at: new Date().toISOString() };
+          if (newEmail && !leadCtx.profile.email) patch.email = newEmail;
+          if (newName && !leadCtx.profile.full_name) patch.full_name = newName;
+          if (Object.keys(patch).length > 1) {
+            await supabase.from("leads").update(patch).eq("id", leadCtx.leadId);
+            console.log(`[AI:${ctx.platform}] lead ${leadCtx.leadId} backfilled from chat:`, Object.keys(patch).filter(k => k !== "updated_at"));
+          }
+        } catch (e) {
+          console.warn(`[AI:${ctx.platform}] lead backfill failed (non-fatal):`, (e as Error).message);
+        }
+      }
     }
   } catch (e) {
     console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
