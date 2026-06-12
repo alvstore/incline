@@ -1,4 +1,6 @@
-// Tiny 5-field cron helpers (UTC). Shared by Automation Brain UI.
+// Tiny 5-field cron helpers. Cron expressions are stored in UTC (pg_cron),
+// but human-facing labels are rendered in IST (Asia/Kolkata) for Indian users.
+import { utcHmToIstHm, istHmToUtcHm } from '@/lib/utils/datetime';
 
 function parseField(field: string, min: number, max: number): number[] {
   const out = new Set<number>();
@@ -35,9 +37,21 @@ export function describeCron(expr: string): string {
   if (h === '*' && dom === '*' && mon === '*' && dow === '*') return `At minute ${m} of every hour`;
   if (h.startsWith('*/') && dom === '*' && mon === '*' && dow === '*')
     return `Every ${h.slice(2)} hours at :${m.padStart(2, '0')}`;
-  if (dom === '*' && mon === '*' && dow === '*')
-    return `Every day at ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} UTC`;
+  if (dom === '*' && mon === '*' && dow === '*') {
+    const hUtc = parseInt(h, 10);
+    const mUtc = parseInt(m, 10);
+    if (Number.isFinite(hUtc) && Number.isFinite(mUtc)) {
+      const { h: hI, m: mI } = utcHmToIstHm(hUtc, mUtc);
+      return `Every day at ${String(hI).padStart(2, '0')}:${String(mI).padStart(2, '0')} IST`;
+    }
+    return `Every day at ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
   return expr;
+}
+
+function istCron(hIst: number, mIst: number) {
+  const { h, m } = istHmToUtcHm(hIst, mIst);
+  return `${m} ${h} * * *`;
 }
 
 export function nextRuns(expr: string, after: Date, count = 3): Date[] {
@@ -74,7 +88,8 @@ export const CRON_PRESETS = [
   { label: 'Every 15 minutes', value: '*/15 * * * *' },
   { label: 'Every 30 minutes', value: '*/30 * * * *' },
   { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at 8:00 AM UTC', value: '0 8 * * *' },
-  { label: 'Daily at 9:30 AM UTC', value: '30 9 * * *' },
-  { label: 'Daily at 9:00 PM UTC', value: '0 21 * * *' },
+  { label: 'Daily at 8:00 AM IST',  value: istCron(8, 0) },
+  { label: 'Daily at 9:30 AM IST',  value: istCron(9, 30) },
+  { label: 'Daily at 6:00 PM IST',  value: istCron(18, 0) },
+  { label: 'Daily at 9:00 PM IST',  value: istCron(21, 0) },
 ];

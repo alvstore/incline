@@ -15,6 +15,7 @@ import { Activity, AlertTriangle, CheckCircle, Copy, Sparkles, Clock, Eye, Monit
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { formatIST, formatISTFull } from '@/lib/utils/datetime';
 import { exportToCSV } from '@/lib/csvExport';
 import { CommunicationFunnelCard } from '@/components/system/CommunicationFunnelCard';
 import { ReconciliationFindingsCard } from '@/components/system/ReconciliationFindingsCard';
@@ -538,8 +539,8 @@ export default function SystemHealth() {
                                       }}
                                     />
                                   </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {format(new Date(lastTime), 'MMM d, HH:mm')}
+                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={formatISTFull(lastTime)}>
+                                    {formatIST(lastTime)}
                                   </TableCell>
                                   <TableCell>
                                     <Badge className={`${sevBadgeClass} rounded-full text-xs font-medium`} variant="secondary">{sev}</Badge>
@@ -661,7 +662,7 @@ export default function SystemHealth() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Time</p>
-                  <p className="text-sm">{format(new Date(selectedError.created_at), 'PPpp')}</p>
+                  <p className="text-sm">{formatISTFull(selectedError.created_at)}</p>
                 </div>
               </div>
 
