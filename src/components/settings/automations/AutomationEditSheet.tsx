@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Bot, Sparkles, Lock, Clock } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatIST } from '@/lib/utils/datetime';
 import { toast } from 'sonner';
 import { CRON_PRESETS, describeCron, nextRuns } from '@/lib/automations/cronHumanize';
 import type { AutomationRule } from './types';
@@ -105,10 +105,10 @@ export function AutomationEditSheet({ rule, onClose, onSaved }: Props) {
             </div>
             {preview.length > 0 && (
               <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-                <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (UTC)</p>
+                <p className="font-semibold flex items-center gap-1.5"><Clock className="h-3 w-3" /> Next runs (IST)</p>
                 <ul className="mt-1.5 space-y-0.5 font-mono">
                   {preview.map((d, i) => (
-                    <li key={i}>{format(d, 'MMM d HH:mm')}</li>
+                    <li key={i}>{formatIST(d, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} IST</li>
                   ))}
                 </ul>
               </div>
