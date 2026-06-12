@@ -553,7 +553,7 @@ async function triggerAiAutoReply(messageId: string, phoneNumber: string, branch
 
 async function sendAiReply(
   replyText: string,
-  inboundMsg: { phone_number: string; contact_name: string | null },
+  inboundMsg: { phone_number: string; contact_name: string | null; created_at?: string | null },
   branchId: string,
   inboundMessageId?: string,
 ) {
