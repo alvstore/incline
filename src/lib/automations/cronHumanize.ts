@@ -88,7 +88,8 @@ export const CRON_PRESETS = [
   { label: 'Every 15 minutes', value: '*/15 * * * *' },
   { label: 'Every 30 minutes', value: '*/30 * * * *' },
   { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at 8:00 AM UTC', value: '0 8 * * *' },
-  { label: 'Daily at 9:30 AM UTC', value: '30 9 * * *' },
-  { label: 'Daily at 9:00 PM UTC', value: '0 21 * * *' },
+  { label: 'Daily at 8:00 AM IST',  value: istCron(8, 0) },
+  { label: 'Daily at 9:30 AM IST',  value: istCron(9, 30) },
+  { label: 'Daily at 6:00 PM IST',  value: istCron(18, 0) },
+  { label: 'Daily at 9:00 PM IST',  value: istCron(21, 0) },
 ];
