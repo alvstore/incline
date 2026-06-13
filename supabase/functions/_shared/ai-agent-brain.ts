@@ -2144,6 +2144,15 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
       if (parsed.profile && typeof parsed.profile === "object") {
         delete parsed.profile.phone;
         if (memory?.profile?.email) delete parsed.profile.email;
+        // v4.3.0 — Validate name fields before merging; the LLM sometimes
+        // echoes "No"/"Yes" from the user as first_name.
+        const phoneForGuard = memory?.profile?.phone;
+        if (parsed.profile.first_name && !looksLikeRealName(parsed.profile.first_name, phoneForGuard)) {
+          delete parsed.profile.first_name;
+        }
+        if (parsed.profile.full_name && !looksLikeRealName(parsed.profile.full_name, phoneForGuard)) {
+          delete parsed.profile.full_name;
+        }
         Object.assign(delta.profile!, parsed.profile);
       }
       if (parsed.facts && typeof parsed.facts === "object") {
