@@ -66,3 +66,11 @@ Whenever the new intent gate fires, write to `ai_memory` so the next inbound fro
 - `.lovable/plan.md` (log entry)
 
 No migrations. No new edge functions. No frontend changes.
+
+---
+## Implemented 2026-06-13
+- `ai-agent-brain.ts` v4.3.0: added HUMAN_HANDOFF_RE + DECLINE_RE deterministic gate before the name/email/goal/plan funnel; pauses bot 24h, writes `consent.wants_human=true` to ai_memory, fires `notify-staff-handoff`, marks DNC on decline.
+- Expanded `FAKE_NAME_TOKENS` with negatives/greetings/control words ("no", "yes", "hi", "haan", "nahi", "human", "manager", …).
+- Name auto-learn now also rejects question-shaped replies and handoff/decline matches.
+- LLM enrichment merge now validates `first_name`/`full_name` with `looksLikeRealName` before writing.
+- Deployed: whatsapp-webhook, meta-webhook.
