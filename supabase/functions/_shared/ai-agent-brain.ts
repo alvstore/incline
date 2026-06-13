@@ -2053,9 +2053,18 @@ async function extractContextDelta(
     const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
     const prevWasNamePrompt = /may I have your name|what's your name|what is your name|your name to get started/i.test(lastBot);
     if (prevWasNamePrompt) {
+      // v4.3.0 — Reject obvious non-name replies (questions, handoff requests,
+      // declines) before they get stored as first_name. "No", "Can I speak to
+      // a person?", "haan", etc. must NEVER become a profile name.
+      const looksLikeQuestion = /\?/.test(lastUser);
+      const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
-      if (tokens.length >= 1 && tokens.length <= 3 && /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])) {
+      if (
+        !looksLikeQuestion && !isHandoffOrDecline &&
+        tokens.length >= 1 && tokens.length <= 3 &&
+        /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])
+      ) {
         const fn = tokens[0];
         if (looksLikeRealName(fn, memory?.profile?.phone)) {
           delta.profile!.first_name = fn;
