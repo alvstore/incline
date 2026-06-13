@@ -1,64 +1,76 @@
-# Restore Lead Nurture Follow-up
+# Fix: AI Brain ignores human-handoff intent + captures "No" as a name
 
-## Root cause recap
-1. **Brain dead since Jun 11 09:50 UTC.** `automation-brain` v2.2.0 added an auth gate requiring `Authorization: Bearer <SERVICE_KEY>` (or `apikey=SERVICE_KEY` + `x-system-call=automation-brain`). The pg_cron job `automation-brain-tick` (jobid 14) still posts only the ANON key, so every tick returns 401. All 15 automation rules have been silently frozen for ~29 hours — including `lead_nurture_followup`, `monitor_ai_lead_loss`, `process_whatsapp_retry_queue`, `process_scheduled_campaigns`, `process_ig_comment_runs`, `daily_send_reminders`, etc.
-2. **Rahul's lead row is empty.** His conversation predates the deterministic email/name capture fix, so `leads.c33b3f77…` has `email=NULL`, `plan_interest=NULL`, `last_contacted_at=NULL`. Even with the brain restored, the nurture worker won't message a lead with no email or with no prior outbound timestamp depending on its eligibility filter.
+## Root cause (audited in `ai-agent-brain.ts`)
 
-## Plan
+Two deterministic bugs, both upstream of the LLM:
 
-### Step 1 — Fix the cron auth headers (migration)
-Re-schedule `automation-brain-tick` (jobid 14) so the HTTP POST includes the service-role bearer and the system-call marker the brain expects:
+1. **No intent gate before the capture funnel.** Lines 588–663 short-circuit to `"May I have your name…"` → `"…email for your Founding Member invite"` → goal list → duration list, regardless of what the user actually said. "Hi is this incline udaipur?" and "Can I speak to live person?" never reach any intent classifier — the bot just walks the next step.
 
-```sql
-SELECT cron.unschedule('automation-brain-tick');
-SELECT cron.schedule(
-  'automation-brain-tick',
-  '*/5 * * * *',
-  $$ SELECT net.http_post(
-    url := 'https://<project>.supabase.co/functions/v1/automation-brain',
-    headers := jsonb_build_object(
-      'Content-Type','application/json',
-      'apikey', '<SERVICE_ROLE_KEY>',
-      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
-      'x-system-call', 'automation-brain'
-    ),
-    body := '{"source":"cron"}'::jsonb,
-    timeout_milliseconds := 55000
-  ); $$
-);
-```
+2. **Name guard is too loose.** Auto-learn at lines 1965–1980 accepts any 1–3 token alpha reply that passes `looksLikeRealName()` (line 95). `FAKE_NAME_TOKENS` only blocks {sample, test, user, demo, …}. So `"No"`, `"Yes"`, `"Ok"`, `"Stop"`, `"Hi"`, `"haan"`, `"nahi"` all pass and are stored as `first_name`. That's why the bot then said *"Thanks, No — what's the best email…"*.
 
-Same pattern audited for the other cron-driven edge functions (`dr-health-probe-db`, `google-reviews-brain-fetch`, `reconcile-whatsapp-pending`, etc.) — if any of them also enforce service-role auth in code but receive only anon, fix in the same migration.
+The user request "AI should understand human questions and use our context" maps cleanly to: detect human-handoff/decline intent first, and never write garbage into the lead profile.
 
-### Step 2 — Force-due all frozen rules
-After the migration, `UPDATE automation_rules SET next_run_at = now() WHERE is_active = true AND next_run_at < now() - interval '1 hour';` so the next tick immediately processes the backlog instead of waiting for each rule's own cron.
+## Changes
 
-### Step 3 — Backfill Rahul's lead (one-off SQL, no migration)
-```sql
-UPDATE leads
-SET email = 'Rahulchaudhary872@gmail.com',
-    full_name = COALESCE(NULLIF(full_name,''), 'Rahul'),
-    last_contacted_at = '2026-06-10 17:25:32+00',
-    updated_at = now()
-WHERE id = 'c33b3f77-305f-4999-acdc-af96a7de4d2e'
-  AND email IS NULL;
-```
-This makes him eligible for `lead_nurture_followup` on the next tick.
+### 1. New intent gate at the top of the capture flow
+File: `supabase/functions/_shared/ai-agent-brain.ts`
 
-### Step 4 — Verify
-- After ~5 min, confirm `automation_rules.last_run_at > now() - interval '10 min'` for every active rule.
-- Check `automation_runs` for fresh `success` rows.
-- Confirm `lead_nurture_followup` dispatched a message to +917737300273 (and other backlogged leads), and that `monitor_ai_lead_loss` didn't fire false-positive alerts on the 29-hour gap.
-- Add a SystemHealth assertion: alert if `max(automation_rules.last_run_at) < now() - 30 min` so a future broken cron is caught within half an hour instead of days.
+Insert a deterministic intent classifier BEFORE the Step 1–4 funnel (current line 588). Patterns (case-insensitive, English + Hinglish + Hindi):
 
-### Step 5 — Document the contract
-Update mem `architecture/p3-workflow-hardening` (or `automation-brain` memory) with the required cron-call header contract so the next brain auth tightening can't desync from the cron command again.
+- **Human handoff:** `live (person|agent|human)`, `real (person|human)`, `speak (to|with) (a )?(person|human|someone|staff|manager|team)`, `talk to (a )?(person|human|someone)`, `call me`, `connect me`, `insaan se baat`, `kisi se baat`, `manager`.
+- **Decline / not-interested:** `not interested`, `don't contact`, `stop`, `unsubscribe`, `leave me alone`, `mat karo`.
+
+When matched:
+- Skip the name/email/goal/plan ask entirely.
+- Set `whatsapp_chat_settings.bot_paused_until = now() + 24h` and `bot_active = false`.
+- Persist `ai_memory.facts.consent.wants_human = true` so the brain remembers across turns (self-learning).
+- Invoke existing `notify-staff-handoff` edge function (fire-and-forget) with `{ reason: "user_requested_human", platform, sender_id, last_message }`.
+- Return a single short reply: *"Got it — a teammate from Incline will reach out shortly. 🙏"*  (decline variant: *"Understood — we won't message further. Reply START anytime to resume."*)
+- Mark result `handoffTriggered: true`.
+
+### 2. Harden name capture (two layers)
+
+In `ai-agent-brain.ts`:
+
+- **Extend `FAKE_NAME_TOKENS`** (line 90) with negative/affirmative/greeting/control words:
+  `yes, no, nope, yep, yeah, ok, okay, sure, maybe, hi, hello, hey, thanks, thank, why, what, who, when, where, how, can, cant, dont, please, stop, wait, cancel, sorry, haan, nahi, nahin, theek, accha, bilkul, kya, kaun, kaise`.
+  These are also rejected after lowercasing+stripping punctuation, so "No.", "No!", "no " all fail.
+
+- **Auto-learn name guard (line 1965 block):** after `looksLikeRealName` passes, additionally reject single-token replies that match the handoff/decline regex from step 1. Also require the prior bot turn to have been the name prompt (already gated) AND the user message word-count ≤ 3 AND no `?` (questions like "Can?" aren't names).
+
+- **LLM-enrichment merge (line 2051):** when the LLM returns `delta.profile.first_name`, run it through the same `looksLikeRealName` + new blocklist before writing.
+
+### 3. Self-learning memory write
+
+Whenever the new intent gate fires, write to `ai_memory` so the next inbound from the same sender:
+- Does not re-trigger the funnel.
+- Causes the brain to reply with the human-handoff acknowledgement until a staff member manually un-pauses (existing `bot_active` toggle in chat UI).
+
+### 4. (No new tables, no edge fn added)
+`notify-staff-handoff` already exists and already posts to staff routing. We're only adding one call site.
 
 ## Out of scope
-- Refactoring `lead-nurture-followup` worker logic itself.
-- Backfilling other historical leads with missing email (only Rahul requested).
-- UI changes to Automation Control Room.
+- No prompt/persona text changes in `ai_knowledge` (the persona already says "transfer when asked"; the bug is that the deterministic short-circuit runs before the persona ever speaks).
+- No UI changes — the existing WhatsAppChat header already shows the bot-paused badge from `bot_paused_until`.
+- IG/Messenger reuses the same brain, so the fix applies to all three channels automatically.
+
+## Verification
+1. Replay the failing thread (Ashutosh, +91 77278 13691):
+   - "Can I speak to live person?" → expect handoff reply, `bot_paused_until` set, staff notified, no name prompt.
+   - "No" after a name prompt → expect re-prompt, NOT stored as first_name.
+2. Unit-style check via `ai-test-purpose` edge fn with the same inputs.
+3. Confirm `ai_memory.facts.consent.wants_human=true` after handoff turn.
 
 ## Files touched
-- `supabase/migrations/<ts>_fix_automation_cron_auth.sql` (re-schedule + force-due + Rahul backfill)
-- `mem://architecture/automation-brain-cron-auth-contract` (new or appended)
+- `supabase/functions/_shared/ai-agent-brain.ts` (intent gate, expanded blocklist, hardened name guards, memory write, notify-staff-handoff invoke)
+- `.lovable/plan.md` (log entry)
+
+No migrations. No new edge functions. No frontend changes.
+
+---
+## Implemented 2026-06-13
+- `ai-agent-brain.ts` v4.3.0: added HUMAN_HANDOFF_RE + DECLINE_RE deterministic gate before the name/email/goal/plan funnel; pauses bot 24h, writes `consent.wants_human=true` to ai_memory, fires `notify-staff-handoff`, marks DNC on decline.
+- Expanded `FAKE_NAME_TOKENS` with negatives/greetings/control words ("no", "yes", "hi", "haan", "nahi", "human", "manager", …).
+- Name auto-learn now also rejects question-shaped replies and handoff/decline matches.
+- LLM enrichment merge now validates `first_name`/`full_name` with `looksLikeRealName` before writing.
+- Deployed: whatsapp-webhook, meta-webhook.

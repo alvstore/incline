@@ -91,7 +91,21 @@ const FAKE_NAME_TOKENS = new Set([
   "sample", "test", "testing", "tester", "user", "demo", "customer",
   "unknown", "na", "none", "null", "n/a", "admin", "guest", "anon",
   "anonymous", "default", "client", "whatsapp", "instagram",
+  // v4.3.0 — Short answers / greetings / control words. These were being
+  // captured as first_name when the funnel asked "what's your name?".
+  "yes", "no", "nope", "yep", "yeah", "ok", "okay", "sure", "maybe",
+  "hi", "hello", "hey", "thanks", "thank", "please", "stop", "wait",
+  "cancel", "sorry", "why", "what", "who", "when", "where", "how",
+  "can", "cant", "dont", "human", "agent", "person", "manager", "staff",
+  "haan", "nahi", "nahin", "theek", "accha", "bilkul", "kya", "kaun", "kaise",
 ]);
+
+// ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
+// English + Hinglish + Hindi. Matched on inbound user text only. v4.3.0
+export const HUMAN_HANDOFF_RE =
+  /\b(live\s+(?:person|agent|human)|real\s+(?:person|human)|speak\s+(?:to|with)\s+(?:a\s+)?(?:person|human|someone|staff|manager|team)|talk\s+to\s+(?:a\s+)?(?:person|human|someone|staff|manager)|call\s+me|connect\s+me|insaan\s+se\s+baat|kisi\s+se\s+baat|manager\s+se\s+baat|human\s+please|real\s+human)\b/i;
+export const DECLINE_RE =
+  /\b(not\s+interested|don'?t\s+contact|leave\s+me\s+alone|unsubscribe|mat\s+karo|nahin?\s+chahiye)\b/i;
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
@@ -290,6 +304,79 @@ export async function runUnifiedAgent(
 
     return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
   }
+
+  // 3c. HUMAN-HANDOFF / DECLINE intent gate. Runs BEFORE the deterministic
+  //     name/email/goal/plan funnel so "Can I speak to a live person?" or "No"
+  //     doesn't get walked through the onboarding script. v4.3.0
+  const inboundText = String(ctx.messageContent || "").trim();
+  const wantsHuman = HUMAN_HANDOFF_RE.test(inboundText);
+  const declines = DECLINE_RE.test(inboundText);
+  if (wantsHuman || declines) {
+    const reason = wantsHuman ? "user_requested_human" : "user_declined_contact";
+    const replyText = wantsHuman
+      ? "Got it — a teammate from Incline will reach out shortly. 🙏"
+      : "Understood — we won't message further. Reply START anytime to resume.";
+    try {
+      const pauseUntil = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          {
+            branch_id: ctx.branchId,
+            phone_number: ctx.senderId,
+            platform: ctx.platform as any,
+            bot_active: false,
+            bot_paused_until: pauseUntil,
+            paused_at: new Date().toISOString(),
+            handoff_reason: reason,
+            do_not_contact: declines ? true : undefined,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] handoff pause write failed:`, (e as Error).message);
+    }
+    try {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        current_intent: reason,
+        facts: { consent: { wants_human: wantsHuman, push_contact_ask: declines ? "declined" : "unknown" } },
+        do_not_ask_add: ["name", "email", "goal", "plan_interest"],
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] handoff memory write failed:`, (e as Error).message);
+    }
+    if (declines) {
+      try {
+        await supabase.rpc("mark_do_not_contact", {
+          p_phone: ctx.senderId,
+          p_branch_id: ctx.branchId,
+          p_reason: "user_declined",
+          p_source: "ai_guard",
+        });
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] mark_do_not_contact failed:`, (e as Error).message);
+      }
+    }
+    if (wantsHuman) {
+      // Fire-and-forget staff alert.
+      try {
+        const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        fetch(`${baseUrl}/functions/v1/notify-staff-handoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            member_phone: ctx.senderId,
+            branch_id: ctx.branchId,
+            reason: `User asked to speak to a live person (${ctx.platform})`,
+          }),
+        }).catch(() => {});
+      } catch { /* noop */ }
+    }
+    return { replyText, leadCaptured: false, leadId: null, handoffTriggered: true, skipped: false };
+  }
+
 
   // 4. Optional delay
   const delaySeconds = aiConfig.reply_delay_seconds || 0;
@@ -1966,9 +2053,18 @@ async function extractContextDelta(
     const lastBot = [...history].reverse().find((m) => m.role !== "user")?.content || "";
     const prevWasNamePrompt = /may I have your name|what's your name|what is your name|your name to get started/i.test(lastBot);
     if (prevWasNamePrompt) {
+      // v4.3.0 — Reject obvious non-name replies (questions, handoff requests,
+      // declines) before they get stored as first_name. "No", "Can I speak to
+      // a person?", "haan", etc. must NEVER become a profile name.
+      const looksLikeQuestion = /\?/.test(lastUser);
+      const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
-      if (tokens.length >= 1 && tokens.length <= 3 && /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])) {
+      if (
+        !looksLikeQuestion && !isHandoffOrDecline &&
+        tokens.length >= 1 && tokens.length <= 3 &&
+        /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])
+      ) {
         const fn = tokens[0];
         if (looksLikeRealName(fn, memory?.profile?.phone)) {
           delta.profile!.first_name = fn;
@@ -2048,6 +2144,15 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
       if (parsed.profile && typeof parsed.profile === "object") {
         delete parsed.profile.phone;
         if (memory?.profile?.email) delete parsed.profile.email;
+        // v4.3.0 — Validate name fields before merging; the LLM sometimes
+        // echoes "No"/"Yes" from the user as first_name.
+        const phoneForGuard = memory?.profile?.phone;
+        if (parsed.profile.first_name && !looksLikeRealName(parsed.profile.first_name, phoneForGuard)) {
+          delete parsed.profile.first_name;
+        }
+        if (parsed.profile.full_name && !looksLikeRealName(parsed.profile.full_name, phoneForGuard)) {
+          delete parsed.profile.full_name;
+        }
         Object.assign(delta.profile!, parsed.profile);
       }
       if (parsed.facts && typeof parsed.facts === "object") {
