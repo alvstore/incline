@@ -91,7 +91,21 @@ const FAKE_NAME_TOKENS = new Set([
   "sample", "test", "testing", "tester", "user", "demo", "customer",
   "unknown", "na", "none", "null", "n/a", "admin", "guest", "anon",
   "anonymous", "default", "client", "whatsapp", "instagram",
+  // v4.3.0 — Short answers / greetings / control words. These were being
+  // captured as first_name when the funnel asked "what's your name?".
+  "yes", "no", "nope", "yep", "yeah", "ok", "okay", "sure", "maybe",
+  "hi", "hello", "hey", "thanks", "thank", "please", "stop", "wait",
+  "cancel", "sorry", "why", "what", "who", "when", "where", "how",
+  "can", "cant", "dont", "human", "agent", "person", "manager", "staff",
+  "haan", "nahi", "nahin", "theek", "accha", "bilkul", "kya", "kaun", "kaise",
 ]);
+
+// ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
+// English + Hinglish + Hindi. Matched on inbound user text only. v4.3.0
+export const HUMAN_HANDOFF_RE =
+  /\b(live\s+(?:person|agent|human)|real\s+(?:person|human)|speak\s+(?:to|with)\s+(?:a\s+)?(?:person|human|someone|staff|manager|team)|talk\s+to\s+(?:a\s+)?(?:person|human|someone|staff|manager)|call\s+me|connect\s+me|insaan\s+se\s+baat|kisi\s+se\s+baat|manager\s+se\s+baat|human\s+please|real\s+human)\b/i;
+export const DECLINE_RE =
+  /\b(not\s+interested|don'?t\s+contact|leave\s+me\s+alone|unsubscribe|mat\s+karo|nahin?\s+chahiye)\b/i;
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
