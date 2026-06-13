@@ -305,6 +305,79 @@ export async function runUnifiedAgent(
     return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
   }
 
+  // 3c. HUMAN-HANDOFF / DECLINE intent gate. Runs BEFORE the deterministic
+  //     name/email/goal/plan funnel so "Can I speak to a live person?" or "No"
+  //     doesn't get walked through the onboarding script. v4.3.0
+  const inboundText = String(ctx.messageContent || "").trim();
+  const wantsHuman = HUMAN_HANDOFF_RE.test(inboundText);
+  const declines = DECLINE_RE.test(inboundText);
+  if (wantsHuman || declines) {
+    const reason = wantsHuman ? "user_requested_human" : "user_declined_contact";
+    const replyText = wantsHuman
+      ? "Got it — a teammate from Incline will reach out shortly. 🙏"
+      : "Understood — we won't message further. Reply START anytime to resume.";
+    try {
+      const pauseUntil = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          {
+            branch_id: ctx.branchId,
+            phone_number: ctx.senderId,
+            platform: ctx.platform as any,
+            bot_active: false,
+            bot_paused_until: pauseUntil,
+            paused_at: new Date().toISOString(),
+            handoff_reason: reason,
+            do_not_contact: declines ? true : undefined,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] handoff pause write failed:`, (e as Error).message);
+    }
+    try {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        current_intent: reason,
+        facts: { consent: { wants_human: wantsHuman, push_contact_ask: declines ? "declined" : "unknown" } },
+        do_not_ask_add: ["name", "email", "goal", "plan_interest"],
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] handoff memory write failed:`, (e as Error).message);
+    }
+    if (declines) {
+      try {
+        await supabase.rpc("mark_do_not_contact", {
+          p_phone: ctx.senderId,
+          p_branch_id: ctx.branchId,
+          p_reason: "user_declined",
+          p_source: "ai_guard",
+        });
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] mark_do_not_contact failed:`, (e as Error).message);
+      }
+    }
+    if (wantsHuman) {
+      // Fire-and-forget staff alert.
+      try {
+        const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        fetch(`${baseUrl}/functions/v1/notify-staff-handoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            member_phone: ctx.senderId,
+            branch_id: ctx.branchId,
+            reason: `User asked to speak to a live person (${ctx.platform})`,
+          }),
+        }).catch(() => {});
+      } catch { /* noop */ }
+    }
+    return { replyText, leadCaptured: false, leadId: null, handoffTriggered: true, skipped: false };
+  }
+
+
   // 4. Optional delay
   const delaySeconds = aiConfig.reply_delay_seconds || 0;
   if (delaySeconds > 0 && delaySeconds <= 30) {
