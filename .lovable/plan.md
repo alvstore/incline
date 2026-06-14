@@ -1,76 +1,142 @@
-# Fix: AI Brain ignores human-handoff intent + captures "No" as a name
 
-## Root cause (audited in `ai-agent-brain.ts`)
+## Goal
 
-Two deterministic bugs, both upstream of the LLM:
+Stop the "Slot-Filling Trap" in the WhatsApp/IG/Messenger AI brain. When a user replies to a name/email prompt with a Hinglish question ("Kha pr h", "kitna", "kab khulega"), the bot must:
 
-1. **No intent gate before the capture funnel.** Lines 588–663 short-circuit to `"May I have your name…"` → `"…email for your Founding Member invite"` → goal list → duration list, regardless of what the user actually said. "Hi is this incline udaipur?" and "Can I speak to live person?" never reach any intent classifier — the bot just walks the next step.
+1. Recognize the intent (Location / Pricing / Timeline).
+2. Answer it from knowledge.
+3. Re-ask for the missing field in the SAME reply.
+4. Never persist the question as `first_name`.
 
-2. **Name guard is too loose.** Auto-learn at lines 1965–1980 accepts any 1–3 token alpha reply that passes `looksLikeRealName()` (line 95). `FAKE_NAME_TOKENS` only blocks {sample, test, user, demo, …}. So `"No"`, `"Yes"`, `"Ok"`, `"Stop"`, `"Hi"`, `"haan"`, `"nahi"` all pass and are stored as `first_name`. That's why the bot then said *"Thanks, No — what's the best email…"*.
+## Why Epic 2 is adapted
 
-The user request "AI should understand human questions and use our context" maps cleanly to: detect human-handoff/decline intent first, and never write garbage into the lead profile.
+The user's epic targets an `upsert_lead_contact` function-calling tool. This project does not use that pattern — capture is deterministic in `supabase/functions/_shared/ai-agent-brain.ts` (Steps 1–4 short-circuit + regex auto-learn + LLM enrichment). The hardening lives there, not in a tool schema.
+
+## Scope (files touched)
+
+1. `supabase/functions/_shared/ai-agent-brain.ts` — intent gate, answer-and-pivot, expanded blocklist, observability log.
+2. `supabase/functions/_shared/ai-prompt.ts` — add `<intent_override>` block to `<strict_rules>` so the LLM follows the same rule on any turn the deterministic gate doesn't short-circuit.
+3. `.lovable/plan.md` — log entry.
+
+No new migrations, no UI changes, no new edge functions. Deploy `whatsapp-webhook` and `meta-webhook` after edit (they import the shared brain).
 
 ## Changes
 
-### 1. New intent gate at the top of the capture flow
-File: `supabase/functions/_shared/ai-agent-brain.ts`
+### 1. Hinglish intent classifier (new, top of brain, runs BEFORE Step 1 short-circuit)
 
-Insert a deterministic intent classifier BEFORE the Step 1–4 funnel (current line 588). Patterns (case-insensitive, English + Hinglish + Hindi):
+Add three regexes + a small classifier:
 
-- **Human handoff:** `live (person|agent|human)`, `real (person|human)`, `speak (to|with) (a )?(person|human|someone|staff|manager|team)`, `talk to (a )?(person|human|someone)`, `call me`, `connect me`, `insaan se baat`, `kisi se baat`, `manager`.
-- **Decline / not-interested:** `not interested`, `don't contact`, `stop`, `unsubscribe`, `leave me alone`, `mat karo`.
+```ts
+export const LOCATION_INTENT_RE =
+  /\b(kha(?:a|n)?\s*pr?\s*h|kaha[ny]?|kidhar|location|address|where(?:\s+is)?|locate|reach|directions?)\b/i;
+export const PRICING_INTENT_RE =
+  /\b(kitna|kitne|paisa|paise|fees?|price|cost|charges?|rate|rates|kharcha|kharch)\b/i;
+export const TIMELINE_INTENT_RE =
+  /\b(kab\s*(?:khul|start|open)|open(?:ing)?\s+(?:when|kab)|start\s*date|launch|kab\s*se|opens?\s+when|when\s+(?:do\s+you\s+)?open)\b/i;
 
-When matched:
-- Skip the name/email/goal/plan ask entirely.
-- Set `whatsapp_chat_settings.bot_paused_until = now() + 24h` and `bot_active = false`.
-- Persist `ai_memory.facts.consent.wants_human = true` so the brain remembers across turns (self-learning).
-- Invoke existing `notify-staff-handoff` edge function (fire-and-forget) with `{ reason: "user_requested_human", platform, sender_id, last_message }`.
-- Return a single short reply: *"Got it — a teammate from Incline will reach out shortly. 🙏"*  (decline variant: *"Understood — we won't message further. Reply START anytime to resume."*)
-- Mark result `handoffTriggered: true`.
+type HinglishIntent = "location" | "pricing" | "timeline" | null;
+function classifyHinglishIntent(text: string): HinglishIntent {
+  if (LOCATION_INTENT_RE.test(text)) return "location";
+  if (PRICING_INTENT_RE.test(text)) return "pricing";
+  if (TIMELINE_INTENT_RE.test(text)) return "timeline";
+  return null;
+}
+```
 
-### 2. Harden name capture (two layers)
+Canned answers (sourced from existing memory constants — Sector 14 Udaipur, Founder's Embargo on price, June 22 launch):
 
-In `ai-agent-brain.ts`:
+```ts
+const INTENT_ANSWERS: Record<Exclude<HinglishIntent,null>, string> = {
+  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
+  pricing:  "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
+  timeline: "We open on June 22nd — Founding Members get launch-day perks ✨",
+};
+```
 
-- **Extend `FAKE_NAME_TOKENS`** (line 90) with negative/affirmative/greeting/control words:
-  `yes, no, nope, yep, yeah, ok, okay, sure, maybe, hi, hello, hey, thanks, thank, why, what, who, when, where, how, can, cant, dont, please, stop, wait, cancel, sorry, haan, nahi, nahin, theek, accha, bilkul, kya, kaun, kaise`.
-  These are also rejected after lowercasing+stripping punctuation, so "No.", "No!", "no " all fail.
+### 2. Answer-and-pivot inside each capture short-circuit step
 
-- **Auto-learn name guard (line 1965 block):** after `looksLikeRealName` passes, additionally reject single-token replies that match the handoff/decline regex from step 1. Also require the prior bot turn to have been the name prompt (already gated) AND the user message word-count ≤ 3 AND no `?` (questions like "Can?" aren't names).
+In the `shouldCaptureLead` block (lines 665–751), before each `return { replyText: … }`, run:
 
-- **LLM-enrichment merge (line 2051):** when the LLM returns `delta.profile.first_name`, run it through the same `looksLikeRealName` + new blocklist before writing.
+```ts
+const intent = classifyHinglishIntent(ctx.messageContent);
+const pivotPrefix = intent ? `${INTENT_ANSWERS[intent]} ` : "";
+```
 
-### 3. Self-learning memory write
+Then prepend `pivotPrefix` to the existing canned reply. Example for Step 1:
 
-Whenever the new intent gate fires, write to `ai_memory` so the next inbound from the same sender:
-- Does not re-trigger the funnel.
-- Causes the brain to reply with the human-handoff acknowledgement until a staff member manually un-pauses (existing `bot_active` toggle in chat UI).
+```ts
+return {
+  replyText: `${pivotPrefix}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
+  …
+};
+```
 
-### 4. (No new tables, no edge fn added)
-`notify-staff-handoff` already exists and already posts to staff routing. We're only adding one call site.
+Same pattern for Step 2 (email), Step 3 (goal), Step 4 (plan duration). For interactive_list replies (Step 3/4), the pivot prefix is prepended to the `body` field of the JSON, not the outer string.
 
-## Out of scope
-- No prompt/persona text changes in `ai_knowledge` (the persona already says "transfer when asked"; the bug is that the deterministic short-circuit runs before the persona ever speaks).
-- No UI changes — the existing WhatsAppChat header already shows the bot-paused badge from `bot_paused_until`.
-- IG/Messenger reuses the same brain, so the fix applies to all three channels automatically.
+### 3. Block Hinglish question words from becoming a name
+
+Two layers — both already exist, just extend:
+
+a. Expand `FAKE_NAME_TOKENS` (line 90) with the new tokens:
+```
+"kha","khan","kahan","kidhar","kab","kitna","kitne","paisa","paise",
+"fees","price","cost","rate","rates","location","address","open","khulega",
+"start","launch","reach","directions"
+```
+
+b. In the auto-learn name block (lines 2052–2076) add an explicit guard:
+```ts
+const hasHinglishIntent = classifyHinglishIntent(lastUser) !== null;
+if (!looksLikeQuestion && !isHandoffOrDecline && !hasHinglishIntent && … ) { … }
+```
+
+c. In the LLM-enrichment merge (lines 2150–2155), apply the same `classifyHinglishIntent(lastUser)` guard before accepting `parsed.profile.first_name` / `full_name`.
+
+### 4. Observability log (the epic's "[AI Tool Call Attempt]" requirement)
+
+Right before each deterministic name write, log a structured line so we can audit false positives in `supabase functions logs`:
+
+```ts
+console.log(
+  "[AI Tool Call Attempt] capture_first_name",
+  JSON.stringify({
+    sender: ctx.senderId,
+    platform: ctx.platform,
+    raw: lastUser.slice(0, 80),
+    candidate: tokens[0],
+    intent: classifyHinglishIntent(lastUser),
+    accepted: true,
+  })
+);
+```
+
+Mirror a `accepted:false` log when any guard rejects, so we can grep for `[AI Tool Call Attempt] capture_first_name` and see both sides.
+
+### 5. System-prompt intent-override (ai-prompt.ts)
+
+Extend `<strict_rules>` (around line 215 in `ai-prompt.ts`) with:
+
+```
+- [INTENT OVERRIDE]: Before extracting name/email/phone, check if the user is asking a NEW question. Hinglish slang dictionary:
+    • "kha pr h" / "kaha" / "kidhar" / "location" → Location intent → answer: Sector 14, Udaipur.
+    • "kitna" / "fees" / "price" / "paisa" → Pricing intent → invoke Founder's Embargo (no ₹).
+    • "kab khulega" / "open kab" / "start date" → Timeline intent → June 22 launch.
+  If the user asks a question, ANSWER it first using <knowledge_base>, THEN politely re-ask for the missing detail in the SAME message. Never save Hinglish questions, greetings, or single-word replies (hi/hello/no/ok/haan/nahi) as names.
+```
+
+This belt-and-braces the deterministic gate for any future turn the LLM handles directly.
 
 ## Verification
-1. Replay the failing thread (Ashutosh, +91 77278 13691):
-   - "Can I speak to live person?" → expect handoff reply, `bot_paused_until` set, staff notified, no name prompt.
-   - "No" after a name prompt → expect re-prompt, NOT stored as first_name.
-2. Unit-style check via `ai-test-purpose` edge fn with the same inputs.
-3. Confirm `ai_memory.facts.consent.wants_human=true` after handoff turn.
 
-## Files touched
-- `supabase/functions/_shared/ai-agent-brain.ts` (intent gate, expanded blocklist, hardened name guards, memory write, notify-staff-handoff invoke)
-- `.lovable/plan.md` (log entry)
+1. `tail -f` on `meta-webhook` + `whatsapp-webhook` edge logs via `supabase--edge_function_logs`, search `[AI Tool Call Attempt]`.
+2. Manual replay through `supabase--curl_edge_functions` on `/meta-webhook` with three fixtures:
+   - `"Kha pr h"` after name prompt → expect "We're at Sector 14, Udaipur… May I know your name?" AND `accepted:false` log AND `profile.first_name` unchanged in `ai_memory`.
+   - `"kitna"` after name prompt → location embargo answer + name re-ask.
+   - `"Aarav"` after name prompt → captured normally, `accepted:true` log.
+3. Confirm no regressions to existing human-handoff (`"can I speak to a person"` still pauses bot 24h).
 
-No migrations. No new edge functions. No frontend changes.
+## Out of scope
 
----
-## Implemented 2026-06-13
-- `ai-agent-brain.ts` v4.3.0: added HUMAN_HANDOFF_RE + DECLINE_RE deterministic gate before the name/email/goal/plan funnel; pauses bot 24h, writes `consent.wants_human=true` to ai_memory, fires `notify-staff-handoff`, marks DNC on decline.
-- Expanded `FAKE_NAME_TOKENS` with negatives/greetings/control words ("no", "yes", "hi", "haan", "nahi", "human", "manager", …).
-- Name auto-learn now also rejects question-shaped replies and handoff/decline matches.
-- LLM enrichment merge now validates `first_name`/`full_name` with `looksLikeRealName` before writing.
-- Deployed: whatsapp-webhook, meta-webhook.
+- No changes to `ai_knowledge` rows, `ai_purposes`, persona text, or the four interactive lists.
+- No new edge function. No DB migration. No UI changes.
+- The user's literal `upsert_lead_contact` tool-schema edit is N/A — capture is deterministic; equivalent hardening is in §3.

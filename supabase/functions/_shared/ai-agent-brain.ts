@@ -98,6 +98,12 @@ const FAKE_NAME_TOKENS = new Set([
   "cancel", "sorry", "why", "what", "who", "when", "where", "how",
   "can", "cant", "dont", "human", "agent", "person", "manager", "staff",
   "haan", "nahi", "nahin", "theek", "accha", "bilkul", "kya", "kaun", "kaise",
+  // v4.4.0 — Hinglish intent words (location/pricing/timeline) that must
+  // NEVER be captured as a first_name.
+  "kha", "khan", "kahan", "kaha", "kidhar", "kab", "kitna", "kitne",
+  "paisa", "paise", "fees", "fee", "price", "cost", "rate", "rates",
+  "location", "address", "open", "khulega", "khulta", "start", "launch",
+  "reach", "direction", "directions", "kharcha", "kharch",
 ]);
 
 // ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
@@ -106,6 +112,38 @@ export const HUMAN_HANDOFF_RE =
   /\b(live\s+(?:person|agent|human)|real\s+(?:person|human)|speak\s+(?:to|with)\s+(?:a\s+)?(?:person|human|someone|staff|manager|team)|talk\s+to\s+(?:a\s+)?(?:person|human|someone|staff|manager)|call\s+me|connect\s+me|insaan\s+se\s+baat|kisi\s+se\s+baat|manager\s+se\s+baat|human\s+please|real\s+human)\b/i;
 export const DECLINE_RE =
   /\b(not\s+interested|don'?t\s+contact|leave\s+me\s+alone|unsubscribe|mat\s+karo|nahin?\s+chahiye)\b/i;
+
+// ─── Hinglish intent classifier (v4.4.0) — answer-and-pivot ──────────────────
+// Recognizes questions a user might ask mid-onboarding. Used in two places:
+//   1. As a guard so questions never become first_name.
+//   2. To prepend a canned answer to the next capture prompt (answer & pivot).
+export const LOCATION_INTENT_RE =
+  /\b(kha(?:a|n)?\s*pr?\s*h|kaha[ny]?|kahan|kidhar|location|address|where(?:\s+is)?|locate|reach|directions?)\b/i;
+export const PRICING_INTENT_RE =
+  /\b(kitna|kitne|paisa|paise|fees?|price|cost|charges?|rate|rates|kharcha|kharch)\b/i;
+export const TIMELINE_INTENT_RE =
+  /\b(kab\s*(?:khul|start|open)|khulega|open(?:ing)?\s+(?:when|kab)|start\s*date|launch|kab\s*se|opens?\s+when|when\s+(?:do\s+you\s+)?open)\b/i;
+
+export type HinglishIntent = "location" | "pricing" | "timeline" | null;
+export function classifyHinglishIntent(text: string): HinglishIntent {
+  const t = String(text || "");
+  if (LOCATION_INTENT_RE.test(t)) return "location";
+  if (PRICING_INTENT_RE.test(t)) return "pricing";
+  if (TIMELINE_INTENT_RE.test(t)) return "timeline";
+  return null;
+}
+
+const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
+  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
+  pricing: "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
+  timeline: "We open on June 22nd — Founding Members get launch-day perks ✨",
+};
+
+function intentPivotPrefix(text: string): string {
+  const intent = classifyHinglishIntent(text);
+  return intent ? `${INTENT_ANSWERS[intent]} ` : "";
+}
+
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
