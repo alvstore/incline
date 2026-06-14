@@ -1,4 +1,11 @@
+// v4.4.0 — Hinglish intent override + answer-and-pivot. Questions like
+//          "Kha pr h" / "kitna" / "kab khulega" are now classified BEFORE the
+//          name funnel; the canned answer is prepended to the next capture
+//          prompt and the question is blocked from ever becoming first_name
+//          (deterministic guard + LLM-enrichment guard). New observability log
+//          "[AI Tool Call Attempt] capture_first_name" emits accepted+rejected.
 // v4.1.0 — Brain SSOT cleanup. Removed hardcoded copy for non-fitness redirect,
+
 //          pricing/PT velvet rope, and the onboarding-order prose. All of that
 //          now lives in ai_knowledge (rows: lead_capture_flow / pricing_rules /
 //          pt_rules / non_membership_intent / facts) and reaches the LLM via
@@ -98,6 +105,12 @@ const FAKE_NAME_TOKENS = new Set([
   "cancel", "sorry", "why", "what", "who", "when", "where", "how",
   "can", "cant", "dont", "human", "agent", "person", "manager", "staff",
   "haan", "nahi", "nahin", "theek", "accha", "bilkul", "kya", "kaun", "kaise",
+  // v4.4.0 — Hinglish intent words (location/pricing/timeline) that must
+  // NEVER be captured as a first_name.
+  "kha", "khan", "kahan", "kaha", "kidhar", "kab", "kitna", "kitne",
+  "paisa", "paise", "fees", "fee", "price", "cost", "rate", "rates",
+  "location", "address", "open", "khulega", "khulta", "start", "launch",
+  "reach", "direction", "directions", "kharcha", "kharch",
 ]);
 
 // ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
@@ -106,6 +119,38 @@ export const HUMAN_HANDOFF_RE =
   /\b(live\s+(?:person|agent|human)|real\s+(?:person|human)|speak\s+(?:to|with)\s+(?:a\s+)?(?:person|human|someone|staff|manager|team)|talk\s+to\s+(?:a\s+)?(?:person|human|someone|staff|manager)|call\s+me|connect\s+me|insaan\s+se\s+baat|kisi\s+se\s+baat|manager\s+se\s+baat|human\s+please|real\s+human)\b/i;
 export const DECLINE_RE =
   /\b(not\s+interested|don'?t\s+contact|leave\s+me\s+alone|unsubscribe|mat\s+karo|nahin?\s+chahiye)\b/i;
+
+// ─── Hinglish intent classifier (v4.4.0) — answer-and-pivot ──────────────────
+// Recognizes questions a user might ask mid-onboarding. Used in two places:
+//   1. As a guard so questions never become first_name.
+//   2. To prepend a canned answer to the next capture prompt (answer & pivot).
+export const LOCATION_INTENT_RE =
+  /\b(kha(?:a|n)?\s*pr?\s*h|kaha[ny]?|kahan|kidhar|location|address|where(?:\s+is)?|locate|reach|directions?)\b/i;
+export const PRICING_INTENT_RE =
+  /\b(kitna|kitne|paisa|paise|fees?|price|cost|charges?|rate|rates|kharcha|kharch)\b/i;
+export const TIMELINE_INTENT_RE =
+  /\b(kab\s*(?:khul|start|open)|khulega|open(?:ing)?\s+(?:when|kab)|start\s*date|launch|kab\s*se|opens?\s+when|when\s+(?:do\s+you\s+)?open)\b/i;
+
+export type HinglishIntent = "location" | "pricing" | "timeline" | null;
+export function classifyHinglishIntent(text: string): HinglishIntent {
+  const t = String(text || "");
+  if (LOCATION_INTENT_RE.test(t)) return "location";
+  if (PRICING_INTENT_RE.test(t)) return "pricing";
+  if (TIMELINE_INTENT_RE.test(t)) return "timeline";
+  return null;
+}
+
+const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
+  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
+  pricing: "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
+  timeline: "We open on June 22nd — Founding Members get launch-day perks ✨",
+};
+
+function intentPivotPrefix(text: string): string {
+  const intent = classifyHinglishIntent(text);
+  return intent ? `${INTENT_ANSWERS[intent]} ` : "";
+}
+
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
@@ -671,11 +716,14 @@ GENERAL RULES:
     // v4.1.0 — extend per-field short-circuit (was only annual-step).
     // Each captured field forces the NEXT deterministic step without an LLM
     // call so a stalled/timed-out Gemini turn cannot drop the funnel.
+    // v4.4.0 — Answer-and-pivot: if the user asked a Hinglish question
+    // (location/pricing/timeline), prepend the canned answer before re-asking.
+    const _pivot = intentPivotPrefix(ctx.messageContent);
 
     // Step 1: nothing captured → ask name (plain text)
     if (!hasName) {
       return {
-        replyText: "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨",
+        replyText: `${_pivot}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
@@ -684,17 +732,18 @@ GENERAL RULES:
     if (hasName && !hasEmail) {
       return {
         replyText: _fn
-          ? `Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
-          : "Could you share your email for your Founding Member invite? ✨",
+          ? `${_pivot}Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
+          : `${_pivot}Could you share your email for your Founding Member invite? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
 
     // Step 3: name+email captured, no goal → ask goal (interactive list)
     if (hasName && hasEmail && !hasGoal) {
+      const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?",
+        body: `${_pivot}${baseBody}`,
         button: "Choose goal",
         sections: [{
           title: "Fitness Goal",
@@ -722,7 +771,7 @@ GENERAL RULES:
             : "Which membership duration are you thinking about?");
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: bodyText,
+        body: `${_pivot}${bodyText}`,
         button: "Choose duration",
         sections: [{
           title: "Membership Duration",
@@ -741,14 +790,15 @@ GENERAL RULES:
       const isAnnual = /annual|yearly|12\s*month/.test(plan);
       const reply = isAnnual
         ? (_fn
-            ? `Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
-            : "Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨")
+            ? `${_pivot}Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
+            : `${_pivot}Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`)
         : (_fn
-            ? `Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
-            : "Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨");
+            ? `${_pivot}Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
+            : `${_pivot}Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨`);
       return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
     }
   }
+
 
   if (inPostCaptureNurture) {
     const fn = memory?.profile?.first_name || firstNameOf(memory?.profile?.full_name) || "there";
@@ -2056,23 +2106,41 @@ async function extractContextDelta(
       // v4.3.0 — Reject obvious non-name replies (questions, handoff requests,
       // declines) before they get stored as first_name. "No", "Can I speak to
       // a person?", "haan", etc. must NEVER become a profile name.
+      // v4.4.0 — Also reject Hinglish intent questions ("Kha pr h", "kitna").
       const looksLikeQuestion = /\?/.test(lastUser);
       const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
+      const hinglishIntent = classifyHinglishIntent(lastUser);
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
-      if (
-        !looksLikeQuestion && !isHandoffOrDecline &&
+      const candidate = tokens[0] || "";
+      const passesShape =
         tokens.length >= 1 && tokens.length <= 3 &&
-        /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])
-      ) {
-        const fn = tokens[0];
-        if (looksLikeRealName(fn, memory?.profile?.phone)) {
-          delta.profile!.first_name = fn;
-          if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
-          delta.do_not_ask_add!.push("name");
-        }
+        /^[\p{L}][\p{L}'.-]{1,}$/u.test(candidate);
+      const accepted =
+        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent &&
+        passesShape && looksLikeRealName(candidate, memory?.profile?.phone);
+
+      console.log(
+        "[AI Tool Call Attempt] capture_first_name",
+        JSON.stringify({
+          sender: ctx.senderId,
+          platform: ctx.platform,
+          raw: lastUser.slice(0, 80),
+          candidate,
+          intent: hinglishIntent,
+          handoff_or_decline: isHandoffOrDecline,
+          looks_like_question: looksLikeQuestion,
+          accepted,
+        })
+      );
+
+      if (accepted) {
+        delta.profile!.first_name = candidate;
+        if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
+        delta.do_not_ask_add!.push("name");
       }
     }
+
   }
 
   for (const [goal, re] of Object.entries(GOAL_HINTS)) {
@@ -2146,13 +2214,21 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
         if (memory?.profile?.email) delete parsed.profile.email;
         // v4.3.0 — Validate name fields before merging; the LLM sometimes
         // echoes "No"/"Yes" from the user as first_name.
+        // v4.4.0 — Also reject when last inbound was a Hinglish intent question.
         const phoneForGuard = memory?.profile?.phone;
-        if (parsed.profile.first_name && !looksLikeRealName(parsed.profile.first_name, phoneForGuard)) {
+        const hinglishIntentForGuard = classifyHinglishIntent(lastUser);
+        if (parsed.profile.first_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.first_name, phoneForGuard))) {
+          console.log("[AI Tool Call Attempt] capture_first_name", JSON.stringify({
+            sender: ctx.senderId, platform: ctx.platform, source: "llm_enrichment",
+            candidate: String(parsed.profile.first_name).slice(0, 40),
+            intent: hinglishIntentForGuard, accepted: false,
+          }));
           delete parsed.profile.first_name;
         }
-        if (parsed.profile.full_name && !looksLikeRealName(parsed.profile.full_name, phoneForGuard)) {
+        if (parsed.profile.full_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.full_name, phoneForGuard))) {
           delete parsed.profile.full_name;
         }
+
         Object.assign(delta.profile!, parsed.profile);
       }
       if (parsed.facts && typeof parsed.facts === "object") {
