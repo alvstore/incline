@@ -709,11 +709,14 @@ GENERAL RULES:
     // v4.1.0 — extend per-field short-circuit (was only annual-step).
     // Each captured field forces the NEXT deterministic step without an LLM
     // call so a stalled/timed-out Gemini turn cannot drop the funnel.
+    // v4.4.0 — Answer-and-pivot: if the user asked a Hinglish question
+    // (location/pricing/timeline), prepend the canned answer before re-asking.
+    const _pivot = intentPivotPrefix(ctx.messageContent);
 
     // Step 1: nothing captured → ask name (plain text)
     if (!hasName) {
       return {
-        replyText: "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨",
+        replyText: `${_pivot}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
@@ -722,17 +725,18 @@ GENERAL RULES:
     if (hasName && !hasEmail) {
       return {
         replyText: _fn
-          ? `Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
-          : "Could you share your email for your Founding Member invite? ✨",
+          ? `${_pivot}Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
+          : `${_pivot}Could you share your email for your Founding Member invite? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
 
     // Step 3: name+email captured, no goal → ask goal (interactive list)
     if (hasName && hasEmail && !hasGoal) {
+      const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?",
+        body: `${_pivot}${baseBody}`,
         button: "Choose goal",
         sections: [{
           title: "Fitness Goal",
@@ -760,7 +764,7 @@ GENERAL RULES:
             : "Which membership duration are you thinking about?");
       const reply = JSON.stringify({
         type: "interactive_list",
-        body: bodyText,
+        body: `${_pivot}${bodyText}`,
         button: "Choose duration",
         sections: [{
           title: "Membership Duration",
@@ -779,14 +783,15 @@ GENERAL RULES:
       const isAnnual = /annual|yearly|12\s*month/.test(plan);
       const reply = isAnnual
         ? (_fn
-            ? `Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
-            : "Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨")
+            ? `${_pivot}Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
+            : `${_pivot}Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`)
         : (_fn
-            ? `Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
-            : "Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨");
+            ? `${_pivot}Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
+            : `${_pivot}Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨`);
       return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
     }
   }
+
 
   if (inPostCaptureNurture) {
     const fn = memory?.profile?.first_name || firstNameOf(memory?.profile?.full_name) || "there";
