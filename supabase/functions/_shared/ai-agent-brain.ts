@@ -2099,23 +2099,41 @@ async function extractContextDelta(
       // v4.3.0 — Reject obvious non-name replies (questions, handoff requests,
       // declines) before they get stored as first_name. "No", "Can I speak to
       // a person?", "haan", etc. must NEVER become a profile name.
+      // v4.4.0 — Also reject Hinglish intent questions ("Kha pr h", "kitna").
       const looksLikeQuestion = /\?/.test(lastUser);
       const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
+      const hinglishIntent = classifyHinglishIntent(lastUser);
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
-      if (
-        !looksLikeQuestion && !isHandoffOrDecline &&
+      const candidate = tokens[0] || "";
+      const passesShape =
         tokens.length >= 1 && tokens.length <= 3 &&
-        /^[\p{L}][\p{L}'.-]{1,}$/u.test(tokens[0])
-      ) {
-        const fn = tokens[0];
-        if (looksLikeRealName(fn, memory?.profile?.phone)) {
-          delta.profile!.first_name = fn;
-          if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
-          delta.do_not_ask_add!.push("name");
-        }
+        /^[\p{L}][\p{L}'.-]{1,}$/u.test(candidate);
+      const accepted =
+        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent &&
+        passesShape && looksLikeRealName(candidate, memory?.profile?.phone);
+
+      console.log(
+        "[AI Tool Call Attempt] capture_first_name",
+        JSON.stringify({
+          sender: ctx.senderId,
+          platform: ctx.platform,
+          raw: lastUser.slice(0, 80),
+          candidate,
+          intent: hinglishIntent,
+          handoff_or_decline: isHandoffOrDecline,
+          looks_like_question: looksLikeQuestion,
+          accepted,
+        })
+      );
+
+      if (accepted) {
+        delta.profile!.first_name = candidate;
+        if (tokens.length > 1) delta.profile!.full_name = tokens.join(" ");
+        delta.do_not_ask_add!.push("name");
       }
     }
+
   }
 
   for (const [goal, re] of Object.entries(GOAL_HINTS)) {
