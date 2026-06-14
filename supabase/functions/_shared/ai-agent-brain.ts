@@ -1,4 +1,11 @@
+// v4.4.0 — Hinglish intent override + answer-and-pivot. Questions like
+//          "Kha pr h" / "kitna" / "kab khulega" are now classified BEFORE the
+//          name funnel; the canned answer is prepended to the next capture
+//          prompt and the question is blocked from ever becoming first_name
+//          (deterministic guard + LLM-enrichment guard). New observability log
+//          "[AI Tool Call Attempt] capture_first_name" emits accepted+rejected.
 // v4.1.0 — Brain SSOT cleanup. Removed hardcoded copy for non-fitness redirect,
+
 //          pricing/PT velvet rope, and the onboarding-order prose. All of that
 //          now lives in ai_knowledge (rows: lead_capture_flow / pricing_rules /
 //          pt_rules / non_membership_intent / facts) and reaches the LLM via
