@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTaskHistory,
@@ -13,8 +17,10 @@ import {
   addTaskComment,
   fetchTaskReminders,
   scheduleTaskReminder,
+  deleteTask,
 } from '@/services/taskService';
 import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -35,9 +41,11 @@ const linkedEntityRoute: Record<string, (id: string) => string> = {
 
 export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerProps) {
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [comment, setComment] = useState('');
   const [remindAt, setRemindAt] = useState('');
+  const roleNames = (roles || []).map((r: any) => r.role);
+  const canDelete = can.deleteTask(roleNames);
 
   const { data: history = [] } = useQuery({
     queryKey: ['task-history', task?.id],
@@ -77,6 +85,17 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
     onError: (e: any) => toast.error(e?.message || 'Failed to schedule'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTask(task!.id),
+    onSuccess: () => {
+      toast.success('Task deleted');
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task-stats'] });
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to delete task'),
+  });
+
   if (!task) return null;
 
   const linkRoute =
@@ -87,8 +106,34 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader>
+        <SheetHeader className="flex flex-row items-start justify-between gap-2">
           <SheetTitle className="text-left">{task.title}</SheetTitle>
+          {canDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Delete task" className="text-red-600 hover:bg-red-50">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently removes "{task.title}" and its comments, history, and reminders. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteMutation.mutate()}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Delete task
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </SheetHeader>
 
         <div className="mt-4 space-y-3">

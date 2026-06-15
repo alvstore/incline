@@ -1,77 +1,106 @@
-# Dynamic AI Memory System
+## Goals
 
-## Injection Strategy (from audit)
-
-1. **New table `ai_dynamic_memory`** — `ai_knowledge` is embedding/RAG-shaped and wrong for short slang→intent rules. A dedicated table keeps SELECT < 5ms (in-mem cache, small row count).
-2. **Inject at two layers** in `ai-agent-brain.ts` / `ai-prompt.ts`:
-   - **Deterministic layer:** load rows into a per-request `Map<phrase, {intent, instruction}>`, used by `classifyHinglishIntent()` and `FAKE_NAME_TOKENS` checks (so DB rules override/extend the hardcoded regexes without removing them as fallback).
-   - **LLM layer:** append a `[DYNAMIC TRAINING RULES]` block to the system prompt right after `<strict_rules>` in `buildSystemPrompt()`.
-3. **UI lives inside `AIAgentControlCenter`** as a new "Training" sub-tab — no new admin page, matches existing Handles/Knowledge tab pattern.
+1. **Task delete with RBAC** (owner + admin + manager).
+2. **AI Training rules — backfill + smarter matching** so the dynamic memory covers all hardcoded intents and stays in sync.
+3. **Stop promising "we'll call you back"** in the Founding Member handoff, and instead **auto-create a Task** for owner/admin/manager with full notifications.
 
 ---
 
-## Epic 1 — Schema (migration)
+## 1. Task Delete (Mission Control)
 
-Table `ai_dynamic_memory`:
+**Capability**
+- Add `delete_task` to `Capability` matrix in `src/lib/auth/permissions.ts` → `['owner','admin','manager']`, plus `can.deleteTask`.
+- Mirror as a row in `role_capabilities` (server) for parity.
 
-| col | type |
-|---|---|
-| id | uuid pk |
-| phrase_or_pattern | text not null (lowercased, unique) |
-| intent_category | text not null (`location` / `pricing` / `timeline` / `handoff` / `decline` / `name_block` / `custom`) |
-| correction_instruction | text not null |
-| is_active | boolean default true |
-| match_type | text default `'contains'` (`'exact' \| 'contains' \| 'regex'`) |
-| priority | int default 100 |
-| created_by | uuid → auth.users |
-| created_at / updated_at | timestamptz |
+**UI**
+- `TaskDetailDrawer.tsx`: footer gets a destructive **Delete task** button (left-aligned, `variant="ghost"` + red icon) wrapped in `AlertDialog` ("Delete this task? This cannot be undone."). Visible only when `can.deleteTask(roles)`.
+- `TaskCard.tsx` + row in `TaskListView.tsx`: add `DropdownMenu` (three-dot) with **Delete** entry, same RBAC gate, same confirm dialog.
+- On confirm → `taskService.deleteTask(id)` (already exists) → `queryClient.invalidateQueries({queryKey:['tasks']})` + stats + toast.
 
-Index: `(is_active, priority desc)`.
-GRANTs: `authenticated` SELECT/INSERT/UPDATE/DELETE, `service_role` ALL, no `anon`.
-RLS: SELECT for `authenticated`; INSERT/UPDATE/DELETE gated by `has_role(auth.uid(),'owner'|'admin')`.
-Seed 8 baseline rows from existing hardcoded regexes (kha pr h / kaha / kitna / fees / kab khulega / human / agent / nahi).
+**Audit**
+- DB trigger on `tasks` already writes audit_logs; nothing new.
 
-## Epic 2 — Brain Injector
+---
 
-`supabase/functions/_shared/ai-dynamic-memory.ts` (new, ~60 lines):
-- `loadDynamicMemory(supabase)` → `{ rows, promptBlock, classify(text) }`
-- In-process cache, 60s TTL, keyed by nothing (global).
-- `promptBlock`: `<dynamic_training_rules>` … `</dynamic_training_rules>` with bullet list `phrase → instruction`.
-- `classify(text)`: returns matching row (exact > regex > contains, ordered by priority).
+## 2. AI Training — Backfill & Smarter Matching
 
-`ai-prompt.ts`: in `buildSystemPrompt()`, after pushing `<strict_rules>`, push `dynMem.promptBlock` if non-empty. Remove the hardcoded Hinglish dictionary from `<strict_rules>` (it becomes seed data in DB) but keep the meta-rule sentence ("ANSWER first, THEN re-ask").
+**Backfill seed (insert tool, not migration)** — add rules so the Hinglish dictionary, fake-name tokens, pricing/timeline/location/handoff regexes, and PT/decline phrases all live in `ai_dynamic_memory`. Categories already supported: `location | pricing | timeline | handoff | decline | name_block | custom`. New rows include:
 
-`ai-agent-brain.ts`: 
-- Load dynamic memory once at top of handler (parallel with existing `loadMemory`).
-- `classifyHinglishIntent()` first checks DB rows, then falls back to hardcoded regexes.
-- `looksLikeRealName()` rejects any phrase appearing in DB with `intent_category='name_block'` (union with `FAKE_NAME_TOKENS`).
-- Pass `dynMem` to `buildSystemPrompt` via new optional field on `BuildSystemPromptInput`.
+- **Location:** "kha pr h", "kaha hai", "kidhar", "location", "address", "where is gym", "udaipur me kahan"
+- **Pricing:** "kitna", "price", "fees", "paisa", "kitne ka", "rate kya", "monthly kitna", "charges"
+- **Timeline:** "kab khulega", "opening kab", "launch when", "kab tak", "start kab"
+- **Handoff:** "talk to human", "call me", "agent se baat", "person se", "manager se baat"
+- **Decline:** "no phone", "don't call", "mat call", "nahi number", "phone share nahi"
+- **Name-block (fake names):** "test", "abc", "xyz", "asdf", "user", "guest", "anonymous", "hi", "hello", "ok", "fitness", "gym", "trainer", "vip", "founding", "member"
 
-Latency budget: one indexed SELECT, expected < 5ms; cached 60s.
+**Schema upgrade (migration)** — add a few columns so admins can train more precisely without code changes:
+- `language` enum (`en | hi | hinglish | any`) default `any` — for analytics + tone hints.
+- `examples jsonb` — array of sample messages the rule fires on (used by the in-UI tester to show coverage).
+- `last_matched_at timestamptz`, `match_count int default 0` — populated by the brain when a rule fires; lets admins see "dead" rules.
+- `created_via text default 'admin'` (admin | seed | ai_suggested) — flags AI-suggested rows for review.
 
-## Epic 3 — Admin UI
+**Brain integration upgrades** (`ai-dynamic-memory.ts` + `ai-agent-brain.ts`)
+- **Word-boundary contains**: today `contains` is naive substring. Switch to `\b{phrase}\b` regex for `match_type='contains'` so "ok" doesn't match "okra".
+- **Hot-reload**: shrink cache TTL to 30s + invalidate cache via a Postgres `NOTIFY` listener triggered by `ai_dynamic_memory` upsert (edge fn calls `loadDynamicMemory({force:true})` on tick).
+- **Telemetry**: every match increments `match_count` and stamps `last_matched_at` via a fire-and-forget RPC `bump_dynamic_memory_hit(id)`.
+- **Auto-suggest loop**: when AI replies fall back to LLM (no rule matched) but message scores high intent-confidence from the LLM, log a row in new table `ai_dynamic_memory_suggestions` (`phrase, suggested_intent, sample_message, source_conversation_id, status='pending'`). Admin UI surfaces these for one-click promotion.
 
-New file `src/components/settings/ai/AITrainingTab.tsx`:
-- Mounted as new sub-tab `"Training"` inside `AIAgentControlCenter` (alongside Handles/Knowledge/Ops).
-- TanStack Query: `useQuery(['ai_dynamic_memory'])` + `useMutation` for create/update/toggle/delete with `invalidateQueries`.
-- Table built with `@tanstack/react-table` (already in deps if present; else fall back to existing styled table primitive — verify in build step). Columns: Phrase · Intent (badge) · Instruction (truncated) · Active (Switch) · Priority · Actions.
-- **Add/Edit uses right-side Sheet** (per project "No Dialog" rule), `sm:max-w-lg`, sticky footer Save/Cancel, Zod + RHF.
-- Intent badges colored per design system (location=indigo, pricing=amber, timeline=violet, handoff=red, decline=slate, name_block=blue, custom=emerald).
-- Inline test input: "Type a sample message" → live shows which rule (if any) would match — gives admins instant feedback.
+**Admin UI enhancements (`AITrainingTab.tsx` + `AITrainingRuleSheet.tsx`)**
+- New "Suggestions" tab listing `ai_dynamic_memory_suggestions` (pending review) with **Promote** / **Dismiss** actions.
+- Column **Last fired** + **Hits** on the main table; dead-rule badge (no hits >30d).
+- Bulk-import CSV: pre-built CSV templates per intent so the team can paste WhatsApp transcripts and bulk-train.
+- Live tester now shows: matched rule, expected pivot prefix, AND language detection.
+
+---
+
+## 3. Founder's Phase — No more fake "we'll call you" + Auto-Task
+
+**Problem:** When user (e.g. Jenil) confirms Annual Founding Member interest, AI replies _"I've asked our Founder's Team to give you a call to finalize your VIP reservation… They will reach out to you shortly"_. Nothing actually happens — no task, no notification — so the promise is a lie.
+
+**Fix — two changes:**
+
+**A. Rewrite the deterministic confirmation copy** in `ai-agent-brain.ts` (the "Founding Member list" lines at L1227/1313/1387). New copy:
+
+> "You're locked in on the Founding Member list, {firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding — no need to chase, we'll reach out on this WhatsApp when your slot is ready."
+
+Removes "call", "callback", "VIP reservation" wording — keeps the promise truthful (we DO reach out via WhatsApp; we don't promise a phone call we never schedule).
+
+**B. Trigger real internal handoff via a new helper `triggerFounderHandoff(ctx, lead)`** invoked at the same point the Founding Member confirmation fires:
+
+1. **Insert task** via service-role: `tasks.insert({ title: 'Founding Member follow-up — {name}', description: 'Lead confirmed Annual Founding Member interest on WhatsApp. Reach out for onboarding walkthrough.', priority: 'high', status: 'pending', due_date: now()+2h, linked_entity_type: 'lead', linked_entity_id: leadId, branch_id })`.
+2. **Notify owner + admin + manager of that branch** through existing `notify-staff-handoff` edge fn (already routes to in-app, WhatsApp, email, SMS based on each user's `notification_preferences`). Pass `{ reason: 'founding_member_confirmed', leadId, taskId, channels: ['in_app','whatsapp','email','sms'] }`.
+3. **Idempotency**: dedupe via `whatsapp_chat_settings.founder_handoff_task_id` column (new) — if set, skip recreating. New migration adds the column + index.
+4. **Audit**: task insert already triggers audit; handoff also logs to `error_logs` with `severity='info'`, `source='founder_handoff'` for observability in System Health.
+
+**Lead loop closure**
+- `leads.lifecycle_stage` advanced to `qualified_handoff`.
+- Task assignment: leave `assignee_id=null` (unassigned) so the assigned-via-RBAC pool in Mission Control picks it up; managers see it in the **Unassigned** filter immediately and can claim or assign.
+
+---
 
 ## Files
 
-**New:**
-- `supabase/functions/_shared/ai-dynamic-memory.ts`
-- `src/components/settings/ai/AITrainingTab.tsx`
-- `src/components/settings/ai/AITrainingRuleSheet.tsx`
-- DB migration
+**Edited**
+- `src/lib/auth/permissions.ts` (+ `delete_task` capability)
+- `src/components/tasks/TaskDetailDrawer.tsx`, `TaskCard.tsx`, `TaskListView.tsx` (delete UI)
+- `supabase/functions/_shared/ai-dynamic-memory.ts` (word-boundary regex, hit telemetry, suggestions writer)
+- `supabase/functions/_shared/ai-agent-brain.ts` (truthful copy + `triggerFounderHandoff` hook)
+- `src/components/settings/ai/AITrainingTab.tsx`, `AITrainingRuleSheet.tsx` (suggestions tab, hits column, CSV import)
 
-**Edited:**
-- `supabase/functions/_shared/ai-prompt.ts` (inject block, drop inline Hinglish dict)
-- `supabase/functions/_shared/ai-agent-brain.ts` (load + extend classify/name-guards, log `[AI Tool Call Attempt]` with matched rule id)
-- `src/components/settings/AIAgentControlCenter.tsx` (mount new tab)
+**New**
+- Migration: `ai_dynamic_memory` adds `language`, `examples`, `last_matched_at`, `match_count`, `created_via`; new table `ai_dynamic_memory_suggestions`; new column `whatsapp_chat_settings.founder_handoff_task_id`; RPC `bump_dynamic_memory_hit(uuid)`.
+- Insert script (via insert tool): seed ~50 backfill rules across intents.
+- `src/components/settings/ai/AITrainingSuggestionsTab.tsx`.
 
-## Out of scope
+**Out of scope** (acknowledged in earlier audit, not in this sprint)
+- 502 cold-start auto-resolve + `bot_paused_timed` Resume banner — separate ticket.
 
-No changes to `ai_knowledge`, `ai_purposes`, embeddings, webhook routing, or any non-AI surface. Hardcoded regexes stay as fallback (defense-in-depth) — not deleted.
+---
+
+## Validation
+
+1. As `manager`: open task → see Delete → confirm → row disappears, list refreshes, audit_log shows DELETE.
+2. As `staff`: Delete button absent in drawer + dropdown.
+3. Send WhatsApp "kha pr h" → brain logs `[AI Tool Call Attempt] dynamic_memory_match {intent:'location'}`, `match_count` increments, reply pivots to location.
+4. Confirm Annual Founding Member on WhatsApp → reply contains NO "call" / "callback"; one new task appears in Mission Control (Unassigned, high priority); owner/admin/manager receive in-app + WhatsApp + email notifications; second confirmation in same chat does NOT create duplicate task.
+5. Admin UI: new "Suggestions" tab lists captured phrases; Promote creates a rule and removes the suggestion.

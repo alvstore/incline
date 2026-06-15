@@ -310,9 +310,14 @@ export type Database = {
           correction_instruction: string
           created_at: string
           created_by: string | null
+          created_via: string
+          examples: Json
           id: string
           intent_category: string
           is_active: boolean
+          language: string
+          last_matched_at: string | null
+          match_count: number
           match_type: string
           phrase_or_pattern: string
           priority: number
@@ -322,9 +327,14 @@ export type Database = {
           correction_instruction: string
           created_at?: string
           created_by?: string | null
+          created_via?: string
+          examples?: Json
           id?: string
           intent_category: string
           is_active?: boolean
+          language?: string
+          last_matched_at?: string | null
+          match_count?: number
           match_type?: string
           phrase_or_pattern: string
           priority?: number
@@ -334,13 +344,54 @@ export type Database = {
           correction_instruction?: string
           created_at?: string
           created_by?: string | null
+          created_via?: string
+          examples?: Json
           id?: string
           intent_category?: string
           is_active?: boolean
+          language?: string
+          last_matched_at?: string | null
+          match_count?: number
           match_type?: string
           phrase_or_pattern?: string
           priority?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_dynamic_memory_suggestions: {
+        Row: {
+          created_at: string
+          id: string
+          phrase: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sample_message: string | null
+          source_conversation_id: string | null
+          status: string
+          suggested_intent: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phrase: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_message?: string | null
+          source_conversation_id?: string | null
+          status?: string
+          suggested_intent: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phrase?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_message?: string | null
+          source_conversation_id?: string | null
+          status?: string
+          suggested_intent?: string
         }
         Relationships: []
       }
@@ -12280,6 +12331,7 @@ export type Database = {
           do_not_contact_set_by: string | null
           do_not_contact_until: string | null
           external_username: string | null
+          founder_handoff_task_id: string | null
           handoff_reason: string | null
           handoff_requested_at: string | null
           id: string
@@ -12319,6 +12371,7 @@ export type Database = {
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
           external_username?: string | null
+          founder_handoff_task_id?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -12358,6 +12411,7 @@ export type Database = {
           do_not_contact_set_by?: string | null
           do_not_contact_until?: string | null
           external_username?: string | null
+          founder_handoff_task_id?: string | null
           handoff_reason?: string | null
           handoff_requested_at?: string | null
           id?: string
@@ -12389,6 +12443,13 @@ export type Database = {
             columns: ["captured_lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_chat_settings_founder_handoff_task_id_fkey"
+            columns: ["founder_handoff_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -13263,6 +13324,10 @@ export type Database = {
           p_staff_id?: string
         }
         Returns: Json
+      }
+      bump_dynamic_memory_hit: {
+        Args: { _rule_id: string }
+        Returns: undefined
       }
       bump_ig_campaign_counters:
         | {
