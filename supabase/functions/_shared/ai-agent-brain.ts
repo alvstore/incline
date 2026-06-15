@@ -140,6 +140,14 @@ export const TIMELINE_INTENT_RE =
 export type HinglishIntent = "location" | "pricing" | "timeline" | null;
 export function classifyHinglishIntent(text: string): HinglishIntent {
   const t = String(text || "");
+  // 1. Admin-trained dynamic rules (DB-backed) win first.
+  const dyn = _dynMemSnapshot?.classify(t);
+  if (dyn) {
+    if (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline") {
+      return dyn.intent_category;
+    }
+  }
+  // 2. Hardcoded fallbacks (defense-in-depth).
   if (LOCATION_INTENT_RE.test(t)) return "location";
   if (PRICING_INTENT_RE.test(t)) return "pricing";
   if (TIMELINE_INTENT_RE.test(t)) return "timeline";
@@ -153,6 +161,11 @@ const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
 };
 
 function intentPivotPrefix(text: string): string {
+  // Prefer admin-curated instruction when available.
+  const dyn = _dynMemSnapshot?.classify(text);
+  if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
+    return `${dyn.correction_instruction.split(/[.!?]\s/)[0]} `;
+  }
   const intent = classifyHinglishIntent(text);
   return intent ? `${INTENT_ANSWERS[intent]} ` : "";
 }
@@ -165,9 +178,13 @@ export function looksLikeRealName(name: unknown, phone?: string | null): boolean
   if (/^\+?\d[\d\s().-]{4,}$/.test(trimmed)) return false;
   // Equals the sender phone
   if (phone && trimmed.replace(/\D/g, "") === phone.replace(/\D/g, "") && trimmed.replace(/\D/g, "").length > 4) return false;
-  // Blocklist (case-insensitive, ignoring punctuation)
+  // Blocklist (case-insensitive, ignoring punctuation). Union of hardcoded
+  // FAKE_NAME_TOKENS and admin-curated name_block phrases from ai_dynamic_memory.
   const normalized = trimmed.toLowerCase().replace(/[^a-z0-9/]/g, "");
   if (FAKE_NAME_TOKENS.has(normalized)) return false;
+  if (_dynMemSnapshot?.nameBlockSet.has(trimmed.toLowerCase())) return false;
+  // Also reject if the entire name matches any dynamic intent rule (e.g. "kha pr h").
+  if (_dynMemSnapshot?.classify(trimmed)) return false;
   // Must contain letters and be >50% letters
   const letters = (trimmed.match(/\p{L}/gu) || []).length;
   if (letters < 2) return false;
