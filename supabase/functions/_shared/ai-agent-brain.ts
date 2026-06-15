@@ -1310,7 +1310,7 @@ function enforceNoRepeatNameAsk(input: {
   if (!knownPlan) {
     return `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`;
   }
-  return `You're on our Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`;
+  return `You're locked in on our Founding Member list, ${firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens.`;
 }
 
 
