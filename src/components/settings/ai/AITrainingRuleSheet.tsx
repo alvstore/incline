@@ -79,7 +79,7 @@ export function AITrainingRuleSheet({ open, onOpenChange, rule }: Props) {
         const { error } = await supabase.from('ai_dynamic_memory').update(values).eq('id', rule.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('ai_dynamic_memory').insert(values);
+        const { error } = await supabase.from('ai_dynamic_memory').insert([values]);
         if (error) throw error;
       }
     },
