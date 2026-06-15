@@ -1224,8 +1224,8 @@ function enforceOutboundInteractiveGuards(input: {
     const knownPlan = !!memory?.facts?.plan_interest;
     if (!knownPlan) return planListJson(firstName);
     return firstName
-      ? `You're on the Founding Member list, ${firstName} — our team will reach out for your pre-launch walkthrough. ✨`
-      : "You're on the Founding Member list — our team will reach out for your pre-launch walkthrough. ✨";
+      ? `You're locked in on the Founding Member list, ${firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens — no need to chase.`
+      : "You're locked in on the Founding Member list ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens — no need to chase.";
   };
 
 
