@@ -63,6 +63,7 @@ export const can = {
   manageAutomations: (r?: string[]) => hasCapability(r, 'manage_automations'),
   viewReconciliation:(r?: string[]) => hasCapability(r, 'view_reconciliation'),
   bookFacility:      (r?: string[]) => hasCapability(r, 'book_facility'),
+  deleteTask:        (r?: string[]) => hasCapability(r, 'delete_task'),
 };
 
 /**
