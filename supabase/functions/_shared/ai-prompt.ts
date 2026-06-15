@@ -19,6 +19,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadPurpose, type Purpose } from "./ai-runtime.ts";
+import { loadDynamicMemory } from "./ai-dynamic-memory.ts";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
