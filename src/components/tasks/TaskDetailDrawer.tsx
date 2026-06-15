@@ -41,9 +41,11 @@ const linkedEntityRoute: Record<string, (id: string) => string> = {
 
 export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerProps) {
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [comment, setComment] = useState('');
   const [remindAt, setRemindAt] = useState('');
+  const roleNames = (roles || []).map((r: any) => r.role);
+  const canDelete = can.deleteTask(roleNames);
 
   const { data: history = [] } = useQuery({
     queryKey: ['task-history', task?.id],
