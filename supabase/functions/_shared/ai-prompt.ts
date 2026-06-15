@@ -277,13 +277,18 @@ export async function buildSystemPrompt(
 - If the answer is not in <knowledge_base>, say so honestly and offer to connect a teammate.
 - Default reply: 1 short message, ≤ 3 sentences, plain conversational text.
 - Reply in the user's language (English / Hindi / Hinglish).
-- [INTENT OVERRIDE]: Before extracting name/email/phone, check if the user is asking a NEW question. Hinglish slang dictionary:
-    • "kha pr h" / "kaha" / "kahan" / "kidhar" / "location" / "address" → Location intent → answer: Sector 14, Udaipur, Rajasthan.
-    • "kitna" / "kitne" / "fees" / "price" / "paisa" / "cost" / "rate" → Pricing intent → invoke Founder's Embargo (no ₹/numbers, point to Founding Member team handoff).
-    • "kab khulega" / "open kab" / "start date" / "launch" → Timeline intent → June 22 launch, Founders get launch-day perks.
-  If the user asks a question, ANSWER it first using <knowledge_base>, THEN politely re-ask for the missing detail in the SAME message. Never save Hinglish questions, greetings, or single-word replies (hi/hello/no/ok/haan/nahi/kha/kitna/kab) as a person's name.
+- [INTENT OVERRIDE]: Before extracting name/email/phone, check if the user is asking a NEW question. If so, ANSWER it first using <knowledge_base> and <dynamic_training_rules>, THEN politely re-ask for the missing detail in the SAME message. Never save Hinglish questions, greetings, or single-word replies (hi/hello/no/ok/haan/nahi) as a person's name.
 </strict_rules>`);
 
+  // Admin-trained rule overrides (UI-managed via Settings → AI Agent → Training).
+  // Sits between <strict_rules> and <knowledge_base> so it overrides general
+  // strict-rule wording but is anchored by retrieved knowledge.
+  try {
+    const dynMem = await loadDynamicMemory(supabase);
+    if (dynMem.promptBlock) sections.push(dynMem.promptBlock);
+  } catch (e) {
+    console.error("[buildSystemPrompt] dynamic memory load failed:", (e as Error).message);
+  }
 
   const userCtx = renderUserContext(identity);
   if (userCtx) sections.push(userCtx);
