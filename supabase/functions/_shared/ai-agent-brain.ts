@@ -90,6 +90,12 @@ import {
 } from "./ai-memory.ts";
 
 import { buildSystemPrompt } from "./ai-prompt.ts";
+import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
+
+// Per-request dynamic memory snapshot. Loaded once at the top of runUnifiedAgent
+// and read synchronously by classifyHinglishIntent / looksLikeRealName.
+let _dynMemSnapshot: DynamicMemoryBundle | null = null;
+export function _setDynMemSnapshot(b: DynamicMemoryBundle | null) { _dynMemSnapshot = b; }
 
 // ─── Placeholder-name guard ────────────────────────────────────────────────────
 // Reject WhatsApp/IG profile names that aren't real human names so the brain
