@@ -75,11 +75,12 @@ export function AITrainingRuleSheet({ open, onOpenChange, rule }: Props) {
 
   const save = useMutation({
     mutationFn: async (values: RuleFormValues) => {
+      const payload = values as Required<RuleFormValues>;
       if (isEdit && rule) {
-        const { error } = await supabase.from('ai_dynamic_memory').update(values).eq('id', rule.id);
+        const { error } = await supabase.from('ai_dynamic_memory').update(payload).eq('id', rule.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('ai_dynamic_memory').insert([values]);
+        const { error } = await supabase.from('ai_dynamic_memory').insert([payload]);
         if (error) throw error;
       }
     },
