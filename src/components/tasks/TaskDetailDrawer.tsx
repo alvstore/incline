@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTaskHistory,
@@ -13,8 +17,10 @@ import {
   addTaskComment,
   fetchTaskReminders,
   scheduleTaskReminder,
+  deleteTask,
 } from '@/services/taskService';
 import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
