@@ -19,12 +19,13 @@ import {
   Bot, Brain, MessageSquare, Search, Power, PowerOff,
   IdCard, Gift, CalendarDays, CalendarPlus, CalendarX, Dumbbell, UserCog,
   CreditCard, Receipt, Wallet, Link2, FileText, Snowflake, RotateCcw,
-  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList,
+  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList, Sparkles,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AIBrainTab } from '@/components/settings/AIBrainTab';
 import { HandlesTab } from '@/components/settings/ai/HandlesTab';
 import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
+import { AITrainingTab } from '@/components/settings/ai/AITrainingTab';
 
 type ToolDef = {
   name: string;
