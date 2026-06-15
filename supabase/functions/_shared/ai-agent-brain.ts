@@ -258,6 +258,25 @@ export async function runUnifiedAgent(
     return skip(`channel_${ctx.platform}_disabled`);
   }
 
+  // Load admin-trained dynamic memory rules (cached 60s). MUST happen before
+  // classifyHinglishIntent / looksLikeRealName are called downstream.
+  try {
+    const dynMem = await loadDynamicMemory(supabase);
+    _setDynMemSnapshot(dynMem);
+    const matched = dynMem.classify(ctx.messageContent || "");
+    console.log("[AI Tool Call Attempt] dynamic_memory_match", JSON.stringify({
+      sender: ctx.senderId,
+      platform: ctx.platform,
+      raw: (ctx.messageContent || "").slice(0, 120),
+      matched_rule_id: matched?.id ?? null,
+      intent_category: matched?.intent_category ?? null,
+      rules_loaded: dynMem.rows.length,
+    }));
+  } catch (e) {
+    console.error("[ai-agent-brain] dynamic memory load failed:", (e as Error).message);
+    _setDynMemSnapshot(null);
+  }
+
 
   // 2. Check pause state — bot_active OR bot_paused_until (timed shut-up switch).
   //    Single source of truth: is_bot_paused() SQL helper.
