@@ -305,6 +305,45 @@ export type Database = {
           },
         ]
       }
+      ai_dynamic_memory: {
+        Row: {
+          correction_instruction: string
+          created_at: string
+          created_by: string | null
+          id: string
+          intent_category: string
+          is_active: boolean
+          match_type: string
+          phrase_or_pattern: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          correction_instruction: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intent_category: string
+          is_active?: boolean
+          match_type?: string
+          phrase_or_pattern: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          correction_instruction?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intent_category?: string
+          is_active?: boolean
+          match_type?: string
+          phrase_or_pattern?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_knowledge: {
         Row: {
           applies_to: string[]
