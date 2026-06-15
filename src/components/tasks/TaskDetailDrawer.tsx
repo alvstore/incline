@@ -85,6 +85,17 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
     onError: (e: any) => toast.error(e?.message || 'Failed to schedule'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTask(task!.id),
+    onSuccess: () => {
+      toast.success('Task deleted');
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task-stats'] });
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to delete task'),
+  });
+
   if (!task) return null;
 
   const linkRoute =
