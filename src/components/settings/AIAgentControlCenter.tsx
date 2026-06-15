@@ -19,12 +19,13 @@ import {
   Bot, Brain, MessageSquare, Search, Power, PowerOff,
   IdCard, Gift, CalendarDays, CalendarPlus, CalendarX, Dumbbell, UserCog,
   CreditCard, Receipt, Wallet, Link2, FileText, Snowflake, RotateCcw,
-  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList,
+  Users, Star, ShoppingBag, Bell, MapPin, ClipboardList, Sparkles,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AIBrainTab } from '@/components/settings/AIBrainTab';
 import { HandlesTab } from '@/components/settings/ai/HandlesTab';
 import { PlumbingTab } from '@/components/settings/ai/PlumbingTab';
+import { AITrainingTab } from '@/components/settings/ai/AITrainingTab';
 
 type ToolDef = {
   name: string;
@@ -159,7 +160,7 @@ export function AIAgentControlCenter() {
         <div>
           <h2 className="text-xl font-bold text-foreground">AI Agent Hub</h2>
           <p className="text-sm text-muted-foreground">
-            Single source of truth — Overview, Knowledge, Handles and Plumbing.
+            Single source of truth — Overview, Knowledge, Training, Handles and Plumbing.
           </p>
         </div>
       </div>
@@ -170,10 +171,10 @@ export function AIAgentControlCenter() {
 }
 
 function AIAgentTabs() {
-  const [tab, setTab] = useState<'overview' | 'knowledge' | 'handles' | 'plumbing'>('overview');
+  const [tab, setTab] = useState<'overview' | 'knowledge' | 'training' | 'handles' | 'plumbing'>('overview');
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
-      <TabsList className="grid grid-cols-4 w-full h-auto p-1">
+      <TabsList className="grid grid-cols-5 w-full h-auto p-1">
         <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 py-2">
           <Activity className="h-3.5 w-3.5 hidden sm:block" />
           Overview
@@ -181,6 +182,10 @@ function AIAgentTabs() {
         <TabsTrigger value="knowledge" className="text-xs sm:text-sm gap-1.5 py-2">
           <Brain className="h-3.5 w-3.5 hidden sm:block" />
           Knowledge
+        </TabsTrigger>
+        <TabsTrigger value="training" className="text-xs sm:text-sm gap-1.5 py-2">
+          <Sparkles className="h-3.5 w-3.5 hidden sm:block" />
+          Training
         </TabsTrigger>
         <TabsTrigger value="handles" className="text-xs sm:text-sm gap-1.5 py-2">
           <Bot className="h-3.5 w-3.5 hidden sm:block" />
@@ -198,6 +203,10 @@ function AIAgentTabs() {
 
       <TabsContent value="knowledge">
         <AIBrainTab />
+      </TabsContent>
+
+      <TabsContent value="training">
+        <AITrainingTab />
       </TabsContent>
 
       <TabsContent value="handles">

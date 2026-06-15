@@ -90,6 +90,12 @@ import {
 } from "./ai-memory.ts";
 
 import { buildSystemPrompt } from "./ai-prompt.ts";
+import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
+
+// Per-request dynamic memory snapshot. Loaded once at the top of runUnifiedAgent
+// and read synchronously by classifyHinglishIntent / looksLikeRealName.
+let _dynMemSnapshot: DynamicMemoryBundle | null = null;
+export function _setDynMemSnapshot(b: DynamicMemoryBundle | null) { _dynMemSnapshot = b; }
 
 // ─── Placeholder-name guard ────────────────────────────────────────────────────
 // Reject WhatsApp/IG profile names that aren't real human names so the brain
@@ -134,6 +140,14 @@ export const TIMELINE_INTENT_RE =
 export type HinglishIntent = "location" | "pricing" | "timeline" | null;
 export function classifyHinglishIntent(text: string): HinglishIntent {
   const t = String(text || "");
+  // 1. Admin-trained dynamic rules (DB-backed) win first.
+  const dyn = _dynMemSnapshot?.classify(t);
+  if (dyn) {
+    if (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline") {
+      return dyn.intent_category;
+    }
+  }
+  // 2. Hardcoded fallbacks (defense-in-depth).
   if (LOCATION_INTENT_RE.test(t)) return "location";
   if (PRICING_INTENT_RE.test(t)) return "pricing";
   if (TIMELINE_INTENT_RE.test(t)) return "timeline";
@@ -147,6 +161,11 @@ const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
 };
 
 function intentPivotPrefix(text: string): string {
+  // Prefer admin-curated instruction when available.
+  const dyn = _dynMemSnapshot?.classify(text);
+  if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
+    return `${dyn.correction_instruction.split(/[.!?]\s/)[0]} `;
+  }
   const intent = classifyHinglishIntent(text);
   return intent ? `${INTENT_ANSWERS[intent]} ` : "";
 }
@@ -159,9 +178,13 @@ export function looksLikeRealName(name: unknown, phone?: string | null): boolean
   if (/^\+?\d[\d\s().-]{4,}$/.test(trimmed)) return false;
   // Equals the sender phone
   if (phone && trimmed.replace(/\D/g, "") === phone.replace(/\D/g, "") && trimmed.replace(/\D/g, "").length > 4) return false;
-  // Blocklist (case-insensitive, ignoring punctuation)
+  // Blocklist (case-insensitive, ignoring punctuation). Union of hardcoded
+  // FAKE_NAME_TOKENS and admin-curated name_block phrases from ai_dynamic_memory.
   const normalized = trimmed.toLowerCase().replace(/[^a-z0-9/]/g, "");
   if (FAKE_NAME_TOKENS.has(normalized)) return false;
+  if (_dynMemSnapshot?.nameBlockSet.has(trimmed.toLowerCase())) return false;
+  // Also reject if the entire name matches any dynamic intent rule (e.g. "kha pr h").
+  if (_dynMemSnapshot?.classify(trimmed)) return false;
   // Must contain letters and be >50% letters
   const letters = (trimmed.match(/\p{L}/gu) || []).length;
   if (letters < 2) return false;
@@ -233,6 +256,25 @@ export async function runUnifiedAgent(
   const channelOn = aiConfig.channels?.[ctx.platform as 'whatsapp' | 'instagram' | 'messenger']?.enabled ?? true;
   if (!channelOn) {
     return skip(`channel_${ctx.platform}_disabled`);
+  }
+
+  // Load admin-trained dynamic memory rules (cached 60s). MUST happen before
+  // classifyHinglishIntent / looksLikeRealName are called downstream.
+  try {
+    const dynMem = await loadDynamicMemory(supabase);
+    _setDynMemSnapshot(dynMem);
+    const matched = dynMem.classify(ctx.messageContent || "");
+    console.log("[AI Tool Call Attempt] dynamic_memory_match", JSON.stringify({
+      sender: ctx.senderId,
+      platform: ctx.platform,
+      raw: (ctx.messageContent || "").slice(0, 120),
+      matched_rule_id: matched?.id ?? null,
+      intent_category: matched?.intent_category ?? null,
+      rules_loaded: dynMem.rows.length,
+    }));
+  } catch (e) {
+    console.error("[ai-agent-brain] dynamic memory load failed:", (e as Error).message);
+    _setDynMemSnapshot(null);
   }
 
 

@@ -1,142 +1,77 @@
+# Dynamic AI Memory System
 
-## Goal
+## Injection Strategy (from audit)
 
-Stop the "Slot-Filling Trap" in the WhatsApp/IG/Messenger AI brain. When a user replies to a name/email prompt with a Hinglish question ("Kha pr h", "kitna", "kab khulega"), the bot must:
+1. **New table `ai_dynamic_memory`** — `ai_knowledge` is embedding/RAG-shaped and wrong for short slang→intent rules. A dedicated table keeps SELECT < 5ms (in-mem cache, small row count).
+2. **Inject at two layers** in `ai-agent-brain.ts` / `ai-prompt.ts`:
+   - **Deterministic layer:** load rows into a per-request `Map<phrase, {intent, instruction}>`, used by `classifyHinglishIntent()` and `FAKE_NAME_TOKENS` checks (so DB rules override/extend the hardcoded regexes without removing them as fallback).
+   - **LLM layer:** append a `[DYNAMIC TRAINING RULES]` block to the system prompt right after `<strict_rules>` in `buildSystemPrompt()`.
+3. **UI lives inside `AIAgentControlCenter`** as a new "Training" sub-tab — no new admin page, matches existing Handles/Knowledge tab pattern.
 
-1. Recognize the intent (Location / Pricing / Timeline).
-2. Answer it from knowledge.
-3. Re-ask for the missing field in the SAME reply.
-4. Never persist the question as `first_name`.
+---
 
-## Why Epic 2 is adapted
+## Epic 1 — Schema (migration)
 
-The user's epic targets an `upsert_lead_contact` function-calling tool. This project does not use that pattern — capture is deterministic in `supabase/functions/_shared/ai-agent-brain.ts` (Steps 1–4 short-circuit + regex auto-learn + LLM enrichment). The hardening lives there, not in a tool schema.
+Table `ai_dynamic_memory`:
 
-## Scope (files touched)
+| col | type |
+|---|---|
+| id | uuid pk |
+| phrase_or_pattern | text not null (lowercased, unique) |
+| intent_category | text not null (`location` / `pricing` / `timeline` / `handoff` / `decline` / `name_block` / `custom`) |
+| correction_instruction | text not null |
+| is_active | boolean default true |
+| match_type | text default `'contains'` (`'exact' \| 'contains' \| 'regex'`) |
+| priority | int default 100 |
+| created_by | uuid → auth.users |
+| created_at / updated_at | timestamptz |
 
-1. `supabase/functions/_shared/ai-agent-brain.ts` — intent gate, answer-and-pivot, expanded blocklist, observability log.
-2. `supabase/functions/_shared/ai-prompt.ts` — add `<intent_override>` block to `<strict_rules>` so the LLM follows the same rule on any turn the deterministic gate doesn't short-circuit.
-3. `.lovable/plan.md` — log entry.
+Index: `(is_active, priority desc)`.
+GRANTs: `authenticated` SELECT/INSERT/UPDATE/DELETE, `service_role` ALL, no `anon`.
+RLS: SELECT for `authenticated`; INSERT/UPDATE/DELETE gated by `has_role(auth.uid(),'owner'|'admin')`.
+Seed 8 baseline rows from existing hardcoded regexes (kha pr h / kaha / kitna / fees / kab khulega / human / agent / nahi).
 
-No new migrations, no UI changes, no new edge functions. Deploy `whatsapp-webhook` and `meta-webhook` after edit (they import the shared brain).
+## Epic 2 — Brain Injector
 
-## Changes
+`supabase/functions/_shared/ai-dynamic-memory.ts` (new, ~60 lines):
+- `loadDynamicMemory(supabase)` → `{ rows, promptBlock, classify(text) }`
+- In-process cache, 60s TTL, keyed by nothing (global).
+- `promptBlock`: `<dynamic_training_rules>` … `</dynamic_training_rules>` with bullet list `phrase → instruction`.
+- `classify(text)`: returns matching row (exact > regex > contains, ordered by priority).
 
-### 1. Hinglish intent classifier (new, top of brain, runs BEFORE Step 1 short-circuit)
+`ai-prompt.ts`: in `buildSystemPrompt()`, after pushing `<strict_rules>`, push `dynMem.promptBlock` if non-empty. Remove the hardcoded Hinglish dictionary from `<strict_rules>` (it becomes seed data in DB) but keep the meta-rule sentence ("ANSWER first, THEN re-ask").
 
-Add three regexes + a small classifier:
+`ai-agent-brain.ts`: 
+- Load dynamic memory once at top of handler (parallel with existing `loadMemory`).
+- `classifyHinglishIntent()` first checks DB rows, then falls back to hardcoded regexes.
+- `looksLikeRealName()` rejects any phrase appearing in DB with `intent_category='name_block'` (union with `FAKE_NAME_TOKENS`).
+- Pass `dynMem` to `buildSystemPrompt` via new optional field on `BuildSystemPromptInput`.
 
-```ts
-export const LOCATION_INTENT_RE =
-  /\b(kha(?:a|n)?\s*pr?\s*h|kaha[ny]?|kidhar|location|address|where(?:\s+is)?|locate|reach|directions?)\b/i;
-export const PRICING_INTENT_RE =
-  /\b(kitna|kitne|paisa|paise|fees?|price|cost|charges?|rate|rates|kharcha|kharch)\b/i;
-export const TIMELINE_INTENT_RE =
-  /\b(kab\s*(?:khul|start|open)|open(?:ing)?\s+(?:when|kab)|start\s*date|launch|kab\s*se|opens?\s+when|when\s+(?:do\s+you\s+)?open)\b/i;
+Latency budget: one indexed SELECT, expected < 5ms; cached 60s.
 
-type HinglishIntent = "location" | "pricing" | "timeline" | null;
-function classifyHinglishIntent(text: string): HinglishIntent {
-  if (LOCATION_INTENT_RE.test(text)) return "location";
-  if (PRICING_INTENT_RE.test(text)) return "pricing";
-  if (TIMELINE_INTENT_RE.test(text)) return "timeline";
-  return null;
-}
-```
+## Epic 3 — Admin UI
 
-Canned answers (sourced from existing memory constants — Sector 14 Udaipur, Founder's Embargo on price, June 22 launch):
+New file `src/components/settings/ai/AITrainingTab.tsx`:
+- Mounted as new sub-tab `"Training"` inside `AIAgentControlCenter` (alongside Handles/Knowledge/Ops).
+- TanStack Query: `useQuery(['ai_dynamic_memory'])` + `useMutation` for create/update/toggle/delete with `invalidateQueries`.
+- Table built with `@tanstack/react-table` (already in deps if present; else fall back to existing styled table primitive — verify in build step). Columns: Phrase · Intent (badge) · Instruction (truncated) · Active (Switch) · Priority · Actions.
+- **Add/Edit uses right-side Sheet** (per project "No Dialog" rule), `sm:max-w-lg`, sticky footer Save/Cancel, Zod + RHF.
+- Intent badges colored per design system (location=indigo, pricing=amber, timeline=violet, handoff=red, decline=slate, name_block=blue, custom=emerald).
+- Inline test input: "Type a sample message" → live shows which rule (if any) would match — gives admins instant feedback.
 
-```ts
-const INTENT_ANSWERS: Record<Exclude<HinglishIntent,null>, string> = {
-  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
-  pricing:  "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
-  timeline: "We open on June 22nd — Founding Members get launch-day perks ✨",
-};
-```
+## Files
 
-### 2. Answer-and-pivot inside each capture short-circuit step
+**New:**
+- `supabase/functions/_shared/ai-dynamic-memory.ts`
+- `src/components/settings/ai/AITrainingTab.tsx`
+- `src/components/settings/ai/AITrainingRuleSheet.tsx`
+- DB migration
 
-In the `shouldCaptureLead` block (lines 665–751), before each `return { replyText: … }`, run:
-
-```ts
-const intent = classifyHinglishIntent(ctx.messageContent);
-const pivotPrefix = intent ? `${INTENT_ANSWERS[intent]} ` : "";
-```
-
-Then prepend `pivotPrefix` to the existing canned reply. Example for Step 1:
-
-```ts
-return {
-  replyText: `${pivotPrefix}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
-  …
-};
-```
-
-Same pattern for Step 2 (email), Step 3 (goal), Step 4 (plan duration). For interactive_list replies (Step 3/4), the pivot prefix is prepended to the `body` field of the JSON, not the outer string.
-
-### 3. Block Hinglish question words from becoming a name
-
-Two layers — both already exist, just extend:
-
-a. Expand `FAKE_NAME_TOKENS` (line 90) with the new tokens:
-```
-"kha","khan","kahan","kidhar","kab","kitna","kitne","paisa","paise",
-"fees","price","cost","rate","rates","location","address","open","khulega",
-"start","launch","reach","directions"
-```
-
-b. In the auto-learn name block (lines 2052–2076) add an explicit guard:
-```ts
-const hasHinglishIntent = classifyHinglishIntent(lastUser) !== null;
-if (!looksLikeQuestion && !isHandoffOrDecline && !hasHinglishIntent && … ) { … }
-```
-
-c. In the LLM-enrichment merge (lines 2150–2155), apply the same `classifyHinglishIntent(lastUser)` guard before accepting `parsed.profile.first_name` / `full_name`.
-
-### 4. Observability log (the epic's "[AI Tool Call Attempt]" requirement)
-
-Right before each deterministic name write, log a structured line so we can audit false positives in `supabase functions logs`:
-
-```ts
-console.log(
-  "[AI Tool Call Attempt] capture_first_name",
-  JSON.stringify({
-    sender: ctx.senderId,
-    platform: ctx.platform,
-    raw: lastUser.slice(0, 80),
-    candidate: tokens[0],
-    intent: classifyHinglishIntent(lastUser),
-    accepted: true,
-  })
-);
-```
-
-Mirror a `accepted:false` log when any guard rejects, so we can grep for `[AI Tool Call Attempt] capture_first_name` and see both sides.
-
-### 5. System-prompt intent-override (ai-prompt.ts)
-
-Extend `<strict_rules>` (around line 215 in `ai-prompt.ts`) with:
-
-```
-- [INTENT OVERRIDE]: Before extracting name/email/phone, check if the user is asking a NEW question. Hinglish slang dictionary:
-    • "kha pr h" / "kaha" / "kidhar" / "location" → Location intent → answer: Sector 14, Udaipur.
-    • "kitna" / "fees" / "price" / "paisa" → Pricing intent → invoke Founder's Embargo (no ₹).
-    • "kab khulega" / "open kab" / "start date" → Timeline intent → June 22 launch.
-  If the user asks a question, ANSWER it first using <knowledge_base>, THEN politely re-ask for the missing detail in the SAME message. Never save Hinglish questions, greetings, or single-word replies (hi/hello/no/ok/haan/nahi) as names.
-```
-
-This belt-and-braces the deterministic gate for any future turn the LLM handles directly.
-
-## Verification
-
-1. `tail -f` on `meta-webhook` + `whatsapp-webhook` edge logs via `supabase--edge_function_logs`, search `[AI Tool Call Attempt]`.
-2. Manual replay through `supabase--curl_edge_functions` on `/meta-webhook` with three fixtures:
-   - `"Kha pr h"` after name prompt → expect "We're at Sector 14, Udaipur… May I know your name?" AND `accepted:false` log AND `profile.first_name` unchanged in `ai_memory`.
-   - `"kitna"` after name prompt → location embargo answer + name re-ask.
-   - `"Aarav"` after name prompt → captured normally, `accepted:true` log.
-3. Confirm no regressions to existing human-handoff (`"can I speak to a person"` still pauses bot 24h).
+**Edited:**
+- `supabase/functions/_shared/ai-prompt.ts` (inject block, drop inline Hinglish dict)
+- `supabase/functions/_shared/ai-agent-brain.ts` (load + extend classify/name-guards, log `[AI Tool Call Attempt]` with matched rule id)
+- `src/components/settings/AIAgentControlCenter.tsx` (mount new tab)
 
 ## Out of scope
 
-- No changes to `ai_knowledge` rows, `ai_purposes`, persona text, or the four interactive lists.
-- No new edge function. No DB migration. No UI changes.
-- The user's literal `upsert_lead_contact` tool-schema edit is N/A — capture is deterministic; equivalent hardening is in §3.
+No changes to `ai_knowledge`, `ai_purposes`, embeddings, webhook routing, or any non-AI surface. Hardcoded regexes stay as fallback (defense-in-depth) — not deleted.
