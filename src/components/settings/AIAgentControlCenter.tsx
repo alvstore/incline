@@ -160,7 +160,7 @@ export function AIAgentControlCenter() {
         <div>
           <h2 className="text-xl font-bold text-foreground">AI Agent Hub</h2>
           <p className="text-sm text-muted-foreground">
-            Single source of truth — Overview, Knowledge, Handles and Plumbing.
+            Single source of truth — Overview, Knowledge, Training, Handles and Plumbing.
           </p>
         </div>
       </div>
