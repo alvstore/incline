@@ -24,7 +24,9 @@ export type Capability =
   | 'manage_automations'
   | 'view_reconciliation'
   | 'book_facility'
-  | 'delete_task';
+  | 'delete_task'
+  | 'rcs_admin'
+  | 'rcs_wallet_view';
 
 const MATRIX: Record<Capability, AppRole[]> = {
   view_financials:     ['owner', 'admin', 'manager'],
@@ -41,6 +43,8 @@ const MATRIX: Record<Capability, AppRole[]> = {
   view_reconciliation: ['owner', 'admin'],
   book_facility:       ['owner', 'admin', 'manager', 'staff', 'trainer', 'member'],
   delete_task:         ['owner', 'admin', 'manager'],
+  rcs_admin:           ['owner', 'admin'],
+  rcs_wallet_view:     ['owner', 'admin'],
 };
 
 export function hasCapability(roles: AppRole[] | string[] | undefined, cap: Capability): boolean {
