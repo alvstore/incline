@@ -2408,6 +2408,7 @@ export type Database = {
           id: string
           member_id: string | null
           provider_message_id: string | null
+          provider_record_id: string | null
           read_at: string | null
           recipient: string
           replied_at: string | null
@@ -2436,6 +2437,7 @@ export type Database = {
           id?: string
           member_id?: string | null
           provider_message_id?: string | null
+          provider_record_id?: string | null
           read_at?: string | null
           recipient: string
           replied_at?: string | null
@@ -2464,6 +2466,7 @@ export type Database = {
           id?: string
           member_id?: string | null
           provider_message_id?: string | null
+          provider_record_id?: string | null
           read_at?: string | null
           recipient?: string
           replied_at?: string | null
@@ -10287,6 +10290,118 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rcs_inbound_events: {
+        Row: {
+          event_type: string
+          id: string
+          message_id: string | null
+          payload: Json
+          received_at: string
+          record_id: string | null
+          sender_phone: string
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          message_id?: string | null
+          payload: Json
+          received_at?: string
+          record_id?: string | null
+          sender_phone: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          message_id?: string | null
+          payload?: Json
+          received_at?: string
+          record_id?: string | null
+          sender_phone?: string
+        }
+        Relationships: []
+      }
+      rcs_templates: {
+        Row: {
+          body_preview: string | null
+          branch_id: string | null
+          created_at: string
+          id: string
+          last_synced_at: string
+          raw: Json | null
+          status: string
+          template_name: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          body_preview?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          raw?: Json | null
+          status?: string
+          template_name: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          body_preview?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          raw?: Json | null
+          status?: string
+          template_name?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rcs_templates_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rcs_wallet_snapshots: {
+        Row: {
+          balance: number | null
+          branch_id: string | null
+          currency: string | null
+          fetched_at: string
+          id: string
+          raw: Json | null
+        }
+        Insert: {
+          balance?: number | null
+          branch_id?: string | null
+          currency?: string | null
+          fetched_at?: string
+          id?: string
+          raw?: Json | null
+        }
+        Update: {
+          balance?: number | null
+          branch_id?: string | null
+          currency?: string | null
+          fetched_at?: string
+          id?: string
+          raw?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rcs_wallet_snapshots_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
