@@ -170,10 +170,9 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
 
   // ── RCS (Rich Communication Services) ──
   rcs_telinfy: [
-    { key: 'sender_id', label: 'RCS Sender / Brand ID', placeholder: 'Approved RCS brand ID', type: 'text', section: 'config' },
-    { key: 'base_url', label: 'API Base URL', placeholder: 'https://api.telinfy.com', type: 'text', section: 'config' },
-    { key: 'api_key', label: 'API Key / Bearer Token', placeholder: 'Enter Telinfy / GreenAds API key', type: 'password', section: 'credentials' },
-    { key: 'webhook_secret', label: 'DLR Webhook Secret', placeholder: 'Shared secret for delivery report webhook', type: 'password', section: 'credentials' },
+    { key: 'sender_id', label: 'RCS Sender / Brand ID (optional)', placeholder: 'Approved RCS brand ID', type: 'text', section: 'config' },
+    { key: 'base_url', label: 'API Base URL', placeholder: 'https://hub.telinfy.com/unified/developer/api/v1', type: 'text', section: 'config' },
+    { key: 'api_key', label: 'API Key (x-api-key)', placeholder: 'Paste Telinfy developer API key', type: 'password', section: 'credentials' },
   ],
   rcs_msg91: [
     { key: 'sender_id', label: 'RCS Sender / Brand ID', placeholder: 'MSG91 approved RCS brand ID', type: 'text', section: 'config' },
