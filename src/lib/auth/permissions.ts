@@ -68,6 +68,8 @@ export const can = {
   viewReconciliation:(r?: string[]) => hasCapability(r, 'view_reconciliation'),
   bookFacility:      (r?: string[]) => hasCapability(r, 'book_facility'),
   deleteTask:        (r?: string[]) => hasCapability(r, 'delete_task'),
+  rcsAdmin:          (r?: string[]) => hasCapability(r, 'rcs_admin'),
+  rcsWalletView:     (r?: string[]) => hasCapability(r, 'rcs_wallet_view'),
 };
 
 /**
