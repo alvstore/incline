@@ -1,67 +1,94 @@
-# Audit & Fix Plan
+## Telinfy RCS — Aligned with official Postman collection
 
-## 1. `pt_package_type` enum mismatch (BLOCKER)
-**Root cause:** Enum values in DB are only `session_based` and `monthly`. Multiple RPCs (`purchase_pt_package` and friends) still compare/insert the legacy string `'duration_based'`. When the column is typed `pt_package_type`, Postgres coerces the literal → `invalid input value for enum pt_package_type: "duration_based"`.
+### What changed vs. previous plan
+Now grounded in the actual `hub.telinfy.com - APIs & Webhook` collection. Base URL, auth header, and endpoints are confirmed (no more guesses).
 
-**Affected migrations / functions** (latest wins): `20260518143238_*.sql` (`purchase_pt_package`), `20260517153957_*.sql` (consume function uses `'monthly'` ✓). Code uses `'session_based' | 'monthly'`.
+### Confirmed contract (from Postman)
+- **Base URL:** `https://hub.telinfy.com/unified/developer/api/v1`
+- **Auth:** `x-api-key: <API_KEY>` header (NOT Bearer)
+- **Endpoints (RCS only):**
+  - `GET /rcs/templates` — list approved templates
+  - `POST /rcs/messages/:contactID?messageId=<custom>` — send (body = `{ templateName, lcustomParam }`)
+  - `GET /rcs/wallet` — balance
+  - `GET /rcs/record/:recordID` — single delivery record
+- **Webhooks (Telinfy → us):**
+  - `POST /webhook/delivery` — DLR; `eventDLR` ∈ `MESSAGE_READ | MESSAGE_DELIVERED | MESSAGE_UNDELIVERED`; identifier = `recordID`
+  - `POST /webhook/user-action` — button click; `user_action_clicked`
+  - `POST /webhook/user-message` — inbound MO (e.g. "STOP"); `user_Messaged`
 
-**Fix:** New migration that recreates `purchase_pt_package` (and any sibling helpers) replacing every `'duration_based'` with `'monthly'`. No enum change needed.
+### Current code mismatches (must fix)
+1. `send-rcs/index.ts` uses `Authorization: Bearer` → must use `x-api-key`.
+2. Endpoints `/rcs/send/text` and `/rcs/send/card` don't exist → real endpoint is `POST /rcs/messages/{contactID}` and is **template-driven** (`templateName` + variables). There is no freeform text send via this API.
+3. `rcs-webhook/index.ts` keys on `message_id` → real payload uses `recordID` + `eventDLR`. Status mapping must read `eventDLR`.
+4. `providerSchemas.ts` field labelled "Bearer Token" → relabel "API Key (x-api-key)".
+5. No handler for `/webhook/user-action` or `/webhook/user-message`.
 
-## 2. Edge function health audit
-Run targeted check across all functions for 502 / 5xx / auth failures over last 24h:
-- Sweep `error_logs` (source LIKE 'edge_%' / function_name) and `supabase--edge_function_logs` for: `automation-brain`, `process-ig-comment-runs`, `process-comm-retry-queue`, `process-whatsapp-retry-queue`, `process-scheduled-campaigns`, `meta-webhook`, `whatsapp-webhook`, `send-whatsapp`, `dispatch-communication`, `ai-agent-brain`, `monitor-ai-lead-loss`, `reconcile-*`, `notify-staff-handoff`.
-- Current findings from logs already pulled: only real recurring failure is `meta-webhook` rejecting Instagram with `signature_mismatch_likely_wrong_app_secret` (see §5). Brain + retry queues are healthy after recent restart. 502s from previous report were cold-starts (already mitigated with backoff).
+### Build plan
 
-**Deliverable:** Markdown audit table in chat (function, last error, count, severity, action). No code changes unless a real bug surfaces — then patch individually.
+**A. Secrets (request once user confirms)**
+- `TELINFY_API_KEY`, `TELINFY_BASE_URL` (default `https://hub.telinfy.com/unified/developer/api/v1`). `TELINFY_SENDER_ID` is implicit per account — drop from required.
 
-## 3. `Empty reply from AI` fallback (+91 63784 32550)
-Single occurrence (info-level). Add structured logging in `ai-agent-brain.ts` to capture: model used, prompt token estimate, finish_reason, raw response length, retrieved KB size — so the next occurrence is debuggable instead of a one-liner. Also auto-resolve the warning after 1h if no repeat (same pattern as brain heartbeats).
+**B. Migration — `rcs_templates` + `rcs_wallet_snapshots`**
+- `rcs_templates(id, branch_id, template_name UNIQUE per branch, body_preview, variables jsonb, status, last_synced_at)` — mirror of Telinfy `GET /rcs/templates`.
+- `rcs_wallet_snapshots(id, branch_id, balance numeric, currency, fetched_at)`.
+- GRANTs + RLS branch-scoped + service_role full.
+- Add `communication_logs.provider_record_id text` index (RCS keys on `recordID`, distinct from `provider_message_id`).
 
-## 4. Edge function failure sweep
-Same scope as §2; output will list any function with error rate > 0 in last 48h. Will additionally check `supabase--linter` for security/perf warnings.
+**C. Edge functions**
+- `send-rcs` → **v0.3.0**
+  - Switch to `x-api-key`.
+  - Single endpoint `POST {base}/rcs/messages/{contactID}?messageId={log_id}`.
+  - Body: `{ templateName, lcustomParam }`. Caller must pass `template_name` + `variables`. If only freeform `message` is provided, return `status:'unsupported', reason:'rcs_requires_template'` and let dispatcher fall back to SMS.
+  - Store returned `recordID` into `communication_logs.provider_record_id`.
+- `rcs-templates-sync` (new) → calls `GET /rcs/templates`, upserts `rcs_templates`.
+- `rcs-wallet` (new) → `GET /rcs/wallet`, writes snapshot; returns balance.
+- `rcs-webhook` → **v0.3.0**, refactor:
+  - Routes by URL path suffix: `/delivery`, `/user-action`, `/user-message`.
+  - `/delivery`: map `eventDLR` → `delivered | read | failed`, lookup `communication_logs` by `provider_record_id`, call `record_delivery_event`.
+  - `/user-action`: insert into a new `rcs_inbound_events` table + emit lead-activity.
+  - `/user-message`: detect opt-out via existing `_shared/optOutDetector.ts` → `mark_do_not_contact`; otherwise hand to `ai-agent-brain` with `channel='rcs'`.
+- `dispatch-communication` → add RCS branch: if `channel='rcs'` and a `template_key` exists, resolve template_name; otherwise skip RCS and fall through to SMS fallback.
 
-## 5. Meta API `(#132001)` + IG signature mismatch
-**(#132001)** = "Template name does not exist in the translation". Audit:
-- Cross-check every `template_name` used in `send-whatsapp` payloads against `whatsapp_templates` rows where `status='APPROVED'` and `language` matches.
-- Log the exact template+lang on each failure (currently swallowed).
-- UI: WhatsApp Templates page — add badges showing **Meta status**, **language**, and a red "Not found in Meta" pill when our DB has a template Meta doesn't recognise. Add "Resync from Meta" button that calls a new `meta-sync-templates` edge fn (lists templates via Graph API, upserts status).
+**D. UI — Settings → Integrations → RCS Hub** (`src/components/settings/rcs/`)
+Vuexy: rounded-2xl, soft shadow, Sheet drawers for create/edit. Tabs:
+1. **Overview** — connection status, wallet balance hero card (gradient), today's sent/delivered/read/undelivered counters (from `communication_logs` where `provider='telinfy_rcs'`).
+2. **Templates** — list with status badges, "Sync from Telinfy" button → `rcs-templates-sync`. Read-only for now (creation happens in Telinfy hub).
+3. **Direct Send (Test Console)** — Sheet: PhoneInput (+91), Template select (from `rcs_templates`), dynamic variable fields, Send. Polls `communication_logs` for the new log id to show timeline (sent → delivered → read).
+4. **Wallet & Reports** — balance card + 30-day delivery breakdown bar chart.
+5. **Webhooks** — three URLs with copy buttons:
+   - DLR: `{SUPABASE_FN_BASE}/rcs-webhook/delivery`
+   - User Action: `{SUPABASE_FN_BASE}/rcs-webhook/user-action`
+   - User Message: `{SUPABASE_FN_BASE}/rcs-webhook/user-message`
 
-**IG signature mismatch** in `meta-webhook`: `META_APP_SECRET` in secrets doesn't match the app subscribed to the IG webhook. Surface a clear banner in Integrations → Meta UI when last 10 webhooks all rejected with `signature_mismatch`, with "Update App Secret" CTA opening the secret editor.
+**E. RBAC**
+- View hub: owner/admin/manager.
+- Send test + sync templates: owner/admin (`rcs_admin` capability).
+- Wallet view: owner/admin (financial).
 
-## 6. Email — two pipelines collision
-We currently have BOTH:
-- Lovable Cloud built-in email (auth + `send-transactional-email` queue) — recommended.
-- A self-rolled `dispatch-communication` → custom SMTP/Resend path for member/CRM mail.
+**F. Live test (+91 98876 01200)**
+1. After secrets in + templates synced, open Test Console.
+2. Pick template (e.g. `welcome`), fill `NAME=Audit Test`, send.
+3. Verify in `communication_logs`: status flow `queued → sent → delivered → read`, `provider_record_id` populated.
+4. Verify `rcs-webhook/delivery` row in `webhook_ingress_log`.
 
-**Plan:**
-- Keep `dispatch-communication` as the single CRM/marketing path (it already handles preferences, dedupe, quiet hours).
-- Route **auth emails** (signup/recovery/magiclink) through Lovable Cloud only.
-- Add a routing rule in `dispatch-communication`: if `category='auth'` → reject (must go through auth hook); else use existing provider chain.
-- Audit `email_send_log` for duplicate sends (same recipient + same subject within 60s) and report.
-- No domain change — we keep `notify.theincline.in`.
+### Files to create / edit
+- create: `supabase/functions/rcs-templates-sync/index.ts`, `supabase/functions/rcs-wallet/index.ts`
+- create: `supabase/migrations/<ts>_rcs_telinfy_v2.sql` (templates, wallet snapshots, `provider_record_id`, `rcs_inbound_events`)
+- edit: `supabase/functions/send-rcs/index.ts` (x-api-key, template-only, recordID)
+- edit: `supabase/functions/rcs-webhook/index.ts` (3 path routes, eventDLR mapping, opt-out, MO → brain)
+- edit: `supabase/functions/dispatch-communication/index.ts` (RCS template branch + SMS fallback)
+- edit: `src/config/providerSchemas.ts` (x-api-key label, base_url default)
+- create: `src/components/settings/rcs/RcsHub.tsx`, `OverviewTab.tsx`, `TemplatesTab.tsx`, `TestConsoleSheet.tsx`, `WalletReportsTab.tsx`, `WebhooksTab.tsx`
+- edit: `src/components/settings/IntegrationSettings.tsx` (link "Open RCS Hub")
+- edit: `src/lib/auth/permissions.ts` (`rcs_admin`, `rcs_wallet_view`)
+- migration: `role_capabilities` rows for new caps
 
-## 7. End-to-end testing playbook (using skills)
-Add `docs/qa-playbook.md`:
-- **Unit / component:** Vitest + RTL on critical hooks (`useAttendance`, `useWallet`, `usePTPackages`) and drawers.
-- **Edge fn:** Deno tests for `dispatch-communication`, `purchase_pt_package` RPC via `supabase--test_edge_functions`, `ai-agent-brain` deterministic-fallback test.
-- **Integration:** seed script → run `automation-brain` once → assert downstream rows.
-- **E2E (manual checklist):** member self-onboarding → membership purchase → PT purchase (both `session_based` & `monthly`) → check-in → benefit booking → invoice PDF → WhatsApp delivery.
-- **Smoke cron:** `healthz` + DR readiness page.
-- **Load:** k6 script hitting `register-member` and `whatsapp-webhook`.
+### Out of scope (this round)
+- MSG91 RCS dispatcher.
+- Inbound RCS thread UI in unified conversation hub (insert + AI reply now; UI listing later).
+- Template creation/submission (Telinfy hub still required for approvals).
 
-## Files to touch (build phase)
-- New migration: fix `purchase_pt_package` ('duration_based' → 'monthly').
-- `supabase/functions/_shared/ai-agent-brain.ts` — richer empty-reply logging + auto-resolve.
-- `supabase/functions/dispatch-communication/index.ts` — auth-category guard + dup-window check.
-- New edge fn: `meta-sync-templates`.
-- `src/components/settings/whatsapp/WhatsAppTemplatesTab.tsx` (or equivalent) — Meta status pills + Resync button + IG-secret banner.
-- `docs/qa-playbook.md` (new).
-
-## Out of scope (this sprint)
-- Rewriting WhatsApp template editor UX beyond status badges + resync.
-- Switching email provider.
-
-## Open questions
-1. For Meta IG webhook — should I auto-disable the IG integration when 10+ signatures fail, or only show a banner?
-2. Email auth-category guard: hard-reject or silently re-route to the auth queue?
-3. Do you want the k6 load script wired into CI, or local-only?
+### Confirm before build
+1. **Add `TELINFY_API_KEY` + `TELINFY_BASE_URL` via secrets prompt now?** (recommended yes)
+2. **Live send to +91 98876 01200** during this build — OK to consume one wallet credit?
+3. Confirm dispatcher behavior when no RCS template exists: **fall back to SMS** (recommended) vs. fail loudly?
