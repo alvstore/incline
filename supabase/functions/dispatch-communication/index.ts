@@ -889,17 +889,34 @@ Deno.serve(async (req) => {
           break;
         }
         case 'rcs': {
+          // Telinfy RCS is template-only. Caller passes template_name + variables in payload.variables.
+          const vars = (input.payload.variables as Record<string, unknown> | undefined) ?? {};
+          const templateName =
+            (vars.template_name as string | undefined) ??
+            (vars.templateName as string | undefined) ??
+            input.template_key ?? null;
+          const lcustomParam = (vars.lcustomParam as Record<string, unknown> | undefined) ?? { ...vars };
+          delete (lcustomParam as Record<string, unknown>).template_name;
+          delete (lcustomParam as Record<string, unknown>).templateName;
+          delete (lcustomParam as Record<string, unknown>).lcustomParam;
+
           const r = await supabase.functions.invoke('send-rcs', {
             body: {
               branch_id: input.branch_id,
               recipient: input.recipient,
+              template_name: templateName,
+              variables: lcustomParam,
               message: input.payload.body,
-              kind: (input.payload.variables as Record<string, unknown> | undefined)?.rcs_kind ?? 'text',
               log_id: log!.id,
             },
           });
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           const rd = r.data as { provider_message_id?: string; status?: string; reason?: string } | undefined;
+          if (rd?.status === 'unsupported') {
+            // Caller-side fallback path: surface a specific reason so the dispatcher's
+            // multi-channel router (if any) can re-queue on SMS. For now, fail loud.
+            throw new Error(rd.reason || 'rcs_requires_template');
+          }
           if (rd?.status && rd.status !== 'sent') throw new Error(rd.reason || rd.status);
           providerMessageId = rd?.provider_message_id;
           break;
