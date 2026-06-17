@@ -23,6 +23,7 @@ import {
   Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
 import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
+import { RcsHub } from './rcs/RcsHub';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
