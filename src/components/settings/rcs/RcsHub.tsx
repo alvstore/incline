@@ -48,8 +48,8 @@ type Template = {
 };
 
 export function RcsHub() {
-  const { profile } = useAuth();
-  const roles = profile?.roles ?? [];
+  const { roles: roleInfos } = useAuth();
+  const roles = (roleInfos ?? []).map((r: any) => r.role as string);
   const isAdmin = can.rcsAdmin(roles);
   const canSeeWallet = can.rcsWalletView(roles);
   const { selectedBranch } = useBranchContext();
