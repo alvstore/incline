@@ -457,7 +457,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
 
           <SheetFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
-            <Button onClick={() => sendMut.mutate()} disabled={sendMut.isPending || !templateName}>
+            <Button onClick={() => sendMut.mutate()} disabled={sendMut.isPending || !templateName || disabled}>
               {sendMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Send
             </Button>
