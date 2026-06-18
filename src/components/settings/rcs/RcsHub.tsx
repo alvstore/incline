@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import {
   Activity, RefreshCw, Send, Wallet, Webhook, Copy, CheckCircle2, XCircle,
-  Loader2, MessageSquare, FileText, Radio,
+  Loader2, MessageSquare, FileText, Radio, Image as ImageIcon, BarChart3, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
