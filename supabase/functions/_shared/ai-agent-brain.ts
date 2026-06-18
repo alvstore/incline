@@ -1,3 +1,9 @@
+// v4.5.0 — Opening-date redaction: bot must NEVER quote a month/year
+//          opening or launch date. Sanitizer strips any "<month> 20XX" or
+//          "open/launch ... 20XX" phrase and replaces with a neutral
+//          "date to be announced" line. ai_knowledge rows scrubbed in
+//          companion migration. SEO files (llms.txt/llms-full.txt/ai.txt)
+//          intentionally untouched.
 // v4.4.0 — Hinglish intent override + answer-and-pivot. Questions like
 //          "Kha pr h" / "kitna" / "kab khulega" are now classified BEFORE the
 //          name funnel; the canned answer is prepended to the next capture
@@ -157,7 +163,7 @@ export function classifyHinglishIntent(text: string): HinglishIntent {
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   location: "We're at Sector 14, Udaipur, Rajasthan ✨",
   pricing: "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
-  timeline: "We open on June 22nd — Founding Members get launch-day perks ✨",
+  timeline: "Our opening date hasn't been announced publicly yet — Founding Members will be the first to know ✨",
 };
 
 function intentPivotPrefix(text: string): string {
@@ -1323,6 +1329,22 @@ const FORBIDDEN_PLAN_TEXT_RE =
   /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
 const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
 const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
+// v4.5.0 — opening/launch date redaction. We never disclose a date publicly.
+const OPENING_DATE_RE =
+  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
+const OPENING_VERB_YEAR_RE =
+  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,60}\b20\d{2}\b/gi;
+const OPENING_DATE_NEUTRAL =
+  "Our opening date hasn't been announced publicly yet — our team will share it as soon as it's locked in ✨";
+
+function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
+  if (!text) return { redacted: text, hit: false };
+  let hit = false;
+  let out = text;
+  if (OPENING_DATE_RE.test(out)) { hit = true; out = out.replace(OPENING_DATE_RE, "soon"); }
+  if (OPENING_VERB_YEAR_RE.test(out)) { hit = true; out = out.replace(OPENING_VERB_YEAR_RE, "open soon"); }
+  return { redacted: out, hit };
+}
 
 function sanitizeFoundersPhaseText(input: {
   replyText: string;
@@ -1335,11 +1357,25 @@ function sanitizeFoundersPhaseText(input: {
   // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
 
-  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(text);
-  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(text);
-  const hasSendDetails = SEND_DETAILS_RE.test(text);
+  // 0. Opening-date guard — runs before plan/price checks. Applies to ALL
+  //    outbound text regardless of capture state.
+  const dateScan = redactOpeningDate(text);
+  if (dateScan.hit) {
+    console.log("[AI:guards] redacted opening-date leak");
+    // If date was the only issue, return neutral line; otherwise continue
+    // sanitization on the redacted text.
+    const redacted = dateScan.redacted;
+    if (!FORBIDDEN_PLAN_TEXT_RE.test(redacted) && !FORBIDDEN_PRICE_TEXT_RE.test(redacted) && !SEND_DETAILS_RE.test(redacted)) {
+      return OPENING_DATE_NEUTRAL;
+    }
+  }
 
-  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return replyText;
+  const scrubbed = dateScan.hit ? dateScan.redacted : text;
+  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(scrubbed);
+  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(scrubbed);
+  const hasSendDetails = SEND_DETAILS_RE.test(scrubbed);
+
+  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return dateScan.hit ? scrubbed : replyText;
 
   const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
   const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
