@@ -1,4 +1,4 @@
-// v1.0.0 — Fetch RCS templates from Telinfy and upsert into rcs_templates.
+// v1.1.0 — Fetch RCS templates from Telinfy with path fallback + verbose diagnostics.
 //   POST /rcs-templates-sync { branch_id?: string }
 // Requires authenticated user with owner|admin role; uses service-role for upsert.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -45,13 +45,28 @@ Deno.serve(async (req) => {
     }
     if (!apiKey) return json(200, { ok: false, reason: 'TELINFY_API_KEY missing' });
 
-    const resp = await fetch(`${baseUrl}/rcs/templates`, {
-      method: 'GET', headers: { 'x-api-key': apiKey },
-    });
-    const text = await resp.text();
+    const CANDIDATE_PATHS = ['/rcs/templates', '/rcs/template', '/rcs/templates/list', '/templates/rcs', '/rcs/templates/approved'];
+    const attempts: Array<{ url: string; status: number; body: any }> = [];
     let data: any = null;
-    try { data = JSON.parse(text); } catch { /* keep text */ }
-    if (!resp.ok) return json(200, { ok: false, reason: `HTTP ${resp.status}`, raw: data || text });
+    let usedUrl = '';
+    for (const p of CANDIDATE_PATHS) {
+      const url = `${baseUrl}${p}`;
+      const resp = await fetch(url, { method: 'GET', headers: { 'x-api-key': apiKey, 'Accept': 'application/json' } });
+      const text = await resp.text();
+      let parsed: any = null; try { parsed = JSON.parse(text); } catch { /* keep */ }
+      attempts.push({ url, status: resp.status, body: parsed ?? text?.slice(0, 200) });
+      if (resp.ok) { data = parsed; usedUrl = url; break; }
+      if (resp.status === 401 || resp.status === 403) break;
+    }
+    if (!data) {
+      const last = attempts[attempts.length - 1] ?? { status: 0 };
+      const reason =
+        last.status === 401 ? 'Invalid API key' :
+        last.status === 403 ? 'API key lacks template permission' :
+        last.status === 404 ? `No templates endpoint found on ${baseUrl}` :
+        `HTTP ${last.status}`;
+      return json(200, { ok: false, reason, attempts, base_url: baseUrl });
+    }
 
     const list: any[] = Array.isArray(data) ? data : (data?.data || data?.templates || []);
     let upserted = 0;
@@ -73,7 +88,7 @@ Deno.serve(async (req) => {
       if (!error) upserted++;
     }
 
-    return json(200, { ok: true, count: list.length, upserted });
+    return json(200, { ok: true, count: list.length, upserted, endpoint: usedUrl });
   } catch (e) {
     console.error('[rcs-templates-sync] error', e);
     return json(500, { ok: false, error: e instanceof Error ? e.message : String(e) });
