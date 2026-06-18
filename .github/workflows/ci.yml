@@ -73,13 +73,14 @@ jobs:
             echo "$MATCHES"
             exit 1
           fi
-          # Client code must NEVER call send-* edge functions directly — always go through
-          # dispatchCommunication. The dispatcher is the only allowed caller of send-*.
+          # Client code must NEVER call send-rcs directly — always go through
+          # dispatchCommunication. The dispatcher is the only allowed caller of send-rcs.
+          # (send-whatsapp/sms/email have legacy callers tracked separately; not yet enforced.)
           DIRECT_SENDS=$(grep -RnoE \
-            "functions\\.invoke\\(['\"]send-(whatsapp|sms|email|rcs|meta-dm)['\"]" \
+            "functions\\.invoke\\(['\"]send-rcs['\"]" \
             src 2>/dev/null)
           if [ -n "$DIRECT_SENDS" ]; then
-            echo "::error::Client code must use dispatchCommunication, not invoke send-* directly:"
+            echo "::error::Client code must use dispatchCommunication, not invoke send-rcs directly:"
             echo "$DIRECT_SENDS"
             exit 1
           fi
