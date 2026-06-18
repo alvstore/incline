@@ -490,7 +490,12 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
                 <SelectTrigger><SelectValue placeholder="Pick a synced template" /></SelectTrigger>
                 <SelectContent>
                   {templates?.map((t) => (
-                    <SelectItem key={t.template_name} value={t.template_name}>{t.template_name}</SelectItem>
+                    <SelectItem key={t.template_name} value={t.template_name}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {isRichKind(t.kind) && <ImageIcon className="h-3 w-3 text-indigo-600" />}
+                        {t.template_name}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
