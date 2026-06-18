@@ -180,11 +180,30 @@ const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   timeline: "Our opening date hasn't been announced publicly yet — Founding Members will be the first to know ✨",
 };
 
+// v4.6.0 — sanitize curated correction_instruction. Admin rows often start
+// with an internal meta-label like "Location intent — Sector 14, Udaipur."
+// We must NEVER show that label to the user.
+const INTENT_META_PREFIX_RE =
+  /^\s*(?:location|pricing|timeline|opening|launch|intent)\s+intent\s*[—\-:]\s*/i;
+const INTENT_RESIDUAL_META_RE = /\bintent\s*[—\-:]\s*/i;
+
 function intentPivotPrefix(text: string): string {
-  // Prefer admin-curated instruction when available.
   const dyn = _dynMemSnapshot?.classify(text);
   if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
-    return `${dyn.correction_instruction.split(/[.!?]\s/)[0]} `;
+    const raw = String(dyn.correction_instruction || "").trim();
+    let cleaned = raw.replace(INTENT_META_PREFIX_RE, "").trim();
+    // first sentence only
+    cleaned = cleaned.split(/[.!?]\s/)[0].trim();
+    // if any residual "intent —" / "intent:" remains, treat as leak and drop
+    if (INTENT_RESIDUAL_META_RE.test(cleaned)) {
+      console.log("[AI:guards] stripped intent meta-prefix (residual)");
+      cleaned = "";
+    }
+    if (cleaned) return `${cleaned} `;
+    // fall through to canonical answer
+    const cat = dyn.intent_category as Exclude<HinglishIntent, null>;
+    console.log(`[AI:guards] stripped intent meta-prefix — falling back to canonical answer for ${cat}`);
+    return `${INTENT_ANSWERS[cat]} `;
   }
   const intent = classifyHinglishIntent(text);
   return intent ? `${INTENT_ANSWERS[intent]} ` : "";
