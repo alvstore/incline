@@ -209,6 +209,22 @@ function intentPivotPrefix(text: string): string {
   return intent ? `${INTENT_ANSWERS[intent]} ` : "";
 }
 
+// v4.6.0 — shared regexes for name-ask de-duplication
+const NAME_ASK_DETECT_RE =
+  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+const ACK_RE =
+  /^(?:thanks?(?:\s+you)?|thank\s+you(?:\s+for[^.]*)?|thx|ty|ok(?:ay)?|k|kk|cool|nice|noted|got\s+it|alright|nevertheless|no\s*worries|no\s*problem|np|sure|hmm+|haan?|ji|theek\s*hai|thik\s+hai|👍|🙏|✨)\.?!?\s*$/i;
+
+function countPriorNameAsks(history: Array<{ role: string; content: string }>): number {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  return history
+    .slice(-10)
+    .filter((m) => m && m.role !== "user" && typeof m.content === "string" && NAME_ASK_DETECT_RE.test(m.content))
+    .length;
+}
+
+
+
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
   const trimmed = name.trim();
