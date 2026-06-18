@@ -1339,11 +1339,10 @@ const OPENING_DATE_NEUTRAL =
 
 function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   if (!text) return { redacted: text, hit: false };
-  let hit = false;
-  let out = text;
-  if (OPENING_DATE_RE.test(out)) { hit = true; out = out.replace(OPENING_DATE_RE, "soon"); }
-  if (OPENING_VERB_YEAR_RE.test(out)) { hit = true; out = out.replace(OPENING_VERB_YEAR_RE, "open soon"); }
-  return { redacted: out, hit };
+  const before = text;
+  let out = text.replace(OPENING_VERB_YEAR_RE, "open soon");
+  out = out.replace(OPENING_DATE_RE, "soon");
+  return { redacted: out, hit: out !== before };
 }
 
 function sanitizeFoundersPhaseText(input: {
