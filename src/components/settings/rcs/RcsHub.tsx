@@ -600,22 +600,180 @@ function WebhooksPanel() {
     ['User Action', WEBHOOK_URLS.userAction, 'Receives button-click events from RCS rich cards'],
     ['User Message', WEBHOOK_URLS.userMessage, 'Inbound MO; honors STOP/opt-out; hands to AI brain'],
   ];
+  const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
+  const snippets: Array<[string, string]> = [
+    ['List templates', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/templates`],
+    ['Send message', `curl -X POST -H "x-api-key: $TELINFY_KEY" -H "Content-Type: application/json" \\
+  -d '{"templateName":"welcome","lcustomParam":{"NAME":"John"}}' \\
+  ${TELINFY_BASE}/rcs/messages/919887601200`],
+    ['Wallet balance', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/wallet`],
+    ['Record by ID', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/record/12345`],
+  ];
   return (
-    <div className="space-y-3">
-      {rows.map(([label, url, hint]) => (
-        <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm text-slate-900">{label}</span>
-              <Button size="sm" variant="outline" onClick={() => copy(url, label)}>
-                <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-slate-500" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Inbound webhook URLs</span>
+        </div>
+        {rows.map(([label, url, hint]) => (
+          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <Button size="sm" variant="outline" onClick={() => copy(url, label)}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+                </Button>
+              </div>
+              <code className="block text-xs bg-slate-100 px-3 py-2 rounded font-mono break-all">{url}</code>
+              <p className="text-xs text-slate-500">{hint}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-500" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Telinfy REST — curl snippets</span>
+        </div>
+        <p className="text-xs text-slate-500">
+          For ad-hoc testing only. Production sends MUST go through{' '}
+          <code className="px-1 py-0.5 rounded bg-slate-100 font-mono text-[11px]">dispatchCommunication()</code>{' '}
+          so dedupe, preferences, quiet hours, and the kill-switch toggle are honored.
+        </p>
+        {snippets.map(([label, snippet]) => (
+          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(snippet); toast.success(`${label} curl copied`); }}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+                </Button>
+              </div>
+              <pre className="text-[11px] bg-slate-900 text-slate-100 px-3 py-2 rounded font-mono overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────── Reports ──────────────────── */
+function ReportsPanel({ branchId }: { branchId: string | null }) {
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ['rcs-reports', branchId],
+    queryFn: async () => {
+      const q = supabase.from('communication_logs')
+        .select('id, recipient, template_id, delivery_status, provider_record_id, sent_at, error_message, content, created_at')
+        .eq('channel', 'rcs').order('created_at', { ascending: false }).limit(50);
+      const { data } = branchId ? await q.eq('branch_id', branchId) : await q;
+      return (data as any[]) ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  if (isLoading) return <Skeleton className="h-40 w-full rounded-2xl" />;
+  if (!logs || logs.length === 0) {
+    return (
+      <Card className="rounded-2xl border-dashed border-2 border-slate-200">
+        <CardContent className="p-8 text-center text-sm text-slate-500">
+          No RCS sends yet. Use the Test Send console to dispatch a message.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const badgeFor = (s: string | null) => {
+    const v = (s || '').toLowerCase();
+    if (v === 'read') return 'bg-indigo-100 text-indigo-700';
+    if (v === 'delivered') return 'bg-emerald-100 text-emerald-700';
+    if (v === 'failed') return 'bg-red-100 text-red-700';
+    if (v === 'sent') return 'bg-slate-100 text-slate-700';
+    return 'bg-amber-100 text-amber-700';
+  };
+
+  return (
+    <Card className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-4 py-2.5">Time</th>
+                <th className="px-4 py-2.5">Recipient</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Record ID</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                    {new Date(l.created_at).toLocaleString('en-IN')}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{l.recipient}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge className={badgeFor(l.delivery_status)}>{l.delivery_status || 'pending'}</Badge>
+                    {l.error_message && <span className="ml-2 text-[10px] text-red-600 truncate">{l.error_message}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{l.provider_record_id || '—'}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {l.provider_record_id && (
+                      <RecordDetailButton branchId={branchId} recordId={l.provider_record_id} />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────── Record detail ────────────── */
+function RecordDetailButton({ branchId, recordId }: { branchId: string | null; recordId: string | number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    enabled: open,
+    queryKey: ['rcs-record', recordId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('rcs-record', { body: { branch_id: branchId, record_id: recordId } });
+      if (error) throw new Error(error.message);
+      if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'fetch_failed');
+      return (data as any).data;
+    },
+  });
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} className="h-7 px-2 text-xs">
+        <Eye className="h-3 w-3 mr-1" />Detail
+      </Button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Telinfy record {String(recordId)}</SheetTitle>
+            <SheetDescription>Live delivery timeline from <code className="font-mono">/rcs/record/:id</code>.</SheetDescription>
+          </SheetHeader>
+          <div className="py-4 space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                Refresh
               </Button>
             </div>
-            <code className="block text-xs bg-slate-100 px-3 py-2 rounded font-mono break-all">{url}</code>
-            <p className="text-xs text-slate-500">{hint}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+            {isLoading ? <Skeleton className="h-40 w-full rounded-xl" /> : (
+              <pre className="text-[11px] bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
+                {data ? JSON.stringify(data, null, 2) : 'No data'}
+              </pre>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
