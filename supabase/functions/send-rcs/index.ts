@@ -38,9 +38,11 @@ Deno.serve(async (req) => {
       return json(200, { status: 'unsupported', reason: 'rcs_requires_template', detail: 'Telinfy RCS only supports template sends; supply template_name + variables or fall back to SMS.' });
     }
 
-    // Resolve creds: per-branch DB row > global DB row > env.
+    // Resolve creds: per-branch DB row > global DB row > env. Use saved key even if toggle is off,
+    // but short-circuit outbound sends when the integration is explicitly disabled.
     let apiKey = ENV_API_KEY;
     let baseUrl = ENV_BASE_URL;
+    let isActive: boolean | null = null;
     const { data: cfgRow } = await supabase
       .from('integration_settings')
       .select('config, credentials, is_active')
@@ -50,11 +52,15 @@ Deno.serve(async (req) => {
       .order('branch_id', { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
-    if (cfgRow?.is_active) {
-      apiKey = (cfgRow as any).credentials?.api_key || apiKey;
-      baseUrl = (((cfgRow as any).config?.base_url || baseUrl) as string).replace(/\/+$/, '');
+    if (cfgRow) {
+      isActive = !!(cfgRow as any).is_active;
+      const dbKey = (cfgRow as any).credentials?.api_key;
+      if (dbKey) apiKey = dbKey;
+      const dbBase = (cfgRow as any).config?.base_url;
+      if (dbBase) baseUrl = String(dbBase).replace(/\/+$/, '');
     }
     if (!apiKey) return json(200, { status: 'not_configured', reason: 'TELINFY_API_KEY missing' });
+    if (isActive === false) return json(200, { status: 'disabled', reason: 'Telinfy integration is disabled' });
 
     const contactId = normalizeTo(recipient);
     const messageId = log_id ? String(log_id) : crypto.randomUUID();
