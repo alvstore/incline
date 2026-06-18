@@ -1,4 +1,4 @@
-// v0.3.0 — Telinfy RCS dispatcher (aligned with hub.telinfy.com Postman collection).
+// v0.4.0 — Telinfy RCS dispatcher (aligned with hub.telinfy.com Postman collection).
 // Endpoint:  POST {base}/rcs/messages/{contactID}?messageId={custom}
 // Auth:      x-api-key: <TELINFY_API_KEY>
 // Body:      { templateName, lcustomParam: { ...vars } }
