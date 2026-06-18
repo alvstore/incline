@@ -29,9 +29,11 @@ Deno.serve(async (req) => {
       .in('branch_id', branchId ? [branchId, null] : [null])
       .order('branch_id', { ascending: false, nullsFirst: false })
       .limit(1).maybeSingle();
-    if (cfg?.is_active) {
-      apiKey = (cfg as any).credentials?.api_key || apiKey;
-      baseUrl = (((cfg as any).config?.base_url || baseUrl) as string).replace(/\/+$/, '');
+    if (cfg) {
+      const dbKey = (cfg as any).credentials?.api_key;
+      if (dbKey) apiKey = dbKey;
+      const dbBase = (cfg as any).config?.base_url;
+      if (dbBase) baseUrl = String(dbBase).replace(/\/+$/, '');
     }
     if (!apiKey) return json(200, { ok: false, reason: 'TELINFY_API_KEY missing' });
 
