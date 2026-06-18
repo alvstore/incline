@@ -70,27 +70,56 @@ Deno.serve(async (req) => {
       return json(200, { ok: false, reason, attempts, base_url: baseUrl });
     }
 
-    const list: any[] = Array.isArray(data) ? data : (data?.data || data?.templates || []);
+    // Telinfy returns a grouped object: { richStandard:[], basicStandard:[], richDynamic:[], basicDynamic:[] }.
+    // Older tenants may return a flat array. Normalize either shape into [{kind, t}].
+    const KIND_KEYS = ['richStandard', 'basicStandard', 'richDynamic', 'basicDynamic'] as const;
+    const KIND_MAP: Record<string, string> = {
+      richStandard: 'rich_standard', basicStandard: 'basic_standard',
+      richDynamic: 'rich_dynamic', basicDynamic: 'basic_dynamic',
+    };
+    const flat: Array<{ kind: string | null; t: any }> = [];
+    if (Array.isArray(data)) {
+      for (const t of data) flat.push({ kind: null, t });
+    } else if (data && typeof data === 'object') {
+      let grouped = false;
+      for (const k of KIND_KEYS) {
+        if (Array.isArray((data as any)[k])) {
+          grouped = true;
+          for (const t of (data as any)[k]) flat.push({ kind: KIND_MAP[k], t });
+        }
+      }
+      if (!grouped) {
+        const list: any[] = (data as any)?.data || (data as any)?.templates || [];
+        for (const t of list) flat.push({ kind: null, t });
+      }
+    }
+
     let upserted = 0;
-    for (const t of list) {
+    for (const { kind, t } of flat) {
       const name = t?.templateName || t?.name || t?.template_name;
       if (!name) continue;
-      const preview = t?.body || t?.message || t?.preview || '';
+      const preview = t?.body || t?.message || t?.preview || t?.text || '';
       const vars = Array.isArray(t?.variables) ? t.variables : extractVars(preview);
       const status = (t?.status || 'approved').toString().toLowerCase();
+      const mediaUrl =
+        t?.mediaUrl || t?.media_url || t?.imageUrl || t?.image_url ||
+        t?.thumbnailUrl || t?.thumbnail_url || t?.media?.url || null;
+      const inferredKind = kind || (mediaUrl ? 'rich_standard' : 'basic_standard');
       const { error } = await supabase.from('rcs_templates').upsert({
         branch_id: branchId,
         template_name: name,
         body_preview: preview,
         variables: vars,
         status,
+        kind: inferredKind,
+        media_url: mediaUrl,
         raw: t,
         last_synced_at: new Date().toISOString(),
       }, { onConflict: 'branch_id,template_name' });
       if (!error) upserted++;
     }
 
-    return json(200, { ok: true, count: list.length, upserted, endpoint: usedUrl });
+    return json(200, { ok: true, count: flat.length, upserted, endpoint: usedUrl });
   } catch (e) {
     console.error('[rcs-templates-sync] error', e);
     return json(500, { ok: false, error: e instanceof Error ? e.message : String(e) });
