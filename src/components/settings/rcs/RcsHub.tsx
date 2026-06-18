@@ -408,7 +408,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
+      <Button onClick={() => setOpen(true)} disabled={disabled} title={disabled ? 'Enable Telinfy integration to send' : undefined}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="sm:max-w-lg">
