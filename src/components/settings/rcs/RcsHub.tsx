@@ -377,7 +377,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
           template_key: templateName,
           payload: {
             body: selected?.variables?.length ? '[RCS template send]' : 'Test',
-            variables: { template_name: templateName, lcustomParam: vars },
+            variables: vars,
           },
         },
       });
