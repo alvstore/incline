@@ -1,67 +1,51 @@
-## RCS Hub — Audit Findings & Fix Plan
+# Stop the WhatsApp / IG bot from leaking the July 2026 opening date
 
-### Audit (what's wrong today)
+## Problem
+The bot told Madhav "we are aiming to open our doors in July 2026." We never publicly committed an opening date in customer comms — the date only lives in our SEO knowledge files (`public/llms-full.txt`, `public/llms.txt`, `public/ai.txt`) and in `ai_knowledge` rows seeded by old migrations. The brain pulls from `ai_knowledge` via RAG, so the model happily repeats it.
 
-1. **Layout order is reversed.** `IntegrationSettings.tsx` line 361 renders `<RcsHub />` (5 tabs, KPIs, wallet card) BEFORE the `Provider credentials` card. So the operational hub appears even when Telinfy is disabled / no credentials saved → looks "hardcoded".
-2. **Hub never checks `integration_settings.is_active`.** It always renders Overview/Templates/Test/Wallet/Webhooks regardless of integration state — no empty / disabled state, no setup CTA.
-3. **Credential precedence is gated on `is_active`.** `send-rcs`, `rcs-templates-sync`, `rcs-wallet` all do `if (cfg?.is_active) apiKey = cfg.credentials.api_key`. If a user saves a key in the UI but forgets the toggle, the function silently falls back to a stale `TELINFY_API_KEY` env (which is the wrong key, producing the 401 we saw). DB-stored credentials should win whenever present, independent of the active toggle (the toggle should gate **dispatch**, not **key resolution**).
-4. **No live status / health pill** at the top of the Hub. User has no way to tell from the Hub itself whether Telinfy is reachable with the saved key.
-5. **Test Send payload bug.** `variables: { template_name: templateName, lcustomParam: vars }` wraps `vars` under a `lcustomParam` key inside `variables`, then `send-rcs` passes `variables` straight into `lcustomParam`. Net result: Telinfy receives `lcustomParam.lcustomParam = {...}` instead of the flat var map. Templates with placeholders will fail substitution.
-6. **No reachability test action.** The Sheet has a "Test" button for credentials, but the Hub itself can't trigger a wallet/templates probe to confirm the key works end-to-end.
-7. **Minor UX:** "Beta" pill next to title is fine, but the Hub header doesn't carry the active provider name (Telinfy / GreenAds Global) or a "Configured / Not configured" status, and the wallet hero card shows a giant "—" with no CTA when empty.
+Per your decision: **keep the date on SEO files** (search engines + LLM crawlers still cite it), **block it everywhere the bot can speak**.
 
-### Fix Plan (UI/UX + correctness, no business-logic changes)
+## Scope (what changes)
+1. **`ai_knowledge` rows** — rewrite every row containing "July 2026" / "opens" / "launch date" to use the phrase **"opening date to be announced"**. Affected rows (confirmed via DB):
+   - `facts` → "Incline Fitness — canonical facts" (lines mentioning "July 2026")
+   - `behavior_rules` → "Answer-first behavior" (opening-timeline line)
+   - `identity_rules` → "Member-first identity rule" (Timeline Reality)
+   - `lead_capture_flow` → "Founder's Phase Onboarding Sequence"
+   - `pricing_rules` → "Pricing Embargo & Founder's Reservation Protocol"
+   - `pt_rules` → "Personal Training — Velvet Rope"
+   - `persona` → "Ananya — Member Concierge"
+   - Replacement copy: "Opening date has not been announced yet — say only 'opening date to be announced' or 'launching soon'. NEVER quote a month or year."
+   - Done via one migration that does targeted `regexp_replace` on `content` and bumps `updated_at` so embeddings re-queue (existing `tg_ai_knowledge_enqueue_embed` trigger fires on update).
 
-**A. Re-order the RCS tab (frontend only)**
+2. **`supabase/functions/_shared/ai-agent-brain.ts` — sanitizer hardening (v3.6.0)**
+   - Extend `sanitizeFoundersPhaseText` to detect & strip any month-year opening claim:
+     - Regex: `/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s*,?\s*20\d{2}\b/gi`
+     - Also: `/\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open)\s+(?:on|in|by)?\s*(?:[a-z]+\s+)?20\d{2}\b/gi`
+     - Also: bare year alone in opening context, e.g. `/\b(?:open|launch)[^.]{0,40}\b20\d{2}\b/gi`
+   - When matched, replace the offending sentence with: *"Our opening date hasn't been announced publicly yet — our team will share it as soon as it's locked in ✨"*
+   - Add a console.log tag `[AI:guards] redacted opening-date leak` for observability.
+   - Update file-top changelog comment from "Opening date corrected to July 2026" → "Opening date never disclosed by bot (v3.6.0)".
 
-```text
-RCS tab
-├── 1. Provider credentials card        ← FIRST
-│     • Telinfy / GreenAds Global  [Active|Inactive]  Configure
-│     • MSG91 RCS                  [Inactive]         Setup
-└── 2. RcsHub                            ← SECOND (collapsed/disabled state when off)
-      • header shows: Telinfy status pill + last reachability check
-      • if not configured → empty state with "Configure Telinfy" button that opens the same Sheet
-      • if configured but inactive → warning banner "Integration disabled — enable to send"
-      • if active → tabs render as today
-```
+3. **Hard-coded leak in `ai-agent-brain.ts:160`** — the `timeline:` fallback string literally says *"We open on June 22nd — Founding Members get launch-day perks ✨"*. Replace with *"Opening date will be announced to Founding Members first ✨"*.
 
-**B. RcsHub component changes (`src/components/settings/rcs/RcsHub.tsx`)**
-- Query `integration_settings` for `rcs / telinfy` (branch + global) at the top → derive `{ saved, isActive, baseUrl }`.
-- Three render states:
-  - **not saved** → dashed empty card: "Telinfy RCS isn't connected yet. Add your `x-api-key` to start." + button that scrolls to / opens the credentials Sheet.
-  - **saved but inactive** → amber banner "Saved but disabled — flip the toggle to send." Tabs visible but Send buttons disabled with tooltip.
-  - **active** → current behavior, plus a green "Connected" pill + "Test connection" button (calls `rcs-wallet` once and toasts ok/fail).
-- Fix Test Send payload: send `variables: vars` (flat map), drop the nested `lcustomParam`/`template_name` keys.
-- Wallet hero: when empty, show "Sync wallet" button inline instead of just "—".
+4. **Deploy** `ai-agent-brain` shared module is pulled by `ai-agent-brain` edge fn (and any caller). Redeploy: `ai-agent-brain` only (consumers re-bundle).
 
-**C. Edge-function credential resolution (`send-rcs`, `rcs-templates-sync`, `rcs-wallet`)**
-- Change the resolver from "use DB only when `is_active`" to:
-  - If `cfg?.credentials?.api_key` exists → use it (and `config.base_url` if set).
-  - `is_active=false` only blocks **outbound sends in `send-rcs`** (return `{status:'disabled'}`), not key resolution for templates/wallet probes.
-- Keeps env vars as last-resort fallback.
+5. **Memory update** — `mem://index.md` Core line currently says *"Founder's Phase (pre July-2026 launch)"*. Rewrite to *"Founder's Phase (pre-launch — opening date NOT disclosed by AI; SEO files only)"* so future agents don't reintroduce the leak.
 
-**D. Visual polish (Vuexy tokens, no new colors)**
-- Hub header: small "Telinfy" sublabel under title, status pill (`Connected` emerald / `Disabled` amber / `Not configured` slate), last-checked timestamp.
-- Wallet hero gradient kept, but shrinks to half width and adds a "Refresh" icon button.
-- Tabs: keep 5, but Wallet tab disabled with lock icon when user lacks `rcs_wallet_view`.
-- Provider credentials card grid: add an `aria-live` region for save/test results.
+## Out of scope (intentionally untouched)
+- `public/llms-full.txt`, `public/llms.txt`, `public/ai.txt`, `public/sitemap.xml` — your SEO/AEO truth, stays as-is.
+- Old SQL migration files (immutable history).
+- `public-self-onboarding` / member-facing UI strings — none of these speak dates.
 
-### Files touched
+## Verification
+1. After deploy, send the same WhatsApp probe: *"On 1 of July the gym open?"* → bot should respond without confirming any date.
+2. Probe variants: *"Kab open ho rahe ho?"*, *"When do you launch?"*, *"July 2026 mein khulega?"* → all redacted.
+3. Inspect `error_logs` / function logs for `[AI:guards] redacted opening-date leak` to confirm sanitizer fires.
+4. Re-check Madhav's thread — bot will no longer cite a date in future replies.
 
-- `src/components/settings/IntegrationSettings.tsx` — swap render order, pass `onConfigureClick` into Hub.
-- `src/components/settings/rcs/RcsHub.tsx` — add config query, state machine, fix Test Send payload, header status pill, empty/inactive states, "Test connection" button.
-- `supabase/functions/send-rcs/index.ts` — resolver uses creds regardless of `is_active`; `is_active=false` short-circuits with `{status:'disabled'}`.
-- `supabase/functions/rcs-templates-sync/index.ts` — resolver uses creds regardless of `is_active`.
-- `supabase/functions/rcs-wallet/index.ts` — same resolver fix.
+## Files touched
+- `supabase/migrations/<new>_redact_opening_date_from_ai_knowledge.sql` (new)
+- `supabase/functions/_shared/ai-agent-brain.ts` (sanitizer + timeline literal)
+- `mem://index.md` (Core line)
 
-### Out of scope (call out, don't change)
-- No new tables, no migrations, no RLS changes.
-- MSG91 RCS dispatcher remains a "credentials only" stub.
-- No changes to `dispatch-communication` routing or `communication_logs` schema.
-
-### Verification
-1. Disable Telinfy toggle → Hub shows amber "disabled" banner; Send buttons disabled; templates/wallet still load if a key is saved.
-2. Clear saved key → Hub shows "Not configured" empty state with Configure CTA.
-3. Enable toggle with valid key → "Connected" pill; Test Send to `+919887601200` reaches Telinfy with flat `lcustomParam` map; delivery status updates via webhook.
-4. Click "Test connection" → toasts wallet balance or precise error from Telinfy.
+No schema, RLS, or grants change.
