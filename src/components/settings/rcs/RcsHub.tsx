@@ -345,7 +345,7 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
 }
 
 /* ─────────────────────────────────────────── Test Send ────────────────── */
-function TestSendPanel({ branchId, isAdmin }: { branchId: string | null; isAdmin: boolean }) {
+function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: string | null; isAdmin: boolean; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState('919887601200');
   const [templateName, setTemplateName] = useState('');
