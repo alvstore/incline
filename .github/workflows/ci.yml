@@ -73,7 +73,17 @@ jobs:
             echo "$MATCHES"
             exit 1
           fi
-          echo "Comm-log write guard passed."
+          # Client code must NEVER call send-* edge functions directly — always go through
+          # dispatchCommunication. The dispatcher is the only allowed caller of send-*.
+          DIRECT_SENDS=$(grep -RnoE \
+            "functions\\.invoke\\(['\"]send-(whatsapp|sms|email|rcs|meta-dm)['\"]" \
+            src 2>/dev/null)
+          if [ -n "$DIRECT_SENDS" ]; then
+            echo "::error::Client code must use dispatchCommunication, not invoke send-* directly:"
+            echo "$DIRECT_SENDS"
+            exit 1
+          fi
+          echo "Comm-log + direct-send guards passed."
 
       - name: Direct-write guard (services-only)
         run: |
