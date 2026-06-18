@@ -1361,8 +1361,9 @@ function enforceOutboundInteractiveGuards(input: {
 // If memory.profile already has a real first name and the LLM produced any
 // variant of "what's your name?", rewrite the reply to acknowledge the user
 // and ask for the next missing onboarding field.
-const NAME_ASK_RE =
-  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+// v4.6.0 — aliased to the shared NAME_ASK_DETECT_RE so the funnel and this
+// post-process guard agree on what counts as a "name ask".
+const NAME_ASK_RE = NAME_ASK_DETECT_RE;
 
 function enforceNoRepeatNameAsk(input: {
   replyText: string;
