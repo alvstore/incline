@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       if (!error) upserted++;
     }
 
-    return json(200, { ok: true, count: list.length, upserted });
+    return json(200, { ok: true, count: list.length, upserted, endpoint: usedUrl });
   } catch (e) {
     console.error('[rcs-templates-sync] error', e);
     return json(500, { ok: false, error: e instanceof Error ? e.message : String(e) });
