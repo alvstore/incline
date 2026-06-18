@@ -359,13 +359,12 @@ export function IntegrationSettings() {
         </TabsContent>
 
         <TabsContent value="rcs" className="space-y-4">
-          <RcsHub />
           <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Settings className="h-4 w-4" /> Provider credentials
               </CardTitle>
-              <CardDescription>Configure per-branch overrides for Telinfy / MSG91 API keys.</CardDescription>
+              <CardDescription>Configure per-branch overrides for Telinfy / MSG91 API keys. Save credentials first, then enable to start sending.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2">
@@ -400,6 +399,7 @@ export function IntegrationSettings() {
               </div>
             </CardContent>
           </Card>
+          <RcsHub onConfigure={() => openConfig('rcs', 'telinfy')} />
         </TabsContent>
 
         <TabsContent value="email" className="space-y-4">
