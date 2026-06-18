@@ -1,4 +1,6 @@
-// v1.1.0 — Fetch RCS templates from Telinfy with path fallback + verbose diagnostics.
+// v1.2.0 — Fetch RCS templates from Telinfy. Handles grouped response
+//          { richStandard, basicStandard, richDynamic, basicDynamic } and
+//          populates `kind` + `media_url` per row so the UI can group/preview rich templates.
 //   POST /rcs-templates-sync { branch_id?: string }
 // Requires authenticated user with owner|admin role; uses service-role for upsert.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
