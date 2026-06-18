@@ -512,7 +512,12 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
                 <CardContent className="p-3 space-y-1 text-xs font-mono">
                   <div>log_id: {logId}</div>
                   <div>status: <Badge>{status?.delivery_status ?? 'pending'}</Badge></div>
-                  {status?.provider_record_id && <div>recordID: {status.provider_record_id}</div>}
+                  {status?.provider_record_id && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span>recordID: {status.provider_record_id}</span>
+                      <RecordDetailButton branchId={branchId} recordId={status.provider_record_id} />
+                    </div>
+                  )}
                   {status?.sent_at && <div>sent: {new Date(status.sent_at).toLocaleTimeString()}</div>}
                   {status?.delivered_at && <div>delivered: {new Date(status.delivered_at).toLocaleTimeString()}</div>}
                   {status?.read_at && <div>read: {new Date(status.read_at).toLocaleTimeString()}</div>}
