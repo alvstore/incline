@@ -47,7 +47,7 @@ type Template = {
   last_synced_at: string;
 };
 
-export function RcsHub() {
+export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const { roles: roleInfos } = useAuth();
   const roles = (roleInfos ?? []).map((r: any) => r.role as string);
   const isAdmin = can.rcsAdmin(roles);
@@ -56,46 +56,135 @@ export function RcsHub() {
   const branchId = (selectedBranch as any)?.id ?? null;
   const [tab, setTab] = useState('overview');
 
+  // Telinfy config probe — drives empty / disabled / active state.
+  const { data: cfg, isLoading: cfgLoading } = useQuery({
+    queryKey: ['rcs-telinfy-cfg', branchId],
+    queryFn: async () => {
+      const q = supabase.from('integration_settings')
+        .select('is_active, credentials, config, updated_at')
+        .eq('integration_type', 'rcs').eq('provider', 'telinfy');
+      const { data } = branchId
+        ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false }).limit(1)
+        : await q.is('branch_id', null).limit(1);
+      return ((data as any[]) ?? [])[0] ?? null;
+    },
+  });
+
+  const hasCreds = !!(cfg && ((cfg as any).credentials?.api_key || (cfg as any).credentials?.has_key));
+  const isActive = !!cfg?.is_active;
+  const state: 'unconfigured' | 'inactive' | 'active' =
+    !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
+
+  const testMut = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('rcs-wallet', { body: { branch_id: branchId } });
+      if (error) throw new Error(error.message);
+      if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'connection_failed');
+      return data as any;
+    },
+    onSuccess: (d: any) => toast.success(`Telinfy reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`),
+    onError: (e: any) => toast.error(`Telinfy unreachable: ${e.message}`),
+  });
+
   return (
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Radio className="h-5 w-5 text-primary" />
-          RCS Hub — Telinfy
-          <Badge variant="secondary" className="ml-1">Beta</Badge>
-        </CardTitle>
-        <CardDescription>
-          Templates, direct sends, wallet, reports, and inbound webhooks for Telinfy RCS.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 flex-wrap">
+              <Radio className="h-5 w-5 text-primary" />
+              RCS Hub <span className="text-slate-400 font-normal">— Telinfy</span>
+              <Badge variant="secondary" className="ml-1">Beta</Badge>
+              <StatusPill state={state} loading={cfgLoading} />
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Templates, direct sends, wallet, reports, and inbound webhooks for Telinfy RCS.
+            </CardDescription>
+          </div>
+          {state === 'active' && (
+            <Button size="sm" variant="outline" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
+              {testMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Activity className="h-4 w-4 mr-2" />}
+              Test connection
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-5 w-full">
-            <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Overview</TabsTrigger>
-            <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
-            <TabsTrigger value="test"><Send className="h-3.5 w-3.5 mr-1.5" />Test Send</TabsTrigger>
-            <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
-            <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
-          </TabsList>
+        {state === 'unconfigured' ? (
+          <EmptyConfigure onConfigure={onConfigure} />
+        ) : (
+          <>
+            {state === 'inactive' && (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-3">
+                <PauseCircleIcon />
+                <div className="flex-1">
+                  <p className="font-semibold">Credentials saved, but integration is disabled.</p>
+                  <p className="text-amber-700/90 text-xs mt-0.5">Flip the Enable Integration toggle in Provider credentials above to start sending.</p>
+                </div>
+                {onConfigure && (
+                  <Button size="sm" variant="outline" onClick={onConfigure}>Open</Button>
+                )}
+              </div>
+            )}
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList className="grid grid-cols-5 w-full">
+                <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Overview</TabsTrigger>
+                <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
+                <TabsTrigger value="test"><Send className="h-3.5 w-3.5 mr-1.5" />Test Send</TabsTrigger>
+                <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
+                <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="overview" className="mt-4">
-            <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet} />
-          </TabsContent>
-          <TabsContent value="templates" className="mt-4">
-            <TemplatesPanel branchId={branchId} isAdmin={isAdmin} />
-          </TabsContent>
-          <TabsContent value="test" className="mt-4">
-            <TestSendPanel branchId={branchId} isAdmin={isAdmin} />
-          </TabsContent>
-          <TabsContent value="wallet" className="mt-4">
-            {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
-          </TabsContent>
-          <TabsContent value="webhooks" className="mt-4">
-            <WebhooksPanel />
-          </TabsContent>
-        </Tabs>
+              <TabsContent value="overview" className="mt-4">
+                <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet} />
+              </TabsContent>
+              <TabsContent value="templates" className="mt-4">
+                <TemplatesPanel branchId={branchId} isAdmin={isAdmin} />
+              </TabsContent>
+              <TabsContent value="test" className="mt-4">
+                <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} />
+              </TabsContent>
+              <TabsContent value="wallet" className="mt-4">
+                {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+              </TabsContent>
+              <TabsContent value="webhooks" className="mt-4">
+                <WebhooksPanel />
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function StatusPill({ state, loading }: { state: 'unconfigured' | 'inactive' | 'active'; loading: boolean }) {
+  if (loading) return <Badge className="bg-slate-100 text-slate-500">Checking…</Badge>;
+  if (state === 'active') return <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-3 w-3 mr-1" />Connected</Badge>;
+  if (state === 'inactive') return <Badge className="bg-amber-100 text-amber-700">Disabled</Badge>;
+  return <Badge className="bg-slate-100 text-slate-600">Not configured</Badge>;
+}
+
+function PauseCircleIcon() {
+  return <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold">!</span>;
+}
+
+function EmptyConfigure({ onConfigure }: { onConfigure?: () => void }) {
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+      <div className="mx-auto h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+        <Radio className="h-6 w-6" />
+      </div>
+      <h3 className="text-sm font-semibold text-slate-900">Telinfy RCS isn't connected yet</h3>
+      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+        Add your Telinfy <code className="px-1 py-0.5 rounded bg-slate-200 font-mono text-[11px]">x-api-key</code> and (optional) Brand ID in Provider credentials above, then enable the integration.
+      </p>
+      {onConfigure && (
+        <Button className="mt-4" onClick={onConfigure}>
+          <Send className="h-4 w-4 mr-2" />Configure Telinfy
+        </Button>
+      )}
+    </div>
   );
 }
 
