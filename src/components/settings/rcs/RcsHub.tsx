@@ -44,8 +44,18 @@ type Template = {
   body_preview: string | null;
   variables: string[];
   status: string;
+  kind: string | null;
+  media_url: string | null;
   last_synced_at: string;
 };
+
+const KIND_LABELS: Record<string, string> = {
+  rich_standard: 'Rich · Standard',
+  rich_dynamic: 'Rich · Dynamic',
+  basic_standard: 'Basic · Standard',
+  basic_dynamic: 'Basic · Dynamic',
+};
+const isRichKind = (k: string | null | undefined) => !!k && k.startsWith('rich');
 
 export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const { roles: roleInfos } = useAuth();
