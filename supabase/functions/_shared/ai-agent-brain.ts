@@ -1,3 +1,17 @@
+// v4.6.0 — Two fixes for the "Rsss" repro:
+//          (1) intentPivotPrefix() no longer ships internal meta-labels like
+//              "Location intent —" to the user. Strips "<Category> intent —/:"
+//              prefixes from curated ai_dynamic_memory rows and falls back to
+//              the canonical INTENT_ANSWERS map when the cleaned text is empty
+//              or still looks like an instruction.
+//          (2) Name-ask de-duplication: the deterministic onboarding
+//              short-circuit no longer repeats the full "Hi! I'm Ananya, the
+//              member concierge…" greeting on every turn. Counts prior bot
+//              name-asks in the last 10 messages and softens at turn 2,
+//              acknowledges at turn 3, and stops re-asking from turn 4. Pure
+//              acknowledgements ("thank you", "ok", "nevertheless") get a
+//              graceful close, no name funnel. Same logic mirrored into
+//              enforceNoRepeatNameAsk so model-generated replies are gated.
 // v4.5.0 — Opening-date redaction: bot must NEVER quote a month/year
 //          opening or launch date. Sanitizer strips any "<month> 20XX" or
 //          "open/launch ... 20XX" phrase and replaces with a neutral
@@ -166,15 +180,50 @@ const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   timeline: "Our opening date hasn't been announced publicly yet — Founding Members will be the first to know ✨",
 };
 
+// v4.6.0 — sanitize curated correction_instruction. Admin rows often start
+// with an internal meta-label like "Location intent — Sector 14, Udaipur."
+// We must NEVER show that label to the user.
+const INTENT_META_PREFIX_RE =
+  /^\s*(?:location|pricing|timeline|opening|launch|intent)\s+intent\s*[—\-:]\s*/i;
+const INTENT_RESIDUAL_META_RE = /\bintent\s*[—\-:]\s*/i;
+
 function intentPivotPrefix(text: string): string {
-  // Prefer admin-curated instruction when available.
   const dyn = _dynMemSnapshot?.classify(text);
   if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
-    return `${dyn.correction_instruction.split(/[.!?]\s/)[0]} `;
+    const raw = String(dyn.correction_instruction || "").trim();
+    let cleaned = raw.replace(INTENT_META_PREFIX_RE, "").trim();
+    // first sentence only
+    cleaned = cleaned.split(/[.!?]\s/)[0].trim();
+    // if any residual "intent —" / "intent:" remains, treat as leak and drop
+    if (INTENT_RESIDUAL_META_RE.test(cleaned)) {
+      console.log("[AI:guards] stripped intent meta-prefix (residual)");
+      cleaned = "";
+    }
+    if (cleaned) return `${cleaned} `;
+    // fall through to canonical answer
+    const cat = dyn.intent_category as Exclude<HinglishIntent, null>;
+    console.log(`[AI:guards] stripped intent meta-prefix — falling back to canonical answer for ${cat}`);
+    return `${INTENT_ANSWERS[cat]} `;
   }
   const intent = classifyHinglishIntent(text);
   return intent ? `${INTENT_ANSWERS[intent]} ` : "";
 }
+
+// v4.6.0 — shared regexes for name-ask de-duplication
+const NAME_ASK_DETECT_RE =
+  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+const ACK_RE =
+  /^(?:thanks?(?:\s+you)?|thank\s+you(?:\s+for[^.]*)?|thx|ty|ok(?:ay)?|k|kk|cool|nice|noted|got\s+it|alright|nevertheless|no\s*worries|no\s*problem|np|sure|hmm+|haan?|ji|theek\s*hai|thik\s+hai|👍|🙏|✨)\.?!?\s*$/i;
+
+function countPriorNameAsks(history: Array<{ role: string; content: string }>): number {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  return history
+    .slice(-10)
+    .filter((m) => m && m.role !== "user" && typeof m.content === "string" && NAME_ASK_DETECT_RE.test(m.content))
+    .length;
+}
+
+
 
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
   if (typeof name !== "string") return false;
@@ -768,13 +817,46 @@ GENERAL RULES:
     // (location/pricing/timeline), prepend the canned answer before re-asking.
     const _pivot = intentPivotPrefix(ctx.messageContent);
 
-    // Step 1: nothing captured → ask name (plain text)
+    // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
     if (!hasName) {
+      const askTurns = countPriorNameAsks(history);
+      const userLast = String(ctx.messageContent || "").trim();
+      const userIsAck = ACK_RE.test(userLast);
+
+      // Pure acknowledgements after we already asked once → don't re-ask.
+      if (askTurns >= 1 && userIsAck) {
+        console.log(`[AI:guards] skipping name-ask on ack (turn=${askTurns})`);
+        return {
+          replyText: "Anytime ✨ I'm here whenever you'd like to continue.",
+          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+        };
+      }
+
+      let body: string;
+      if (askTurns === 0) {
+        body = "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨";
+      } else if (askTurns === 1) {
+        body = "…and may I have your name so I can help better? ✨";
+      } else if (askTurns === 2) {
+        body = "No problem — whenever you'd like to share your name, I'll line up your Founding Member invite. Meanwhile, anything specific I can help with? ✨";
+      } else {
+        // Turn 4+: stop pushing for the name. Let the pivot answer carry the
+        // reply; if there's no pivot, send a neutral assist line.
+        console.log(`[AI:guards] giving_up_name_ask (turn=${askTurns}) — pivot=${_pivot ? "yes" : "no"}`);
+        body = _pivot ? "" : "Happy to help with anything specific — equipment, recovery suite, location, or our Founding Member list ✨";
+        return {
+          replyText: `${_pivot}${body}`.trim(),
+          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+        };
+      }
+
+      if (askTurns > 0) console.log(`[AI:guards] name-ask softened — turn=${askTurns}`);
       return {
-        replyText: `${_pivot}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
+        replyText: `${_pivot}${body}`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
+
 
     // Step 2: name captured, no email → ask email (plain text)
     if (hasName && !hasEmail) {
@@ -1279,8 +1361,9 @@ function enforceOutboundInteractiveGuards(input: {
 // If memory.profile already has a real first name and the LLM produced any
 // variant of "what's your name?", rewrite the reply to acknowledge the user
 // and ask for the next missing onboarding field.
-const NAME_ASK_RE =
-  /(what'?s|may i (?:have|know)|can i (?:have|get|know)|could i (?:have|get|know)|tell me|share|your)\s+(?:your\s+)?(?:good\s+)?name\??/i;
+// v4.6.0 — aliased to the shared NAME_ASK_DETECT_RE so the funnel and this
+// post-process guard agree on what counts as a "name ask".
+const NAME_ASK_RE = NAME_ASK_DETECT_RE;
 
 function enforceNoRepeatNameAsk(input: {
   replyText: string;
