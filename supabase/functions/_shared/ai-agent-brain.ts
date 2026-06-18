@@ -1,3 +1,17 @@
+// v4.6.0 — Two fixes for the "Rsss" repro:
+//          (1) intentPivotPrefix() no longer ships internal meta-labels like
+//              "Location intent —" to the user. Strips "<Category> intent —/:"
+//              prefixes from curated ai_dynamic_memory rows and falls back to
+//              the canonical INTENT_ANSWERS map when the cleaned text is empty
+//              or still looks like an instruction.
+//          (2) Name-ask de-duplication: the deterministic onboarding
+//              short-circuit no longer repeats the full "Hi! I'm Ananya, the
+//              member concierge…" greeting on every turn. Counts prior bot
+//              name-asks in the last 10 messages and softens at turn 2,
+//              acknowledges at turn 3, and stops re-asking from turn 4. Pure
+//              acknowledgements ("thank you", "ok", "nevertheless") get a
+//              graceful close, no name funnel. Same logic mirrored into
+//              enforceNoRepeatNameAsk so model-generated replies are gated.
 // v4.5.0 — Opening-date redaction: bot must NEVER quote a month/year
 //          opening or launch date. Sanitizer strips any "<month> 20XX" or
 //          "open/launch ... 20XX" phrase and replaces with a neutral
