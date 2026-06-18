@@ -340,28 +340,61 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
       </div>
       {isLoading ? <Skeleton className="h-40 w-full rounded-2xl" /> :
         templates && templates.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {templates.map((t) => (
-              <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{t.template_name}</span>
-                    <Badge className={t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
-                      {t.status}
-                    </Badge>
+          <>
+            <p className="text-xs text-slate-500">
+              Rich-media RCS messages (image cards, carousels, suggested replies) are pre-approved on the Telinfy dashboard.
+              To add a new rich card, create it in Telinfy → Templates, then click "Sync from Telinfy".
+            </p>
+            {(['rich', 'basic'] as const).map((bucket) => {
+              const rows = templates.filter((t) => bucket === 'rich' ? isRichKind(t.kind) : !isRichKind(t.kind));
+              if (rows.length === 0) return null;
+              return (
+                <div key={bucket} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-indigo-600" /> : <MessageSquare className="h-4 w-4 text-slate-500" />}
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {bucket === 'rich' ? 'Rich media' : 'Basic'} · {rows.length}
+                    </span>
                   </div>
-                  {t.body_preview && <p className="text-xs text-slate-600 line-clamp-3">{t.body_preview}</p>}
-                  {t.variables?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {t.variables.map((v) => (
-                        <Badge key={v} variant="outline" className="text-[10px] font-mono">{`{${v}}`}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {rows.map((t) => (
+                      <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+                        {t.media_url && (
+                          <div className="aspect-video bg-slate-100 overflow-hidden">
+                            <img src={t.media_url} alt={`${t.template_name} preview`} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                        )}
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="font-semibold text-slate-900 truncate">{t.template_name}</span>
+                            <div className="flex items-center gap-1">
+                              {isRichKind(t.kind) && (
+                                <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                  <ImageIcon className="h-2.5 w-2.5 mr-0.5" />Rich
+                                </Badge>
+                              )}
+                              <Badge className={t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
+                                {t.status}
+                              </Badge>
+                            </div>
+                          </div>
+                          {t.kind && <p className="text-[10px] uppercase tracking-wider text-slate-400">{KIND_LABELS[t.kind] || t.kind}</p>}
+                          {t.body_preview && <p className="text-xs text-slate-600 line-clamp-3">{t.body_preview}</p>}
+                          {t.variables?.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {t.variables.map((v) => (
+                                <Badge key={v} variant="outline" className="text-[10px] font-mono">{`{${v}}`}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </>
         ) : (
           <Card className="rounded-2xl border-dashed border-2 border-slate-200">
             <CardContent className="p-8 text-center text-sm text-slate-500">
