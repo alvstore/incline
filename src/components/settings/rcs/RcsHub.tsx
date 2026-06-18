@@ -417,8 +417,8 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
   const { data: templates } = useQuery({
     queryKey: ['rcs-templates-picker', branchId],
     queryFn: async () => {
-      const { data } = await supabase.from('rcs_templates').select('template_name, variables').order('template_name');
-      return (data as { template_name: string; variables: string[] }[]) ?? [];
+      const { data } = await supabase.from('rcs_templates').select('template_name, variables, kind').order('template_name');
+      return (data as { template_name: string; variables: string[]; kind: string | null }[]) ?? [];
     },
   });
 
