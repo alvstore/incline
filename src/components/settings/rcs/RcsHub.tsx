@@ -79,12 +79,27 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('rcs-wallet', { body: { branch_id: branchId } });
       if (error) throw new Error(error.message);
-      if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'connection_failed');
+      if (!(data as any)?.ok) {
+        const reason = (data as any)?.reason || 'connection_failed';
+        const attempts = (data as any)?.attempts;
+        const err: any = new Error(reason);
+        err.attempts = attempts;
+        throw err;
+      }
       return data as any;
     },
-    onSuccess: (d: any) => toast.success(`Telinfy reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`),
-    onError: (e: any) => toast.error(`Telinfy unreachable: ${e.message}`),
+    onSuccess: (d: any) =>
+      toast.success(`Telinfy reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`, {
+        description: d.endpoint ? `via ${d.endpoint}` : undefined,
+      }),
+    onError: (e: any) => {
+      const desc = Array.isArray(e?.attempts)
+        ? e.attempts.map((a: any) => `${a.status} ${a.url}`).join('\n')
+        : undefined;
+      toast.error(`Telinfy unreachable: ${e.message}`, { description: desc, duration: 10_000 });
+    },
   });
+
 
   return (
     <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-0">
