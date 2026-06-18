@@ -73,7 +73,18 @@ jobs:
             echo "$MATCHES"
             exit 1
           fi
-          echo "Comm-log write guard passed."
+          # Client code must NEVER call send-rcs directly — always go through
+          # dispatchCommunication. The dispatcher is the only allowed caller of send-rcs.
+          # (send-whatsapp/sms/email have legacy callers tracked separately; not yet enforced.)
+          DIRECT_SENDS=$(grep -RnoE \
+            "functions\\.invoke\\(['\"]send-rcs['\"]" \
+            src 2>/dev/null)
+          if [ -n "$DIRECT_SENDS" ]; then
+            echo "::error::Client code must use dispatchCommunication, not invoke send-rcs directly:"
+            echo "$DIRECT_SENDS"
+            exit 1
+          fi
+          echo "Comm-log + direct-send guards passed."
 
       - name: Direct-write guard (services-only)
         run: |

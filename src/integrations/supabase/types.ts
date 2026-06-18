@@ -10330,7 +10330,9 @@ export type Database = {
           branch_id: string | null
           created_at: string
           id: string
+          kind: string | null
           last_synced_at: string
+          media_url: string | null
           raw: Json | null
           status: string
           template_name: string
@@ -10342,7 +10344,9 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           id?: string
+          kind?: string | null
           last_synced_at?: string
+          media_url?: string | null
           raw?: Json | null
           status?: string
           template_name: string
@@ -10354,7 +10358,9 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           id?: string
+          kind?: string | null
           last_synced_at?: string
+          media_url?: string | null
           raw?: Json | null
           status?: string
           template_name?: string

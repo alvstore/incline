@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import {
   Activity, RefreshCw, Send, Wallet, Webhook, Copy, CheckCircle2, XCircle,
-  Loader2, MessageSquare, FileText, Radio,
+  Loader2, MessageSquare, FileText, Radio, Image as ImageIcon, BarChart3, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,8 +44,18 @@ type Template = {
   body_preview: string | null;
   variables: string[];
   status: string;
+  kind: string | null;
+  media_url: string | null;
   last_synced_at: string;
 };
+
+const KIND_LABELS: Record<string, string> = {
+  rich_standard: 'Rich · Standard',
+  rich_dynamic: 'Rich · Dynamic',
+  basic_standard: 'Basic · Standard',
+  basic_dynamic: 'Basic · Dynamic',
+};
+const isRichKind = (k: string | null | undefined) => !!k && k.startsWith('rich');
 
 export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const { roles: roleInfos } = useAuth();
@@ -142,11 +152,12 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </div>
             )}
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid grid-cols-5 w-full">
+              <TabsList className="grid grid-cols-6 w-full">
                 <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Overview</TabsTrigger>
                 <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
                 <TabsTrigger value="test"><Send className="h-3.5 w-3.5 mr-1.5" />Test Send</TabsTrigger>
                 <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
+                <TabsTrigger value="reports"><BarChart3 className="h-3.5 w-3.5 mr-1.5" />Reports</TabsTrigger>
                 <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
               </TabsList>
 
@@ -161,6 +172,9 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </TabsContent>
               <TabsContent value="wallet" className="mt-4">
                 {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+              </TabsContent>
+              <TabsContent value="reports" className="mt-4">
+                <ReportsPanel branchId={branchId} />
               </TabsContent>
               <TabsContent value="webhooks" className="mt-4">
                 <WebhooksPanel />
@@ -326,28 +340,61 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
       </div>
       {isLoading ? <Skeleton className="h-40 w-full rounded-2xl" /> :
         templates && templates.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {templates.map((t) => (
-              <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{t.template_name}</span>
-                    <Badge className={t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
-                      {t.status}
-                    </Badge>
+          <>
+            <p className="text-xs text-slate-500">
+              Rich-media RCS messages (image cards, carousels, suggested replies) are pre-approved on the Telinfy dashboard.
+              To add a new rich card, create it in Telinfy → Templates, then click "Sync from Telinfy".
+            </p>
+            {(['rich', 'basic'] as const).map((bucket) => {
+              const rows = templates.filter((t) => bucket === 'rich' ? isRichKind(t.kind) : !isRichKind(t.kind));
+              if (rows.length === 0) return null;
+              return (
+                <div key={bucket} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {bucket === 'rich' ? <ImageIcon className="h-4 w-4 text-indigo-600" /> : <MessageSquare className="h-4 w-4 text-slate-500" />}
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {bucket === 'rich' ? 'Rich media' : 'Basic'} · {rows.length}
+                    </span>
                   </div>
-                  {t.body_preview && <p className="text-xs text-slate-600 line-clamp-3">{t.body_preview}</p>}
-                  {t.variables?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {t.variables.map((v) => (
-                        <Badge key={v} variant="outline" className="text-[10px] font-mono">{`{${v}}`}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {rows.map((t) => (
+                      <Card key={t.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+                        {t.media_url && (
+                          <div className="aspect-video bg-slate-100 overflow-hidden">
+                            <img src={t.media_url} alt={`${t.template_name} preview`} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                        )}
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="font-semibold text-slate-900 truncate">{t.template_name}</span>
+                            <div className="flex items-center gap-1">
+                              {isRichKind(t.kind) && (
+                                <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                  <ImageIcon className="h-2.5 w-2.5 mr-0.5" />Rich
+                                </Badge>
+                              )}
+                              <Badge className={t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>
+                                {t.status}
+                              </Badge>
+                            </div>
+                          </div>
+                          {t.kind && <p className="text-[10px] uppercase tracking-wider text-slate-400">{KIND_LABELS[t.kind] || t.kind}</p>}
+                          {t.body_preview && <p className="text-xs text-slate-600 line-clamp-3">{t.body_preview}</p>}
+                          {t.variables?.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {t.variables.map((v) => (
+                                <Badge key={v} variant="outline" className="text-[10px] font-mono">{`{${v}}`}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </>
         ) : (
           <Card className="rounded-2xl border-dashed border-2 border-slate-200">
             <CardContent className="p-8 text-center text-sm text-slate-500">
@@ -370,8 +417,8 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
   const { data: templates } = useQuery({
     queryKey: ['rcs-templates-picker', branchId],
     queryFn: async () => {
-      const { data } = await supabase.from('rcs_templates').select('template_name, variables').order('template_name');
-      return (data as { template_name: string; variables: string[] }[]) ?? [];
+      const { data } = await supabase.from('rcs_templates').select('template_name, variables, kind').order('template_name');
+      return (data as { template_name: string; variables: string[]; kind: string | null }[]) ?? [];
     },
   });
 
@@ -443,7 +490,12 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
                 <SelectTrigger><SelectValue placeholder="Pick a synced template" /></SelectTrigger>
                 <SelectContent>
                   {templates?.map((t) => (
-                    <SelectItem key={t.template_name} value={t.template_name}>{t.template_name}</SelectItem>
+                    <SelectItem key={t.template_name} value={t.template_name}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {isRichKind(t.kind) && <ImageIcon className="h-3 w-3 text-indigo-600" />}
+                        {t.template_name}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -460,7 +512,12 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
                 <CardContent className="p-3 space-y-1 text-xs font-mono">
                   <div>log_id: {logId}</div>
                   <div>status: <Badge>{status?.delivery_status ?? 'pending'}</Badge></div>
-                  {status?.provider_record_id && <div>recordID: {status.provider_record_id}</div>}
+                  {status?.provider_record_id && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span>recordID: {status.provider_record_id}</span>
+                      <RecordDetailButton branchId={branchId} recordId={status.provider_record_id} />
+                    </div>
+                  )}
                   {status?.sent_at && <div>sent: {new Date(status.sent_at).toLocaleTimeString()}</div>}
                   {status?.delivered_at && <div>delivered: {new Date(status.delivered_at).toLocaleTimeString()}</div>}
                   {status?.read_at && <div>read: {new Date(status.read_at).toLocaleTimeString()}</div>}
@@ -543,22 +600,180 @@ function WebhooksPanel() {
     ['User Action', WEBHOOK_URLS.userAction, 'Receives button-click events from RCS rich cards'],
     ['User Message', WEBHOOK_URLS.userMessage, 'Inbound MO; honors STOP/opt-out; hands to AI brain'],
   ];
+  const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
+  const snippets: Array<[string, string]> = [
+    ['List templates', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/templates`],
+    ['Send message', `curl -X POST -H "x-api-key: $TELINFY_KEY" -H "Content-Type: application/json" \\
+  -d '{"templateName":"welcome","lcustomParam":{"NAME":"John"}}' \\
+  ${TELINFY_BASE}/rcs/messages/919887601200`],
+    ['Wallet balance', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/wallet`],
+    ['Record by ID', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/record/12345`],
+  ];
   return (
-    <div className="space-y-3">
-      {rows.map(([label, url, hint]) => (
-        <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm text-slate-900">{label}</span>
-              <Button size="sm" variant="outline" onClick={() => copy(url, label)}>
-                <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-slate-500" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Inbound webhook URLs</span>
+        </div>
+        {rows.map(([label, url, hint]) => (
+          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <Button size="sm" variant="outline" onClick={() => copy(url, label)}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+                </Button>
+              </div>
+              <code className="block text-xs bg-slate-100 px-3 py-2 rounded font-mono break-all">{url}</code>
+              <p className="text-xs text-slate-500">{hint}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-500" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Telinfy REST — curl snippets</span>
+        </div>
+        <p className="text-xs text-slate-500">
+          For ad-hoc testing only. Production sends MUST go through{' '}
+          <code className="px-1 py-0.5 rounded bg-slate-100 font-mono text-[11px]">dispatchCommunication()</code>{' '}
+          so dedupe, preferences, quiet hours, and the kill-switch toggle are honored.
+        </p>
+        {snippets.map(([label, snippet]) => (
+          <Card key={label} className="rounded-2xl shadow-md shadow-slate-200/50 border-0">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm text-slate-900">{label}</span>
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(snippet); toast.success(`${label} curl copied`); }}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
+                </Button>
+              </div>
+              <pre className="text-[11px] bg-slate-900 text-slate-100 px-3 py-2 rounded font-mono overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────── Reports ──────────────────── */
+function ReportsPanel({ branchId }: { branchId: string | null }) {
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ['rcs-reports', branchId],
+    queryFn: async () => {
+      const q = supabase.from('communication_logs')
+        .select('id, recipient, template_id, delivery_status, provider_record_id, sent_at, error_message, content, created_at')
+        .eq('channel', 'rcs').order('created_at', { ascending: false }).limit(50);
+      const { data } = branchId ? await q.eq('branch_id', branchId) : await q;
+      return (data as any[]) ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  if (isLoading) return <Skeleton className="h-40 w-full rounded-2xl" />;
+  if (!logs || logs.length === 0) {
+    return (
+      <Card className="rounded-2xl border-dashed border-2 border-slate-200">
+        <CardContent className="p-8 text-center text-sm text-slate-500">
+          No RCS sends yet. Use the Test Send console to dispatch a message.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const badgeFor = (s: string | null) => {
+    const v = (s || '').toLowerCase();
+    if (v === 'read') return 'bg-indigo-100 text-indigo-700';
+    if (v === 'delivered') return 'bg-emerald-100 text-emerald-700';
+    if (v === 'failed') return 'bg-red-100 text-red-700';
+    if (v === 'sent') return 'bg-slate-100 text-slate-700';
+    return 'bg-amber-100 text-amber-700';
+  };
+
+  return (
+    <Card className="rounded-2xl shadow-md shadow-slate-200/50 border-0 overflow-hidden">
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-4 py-2.5">Time</th>
+                <th className="px-4 py-2.5">Recipient</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Record ID</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                    {new Date(l.created_at).toLocaleString('en-IN')}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{l.recipient}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge className={badgeFor(l.delivery_status)}>{l.delivery_status || 'pending'}</Badge>
+                    {l.error_message && <span className="ml-2 text-[10px] text-red-600 truncate">{l.error_message}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{l.provider_record_id || '—'}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {l.provider_record_id && (
+                      <RecordDetailButton branchId={branchId} recordId={l.provider_record_id} />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────── Record detail ────────────── */
+function RecordDetailButton({ branchId, recordId }: { branchId: string | null; recordId: string | number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    enabled: open,
+    queryKey: ['rcs-record', recordId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('rcs-record', { body: { branch_id: branchId, record_id: recordId } });
+      if (error) throw new Error(error.message);
+      if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'fetch_failed');
+      return (data as any).data;
+    },
+  });
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} className="h-7 px-2 text-xs">
+        <Eye className="h-3 w-3 mr-1" />Detail
+      </Button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="right" className="sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Telinfy record {String(recordId)}</SheetTitle>
+            <SheetDescription>Live delivery timeline from <code className="font-mono">/rcs/record/:id</code>.</SheetDescription>
+          </SheetHeader>
+          <div className="py-4 space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                Refresh
               </Button>
             </div>
-            <code className="block text-xs bg-slate-100 px-3 py-2 rounded font-mono break-all">{url}</code>
-            <p className="text-xs text-slate-500">{hint}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+            {isLoading ? <Skeleton className="h-40 w-full rounded-xl" /> : (
+              <pre className="text-[11px] bg-slate-900 text-slate-100 p-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
+                {data ? JSON.stringify(data, null, 2) : 'No data'}
+              </pre>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

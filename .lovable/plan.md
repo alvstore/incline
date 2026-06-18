@@ -1,68 +1,65 @@
-# Fix two WhatsApp-brain bugs surfaced in Rsss's chat
 
-## What went wrong (root causes)
+## Context — what already exists
 
-### Bug 1 — "Location intent —" meta-prefix leaked into the user reply
-`intentPivotPrefix()` in `supabase/functions/_shared/ai-agent-brain.ts:169` pulls a curated row from `ai_dynamic_memory` and uses its raw `correction_instruction` as the user-facing prefix:
+After auditing the codebase, **most of what you asked for is already built**:
 
-```ts
-return `${dyn.correction_instruction.split(/[.!?]\s/)[0]} `;
-```
+| Capability | Where | Status |
+|---|---|---|
+| Manage templates | `Settings → RCS Hub → Templates` (mirrors Telinfy via `rcs-templates-sync`) | ✅ |
+| Direct send (test) | `RCS Hub → Test Send` drawer → `dispatch-communication` → `send-rcs` | ✅ |
+| Wallet | `RCS Hub → Wallet` + `rcs-wallet` edge fn (`GET /rcs/wallet`) | ✅ |
+| Webhooks | `rcs-webhook` edge fn handles `/delivery`, `/user-action`, `/user-message`; URLs shown in Webhooks tab | ✅ |
+| Single dispatcher | `dispatch-communication` v1.17.0 routes `channel:'rcs'` → `send-rcs`, applies kill-switch (`channel_active_for_branch`), preferences, dedupe, quiet hours, logs to `communication_logs` | ✅ |
+| On/off toggle respected | `integration_settings.is_active=false` → `send-rcs` short-circuits with `status:'disabled'`; dispatcher kill-switch also blocks | ✅ |
 
-The admin-curated row for the `location` category literally starts with `"Location intent — Sector 14, Udaipur."` — that string is an **internal instruction to the model**, not a customer-facing answer. We never sanitized it, so it shipped verbatim as the prefix and the user saw:
+So the answer to questions 1–4 is largely **"already done"** — see "Answers" section at the bottom of this plan.
 
-> *"Location intent — Sector 14, Udaipur. Hi! I'm Ananya …"*
+## What's actually missing — this plan covers it
 
-### Bug 2 — Bot repeats the full self-introduction + name ask on every turn
-The deterministic onboarding short-circuit at line 772:
+### 1. Reports endpoint (`GET /rcs/record/:recordID`)
+Postman collection exposes per-record drill-down (read/delivered/undelivered timeline) but we don't surface it.
 
-```ts
-if (!hasName) {
-  return { replyText: `${_pivot}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`, … };
-}
-```
+- New edge fn **`rcs-record`** (mirrors `rcs-wallet` shape): accepts `{ branch_id, record_id }`, resolves Telinfy creds from `integration_settings`, calls `GET {base}/rcs/record/:recordID` with `x-api-key`, returns `{ ok, data }`.
+- In `RcsHub → Test Send` results card, when `provider_record_id` is present add a **"Fetch detail"** button that invokes `rcs-record` and renders the raw event timeline (status / eventDLR list) in a collapsible block.
+- New **Reports tab** in `RcsHub` (between Wallet and Webhooks): last 50 `communication_logs` rows where `channel='rcs'`, columns: time · recipient · template · status (badge) · recordID (click → fetch detail).
 
-…fires on **every** inbound until a name is captured. Rsss sent 5 messages, never gave a name → got the full "Hi! I'm Ananya, the member concierge…" five times. There is no turn-count awareness, no softening after N asks, and no acknowledgement of the user's actual message ("Sector 14 is too far", "Nevertheless", "Thank you").
+### 2. Rich-media template visibility (question 5)
+Telinfy's REST RCS is **template-driven only** — `GET /rcs/templates` returns `{ richStandard, basicStandard, richDynamic, basicDynamic }`. Rich media (image cards, suggested replies, carousels) lives **inside the approved template on Telinfy's side**; the API does not accept freeform media payloads. We honor that today by returning `status:'unsupported'` when no `template_name` is supplied (dispatcher then falls back to SMS).
 
-## Fix (scope: `supabase/functions/_shared/ai-agent-brain.ts` only, v4.6.0)
+What we'll add:
+- Extend `rcs_templates` with `kind text` (`rich_standard | basic_standard | rich_dynamic | basic_dynamic`) and `media_url text` (preview image, when Telinfy returns one). Migration + GRANTs.
+- Update `rcs-templates-sync` to populate both fields from the grouped response.
+- In `TemplatesPanel`, group cards into **"Rich" / "Basic"** sections, show a small media thumbnail when `media_url` is set, and add a **"Rich"** badge.
+- In `Test Send` template picker, prefix rich templates with a 🎴 icon (lucide `Image`) so admins know which sends will render as a rich card.
+- Add a one-line helper above the picker: *"Rich-media RCS messages are pre-approved on the Telinfy dashboard. To add a new card/carousel, create it in Telinfy → Templates, then click Sync."*
 
-### Fix 1 — sanitize the intent pivot prefix
-Rewrite `intentPivotPrefix()`:
-1. Strip any leading meta-label like `"<Category> intent —"`, `"<Category> intent:"`, `"INTENT:"`, `"Intent:"` (case-insensitive) before using `dyn.correction_instruction`.
-2. If the curated row has a dedicated `intent_answer` / `customer_facing` column, prefer that. (Inspect `ai_dynamic_memory` columns first; if a customer-facing field exists, use it; otherwise the sanitized first sentence + fallback to hardcoded `INTENT_ANSWERS[intent_category]` when the cleaned string is empty.)
-3. As a final guard: if the cleaned prefix still contains the word `"intent"` followed by `—`/`:`, drop it and fall back to `INTENT_ANSWERS`.
+### 3. Documentation & curl panel in Webhooks tab
+Add a second card under the existing webhook URL list with copy-able curl snippets pulled straight from the Postman collection:
+- Get templates · Send message · Wallet · Record-by-ID
+Each uses the **app's stored Telinfy key** label (`x-api-key: <stored>`), never prints the actual key.
 
-### Fix 2 — turn-aware name-ask de-duplication
-Add a small helper `nameAskTurnCount(history)` that counts how many **bot** turns in the last 10 messages match `NAME_ASK_RE`. Then:
-
-- **Turn 1 (first ask):** unchanged — full greeting *"Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨"*.
-- **Turn 2:** drop the self-introduction, just *"…and may I have your name so I can help better? ✨"* (prefixed with the answer-pivot when the user asked a real question).
-- **Turn 3:** acknowledge the user explicitly: *"No problem — whenever you'd like to share your name, I'll line up your Founding Member invite. Meanwhile, anything specific I can help with? ✨"*.
-- **Turn 4+:** stop re-asking; respond only to the user's last message (let the LLM generate, no forced name funnel). Mark `do_not_ask_add: ["first_name"]` for this conversation in memory so the short-circuit no longer fires; flag conversation for human follow-up via `whatsapp_chat_settings.needs_human_review = true` (column exists per existing usage — verify; otherwise log a `[AI:guards] giving_up_name_ask` warning).
-- Also: when the user's last 2 messages are pure acknowledgements ("thank you", "ok", "nevertheless"), do NOT re-ask name at all — return a brief close *"Anytime ✨ I'm here when you'd like to continue."* (regex `ACK_RE`).
-
-Mirror the same turn-count guard inside `enforceNoRepeatNameAsk()` so model-generated replies are gated identically.
-
-### Fix 3 — version bump + observability
-- Update file-top changelog to **v4.6.0**.
-- Add `console.log("[AI:guards] name-ask softened — turn=" + n)` and `[AI:guards] stripped intent meta-prefix` for traceability.
-
-## Deploy
-Redeploy `whatsapp-webhook` and `meta-webhook` (they bundle the shared brain).
-
-## Verification
-Replay Rsss's transcript shape against the deployed function via `supabase--test_edge_functions` with a stubbed history (mock 1–4 ask turns):
-1. Inbound *"Can you pls brief abt the location"* → reply starts with *"We're at Sector 14, Udaipur, Rajasthan ✨"* (no "Location intent —" leak).
-2. Inbound *"Sector 14 is too far"* (turn 2) → no self-intro repeat; short *"…and may I have your name so I can help better? ✨"*.
-3. Inbound *"Nevertheless"* (turn 3) → graceful acknowledgement, no name re-ask.
-4. Inbound *"Thank you for the response"* (turn 4) → *"Anytime ✨ …"* — no greeting at all.
-
-Also `rg "Location intent" supabase/functions/_shared/ai-agent-brain.ts` should return zero matches in user-facing strings.
-
-## Out of scope
-- `ai_dynamic_memory` row content edits — fix is defensive at the brain layer so future curated rows can't leak meta text.
-- No schema or RLS change.
-- SEO files, dispatcher, RCS, Telinfy — untouched.
+### 4. Lock-in: dispatcher single source of truth
+- Add a CI rule line to the existing comms guard so any new direct `supabase.functions.invoke('send-rcs', …)` (outside `dispatch-communication`) fails the build, matching the existing rule for `send-whatsapp` / `send-sms` / `send-email`.
+- Update `mem://index.md` Core line for comms to explicitly call out `rcs` alongside Email/SMS/WhatsApp/in-app.
 
 ## Files touched
-- `supabase/functions/_shared/ai-agent-brain.ts` (sanitizer + turn-aware funnel + version comment)
+
+- `supabase/functions/rcs-record/index.ts` (new)
+- `supabase/functions/rcs-templates-sync/index.ts` (kind + media_url)
+- `supabase/migrations/<ts>_rcs_template_kind.sql` (new — ALTER + GRANT no-op since table exists)
+- `src/components/settings/rcs/RcsHub.tsx` (Reports tab, rich/basic grouping, fetch-detail button, curl snippets)
+- `.github/workflows/ci.yml` (extend direct-write guard with `send-rcs`)
+- `mem://index.md` (Core line update)
+
+## Out of scope
+- Building our own RCS template designer (Telinfy is SSOT for template approval).
+- Sending freeform RCS text — not supported by Telinfy REST.
+- Inbound AI replies on RCS — already wired via `rcs-webhook/user-message` → `ai-agent-brain`; no change needed.
+
+## Answers to your numbered questions
+
+1. **Manage templates** → `Settings → RCS Hub → Templates` (Sync button mirrors Telinfy's `GET /rcs/templates`). New rich/basic grouping after this plan.
+2. **Send direct message** → `RCS Hub → Test Send` drawer (always goes through `dispatch-communication`); same path is used programmatically: `dispatchCommunication({ channel:'rcs', recipient, template_key, payload:{ variables } })`.
+3. **All RCS endpoints** → templates ✅, messages ✅, wallet ✅, webhooks ✅, **reports record-by-ID added by this plan**.
+4. **Single source of truth + on/off** → already enforced by `dispatch-communication` v1.17.0 + `send-rcs` is_active check; this plan adds the CI guard to prevent regressions.
+5. **Rich media** → rich messages = pre-approved rich templates on Telinfy; UI will now badge them and show preview thumbnails. Anything not in an approved rich template falls back to SMS via dispatcher.
