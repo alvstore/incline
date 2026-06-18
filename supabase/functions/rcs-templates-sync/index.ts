@@ -1,4 +1,4 @@
-// v1.0.0 — Fetch RCS templates from Telinfy and upsert into rcs_templates.
+// v1.1.0 — Fetch RCS templates from Telinfy with path fallback + verbose diagnostics.
 //   POST /rcs-templates-sync { branch_id?: string }
 // Requires authenticated user with owner|admin role; uses service-role for upsert.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
