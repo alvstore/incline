@@ -152,11 +152,12 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </div>
             )}
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid grid-cols-5 w-full">
+              <TabsList className="grid grid-cols-6 w-full">
                 <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Overview</TabsTrigger>
                 <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
                 <TabsTrigger value="test"><Send className="h-3.5 w-3.5 mr-1.5" />Test Send</TabsTrigger>
                 <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
+                <TabsTrigger value="reports"><BarChart3 className="h-3.5 w-3.5 mr-1.5" />Reports</TabsTrigger>
                 <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
               </TabsList>
 
@@ -171,6 +172,9 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </TabsContent>
               <TabsContent value="wallet" className="mt-4">
                 {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+              </TabsContent>
+              <TabsContent value="reports" className="mt-4">
+                <ReportsPanel branchId={branchId} />
               </TabsContent>
               <TabsContent value="webhooks" className="mt-4">
                 <WebhooksPanel />
