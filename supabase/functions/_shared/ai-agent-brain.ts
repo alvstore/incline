@@ -801,13 +801,46 @@ GENERAL RULES:
     // (location/pricing/timeline), prepend the canned answer before re-asking.
     const _pivot = intentPivotPrefix(ctx.messageContent);
 
-    // Step 1: nothing captured → ask name (plain text)
+    // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
     if (!hasName) {
+      const askTurns = countPriorNameAsks(history);
+      const userLast = String(ctx.messageContent || "").trim();
+      const userIsAck = ACK_RE.test(userLast);
+
+      // Pure acknowledgements after we already asked once → don't re-ask.
+      if (askTurns >= 1 && userIsAck) {
+        console.log(`[AI:guards] skipping name-ask on ack (turn=${askTurns})`);
+        return {
+          replyText: "Anytime ✨ I'm here whenever you'd like to continue.",
+          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+        };
+      }
+
+      let body: string;
+      if (askTurns === 0) {
+        body = "Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨";
+      } else if (askTurns === 1) {
+        body = "…and may I have your name so I can help better? ✨";
+      } else if (askTurns === 2) {
+        body = "No problem — whenever you'd like to share your name, I'll line up your Founding Member invite. Meanwhile, anything specific I can help with? ✨";
+      } else {
+        // Turn 4+: stop pushing for the name. Let the pivot answer carry the
+        // reply; if there's no pivot, send a neutral assist line.
+        console.log(`[AI:guards] giving_up_name_ask (turn=${askTurns}) — pivot=${_pivot ? "yes" : "no"}`);
+        body = _pivot ? "" : "Happy to help with anything specific — equipment, recovery suite, location, or our Founding Member list ✨";
+        return {
+          replyText: `${_pivot}${body}`.trim(),
+          leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
+        };
+      }
+
+      if (askTurns > 0) console.log(`[AI:guards] name-ask softened — turn=${askTurns}`);
       return {
-        replyText: `${_pivot}Hi! I'm Ananya, the member concierge at Incline. May I have your name to get started? ✨`,
+        replyText: `${_pivot}${body}`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
+
 
     // Step 2: name captured, no email → ask email (plain text)
     if (hasName && !hasEmail) {
