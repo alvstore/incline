@@ -738,6 +738,59 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
+  // 6b. CALLBACK CONSENT SHORT-CIRCUIT (v4.8.0) — when the previous assistant
+  //     turn offered a human callback ("Want our team to call you?") and the
+  //     user now says yes ("Yeah sure", "haan ji", "please call"), we MUST
+  //     create a real callback task instead of letting the LLM hallucinate
+  //     an "I've notified our team" line. This is the root cause behind the
+  //     Vicky Gidwani leak — the bot promised a callback that never reached
+  //     the founder team.
+  const userSaidYes = CALLBACK_YES_RE.test(String(ctx.messageContent || "").trim());
+  const botOfferedCallback = lastBotOfferedCallback(history);
+  const alreadyHandedOff = !!chatSettings?.founder_handoff_task_id;
+  if (userSaidYes && botOfferedCallback && !alreadyHandedOff && !memberCtx.isMember) {
+    console.log(`[AI:${ctx.platform}] callback consent detected — creating founder handoff task`);
+    const displayName =
+      memory?.profile?.first_name ||
+      firstNameOf(memory?.profile?.full_name) ||
+      chatSettings?.contact_name ||
+      null;
+    const summary = chatSettings?.conversation_summary || null;
+    const handoff = await requestFounderHandoff(supabase, supabaseUrl, serviceKey, {
+      branchId: ctx.branchId,
+      chatPhone: ctx.senderId,
+      leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+      contactName: displayName,
+      platform: ctx.platform,
+      reason: "founding_member_callback",
+      summary,
+    });
+    if (handoff.ok) {
+      const fn = displayName ? displayName.split(/\s+/)[0] : "";
+      const reply = fn
+        ? `Locked in, ${fn} ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`
+        : `Locked in ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`;
+      return {
+        replyText: reply,
+        leadCaptured: false,
+        leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+        handoffTriggered: true,
+        skipped: false,
+      };
+    }
+    // Handoff failed — log to error_logs and let the LLM fall through with a
+    // softer copy. We do NOT want to promise a callback that didn't happen.
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "ai_agent_brain",
+        p_severity: "error",
+        p_message: `callback handoff failed: ${handoff.error ?? "unknown"}`,
+        p_context: { phone: ctx.senderId, branch_id: ctx.branchId, lead_id: leadCtx?.leadId ?? null },
+      });
+    } catch { /* noop */ }
+  }
+
+
   // 7. Hydrate deterministic gym facts (plans, facilities, timings).
   //    Persona, behavior rules, FAQs and offers all come from the SSOT brain
   //    (ai_purposes.system_prompt + ai_knowledge) via buildSystemPrompt().
