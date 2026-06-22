@@ -98,6 +98,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
+import {
+  CALLBACK_YES_RE,
+  lastBotOfferedCallback,
+  requestFounderHandoff,
+} from "./handoff.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
 import {
