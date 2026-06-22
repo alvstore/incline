@@ -1,3 +1,20 @@
+// v4.8.0 — Lead-loss fixes triggered by Vicky Gidwani conversation audit:
+//          (1) Callback-consent short-circuit: when the user says "Yeah sure"
+//              after the bot offers a human callback, we now run
+//              requestFounderHandoff() (creates a real `tasks` row, stamps
+//              founder_handoff_task_id, advances lead.status='qualified',
+//              writes a `callback_requested` activity, and pings the dispatcher
+//              for in-app notification). Only after this succeeds does the
+//              bot say "a founder will call you within 2 hours".
+//          (2) Hallucinated-action guard: strips any "I've notified the team"
+//              / "created a task" / "scheduled your callback" claim when no
+//              tool actually ran on this turn — replaces with a safe
+//              non-committal line so we never lie to a prospect.
+//          (3) Lead write-through extended to sync fitness_goal +
+//              plan_interest from interactive_list answers and advance
+//              leads.status from `new` → `contacted` on first user reply.
+//              Adds a `whatsapp_reply` lead_activities entry per captured
+//              field so the CRM timeline matches the chat.
 // v4.6.0 — Two fixes for the "Rsss" repro:
 //          (1) intentPivotPrefix() no longer ships internal meta-labels like
 //              "Location intent —" to the user. Strips "<Category> intent —/:"
