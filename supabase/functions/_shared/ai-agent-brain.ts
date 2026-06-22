@@ -1,3 +1,20 @@
+// v4.8.0 — Lead-loss fixes triggered by Vicky Gidwani conversation audit:
+//          (1) Callback-consent short-circuit: when the user says "Yeah sure"
+//              after the bot offers a human callback, we now run
+//              requestFounderHandoff() (creates a real `tasks` row, stamps
+//              founder_handoff_task_id, advances lead.status='qualified',
+//              writes a `callback_requested` activity, and pings the dispatcher
+//              for in-app notification). Only after this succeeds does the
+//              bot say "a founder will call you within 2 hours".
+//          (2) Hallucinated-action guard: strips any "I've notified the team"
+//              / "created a task" / "scheduled your callback" claim when no
+//              tool actually ran on this turn — replaces with a safe
+//              non-committal line so we never lie to a prospect.
+//          (3) Lead write-through extended to sync fitness_goal +
+//              plan_interest from interactive_list answers and advance
+//              leads.status from `new` → `contacted` on first user reply.
+//              Adds a `whatsapp_reply` lead_activities entry per captured
+//              field so the CRM timeline matches the chat.
 // v4.6.0 — Two fixes for the "Rsss" repro:
 //          (1) intentPivotPrefix() no longer ships internal meta-labels like
 //              "Location intent —" to the user. Strips "<Category> intent —/:"
@@ -98,6 +115,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAllToolDefinitions } from "./ai-tools.ts";
 import { executeSharedToolCall } from "./ai-tool-executor.ts";
+import {
+  CALLBACK_YES_RE,
+  lastBotOfferedCallback,
+  requestFounderHandoff,
+} from "./handoff.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
 import {
@@ -371,7 +393,7 @@ export async function runUnifiedAgent(
   //    Single source of truth: is_bot_paused() SQL helper.
   const { data: chatSettings } = await supabase
     .from("whatsapp_chat_settings")
-    .select("bot_active, bot_paused_until, captured_lead_id, conversation_summary")
+    .select("bot_active, bot_paused_until, captured_lead_id, conversation_summary, founder_handoff_task_id, handoff_requested_at, contact_name")
     .eq("branch_id", ctx.branchId)
     .eq("phone_number", ctx.senderId)
     .maybeSingle();
@@ -674,16 +696,39 @@ export async function runUnifiedAgent(
       // lead row so future turns hydrate from CRM and the onboarding short-
       // circuit advances. Without this, ai_memory has the email but the
       // leads.email column stays NULL and the next session re-asks it.
+      // v4.8.0 — Also sync fitness_goal + plan_interest captured from
+      // interactive_list answers, and advance leads.status from `new` →
+      // `contacted` on first user-driven reply. This fixes the silent-loss
+      // bug where Vicky's "Annual — Founding Member" pick never reached the
+      // leads row, so the CRM kept showing her as a blank `new` lead.
       const newEmail = (delta.profile?.email || "").toString().trim();
       const newName = (delta.profile?.full_name || delta.profile?.first_name || "").toString().trim();
-      if (leadCtx?.leadId && (newEmail || newName)) {
+      const newGoal = (delta.facts?.fitness_goal || delta.facts?.goal || "").toString().trim();
+      const newPlan = (delta.facts?.plan_interest || "").toString().trim();
+      if (leadCtx?.leadId) {
         try {
           const patch: Record<string, any> = { updated_at: new Date().toISOString() };
           if (newEmail && !leadCtx.profile.email) patch.email = newEmail;
           if (newName && !leadCtx.profile.full_name) patch.full_name = newName;
+          if (newGoal && !leadCtx.facts.fitness_goal) patch.fitness_goal = newGoal;
+          if (newPlan && !leadCtx.facts.plan_interest) patch.plan_interest = newPlan.toLowerCase();
+          // Move `new` → `contacted` once the lead has engaged via the bot.
+          if (leadCtx.status === "new") patch.status = "contacted";
           if (Object.keys(patch).length > 1) {
             await supabase.from("leads").update(patch).eq("id", leadCtx.leadId);
             console.log(`[AI:${ctx.platform}] lead ${leadCtx.leadId} backfilled from chat:`, Object.keys(patch).filter(k => k !== "updated_at"));
+          }
+          // Lightweight activity entry so the CRM timeline shows what they said.
+          if (newGoal || newPlan) {
+            try {
+              await supabase.from("lead_activities").insert({
+                lead_id: leadCtx.leadId,
+                branch_id: ctx.branchId,
+                activity_type: "whatsapp_reply",
+                title: "Bot captured onboarding answer",
+                metadata: { fitness_goal: newGoal || null, plan_interest: newPlan || null, platform: ctx.platform },
+              });
+            } catch { /* non-fatal */ }
           }
         } catch (e) {
           console.warn(`[AI:${ctx.platform}] lead backfill failed (non-fatal):`, (e as Error).message);
@@ -709,6 +754,59 @@ export async function runUnifiedAgent(
     role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
     content: String(m.content || ""),
   }));
+
+  // 6b. CALLBACK CONSENT SHORT-CIRCUIT (v4.8.0) — when the previous assistant
+  //     turn offered a human callback ("Want our team to call you?") and the
+  //     user now says yes ("Yeah sure", "haan ji", "please call"), we MUST
+  //     create a real callback task instead of letting the LLM hallucinate
+  //     an "I've notified our team" line. This is the root cause behind the
+  //     Vicky Gidwani leak — the bot promised a callback that never reached
+  //     the founder team.
+  const userSaidYes = CALLBACK_YES_RE.test(String(ctx.messageContent || "").trim());
+  const botOfferedCallback = lastBotOfferedCallback(history);
+  const alreadyHandedOff = !!chatSettings?.founder_handoff_task_id;
+  if (userSaidYes && botOfferedCallback && !alreadyHandedOff && !memberCtx.isMember) {
+    console.log(`[AI:${ctx.platform}] callback consent detected — creating founder handoff task`);
+    const displayName =
+      memory?.profile?.first_name ||
+      firstNameOf(memory?.profile?.full_name) ||
+      chatSettings?.contact_name ||
+      null;
+    const summary = chatSettings?.conversation_summary || null;
+    const handoff = await requestFounderHandoff(supabase, supabaseUrl, serviceKey, {
+      branchId: ctx.branchId,
+      chatPhone: ctx.senderId,
+      leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+      contactName: displayName,
+      platform: ctx.platform,
+      reason: "founding_member_callback",
+      summary,
+    });
+    if (handoff.ok) {
+      const fn = displayName ? displayName.split(/\s+/)[0] : "";
+      const reply = fn
+        ? `Locked in, ${fn} ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`
+        : `Locked in ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`;
+      return {
+        replyText: reply,
+        leadCaptured: false,
+        leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+        handoffTriggered: true,
+        skipped: false,
+      };
+    }
+    // Handoff failed — log to error_logs and let the LLM fall through with a
+    // softer copy. We do NOT want to promise a callback that didn't happen.
+    try {
+      await supabase.rpc("log_error_event", {
+        p_source: "ai_agent_brain",
+        p_severity: "error",
+        p_message: `callback handoff failed: ${handoff.error ?? "unknown"}`,
+        p_context: { phone: ctx.senderId, branch_id: ctx.branchId, lead_id: leadCtx?.leadId ?? null },
+      });
+    } catch { /* noop */ }
+  }
+
 
   // 7. Hydrate deterministic gym facts (plans, facilities, timings).
   //    Persona, behavior rules, FAQs and offers all come from the SSOT brain
@@ -1171,6 +1269,13 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9c.1 HALLUCINATED-ACTION GUARD (v4.8.0) — the LLM occasionally claims it
+  //      has "notified our team" / "created a task" / "scheduled a callback"
+  //      when no tool actually ran (this is what cost us the Vicky lead).
+  //      Strip the claim and replace with a safe, non-committal line so the
+  //      bot never silently promises something it didn't do.
+  replyText = stripHallucinatedActions(replyText, !!chatSettings?.founder_handoff_task_id);
+
   // 9d. NAME-REPEAT GUARD — if memory already has a real first name and the
   // model is still asking for it (history fetch can be empty, model can ignore
   // the prompt), rewrite the reply to thank the user and advance to the next
@@ -1460,6 +1565,25 @@ function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   let out = text.replace(OPENING_VERB_YEAR_RE, "open soon");
   out = out.replace(OPENING_DATE_RE, "soon");
   return { redacted: out, hit: out !== before };
+}
+
+// v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
+// like "I've notified our team", "created a task", "booked your slot",
+// "scheduled the callback". When no tool actually ran on this turn (handoff
+// flag not set), we strip the claim and substitute a safe non-committal
+// acknowledgement. Without this guard we silently lose hot leads.
+const HALLUCINATED_ACTION_RE =
+  /\b(?:(?:i'?ve|i\s*have|just)\s+)?(?:notified|informed|alerted|paged|messaged|let\s+(?:the|our)\s+(?:team|founder)\s+know|created\s+(?:a\s+)?(?:task|ticket)|booked\s+you|scheduled\s+(?:a|your|the)\s+(?:call|callback|slot)|added\s+you\s+to\s+the\s+(?:queue|list)|forwarded\s+(?:this|your\s+request)\s+to)\b/i;
+
+function stripHallucinatedActions(replyText: string, handoffActuallyHappened: boolean): string {
+  if (!replyText) return replyText;
+  if (handoffActuallyHappened) return replyText; // tool DID run — claim is truthful
+  const text = String(replyText);
+  // Skip interactive JSON envelopes — handled elsewhere.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+  if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
+  console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
+  return "Got it — sharing your interest with our team. Someone will reach out to you shortly ✨";
 }
 
 function sanitizeFoundersPhaseText(input: {
