@@ -376,7 +376,7 @@ export async function runUnifiedAgent(
   //    Single source of truth: is_bot_paused() SQL helper.
   const { data: chatSettings } = await supabase
     .from("whatsapp_chat_settings")
-    .select("bot_active, bot_paused_until, captured_lead_id, conversation_summary")
+    .select("bot_active, bot_paused_until, captured_lead_id, conversation_summary, founder_handoff_task_id, handoff_requested_at, contact_name")
     .eq("branch_id", ctx.branchId)
     .eq("phone_number", ctx.senderId)
     .maybeSingle();
