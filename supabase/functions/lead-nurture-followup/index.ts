@@ -326,13 +326,25 @@ serve(async (req) => {
 
       const partialData = chat.partial_lead_data as Record<string, any> | null;
 
-      if (lead?.id) continue;
+      // v2.1.0 — Skip only when the lead is already converted or terminal.
+      // Previously this function skipped ANY chat with a lead row, which
+      // silently disabled nurture for ~65% of prospects since capture-lead
+      // creates a row on first inbound.
+      const NURTURE_STATUSES = new Set(["new", "contacted", "no_response", "cold"]);
+      if (lead?.id && lead.status && !NURTURE_STATUSES.has(String(lead.status))) {
+        decisions.push({ phone: chat.phone_number, skipped: `lead_status:${lead.status}` });
+        continue;
+      }
+
       const { data: linkedMember } = await supabase
         .from("members")
         .select("id")
         .eq("phone_number", chat.phone_number)
         .maybeSingle();
-      if (linkedMember?.id) continue;
+      if (linkedMember?.id) {
+        decisions.push({ phone: chat.phone_number, skipped: "is_member" });
+        continue;
+      }
 
       const chatPlatform = chat.platform || "whatsapp";
 
