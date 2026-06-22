@@ -174,6 +174,23 @@ export function classifyHinglishIntent(text: string): HinglishIntent {
   return null;
 }
 
+// v4.7.0 — multi-intent. "When it is opening and address" needs BOTH the
+// timeline + location canonical answers, not just the first one. Returns an
+// ordered, de-duplicated array (priority: location → timeline → pricing).
+export function classifyHinglishIntents(text: string): Array<Exclude<HinglishIntent, null>> {
+  const t = String(text || "");
+  const out = new Set<Exclude<HinglishIntent, null>>();
+  const dyn = _dynMemSnapshot?.classify(t);
+  if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
+    out.add(dyn.intent_category);
+  }
+  if (LOCATION_INTENT_RE.test(t)) out.add("location");
+  if (TIMELINE_INTENT_RE.test(t)) out.add("timeline");
+  if (PRICING_INTENT_RE.test(t)) out.add("pricing");
+  const order: Array<Exclude<HinglishIntent, null>> = ["location", "timeline", "pricing"];
+  return order.filter((k) => out.has(k)).slice(0, 2);
+}
+
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   location: "We're at Sector 14, Udaipur, Rajasthan ✨",
   pricing: "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
@@ -186,27 +203,44 @@ const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
 const INTENT_META_PREFIX_RE =
   /^\s*(?:location|pricing|timeline|opening|launch|intent)\s+intent\s*[—\-:]\s*/i;
 const INTENT_RESIDUAL_META_RE = /\bintent\s*[—\-:]\s*/i;
+// v4.7.0 — strip admin instruction-style prefixes like "Share full address:",
+// "Tell the user ...:", "Reply with ...:". These are operator notes, never
+// user-facing copy. If the cleaned line still starts with such a verb, we
+// fall back to the canonical answer.
+const INTENT_INSTRUCTION_PREFIX_RE =
+  /^\s*(?:share|tell|reply|say|mention|use|send|give|provide|inform|respond|answer|state|note|please)\b[^:\n]{0,80}:\s*/i;
+const INTENT_INSTRUCTION_RESIDUAL_RE =
+  /^\s*(?:share|tell|reply|say|mention|use|send|give|provide|inform|respond|answer|state|note)\b[^:\n]{0,80}:/i;
 
 function intentPivotPrefix(text: string): string {
+  const intents = classifyHinglishIntents(text);
+  if (intents.length === 0) return "";
+
   const dyn = _dynMemSnapshot?.classify(text);
-  if (dyn && (dyn.intent_category === "location" || dyn.intent_category === "pricing" || dyn.intent_category === "timeline")) {
+  // When admin has curated a row for the primary intent, prefer it (after sanitizing).
+  if (dyn && intents.includes(dyn.intent_category as any)) {
     const raw = String(dyn.correction_instruction || "").trim();
-    let cleaned = raw.replace(INTENT_META_PREFIX_RE, "").trim();
+    let cleaned = raw
+      .replace(INTENT_META_PREFIX_RE, "")
+      .replace(INTENT_INSTRUCTION_PREFIX_RE, "")
+      .trim();
     // first sentence only
     cleaned = cleaned.split(/[.!?]\s/)[0].trim();
-    // if any residual "intent —" / "intent:" remains, treat as leak and drop
-    if (INTENT_RESIDUAL_META_RE.test(cleaned)) {
-      console.log("[AI:guards] stripped intent meta-prefix (residual)");
+    if (INTENT_RESIDUAL_META_RE.test(cleaned) || INTENT_INSTRUCTION_RESIDUAL_RE.test(cleaned)) {
+      console.log("[AI:guards] stripped admin-prefix (residual) — falling back to canonical");
       cleaned = "";
     }
-    if (cleaned) return `${cleaned} `;
-    // fall through to canonical answer
-    const cat = dyn.intent_category as Exclude<HinglishIntent, null>;
-    console.log(`[AI:guards] stripped intent meta-prefix — falling back to canonical answer for ${cat}`);
-    return `${INTENT_ANSWERS[cat]} `;
+    if (cleaned) {
+      // append any OTHER intent's canonical line so multi-intent questions are fully answered
+      const extras = intents
+        .filter((i) => i !== dyn.intent_category)
+        .map((i) => INTENT_ANSWERS[i]);
+      return [cleaned, ...extras].join(" ") + " ";
+    }
   }
-  const intent = classifyHinglishIntent(text);
-  return intent ? `${INTENT_ANSWERS[intent]} ` : "";
+
+  // No usable admin row — concatenate canonical answers in priority order.
+  return intents.map((i) => INTENT_ANSWERS[i]).join(" ") + " ";
 }
 
 // v4.6.0 — shared regexes for name-ask de-duplication

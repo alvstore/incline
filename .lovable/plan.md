@@ -1,65 +1,68 @@
+## Audit findings
 
-## Context — what already exists
+### 1. Prefix leak: `Share full address: Sector 14, Udaipur, Rajasthan.`
+The v4.6.0 sanitizer only strips the pattern `<location|pricing|timeline|opening|launch|intent> intent —/:`.
+A newer admin row in `ai_dynamic_memory` uses an **imperative-style** prefix:
 
-After auditing the codebase, **most of what you asked for is already built**:
+```
+id: a395258e-…  intent_category=location
+correction_instruction: "Share full address: Sector 14, Udaipur, Rajasthan."
+```
 
-| Capability | Where | Status |
-|---|---|---|
-| Manage templates | `Settings → RCS Hub → Templates` (mirrors Telinfy via `rcs-templates-sync`) | ✅ |
-| Direct send (test) | `RCS Hub → Test Send` drawer → `dispatch-communication` → `send-rcs` | ✅ |
-| Wallet | `RCS Hub → Wallet` + `rcs-wallet` edge fn (`GET /rcs/wallet`) | ✅ |
-| Webhooks | `rcs-webhook` edge fn handles `/delivery`, `/user-action`, `/user-message`; URLs shown in Webhooks tab | ✅ |
-| Single dispatcher | `dispatch-communication` v1.17.0 routes `channel:'rcs'` → `send-rcs`, applies kill-switch (`channel_active_for_branch`), preferences, dedupe, quiet hours, logs to `communication_logs` | ✅ |
-| On/off toggle respected | `integration_settings.is_active=false` → `send-rcs` short-circuits with `status:'disabled'`; dispatcher kill-switch also blocks | ✅ |
+That whole string was emitted verbatim to the user. There are 10 curated rows total; several still leak `Location intent —` / `Pricing intent —` because they're being saved by admins as internal notes, not user-facing copy.
 
-So the answer to questions 1–4 is largely **"already done"** — see "Answers" section at the bottom of this plan.
+### 2. Multi-intent question dropped half the answer
+User asked: *"When it is opening and address"* — brain pivoted with location only and ignored the opening half. Single-intent classifier picks the first match (location) and exits. Founder's-phase rule still applies (opening date embargoed), so the right answer is: location line + "Our opening date hasn't been announced publicly yet — Founding Members will be the first to know."
 
-## What's actually missing — this plan covers it
+### 3. Funnel didn't acknowledge "U are opening at sector 14"
+After the user confirmed location, the bot jumped straight to the goal CTA. It should briefly acknowledge ("Yes — Sector 14, Udaipur ✨") before progressing.
 
-### 1. Reports endpoint (`GET /rcs/record/:recordID`)
-Postman collection exposes per-record drill-down (read/delivered/undelivered timeline) but we don't surface it.
+### 4. Nurture audit
+- `automation_rules.lead_nurture_followup` is **active**, cron `*/15 * * * *`, last_run = success 7 min ago, dispatched 1.
+- 81 active chats, **53 never nurtured**, 13 nurtured in 24h.
+- Root cause for the 53: `lead-nurture-followup/index.ts:329` — `if (lead?.id) continue;` **skips any chat that already has a `leads` row**. Since `capture-lead` creates a lead on first inbound, almost every prospect is excluded. This inverts the documented intent (nurture is supposed to chase leads who went cold). Member-link skip on line 335 is correct and stays.
+- Secondary: chats with `bot_active=false` (manual handoff / "AI paused 365d") are excluded by design — correct, no change.
 
-- New edge fn **`rcs-record`** (mirrors `rcs-wallet` shape): accepts `{ branch_id, record_id }`, resolves Telinfy creds from `integration_settings`, calls `GET {base}/rcs/record/:recordID` with `x-api-key`, returns `{ ok, data }`.
-- In `RcsHub → Test Send` results card, when `provider_record_id` is present add a **"Fetch detail"** button that invokes `rcs-record` and renders the raw event timeline (status / eventDLR list) in a collapsible block.
-- New **Reports tab** in `RcsHub` (between Wallet and Webhooks): last 50 `communication_logs` rows where `channel='rcs'`, columns: time · recipient · template · status (badge) · recordID (click → fetch detail).
+---
 
-### 2. Rich-media template visibility (question 5)
-Telinfy's REST RCS is **template-driven only** — `GET /rcs/templates` returns `{ richStandard, basicStandard, richDynamic, basicDynamic }`. Rich media (image cards, suggested replies, carousels) lives **inside the approved template on Telinfy's side**; the API does not accept freeform media payloads. We honor that today by returning `status:'unsupported'` when no `template_name` is supplied (dispatcher then falls back to SMS).
+## Plan
 
-What we'll add:
-- Extend `rcs_templates` with `kind text` (`rich_standard | basic_standard | rich_dynamic | basic_dynamic`) and `media_url text` (preview image, when Telinfy returns one). Migration + GRANTs.
-- Update `rcs-templates-sync` to populate both fields from the grouped response.
-- In `TemplatesPanel`, group cards into **"Rich" / "Basic"** sections, show a small media thumbnail when `media_url` is set, and add a **"Rich"** badge.
-- In `Test Send` template picker, prefix rich templates with a 🎴 icon (lucide `Image`) so admins know which sends will render as a rich card.
-- Add a one-line helper above the picker: *"Rich-media RCS messages are pre-approved on the Telinfy dashboard. To add a new card/carousel, create it in Telinfy → Templates, then click Sync."*
+### A. Brain sanitizer — `supabase/functions/_shared/ai-agent-brain.ts`
+1. Add a second regex `INTENT_INSTRUCTION_PREFIX_RE` that strips any imperative-with-colon opener:
+   `^\s*(share|tell|reply|say|mention|use|send|give|provide|inform|respond|answer|state)[^:\n]{0,80}:\s*`
+2. In `intentPivotPrefix()`, apply both regexes (existing + new) before the residual-check; if cleaned text still starts with an imperative verb followed by a colon, fall back to the canonical `INTENT_ANSWERS[cat]`.
+3. Add unit-style log `[AI:guards] stripped instruction-prefix`.
+4. **Multi-intent**: extend classifier to return `Set<HinglishIntent>` when more than one match is found, and concatenate canonical answers in priority order (location → timeline → pricing), space-separated, before the funnel response. Cap to 2 intents to keep it tight.
+5. Add a tiny ack-prefix when the prior user message is a confirmation of bot-stated location ("u are opening at sector 14" / "ok sector 14"): respond with `Yes — Sector 14, Udaipur ✨ ` before continuing the funnel.
 
-### 3. Documentation & curl panel in Webhooks tab
-Add a second card under the existing webhook URL list with copy-able curl snippets pulled straight from the Postman collection:
-- Get templates · Send message · Wallet · Record-by-ID
-Each uses the **app's stored Telinfy key** label (`x-api-key: <stored>`), never prints the actual key.
+### B. Backfill curated memory — new migration
+- Update all 10 `ai_dynamic_memory` rows in `(location | pricing | timeline)` so `correction_instruction` is the **user-facing answer**, not the admin note:
+  - location → `We're at Sector 14, Udaipur, Rajasthan ✨`
+  - pricing  → `Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨`
+  - timeline → `Our opening date hasn't been announced publicly yet — Founding Members will be the first to know ✨`
+- Add a CHECK-style trigger `tg_ai_dynamic_memory_sanitize` that rewrites any new insert/update whose text starts with `^(<cat>\s+intent\s*[—\-:])` or the imperative pattern above, into the canonical answer. Prevents future leaks at the source.
 
-### 4. Lock-in: dispatcher single source of truth
-- Add a CI rule line to the existing comms guard so any new direct `supabase.functions.invoke('send-rcs', …)` (outside `dispatch-communication`) fails the build, matching the existing rule for `send-whatsapp` / `send-sms` / `send-email`.
-- Update `mem://index.md` Core line for comms to explicitly call out `rcs` alongside Email/SMS/WhatsApp/in-app.
+### C. Nurture fix — `supabase/functions/lead-nurture-followup/index.ts`
+1. Remove the blanket skip on line 329 (`if (lead?.id) continue;`). Nurture should fire **for cold leads**, not skip them. Keep the member-link skip (line 335) — converted members should not be nurtured.
+2. Add a stronger qualifier: only nurture if `leads.status IN ('new','contacted','no_response')` (skip `qualified`, `converted`, `lost`, `do_not_contact`).
+3. Add a log line per skip reason so future audits don't need code-reading.
+4. Add a `nurture_audit` JSONB column-free summary returned in the function response (counts of `skipped_member`, `skipped_status`, `skipped_window`, `skipped_gap`, `nudged`) — surfaces in `automation_rules.last_error` / `last_dispatched_count`.
 
-## Files touched
+### D. Verification
+- After deploy, hit `/lead-nurture-followup` once via curl and inspect the JSON summary.
+- Re-run the WhatsApp test: send `When it is opening and address` and `U are opening at sector 14` from a sandbox number; confirm:
+  - No `Share full address:` / `Location intent —` leak.
+  - Both opening + address handled in one reply.
+  - Funnel ack appears.
+- SQL spot-check on `ai_dynamic_memory` shows zero rows with admin-note prefixes.
 
-- `supabase/functions/rcs-record/index.ts` (new)
-- `supabase/functions/rcs-templates-sync/index.ts` (kind + media_url)
-- `supabase/migrations/<ts>_rcs_template_kind.sql` (new — ALTER + GRANT no-op since table exists)
-- `src/components/settings/rcs/RcsHub.tsx` (Reports tab, rich/basic grouping, fetch-detail button, curl snippets)
-- `.github/workflows/ci.yml` (extend direct-write guard with `send-rcs`)
-- `mem://index.md` (Core line update)
+### Files changed
+- `supabase/functions/_shared/ai-agent-brain.ts` (sanitizer + multi-intent + ack)
+- `supabase/functions/lead-nurture-followup/index.ts` (skip rules + audit summary)
+- new migration: backfill + sanitize trigger on `ai_dynamic_memory`
+- redeploy: `whatsapp-webhook`, `meta-webhook`, `lead-nurture-followup`
 
-## Out of scope
-- Building our own RCS template designer (Telinfy is SSOT for template approval).
-- Sending freeform RCS text — not supported by Telinfy REST.
-- Inbound AI replies on RCS — already wired via `rcs-webhook/user-message` → `ai-agent-brain`; no change needed.
-
-## Answers to your numbered questions
-
-1. **Manage templates** → `Settings → RCS Hub → Templates` (Sync button mirrors Telinfy's `GET /rcs/templates`). New rich/basic grouping after this plan.
-2. **Send direct message** → `RCS Hub → Test Send` drawer (always goes through `dispatch-communication`); same path is used programmatically: `dispatchCommunication({ channel:'rcs', recipient, template_key, payload:{ variables } })`.
-3. **All RCS endpoints** → templates ✅, messages ✅, wallet ✅, webhooks ✅, **reports record-by-ID added by this plan**.
-4. **Single source of truth + on/off** → already enforced by `dispatch-communication` v1.17.0 + `send-rcs` is_active check; this plan adds the CI guard to prevent regressions.
-5. **Rich media** → rich messages = pre-approved rich templates on Telinfy; UI will now badge them and show preview thumbnails. Anything not in an approved rich template falls back to SMS via dispatcher.
+### Out of scope
+- Changing public SEO files (still say "July 2026" for crawlers — Founder's-Phase rule unchanged).
+- RCS work from previous task.
+- Touching cron schedule or `bot_active` semantics.
