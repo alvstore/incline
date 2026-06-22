@@ -679,16 +679,39 @@ export async function runUnifiedAgent(
       // lead row so future turns hydrate from CRM and the onboarding short-
       // circuit advances. Without this, ai_memory has the email but the
       // leads.email column stays NULL and the next session re-asks it.
+      // v4.8.0 — Also sync fitness_goal + plan_interest captured from
+      // interactive_list answers, and advance leads.status from `new` →
+      // `contacted` on first user-driven reply. This fixes the silent-loss
+      // bug where Vicky's "Annual — Founding Member" pick never reached the
+      // leads row, so the CRM kept showing her as a blank `new` lead.
       const newEmail = (delta.profile?.email || "").toString().trim();
       const newName = (delta.profile?.full_name || delta.profile?.first_name || "").toString().trim();
-      if (leadCtx?.leadId && (newEmail || newName)) {
+      const newGoal = (delta.facts?.fitness_goal || delta.facts?.goal || "").toString().trim();
+      const newPlan = (delta.facts?.plan_interest || "").toString().trim();
+      if (leadCtx?.leadId) {
         try {
           const patch: Record<string, any> = { updated_at: new Date().toISOString() };
           if (newEmail && !leadCtx.profile.email) patch.email = newEmail;
           if (newName && !leadCtx.profile.full_name) patch.full_name = newName;
+          if (newGoal && !leadCtx.facts.fitness_goal) patch.fitness_goal = newGoal;
+          if (newPlan && !leadCtx.facts.plan_interest) patch.plan_interest = newPlan.toLowerCase();
+          // Move `new` → `contacted` once the lead has engaged via the bot.
+          if (leadCtx.status === "new") patch.status = "contacted";
           if (Object.keys(patch).length > 1) {
             await supabase.from("leads").update(patch).eq("id", leadCtx.leadId);
             console.log(`[AI:${ctx.platform}] lead ${leadCtx.leadId} backfilled from chat:`, Object.keys(patch).filter(k => k !== "updated_at"));
+          }
+          // Lightweight activity entry so the CRM timeline shows what they said.
+          if (newGoal || newPlan) {
+            try {
+              await supabase.from("lead_activities").insert({
+                lead_id: leadCtx.leadId,
+                branch_id: ctx.branchId,
+                activity_type: "whatsapp_reply",
+                title: "Bot captured onboarding answer",
+                metadata: { fitness_goal: newGoal || null, plan_interest: newPlan || null, platform: ctx.platform },
+              });
+            } catch { /* non-fatal */ }
           }
         } catch (e) {
           console.warn(`[AI:${ctx.platform}] lead backfill failed (non-fatal):`, (e as Error).message);
