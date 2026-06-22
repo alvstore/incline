@@ -1252,6 +1252,13 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9c.1 HALLUCINATED-ACTION GUARD (v4.8.0) — the LLM occasionally claims it
+  //      has "notified our team" / "created a task" / "scheduled a callback"
+  //      when no tool actually ran (this is what cost us the Vicky lead).
+  //      Strip the claim and replace with a safe, non-committal line so the
+  //      bot never silently promises something it didn't do.
+  replyText = stripHallucinatedActions(replyText, !!chatSettings?.founder_handoff_task_id);
+
   // 9d. NAME-REPEAT GUARD — if memory already has a real first name and the
   // model is still asking for it (history fetch can be empty, model can ignore
   // the prompt), rewrite the reply to thank the user and advance to the next
