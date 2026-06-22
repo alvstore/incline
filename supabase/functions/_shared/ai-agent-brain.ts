@@ -1550,6 +1550,25 @@ function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   return { redacted: out, hit: out !== before };
 }
 
+// v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
+// like "I've notified our team", "created a task", "booked your slot",
+// "scheduled the callback". When no tool actually ran on this turn (handoff
+// flag not set), we strip the claim and substitute a safe non-committal
+// acknowledgement. Without this guard we silently lose hot leads.
+const HALLUCINATED_ACTION_RE =
+  /\b(?:(?:i'?ve|i\s*have|just)\s+)?(?:notified|informed|alerted|paged|messaged|let\s+(?:the|our)\s+(?:team|founder)\s+know|created\s+(?:a\s+)?(?:task|ticket)|booked\s+you|scheduled\s+(?:a|your|the)\s+(?:call|callback|slot)|added\s+you\s+to\s+the\s+(?:queue|list)|forwarded\s+(?:this|your\s+request)\s+to)\b/i;
+
+function stripHallucinatedActions(replyText: string, handoffActuallyHappened: boolean): string {
+  if (!replyText) return replyText;
+  if (handoffActuallyHappened) return replyText; // tool DID run — claim is truthful
+  const text = String(replyText);
+  // Skip interactive JSON envelopes — handled elsewhere.
+  if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
+  if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
+  console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
+  return "Got it — sharing your interest with our team. Someone will reach out to you shortly ✨";
+}
+
 function sanitizeFoundersPhaseText(input: {
   replyText: string;
   memory: any;
