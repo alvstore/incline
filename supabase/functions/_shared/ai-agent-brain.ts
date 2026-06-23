@@ -1,3 +1,14 @@
+// v4.9.0 — Roma/Dinesh leak fix:
+//          (1) New ensureLeadFromMemory() promotes a fully-captured
+//              ai_memory row into a real `leads` row. Called after the
+//              auto-learn pass AND inside the callback-consent block so
+//              handoff always has a real leadId.
+//          (2) CALLBACK_YES_RE widened to accept "yes sure", "yes please",
+//              etc. (Roma replied "Yes sure" and the v1.0 regex rejected it).
+//          (3) Hallucinated-callback guard sanitizes LLM-generated replies
+//              that promise "I've notified our team" when no real handoff
+//              task was created on this turn. Replaces with safe deterministic
+//              offer + logs to error_logs.
 // v4.8.0 — Lead-loss fixes triggered by Vicky Gidwani conversation audit:
 //          (1) Callback-consent short-circuit: when the user says "Yeah sure"
 //              after the bot offers a human callback, we now run
@@ -119,7 +130,9 @@ import {
   CALLBACK_YES_RE,
   lastBotOfferedCallback,
   requestFounderHandoff,
+  assertCallbackPromiseAllowed,
 } from "./handoff.ts";
+import { ensureLeadFromMemory } from "./leadCapture.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
 import {
