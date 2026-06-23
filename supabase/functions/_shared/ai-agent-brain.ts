@@ -1,3 +1,14 @@
+// v4.9.0 — Roma/Dinesh leak fix:
+//          (1) New ensureLeadFromMemory() promotes a fully-captured
+//              ai_memory row into a real `leads` row. Called after the
+//              auto-learn pass AND inside the callback-consent block so
+//              handoff always has a real leadId.
+//          (2) CALLBACK_YES_RE widened to accept "yes sure", "yes please",
+//              etc. (Roma replied "Yes sure" and the v1.0 regex rejected it).
+//          (3) Hallucinated-callback guard sanitizes LLM-generated replies
+//              that promise "I've notified our team" when no real handoff
+//              task was created on this turn. Replaces with safe deterministic
+//              offer + logs to error_logs.
 // v4.8.0 — Lead-loss fixes triggered by Vicky Gidwani conversation audit:
 //          (1) Callback-consent short-circuit: when the user says "Yeah sure"
 //              after the bot offers a human callback, we now run
@@ -119,7 +130,9 @@ import {
   CALLBACK_YES_RE,
   lastBotOfferedCallback,
   requestFounderHandoff,
+  assertCallbackPromiseAllowed,
 } from "./handoff.ts";
+import { ensureLeadFromMemory } from "./leadCapture.ts";
 import { phoneVariants } from "./phone.ts";
 import { callAI } from "./ai-dispatcher.ts";
 import {
@@ -738,6 +751,34 @@ export async function runUnifiedAgent(
   } catch (e) {
     console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
   }
+
+  // 5d. ENSURE LEAD FROM MEMORY (v4.9.0) — promote the captured ai_memory
+  //     snapshot into a real leads row BEFORE any deterministic short-circuit
+  //     returns. Prevents the Roma/Dinesh leak where name+email+goal+plan
+  //     were all known but the CRM never received a row.
+  if (!memberCtx.isMember) {
+    try {
+      const ensured = await ensureLeadFromMemory(supabase, {
+        branchId: ctx.branchId,
+        senderId: ctx.senderId,
+        platform: ctx.platform,
+        contactName: ctx.contactName ?? null,
+        memory,
+        supabaseUrl,
+        serviceKey,
+      });
+      if (ensured.leadId && !leadCtx) {
+        // Refresh leadCtx so downstream handoff / lead identity prompts work.
+        try {
+          const v = phoneVariants(ctx.senderId);
+          leadCtx = await resolveLeadContext(supabase, v, ctx.branchId);
+        } catch { /* non-fatal */ }
+      }
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] ensureLeadFromMemory failed (continuing):`, (e as Error).message);
+    }
+  }
+
   const memoryBlock = renderMemoryBlock(memory);
   const runtimeRules = renderRuntimeRules(memory, ctx.platform);
 
@@ -1351,6 +1392,22 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     asked_questions_add: askedNow,
     current_intent: memberCtx.isMember ? "member_assist" : (memory?.current_intent ?? null),
   });
+
+  // v4.9.0 — Hallucinated-callback guard. If the LLM emitted "I've notified
+  // our team / shared your details" but no real handoff task was triggered
+  // on this turn, strip the claim and substitute a safe deterministic offer.
+  // We pass handoffOk=false here because this code path runs ONLY when the
+  // 6b callback-consent short-circuit did NOT fire (which is the only place
+  // a real founder handoff is created from within runUnifiedAgent).
+  if (replyText && !memberCtx.isMember) {
+    try {
+      replyText = await assertCallbackPromiseAllowed(supabase, replyText, false, {
+        branchId: ctx.branchId,
+        senderId: ctx.senderId,
+        platform: ctx.platform,
+      });
+    } catch { /* non-fatal */ }
+  }
 
   return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }

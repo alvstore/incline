@@ -1,80 +1,65 @@
 
-## Audit Finding — why Vicky's "Yeah sure" was lost
+## Audit findings (root cause)
 
-I traced the WhatsApp thread for **+91 97723 99207 (Vicky Gidwani)** through the database and the brain code. Three independent bugs combined to lose this hot lead:
+I traced both leaked chats through `whatsapp_messages`, `whatsapp_chat_settings`, `ai_memory`, and `leads`. Roma's `ai_memory` row is fully populated — `full_name=Roma`, `email=Romakeswani92@gmail.com`, `fitness_goal=weight_loss`, `plan_interest=Annual`, `consent.wants_human=true` — but **no `leads` row exists, no callback task exists, no `founder_handoff_task_id` is set**. Same shape for Dinesh. The bot still said *"I've shared your details with our Founding Team."* Three independent bugs combined to lose them:
 
-### Bug 1 — "I've notified our team" is a **hallucinated reply** (CRITICAL)
-- The lead exists (`leads.id = 20919e10…`, source `website`, status `new`) and is correctly linked to the chat (`whatsapp_chat_settings.captured_lead_id`).
-- The column `whatsapp_chat_settings.founder_handoff_task_id` exists for exactly this purpose, but a repo-wide search shows **zero code anywhere** writes to it.
-- There is no tool, no RPC, no edge-fn path that creates a callback Task, sends a staff notification, or sets `handoff_requested_at` when the user agrees to a call.
-- The line "Got it, Vicky! I've notified our Founding Member team…" came **purely from the LLM** with no side effect. The founder team was never notified.
+1. **Funnel completes in memory but never writes to `leads`.** The deterministic onboarding short-circuit in `_shared/ai-agent-brain.ts` (lines 939–1062) returns the next prompt for each missing field. Once name+email+goal+plan_interest are all in `ai_memory`, the final branch (line 1050) sends *"Want our team to lock in your Founding spot?"* and returns. The actual `tryParseAndCaptureLead()` path (line 2104) is only reached when the LLM emits a `{"status":"lead_captured"…}` JSON envelope, which the short-circuit never produces. Result: the CRM never gets a lead.
 
-### Bug 2 — `fitness_goal` and `plan_interest` never persisted on the lead row
-- During the chat, Vicky picked `Flexibility / General` and `Annual — Founding Member` via interactive lists.
-- `leads.fitness_goal` and `leads.plan_interest` are still `NULL`. The data only lives inside `ai_memory.facts` (transient brain memory).
-- The brain has a `factsPatch` → `leads.update` path (around line 685 in `ai-agent-brain.ts`) but it only fires on first capture, not on subsequent interactive_list selections after the lead already exists.
-- Result: CRM and segments treat Vicky as a "new website lead with no goal/plan" — she does not appear on any Founding-Member follow-up segment.
+2. **Callback consent regex misses "Yes sure".** `CALLBACK_YES_RE` in `_shared/handoff.ts` accepts `yeah sure` and `sure` alone but not `yes sure`, `yes please`, `ya sure`, `haan sure`, etc. Roma's exact reply *"Yes sure"* failed the test, so `requestFounderHandoff()` never ran. Even if it had, `leadId` would have been `null` because of bug #1.
 
-### Bug 3 — Status stays `new`, no activity logged
-- `leads.status` is still `new` (never advanced to `contacted` / `interested` / `hot`).
-- No row in `lead_activities` for this WhatsApp conversation.
-- Nurture cron also will not act because there is no "callback requested" intent recorded anywhere.
+3. **No hallucination guard on "I've notified our team" copy.** When neither the handoff nor a real task fires, the LLM still happily produces *"I've shared your details with our Founding Team."* There is no sanitizer that strips that phrasing when no `tasks` row was just created.
 
----
+## What to build
 
-## Fix Plan
+### 1. `_shared/leadCapture.ts` — `ensureLeadFromMemory()` (new helper)
+Single source of truth that turns `ai_memory` into a real `leads` row. Idempotent.
 
-### A. Add a real callback / human-handoff tool in the brain (the core fix)
+- Inputs: `supabase`, `branchId`, `senderId`, `platform`, `memory`, `contactName`.
+- Guards: skip if sender is an active member; skip if a `leads` row already exists for any phone variant; require `profile.email` valid AND at least one of (`facts.fitness_goal`, `facts.plan_interest`, `consent.wants_human=true`).
+- Writes: `leads` row (`source=<platform>_ai`, `status='contacted'`, `temperature='warm'`, `score=50`, mapped `full_name/email/fitness_goal/plan_interest/notes`), stamps `whatsapp_chat_settings.captured_lead_id`, inserts a `lead_activities` `whatsapp_funnel_completed` entry, and fires `notify-lead-created`.
+- Returns `{ leadId, created }` so the caller can use it for handoff.
 
-In `supabase/functions/_shared/ai-agent-brain.ts`:
+### 2. `_shared/ai-agent-brain.ts` — wire `ensureLeadFromMemory` into the funnel
+- Call it once immediately AFTER the 5c auto-learn pass (before any deterministic short-circuit returns) so any reply that just supplied the last missing field is captured first.
+- Call it again at the top of the 6b callback-consent block so handoff always has a real `leadId`.
+- Replace the line 1050 "Want our team to lock in…" early-return with a path that ALSO ensures a lead exists, so a deterministic close doesn't bypass capture.
+- Bump version to v4.9.0 with header comment.
 
-1. Add an intent detector `WANT_CALLBACK_RE` (matches "yes / yeah / sure / haan / call me / call kar lo / okay please" **immediately after** an outbound message that contained a callback offer — track via `lastBotIntent` already on the turn context).
-2. When detected, call a new server action `requestFounderHandoff({ chatSettingId, leadId, branchId, reason, summary })` that atomically:
-   - Inserts a `tasks` row: title `"Founding Member callback — {name}"`, category `lead_callback`, priority `high`, due in 2 working hours, assignee = configured founder/manager.
-   - Updates `whatsapp_chat_settings`: `founder_handoff_task_id`, `handoff_requested_at = now()`, `handoff_reason = 'founding_member_callback'`.
-   - Updates `leads`: `status = 'interested'`, appends a `lead_activities` row of type `callback_requested`.
-   - Calls `dispatchCommunication` with event `lead_callback_requested` (in-app + optional WhatsApp/email to assignee) — honors integration on/off toggles automatically.
-3. Replace the LLM "I've notified our team" copy with a **deterministic** confirmation rendered **only after** the tool succeeds (e.g. "Locked in, Vicky ✨ A founder will call you within 2 hours on +91 977…"). If the tool fails, the bot says "Let me try again in a moment" and logs to `error_logs` via `log_error_event` — never silently promises.
+### 3. `_shared/handoff.ts` — widen `CALLBACK_YES_RE` + add guard helper
+- New regex covers: `yes`, `yes sure`, `yes please`, `yes please call`, `yes do it`, `ya/ya sure`, `yeah`, `yeah sure`, `yep`, `yup`, `sure`, `sure thing`, `okay`, `ok please`, `please call`, `go ahead`, `do it`, `haan/haan ji/haan sure`, `ji haan`, `theek hai`, `sounds good`, `absolutely`, `definitely`, common emoji (`🙏 👍 ✅`). Anchored, case-insensitive, trailing punctuation allowed.
+- Export `assertCallbackPromiseAllowed(reply, handoffOk)` — returns sanitized reply: if `handoffOk=false` and the reply contains "notified|shared your details|team will reach out|our founders will call|locked in", swap it with the safe offer line and log a `error_logs` row (`source='ai_agent_brain', severity='warning', message='hallucinated_callback_stripped'`).
 
-### B. Persist interactive_list answers on the lead row immediately
+### 4. Brain — apply the hallucination guard
+After every LLM-generated reply path (the non-deterministic branches that fall through to `callAI`), pipe `replyText` through `assertCallbackPromiseAllowed(replyText, handoffJustTriggered)` before returning. Existing deterministic copy is exempt because it only runs when a real task was created.
 
-In the same file, in the existing interactive_list handler (around lines 1306–1346):
-- After updating `ai_memory.facts`, if `leadCtx?.leadId` exists, **upsert the new field directly** onto `leads` (`fitness_goal`, `plan_interest`) using a small `syncLeadFacts(leadId, patch)` helper.
-- Also bump `leads.status` from `new` → `contacted` on the first user-driven reply, and to `interested` once both goal + plan_interest are known.
-- Insert a `lead_activities` row (`type = 'whatsapp_reply'`, `meta = {field, value}`) so the CRM timeline shows what Vicky chose.
+### 5. Safety-net cron: extend `monitor-ai-lead-loss`
+Add a second pass each tick:
+- `SELECT contact_key, branch_id, platform, profile, facts FROM ai_memory WHERE profile->>'email' ~ '^[^@]+@[^@]+\\.[^@]+$' AND (facts ? 'plan_interest' OR facts ? 'fitness_goal') AND last_seen_at > now() - interval '24h'`
+- For each row with no matching `leads.phone` variant, call `ensureLeadFromMemory` and `requestFounderHandoff` with `reason='auto_recovered_funnel'`.
+- Report count in the existing JSON output (`recovered_from_memory`).
 
-### C. Add a guardrail against future hallucinated "I've notified…" copy
+### 6. Backfill Roma + Dinesh (migration)
+- Insert `leads` rows for `+919414646641` (Roma Keswani) and Dinesh's phone (look up from `whatsapp_chat_settings.phone_number` matching contact_name='Dinesh' in last 24h) using their `ai_memory` data: status=`qualified`, source=`whatsapp_ai`, fitness_goal/plan_interest filled.
+- Stamp `whatsapp_chat_settings.captured_lead_id` and `founder_handoff_task_id` on both rows.
+- Create 2 `tasks` rows (`title='Founding Member callback — <name>'`, `priority=high`, due in 2h, `linked_entity_type='lead'`).
+- Insert `lead_activities` `callback_requested` entries.
+- Fire `notify-lead-created` for each so the founder team sees them now.
 
-In the brain's outbound sanitizer (same file, near `INTENT_INSTRUCTION_PREFIX_RE` from v4.7.0):
-- Add `HALLUCINATED_ACTION_RE = /(notified|informed|alerted|created (a )?task|booked you|scheduled)/i`.
-- If the LLM text matches AND no tool call ran on this turn, **strip the claim** and fall back to a safe copy ("Got it — sharing your interest with our team. They'll reach out shortly.") plus a `[AI:guards] stripped hallucinated action` log to `error_logs` so we can monitor.
-
-### D. Backfill Vicky right now (data fix, not code)
-
-Once the code ships, run a one-off via the insert tool:
-- Update `leads` for `20919e10…`: `fitness_goal = 'flexibility'`, `plan_interest = 'annual'`, `status = 'interested'`.
-- Insert a `tasks` row for the founder callback (high priority, due today).
-- Set `whatsapp_chat_settings.handoff_requested_at` + `founder_handoff_task_id` on the chat row.
-
-### E. Verification
-
-1. `supabase--curl_edge_functions` replays a synthetic interactive_list reply ("Annual — Founding Member") followed by "Yeah sure" against the staging brain → assert: `tasks` row created, `whatsapp_chat_settings.founder_handoff_task_id` populated, `leads.status='interested'`, outbound message uses deterministic copy.
-2. SQL spot-check that no other open chat has `captured_lead_id IS NOT NULL` with `status='new'` AND a "notified / call you" outbound in the last 48h — if any, backfill the same way.
-3. Add a Deno test in `_shared` for `requestFounderHandoff` happy path + failure path (must NOT send confirmation if task insert fails).
-
----
+### 7. Verify
+- Replay Roma's last user message via `supabase--curl_edge_functions` on `whatsapp-webhook` and confirm: lead row created, task row created, `founder_handoff_task_id` stamped, reply text matches the deterministic "Locked in…" copy (not the hallucinated one).
+- SQL spot-check: `SELECT COUNT(*) FROM ai_memory m WHERE profile->>'email' ~ '@' AND NOT EXISTS (SELECT 1 FROM leads l WHERE l.phone = m.contact_key)` — should drop to ~0 after the cron pass.
 
 ## Files touched
-- `supabase/functions/_shared/ai-agent-brain.ts` (intent, tool call, sanitizer, lead sync)
-- `supabase/functions/_shared/handoff.ts` *(new)* — `requestFounderHandoff()` server action, reusable from `whatsapp-webhook` / `meta-webhook`
-- `supabase/functions/whatsapp-webhook/index.ts` + `meta-webhook/index.ts` — redeploy (no logic change, just bumps brain version)
-- New migration: backfill row for Vicky + add `lead_activities.type` value `callback_requested` if missing in the enum (check first; only add if not present)
-- `.lovable/plan.md` — append v4.8.0 entry
-- Optional Deno test under `supabase/functions/_shared/handoff_test.ts`
 
-## Out of scope
-- RCS / template work.
-- Changing the onboarding question order.
-- SEO / public-facing copy.
+- `supabase/functions/_shared/leadCapture.ts` *(new)*
+- `supabase/functions/_shared/handoff.ts` *(regex + new guard)*
+- `supabase/functions/_shared/ai-agent-brain.ts` *(v4.9.0 — wire capture + guard)*
+- `supabase/functions/monitor-ai-lead-loss/index.ts` *(memory-orphan sweep)*
+- `supabase/functions/whatsapp-webhook/index.ts`, `meta-webhook/index.ts` *(redeploy only — share `_shared` module)*
+- New migration: backfill Roma + Dinesh + tasks + activities
 
-Used the **engineering-skills**, **senior-architect**, and **code-reviewer** skills.
+## Out of scope (this round)
+
+- RCS, Meta template work, Instagram signature mismatch (separate issue in logs).
+- Restructuring the onboarding question order or copy — the SSOT in `ai_knowledge` stays as-is.
+- Public site / SEO / `ai.txt` changes.

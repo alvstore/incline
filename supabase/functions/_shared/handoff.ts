@@ -187,15 +187,18 @@ export async function requestFounderHandoff(
 
 // Heuristic to detect when the user explicitly agrees to a callback.
 // Kept here so the brain and other callers share the same definition.
+// v1.1.0 — widened to accept "yes sure", "yes please", "ya sure", "haan sure",
+// and other natural affirmations that the v1.0 regex missed (Roma Keswani
+// said "Yes sure" and the original pattern rejected it, killing the lead).
 export const CALLBACK_YES_RE =
-  /^\s*(?:yes(?:\s*please)?(?:\s*call)?|yeah(?:\s+sure)?|yep|yup|sure(?:\s*(?:please|do|go ahead))?|ok(?:ay)?(?:\s*(?:please|sure))?|please\s*(?:do|call)|go\s*ahead|do\s*it|haan(?:\s*ji)?|ji(?:\s*haan)?|theek\s*hai|sounds?\s+good|sure\s*thing|absolutely|definitely|🙏|👍|✅)\s*[.!]*\s*$/i;
+  /^\s*(?:y(?:es|eah|a|ep|up|ess+)|sure|ok(?:ay)?|please|haan|ji|theek\s*hai|sounds?\s+good|absolutely|definitely|of\s*course|certainly|👍|✅|🙏|❤️|✨)(?:[\s,.!]+(?:y(?:es|eah|a|ep|up)|sure(?:\s*thing)?|please|do|call|kar(?:o|do|dijiye)?|go\s*ahead|why\s*not|ji|haan|please\s*call|please\s*do|do\s*it))*\s*[.!?]*\s*$/i;
 
 // Detects whether the most recent assistant turn(s) actually offered a
 // callback. We only trigger handoff when the user is responding to such an
 // offer — bare "yes" to anything else (e.g. a goal question) must NOT create
 // a task.
 export const CALLBACK_OFFER_RE =
-  /(call\s+you|give\s+you\s+a\s+call|team\s+(?:to\s+)?(?:call|reach\s+out)|lock\s+in\s+your\s+(?:founding\s+)?spot|founder\s+will\s+(?:call|reach)|connect\s+you\s+with\s+(?:our|the)\s+team|have\s+our\s+team\s+call)/i;
+  /(call\s+you|give\s+you\s+a\s+call|team\s+(?:to\s+)?(?:call|reach\s+out)|lock\s+in\s+your\s+(?:founding\s+)?spot|founder\s+will\s+(?:call|reach)|connect\s+you\s+with\s+(?:our|the)\s+team|have\s+our\s+team\s+call|have\s+them\s+call|share\s+(?:the\s+)?(?:exclusive\s+)?(?:details|pricing)\s+(?:with\s+)?you|finalize\s+your\s+(?:vip\s+)?spot)/i;
 
 export function lastBotOfferedCallback(
   history: Array<{ role: string; content: string }>,
@@ -207,4 +210,53 @@ export function lastBotOfferedCallback(
   if (recent.length === 0) return false;
   const lastAssistant = recent[recent.length - 1]?.content || "";
   return CALLBACK_OFFER_RE.test(lastAssistant);
+}
+
+// Strings the LLM emits when it "decides" it has handed off to humans. If we
+// did NOT just create a real task, these are hallucinations and must never
+// reach the prospect. v1.0.0 (Roma/Dinesh leak fix).
+export const HALLUCINATED_CALLBACK_RE =
+  /(i['’]?ve\s+(?:notified|shared|informed|alerted|told|sent|forwarded)|notified\s+(?:our|the)\s+(?:founding|founder|team|sales)|shared\s+your\s+details|forwarded\s+your\s+details|our\s+(?:team|founders?)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|team\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|locked\s+in|founding\s+team|i['’]?ve\s+(?:added|created|scheduled|booked|registered)\s+(?:a|the|your))/i;
+
+const SAFE_CALLBACK_OFFER =
+  "Want our team to call you to lock in your Founding spot? ✨";
+
+// Sanitizes an LLM-generated reply when no real callback/handoff task was
+// triggered this turn. If the reply promises a callback or claims we
+// "notified the team", we strip that sentence and substitute a deterministic
+// offer the user can re-confirm — and log to error_logs so we can monitor
+// the false-promise rate.
+export async function assertCallbackPromiseAllowed(
+  supabase: any,
+  replyText: string,
+  handoffOk: boolean,
+  ctx: { branchId: string; senderId: string; platform: string },
+): Promise<string> {
+  if (handoffOk) return replyText;
+  if (!replyText || !HALLUCINATED_CALLBACK_RE.test(replyText)) return replyText;
+
+  const cleaned = replyText
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => !HALLUCINATED_CALLBACK_RE.test(s))
+    .join(" ")
+    .trim();
+
+  const safeReply = cleaned ? `${cleaned} ${SAFE_CALLBACK_OFFER}`.trim() : SAFE_CALLBACK_OFFER;
+
+  try {
+    await supabase.rpc("log_error_event", {
+      p_source: "ai_agent_brain",
+      p_severity: "warning",
+      p_message: "hallucinated_callback_stripped",
+      p_context: {
+        branch_id: ctx.branchId,
+        platform: ctx.platform,
+        phone: ctx.senderId,
+        original: replyText.slice(0, 400),
+        rewritten: safeReply.slice(0, 400),
+      },
+    });
+  } catch { /* noop */ }
+
+  return safeReply;
 }
