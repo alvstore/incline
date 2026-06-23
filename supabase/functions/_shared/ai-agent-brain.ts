@@ -1393,6 +1393,22 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     current_intent: memberCtx.isMember ? "member_assist" : (memory?.current_intent ?? null),
   });
 
+  // v4.9.0 — Hallucinated-callback guard. If the LLM emitted "I've notified
+  // our team / shared your details" but no real handoff task was triggered
+  // on this turn, strip the claim and substitute a safe deterministic offer.
+  // We pass handoffOk=false here because this code path runs ONLY when the
+  // 6b callback-consent short-circuit did NOT fire (which is the only place
+  // a real founder handoff is created from within runUnifiedAgent).
+  if (replyText && !memberCtx.isMember) {
+    try {
+      replyText = await assertCallbackPromiseAllowed(supabase, replyText, false, {
+        branchId: ctx.branchId,
+        senderId: ctx.senderId,
+        platform: ctx.platform,
+      });
+    } catch { /* non-fatal */ }
+  }
+
   return { replyText, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
 }
 
