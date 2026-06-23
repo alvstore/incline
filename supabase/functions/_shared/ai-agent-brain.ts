@@ -751,6 +751,34 @@ export async function runUnifiedAgent(
   } catch (e) {
     console.warn(`[AI:${ctx.platform}] auto-learn pass failed (continuing):`, (e as Error).message);
   }
+
+  // 5d. ENSURE LEAD FROM MEMORY (v4.9.0) — promote the captured ai_memory
+  //     snapshot into a real leads row BEFORE any deterministic short-circuit
+  //     returns. Prevents the Roma/Dinesh leak where name+email+goal+plan
+  //     were all known but the CRM never received a row.
+  if (!memberCtx.isMember) {
+    try {
+      const ensured = await ensureLeadFromMemory(supabase, {
+        branchId: ctx.branchId,
+        senderId: ctx.senderId,
+        platform: ctx.platform,
+        contactName: ctx.contactName ?? null,
+        memory,
+        supabaseUrl,
+        serviceKey,
+      });
+      if (ensured.leadId && !leadCtx) {
+        // Refresh leadCtx so downstream handoff / lead identity prompts work.
+        try {
+          const v = phoneVariants(ctx.senderId);
+          leadCtx = await resolveLeadContext(supabase, v, ctx.branchId);
+        } catch { /* non-fatal */ }
+      }
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] ensureLeadFromMemory failed (continuing):`, (e as Error).message);
+    }
+  }
+
   const memoryBlock = renderMemoryBlock(memory);
   const runtimeRules = renderRuntimeRules(memory, ctx.platform);
 
