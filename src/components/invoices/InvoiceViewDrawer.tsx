@@ -33,7 +33,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
         .from('invoices')
         .select(`
           *,
-          members(member_code, profiles:user_id(full_name, email, phone)),
+          members(member_code, profiles:user_id(full_name, email, phone), lead:lead_id(full_name, email, phone, avatar_url)),
           branch:branch_id(name, address, phone, email, gstin),
           invoice_items(*),
           pos_sales!invoices_pos_sale_id_fkey(items)
