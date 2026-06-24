@@ -64,8 +64,9 @@ export default function MembersPage() {
       const { data, error } = await supabase
         .from('members')
         .select(`
-          id, member_code, user_id, branch_id, status, created_at, assigned_trainer_id,
+          id, member_code, user_id, lead_id, branch_id, status, created_at, assigned_trainer_id,
           profiles:user_id(full_name, email, phone, avatar_url),
+          lead:lead_id(full_name, email, phone, avatar_url),
           branch:branch_id(name, code),
           memberships(id, status, start_date, end_date, plan_id, membership_plans(name))
         `)
