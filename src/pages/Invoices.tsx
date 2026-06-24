@@ -420,15 +420,15 @@ export default function InvoicesPage() {
                                     Download
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => {
-                                    const memberProfile = (invoice.members as any)?.profiles;
+                                    const d = resolveMemberDisplay(invoice.members, invoice.customer_name);
                                     setPaymentLinkInvoice({
                                       id: invoice.id,
                                       invoice_number: invoice.invoice_number,
                                       total_amount: invoice.total_amount,
                                       amount_paid: invoice.amount_paid || 0,
-                                      member_name: memberProfile?.full_name,
-                                      member_phone: memberProfile?.phone,
-                                      member_email: memberProfile?.email,
+                                      member_name: d.name,
+                                      member_phone: d.phone,
+                                      member_email: d.email,
                                       branch_id: invoice.branch_id,
                                     });
                                   }}>
