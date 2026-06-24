@@ -234,7 +234,17 @@ export const leadService = {
     });
     if (error) throw new Error(`Lead conversion failed: ${error.message}`);
     const result = data as { success: boolean; member_id?: string; error?: string; idempotent_hit?: boolean };
-    if (!result?.success) throw new Error(result?.error || 'Lead conversion failed');
+    if (!result?.success) {
+      const code = result?.error || 'unknown_error';
+      const friendly: Record<string, string> = {
+        not_authenticated: 'Please sign in again to convert this lead.',
+        forbidden: "You don't have permission to convert leads.",
+        lead_not_found: 'This lead no longer exists.',
+        lead_lost: 'This lead is marked as Lost — reopen it before converting.',
+        do_not_contact: 'This lead is on Do-Not-Contact and cannot be converted.',
+      };
+      throw new Error(friendly[code] || `Lead conversion failed: ${code}`);
+    }
     return { memberId: result.member_id, idempotent: !!result.idempotent_hit };
   },
 
