@@ -196,7 +196,7 @@ export default function PaymentsPage() {
   const filteredPayments = useMemo(() => {
     return payments.filter((payment: any) => {
       if (searchTerm) {
-        const memberName = payment.members?.profiles?.full_name?.toLowerCase() || '';
+        const memberName = resolveMemberDisplay(payment.members).name.toLowerCase();
         const memberCode = payment.members?.member_code?.toLowerCase() || '';
         const invoiceNum = payment.invoices?.invoice_number?.toLowerCase() || '';
         const search = searchTerm.toLowerCase();
