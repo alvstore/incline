@@ -308,6 +308,7 @@ export default function MembersPage() {
   const stats = {
     total: totalCount ?? membersWithMemberships.length,
     active: membersWithMemberships.filter((m: any) => m.status === 'active').length,
+    scheduled: membersWithMemberships.filter((m: any) => m.status === 'scheduled').length,
     inactive: membersWithMemberships.filter((m: any) => m.status === 'inactive').length,
     frozen: frozenCount,
     expiringSoon: membersWithMemberships.filter((m: any) => {
@@ -321,6 +322,7 @@ export default function MembersPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       active: 'bg-success/10 text-success border-success/20',
+      scheduled: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30',
       inactive: 'bg-muted text-muted-foreground border-muted',
       frozen: 'bg-info/10 text-info border-info/20',
       suspended: 'bg-destructive/10 text-destructive border-destructive/20',
