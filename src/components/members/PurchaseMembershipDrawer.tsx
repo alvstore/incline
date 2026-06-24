@@ -721,15 +721,17 @@ export function PurchaseMembershipDrawer({
             <Button
               className="flex-1"
               onClick={() => purchaseMembership.mutate()}
-              disabled={!selectedPlanId || purchaseMembership.isPending || !canRenew}
+              disabled={!selectedPlanId || purchaseMembership.isPending || (!canRenew && !advanceBooking)}
             >
               {purchaseMembership.isPending
                 ? 'Processing...'
-                : !canRenew
+                : (!canRenew && !advanceBooking)
                   ? 'Cannot Purchase Yet'
-                  : isMemberMode
-                    ? 'Pay Now'
-                    : 'Complete Purchase'}
+                  : advanceBooking
+                    ? 'Schedule & Collect Payment'
+                    : isMemberMode
+                      ? 'Pay Now'
+                      : 'Complete Purchase'}
             </Button>
           </div>
         </div>
