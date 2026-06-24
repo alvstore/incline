@@ -513,19 +513,40 @@ export function PurchaseMembershipDrawer({
                 </Card>
               )}
 
-              {/* Start Date */}
+              {/* Start Date + Advance booking toggle */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Start Date
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Start Date
+                  </Label>
+                  {!isMemberMode && (
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="advance-booking" className="text-xs text-muted-foreground cursor-pointer">
+                        Advance booking
+                      </Label>
+                      <Switch
+                        id="advance-booking"
+                        checked={advanceBooking}
+                        onCheckedChange={(v) => {
+                          setAdvanceBooking(v);
+                          if (v && new Date(startDate) <= new Date()) {
+                            setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
                 <Input
                   type="date"
                   value={startDate}
+                  min={advanceBooking ? format(addDays(new Date(), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
                   End Date: {calculateEndDate()}
+                  {advanceBooking && ' · Membership stays Scheduled until start date.'}
                 </p>
               </div>
 
