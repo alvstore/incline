@@ -443,7 +443,7 @@ export default function MembersPage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <Card className="relative overflow-hidden border-l-4 border-l-primary hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('all')}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -473,6 +473,22 @@ export default function MembersPage() {
               {statusFilter === 'active' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-success" />}
             </CardContent>
           </Card>
+
+          <Card className="relative overflow-hidden border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('scheduled')}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Scheduled</p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-300">{stats.scheduled}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                  <CalendarClock className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
+                </div>
+              </div>
+              {statusFilter === 'scheduled' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-500" />}
+            </CardContent>
+          </Card>
+
 
           <Card className="relative overflow-hidden border-l-4 border-l-muted-foreground hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('inactive')}>
             <CardContent className="p-4">
