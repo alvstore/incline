@@ -164,7 +164,7 @@ export default function PaymentsPage() {
     queryFn: async () => {
       let query = supabase
         .from('payments')
-        .select(`*, members(member_code, profiles:user_id(full_name)), invoices(invoice_number)`)
+        .select(`*, members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)), invoices(invoice_number)`)
         .order('payment_date', { ascending: false })
         .limit(200);
       if (branchFilter) query = query.eq('branch_id', branchFilter);
