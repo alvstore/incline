@@ -58,7 +58,7 @@ async function loadLogoDataUrl(url?: string | null): Promise<{ dataUrl: string; 
 }
 
 // Resolve a BrandContext (with logoUrl) without React. Mirrors useBrandContext.
-async function resolveBrandAsync(branchId?: string | null, branchName?: string | null): Promise<BrandContext> {
+export async function resolveBrandAsync(branchId?: string | null, branchName?: string | null): Promise<BrandContext> {
   let branch: BrandContext['branch'] = { name: branchName || 'Incline' };
   if (branchId) {
     const { data } = await supabase.from('branches').select('id,name,code,address,phone,email,gstin').eq('id', branchId).maybeSingle();
