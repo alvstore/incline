@@ -327,7 +327,7 @@ export default function PaymentsPage() {
                             const key = inv.member_id || inv.id;
                             const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
                             const existing = grouped.get(key) || {
-                              name: inv.members?.profiles?.full_name || 'Unknown',
+                              name: resolveMemberDisplay(inv.members).name,
                               code: inv.members?.member_code || '',
                               invoices: [],
                               total: 0,
