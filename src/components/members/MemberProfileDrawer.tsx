@@ -633,6 +633,7 @@ export function MemberProfileDrawer({
             full_name, email, phone, avatar_url, gender, date_of_birth,
             address, city, state, emergency_contact_name, emergency_contact_phone
           ),
+          lead:lead_id(full_name, email, phone, avatar_url, gender, date_of_birth),
           branch:branch_id(name, code),
           created_by_profile:created_by(full_name, email),
           memberships(
