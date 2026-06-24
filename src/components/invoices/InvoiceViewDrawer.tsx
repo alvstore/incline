@@ -224,11 +224,11 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
             <Card>
               <CardContent className="pt-4">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Bill To</p>
-                <p className="font-medium">{memberProfile?.full_name || invoice.customer_name || 'Walk-in Customer'}</p>
-                <p className="text-sm text-muted-foreground">{memberProfile?.email || invoice.customer_email}</p>
-                <p className="text-sm text-muted-foreground">{memberProfile?.phone || invoice.customer_phone}</p>
-                {invoice.members?.member_code && (
-                  <p className="text-xs font-mono text-muted-foreground mt-1">{invoice.members.member_code}</p>
+                <p className="font-medium">{memberDisplay.name}</p>
+                <p className="text-sm text-muted-foreground">{memberDisplay.email || invoice.customer_email}</p>
+                <p className="text-sm text-muted-foreground">{memberDisplay.phone || invoice.customer_phone}</p>
+                {memberDisplay.code && (
+                  <p className="text-xs font-mono text-muted-foreground mt-1">{memberDisplay.code}</p>
                 )}
                 {invoice.customer_gstin && (
                   <p className="text-xs font-mono text-muted-foreground">GSTIN: {invoice.customer_gstin}</p>
