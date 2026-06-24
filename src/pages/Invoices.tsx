@@ -418,7 +418,32 @@ export default function InvoicesPage() {
                                     <Eye className="mr-2 h-4 w-4" />
                                     View
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        toast.loading('Preparing invoice PDF…', { id: `dl-${invoice.id}` });
+                                        const { data: full, error } = await supabase
+                                          .from('invoices')
+                                          .select(`
+                                            *,
+                                            members(member_code, profiles:user_id(full_name, email, phone), lead:lead_id(full_name, email, phone, avatar_url)),
+                                            branch:branch_id(name, address, phone, email, gstin),
+                                            invoice_items(*),
+                                            pos_sales!invoices_pos_sale_id_fkey(items)
+                                          `)
+                                          .eq('id', invoice.id)
+                                          .single();
+                                        if (error || !full) throw error || new Error('Invoice not found');
+                                        const brand = await resolveBrandAsync(full.branch_id, (full as any).branch?.name);
+                                        const blob = buildInvoicePdf(toInvoicePdfInput(full), brand);
+                                        downloadBlob(blob, `Invoice-${full.invoice_number}.pdf`);
+                                        toast.success('Invoice downloaded', { id: `dl-${invoice.id}` });
+                                      } catch (e: any) {
+                                        console.error('Invoice download failed:', e);
+                                        toast.error(e?.message || 'Could not download invoice', { id: `dl-${invoice.id}` });
+                                      }
+                                    }}
+                                  >
                                     <Download className="mr-2 h-4 w-4" />
                                     Download
                                   </DropdownMenuItem>
