@@ -18,8 +18,9 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { 
   Search, Plus, Users, UserCheck, UserX, CreditCard, Dumbbell, 
   Eye, Clock, Building2, AlertTriangle, CheckCircle, MoreHorizontal, Snowflake,
-  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock
+  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock, Wallet
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { exportToCSV } from '@/lib/csvExport';
@@ -31,6 +32,7 @@ import { differenceInDays, format } from 'date-fns';
 const PAGE_SIZE = 20;
 
 export default function MembersPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
@@ -595,6 +597,9 @@ export default function MembersPage() {
                     <TableBody>
                       {filteredMembers.map((member: any) => {
                         const activeMembership = getActiveMembership(member.memberships);
+                        const scheduledMembership = member.scheduledMembership;
+                        const existingPlan = activeMembership || scheduledMembership;
+                        const memberDue = duesByMember[member.id] || 0;
                         const daysLeft = getDaysRemaining(activeMembership);
                         
                         return (
@@ -761,21 +766,34 @@ export default function MembersPage() {
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => handlePurchaseMembership(member)}>
                                       <CreditCard className="h-4 w-4 mr-2" />
-                                      {activeMembership ? 'Renew Plan' : 'Add Plan'}
+                                      {activeMembership
+                                        ? 'Renew Plan'
+                                        : scheduledMembership
+                                          ? 'Reschedule / Change Plan'
+                                          : 'Add Plan'}
                                     </DropdownMenuItem>
-                                    {activeMembership && (
+                                    {memberDue > 0 && (
+                                      <DropdownMenuItem onClick={() => navigate(`/members/${member.id}?tab=invoices`)}>
+                                        <Wallet className="h-4 w-4 mr-2 text-destructive" />
+                                        Collect Due ₹{memberDue.toLocaleString()}
+                                      </DropdownMenuItem>
+                                    )}
+                                    {existingPlan && (
                                       <>
                                         <DropdownMenuItem onClick={() => handlePurchasePT(member)}>
                                           <Dumbbell className="h-4 w-4 mr-2" />
                                           Buy PT Package
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
-                                        <DropdownMenuItem 
-                                          onClick={() => handleQuickFreeze(member)}
-                                          disabled={activeMembership.status === 'frozen'}
+                                        <DropdownMenuItem
+                                          onClick={() => activeMembership && handleQuickFreeze(member)}
+                                          disabled={!activeMembership || activeMembership.status === 'frozen'}
                                         >
                                           <Snowflake className="h-4 w-4 mr-2" />
                                           Quick Freeze
+                                          {!activeMembership && (
+                                            <span className="ml-2 text-xs text-muted-foreground">(after plan starts)</span>
+                                          )}
                                         </DropdownMenuItem>
                                       </>
                                     )}

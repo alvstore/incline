@@ -12,6 +12,7 @@ import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, M
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildInvoicePdf, buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
+import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
@@ -75,50 +76,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
 
   const handlePrint = () => { window.print(); };
 
-  const buildPDFData = () => {
-    const memberDisplay = resolveMemberDisplay((invoice as any).members, invoice.customer_name);
-    // Build a product_id → batches[] map from pos_sales.items (set by create_pos_sale RPC)
-    const posItems: any[] = Array.isArray((invoice as any).pos_sales?.items)
-      ? (invoice as any).pos_sales.items
-      : Array.isArray((invoice as any).pos_sales?.[0]?.items)
-        ? (invoice as any).pos_sales[0].items
-        : [];
-    const batchByProduct = new Map<string, any[]>();
-    posItems.forEach((it: any) => {
-      if (it?.product_id && Array.isArray(it.batches) && it.batches.length) {
-        batchByProduct.set(String(it.product_id), it.batches);
-      }
-    });
-    return {
-      invoice_number: invoice.invoice_number,
-      created_at: invoice.created_at,
-      due_date: invoice.due_date,
-      status: invoice.status,
-      subtotal: invoice.subtotal || invoice.total_amount,
-      discount_amount: invoice.discount_amount || 0,
-      tax_amount: invoice.tax_amount || 0,
-      total_amount: invoice.total_amount,
-      amount_paid: invoice.amount_paid || 0,
-      notes: invoice.notes,
-      items: (invoice.invoice_items || []).map((i: any) => ({
-        description: i.description, quantity: i.quantity || 1,
-        unit_price: i.unit_price, total_amount: i.total_amount,
-        batches: i.reference_id ? batchByProduct.get(String(i.reference_id)) : undefined,
-      })),
-      member_name: memberDisplay.name,
-      member_code: memberDisplay.code,
-      member_email: memberDisplay.email || invoice.customer_email,
-      member_phone: memberDisplay.phone || invoice.customer_phone,
-      branch_name: invoice.branch?.name || '',
-      branch_address: invoice.branch?.address,
-      branch_phone: invoice.branch?.phone,
-      branch_email: invoice.branch?.email,
-      gst_number: invoice.branch?.gstin,
-      is_gst_invoice: invoice.is_gst_invoice || false,
-      gst_rate: invoice.gst_rate || 0,
-      customer_gstin: invoice.customer_gstin,
-    };
-  };
+  const buildPDFData = () => toInvoicePdfInput(invoice);
 
   const handleDownloadPDF = () => {
     if (!invoice) return;

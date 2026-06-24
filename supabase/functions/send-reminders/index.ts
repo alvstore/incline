@@ -1,4 +1,4 @@
-// send-reminders v2.1 — allow service-role (Automation Brain) bypass.
+// send-reminders v2.2 — skip payment reminders when invoice is paid / void / zero balance.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
     // ── 1. Payment reminders (with invoice context + Razorpay link) ──
     const { data: pendingReminders } = await adminClient
       .from("payment_reminders")
-      .select("*, members:member_id (user_id, member_code, branch_id, profiles:user_id (full_name, phone, email)), invoices:invoice_id (id, invoice_number, total_amount, amount_paid, due_date, payment_due_date)")
+      .select("*, members:member_id (user_id, member_code, branch_id, profiles:user_id (full_name, phone, email)), invoices:invoice_id (id, invoice_number, total_amount, amount_paid, due_date, payment_due_date, status)")
       .eq("status", "pending")
       .lte("scheduled_for", now.toISOString());
 
@@ -240,15 +240,31 @@ Deno.serve(async (req) => {
       if (!member?.user_id) continue;
       if (!isReminderEnabled(reminder.branch_id, "payment_due")) continue;
 
+      // Skip if the invoice is already paid / voided / cancelled / refunded,
+      // or if there is no outstanding balance left to collect.
+      const totalAmt = Number(invoice?.total_amount || 0);
+      const paidAmt = Number(invoice?.amount_paid || 0);
+      const pendingAmt = Math.max(totalAmt - paidAmt, 0);
+      const terminalStatuses = ["paid", "voided", "cancelled", "refunded"];
+      const isTerminal = invoice?.status && terminalStatuses.includes(invoice.status);
+      if (!invoice || isTerminal || pendingAmt < 1) {
+        await adminClient
+          .from("payment_reminders")
+          .update({
+            status: "skipped",
+            skipped_reason: isTerminal ? `invoice_${invoice?.status}` : "no_balance",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", reminder.id);
+        results.payment_reminders_skipped = (results.payment_reminders_skipped || 0) + 1;
+        continue;
+      }
+
       const name = member.profiles?.full_name || "Member";
       const isOverdue = !["due_soon", "before_due", "on_due"].includes(reminder.reminder_type);
       const triggerEvent = isOverdue ? "membership_overdue" : "payment_due";
       const reminderCopy = reminder.reminder_type === "due_soon" || reminder.reminder_type === "before_due"
         ? "due soon" : reminder.reminder_type === "on_due" ? "due today" : "overdue";
-
-      const totalAmt = Number(invoice?.total_amount || 0);
-      const paidAmt = Number(invoice?.amount_paid || 0);
-      const pendingAmt = Math.max(totalAmt - paidAmt, 0);
 
       // Mint a Razorpay payment link if invoice has dues and we don't have one cached
       let paymentLink = "";
