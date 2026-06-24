@@ -764,21 +764,34 @@ export default function MembersPage() {
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => handlePurchaseMembership(member)}>
                                       <CreditCard className="h-4 w-4 mr-2" />
-                                      {activeMembership ? 'Renew Plan' : 'Add Plan'}
+                                      {activeMembership
+                                        ? 'Renew Plan'
+                                        : scheduledMembership
+                                          ? 'Reschedule / Change Plan'
+                                          : 'Add Plan'}
                                     </DropdownMenuItem>
-                                    {activeMembership && (
+                                    {memberDue > 0 && (
+                                      <DropdownMenuItem onClick={() => navigate(`/members/${member.id}?tab=invoices`)}>
+                                        <Wallet className="h-4 w-4 mr-2 text-destructive" />
+                                        Collect Due ₹{memberDue.toLocaleString()}
+                                      </DropdownMenuItem>
+                                    )}
+                                    {existingPlan && (
                                       <>
                                         <DropdownMenuItem onClick={() => handlePurchasePT(member)}>
                                           <Dumbbell className="h-4 w-4 mr-2" />
                                           Buy PT Package
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
-                                        <DropdownMenuItem 
-                                          onClick={() => handleQuickFreeze(member)}
-                                          disabled={activeMembership.status === 'frozen'}
+                                        <DropdownMenuItem
+                                          onClick={() => activeMembership && handleQuickFreeze(member)}
+                                          disabled={!activeMembership || activeMembership.status === 'frozen'}
                                         >
                                           <Snowflake className="h-4 w-4 mr-2" />
                                           Quick Freeze
+                                          {!activeMembership && (
+                                            <span className="ml-2 text-xs text-muted-foreground">(after plan starts)</span>
+                                          )}
                                         </DropdownMenuItem>
                                       </>
                                     )}
