@@ -613,7 +613,7 @@ export default function MembersPage() {
                                     </AvatarFallback>
                                   </Avatar>
                                   <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                                    member.status === 'active' ? 'bg-success' : member.status === 'frozen' ? 'bg-info' : member.status === 'suspended' ? 'bg-destructive' : 'bg-muted-foreground'
+                                    member.status === 'active' ? 'bg-success' : member.status === 'scheduled' ? 'bg-indigo-500' : member.status === 'frozen' ? 'bg-info' : member.status === 'suspended' ? 'bg-destructive' : 'bg-muted-foreground'
                                   }`} />
                                 </div>
                                 <div>
