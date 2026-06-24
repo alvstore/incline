@@ -73,7 +73,14 @@ export default function MembersPage() {
         .eq('id', memberId)
         .maybeSingle();
       if (cancelled || error || !data) return;
-      setSelectedMember({ ...data, joined_at: (data as any).created_at });
+      const d: any = data;
+      const profiles = d.profiles || (d.lead ? {
+        full_name: d.lead.full_name,
+        email: d.lead.email,
+        phone: d.lead.phone,
+        avatar_url: d.lead.avatar_url,
+      } : null);
+      setSelectedMember({ ...d, profiles, joined_at: d.created_at });
       setProfileOpen(true);
     })();
     return () => { cancelled = true; };
