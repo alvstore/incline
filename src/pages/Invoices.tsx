@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
 const PAGE_SIZE = 20;
 
