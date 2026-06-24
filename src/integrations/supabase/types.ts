@@ -13299,6 +13299,7 @@ export type Database = {
         Args: { _member_package_id: string; _payment_id?: string }
         Returns: Json
       }
+      activate_scheduled_memberships: { Args: never; Returns: Json }
       add_to_waitlist: {
         Args: { _class_id: string; _member_id: string }
         Returns: Json

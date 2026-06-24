@@ -57,6 +57,7 @@ export function PurchaseMembershipDrawer({
   }, [open, presetPlanId]);
 
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [advanceBooking, setAdvanceBooking] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountReason, setDiscountReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string>(isMemberMode ? 'razorpay_link' : 'cash');
@@ -208,10 +209,15 @@ export function PurchaseMembershipDrawer({
         if (!paymentDueDate) throw new Error('Please set a due date for remaining amount');
       }
 
-      // ✅ Renewal: if member has an active membership, start the new one the day after current expiry.
-      const effectiveStartDate = activeMembership && canRenew && activeMembership.end_date
-        ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
-        : startDate;
+      // Start date resolution:
+      //  • Advance booking ON (staff)  → use the user-picked date as-is (creates a Scheduled membership).
+      //  • Active renewal w/o advance → start day after current expiry.
+      //  • Otherwise                  → user-picked date.
+      const effectiveStartDate = advanceBooking
+        ? startDate
+        : (activeMembership && canRenew && activeMembership.end_date
+            ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
+            : startDate);
 
       const totalAmount = calculateTotal();
       const actualAmountPaid = isPaymentLink ? 0 : (isPartialPayment ? amountPaying : totalAmount);
@@ -300,6 +306,7 @@ export function PurchaseMembershipDrawer({
     // Preserve presetPlanId so reopening the drawer with a preset still pre-selects it.
     setSelectedPlanId(presetPlanId ?? '');
     setStartDate(format(new Date(), 'yyyy-MM-dd'));
+    setAdvanceBooking(false);
     setDiscountAmount(0);
     setDiscountReason('');
     setPaymentMethod('cash');
@@ -323,14 +330,14 @@ export function PurchaseMembershipDrawer({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* Active Membership Warning */}
-          {activeMembership && !canRenew && (
+          {/* Active Membership Warning — softened when staff opts into advance booking */}
+          {activeMembership && !canRenew && !advanceBooking && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 Member already has an active membership ({activeMembership.membership_plans?.name}) 
                 expiring on {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}. 
-                Renewal is allowed only 7 days before expiry.
+                Renewal is allowed only 7 days before expiry — or enable "Advance booking" below to schedule a future start.
                 <br />
                 <span className="font-medium">Days remaining: {daysUntilExpiry}</span>
               </AlertDescription>
@@ -338,12 +345,23 @@ export function PurchaseMembershipDrawer({
           )}
 
           {/* Renewal Notice */}
-          {activeMembership && canRenew && (
+          {activeMembership && canRenew && !advanceBooking && (
             <Alert className="border-success/50 bg-success/5">
               <CheckCircle className="h-4 w-4 text-success" />
               <AlertDescription className="text-success">
                 Current membership expires in {daysUntilExpiry} days. 
                 New membership will start after current one ends.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Advance-booking confirmation banner */}
+          {advanceBooking && (
+            <Alert className="border-blue-300 bg-blue-50">
+              <Calendar className="h-4 w-4 text-blue-700" />
+              <AlertDescription className="text-blue-800">
+                Scheduled to start on <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong>.
+                The membership stays in <strong>Scheduled</strong> status until then — hardware access is not granted before the start date.
               </AlertDescription>
             </Alert>
           )}
@@ -496,19 +514,40 @@ export function PurchaseMembershipDrawer({
                 </Card>
               )}
 
-              {/* Start Date */}
+              {/* Start Date + Advance booking toggle */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Start Date
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Start Date
+                  </Label>
+                  {!isMemberMode && (
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="advance-booking" className="text-xs text-muted-foreground cursor-pointer">
+                        Advance booking
+                      </Label>
+                      <Switch
+                        id="advance-booking"
+                        checked={advanceBooking}
+                        onCheckedChange={(v) => {
+                          setAdvanceBooking(v);
+                          if (v && new Date(startDate) <= new Date()) {
+                            setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
                 <Input
                   type="date"
                   value={startDate}
+                  min={advanceBooking ? format(addDays(new Date(), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
                   End Date: {calculateEndDate()}
+                  {advanceBooking && ' · Membership stays Scheduled until start date.'}
                 </p>
               </div>
 
@@ -682,15 +721,17 @@ export function PurchaseMembershipDrawer({
             <Button
               className="flex-1"
               onClick={() => purchaseMembership.mutate()}
-              disabled={!selectedPlanId || purchaseMembership.isPending || !canRenew}
+              disabled={!selectedPlanId || purchaseMembership.isPending || (!canRenew && !advanceBooking)}
             >
               {purchaseMembership.isPending
                 ? 'Processing...'
-                : !canRenew
+                : (!canRenew && !advanceBooking)
                   ? 'Cannot Purchase Yet'
-                  : isMemberMode
-                    ? 'Pay Now'
-                    : 'Complete Purchase'}
+                  : advanceBooking
+                    ? 'Schedule & Collect Payment'
+                    : isMemberMode
+                      ? 'Pay Now'
+                      : 'Complete Purchase'}
             </Button>
           </div>
         </div>
