@@ -161,7 +161,7 @@ export default function InvoicesPage() {
   // Client-side search filter (search is lightweight on paginated data)
   const filteredInvoices = invoices.filter((invoice: any) => {
     if (!searchTerm) return true;
-    const memberName = invoice.members?.profiles?.full_name || '';
+    const memberName = resolveMemberDisplay(invoice.members, invoice.customer_name).name;
     return memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase());
   });
