@@ -192,7 +192,7 @@ export default function InvoicesPage() {
       const t = getInvoiceType(inv);
       return [
         inv.invoice_number,
-        inv.members?.profiles?.full_name || inv.customer_name || 'Walk-in',
+        resolveMemberDisplay(inv.members, inv.customer_name).name,
         t.label,
         inv.total_amount,
         inv.amount_paid || 0,
