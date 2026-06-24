@@ -329,14 +329,14 @@ export function PurchaseMembershipDrawer({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* Active Membership Warning */}
-          {activeMembership && !canRenew && (
+          {/* Active Membership Warning — softened when staff opts into advance booking */}
+          {activeMembership && !canRenew && !advanceBooking && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 Member already has an active membership ({activeMembership.membership_plans?.name}) 
                 expiring on {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}. 
-                Renewal is allowed only 7 days before expiry.
+                Renewal is allowed only 7 days before expiry — or enable "Advance booking" below to schedule a future start.
                 <br />
                 <span className="font-medium">Days remaining: {daysUntilExpiry}</span>
               </AlertDescription>
@@ -344,12 +344,23 @@ export function PurchaseMembershipDrawer({
           )}
 
           {/* Renewal Notice */}
-          {activeMembership && canRenew && (
+          {activeMembership && canRenew && !advanceBooking && (
             <Alert className="border-success/50 bg-success/5">
               <CheckCircle className="h-4 w-4 text-success" />
               <AlertDescription className="text-success">
                 Current membership expires in {daysUntilExpiry} days. 
                 New membership will start after current one ends.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Advance-booking confirmation banner */}
+          {advanceBooking && (
+            <Alert className="border-blue-300 bg-blue-50">
+              <Calendar className="h-4 w-4 text-blue-700" />
+              <AlertDescription className="text-blue-800">
+                Scheduled to start on <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong>.
+                The membership stays in <strong>Scheduled</strong> status until then — hardware access is not granted before the start date.
               </AlertDescription>
             </Alert>
           )}
