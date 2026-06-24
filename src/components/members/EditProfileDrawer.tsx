@@ -111,26 +111,44 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!member?.user_id) {
-      toast.error('Cannot edit profile: Member has no linked user account');
+    if (!member?.user_id && !member?.lead_id) {
+      toast.error('Cannot edit profile: Member has no linked user account or lead');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: formData.full_name,
-          phone: formData.phone,
-          email: formData.email,
-          emergency_contact_name: formData.emergency_contact_name,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          avatar_url: avatarUrl
-        })
-        .eq('id', member.user_id);
+      if (member?.user_id) {
+        // Member has completed signup — update the profiles row
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            full_name: formData.full_name,
+            phone: formData.phone,
+            email: formData.email,
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            avatar_url: avatarUrl
+          })
+          .eq('id', member.user_id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else if (member?.lead_id) {
+        // Pre-signup member (converted from lead) — write PII back to the lead row.
+        // Emergency contact fields don't exist on leads, so skip them; they'll be
+        // editable once the member completes signup and a profile row exists.
+        const { error } = await supabase
+          .from('leads')
+          .update({
+            full_name: formData.full_name,
+            phone: formData.phone,
+            email: formData.email,
+            avatar_url: avatarUrl,
+          })
+          .eq('id', member.lead_id);
+
+        if (error) throw error;
+      }
 
       // Update fitness goals, GSTIN, and fitness/diet profile on member record
       if (member?.id) {
