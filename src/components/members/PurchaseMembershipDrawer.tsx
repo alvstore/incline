@@ -209,10 +209,15 @@ export function PurchaseMembershipDrawer({
         if (!paymentDueDate) throw new Error('Please set a due date for remaining amount');
       }
 
-      // ✅ Renewal: if member has an active membership, start the new one the day after current expiry.
-      const effectiveStartDate = activeMembership && canRenew && activeMembership.end_date
-        ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
-        : startDate;
+      // Start date resolution:
+      //  • Advance booking ON (staff)  → use the user-picked date as-is (creates a Scheduled membership).
+      //  • Active renewal w/o advance → start day after current expiry.
+      //  • Otherwise                  → user-picked date.
+      const effectiveStartDate = advanceBooking
+        ? startDate
+        : (activeMembership && canRenew && activeMembership.end_date
+            ? format(addDays(new Date(activeMembership.end_date), 1), 'yyyy-MM-dd')
+            : startDate);
 
       const totalAmount = calculateTotal();
       const actualAmountPaid = isPaymentLink ? 0 : (isPartialPayment ? amountPaying : totalAmount);
