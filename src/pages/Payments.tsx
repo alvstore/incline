@@ -105,7 +105,7 @@ export default function PaymentsPage() {
         .from('invoices')
         .select(`
           id, invoice_number, total_amount, amount_paid, status, due_date, invoice_type, member_id,
-          members(member_code, profiles:user_id(full_name, phone))
+          members(member_code, profiles:user_id(full_name, phone, email, avatar_url), lead:lead_id(full_name, phone, email, avatar_url))
         `)
         .in('status', ['pending', 'partial', 'overdue'])
         .order('due_date', { ascending: true })
