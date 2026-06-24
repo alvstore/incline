@@ -306,6 +306,7 @@ export function PurchaseMembershipDrawer({
     // Preserve presetPlanId so reopening the drawer with a preset still pre-selects it.
     setSelectedPlanId(presetPlanId ?? '');
     setStartDate(format(new Date(), 'yyyy-MM-dd'));
+    setAdvanceBooking(false);
     setDiscountAmount(0);
     setDiscountReason('');
     setPaymentMethod('cash');
