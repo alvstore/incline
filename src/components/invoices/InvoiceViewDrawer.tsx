@@ -12,6 +12,7 @@ import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, M
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildInvoicePdf, buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
+import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
