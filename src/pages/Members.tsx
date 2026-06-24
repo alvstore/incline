@@ -164,10 +164,17 @@ export default function MembersPage() {
             end.setHours(0, 0, 0, 0);
             return ms.status === 'active' && end >= today;
           });
+          const scheduledMembership = m.memberships?.find((ms: any) => {
+            if (ms.status !== 'pending') return false;
+            const start = new Date(ms.start_date);
+            start.setHours(0, 0, 0, 0);
+            return start > today;
+          });
           const frozenMembership = m.memberships?.find((ms: any) => ms.status === 'frozen');
           let memberStatus = 'inactive';
           if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
           else if (activeMembership) memberStatus = 'active';
+          else if (scheduledMembership) memberStatus = 'scheduled';
           else if (frozenMembership) memberStatus = 'frozen';
           // Fall back to lead PII when the member has no linked profile yet
           // (lead→member conversion creates the member with user_id = NULL until
@@ -178,7 +185,7 @@ export default function MembersPage() {
             phone: m.lead.phone,
             avatar_url: m.lead.avatar_url,
           } : null);
-          return { ...m, profiles, status: memberStatus, joined_at: m.created_at };
+          return { ...m, profiles, status: memberStatus, scheduledMembership, joined_at: m.created_at };
         });
 
         // Pin pending_plan to the very top so reception sees fresh self-registrations.
