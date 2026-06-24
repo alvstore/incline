@@ -57,6 +57,7 @@ export function PurchaseMembershipDrawer({
   }, [open, presetPlanId]);
 
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [advanceBooking, setAdvanceBooking] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountReason, setDiscountReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string>(isMemberMode ? 'razorpay_link' : 'cash');
