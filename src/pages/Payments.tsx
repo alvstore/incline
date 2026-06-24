@@ -492,7 +492,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Member:</span>
-                  <span>{voidingPayment.members?.profiles?.full_name || 'Walk-in'}</span>
+                  <span>{resolveMemberDisplay(voidingPayment.members).name}</span>
                 </div>
                 {voidingPayment.invoices?.invoice_number && (
                   <div className="flex justify-between">
