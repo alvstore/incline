@@ -232,10 +232,15 @@ export default function MembersPage() {
     enabled: memberIds.length > 0 && search.length > 0,
   });
 
-  // Merge memberships into members for search results
+  // Merge memberships into members for search results + re-derive status so
+  // search results respect the scheduled/active/frozen distinction (the RPC
+  // only returns the raw members.status column).
   const membersWithMemberships = useMemo(() => {
     if (!search || memberships.length === 0) return members;
-    
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const membershipMap = new Map<string, any[]>();
     memberships.forEach((ms: any) => {
       if (!membershipMap.has(ms.member_id)) {
@@ -243,11 +248,28 @@ export default function MembersPage() {
       }
       membershipMap.get(ms.member_id)!.push(ms);
     });
-    
-    return members.map((m: any) => ({
-      ...m,
-      memberships: membershipMap.get(m.id) || []
-    }));
+
+    return members.map((m: any) => {
+      const list = membershipMap.get(m.id) || [];
+      const activeMembership = list.find((ms: any) => {
+        const end = new Date(ms.end_date);
+        end.setHours(0, 0, 0, 0);
+        return ms.status === 'active' && end >= today;
+      });
+      const scheduledMembership = list.find((ms: any) => {
+        if (ms.status !== 'pending') return false;
+        const start = new Date(ms.start_date);
+        start.setHours(0, 0, 0, 0);
+        return start > today;
+      });
+      const frozenMembership = list.find((ms: any) => ms.status === 'frozen');
+      let memberStatus = m.status === 'pending_plan' ? 'pending_plan' : 'inactive';
+      if (m.status === 'pending_plan') memberStatus = 'pending_plan';
+      else if (activeMembership) memberStatus = 'active';
+      else if (scheduledMembership) memberStatus = 'scheduled';
+      else if (frozenMembership) memberStatus = 'frozen';
+      return { ...m, memberships: list, scheduledMembership, status: memberStatus };
+    });
   }, [members, memberships, search]);
 
   // Bulk-fetch outstanding dues for the current page of members so we can
