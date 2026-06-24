@@ -632,9 +632,16 @@ export default function MembersPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusColor(member.status)}>
-                                {member.status === 'frozen' && <Snowflake className="h-3 w-3 mr-1" />}
-                                {member.status === 'pending_plan' ? 'Pending Plan' : member.status === 'frozen' ? 'Frozen' : member.status}
+                              <Badge variant="outline" className={`${getStatusColor(member.status)} gap-1`}>
+                                {member.status === 'frozen' && <Snowflake className="h-3 w-3" />}
+                                {member.status === 'scheduled' && <CalendarClock className="h-3 w-3" />}
+                                {member.status === 'pending_plan'
+                                  ? 'Pending Plan'
+                                  : member.status === 'frozen'
+                                  ? 'Frozen'
+                                  : member.status === 'scheduled' && member.scheduledMembership?.start_date
+                                  ? `Scheduled · ${format(new Date(member.scheduledMembership.start_date), 'dd MMM')}`
+                                  : member.status}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -648,6 +655,21 @@ export default function MembersPage() {
                                       <Snowflake className="h-3 w-3 mr-0.5" />Frozen
                                     </Badge>
                                   )}
+                                  {duesByMember[member.id] > 0 && (
+                                    <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
+                                      Due ₹{duesByMember[member.id].toLocaleString()}
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : member.scheduledMembership ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Badge className="bg-indigo-600 text-white hover:bg-indigo-600">
+                                    {member.scheduledMembership.membership_plans?.name || 'Plan'}
+                                  </Badge>
+                                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30 text-xs gap-1">
+                                    <CalendarClock className="h-3 w-3" />
+                                    Starts {format(new Date(member.scheduledMembership.start_date), 'dd MMM yyyy')}
+                                  </Badge>
                                   {duesByMember[member.id] > 0 && (
                                     <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
                                       Due ₹{duesByMember[member.id].toLocaleString()}
@@ -685,6 +707,13 @@ export default function MembersPage() {
                                       <TooltipContent>Includes gifted free days</TooltipContent>
                                     </Tooltip>
                                   )}
+                                </div>
+                              ) : member.scheduledMembership ? (
+                                <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300">
+                                  <CalendarClock className="h-3 w-3" />
+                                  <span className="font-medium">
+                                    Starts in {Math.max(0, differenceInDays(new Date(member.scheduledMembership.start_date), new Date()))}d
+                                  </span>
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">--</span>
