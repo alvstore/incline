@@ -633,6 +633,7 @@ export function MemberProfileDrawer({
             full_name, email, phone, avatar_url, gender, date_of_birth,
             address, city, state, emergency_contact_name, emergency_contact_phone
           ),
+          lead:lead_id(full_name, email, phone, avatar_url, gender, date_of_birth),
           branch:branch_id(name, code),
           created_by_profile:created_by(full_name, email),
           memberships(
@@ -835,7 +836,17 @@ export function MemberProfileDrawer({
     });
   }, []);
 
-  const profile = memberDetails?.profiles || member?.profiles;
+  // Fall back to lead row PII when the member has no linked auth profile yet
+  // (lead→member conversion leaves user_id NULL until the member sets a password).
+  const leadFallback = (memberDetails as any)?.lead;
+  const profile = memberDetails?.profiles || member?.profiles || (leadFallback ? {
+    full_name: leadFallback.full_name,
+    email: leadFallback.email,
+    phone: leadFallback.phone,
+    avatar_url: leadFallback.avatar_url,
+    gender: leadFallback.gender,
+    date_of_birth: leadFallback.date_of_birth,
+  } : null);
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
   const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
   const hasRegistrationForm = !!registrationFormDocument;
