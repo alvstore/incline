@@ -349,7 +349,8 @@ export default function InvoicesPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredInvoices.map((invoice: any) => {
-                        const memberName = invoice.members?.profiles?.full_name || invoice.customer_name || 'Walk-in Customer';
+                        const display = resolveMemberDisplay(invoice.members, invoice.customer_name);
+                        const memberName = display.name;
                         const balance = invoice.total_amount - (invoice.amount_paid || 0);
                         
                         return (
@@ -357,7 +358,7 @@ export default function InvoicesPage() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-10 w-10">
-                                  <AvatarImage src={invoice.members?.profiles?.avatar_url} />
+                                  <AvatarImage src={display.avatar_url ?? undefined} />
                                   <AvatarFallback className="bg-accent/10 text-accent font-semibold">
                                     {getInitials(memberName)}
                                   </AvatarFallback>
@@ -365,7 +366,7 @@ export default function InvoicesPage() {
                                 <div>
                                   <p className="font-medium">{memberName}</p>
                                   <p className="text-sm text-muted-foreground">
-                                    {invoice.members?.member_code || 'Guest'}
+                                    {display.code || 'Guest'}
                                   </p>
                                 </div>
                               </div>
