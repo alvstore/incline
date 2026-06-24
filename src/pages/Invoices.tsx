@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
 const PAGE_SIZE = 20;
 
@@ -83,7 +84,7 @@ export default function InvoicesPage() {
         .from('invoices')
         .select(`
           id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
-          members(member_code, profiles:user_id(full_name, email, phone, avatar_url)),
+          members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
           invoice_items(description, reference_type)
         `)
         .eq('id', invoiceId)
@@ -125,7 +126,7 @@ export default function InvoicesPage() {
         .from('invoices')
         .select(`
           id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
-          members(member_code, profiles:user_id(full_name, email, phone, avatar_url)),
+          members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
           invoice_items(description, reference_type)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
@@ -161,7 +162,7 @@ export default function InvoicesPage() {
   // Client-side search filter (search is lightweight on paginated data)
   const filteredInvoices = invoices.filter((invoice: any) => {
     if (!searchTerm) return true;
-    const memberName = invoice.members?.profiles?.full_name || '';
+    const memberName = resolveMemberDisplay(invoice.members, invoice.customer_name).name;
     return memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase());
   });
@@ -191,7 +192,7 @@ export default function InvoicesPage() {
       const t = getInvoiceType(inv);
       return [
         inv.invoice_number,
-        inv.members?.profiles?.full_name || inv.customer_name || 'Walk-in',
+        resolveMemberDisplay(inv.members, inv.customer_name).name,
         t.label,
         inv.total_amount,
         inv.amount_paid || 0,
@@ -348,7 +349,8 @@ export default function InvoicesPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredInvoices.map((invoice: any) => {
-                        const memberName = invoice.members?.profiles?.full_name || invoice.customer_name || 'Walk-in Customer';
+                        const display = resolveMemberDisplay(invoice.members, invoice.customer_name);
+                        const memberName = display.name;
                         const balance = invoice.total_amount - (invoice.amount_paid || 0);
                         
                         return (
@@ -356,7 +358,7 @@ export default function InvoicesPage() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-10 w-10">
-                                  <AvatarImage src={invoice.members?.profiles?.avatar_url} />
+                                  <AvatarImage src={display.avatar_url ?? undefined} />
                                   <AvatarFallback className="bg-accent/10 text-accent font-semibold">
                                     {getInitials(memberName)}
                                   </AvatarFallback>
@@ -364,7 +366,7 @@ export default function InvoicesPage() {
                                 <div>
                                   <p className="font-medium">{memberName}</p>
                                   <p className="text-sm text-muted-foreground">
-                                    {invoice.members?.member_code || 'Guest'}
+                                    {display.code || 'Guest'}
                                   </p>
                                 </div>
                               </div>
@@ -418,15 +420,15 @@ export default function InvoicesPage() {
                                     Download
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => {
-                                    const memberProfile = (invoice.members as any)?.profiles;
+                                    const d = resolveMemberDisplay(invoice.members, invoice.customer_name);
                                     setPaymentLinkInvoice({
                                       id: invoice.id,
                                       invoice_number: invoice.invoice_number,
                                       total_amount: invoice.total_amount,
                                       amount_paid: invoice.amount_paid || 0,
-                                      member_name: memberProfile?.full_name,
-                                      member_phone: memberProfile?.phone,
-                                      member_email: memberProfile?.email,
+                                      member_name: d.name,
+                                      member_phone: d.phone,
+                                      member_email: d.email,
                                       branch_id: invoice.branch_id,
                                     });
                                   }}>

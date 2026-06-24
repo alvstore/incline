@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPayment } from '@/services/billingService';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -105,7 +106,7 @@ export default function PaymentsPage() {
         .from('invoices')
         .select(`
           id, invoice_number, total_amount, amount_paid, status, due_date, invoice_type, member_id,
-          members(member_code, profiles:user_id(full_name, phone))
+          members(member_code, profiles:user_id(full_name, phone, email, avatar_url), lead:lead_id(full_name, phone, email, avatar_url))
         `)
         .in('status', ['pending', 'partial', 'overdue'])
         .order('due_date', { ascending: true })
@@ -164,7 +165,7 @@ export default function PaymentsPage() {
     queryFn: async () => {
       let query = supabase
         .from('payments')
-        .select(`*, members(member_code, profiles:user_id(full_name)), invoices(invoice_number)`)
+        .select(`*, members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)), invoices(invoice_number)`)
         .order('payment_date', { ascending: false })
         .limit(200);
       if (branchFilter) query = query.eq('branch_id', branchFilter);
@@ -195,7 +196,7 @@ export default function PaymentsPage() {
   const filteredPayments = useMemo(() => {
     return payments.filter((payment: any) => {
       if (searchTerm) {
-        const memberName = payment.members?.profiles?.full_name?.toLowerCase() || '';
+        const memberName = resolveMemberDisplay(payment.members).name.toLowerCase();
         const memberCode = payment.members?.member_code?.toLowerCase() || '';
         const invoiceNum = payment.invoices?.invoice_number?.toLowerCase() || '';
         const search = searchTerm.toLowerCase();
@@ -229,7 +230,12 @@ export default function PaymentsPage() {
 
   const exportToCSV = () => {
     const headers = ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'];
-    const rows = filteredPayments.map((p: any) => [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), p.members?.profiles?.full_name || 'Walk-in', p.amount, p.payment_method, p.status, p.invoices?.invoice_number || '-']);
+    const rows = filteredPayments.map((p: any) => {
+      const d = resolveMemberDisplay(p.members);
+      const inv = p.invoices?.invoice_number || '-';
+      const displayName = d.code ? `${d.name} (${d.code})${inv !== '-' ? ' · ' + inv : ''}` : d.name;
+      return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
+    });
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -246,7 +252,7 @@ export default function PaymentsPage() {
   const handleCollectFromDues = (invoice: any) => {
     setSelectedMember({
       id: invoice.member_id,
-      full_name: invoice.members?.profiles?.full_name || 'Unknown',
+      full_name: resolveMemberDisplay(invoice.members).name,
       member_code: invoice.members?.member_code || '',
     });
     setSelectedInvoice(invoice);
@@ -321,7 +327,7 @@ export default function PaymentsPage() {
                             const key = inv.member_id || inv.id;
                             const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
                             const existing = grouped.get(key) || {
-                              name: inv.members?.profiles?.full_name || 'Unknown',
+                              name: resolveMemberDisplay(inv.members).name,
                               code: inv.members?.member_code || '',
                               invoices: [],
                               total: 0,
@@ -409,9 +415,15 @@ export default function PaymentsPage() {
                 <TableBody>
                   {filteredPayments.map((payment: any) => {
                     const isVoided = payment.status === 'voided';
+                    const d = resolveMemberDisplay(payment.members);
                     return (
                       <TableRow key={payment.id} className={isVoided ? 'opacity-50' : ''}>
-                        <TableCell><div className="flex flex-col"><span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{payment.members?.profiles?.full_name || 'Walk-in'}</span>{payment.members?.member_code && <span className="text-xs text-muted-foreground">{payment.members.member_code}</span>}</div></TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{d.name}</span>
+                            {d.code && <span className="text-xs text-muted-foreground">{d.code}</span>}
+                          </div>
+                        </TableCell>
                         <TableCell className={`font-medium ${isVoided ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
                         <TableCell><Badge className={getMethodColor(payment.payment_method)}>{payment.payment_method}</Badge></TableCell>
                         <TableCell><Badge className={getStatusColor(payment.status)}>{payment.status}</Badge></TableCell>
@@ -480,7 +492,7 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Member:</span>
-                  <span>{voidingPayment.members?.profiles?.full_name || 'Walk-in'}</span>
+                  <span>{resolveMemberDisplay(voidingPayment.members).name}</span>
                 </div>
                 {voidingPayment.invoices?.invoice_number && (
                   <div className="flex justify-between">

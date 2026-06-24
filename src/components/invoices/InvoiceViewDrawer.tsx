@@ -13,6 +13,7 @@ import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildInvoicePdf, buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
 interface InvoiceViewDrawerProps {
   open: boolean;
@@ -33,7 +34,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
         .from('invoices')
         .select(`
           *,
-          members(member_code, profiles:user_id(full_name, email, phone)),
+          members(member_code, profiles:user_id(full_name, email, phone), lead:lead_id(full_name, email, phone, avatar_url)),
           branch:branch_id(name, address, phone, email, gstin),
           invoice_items(*),
           pos_sales!invoices_pos_sale_id_fkey(items)
@@ -75,7 +76,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
   const handlePrint = () => { window.print(); };
 
   const buildPDFData = () => {
-    const memberProfile = (invoice.members as any)?.profiles;
+    const memberDisplay = resolveMemberDisplay((invoice as any).members, invoice.customer_name);
     // Build a product_id → batches[] map from pos_sales.items (set by create_pos_sale RPC)
     const posItems: any[] = Array.isArray((invoice as any).pos_sales?.items)
       ? (invoice as any).pos_sales.items
@@ -104,10 +105,10 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
         unit_price: i.unit_price, total_amount: i.total_amount,
         batches: i.reference_id ? batchByProduct.get(String(i.reference_id)) : undefined,
       })),
-      member_name: memberProfile?.full_name || invoice.customer_name || 'Walk-in Customer',
-      member_code: invoice.members?.member_code,
-      member_email: memberProfile?.email || invoice.customer_email,
-      member_phone: memberProfile?.phone || invoice.customer_phone,
+      member_name: memberDisplay.name,
+      member_code: memberDisplay.code,
+      member_email: memberDisplay.email || invoice.customer_email,
+      member_phone: memberDisplay.phone || invoice.customer_phone,
       branch_name: invoice.branch?.name || '',
       branch_address: invoice.branch?.address,
       branch_phone: invoice.branch?.phone,
@@ -144,7 +145,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
     );
   }
 
-  const memberProfile = (invoice.members as any)?.profiles;
+  const memberDisplay = resolveMemberDisplay((invoice as any).members, invoice.customer_name);
   const dueAmount = invoice.total_amount - (invoice.amount_paid || 0);
 
   // Derive Wallet Used vs Other Payment from payments table (fallback to notes regex)
@@ -223,11 +224,11 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
             <Card>
               <CardContent className="pt-4">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Bill To</p>
-                <p className="font-medium">{memberProfile?.full_name || invoice.customer_name || 'Walk-in Customer'}</p>
-                <p className="text-sm text-muted-foreground">{memberProfile?.email || invoice.customer_email}</p>
-                <p className="text-sm text-muted-foreground">{memberProfile?.phone || invoice.customer_phone}</p>
-                {invoice.members?.member_code && (
-                  <p className="text-xs font-mono text-muted-foreground mt-1">{invoice.members.member_code}</p>
+                <p className="font-medium">{memberDisplay.name}</p>
+                <p className="text-sm text-muted-foreground">{memberDisplay.email || invoice.customer_email}</p>
+                <p className="text-sm text-muted-foreground">{memberDisplay.phone || invoice.customer_phone}</p>
+                {memberDisplay.code && (
+                  <p className="text-xs font-mono text-muted-foreground mt-1">{memberDisplay.code}</p>
                 )}
                 {invoice.customer_gstin && (
                   <p className="text-xs font-mono text-muted-foreground">GSTIN: {invoice.customer_gstin}</p>
