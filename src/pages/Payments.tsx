@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPayment } from '@/services/billingService';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
