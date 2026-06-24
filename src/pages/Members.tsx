@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { 
   Search, Plus, Users, UserCheck, UserX, CreditCard, Dumbbell, 
   Eye, Clock, Building2, AlertTriangle, CheckCircle, MoreHorizontal, Snowflake,
-  ChevronLeft, ChevronRight, Download, UsersRound, Gift
+  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -164,10 +164,17 @@ export default function MembersPage() {
             end.setHours(0, 0, 0, 0);
             return ms.status === 'active' && end >= today;
           });
+          const scheduledMembership = m.memberships?.find((ms: any) => {
+            if (ms.status !== 'pending') return false;
+            const start = new Date(ms.start_date);
+            start.setHours(0, 0, 0, 0);
+            return start > today;
+          });
           const frozenMembership = m.memberships?.find((ms: any) => ms.status === 'frozen');
           let memberStatus = 'inactive';
           if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
           else if (activeMembership) memberStatus = 'active';
+          else if (scheduledMembership) memberStatus = 'scheduled';
           else if (frozenMembership) memberStatus = 'frozen';
           // Fall back to lead PII when the member has no linked profile yet
           // (lead→member conversion creates the member with user_id = NULL until
@@ -178,7 +185,7 @@ export default function MembersPage() {
             phone: m.lead.phone,
             avatar_url: m.lead.avatar_url,
           } : null);
-          return { ...m, profiles, status: memberStatus, joined_at: m.created_at };
+          return { ...m, profiles, status: memberStatus, scheduledMembership, joined_at: m.created_at };
         });
 
         // Pin pending_plan to the very top so reception sees fresh self-registrations.
@@ -225,10 +232,15 @@ export default function MembersPage() {
     enabled: memberIds.length > 0 && search.length > 0,
   });
 
-  // Merge memberships into members for search results
+  // Merge memberships into members for search results + re-derive status so
+  // search results respect the scheduled/active/frozen distinction (the RPC
+  // only returns the raw members.status column).
   const membersWithMemberships = useMemo(() => {
     if (!search || memberships.length === 0) return members;
-    
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const membershipMap = new Map<string, any[]>();
     memberships.forEach((ms: any) => {
       if (!membershipMap.has(ms.member_id)) {
@@ -236,11 +248,28 @@ export default function MembersPage() {
       }
       membershipMap.get(ms.member_id)!.push(ms);
     });
-    
-    return members.map((m: any) => ({
-      ...m,
-      memberships: membershipMap.get(m.id) || []
-    }));
+
+    return members.map((m: any) => {
+      const list = membershipMap.get(m.id) || [];
+      const activeMembership = list.find((ms: any) => {
+        const end = new Date(ms.end_date);
+        end.setHours(0, 0, 0, 0);
+        return ms.status === 'active' && end >= today;
+      });
+      const scheduledMembership = list.find((ms: any) => {
+        if (ms.status !== 'pending') return false;
+        const start = new Date(ms.start_date);
+        start.setHours(0, 0, 0, 0);
+        return start > today;
+      });
+      const frozenMembership = list.find((ms: any) => ms.status === 'frozen');
+      let memberStatus = m.status === 'pending_plan' ? 'pending_plan' : 'inactive';
+      if (m.status === 'pending_plan') memberStatus = 'pending_plan';
+      else if (activeMembership) memberStatus = 'active';
+      else if (scheduledMembership) memberStatus = 'scheduled';
+      else if (frozenMembership) memberStatus = 'frozen';
+      return { ...m, memberships: list, scheduledMembership, status: memberStatus };
+    });
   }, [members, memberships, search]);
 
   // Bulk-fetch outstanding dues for the current page of members so we can
@@ -279,6 +308,7 @@ export default function MembersPage() {
   const stats = {
     total: totalCount ?? membersWithMemberships.length,
     active: membersWithMemberships.filter((m: any) => m.status === 'active').length,
+    scheduled: membersWithMemberships.filter((m: any) => m.status === 'scheduled').length,
     inactive: membersWithMemberships.filter((m: any) => m.status === 'inactive').length,
     frozen: frozenCount,
     expiringSoon: membersWithMemberships.filter((m: any) => {
@@ -292,6 +322,7 @@ export default function MembersPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       active: 'bg-success/10 text-success border-success/20',
+      scheduled: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30',
       inactive: 'bg-muted text-muted-foreground border-muted',
       frozen: 'bg-info/10 text-info border-info/20',
       suspended: 'bg-destructive/10 text-destructive border-destructive/20',
@@ -412,7 +443,7 @@ export default function MembersPage() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <Card className="relative overflow-hidden border-l-4 border-l-primary hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('all')}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -442,6 +473,22 @@ export default function MembersPage() {
               {statusFilter === 'active' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-success" />}
             </CardContent>
           </Card>
+
+          <Card className="relative overflow-hidden border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('scheduled')}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Scheduled</p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-300">{stats.scheduled}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                  <CalendarClock className="h-6 w-6 text-indigo-600 dark:text-indigo-300" />
+                </div>
+              </div>
+              {statusFilter === 'scheduled' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-500" />}
+            </CardContent>
+          </Card>
+
 
           <Card className="relative overflow-hidden border-l-4 border-l-muted-foreground hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleStatusFilter('inactive')}>
             <CardContent className="p-4">
@@ -566,7 +613,7 @@ export default function MembersPage() {
                                     </AvatarFallback>
                                   </Avatar>
                                   <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                                    member.status === 'active' ? 'bg-success' : member.status === 'frozen' ? 'bg-info' : member.status === 'suspended' ? 'bg-destructive' : 'bg-muted-foreground'
+                                    member.status === 'active' ? 'bg-success' : member.status === 'scheduled' ? 'bg-indigo-500' : member.status === 'frozen' ? 'bg-info' : member.status === 'suspended' ? 'bg-destructive' : 'bg-muted-foreground'
                                   }`} />
                                 </div>
                                 <div>
@@ -585,9 +632,16 @@ export default function MembersPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={getStatusColor(member.status)}>
-                                {member.status === 'frozen' && <Snowflake className="h-3 w-3 mr-1" />}
-                                {member.status === 'pending_plan' ? 'Pending Plan' : member.status === 'frozen' ? 'Frozen' : member.status}
+                              <Badge variant="outline" className={`${getStatusColor(member.status)} gap-1`}>
+                                {member.status === 'frozen' && <Snowflake className="h-3 w-3" />}
+                                {member.status === 'scheduled' && <CalendarClock className="h-3 w-3" />}
+                                {member.status === 'pending_plan'
+                                  ? 'Pending Plan'
+                                  : member.status === 'frozen'
+                                  ? 'Frozen'
+                                  : member.status === 'scheduled' && member.scheduledMembership?.start_date
+                                  ? `Scheduled · ${format(new Date(member.scheduledMembership.start_date), 'dd MMM')}`
+                                  : member.status}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -601,6 +655,21 @@ export default function MembersPage() {
                                       <Snowflake className="h-3 w-3 mr-0.5" />Frozen
                                     </Badge>
                                   )}
+                                  {duesByMember[member.id] > 0 && (
+                                    <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
+                                      Due ₹{duesByMember[member.id].toLocaleString()}
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : member.scheduledMembership ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Badge className="bg-indigo-600 text-white hover:bg-indigo-600">
+                                    {member.scheduledMembership.membership_plans?.name || 'Plan'}
+                                  </Badge>
+                                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30 text-xs gap-1">
+                                    <CalendarClock className="h-3 w-3" />
+                                    Starts {format(new Date(member.scheduledMembership.start_date), 'dd MMM yyyy')}
+                                  </Badge>
                                   {duesByMember[member.id] > 0 && (
                                     <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
                                       Due ₹{duesByMember[member.id].toLocaleString()}
@@ -638,6 +707,13 @@ export default function MembersPage() {
                                       <TooltipContent>Includes gifted free days</TooltipContent>
                                     </Tooltip>
                                   )}
+                                </div>
+                              ) : member.scheduledMembership ? (
+                                <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300">
+                                  <CalendarClock className="h-3 w-3" />
+                                  <span className="font-medium">
+                                    Starts in {Math.max(0, differenceInDays(new Date(member.scheduledMembership.start_date), new Date()))}d
+                                  </span>
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">--</span>

@@ -1,73 +1,104 @@
 ## Problem
 
-Love Kumar Paliwal paid in advance but wants membership to start **27 July**. Today the system has no clean path for this:
+Love Kumar Paliwal bought a membership that starts **27 Jul 2026**. The plan exists in the DB as `memberships.status = 'pending'` with a future `start_date`. But on the Members list:
 
-1. The Purchase drawer **has** a Start Date field, but it is silently overridden when the member has any active membership (`effectiveStartDate` logic), and the "active membership" guard blocks new purchases unless the existing one expires within 7 days.
-2. `purchase_membership` RPC always inserts the new row as `status='active'`, even when `start_date` is in the future. So the membership counts as live immediately, MIPS hardware gets enabled now, expiry math is wrong, and dashboards show it as the current plan.
-3. MIPS / biometric sync queue and access events fire on insert — there is nothing that defers hardware access to `start_date`.
-4. No nightly job flips `pending → active` on the start date, or `active → expired` cleanly afterwards for scheduled rows.
-5. UI has no badge for "Scheduled" memberships.
+- **Status** column shows `inactive` (because no `status='active'` row matches today)
+- **Membership** column shows `No Plan` (because the same filter excludes `pending`)
+- He is also counted under the **Inactive** KPI tile
 
-The `membership_status` enum already has a `pending` value — we just aren't using it.
+This is wrong — a member who has *paid and is scheduled to start* is not the same as a member with **no membership at all**. The Members page treats "no active row" as "inactive", with no awareness of the new `pending` (Scheduled) state we introduced for advance bookings.
 
-## Fix Plan
+## Goal
 
-### 1. RPC: `purchase_membership` — honour future start_date
-- If `p_start_date > current_date` → insert membership with `status='pending'` instead of `'active'`.
-- Keep invoice + payment behaviour identical (member is paying now).
-- Block overlap: if another `active`/`pending` membership already covers `[p_start_date, p_end_date]` for the same member, raise a clear error (unless explicit advance-booking flag is set).
-- Add `p_allow_advance boolean DEFAULT false` so back-office can intentionally schedule alongside an active plan; without it, RPC behaves as today.
+Introduce **Scheduled** as a first-class member status across the Members list, KPIs, badges, and counts — clearly distinct from `inactive` ("never bought / lapsed") and `active` ("plan running today").
 
-### 2. Drawer: `PurchaseMembershipDrawer.tsx`
-- Add a new toggle **"Advance booking — start later"** (visible only in staff mode when an active membership exists or the picked date > today).
-- When ON:
-  - Stop forcing `effectiveStartDate = activeMembership.end_date + 1`. Pass the user-picked `startDate` straight to the RPC with `p_allow_advance = true`.
-  - Replace the "Renewal allowed only 7 days before expiry" hard block with a soft notice; allow submission.
-  - Show a banner: "This membership will start on <date> and remain Scheduled until then. Member will not get gym access before start date."
-- End-date preview already uses `startDate + duration_days` — keep as is.
-- Validation: `startDate >= today`. If member has an active membership and advance toggle is OFF, keep current renewal guard.
+## Scope (UI / presentation only — no schema or RPC changes)
 
-### 3. Lifecycle activation job
-- Add SQL function `activate_scheduled_memberships()` — flips `pending → active` for every row where `start_date <= current_date`.
-- Schedule via existing pg_cron daily tick (00:05 IST) — slot it into the Automation Brain manifest so it shows up in the control room.
-- On flip: insert a `member_lifecycle_events` row (`event_type='membership_started'`) so MIPS sync and notifications fire through the existing pipelines.
+All edits in `src/pages/Members.tsx`. The data is already correct in the DB; we just need to read the `pending` row and render it properly.
 
-### 4. MIPS / biometric sync
-- `biometric_sync_queue` and `mips-access` push currently treat the membership as live on insert. Change the trigger / enqueue logic to:
-  - On `pending` insert → enqueue a sync with `effective_from = start_date` and `valid_from = start_date`; do NOT push to MIPS hardware yet.
-  - When `activate_scheduled_memberships()` flips status to `active` → enqueue the actual MIPS push (same path as today's purchase).
-- Keep `original_end_date = end_date` so freeze/extend math stays correct.
+### 1. Status derivation (lines ~158–182)
 
-### 5. UI display
-- Members list + profile: status badge "Scheduled (starts <DD MMM>)" when `status='pending' AND start_date > today`. Use blue tone (`bg-blue-50 text-blue-700`), matches existing Vuexy palette.
-- Membership card in profile: show "Starts on" row above "Expires on" when scheduled.
-- Sort: scheduled memberships listed after active ones in member detail.
+Extend the per-member status reducer to recognise scheduled memberships:
 
-### 6. Backfill for Love Kumar Paliwal
-- Run a one-off UPDATE on his current membership row: set `start_date = 2026-07-27`, `end_date = 2026-07-27 + plan.duration_days`, `original_end_date = same`, `status = 'pending'`. Invoice + payment untouched. (Migration tool, single statement.)
+```text
+priority:
+  pending_plan  → "Pending Plan"      (lifecycle_state, unchanged)
+  active        → "Active"            (status='active' AND end_date >= today)
+  scheduled     → "Scheduled"         (status='pending' AND start_date > today)   ← NEW
+  frozen        → "Frozen"            (status='frozen')
+  inactive      → "Inactive"          (nothing else)
+```
 
-### 7. Audit touchpoints (no behaviour change, just verification)
-- `membershipService.fetchActiveMembership` — already filters by `status='active'`, will correctly skip scheduled rows.
-- `lifecycleService` — confirm `transition_member_lifecycle` accepts `pending` source state; add transition if missing.
-- `useMemberHasPtPackage` and PT purchase guard — no change, PT is independent.
-- `cancel_membership` / `freeze_membership` RPCs — allow cancel on `pending` (refund path), disallow freeze on `pending` (nothing to freeze yet). Small guard tweaks only.
-- `record_payment` — unchanged; advance payment still posts against the invoice today.
+Also expose the scheduled membership row on the member object as `scheduledMembership` so the Membership column can render it.
 
-## Files / Migrations
+### 2. KPI tiles (lines ~279–290, 440–470)
 
-**SQL migration (one file):**
-- Rewrite `public.purchase_membership` with `p_allow_advance` + future-date → `pending`.
-- New `public.activate_scheduled_memberships()` + pg_cron schedule.
-- Trigger update on `memberships` insert: skip MIPS enqueue when `status='pending'`; lifecycle event on activation.
-- Small guard tweaks in `cancel_membership` / `freeze_membership`.
-- One-off backfill UPDATE for Love Kumar Paliwal.
+- **Active** count: unchanged (only truly active today).
+- **Inactive** count: subtract scheduled members so Love no longer inflates this tile.
+- Add a new **Scheduled** KPI card between **Active** and **Inactive**:
+  - Icon: `CalendarClock` (lucide)
+  - Color: indigo/violet (`border-l-indigo-500`, `bg-indigo-50 text-indigo-600`)
+  - Click → `handleStatusFilter('scheduled')`
+- Keep the 5-card row responsive (already grid; add the 6th tile, allow wrap on smaller screens).
 
-**TS edits:**
-- `src/services/membershipPurchaseService.ts` — add `allowAdvance?: boolean` to `MembershipPurchaseInput`, pass to RPC.
-- `src/components/members/PurchaseMembershipDrawer.tsx` — advance-booking toggle, banner, soften renewal guard, stop overriding startDate when toggle is on.
-- `src/components/members/MemberProfileDrawer.tsx` + members list cell — render "Scheduled" badge for `pending` + future `start_date`.
-- `src/types/membership.ts` — no change (enum already includes `pending`); only ensure the UI maps it.
+### 3. Status badge (lines ~292–301, 587–591)
+
+Add `scheduled` to `getStatusColor`:
+```text
+scheduled → bg-indigo-50 text-indigo-700 border-indigo-200
+```
+Badge label: `Scheduled · starts DD MMM` (use the scheduled row's `start_date`, formatted with `format(date, 'dd MMM')`). Prefix with a small `CalendarClock` icon.
+
+### 4. Membership column (lines ~593–621)
+
+Render order inside the cell:
+1. If `activeMembership` exists → current behaviour (plan name + Frozen/Due badges).
+2. Else if `scheduledMembership` exists → show:
+   - Solid indigo badge with plan name (e.g. `Annual Plan`)
+   - Secondary outline badge: `Starts 27 Jul 2026` (indigo-tinted)
+   - Plus the existing `Due ₹X` badge if any
+3. Else → existing `No Plan` dashed badge.
+
+This removes the misleading "No Plan" for Love and tells reception exactly when his access turns on.
+
+### 5. Days Left column (lines ~623–640)
+
+For scheduled members show `Starts in Nd` (computed `differenceInDays(start_date, today)`) with a neutral indigo color and `CalendarClock` icon, instead of `--`.
+
+### 6. Filter chip / status dropdown
+
+Add **Scheduled** as a selectable filter value wherever the status filter is offered, so staff can list only upcoming starts.
+
+### 7. Search RPC fallback (lines ~119–135)
+
+`search_members` RPC returns only `member_status` and no memberships, so server-side search currently can't distinguish scheduled members. Two options — pick one:
+
+- **(preferred, no DB change):** when search is active, after the RPC returns, do a follow-up `memberships` query for the returned `member.id`s (same shape we already do in `member-memberships` query at line 215) and run the same derivation. Keeps the RPC untouched.
+- Alternative: extend `search_members` to also return `scheduled` flag. Out of scope unless we want it.
+
+I will use the first option.
+
+### 8. Code review / consistency pass
+
+- `MemberProfileDrawer` already received scheduled-membership treatment in the previous turn — confirm the list page uses the same date formatting and badge tokens for visual consistency.
+- No changes to `membershipService.fetchActiveMembership`, `purchase_membership` RPC, MIPS sync, or cron — those were settled in the prior plan.
+- No new TypeScript `any` introduced; reuse existing membership row type.
 
 ## Out of scope
-- Refund-on-cancel flows for scheduled memberships (existing cancel RPC handles it once guard is tweaked).
-- Member-portal (`MemberCheckout`) advance booking — keep member-mode as "starts today" for now; back-office only.
+
+- DB schema, RPC, cron, or MIPS changes.
+- Member-portal (member-facing) views — separate task if needed.
+- Backfill (Love is already `pending` with `start_date = 2026-07-27`).
+
+## Files to edit
+
+- `src/pages/Members.tsx` (status derivation, KPI grid, badges, Membership cell, Days Left cell, filter handler, search-path enrichment)
+
+## Acceptance
+
+For Love Kumar Paliwal on 24 Jun 2026:
+- Status badge: **Scheduled · starts 27 Jul** (indigo)
+- Membership cell: plan name + `Starts 27 Jul 2026` + `Due ₹25,000`
+- Days Left: `Starts in 33d`
+- KPI tiles: Active **0**, **Scheduled 1**, Inactive **0**
+- Clicking the Scheduled tile filters the table to him.
