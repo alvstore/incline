@@ -28,7 +28,7 @@ import {
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { buildInvoicePdf, downloadBlob } from '@/utils/pdfBlob';
 import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
-import { resolveBrandForBranch } from '@/utils/pdfBlob';
+import { resolveBrandAsync } from '@/utils/pdfBlob';
 
 const PAGE_SIZE = 20;
 
