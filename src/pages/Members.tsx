@@ -132,8 +132,9 @@ export default function MembersPage() {
         let query = supabase
           .from('members')
           .select(`
-            id, member_code, user_id, branch_id, status, lifecycle_state, created_at, assigned_trainer_id,
+            id, member_code, user_id, lead_id, branch_id, status, lifecycle_state, created_at, assigned_trainer_id,
             profiles:user_id(full_name, email, phone, avatar_url),
+            lead:lead_id(full_name, email, phone, avatar_url),
             branch:branch_id(name, code),
             memberships(id, status, start_date, end_date, plan_id, membership_plans(name))
           `, { count: 'exact' })
@@ -161,7 +162,16 @@ export default function MembersPage() {
           if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
           else if (activeMembership) memberStatus = 'active';
           else if (frozenMembership) memberStatus = 'frozen';
-          return { ...m, status: memberStatus, joined_at: m.created_at };
+          // Fall back to lead PII when the member has no linked profile yet
+          // (lead→member conversion creates the member with user_id = NULL until
+          // the member sets a password and an auth/profile row is created).
+          const profiles = m.profiles || (m.lead ? {
+            full_name: m.lead.full_name,
+            email: m.lead.email,
+            phone: m.lead.phone,
+            avatar_url: m.lead.avatar_url,
+          } : null);
+          return { ...m, profiles, status: memberStatus, joined_at: m.created_at };
         });
 
         // Pin pending_plan to the very top so reception sees fresh self-registrations.
