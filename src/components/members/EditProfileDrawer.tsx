@@ -81,12 +81,13 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !member?.user_id) return;
+    if (!file || !member?.id) return;
 
     setIsUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${member.user_id}-${Date.now()}.${fileExt}`;
+      const ownerKey = member.user_id || member.id;
+      const fileName = `${ownerKey}-${Date.now()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
