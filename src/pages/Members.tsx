@@ -595,6 +595,9 @@ export default function MembersPage() {
                     <TableBody>
                       {filteredMembers.map((member: any) => {
                         const activeMembership = getActiveMembership(member.memberships);
+                        const scheduledMembership = member.scheduledMembership;
+                        const existingPlan = activeMembership || scheduledMembership;
+                        const memberDue = duesByMember[member.id] || 0;
                         const daysLeft = getDaysRemaining(activeMembership);
                         
                         return (
