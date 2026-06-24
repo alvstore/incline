@@ -32,6 +32,7 @@ import { differenceInDays, format } from 'date-fns';
 const PAGE_SIZE = 20;
 
 export default function MembersPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
