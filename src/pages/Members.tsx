@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { 
   Search, Plus, Users, UserCheck, UserX, CreditCard, Dumbbell, 
   Eye, Clock, Building2, AlertTriangle, CheckCircle, MoreHorizontal, Snowflake,
-  ChevronLeft, ChevronRight, Download, UsersRound, Gift
+  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
