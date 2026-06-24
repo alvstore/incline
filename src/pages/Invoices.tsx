@@ -83,7 +83,7 @@ export default function InvoicesPage() {
         .from('invoices')
         .select(`
           id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
-          members(member_code, profiles:user_id(full_name, email, phone, avatar_url)),
+          members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
           invoice_items(description, reference_type)
         `)
         .eq('id', invoiceId)
