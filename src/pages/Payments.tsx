@@ -415,9 +415,15 @@ export default function PaymentsPage() {
                 <TableBody>
                   {filteredPayments.map((payment: any) => {
                     const isVoided = payment.status === 'voided';
+                    const d = resolveMemberDisplay(payment.members);
                     return (
                       <TableRow key={payment.id} className={isVoided ? 'opacity-50' : ''}>
-                        <TableCell><div className="flex flex-col"><span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{payment.members?.profiles?.full_name || 'Walk-in'}</span>{payment.members?.member_code && <span className="text-xs text-muted-foreground">{payment.members.member_code}</span>}</div></TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{d.name}</span>
+                            {d.code && <span className="text-xs text-muted-foreground">{d.code}</span>}
+                          </div>
+                        </TableCell>
                         <TableCell className={`font-medium ${isVoided ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
                         <TableCell><Badge className={getMethodColor(payment.payment_method)}>{payment.payment_method}</Badge></TableCell>
                         <TableCell><Badge className={getStatusColor(payment.status)}>{payment.status}</Badge></TableCell>
