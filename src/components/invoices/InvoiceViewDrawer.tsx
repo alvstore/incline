@@ -13,6 +13,7 @@ import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildInvoicePdf, buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
 interface InvoiceViewDrawerProps {
   open: boolean;
