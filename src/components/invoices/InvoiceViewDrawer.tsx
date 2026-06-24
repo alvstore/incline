@@ -76,7 +76,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
   const handlePrint = () => { window.print(); };
 
   const buildPDFData = () => {
-    const memberProfile = (invoice.members as any)?.profiles;
+    const memberDisplay = resolveMemberDisplay((invoice as any).members, invoice.customer_name);
     // Build a product_id → batches[] map from pos_sales.items (set by create_pos_sale RPC)
     const posItems: any[] = Array.isArray((invoice as any).pos_sales?.items)
       ? (invoice as any).pos_sales.items
