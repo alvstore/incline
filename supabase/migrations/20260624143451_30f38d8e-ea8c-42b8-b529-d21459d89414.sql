@@ -1,0 +1,1 @@
+ALTER TABLE public.payment_reminders ADD COLUMN IF NOT EXISTS skipped_reason text;
