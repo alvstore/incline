@@ -230,7 +230,12 @@ export default function PaymentsPage() {
 
   const exportToCSV = () => {
     const headers = ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'];
-    const rows = filteredPayments.map((p: any) => [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), p.members?.profiles?.full_name || 'Walk-in', p.amount, p.payment_method, p.status, p.invoices?.invoice_number || '-']);
+    const rows = filteredPayments.map((p: any) => {
+      const d = resolveMemberDisplay(p.members);
+      const inv = p.invoices?.invoice_number || '-';
+      const displayName = d.code ? `${d.name} (${d.code})${inv !== '-' ? ' · ' + inv : ''}` : d.name;
+      return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
+    });
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
