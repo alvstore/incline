@@ -145,7 +145,7 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
     );
   }
 
-  const memberProfile = (invoice.members as any)?.profiles;
+  const memberDisplay = resolveMemberDisplay((invoice as any).members, invoice.customer_name);
   const dueAmount = invoice.total_amount - (invoice.amount_paid || 0);
 
   // Derive Wallet Used vs Other Payment from payments table (fallback to notes regex)
