@@ -195,6 +195,7 @@ export interface InvoicePdfInput {
     total_amount: number;
     hsn_code?: string;
     batches?: Array<{ batch_number: string; exp_date?: string | null; quantity?: number }>;
+    meta?: { subtitle?: string; bullets?: string[] };
   }>;
   member_name: string;
   member_code?: string | null;
