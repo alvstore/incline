@@ -353,8 +353,15 @@ export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContex
       return `Batch: ${b.batch_number}${exp}${q}`;
     }).join('\n');
   };
+  const formatMetaSuffix = (meta?: { subtitle?: string; bullets?: string[] }): string => {
+    if (!meta) return '';
+    const parts: string[] = [];
+    if (meta.subtitle) parts.push(meta.subtitle);
+    if (meta.bullets && meta.bullets.length) parts.push(...meta.bullets.map(b => `• ${b}`));
+    return parts.length ? '\n' + parts.join('\n') : '';
+  };
   const body = data.items.map(i => {
-    const desc = `${i.description}${formatBatchSuffix(i.batches)}`;
+    const desc = `${i.description}${formatMetaSuffix(i.meta)}${formatBatchSuffix(i.batches)}`;
     return showHsn
       ? [desc, i.hsn_code || '-', String(i.quantity || 1), inr(i.unit_price), inr(i.total_amount)]
       : [desc, String(i.quantity || 1), inr(i.unit_price), inr(i.total_amount)];
