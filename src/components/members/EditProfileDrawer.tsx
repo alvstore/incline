@@ -141,23 +141,32 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
             full_name: formData.full_name,
             phone: formData.phone,
             email: formData.email,
+            date_of_birth: formData.date_of_birth || null,
+            gender: (formData.gender || null) as any,
+            address: formData.address || null,
+            city: formData.city || null,
+            state: formData.state || null,
+            postal_code: formData.postal_code || null,
+            country: formData.country || null,
             emergency_contact_name: formData.emergency_contact_name,
             emergency_contact_phone: formData.emergency_contact_phone,
-            avatar_url: avatarUrl
+            avatar_url: avatarUrl,
           })
           .eq('id', member.user_id);
 
         if (error) throw error;
       } else if (member?.lead_id) {
         // Pre-signup member (converted from lead) — write PII back to the lead row.
-        // Emergency contact fields don't exist on leads, so skip them; they'll be
-        // editable once the member completes signup and a profile row exists.
+        // leads has full_name/phone/email/date_of_birth/gender/avatar_url; address +
+        // emergency contacts only persist once a profile exists post-signup.
         const { error } = await supabase
           .from('leads')
           .update({
             full_name: formData.full_name,
             phone: formData.phone,
             email: formData.email,
+            date_of_birth: formData.date_of_birth || null,
+            gender: (formData.gender || null) as any,
             avatar_url: avatarUrl,
           })
           .eq('id', member.lead_id);
