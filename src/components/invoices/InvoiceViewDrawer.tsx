@@ -11,9 +11,9 @@ import { format } from 'date-fns';
 import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail } from 'lucide-react';
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
-import { buildInvoicePdf, buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
+import { buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
-import { useBrandContext } from '@/lib/brand/useBrandContext';
+import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 
 interface InvoiceViewDrawerProps {
@@ -26,7 +26,6 @@ interface InvoiceViewDrawerProps {
 
 export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayment, onSendPaymentLink }: InvoiceViewDrawerProps) {
   const [shareOpen, setShareOpen] = useState(false);
-  const { data: brand } = useBrandContext(null);
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice-details', invoiceId],
     queryFn: async () => {
@@ -78,14 +77,14 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
 
   const buildPDFData = () => toInvoicePdfInput(invoice);
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!invoice) return;
-    const blob = buildInvoicePdf(buildPDFData(), brand);
+    const blob = await generateInvoicePdfBlob(invoice);
     downloadBlob(blob, `Invoice-${invoice.invoice_number}.pdf`);
   };
   const handleThermalPrint = () => {
     if (!invoice) return;
-    printBlob(buildThermalReceiptPdf(buildPDFData(), brand));
+    printBlob(buildThermalReceiptPdf(buildPDFData()));
   };
 
   if (isLoading || !invoice) {

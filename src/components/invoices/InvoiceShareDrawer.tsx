@@ -13,7 +13,7 @@ import { format } from 'date-fns';
 import { communicationService } from '@/services/communicationService';
 import { e } from '@/utils/htmlEscape';
 import { supabase } from '@/integrations/supabase/client';
-import { buildInvoicePdf, type InvoicePdfInput } from '@/utils/pdfBlob';
+import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { sendWhatsAppDocument } from '@/utils/whatsappDocumentSender';
 import { findTemplate, resolveTemplate } from '@/lib/templates/dynamicAttachment';
