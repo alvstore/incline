@@ -38,6 +38,13 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
     full_name: '',
     phone: '',
     email: '',
+    date_of_birth: '',
+    gender: '',
+    address: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     fitness_goals: '',
@@ -52,13 +59,20 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
   const [equipmentAvailability, setEquipmentAvailability] = useState<string[]>([]);
 
   useEffect(() => {
-    if (profile) {
+    if (profile || member) {
       setFormData({
-        full_name: profile.full_name || '',
-        phone: profile.phone || '',
-        email: profile.email || '',
-        emergency_contact_name: profile.emergency_contact_name || '',
-        emergency_contact_phone: profile.emergency_contact_phone || '',
+        full_name: profile?.full_name || member?.lead?.full_name || '',
+        phone: profile?.phone || member?.lead?.phone || '',
+        email: profile?.email || member?.lead?.email || '',
+        date_of_birth: profile?.date_of_birth || member?.lead?.date_of_birth || '',
+        gender: profile?.gender || member?.lead?.gender || '',
+        address: profile?.address || '',
+        city: profile?.city || '',
+        state: profile?.state || '',
+        postal_code: profile?.postal_code || '',
+        country: profile?.country || '',
+        emergency_contact_name: profile?.emergency_contact_name || '',
+        emergency_contact_phone: profile?.emergency_contact_phone || '',
         fitness_goals: member?.fitness_goals || '',
         gstin: member?.gstin || '',
         dietary_preference: member?.dietary_preference || '',
@@ -69,7 +83,7 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
         injuries_limitations: member?.injuries_limitations || '',
       });
       setEquipmentAvailability(Array.isArray(member?.equipment_availability) ? member.equipment_availability : []);
-      setAvatarUrl(profile.avatar_url || null);
+      setAvatarUrl(profile?.avatar_url || member?.lead?.avatar_url || null);
     }
   }, [profile, member]);
 
