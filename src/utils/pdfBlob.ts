@@ -195,6 +195,7 @@ export interface InvoicePdfInput {
     total_amount: number;
     hsn_code?: string;
     batches?: Array<{ batch_number: string; exp_date?: string | null; quantity?: number }>;
+    meta?: { subtitle?: string; bullets?: string[] };
   }>;
   member_name: string;
   member_code?: string | null;
@@ -207,7 +208,7 @@ export interface InvoicePdfInput {
   gst_number?: string | null;
 }
 
-export function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContext): Blob {
+export async function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContext): Promise<Blob> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const PAGE_W = 210;
   const title = data.is_gst_invoice ? 'TAX INVOICE' : 'INVOICE';
@@ -221,6 +222,8 @@ export function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContext): Bl
       gstin: data.gst_number ?? null,
     },
   };
+  // Load logo (cached); falls back to bundled incline asset via resolveBrandAsync.
+  const logo = await loadLogoDataUrl(resolvedBrand.logoUrl || inclineLogoAsset);
 
   // ── Brand palette (indigo / violet) ─────────────────────────────────────
   const INDIGO: [number, number, number] = [79, 70, 229];   // #4F46E5
@@ -242,19 +245,33 @@ export function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContext): Bl
     doc.rect((PAGE_W / STRIPS) * i, 0, PAGE_W / STRIPS + 0.3, HEADER_H, 'F');
   }
 
-  // Company wordmark (left). Synchronous: skip raster logo to avoid async
-  // refactor; cached logo loader is async and only used in buildPlanPdf.
+  // Logo (left of wordmark) on white rounded card
+  let textX = 14;
+  if (logo) {
+    const maxH = 14, maxW = 28;
+    const ratio = logo.w / Math.max(1, logo.h);
+    let lh = maxH, lw = lh * ratio;
+    if (lw > maxW) { lw = maxW; lh = lw / ratio; }
+    const padX = 3, padY = 3;
+    const boxX = 10, boxY = (HEADER_H - lh - padY * 2) / 2;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(boxX, boxY, lw + padX * 2, lh + padY * 2, 1.5, 1.5, 'F');
+    try { doc.addImage(logo.dataUrl, 'PNG', boxX + padX, boxY + padY, lw, lh, undefined, 'FAST'); } catch { /* ignore */ }
+    textX = boxX + lw + padX * 2 + 4;
+  }
+
+  // Company wordmark
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.text(resolvedBrand.companyName.toUpperCase(), 14, 17);
+  doc.setFontSize(18);
+  doc.text(resolvedBrand.companyName.toUpperCase(), textX, 17);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(226, 232, 240); // slate-200
-  doc.text('The Incline Life by Incline', 14, 23);
-  if (resolvedBrand.branch.name) doc.text(resolvedBrand.branch.name, 14, 28);
+  doc.text('The Incline Life by Incline', textX, 22);
+  if (resolvedBrand.branch.name) doc.text(resolvedBrand.branch.name, textX, 27);
   const headerContact = [resolvedBrand.branch.phone, resolvedBrand.branch.email].filter(Boolean).join('  ·  ');
-  if (headerContact) doc.text(headerContact, 14, 33);
+  if (headerContact) doc.text(headerContact, textX, 32);
 
   // Title block (right)
   doc.setTextColor(255, 255, 255);
@@ -336,8 +353,15 @@ export function buildInvoicePdf(data: InvoicePdfInput, brand?: BrandContext): Bl
       return `Batch: ${b.batch_number}${exp}${q}`;
     }).join('\n');
   };
+  const formatMetaSuffix = (meta?: { subtitle?: string; bullets?: string[] }): string => {
+    if (!meta) return '';
+    const parts: string[] = [];
+    if (meta.subtitle) parts.push(meta.subtitle);
+    if (meta.bullets && meta.bullets.length) parts.push(...meta.bullets.map(b => `• ${b}`));
+    return parts.length ? '\n' + parts.join('\n') : '';
+  };
   const body = data.items.map(i => {
-    const desc = `${i.description}${formatBatchSuffix(i.batches)}`;
+    const desc = `${i.description}${formatMetaSuffix(i.meta)}${formatBatchSuffix(i.batches)}`;
     return showHsn
       ? [desc, i.hsn_code || '-', String(i.quantity || 1), inr(i.unit_price), inr(i.total_amount)]
       : [desc, String(i.quantity || 1), inr(i.unit_price), inr(i.total_amount)];

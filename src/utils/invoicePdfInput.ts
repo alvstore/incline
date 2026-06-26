@@ -1,4 +1,5 @@
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
+import { supabase } from '@/integrations/supabase/client';
 import type { InvoicePdfInput } from '@/utils/pdfBlob';
 
 /**
@@ -56,4 +57,79 @@ export function toInvoicePdfInput(invoice: any): InvoicePdfInput {
     gst_rate: invoice.gst_rate || 0,
     customer_gstin: invoice.customer_gstin,
   } as InvoicePdfInput;
+}
+
+/**
+ * Same as `toInvoicePdfInput` plus async enrichment for membership rows:
+ * fetches the plan + benefits and attaches a "Includes:" bullet list and a
+ * complimentary-period subtitle (when the membership window exceeds plan duration).
+ */
+export async function toInvoicePdfInputAsync(invoice: any): Promise<InvoicePdfInput> {
+  const base = toInvoicePdfInput(invoice);
+  const items = invoice.invoice_items || [];
+  const membershipIds: string[] = items
+    .filter((i: any) => i.reference_type === 'membership' && i.reference_id)
+    .map((i: any) => String(i.reference_id));
+
+  if (membershipIds.length === 0) return base;
+
+  // Pull memberships, plan, and plan_benefits (+ benefit_type name) in two queries.
+  const { data: memberships } = await supabase
+    .from('memberships')
+    .select('id, plan_id, start_date, end_date, plan:plan_id(name, duration_days)')
+    .in('id', membershipIds);
+  const planIds = Array.from(new Set((memberships || []).map((m: any) => m.plan_id).filter(Boolean)));
+  const { data: benefits } = planIds.length
+    ? await supabase
+        .from('plan_benefits')
+        .select('plan_id, benefit_type, frequency, limit_count, description, benefit_type_id, benefit:benefit_type_id(name)')
+        .in('plan_id', planIds)
+    : { data: [] as any[] };
+
+  const byMembership = new Map<string, any>();
+  (memberships || []).forEach((m: any) => byMembership.set(String(m.id), m));
+  const benefitsByPlan = new Map<string, any[]>();
+  (benefits || []).forEach((b: any) => {
+    const list = benefitsByPlan.get(String(b.plan_id)) || [];
+    list.push(b);
+    benefitsByPlan.set(String(b.plan_id), list);
+  });
+
+  base.items = base.items.map((row, idx) => {
+    const raw = items[idx];
+    if (!raw || raw.reference_type !== 'membership' || !raw.reference_id) return row;
+    const m = byMembership.get(String(raw.reference_id));
+    if (!m) return row;
+
+    const subtitleBits: string[] = [];
+    if (m.start_date && m.end_date) {
+      const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      subtitleBits.push(`Valid ${fmt(m.start_date)} → ${fmt(m.end_date)}`);
+    }
+    if (m.start_date && m.end_date && m.plan?.duration_days) {
+      const actual = Math.round((new Date(m.end_date).getTime() - new Date(m.start_date).getTime()) / 86_400_000);
+      const extra = actual - m.plan.duration_days;
+      if (extra >= 25) {
+        const months = Math.round(extra / 30);
+        subtitleBits.push(`Includes ${extra} complimentary days${months > 0 ? ` (~${months} month${months > 1 ? 's' : ''} extra)` : ''}`);
+      }
+    }
+
+    const planBenefits = benefitsByPlan.get(String(m.plan_id)) || [];
+    const bullets = planBenefits.slice(0, 8).map((b: any) => {
+      const name = b.benefit?.name || b.benefit_type || 'Benefit';
+      const count = b.limit_count ? `${b.limit_count}${b.frequency ? ` / ${b.frequency}` : ''}` : null;
+      return count ? `${name} — ${count}` : (b.description || name);
+    });
+
+    return {
+      ...row,
+      meta: {
+        subtitle: subtitleBits.join(' · ') || undefined,
+        bullets: bullets.length ? bullets : undefined,
+      },
+    };
+  });
+
+  return base;
 }
