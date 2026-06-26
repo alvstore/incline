@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, User, Phone, Mail, AlertCircle, Camera, Target, Activity } from 'lucide-react';
+import { Loader2, User, Phone, Mail, AlertCircle, Camera, Target, Activity, MapPin, Cake } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
