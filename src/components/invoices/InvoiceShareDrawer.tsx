@@ -108,39 +108,9 @@ Team Incline Fitness`;
     <p style="color:#ffffffaa;">If you have any questions about this invoice, just reply to this email — we're here to help.</p>
     <p style="margin-top:18px;">Warm regards,<br><strong>Team Incline Fitness</strong></p>`;
 
-  // Map the invoice row to the PDF builder input. Pulls items, branch, and
-  // member contact details so the generated PDF matches the on-screen invoice.
-  const buildPdfInput = (): InvoicePdfInput => ({
-    invoice_number: invoice.invoice_number,
-    created_at: invoice.created_at,
-    due_date: invoice.due_date,
-    status: invoice.status,
-    subtotal: Number(invoice.subtotal || 0),
-    discount_amount: Number(invoice.discount_amount || 0),
-    tax_amount: Number(invoice.tax_amount || 0),
-    gst_rate: Number(invoice.gst_rate || 0),
-    total_amount: Number(invoice.total_amount || 0),
-    amount_paid: Number(invoice.amount_paid || 0),
-    notes: invoice.notes,
-    is_gst_invoice: invoice.is_gst_invoice,
-    customer_gstin: invoice.customer_gstin,
-    items: (invoice.invoice_items || []).map((it: any) => ({
-      description: it.description,
-      quantity: Number(it.quantity || 1),
-      unit_price: Number(it.unit_price || 0),
-      total_amount: Number(it.total_amount || 0),
-      hsn_code: it.hsn_code,
-    })),
-    member_name: memberName,
-    member_code: (invoice.members as any)?.member_code,
-    member_email: guestEmail || undefined,
-    member_phone: guestPhone || undefined,
-    branch_name: branch.name || 'Incline Fitness',
-    branch_address: branch.address,
-    branch_phone: branch.phone,
-    branch_email: branch.email,
-    gst_number: branch.gstin,
-  });
+  // PDF generation is centralised in `generateInvoicePdfBlob` so the WhatsApp /
+  // Email attachments are byte-identical to the Drawer download and the
+  // Invoices list download — single source of truth for branding + benefits.
 
   /** Build a `{{var}}` context for invoice templates. */
   const buildTemplateVars = () => ({
@@ -172,7 +142,7 @@ Team Incline Fitness`;
         filename: `Invoice-${invoice.invoice_number}.pdf`,
       });
 
-      const pdf = buildInvoicePdf(buildPdfInput());
+      const pdf = await generateInvoicePdfBlob(invoice);
       const result = await sendWhatsAppDocument({
         branchId: invoice.branch_id,
         phone,
@@ -217,7 +187,7 @@ Team Incline Fitness`;
         filename: `Invoice-${invoice.invoice_number}.pdf`,
       });
 
-      const pdf = buildInvoicePdf(buildPdfInput());
+      const pdf = await generateInvoicePdfBlob(invoice);
       if (pdf.size < 1024) {
         throw new Error('Generated PDF is empty or corrupted — refresh and try again');
       }
