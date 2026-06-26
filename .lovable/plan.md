@@ -1,138 +1,96 @@
-# Fix Pack: Member actions, Invoice download/PDF, Reminders, Recent Payments naming
 
-Five small, scoped fixes — all UI/edge-function level. No schema changes.
+## Problem
 
----
+Two PDF paths produce different output:
 
-## 1. Members → row actions: respect "Scheduled" plan
+1. **Invoices list "Download" action** (`src/pages/Invoices.tsx`) — calls `resolveBrandAsync(invoice.branch_id, …)` so it picks up the branch's address/phone/email and the Incline logo URL (with bundled fallback).
+2. **Invoice Details drawer "Download" button** (`src/components/invoices/InvoiceViewDrawer.tsx`) — passes `useBrandContext(null)` (global only, no branch_id), so the brand has no branch address and may miss the logo lookup chain.
 
-**File:** `src/pages/Members.tsx` (action dropdown around line 762)
+Additionally:
 
-Current logic only checks `activeMembership`, so Love Kumar (who has a **scheduled** plan starting 27 Jul) sees "Add Plan" + nothing else.
+- `buildInvoicePdf` is **synchronous** and explicitly skips raster logo rendering (see comment at `pdfBlob.ts:246`). So **neither** path actually paints the logo — only the wordmark.
+- Membership line items currently show only `"Annual Plan - 365 days"` (raw `invoice_items.description`). The PDF does not expand membership rows with included benefits / "1 month extra" details.
 
-Change:
-- Compute `existingPlan = activeMembership || scheduledMembership` (already derived earlier in the row).
-- Primary item label:
-  - `activeMembership` → **Renew Plan**
-  - `scheduledMembership` (no active) → **Reschedule Plan** (opens existing PurchaseMembershipDrawer in "edit start date" mode — for now reuses purchase drawer, label only)
-  - none → **Add Plan**
-- Show the secondary block (Buy PT Package, Quick Freeze) when **either** active OR scheduled exists. Quick Freeze stays disabled for scheduled (only active can be frozen) with tooltip "Available after plan starts".
-- Add new item "Collect Due ₹X" (opens existing payment link drawer for the linked invoice) when `pendingDues > 0` — applies to both active and scheduled. This solves the "₹25,000 due but no quick way to collect" gap visible in the screenshot.
+## Fix plan
 
----
+### 1. Single source of truth for invoice PDF generation
 
-## 2. Invoices list → Download menu item is dead
-
-**File:** `src/pages/Invoices.tsx` line 418–421
-
-The `DropdownMenuItem` for Download has no `onClick`. Wire it to:
+Create one async helper that both call sites use:
 
 ```ts
-onClick={async () => {
-  const full = await fetchInvoice(invoice.id); // existing billingService
-  const brand = await resolveBrandForBranch(invoice.branch_id);
-  const blob = buildInvoicePdf(toPdfInput(full, invoice.members), brand);
-  downloadBlob(blob, `Invoice-${invoice.invoice_number}.pdf`);
-}}
-```
-
-Use the same `toPdfInput` shape already used inside `InvoiceViewDrawer.handleDownloadPDF`. Extract that mapper into `src/utils/invoicePdfInput.ts` so both call sites share it. Show a toast on success / error.
-
----
-
-## 3. Invoice PDF → on-brand Incline look
-
-**File:** `src/utils/pdfBlob.ts` (`header`, `buildInvoicePdf`, footer helpers)
-
-Keep jsPDF (no new deps). Tighten brand fidelity:
-
-- **Header band:** swap the flat primary fill for the Vuexy indigo→violet gradient (simulate via two stacked rects with interpolated colors). Increase header height to 38mm. Left side: Incline logo (already cached via `_logoCache`) at 28mm wide. Right side: large `TAX INVOICE` / `INVOICE` in white 18pt + invoice # and date stacked below in 9pt white/80%.
-- **Brand line under header:** thin 1mm violet bar `#7C3AED`, then `The Incline Life by Incline` tagline in `BRAND.muted` 8pt italic (required by the brand-identity memory).
-- **Bill To / From cards:** two equal-width rounded rects (`doc.roundedRect`, r=2) side-by-side, soft slate fill (`#F8FAFC`). From-card lists branch name, address, phone, email, GSTIN (when present).
-- **Items table:** `theme: 'plain'` with a single 0.2mm bottom border per row, header row filled with `#EEF2FF` and indigo text (not white-on-violet which looks heavy on A4). Right-align Qty/Rate/Amount. Monospace amounts.
-- **Totals block:** right-aligned card with Subtotal / Discount / Taxable / CGST / SGST / IGST (only the lines that apply) / **Total** in bold 12pt indigo, then **Amount Paid** (green) and **Balance Due** (red if >0).
-- **Payment status stamp:** if `status === 'paid'` overlay a 30°-rotated `PAID` outline stamp (green) at ~40% opacity; if `voided` overlay `VOID` (red).
-- **Footer:** thin top border, three columns — left "Thank you for choosing Incline", center support contact, right page `n / N`. Legal line: `The Incline Life by Incline · CIN/GSTIN if set · {website}`.
-- **Typography:** use helvetica (jsPDF built-in) but normalize sizes: H1 18 · H2 11 · body 9 · meta 8. No size below 8.
-
-`buildThermalReceiptPdf` (POS) keeps its current 80mm layout — only the A4 invoice changes.
-
-Verify by generating a sample blob for an invoice with mixed items + dues and opening it locally.
-
----
-
-## 4. Payment Reminders → skip when invoice already paid
-
-**File:** `supabase/functions/send-reminders/index.ts` (payment block ~line 237)
-
-Inside the `for (const reminder of pendingReminders)` loop, after loading `invoice`, add a guard **before** any send work:
-
-```ts
-const totalAmt = Number(invoice?.total_amount || 0);
-const paidAmt  = Number(invoice?.amount_paid  || 0);
-const pendingAmt = Math.max(totalAmt - paidAmt, 0);
-const terminal = ['paid', 'voided', 'cancelled', 'refunded'].includes(invoice?.status);
-
-if (!invoice || terminal || pendingAmt < 1) {
-  await adminClient
-    .from('payment_reminders')
-    .update({ status: 'skipped', skipped_reason: terminal ? `invoice_${invoice?.status}` : 'no_balance', updated_at: new Date().toISOString() })
-    .eq('id', reminder.id);
-  continue;
+// src/utils/invoicePdf.ts (new)
+export async function generateInvoicePdfBlob(invoice: any): Promise<Blob> {
+  const input = await toInvoicePdfInputAsync(invoice); // enriches membership rows
+  const brand = await resolveBrandAsync(invoice.branch_id, invoice?.branch?.name);
+  return buildInvoicePdf(input, brand);
 }
 ```
 
-Also pre-filter the initial select with `.in('invoice_id', <unpaid invoice ids>)`? — keep DB load low by adding a join filter is non-trivial in PostgREST, so the in-loop skip is cheaper and correct.
+Replace both download handlers:
 
-Add `skipped_reason text` column to `payment_reminders` via migration (single ALTER TABLE … ADD COLUMN IF NOT EXISTS) so the skip is auditable. (Tiny migration — included in this plan as the only DB change.)
+- **`InvoiceViewDrawer.tsx`** — drop `useBrandContext(null)`; `handleDownloadPDF` becomes async and calls `generateInvoicePdfBlob(invoice)`.
+- **`Invoices.tsx`** (Download menu item) — call `generateInvoicePdfBlob(full)` instead of the inline `resolveBrandAsync + toInvoicePdfInput + buildInvoicePdf` triplet.
+- **`InvoiceShareDrawer.tsx`** — same; both `buildInvoicePdf(buildPdfInput())` calls go through `generateInvoicePdfBlob(invoice)` so emailed/shared PDFs match.
 
-Bump fn header to `// send-reminders v2.2 — skip when invoice paid/void/zero balance.`
+Result: identical bytes whether the user downloads from the list, the drawer, or share.
 
----
+### 2. Embed the Incline logo in the invoice PDF
 
-## 5. Audit "user shows staff name instead of customer"
+Convert `buildInvoicePdf` (in `pdfBlob.ts`) to **async** so it can use the existing cached `loadLogoDataUrl(brand.logoUrl)` helper (already used by `buildPlanPdf`).
 
-**Audit scope:**
+- If a logo loads, render it on the left of the gradient header (~22×22mm, vertically centered), and shift the wordmark to the right of the logo.
+- If logo load fails, keep the current text-only wordmark — no regression.
+- `resolveBrandAsync` already falls back to bundled `incline-logo.png`, so the logo will always be present unless fetch fails entirely.
 
-- `src/pages/Payments.tsx` row line 423 → already uses `resolveMemberDisplay(payment.members).name`. ✅ correct.
-- `src/pages/Invoices.tsx` invoice list → already resolved. ✅
-- `src/components/invoices/InvoiceViewDrawer.tsx` Bill-To → already resolved.
-- **Suspected leak:** `payment.received_by` (auth user id of staff who recorded the payment) was being surfaced in some places. Grep for `received_by`, `recorded_by`, `created_by` joined to `profiles` in:
-  - `src/pages/Payments.tsx`
-  - `src/components/invoices/InvoiceViewDrawer.tsx`
-  - `src/components/payments/*`
-  - `src/pages/Dashboard.tsx` (recent payments widget)
-  - `src/pages/MemberProfile.tsx` "Recent payments" tab
-- For every match: if the display is meant to identify the **customer**, replace with `resolveMemberDisplay(row.members)`. If it legitimately shows "Recorded by …" (audit context), keep but relabel the column header to **Recorded by** and render in `text-xs text-muted-foreground` so it cannot be confused with the customer name.
-- Add a unit-style sanity check: `src/services/__tests__/resolveMemberDisplay.spec.ts` covering profiles-only, lead-only, both, and empty cases (mirrors existing `walletService.sanity.mjs` style).
+All callers (`InvoiceViewDrawer`, `Invoices`, `InvoiceShareDrawer`, anything else from the grep) become `await buildInvoicePdf(...)`. Helper from step 1 hides that.
 
-If the audit finds zero remaining leaks in shipped UI, document this in `mem://architecture/customer-vs-staff-naming` so future code doesn't regress.
+### 3. Branch "From" address always populated
 
----
+After step 1, both paths feed the invoice's actual `branch_id` into `resolveBrandAsync`, which fetches `branches.address/phone/email/gstin`. The "FROM" card already renders these — no further change needed.
 
-## Out of scope (will not touch this pass)
+### 4. Enrich membership line items with plan details + benefits
 
-- Razorpay link expiry policy.
-- Reminder cadence changes (only paid-skip logic).
-- POS thermal receipt layout.
-- Any DB grants/RLS changes.
+Extend `toInvoicePdfInput` → async variant `toInvoicePdfInputAsync(invoice)`:
 
-## Acceptance
+- For each `invoice_items` row where `reference_type === 'membership'`, fetch:
+  ```sql
+  select m.id, m.start_date, m.end_date, m.plan_id,
+         p.name, p.duration_days, p.duration_type,
+         (select json_agg(json_build_object('name', bt.name, 'quantity', pb.quantity, 'unit', pb.unit))
+            from plan_benefits pb
+            join benefit_types bt on bt.id = pb.benefit_type_id
+           where pb.plan_id = p.id) as benefits
+    from memberships m
+    join membership_plans p on p.id = m.plan_id
+   where m.id = :reference_id
+  ```
+- Build an expanded description: header line + a "Includes:" bullet list of benefits, and (if `duration_days > plan_duration_days`) a "+ 1 month complimentary" callout derived from `end_date - start_date` vs plan duration.
+- Pass through new optional `meta` field on the item:
+  ```ts
+  items: [{ ..., meta: { subtitle?: string; bullets?: string[] } }]
+  ```
+- In `buildInvoicePdf`, when rendering each row's description cell, append `meta.subtitle` (smaller, muted) and `meta.bullets` (• list, 8pt) under the description so the PDF reads:
+  ```
+  Annual Plan - 365 days
+  Includes 30 complimentary days
+  • Sauna — 12 sessions
+  • Ice Bath — 12 sessions
+  • Personal Training — 4 sessions
+  ```
 
-1. Members row for Love Kumar (scheduled plan, ₹25,000 due) shows: **Renew Plan**, **Buy PT Package**, **Quick Freeze** (disabled w/ tooltip), **Collect Due ₹25,000**.
-2. Invoices list → kebab → **Download** writes `Invoice-INV-INC-26-0014.pdf` and toasts success.
-3. Generated PDF shows indigo→violet header, Incline logo, "Bill To" + "From" cards, totals card, "PAID"/"VOID" stamp when applicable, branded footer.
-4. After marking an invoice paid, the next `automation-brain-tick` run marks its `payment_reminders` rows as `status='skipped'` with `skipped_reason='invoice_paid'` and sends nothing.
-5. Grep audit for `received_by|recorded_by` UI usage returns either zero matches in customer-name slots, or matches relabeled as "Recorded by".
+### 5. Files touched
 
-## Files touched
+- `src/utils/pdfBlob.ts` — make `buildInvoicePdf` async, draw logo, render item meta.
+- `src/utils/invoicePdfInput.ts` — keep sync mapper, add `toInvoicePdfInputAsync` that enriches membership rows.
+- `src/utils/invoicePdf.ts` *(new)* — `generateInvoicePdfBlob(invoice)` single entry point.
+- `src/components/invoices/InvoiceViewDrawer.tsx` — drop `useBrandContext`, use helper.
+- `src/pages/Invoices.tsx` — Download menu item uses helper.
+- `src/components/invoices/InvoiceShareDrawer.tsx` — both download/share PDF calls use helper.
 
-- `src/pages/Members.tsx`
-- `src/pages/Invoices.tsx`
-- `src/components/invoices/InvoiceViewDrawer.tsx` (extract mapper)
-- `src/utils/invoicePdfInput.ts` (new — shared mapper)
-- `src/utils/pdfBlob.ts` (PDF redesign)
-- `supabase/functions/send-reminders/index.ts`
-- Migration: `payment_reminders.skipped_reason` column
-- Optional audit edits in Dashboard / MemberProfile recent-payments widgets
-- `src/services/__tests__/resolveMemberDisplay.spec.ts` (new)
+### Acceptance
+
+- Downloading INV-INC-26-0014 from either the drawer or the list produces a PDF with: Incline logo (left of wordmark), branch address in FROM card, line item showing "Annual Plan - 365 days" + plan benefits + complimentary period.
+- Share drawer's attached PDF matches.
+- No other PDFs (plan, payslip, thermal receipt) regress.
+
+Used the **ui-ux-pro-max** and **senior-architect** skills.
