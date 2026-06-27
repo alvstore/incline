@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.get_employer_profile(uuid) TO authenticated, service_role;
