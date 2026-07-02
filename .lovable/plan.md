@@ -1,96 +1,106 @@
 
-## Problem
+# Epic Sprint: Centralized AI Memory + Public Launch Date (26 July 2026)
 
-Two PDF paths produce different output:
+## Public date is now official: Sunday, 26 July 2026
 
-1. **Invoices list "Download" action** (`src/pages/Invoices.tsx`) — calls `resolveBrandAsync(invoice.branch_id, …)` so it picks up the branch's address/phone/email and the Incline logo URL (with bundled fallback).
-2. **Invoice Details drawer "Download" button** (`src/components/invoices/InvoiceViewDrawer.tsx`) — passes `useBrandContext(null)` (global only, no branch_id), so the brand has no branch address and may miss the logo lookup chain.
+All embargoes on the *date itself* are lifted. The **pricing embargo remains** — plans/fees stay under wraps until the opening. Every source of truth (SEO files, `ai_knowledge`, sanitizer, canned regex answers) is aligned to a **single** date string.
 
-Additionally:
+## Canonical strings (SSOT — use these exact values everywhere)
 
-- `buildInvoicePdf` is **synchronous** and explicitly skips raster logo rendering (see comment at `pdfBlob.ts:246`). So **neither** path actually paints the logo — only the wordmark.
-- Membership line items currently show only `"Annual Plan - 365 days"` (raw `invoice_items.description`). The PDF does not expand membership rows with included benefits / "1 month extra" details.
+- **Opening date:** `Sunday, 26 July 2026`
+- **Short form:** `26 July 2026`
+- **Embargo pivot line (English):** `"We open on Sunday, 26 July 2026. All plan pricing is under embargo until then — right now I can only reserve your Founding Membership spot. Want me to add your name?"`
+- **Embargo pivot line (Hinglish):** `"Hum Sunday, 26 July 2026 ko launch kar rahe hain. Tab tak saare plans embargo mein hain — abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?"`
 
-## Fix plan
+## Current fragmentation (audit)
 
-### 1. Single source of truth for invoice PDF generation
+| Layer | File(s) | Today's state |
+|---|---|---|
+| SEO | `public/llms.txt`, `public/llms-full.txt`, `public/ai.txt`, `index.html` (JSON-LD), `public/sitemap.xml` | `llms*` currently show `"n"` placeholder (previously scrubbed). `index.html` has no `openingDate`. |
+| Knowledge base SSOT | `ai_knowledge` rows `facts`, `pricing_rules`, `pt_rules` (migration `20260610131829…`) | Say `"July 2026"` (no day). `pricing_rules` and inline scaffolds contradict each other. |
+| Brain regex canned answers | `ai-agent-brain.ts` `INTENT_ANSWERS.timeline` / `.pricing` (lines 229–233) | Say *"date hasn't been announced"* — stale, conflicts with new public date. |
+| Inline duplicated prose | `ai-agent-brain.ts` lines 1094–1100, 1119, 1503, 1590–1598, 1687–1721 | 6+ copies of "Founding Member (Annual) is our only active enrollment" — the exact "memory conflict" the user reported. |
+| Sanitizer | `ai-agent-brain.ts` lines 1611–1625 (`redactOpeningDate`) | Strips *every* `<month> 20XX` — will now wrongly redact "26 July 2026" from legitimate replies. |
 
-Create one async helper that both call sites use:
+## Epic 1 — Purge duplicates, single SSOT
+
+### 1a. `ai-agent-brain.ts` — introduce shared constants, delete duplicated prose
 
 ```ts
-// src/utils/invoicePdf.ts (new)
-export async function generateInvoicePdfBlob(invoice: any): Promise<Blob> {
-  const input = await toInvoicePdfInputAsync(invoice); // enriches membership rows
-  const brand = await resolveBrandAsync(invoice.branch_id, invoice?.branch?.name);
-  return buildInvoicePdf(input, brand);
-}
+// Single source of truth for user-facing embargo copy. Every regex-fallback
+// canned answer and every inline prompt scaffold reads from here.
+export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
+export const EMBARGO_PIVOT_LINE_EN =
+  `We open on ${LAUNCH_DATE_LABEL}. All plan pricing is under embargo until then — ` +
+  `right now I can only reserve your Founding Membership spot. Want me to add your name?`;
+export const EMBARGO_PIVOT_LINE_HI =
+  `Hum ${LAUNCH_DATE_LABEL} ko launch kar rahe hain. Tab tak saare plans embargo mein hain — ` +
+  `abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?`;
 ```
 
-Replace both download handlers:
+Replace:
+- `INTENT_ANSWERS.pricing` → `EMBARGO_PIVOT_LINE_EN`
+- `INTENT_ANSWERS.timeline` → `EMBARGO_PIVOT_LINE_EN` (timeline no longer says "not announced")
+- `OPENING_DATE_NEUTRAL` (line 1616) → `EMBARGO_PIVOT_LINE_EN`
+- Inline "Founding Member (Annual) is our only active enrollment…" prose at lines 1094–1100 → single reference to `EMBARGO_PIVOT_LINE_EN`
+- POST-CAPTURE NURTURE block (line 1119) → replace 6-line embargo prose with: `Refer to the "Launch & Pricing Embargo" rule in <knowledge_base>. Never paraphrase.`
+- `askNextMissing` closer (line 1511) and `enforceNoRepeatNameAsk` closer (line 1598) → `EMBARGO_PIVOT_LINE_EN` (personalized with `firstName` when known)
 
-- **`InvoiceViewDrawer.tsx`** — drop `useBrandContext(null)`; `handleDownloadPDF` becomes async and calls `generateInvoicePdfBlob(invoice)`.
-- **`Invoices.tsx`** (Download menu item) — call `generateInvoicePdfBlob(full)` instead of the inline `resolveBrandAsync + toInvoicePdfInput + buildInvoicePdf` triplet.
-- **`InvoiceShareDrawer.tsx`** — same; both `buildInvoicePdf(buildPdfInput())` calls go through `generateInvoicePdfBlob(invoice)` so emailed/shared PDFs match.
+### 1b. Sanitizer fix — allow the canonical date through
 
-Result: identical bytes whether the user downloads from the list, the drawer, or share.
+`OPENING_DATE_RE` and `OPENING_VERB_YEAR_RE` currently strip **any** `<month> 20XX`. Update them so a message containing the exact canonical string `"26 July 2026"` or `"Sunday, 26 July 2026"` passes through unchanged; all other year-bearing month phrases (LLM hallucinations, wrong months) are still redacted to `EMBARGO_PIVOT_LINE_EN`.
 
-### 2. Embed the Incline logo in the invoice PDF
+Implementation: bail out of redaction with a preflight check `if (/\bSunday,?\s+26\s+July\s+2026\b|\b26\s+July\s+2026\b/i.test(text)) return { redacted: text, hit: false };`.
 
-Convert `buildInvoicePdf` (in `pdfBlob.ts`) to **async** so it can use the existing cached `loadLogoDataUrl(brand.logoUrl)` helper (already used by `buildPlanPdf`).
+## Epic 2 — Knowledge base alignment (single migration)
 
-- If a logo loads, render it on the left of the gradient header (~22×22mm, vertically centered), and shift the wordmark to the right of the logo.
-- If logo load fails, keep the current text-only wordmark — no regression.
-- `resolveBrandAsync` already falls back to bundled `incline-logo.png`, so the logo will always be present unless fetch fails entirely.
+New migration `<timestamp>_launch_date_and_embargo_ssot.sql`:
 
-All callers (`InvoiceViewDrawer`, `Invoices`, `InvoiceShareDrawer`, anything else from the grep) become `await buildInvoicePdf(...)`. Helper from step 1 hides that.
+**`ai_knowledge` upserts** (all `priority=1`, `applies_to={all}`, `is_active=true`, `status='active'`):
 
-### 3. Branch "From" address always populated
+1. **`launch_timeline` / "Public Opening Date"** — content:
+   > Incline opens to the public on **Sunday, 26 July 2026**. This date is now public — quote it accurately. Do NOT invent a time of day or day-1 schedule.
 
-After step 1, both paths feed the invoice's actual `branch_id` into `resolveBrandAsync`, which fetches `branches.address/phone/email/gstin`. The "FROM" card already renders these — no further change needed.
+2. **`pricing_rules` / "Launch & Pricing Embargo"** — content (verbatim, this is the unified rule the user asked for):
+   > **[LAUNCH & PRICING EMBARGO RULE]** — Incline opens on Sunday, 26 July 2026. You are strictly forbidden from quoting any prices, fees, or membership tiers before that date. All plan details will be exclusively disclosed on and after the July 26 opening. If asked about pricing, fees, or timeline, you MUST state this embargo and immediately pivot to the ONLY allowed action: asking the user if they want to reserve a spot for a Founding Membership.
+   >
+   > Approved reply (English): "We open on Sunday, 26 July 2026. All plan pricing is under embargo until then — right now I can only reserve your Founding Membership spot. Want me to add your name?"
+   >
+   > Approved reply (Hinglish): "Hum Sunday, 26 July 2026 ko launch kar rahe hain. Tab tak saare plans embargo mein hain — abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?"
+   >
+   > Never write a currency symbol (₹, Rs., INR) or a number followed by /month, /mo, per month. Never list plan tiers by name with prices.
 
-### 4. Enrich membership line items with plan details + benefits
+3. **`facts` refresh** — update `source_data.opening_label` from `'July 2026'` → `'Sunday, 26 July 2026'`; scrub the `"say July 2026 only"` clause.
 
-Extend `toInvoicePdfInput` → async variant `toInvoicePdfInputAsync(invoice)`:
+4. **`pt_rules` refresh** — replace `"Until the official launch (July 2026)"` → `"Until the official launch on 26 July 2026"`.
 
-- For each `invoice_items` row where `reference_type === 'membership'`, fetch:
-  ```sql
-  select m.id, m.start_date, m.end_date, m.plan_id,
-         p.name, p.duration_days, p.duration_type,
-         (select json_agg(json_build_object('name', bt.name, 'quantity', pb.quantity, 'unit', pb.unit))
-            from plan_benefits pb
-            join benefit_types bt on bt.id = pb.benefit_type_id
-           where pb.plan_id = p.id) as benefits
-    from memberships m
-    join membership_plans p on p.id = m.plan_id
-   where m.id = :reference_id
-  ```
-- Build an expanded description: header line + a "Includes:" bullet list of benefits, and (if `duration_days > plan_duration_days`) a "+ 1 month complimentary" callout derived from `end_date - start_date` vs plan duration.
-- Pass through new optional `meta` field on the item:
-  ```ts
-  items: [{ ..., meta: { subtitle?: string; bullets?: string[] } }]
-  ```
-- In `buildInvoicePdf`, when rendering each row's description cell, append `meta.subtitle` (smaller, muted) and `meta.bullets` (• list, 8pt) under the description so the PDF reads:
-  ```
-  Annual Plan - 365 days
-  Includes 30 complimentary days
-  • Sauna — 12 sessions
-  • Ice Bath — 12 sessions
-  • Personal Training — 4 sessions
-  ```
+## Epic 3 — SEO / crawler surfaces
 
-### 5. Files touched
+**`public/llms.txt`** — replace `Opening: n` → `Opening: Sunday, 26 July 2026`.
 
-- `src/utils/pdfBlob.ts` — make `buildInvoicePdf` async, draw logo, render item meta.
-- `src/utils/invoicePdfInput.ts` — keep sync mapper, add `toInvoicePdfInputAsync` that enriches membership rows.
-- `src/utils/invoicePdf.ts` *(new)* — `generateInvoicePdfBlob(invoice)` single entry point.
-- `src/components/invoices/InvoiceViewDrawer.tsx` — drop `useBrandContext`, use helper.
-- `src/pages/Invoices.tsx` — Download menu item uses helper.
-- `src/components/invoices/InvoiceShareDrawer.tsx` — both download/share PDF calls use helper.
+**`public/llms-full.txt`** — replace `Opens to public: **n**` → `Opens to public: **Sunday, 26 July 2026**`; replace `before the n public opening` → `before the 26 July 2026 public opening`; add `Q: When does Incline open?` / `A: Sunday, 26 July 2026.` to the Q&A block.
 
-### Acceptance
+**`public/ai.txt`** — add `opening-date: 2026-07-26` line if not present.
 
-- Downloading INV-INC-26-0014 from either the drawer or the list produces a PDF with: Incline logo (left of wordmark), branch address in FROM card, line item showing "Annual Plan - 365 days" + plan benefits + complimentary period.
-- Share drawer's attached PDF matches.
-- No other PDFs (plan, payslip, thermal receipt) regress.
+**`index.html`** — extend the existing `HealthClub` / `Organization` JSON-LD with `"openingDate": "2026-07-26"` and refine `"description"` to include the date. Keep title/canonical/og:* unchanged (they're already correct).
 
-Used the **ui-ux-pro-max** and **senior-architect** skills.
+**`public/sitemap.xml`** — no URL changes; just bump `<lastmod>` on `/` and `/register` to today.
+
+**Memory core rule** — update `mem://index.md` Founder's Phase line from *"opening date NOT disclosed by AI"* to *"opening date is public: Sunday, 26 July 2026 — pricing still embargoed until then"*.
+
+## Files touched
+
+- `supabase/migrations/<new>_launch_date_and_embargo_ssot.sql` (new)
+- `supabase/functions/_shared/ai-agent-brain.ts` (constants + delete 6 duplicated prose blocks + sanitizer bypass)
+- `public/llms.txt`, `public/llms-full.txt`, `public/ai.txt`, `index.html`, `public/sitemap.xml`
+- Memory: update `mem://index.md` Founder's Phase core rule + core embargo rule
+
+No changes to `ai-prompt.ts`, `ai-memory.ts`, `ai-dynamic-memory.ts`, `ai-runtime.ts` — architecture is already correct, only content was fragmented.
+
+## Verification
+
+- `rg -n "Founding Member \(Annual\) is our only active enrollment" supabase/functions/_shared/ai-agent-brain.ts` → 0 hits post-edit.
+- `rg -n "July 2026|\"n\"" supabase/functions/_shared/ public/llms.txt public/llms-full.txt public/ai.txt` → every remaining hit is intentional (`26 July 2026`).
+- Manual: send "kitna hai?" and "kab khulega?" to the brain → both return `EMBARGO_PIVOT_LINE_EN` verbatim (regex path) and the LLM path returns the same wording from `<knowledge_base>` (Epic 2 row).
+- Sanitizer unit check: `redactOpeningDate("We open on Sunday, 26 July 2026 ✨")` returns `hit=false`.
+- SEO scan (Rescan button) confirms `openingDate` present in JSON-LD.
