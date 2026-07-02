@@ -1117,13 +1117,10 @@ GENERAL RULES:
     if (hasName && hasEmail && hasGoal && hasPlanInterest && !chatSettings?.captured_lead_id) {
       const plan = String(memory?.facts?.plan_interest || "").toLowerCase();
       const isAnnual = /annual|yearly|12\s*month/.test(plan);
-      const reply = isAnnual
-        ? (_fn
-            ? `${_pivot}Perfect ${_fn} — Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`
-            : `${_pivot}Founding Member (Annual) is our only active enrollment right now with launch-day perks. Want our team to lock in your Founding spot? ✨`)
-        : (_fn
-            ? `${_pivot}Noted ${_fn} — I've logged your interest. Our team will share full plan options closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open. ✨`
-            : `${_pivot}Noted — I've logged your interest. Our team will share full plan options closer to launch. ✨`);
+      // Unified embargo pivot — annual and non-annual both route to the same
+      // SSOT line so wording never drifts. Personalization via embargoPivotLine.
+      const reply = `${_pivot}${embargoPivotLine(_fn)}`;
+      void isAnnual; // intent still captured for CRM segmentation; copy is unified.
       return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
     }
   }
@@ -1142,7 +1139,7 @@ HARD RULES:
 - DO NOT emit any {"status":"lead_captured"...} JSON — the lead already exists.
 - DO NOT run the Turn 1 → Turn 5 onboarding sequence.
 - Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
-- If they ask about Founding Member / membership / pricing: "Our Founding Member (Annual) enrollment is the only active offer right now — happy to have our team call you to lock in your Founding spot. Sound good?"
+- If they ask about Founding Member / membership / pricing / opening date / timeline: refer VERBATIM to the "Launch & Pricing Embargo" rule in <knowledge_base>. Do not paraphrase or invent alternative wording.
 - If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge, offer human follow-up.
 - VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
 - If they want to speak to a person or you hit two errors: call transfer_to_human.
@@ -1533,9 +1530,7 @@ function enforceOutboundInteractiveGuards(input: {
     if (!knownGoal) return goalListJson(firstName);
     const knownPlan = !!memory?.facts?.plan_interest;
     if (!knownPlan) return planListJson(firstName);
-    return firstName
-      ? `You're locked in on the Founding Member list, ${firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens — no need to chase.`
-      : "You're locked in on the Founding Member list ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens — no need to chase.";
+    return embargoPivotLine(firstName);
   };
 
 
@@ -1621,7 +1616,7 @@ function enforceNoRepeatNameAsk(input: {
   if (!knownPlan) {
     return `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`;
   }
-  return `You're locked in on our Founding Member list, ${firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp when your slot opens.`;
+  return embargoPivotLine(firstName);
 }
 
 
@@ -1639,11 +1634,16 @@ const OPENING_DATE_RE =
   /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
 const OPENING_VERB_YEAR_RE =
   /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,60}\b20\d{2}\b/gi;
-const OPENING_DATE_NEUTRAL =
-  "Our opening date hasn't been announced publicly yet — our team will share it as soon as it's locked in ✨";
+// Whitelist the canonical opening date so legitimate replies pass through.
+const CANONICAL_OPENING_DATE_RE =
+  /\b(?:sunday,?\s+)?26(?:st|th)?\s+july,?\s+2026\b/i;
+const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
 
 function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   if (!text) return { redacted: text, hit: false };
+  // If the message contains the canonical public opening date, allow it through
+  // untouched — the date itself is no longer embargoed, only pricing is.
+  if (CANONICAL_OPENING_DATE_RE.test(text)) return { redacted: text, hit: false };
   const before = text;
   let out = text.replace(OPENING_VERB_YEAR_RE, "open soon");
   out = out.replace(OPENING_DATE_RE, "soon");
@@ -1742,9 +1742,7 @@ function sanitizeFoundersPhaseText(input: {
       ] }],
     });
   }
-  return firstName
-    ? `You're locked in on the Founding Member list, ${firstName} ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp closer to opening.`
-    : "You're locked in on the Founding Member list ✨ One of our founders will personally walk you through your pre-launch onboarding right here on WhatsApp closer to opening.";
+  return embargoPivotLine(firstName);
 }
 
 // Deterministic fallback when the model returns no text. Mirrors the

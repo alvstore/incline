@@ -21,6 +21,7 @@ Category: Luxury fitness and recovery club
 Location: Sector 14, Udaipur, Rajasthan, 313001, India
 Geo: 24.546845, 73.701003
 Hours: 24/7
+Opening-Date: 2026-07-26
 Website: https://theincline.in/
 
 # Disambiguation:
