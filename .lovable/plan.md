@@ -1,106 +1,90 @@
+# Launch Countdown — "26 July 2026" Moment
 
-# Epic Sprint: Centralized AI Memory + Public Launch Date (26 July 2026)
+## Intent
+Turn the flat "BEGIN YOUR ASCENT • 2026" line into a **living countdown** to `Sunday, 26 July 2026 00:00 IST`, without changing hero layout, 3D scene, register flow, or breaking the pricing embargo. Everything degrades gracefully to a static date label.
 
-## Public date is now official: Sunday, 26 July 2026
+## What the user will see
 
-All embargoes on the *date itself* are lifted. The **pricing embargo remains** — plans/fees stay under wraps until the opening. Every source of truth (SEO files, `ai_knowledge`, sanitizer, canned regex answers) is aligned to a **single** date string.
+1. **Hero scroll indicator (upgraded in place)**
+   Existing line:
+   ```
+   BEGIN YOUR ASCENT • 2026
+   ```
+   New line (same spot, same typography, same pulse):
+   ```
+   BEGIN YOUR ASCENT · SUN 26 JUL 2026
+   ── 142d : 07h : 22m : 18s ──
+   ```
+   - Ticks every second via a single `setInterval`; pauses when tab is hidden (`visibilitychange`) to keep it cheap.
+   - Honours `prefers-reduced-motion`: no `animate-pulse`, no seconds tick — shows just `142 days to go`.
+   - After the moment passes: collapses to `WE ARE OPEN · SUN 26 JUL 2026` (no negative numbers, no broken UI).
 
-## Canonical strings (SSOT — use these exact values everywhere)
+2. **Floating "Founding Membership" chip (new, bottom-right, desktop + mobile)**
+   Small glass pill, appears after 1.5s idle:
+   ```
+   ◐ Launching in 142 days  →  Reserve your spot
+   ```
+   - Click opens the **existing** `RegisterModal` (no new flow, no new route).
+   - Dismissable (session-scoped `sessionStorage` flag). Never re-nags the same session.
+   - Hidden on `prefers-reduced-motion` and when the register modal is already open.
+   - Never mentions pricing — pivot copy aligns with the SSOT embargo rule.
 
-- **Opening date:** `Sunday, 26 July 2026`
-- **Short form:** `26 July 2026`
-- **Embargo pivot line (English):** `"We open on Sunday, 26 July 2026. All plan pricing is under embargo until then — right now I can only reserve your Founding Membership spot. Want me to add your name?"`
-- **Embargo pivot line (Hinglish):** `"Hum Sunday, 26 July 2026 ko launch kar rahe hain. Tab tak saare plans embargo mein hain — abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?"`
+3. **Section 8 (final CTA), if it exists** — append the same countdown as a single muted line under the primary CTA. Purely additive text; no button/layout changes.
 
-## Current fragmentation (audit)
+## Technical plan
 
-| Layer | File(s) | Today's state |
-|---|---|---|
-| SEO | `public/llms.txt`, `public/llms-full.txt`, `public/ai.txt`, `index.html` (JSON-LD), `public/sitemap.xml` | `llms*` currently show `"n"` placeholder (previously scrubbed). `index.html` has no `openingDate`. |
-| Knowledge base SSOT | `ai_knowledge` rows `facts`, `pricing_rules`, `pt_rules` (migration `20260610131829…`) | Say `"July 2026"` (no day). `pricing_rules` and inline scaffolds contradict each other. |
-| Brain regex canned answers | `ai-agent-brain.ts` `INTENT_ANSWERS.timeline` / `.pricing` (lines 229–233) | Say *"date hasn't been announced"* — stale, conflicts with new public date. |
-| Inline duplicated prose | `ai-agent-brain.ts` lines 1094–1100, 1119, 1503, 1590–1598, 1687–1721 | 6+ copies of "Founding Member (Annual) is our only active enrollment" — the exact "memory conflict" the user reported. |
-| Sanitizer | `ai-agent-brain.ts` lines 1611–1625 (`redactOpeningDate`) | Strips *every* `<month> 20XX` — will now wrongly redact "26 July 2026" from legitimate replies. |
-
-## Epic 1 — Purge duplicates, single SSOT
-
-### 1a. `ai-agent-brain.ts` — introduce shared constants, delete duplicated prose
-
+### New file: `src/lib/launch.ts`
+Single source of truth for the date + helpers. No React.
 ```ts
-// Single source of truth for user-facing embargo copy. Every regex-fallback
-// canned answer and every inline prompt scaffold reads from here.
-export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
-export const EMBARGO_PIVOT_LINE_EN =
-  `We open on ${LAUNCH_DATE_LABEL}. All plan pricing is under embargo until then — ` +
-  `right now I can only reserve your Founding Membership spot. Want me to add your name?`;
-export const EMBARGO_PIVOT_LINE_HI =
-  `Hum ${LAUNCH_DATE_LABEL} ko launch kar rahe hain. Tab tak saare plans embargo mein hain — ` +
-  `abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?`;
+export const LAUNCH_ISO = '2026-07-26T00:00:00+05:30'; // Sun 26 Jul 2026 IST
+export const LAUNCH_LABEL_SHORT = 'Sun 26 Jul 2026';
+export const LAUNCH_LABEL_LONG  = 'Sunday, 26 July 2026';
+export function msUntilLaunch(now = Date.now()) { … }
+export function formatCountdown(ms: number): { d:number; h:number; m:number; s:number; past:boolean };
 ```
+Matches the existing SSOT already used in `ai-agent-brain.ts` and `public/llms*.txt`.
 
-Replace:
-- `INTENT_ANSWERS.pricing` → `EMBARGO_PIVOT_LINE_EN`
-- `INTENT_ANSWERS.timeline` → `EMBARGO_PIVOT_LINE_EN` (timeline no longer says "not announced")
-- `OPENING_DATE_NEUTRAL` (line 1616) → `EMBARGO_PIVOT_LINE_EN`
-- Inline "Founding Member (Annual) is our only active enrollment…" prose at lines 1094–1100 → single reference to `EMBARGO_PIVOT_LINE_EN`
-- POST-CAPTURE NURTURE block (line 1119) → replace 6-line embargo prose with: `Refer to the "Launch & Pricing Embargo" rule in <knowledge_base>. Never paraphrase.`
-- `askNextMissing` closer (line 1511) and `enforceNoRepeatNameAsk` closer (line 1598) → `EMBARGO_PIVOT_LINE_EN` (personalized with `firstName` when known)
+### New file: `src/components/launch/LaunchCountdown.tsx`
+- Tiny presentational component: `<LaunchCountdown variant="inline" | "chip" | "line" />`.
+- Uses one shared `useCountdown()` hook (single interval per mount, cleared on unmount, paused on `document.hidden`).
+- Reduced-motion + past-launch branches handled inside; parent doesn't care.
+- No new dependencies.
 
-### 1b. Sanitizer fix — allow the canonical date through
+### New file: `src/components/launch/FoundingChip.tsx`
+- Fixed-position glass pill (`bottom-4 right-4 z-40`), keyboard-focusable button, `aria-label="Reserve your Founding Membership spot"`.
+- Fires the same custom event `RegisterModal` already listens to (or dispatches `window.dispatchEvent(new CustomEvent('open-register'))` — we'll reuse whatever `RegisterModal` already exposes; if none, we lift a small callback via `useState` in `InclineAscent`).
 
-`OPENING_DATE_RE` and `OPENING_VERB_YEAR_RE` currently strip **any** `<month> 20XX`. Update them so a message containing the exact canonical string `"26 July 2026"` or `"Sunday, 26 July 2026"` passes through unchanged; all other year-bearing month phrases (LLM hallucinations, wrong months) are still redacted to `EMBARGO_PIVOT_LINE_EN`.
+### Edits
+- **`src/components/ui/ScrollOverlay.tsx`** — replace the `BEGIN YOUR ASCENT • 2026` `<span>` with `<LaunchCountdown variant="inline" />`. No other change to that file.
+- **`src/pages/InclineAscent.tsx`** — mount `<FoundingChip />` lazily (idle callback, same pattern as `RegisterModal`) so it never blocks LCP. Skip mount if `prefers-reduced-motion`.
+- **`index.html`** — extend existing JSON-LD with a single `Event` object:
+  ```json
+  { "@context":"https://schema.org", "@type":"Event",
+    "name":"The Incline Life — Grand Opening",
+    "startDate":"2026-07-26T00:00:00+05:30",
+    "eventStatus":"https://schema.org/EventScheduled",
+    "eventAttendanceMode":"https://schema.org/OfflineEventAttendanceMode",
+    "location":{ "@type":"Place","name":"The Incline Life","address":"Sector 14, Udaipur, Rajasthan 313001, IN" },
+    "url":"https://theincline.in/" }
+  ```
+  Keeps existing `openingDate` on `HealthClub` untouched.
 
-Implementation: bail out of redaction with a preflight check `if (/\bSunday,?\s+26\s+July\s+2026\b|\b26\s+July\s+2026\b/i.test(text)) return { redacted: text, hit: false };`.
+## What we deliberately do NOT do
+- No pricing, tier, or ₹ number anywhere (embargo remains).
+- No changes to the 3D scene, `Scene3D`, canvas, or scroll-driven animations.
+- No new routes, no new backend calls, no `ai_knowledge` edits (already aligned last sprint).
+- No changes to `ScrollProgressBar`, sound effects, register flow, or waiver.
+- No new npm dependencies.
 
-## Epic 2 — Knowledge base alignment (single migration)
-
-New migration `<timestamp>_launch_date_and_embargo_ssot.sql`:
-
-**`ai_knowledge` upserts** (all `priority=1`, `applies_to={all}`, `is_active=true`, `status='active'`):
-
-1. **`launch_timeline` / "Public Opening Date"** — content:
-   > Incline opens to the public on **Sunday, 26 July 2026**. This date is now public — quote it accurately. Do NOT invent a time of day or day-1 schedule.
-
-2. **`pricing_rules` / "Launch & Pricing Embargo"** — content (verbatim, this is the unified rule the user asked for):
-   > **[LAUNCH & PRICING EMBARGO RULE]** — Incline opens on Sunday, 26 July 2026. You are strictly forbidden from quoting any prices, fees, or membership tiers before that date. All plan details will be exclusively disclosed on and after the July 26 opening. If asked about pricing, fees, or timeline, you MUST state this embargo and immediately pivot to the ONLY allowed action: asking the user if they want to reserve a spot for a Founding Membership.
-   >
-   > Approved reply (English): "We open on Sunday, 26 July 2026. All plan pricing is under embargo until then — right now I can only reserve your Founding Membership spot. Want me to add your name?"
-   >
-   > Approved reply (Hinglish): "Hum Sunday, 26 July 2026 ko launch kar rahe hain. Tab tak saare plans embargo mein hain — abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?"
-   >
-   > Never write a currency symbol (₹, Rs., INR) or a number followed by /month, /mo, per month. Never list plan tiers by name with prices.
-
-3. **`facts` refresh** — update `source_data.opening_label` from `'July 2026'` → `'Sunday, 26 July 2026'`; scrub the `"say July 2026 only"` clause.
-
-4. **`pt_rules` refresh** — replace `"Until the official launch (July 2026)"` → `"Until the official launch on 26 July 2026"`.
-
-## Epic 3 — SEO / crawler surfaces
-
-**`public/llms.txt`** — replace `Opening: n` → `Opening: Sunday, 26 July 2026`.
-
-**`public/llms-full.txt`** — replace `Opens to public: **n**` → `Opens to public: **Sunday, 26 July 2026**`; replace `before the n public opening` → `before the 26 July 2026 public opening`; add `Q: When does Incline open?` / `A: Sunday, 26 July 2026.` to the Q&A block.
-
-**`public/ai.txt`** — add `opening-date: 2026-07-26` line if not present.
-
-**`index.html`** — extend the existing `HealthClub` / `Organization` JSON-LD with `"openingDate": "2026-07-26"` and refine `"description"` to include the date. Keep title/canonical/og:* unchanged (they're already correct).
-
-**`public/sitemap.xml`** — no URL changes; just bump `<lastmod>` on `/` and `/register` to today.
-
-**Memory core rule** — update `mem://index.md` Founder's Phase line from *"opening date NOT disclosed by AI"* to *"opening date is public: Sunday, 26 July 2026 — pricing still embargoed until then"*.
+## Verification (post-build)
+- Landing renders with countdown ticking; toggling reduced-motion in devtools removes the seconds tick.
+- Playwright headless: navigate `/`, screenshot hero, assert `Sun 26 Jul 2026` text present, assert `FoundingChip` becomes visible ~1.5s later, click → register modal opens.
+- Set system clock forward (unit test on `formatCountdown`) to confirm the past-launch branch renders `WE ARE OPEN` instead of negative numbers.
+- `rg -n "26 July 2026|2026-07-26"` still shows every existing SSOT hit intact; new hits only in `src/lib/launch.ts`, `index.html`, and the two new components.
+- Lighthouse: LCP unchanged (chip mounts on idle, countdown is text-only).
 
 ## Files touched
+- **New:** `src/lib/launch.ts`, `src/components/launch/LaunchCountdown.tsx`, `src/components/launch/FoundingChip.tsx`
+- **Edit:** `src/components/ui/ScrollOverlay.tsx` (1 line swap), `src/pages/InclineAscent.tsx` (lazy mount chip), `index.html` (add Event JSON-LD)
 
-- `supabase/migrations/<new>_launch_date_and_embargo_ssot.sql` (new)
-- `supabase/functions/_shared/ai-agent-brain.ts` (constants + delete 6 duplicated prose blocks + sanitizer bypass)
-- `public/llms.txt`, `public/llms-full.txt`, `public/ai.txt`, `index.html`, `public/sitemap.xml`
-- Memory: update `mem://index.md` Founder's Phase core rule + core embargo rule
-
-No changes to `ai-prompt.ts`, `ai-memory.ts`, `ai-dynamic-memory.ts`, `ai-runtime.ts` — architecture is already correct, only content was fragmented.
-
-## Verification
-
-- `rg -n "Founding Member \(Annual\) is our only active enrollment" supabase/functions/_shared/ai-agent-brain.ts` → 0 hits post-edit.
-- `rg -n "July 2026|\"n\"" supabase/functions/_shared/ public/llms.txt public/llms-full.txt public/ai.txt` → every remaining hit is intentional (`26 July 2026`).
-- Manual: send "kitna hai?" and "kab khulega?" to the brain → both return `EMBARGO_PIVOT_LINE_EN` verbatim (regex path) and the LLM path returns the same wording from `<knowledge_base>` (Epic 2 row).
-- Sanitizer unit check: `redactOpeningDate("We open on Sunday, 26 July 2026 ✨")` returns `hit=false`.
-- SEO scan (Rescan button) confirms `openingDate` present in JSON-LD.
+Skills used: `ui-ux-pro-max` (motion + hierarchy check), `code-reviewer` (kept components <200 lines, no `any`, TanStack-free presentational only, a11y).
