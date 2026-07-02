@@ -13,6 +13,7 @@ const INCLINE_LOGO = '/incline-logo.png';
 const Scene3D = lazy(() => import('@/components/3d/Scene3D'));
 const RegisterModal = lazy(() => import('@/components/ui/RegisterModal'));
 const LegalModal = lazy(() => import('@/components/ui/LegalModal'));
+const FoundingChip = lazy(() => import('@/components/launch/FoundingChip'));
 
 const InclineAscent = () => {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -245,6 +246,7 @@ const InclineAscent = () => {
         <Suspense fallback={null}>
           <RegisterModal />
           <LegalModal />
+          <FoundingChip />
         </Suspense>
       )}
     </div>
