@@ -147,6 +147,29 @@ import {
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
+// ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
+// Public opening date is Sunday, 26 July 2026. The date itself is disclosable;
+// prices/fees/plan tiers stay embargoed until then. Every regex-fallback
+// canned answer, every inline prompt scaffold, and every sanitizer fallback
+// reads from these constants — do NOT duplicate this wording elsewhere.
+// Canonical embargo copy also lives in ai_knowledge (topic='pricing_rules',
+// title='Launch & Pricing Embargo', priority=1) for the LLM path.
+export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
+export const EMBARGO_PIVOT_LINE_EN =
+  `We open on ${LAUNCH_DATE_LABEL}. All plan pricing is under embargo until then — ` +
+  `right now I can only reserve your Founding Membership spot. Want me to add your name?`;
+export const EMBARGO_PIVOT_LINE_HI =
+  `Hum ${LAUNCH_DATE_LABEL} ko launch kar rahe hain. Tab tak saare plans embargo mein hain — ` +
+  `abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?`;
+/** Personalized variant of the embargo pivot line — call with the user's first name. */
+export function embargoPivotLine(firstName?: string | null): string {
+  const fn = (firstName || "").trim();
+  return fn
+    ? `${fn}, ${EMBARGO_PIVOT_LINE_EN.charAt(0).toLowerCase()}${EMBARGO_PIVOT_LINE_EN.slice(1)}`
+    : EMBARGO_PIVOT_LINE_EN;
+}
+
+
 // Per-request dynamic memory snapshot. Loaded once at the top of runUnifiedAgent
 // and read synchronously by classifyHinglishIntent / looksLikeRealName.
 let _dynMemSnapshot: DynamicMemoryBundle | null = null;
@@ -226,10 +249,13 @@ export function classifyHinglishIntents(text: string): Array<Exclude<HinglishInt
   return order.filter((k) => out.has(k)).slice(0, 2);
 }
 
+// Canned regex-fallback answers. Pricing + timeline both collapse to the
+// unified EMBARGO_PIVOT_LINE_EN — the LLM path (via ai_knowledge) returns
+// byte-identical wording so the user experience is consistent.
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   location: "We're at Sector 14, Udaipur, Rajasthan ✨",
-  pricing: "Founding Member (Annual) is our only active enrollment right now — full pricing is shared by our team once you're on the Founder's list ✨",
-  timeline: "Our opening date hasn't been announced publicly yet — Founding Members will be the first to know ✨",
+  pricing: EMBARGO_PIVOT_LINE_EN,
+  timeline: EMBARGO_PIVOT_LINE_EN,
 };
 
 // v4.6.0 — sanitize curated correction_instruction. Admin rows often start
