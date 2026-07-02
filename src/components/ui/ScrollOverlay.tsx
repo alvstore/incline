@@ -1,3 +1,4 @@
+import LaunchCountdown from "@/components/launch/LaunchCountdown";
 import {
   ChevronDown,
   Instagram,
@@ -39,10 +40,8 @@ const ScrollOverlay = () => {
             </p>
           </div>
         </div>
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-          <span className="text-sm tracking-widest uppercase font-bold text-primary animate-pulse text-center">
-            BEGIN YOUR ASCENT • 2026
-          </span>
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-center">
+          <LaunchCountdown variant="inline" />
           <ChevronDown className="w-6 h-6 scroll-indicator text-primary animate-bounce" />
         </div>
       </section>
