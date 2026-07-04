@@ -14,6 +14,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useInView } from '@/hooks/useInView';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { 
   UserPlus, 
   Dumbbell, 
