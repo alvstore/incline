@@ -14,6 +14,7 @@ import { useBranchContext } from '@/contexts/BranchContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useInView } from '@/hooks/useInView';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { 
   UserPlus, 
   Dumbbell, 
@@ -237,20 +238,23 @@ export default function DashboardPage() {
       // filter below ensures fully-paid rows never leak in.
       let query = supabase
         .from('invoices')
-        .select('id, total_amount, amount_paid, status, member_id, members(member_code, user_id, profiles:user_id(full_name))')
+        .select('id, total_amount, amount_paid, status, member_id, customer_name, members(member_code, profiles:user_id(full_name, avatar_url, email, phone), lead:leads!members_lead_id_fkey(full_name, avatar_url, email, phone))')
         .in('status', ['pending', 'overdue', 'partial'])
         .order('total_amount', { ascending: false })
         .limit(20);
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       const { data } = await query;
       const items = (data || [])
-        .map((inv: any) => ({
-          id: inv.id,
-          memberName: inv.members?.profiles?.full_name || 'Unknown',
-          memberCode: inv.members?.member_code || '',
-          owed: (inv.total_amount || 0) - (inv.amount_paid || 0),
-          status: inv.status,
-        }))
+        .map((inv: any) => {
+          const display = resolveMemberDisplay(inv.members, inv.customer_name);
+          return {
+            id: inv.id,
+            memberName: display.name,
+            memberCode: display.code || '',
+            owed: (inv.total_amount || 0) - (inv.amount_paid || 0),
+            status: inv.status,
+          };
+        })
         .filter((r: any) => r.owed > 0)
         .slice(0, 5);
       const totalOutstanding = items.reduce((sum: number, r: any) => sum + r.owed, 0);
@@ -270,7 +274,7 @@ export default function DashboardPage() {
 
       let query = supabase
         .from('memberships')
-        .select('id, end_date, member_id, members(member_code, profiles:user_id(full_name)), membership_plans(name)')
+        .select('id, end_date, member_id, members(member_code, profiles:user_id(full_name), lead:leads!members_lead_id_fkey(full_name)), membership_plans(name)')
         .eq('status', 'active')
         .gte('end_date', today)
         .lte('end_date', in48h)
@@ -279,13 +283,16 @@ export default function DashboardPage() {
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       const { data } = await query;
 
-      return (data || []).map((m: any) => ({
-        memberId: m.member_id,
-        memberCode: m.members?.member_code,
-        memberName: m.members?.profiles?.full_name || 'Unknown',
-        hoursRemaining: differenceInHours(new Date(m.end_date), now),
-        planName: m.membership_plans?.name || 'N/A',
-      }));
+      return (data || []).map((m: any) => {
+        const display = resolveMemberDisplay(m.members);
+        return {
+          memberId: m.member_id,
+          memberCode: m.members?.member_code,
+          memberName: display.name,
+          hoursRemaining: differenceInHours(new Date(m.end_date), now),
+          planName: m.membership_plans?.name || 'N/A',
+        };
+      });
     },
   });
 
