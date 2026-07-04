@@ -274,7 +274,7 @@ export default function DashboardPage() {
 
       let query = supabase
         .from('memberships')
-        .select('id, end_date, member_id, members(member_code, profiles:user_id(full_name)), membership_plans(name)')
+        .select('id, end_date, member_id, members(member_code, profiles:user_id(full_name), lead:leads!members_lead_id_fkey(full_name)), membership_plans(name)')
         .eq('status', 'active')
         .gte('end_date', today)
         .lte('end_date', in48h)
@@ -283,13 +283,16 @@ export default function DashboardPage() {
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       const { data } = await query;
 
-      return (data || []).map((m: any) => ({
-        memberId: m.member_id,
-        memberCode: m.members?.member_code,
-        memberName: m.members?.profiles?.full_name || 'Unknown',
-        hoursRemaining: differenceInHours(new Date(m.end_date), now),
-        planName: m.membership_plans?.name || 'N/A',
-      }));
+      return (data || []).map((m: any) => {
+        const display = resolveMemberDisplay(m.members);
+        return {
+          memberId: m.member_id,
+          memberCode: m.members?.member_code,
+          memberName: display.name,
+          hoursRemaining: differenceInHours(new Date(m.end_date), now),
+          planName: m.membership_plans?.name || 'N/A',
+        };
+      });
     },
   });
 
