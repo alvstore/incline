@@ -148,19 +148,18 @@ import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
 // ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
-// Public opening date is Sunday, 26 July 2026. The date itself is disclosable;
-// prices/fees/plan tiers stay embargoed until then. Every regex-fallback
-// canned answer, every inline prompt scaffold, and every sanitizer fallback
-// reads from these constants — do NOT duplicate this wording elsewhere.
-// Canonical embargo copy also lives in ai_knowledge (topic='pricing_rules',
-// title='Launch & Pricing Embargo', priority=1) for the LLM path.
-export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
+// v5.0.0 (Lakshya audit): during Founder's Phase the bot MUST NOT disclose
+// the opening date, offer callbacks, or promise tours. The real date is kept
+// internal for staff-side task descriptions ONLY. All outbound copy uses the
+// neutral phrase "opening day".
+export const LAUNCH_DATE_LABEL = "opening day";
+export const LAUNCH_DATE_INTERNAL = "2026-07-26"; // staff/task use only
 export const EMBARGO_PIVOT_LINE_EN =
-  `We open on ${LAUNCH_DATE_LABEL}. All plan pricing is under embargo until then — ` +
-  `right now I can only reserve your Founding Membership spot. Want me to add your name?`;
+  `Founding Membership spots are open right now — want me to add your name to the list? ` +
+  `I'll share the full details with you on opening day.`;
 export const EMBARGO_PIVOT_LINE_HI =
-  `Hum ${LAUNCH_DATE_LABEL} ko launch kar rahe hain. Tab tak saare plans embargo mein hain — ` +
-  `abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?`;
+  `Founding Membership spots abhi open hain — naam add kar doon? ` +
+  `Opening day pe main aapko saari details bhej dunga.`;
 /** Personalized variant of the embargo pivot line — call with the user's first name. */
 export function embargoPivotLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
@@ -168,6 +167,7 @@ export function embargoPivotLine(firstName?: string | null): string {
     ? `${fn}, ${EMBARGO_PIVOT_LINE_EN.charAt(0).toLowerCase()}${EMBARGO_PIVOT_LINE_EN.slice(1)}`
     : EMBARGO_PIVOT_LINE_EN;
 }
+
 
 
 // Per-request dynamic memory snapshot. Loaded once at the top of runUnifiedAgent
