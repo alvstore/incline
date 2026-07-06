@@ -1,5 +1,10 @@
 // _shared/handoff.ts
-// v1.0.0 — Founder / human handoff orchestrator.
+// v2.0.0 — Founder's Phase reservation orchestrator (Lakshya audit).
+//          Task title/description reworded from "callback" → "reservation".
+//          No SLA promise to the prospect: the internal task still fires but
+//          the outbound copy NEVER commits the team to a call before opening
+//          day. See ai-agent-brain.ts §6b (Reservation short-circuit).
+
 //
 // Single source of truth invoked from the AI brain whenever a lead explicitly
 // agrees to a callback (e.g. "Yeah sure" after the bot offers "want our team
