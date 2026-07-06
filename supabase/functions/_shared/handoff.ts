@@ -76,13 +76,15 @@ export async function requestFounderHandoff(
   //    notification (step 4) handles routing to the actual humans.
   const displayName = (contactName && contactName.trim()) || chatPhone;
   const dueDate = new Date();
-  dueDate.setHours(dueDate.getHours() + 2); // 2-hour SLA
-  const title = `Founding Member callback — ${displayName}`;
+  dueDate.setDate(dueDate.getDate() + 1); // review within 24h, no external SLA promise
+  const title = `Founding Member reservation — ${displayName}`;
   const description =
-    `Lead agreed to a callback on ${platform} ${chatPhone}.\n` +
+    `Lead reserved a Founding Member spot on ${platform} ${chatPhone}.\n` +
     `Reason: ${reason}.\n` +
     (summary ? `Context: ${summary}\n` : "") +
+    `Do NOT call this prospect before opening day — Founder's Phase policy.\n` +
     `Open the WhatsApp inbox for the full transcript.`;
+
 
   let taskId: string | null = null;
   try {
