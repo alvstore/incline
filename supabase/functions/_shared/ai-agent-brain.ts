@@ -1700,7 +1700,8 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
   if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
   console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
-  return "Got it — sharing your interest with our team. Someone will reach out to you shortly ✨";
+  return "Got it — noting your interest. I'll share the full details with you on opening day ✨";
+
 }
 
 function sanitizeFoundersPhaseText(input: {
