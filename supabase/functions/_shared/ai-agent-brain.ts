@@ -2713,11 +2713,12 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and pitch Founding Member (Annual) — "Want our team to lock in your Founding spot?". Never quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? I'll share everything on opening day." NEVER promise a callback, tour, visit, or that a founder/team will call. NEVER quote prices, fees, session counts, or any month/year/date.`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open." Never quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared on opening day. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback or a call from the team. NEVER quote prices or dates.`);
     }
   }
+
   if (memory?.profile?.first_name) {
     if (looksLikeRealName(memory.profile.first_name, (memory as any)?.profile?.phone)) {
       rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
