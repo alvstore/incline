@@ -1629,26 +1629,33 @@ const FORBIDDEN_PLAN_TEXT_RE =
   /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
 const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
 const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
-// v4.5.0 — opening/launch date redaction. We never disclose a date publicly.
+// v5.0.0 — opening/launch date FULL redaction. Founder's Phase policy:
+// the bot NEVER discloses a month, year, or numeric opening date.
 const OPENING_DATE_RE =
-  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
+  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
 const OPENING_VERB_YEAR_RE =
-  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,60}\b20\d{2}\b/gi;
-// Whitelist the canonical opening date so legitimate replies pass through.
-const CANONICAL_OPENING_DATE_RE =
-  /\b(?:sunday,?\s+)?26(?:st|th)?\s+july,?\s+2026\b/i;
-const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
+  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,80}\b20\d{2}\b/gi;
+// e.g. "26 July 2026", "26th July 2026", "Sunday, 26 July 2026"
+const NUMERIC_LONG_DATE_RE =
+  /\b(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)?,?\s*\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)[a-z]*,?\s*20\d{2}\b/gi;
+// e.g. "26 July", "26th July", "26-07-2026", "26/07/2026"
+const SHORT_MONTH_DAY_RE =
+  /\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/gi;
+const NUMERIC_DMY_RE = /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]20\d{2}\b/g;
 
 function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   if (!text) return { redacted: text, hit: false };
-  // If the message contains the canonical public opening date, allow it through
-  // untouched — the date itself is no longer embargoed, only pricing is.
-  if (CANONICAL_OPENING_DATE_RE.test(text)) return { redacted: text, hit: false };
   const before = text;
-  let out = text.replace(OPENING_VERB_YEAR_RE, "open soon");
-  out = out.replace(OPENING_DATE_RE, "soon");
+  let out = text;
+  out = out.replace(NUMERIC_LONG_DATE_RE, "opening day");
+  out = out.replace(NUMERIC_DMY_RE, "opening day");
+  out = out.replace(OPENING_VERB_YEAR_RE, "open on opening day");
+  out = out.replace(OPENING_DATE_RE, "opening day");
+  out = out.replace(SHORT_MONTH_DAY_RE, "opening day");
   return { redacted: out, hit: out !== before };
 }
+const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
+
 
 // v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
 // like "I've notified our team", "created a task", "booked your slot",
