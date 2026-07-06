@@ -1,5 +1,10 @@
 // _shared/handoff.ts
-// v1.0.0 — Founder / human handoff orchestrator.
+// v2.0.0 — Founder's Phase reservation orchestrator (Lakshya audit).
+//          Task title/description reworded from "callback" → "reservation".
+//          No SLA promise to the prospect: the internal task still fires but
+//          the outbound copy NEVER commits the team to a call before opening
+//          day. See ai-agent-brain.ts §6b (Reservation short-circuit).
+
 //
 // Single source of truth invoked from the AI brain whenever a lead explicitly
 // agrees to a callback (e.g. "Yeah sure" after the bot offers "want our team
@@ -71,13 +76,15 @@ export async function requestFounderHandoff(
   //    notification (step 4) handles routing to the actual humans.
   const displayName = (contactName && contactName.trim()) || chatPhone;
   const dueDate = new Date();
-  dueDate.setHours(dueDate.getHours() + 2); // 2-hour SLA
-  const title = `Founding Member callback — ${displayName}`;
+  dueDate.setDate(dueDate.getDate() + 1); // review within 24h, no external SLA promise
+  const title = `Founding Member reservation — ${displayName}`;
   const description =
-    `Lead agreed to a callback on ${platform} ${chatPhone}.\n` +
+    `Lead reserved a Founding Member spot on ${platform} ${chatPhone}.\n` +
     `Reason: ${reason}.\n` +
     (summary ? `Context: ${summary}\n` : "") +
+    `Do NOT call this prospect before opening day — Founder's Phase policy.\n` +
     `Open the WhatsApp inbox for the full transcript.`;
+
 
   let taskId: string | null = null;
   try {
@@ -212,19 +219,23 @@ export function lastBotOfferedCallback(
   return CALLBACK_OFFER_RE.test(lastAssistant);
 }
 
-// Strings the LLM emits when it "decides" it has handed off to humans. If we
-// did NOT just create a real task, these are hallucinations and must never
-// reach the prospect. v1.0.0 (Roma/Dinesh leak fix).
+// Strings the LLM emits when it "decides" it has handed off to humans, OR
+// promises a callback/tour/pricing disclosure. During Founder's Phase the bot
+// must NEVER commit a human to call, visit, or share pricing before opening
+// day. If we did NOT just create a real reservation this turn, any such line
+// is a false promise and must never reach the prospect.
+// v2.0.0 (Lakshya audit) — widened to catch callback/visit/tour/pricing
+// commitments in addition to the original "notified team" hallucinations.
 export const HALLUCINATED_CALLBACK_RE =
-  /(i['’]?ve\s+(?:notified|shared|informed|alerted|told|sent|forwarded)|notified\s+(?:our|the)\s+(?:founding|founder|team|sales)|shared\s+your\s+details|forwarded\s+your\s+details|our\s+(?:team|founders?)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|team\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|locked\s+in|founding\s+team|i['’]?ve\s+(?:added|created|scheduled|booked|registered)\s+(?:a|the|your))/i;
+  /(i['’]?ve\s+(?:notified|shared|informed|alerted|told|sent|forwarded)|notified\s+(?:our|the)\s+(?:founding|founder|team|sales)|shared\s+your\s+details|forwarded\s+your\s+details|our\s+(?:team|founders?|founding\s+team)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you|get\s+back|revert)|(?:a\s+)?(?:teammate|team\s+member|founder|someone|human)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you|get\s+back|revert)|team\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|(?:will\s+)?(?:personally\s+)?call\s+you\s+(?:back|within|in\s+the\s+next|shortly|soon)|callback\s+(?:within|in|shortly)|within\s+the\s+next\s+\d+\s*(?:hour|hr|min)|locked\s+in|founding\s+team|i['’]?ve\s+(?:added|created|scheduled|booked|registered)\s+(?:a|the|your)|book\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|schedule\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|(?:want\s+(?:our|the)\s+team\s+to\s+call|team\s+to\s+lock\s+in\s+your))/i;
 
-const SAFE_CALLBACK_OFFER =
-  "Want our team to call you to lock in your Founding spot? ✨";
+const SAFE_RESERVATION_OFFER =
+  "Want me to add your name to the Founding Members list? I'll share everything on opening day ✨";
 
-// Sanitizes an LLM-generated reply when no real callback/handoff task was
-// triggered this turn. If the reply promises a callback or claims we
-// "notified the team", we strip that sentence and substitute a deterministic
-// offer the user can re-confirm — and log to error_logs so we can monitor
+// Sanitizes an LLM-generated reply when no real reservation was
+// triggered this turn. If the reply promises a callback/tour/pricing or
+// claims we "notified the team", we strip that sentence and substitute a
+// deterministic reservation offer — and log to error_logs so we can monitor
 // the false-promise rate.
 export async function assertCallbackPromiseAllowed(
   supabase: any,
@@ -241,7 +252,8 @@ export async function assertCallbackPromiseAllowed(
     .join(" ")
     .trim();
 
-  const safeReply = cleaned ? `${cleaned} ${SAFE_CALLBACK_OFFER}`.trim() : SAFE_CALLBACK_OFFER;
+  const safeReply = cleaned ? `${cleaned} ${SAFE_RESERVATION_OFFER}`.trim() : SAFE_RESERVATION_OFFER;
+
 
   try {
     await supabase.rpc("log_error_event", {

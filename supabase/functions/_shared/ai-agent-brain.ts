@@ -148,19 +148,18 @@ import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
 // ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
-// Public opening date is Sunday, 26 July 2026. The date itself is disclosable;
-// prices/fees/plan tiers stay embargoed until then. Every regex-fallback
-// canned answer, every inline prompt scaffold, and every sanitizer fallback
-// reads from these constants — do NOT duplicate this wording elsewhere.
-// Canonical embargo copy also lives in ai_knowledge (topic='pricing_rules',
-// title='Launch & Pricing Embargo', priority=1) for the LLM path.
-export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
+// v5.0.0 (Lakshya audit): during Founder's Phase the bot MUST NOT disclose
+// the opening date, offer callbacks, or promise tours. The real date is kept
+// internal for staff-side task descriptions ONLY. All outbound copy uses the
+// neutral phrase "opening day".
+export const LAUNCH_DATE_LABEL = "opening day";
+export const LAUNCH_DATE_INTERNAL = "2026-07-26"; // staff/task use only
 export const EMBARGO_PIVOT_LINE_EN =
-  `We open on ${LAUNCH_DATE_LABEL}. All plan pricing is under embargo until then — ` +
-  `right now I can only reserve your Founding Membership spot. Want me to add your name?`;
+  `Founding Membership spots are open right now — want me to add your name to the list? ` +
+  `I'll share the full details with you on opening day.`;
 export const EMBARGO_PIVOT_LINE_HI =
-  `Hum ${LAUNCH_DATE_LABEL} ko launch kar rahe hain. Tab tak saare plans embargo mein hain — ` +
-  `abhi main sirf Founding Membership spot reserve kar sakta hoon. Naam add kar doon?`;
+  `Founding Membership spots abhi open hain — naam add kar doon? ` +
+  `Opening day pe main aapko saari details bhej dunga.`;
 /** Personalized variant of the embargo pivot line — call with the user's first name. */
 export function embargoPivotLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
@@ -168,6 +167,7 @@ export function embargoPivotLine(firstName?: string | null): string {
     ? `${fn}, ${EMBARGO_PIVOT_LINE_EN.charAt(0).toLowerCase()}${EMBARGO_PIVOT_LINE_EN.slice(1)}`
     : EMBARGO_PIVOT_LINE_EN;
 }
+
 
 
 // Per-request dynamic memory snapshot. Loaded once at the top of runUnifiedAgent
@@ -822,18 +822,16 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
-  // 6b. CALLBACK CONSENT SHORT-CIRCUIT (v4.8.0) — when the previous assistant
-  //     turn offered a human callback ("Want our team to call you?") and the
-  //     user now says yes ("Yeah sure", "haan ji", "please call"), we MUST
-  //     create a real callback task instead of letting the LLM hallucinate
-  //     an "I've notified our team" line. This is the root cause behind the
-  //     Vicky Gidwani leak — the bot promised a callback that never reached
-  //     the founder team.
+  // 6b. RESERVATION SHORT-CIRCUIT (v5.0.0, Lakshya audit) — when the bot's
+  //     last turn offered a Founding Membership reservation and the user
+  //     says yes, we create the internal ops task via requestFounderHandoff
+  //     but the outbound copy NEVER commits a human to call. Founder's Phase
+  //     policy: no callbacks, no tours, no pricing before opening day.
   const userSaidYes = CALLBACK_YES_RE.test(String(ctx.messageContent || "").trim());
   const botOfferedCallback = lastBotOfferedCallback(history);
   const alreadyHandedOff = !!chatSettings?.founder_handoff_task_id;
   if (userSaidYes && botOfferedCallback && !alreadyHandedOff && !memberCtx.isMember) {
-    console.log(`[AI:${ctx.platform}] callback consent detected — creating founder handoff task`);
+    console.log(`[AI:${ctx.platform}] reservation consent detected — creating founder ops task (no callback promise)`);
     const displayName =
       memory?.profile?.first_name ||
       firstNameOf(memory?.profile?.full_name) ||
@@ -846,14 +844,14 @@ export async function runUnifiedAgent(
       leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
       contactName: displayName,
       platform: ctx.platform,
-      reason: "founding_member_callback",
+      reason: "founding_member_reservation",
       summary,
     });
     if (handoff.ok) {
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `Locked in, ${fn} ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`
-        : `Locked in ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`;
+        ? `You're on the Founding Members list, ${fn} ✨ I'll share the full details with you on opening day — no calls before then.`
+        : `You're on the Founding Members list ✨ I'll share the full details with you on opening day — no calls before then.`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -862,17 +860,46 @@ export async function runUnifiedAgent(
         skipped: false,
       };
     }
-    // Handoff failed — log to error_logs and let the LLM fall through with a
-    // softer copy. We do NOT want to promise a callback that didn't happen.
+    // Reservation failed — log and let the LLM fall through with softer copy.
+    // We do NOT want to promise anything that didn't actually happen.
     try {
       await supabase.rpc("log_error_event", {
         p_source: "ai_agent_brain",
         p_severity: "error",
-        p_message: `callback handoff failed: ${handoff.error ?? "unknown"}`,
+        p_message: `reservation handoff failed: ${handoff.error ?? "unknown"}`,
         p_context: { phone: ctx.senderId, branch_id: ctx.branchId, lead_id: leadCtx?.leadId ?? null },
       });
     } catch { /* noop */ }
   }
+
+  // 6c. ALREADY-RESERVED GATE (v5.0.0) — if this chat already has a
+  //     handoff/reservation task and the user is just sending a bare
+  //     affirmation / thanks / reaction, reply once with a calm
+  //     acknowledgement and DO NOT re-offer the reservation or run the LLM.
+  //     This kills the "same question asked 6 times" loop.
+  if (alreadyHandedOff && !memberCtx.isMember) {
+    const bare = String(ctx.messageContent || "").trim();
+    const bareOk = /^\s*(?:ok(?:ay|k)?|okok|ok\s*ok|sure|done|thanks?|thank\s*you|thx|ty|great|good|cool|nice|👍|✅|🙏|❤️|✨|😊|😃|👌|yes|yep|yeah|haan|ji|hmm+|k|kk)\s*[.!?]*\s*$/i.test(bare);
+    if (bareOk) {
+      const displayName =
+        memory?.profile?.first_name ||
+        firstNameOf(memory?.profile?.full_name) ||
+        chatSettings?.contact_name ||
+        null;
+      const fn = displayName ? displayName.split(/\s+/)[0] : "";
+      const reply = fn
+        ? `You're all set on the Founding list, ${fn} ✨ I'll ping you on opening day.`
+        : `You're all set on the Founding list ✨ I'll ping you on opening day.`;
+      return {
+        replyText: reply,
+        leadCaptured: false,
+        leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+        handoffTriggered: false,
+        skipped: false,
+      };
+    }
+  }
+
 
 
   // 7. Hydrate deterministic gym facts (plans, facilities, timings).
@@ -1140,10 +1167,13 @@ HARD RULES:
 - DO NOT run the Turn 1 → Turn 5 onboarding sequence.
 - Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
 - If they ask about Founding Member / membership / pricing / opening date / timeline: refer VERBATIM to the "Launch & Pricing Embargo" rule in <knowledge_base>. Do not paraphrase or invent alternative wording.
-- If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge, offer human follow-up.
+- If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge and offer to add them to the Founding Members list.
 - VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
-- If they want to speak to a person or you hit two errors: call transfer_to_human.
+- FOUNDER'S PHASE — NO CALLBACK POLICY: NEVER promise a callback, tour, visit, or that a founder / team / teammate / human will call, contact, reach out, get back, or revert. NEVER say "within X hours". NEVER mention a specific month, year, or opening date — refer to it ONLY as "opening day".
+- If the user asks to speak to a person: reply "I'll pass this to our team — they'll reach out on opening day, ${fn} ✨" and DO NOT commit to a call before then.
+- If they hit two errors or explicitly request escalation past that: call transfer_to_human.
 - Keep replies under 25 words, one question max, at most 1 emoji.`;
+
   }
 
   if (shouldCaptureLead) {
@@ -1629,26 +1659,33 @@ const FORBIDDEN_PLAN_TEXT_RE =
   /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
 const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
 const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
-// v4.5.0 — opening/launch date redaction. We never disclose a date publicly.
+// v5.0.0 — opening/launch date FULL redaction. Founder's Phase policy:
+// the bot NEVER discloses a month, year, or numeric opening date.
 const OPENING_DATE_RE =
-  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
+  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
 const OPENING_VERB_YEAR_RE =
-  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,60}\b20\d{2}\b/gi;
-// Whitelist the canonical opening date so legitimate replies pass through.
-const CANONICAL_OPENING_DATE_RE =
-  /\b(?:sunday,?\s+)?26(?:st|th)?\s+july,?\s+2026\b/i;
-const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
+  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,80}\b20\d{2}\b/gi;
+// e.g. "26 July 2026", "26th July 2026", "Sunday, 26 July 2026"
+const NUMERIC_LONG_DATE_RE =
+  /\b(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)?,?\s*\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)[a-z]*,?\s*20\d{2}\b/gi;
+// e.g. "26 July", "26th July", "26-07-2026", "26/07/2026"
+const SHORT_MONTH_DAY_RE =
+  /\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/gi;
+const NUMERIC_DMY_RE = /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]20\d{2}\b/g;
 
 function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
   if (!text) return { redacted: text, hit: false };
-  // If the message contains the canonical public opening date, allow it through
-  // untouched — the date itself is no longer embargoed, only pricing is.
-  if (CANONICAL_OPENING_DATE_RE.test(text)) return { redacted: text, hit: false };
   const before = text;
-  let out = text.replace(OPENING_VERB_YEAR_RE, "open soon");
-  out = out.replace(OPENING_DATE_RE, "soon");
+  let out = text;
+  out = out.replace(NUMERIC_LONG_DATE_RE, "opening day");
+  out = out.replace(NUMERIC_DMY_RE, "opening day");
+  out = out.replace(OPENING_VERB_YEAR_RE, "open on opening day");
+  out = out.replace(OPENING_DATE_RE, "opening day");
+  out = out.replace(SHORT_MONTH_DAY_RE, "opening day");
   return { redacted: out, hit: out !== before };
 }
+const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
+
 
 // v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
 // like "I've notified our team", "created a task", "booked your slot",
@@ -1666,7 +1703,8 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
   if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
   console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
-  return "Got it — sharing your interest with our team. Someone will reach out to you shortly ✨";
+  return "Got it — noting your interest. I'll share the full details with you on opening day ✨";
+
 }
 
 function sanitizeFoundersPhaseText(input: {
@@ -2678,11 +2716,12 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and pitch Founding Member (Annual) — "Want our team to lock in your Founding spot?". Never quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? I'll share everything on opening day." NEVER promise a callback, tour, visit, or that a founder/team will call. NEVER quote prices, fees, session counts, or any month/year/date.`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared closer to launch. The only active enrollment right now is Founding Member (Annual) with launch perks — happy to share more if you're open." Never quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared on opening day. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback or a call from the team. NEVER quote prices or dates.`);
     }
   }
+
   if (memory?.profile?.first_name) {
     if (looksLikeRealName(memory.profile.first_name, (memory as any)?.profile?.phone)) {
       rules.push(`KNOWN NAME: Greet/address user as "${memory.profile.first_name}". Do NOT ask their name again.`);
