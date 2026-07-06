@@ -822,18 +822,16 @@ export async function runUnifiedAgent(
     content: String(m.content || ""),
   }));
 
-  // 6b. CALLBACK CONSENT SHORT-CIRCUIT (v4.8.0) — when the previous assistant
-  //     turn offered a human callback ("Want our team to call you?") and the
-  //     user now says yes ("Yeah sure", "haan ji", "please call"), we MUST
-  //     create a real callback task instead of letting the LLM hallucinate
-  //     an "I've notified our team" line. This is the root cause behind the
-  //     Vicky Gidwani leak — the bot promised a callback that never reached
-  //     the founder team.
+  // 6b. RESERVATION SHORT-CIRCUIT (v5.0.0, Lakshya audit) — when the bot's
+  //     last turn offered a Founding Membership reservation and the user
+  //     says yes, we create the internal ops task via requestFounderHandoff
+  //     but the outbound copy NEVER commits a human to call. Founder's Phase
+  //     policy: no callbacks, no tours, no pricing before opening day.
   const userSaidYes = CALLBACK_YES_RE.test(String(ctx.messageContent || "").trim());
   const botOfferedCallback = lastBotOfferedCallback(history);
   const alreadyHandedOff = !!chatSettings?.founder_handoff_task_id;
   if (userSaidYes && botOfferedCallback && !alreadyHandedOff && !memberCtx.isMember) {
-    console.log(`[AI:${ctx.platform}] callback consent detected — creating founder handoff task`);
+    console.log(`[AI:${ctx.platform}] reservation consent detected — creating founder ops task (no callback promise)`);
     const displayName =
       memory?.profile?.first_name ||
       firstNameOf(memory?.profile?.full_name) ||
@@ -846,14 +844,14 @@ export async function runUnifiedAgent(
       leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
       contactName: displayName,
       platform: ctx.platform,
-      reason: "founding_member_callback",
+      reason: "founding_member_reservation",
       summary,
     });
     if (handoff.ok) {
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `Locked in, ${fn} ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`
-        : `Locked in ✨ One of our founders will personally call you within the next 2 hours on this number to walk you through the Founding Member details.`;
+        ? `You're on the Founding Members list, ${fn} ✨ I'll share the full details with you on opening day — no calls before then.`
+        : `You're on the Founding Members list ✨ I'll share the full details with you on opening day — no calls before then.`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -862,17 +860,46 @@ export async function runUnifiedAgent(
         skipped: false,
       };
     }
-    // Handoff failed — log to error_logs and let the LLM fall through with a
-    // softer copy. We do NOT want to promise a callback that didn't happen.
+    // Reservation failed — log and let the LLM fall through with softer copy.
+    // We do NOT want to promise anything that didn't actually happen.
     try {
       await supabase.rpc("log_error_event", {
         p_source: "ai_agent_brain",
         p_severity: "error",
-        p_message: `callback handoff failed: ${handoff.error ?? "unknown"}`,
+        p_message: `reservation handoff failed: ${handoff.error ?? "unknown"}`,
         p_context: { phone: ctx.senderId, branch_id: ctx.branchId, lead_id: leadCtx?.leadId ?? null },
       });
     } catch { /* noop */ }
   }
+
+  // 6c. ALREADY-RESERVED GATE (v5.0.0) — if this chat already has a
+  //     handoff/reservation task and the user is just sending a bare
+  //     affirmation / thanks / reaction, reply once with a calm
+  //     acknowledgement and DO NOT re-offer the reservation or run the LLM.
+  //     This kills the "same question asked 6 times" loop.
+  if (alreadyHandedOff && !memberCtx.isMember) {
+    const bare = String(ctx.messageContent || "").trim();
+    const bareOk = /^\s*(?:ok(?:ay|k)?|okok|ok\s*ok|sure|done|thanks?|thank\s*you|thx|ty|great|good|cool|nice|👍|✅|🙏|❤️|✨|😊|😃|👌|yes|yep|yeah|haan|ji|hmm+|k|kk)\s*[.!?]*\s*$/i.test(bare);
+    if (bareOk) {
+      const displayName =
+        memory?.profile?.first_name ||
+        firstNameOf(memory?.profile?.full_name) ||
+        chatSettings?.contact_name ||
+        null;
+      const fn = displayName ? displayName.split(/\s+/)[0] : "";
+      const reply = fn
+        ? `You're all set on the Founding list, ${fn} ✨ I'll ping you on opening day.`
+        : `You're all set on the Founding list ✨ I'll ping you on opening day.`;
+      return {
+        replyText: reply,
+        leadCaptured: false,
+        leadId: leadCtx?.leadId ?? chatSettings?.captured_lead_id ?? null,
+        handoffTriggered: false,
+        skipped: false,
+      };
+    }
+  }
+
 
 
   // 7. Hydrate deterministic gym facts (plans, facilities, timings).
