@@ -1718,9 +1718,14 @@ function sanitizeFoundersPhaseText(input: {
   // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
 
+  // 0a. Non-Latin script scrubber — Gemini occasionally leaks CJK
+  //     ("withすべて everything"). Strip any Han/Hiragana/Katakana/Hangul chars.
+  const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
+  const workText = cjkStripped || text;
+
   // 0. Opening-date guard — runs before plan/price checks. Applies to ALL
   //    outbound text regardless of capture state.
-  const dateScan = redactOpeningDate(text);
+  const dateScan = redactOpeningDate(workText);
   if (dateScan.hit) {
     console.log("[AI:guards] redacted opening-date leak");
     // If date was the only issue, return neutral line; otherwise continue
@@ -1813,9 +1818,10 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
         : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
     }
   }
+  // No-callback policy: never promise the team will pick anything up.
   return firstName
-    ? `Got it, ${firstName} — give me one sec while our team picks this up. ✨`
-    : "Got it — give me one sec while our team picks this up. ✨";
+    ? `Noted, ${firstName} — I'll share the full details on opening day ✨`
+    : "Noted — I'll share the full details on opening day ✨";
 
 }
 
