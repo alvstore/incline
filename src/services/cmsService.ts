@@ -59,7 +59,7 @@ const DEFAULT_THEME: ThemeSettings = {
   contactPhone: '+91 98765 43210',
   address: '123 Fitness Street, Mumbai, India',
   socialLinks: {
-    instagram: 'https://instagram.com/inclinefitness',
+    instagram: 'https://instagram.com/inclineudaipur',
     facebook: 'https://facebook.com/inclinefitness',
     twitter: 'https://twitter.com/inclinefitness',
     youtube: 'https://youtube.com/inclinefitness',

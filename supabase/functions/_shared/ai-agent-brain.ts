@@ -148,18 +148,17 @@ import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
 // ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
-// v5.0.0 (Lakshya audit): during Founder's Phase the bot MUST NOT disclose
-// the opening date, offer callbacks, or promise tours. The real date is kept
-// internal for staff-side task descriptions ONLY. All outbound copy uses the
-// neutral phrase "opening day".
-export const LAUNCH_DATE_LABEL = "opening day";
-export const LAUNCH_DATE_INTERNAL = "2026-07-26"; // staff/task use only
+// v6.0.0 (Shubham audit): the opening date IS disclosed with a warm welcome.
+// Pricing / PT packages / plan tiers remain embargoed until opening day.
+// No callback commitments before opening day.
+export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
+export const LAUNCH_DATE_INTERNAL = "2026-07-26";
 export const EMBARGO_PIVOT_LINE_EN =
-  `Founding Membership spots are open right now — want me to add your name to the list? ` +
-  `I'll share the full details with you on opening day.`;
+  `We open on Sunday, 26 July 2026 — you're most welcome to visit us then! ` +
+  `Want me to add your name to the Founding Members list so you get the full details first?`;
 export const EMBARGO_PIVOT_LINE_HI =
-  `Founding Membership spots abhi open hain — naam add kar doon? ` +
-  `Opening day pe main aapko saari details bhej dunga.`;
+  `Hum Sunday, 26 July 2026 ko open kar rahe hain — aap zaroor visit kijiye! ` +
+  `Naam Founding Members list mein add kar doon?`;
 /** Personalized variant of the embargo pivot line — call with the user's first name. */
 export function embargoPivotLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
@@ -850,8 +849,8 @@ export async function runUnifiedAgent(
     if (handoff.ok) {
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're on the Founding Members list, ${fn} ✨ I'll share the full details with you on opening day — no calls before then.`
-        : `You're on the Founding Members list ✨ I'll share the full details with you on opening day — no calls before then.`;
+        ? `You're on the Founding Members list, ${fn} ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`
+        : `You're on the Founding Members list ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -888,8 +887,8 @@ export async function runUnifiedAgent(
         null;
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're all set on the Founding list, ${fn} ✨ I'll ping you on opening day.`
-        : `You're all set on the Founding list ✨ I'll ping you on opening day.`;
+        ? `You're all set, ${fn} ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`
+        : `You're all set ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -1169,8 +1168,9 @@ HARD RULES:
 - If they ask about Founding Member / membership / pricing / opening date / timeline: refer VERBATIM to the "Launch & Pricing Embargo" rule in <knowledge_base>. Do not paraphrase or invent alternative wording.
 - If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge and offer to add them to the Founding Members list.
 - VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
-- FOUNDER'S PHASE — NO CALLBACK POLICY: NEVER promise a callback, tour, visit, or that a founder / team / teammate / human will call, contact, reach out, get back, or revert. NEVER say "within X hours". NEVER mention a specific month, year, or opening date — refer to it ONLY as "opening day".
-- If the user asks to speak to a person: reply "I'll pass this to our team — they'll reach out on opening day, ${fn} ✨" and DO NOT commit to a call before then.
+- OPENING DATE: You MAY (and should) tell users we open on Sunday, 26 July 2026 and warmly welcome them to visit us on/after that date. Encourage them to come by!
+- NO CALLBACK POLICY: NEVER promise a callback, tour, or that a founder / team / teammate / human will call, contact, reach out, or revert BEFORE opening day. NEVER say "within X hours". After opening day (26 July 2026), the team will welcome them in person.
+- If the user asks to speak to a person: reply "I'll note this for our team — you're most welcome to meet us at the club on/after Sunday, 26 July 2026, ${fn} ✨" and DO NOT commit to a call before then.
 - If they hit two errors or explicitly request escalation past that: call transfer_to_human.
 - Keep replies under 25 words, one question max, at most 1 emoji.`;
 
@@ -1659,30 +1659,11 @@ const FORBIDDEN_PLAN_TEXT_RE =
   /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
 const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
 const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
-// v5.0.0 — opening/launch date FULL redaction. Founder's Phase policy:
-// the bot NEVER discloses a month, year, or numeric opening date.
-const OPENING_DATE_RE =
-  /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)\s*,?\s*20\d{2}\b/gi;
-const OPENING_VERB_YEAR_RE =
-  /\b(?:opens?|opening|launch(?:es|ing)?|doors?\s+open|khulega|khul\s+raha|kab\s+khul)[^.!?\n]{0,80}\b20\d{2}\b/gi;
-// e.g. "26 July 2026", "26th July 2026", "Sunday, 26 July 2026"
-const NUMERIC_LONG_DATE_RE =
-  /\b(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)?,?\s*\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|jul(?:ai)?|aug|sep|sept|oct|nov|dec)[a-z]*,?\s*20\d{2}\b/gi;
-// e.g. "26 July", "26th July", "26-07-2026", "26/07/2026"
-const SHORT_MONTH_DAY_RE =
-  /\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/gi;
-const NUMERIC_DMY_RE = /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]20\d{2}\b/g;
-
+// v6.0.0 — opening-date disclosure is now ALLOWED. The redactor is a
+// pass-through so the LLM (and knowledge base) can freely mention
+// "Sunday, 26 July 2026". Signature preserved for callers.
 function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
-  if (!text) return { redacted: text, hit: false };
-  const before = text;
-  let out = text;
-  out = out.replace(NUMERIC_LONG_DATE_RE, "opening day");
-  out = out.replace(NUMERIC_DMY_RE, "opening day");
-  out = out.replace(OPENING_VERB_YEAR_RE, "open on opening day");
-  out = out.replace(OPENING_DATE_RE, "opening day");
-  out = out.replace(SHORT_MONTH_DAY_RE, "opening day");
-  return { redacted: out, hit: out !== before };
+  return { redacted: text, hit: false };
 }
 const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
 
@@ -1703,7 +1684,7 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
   if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
   console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
-  return "Got it — noting your interest. I'll share the full details with you on opening day ✨";
+  return "Got it — noting your interest. We open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
 
 }
 
@@ -1818,10 +1799,10 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
         : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
     }
   }
-  // No-callback policy: never promise the team will pick anything up.
+  // No-callback policy before opening day: welcome them on 26 July 2026.
   return firstName
-    ? `Noted, ${firstName} — I'll share the full details on opening day ✨`
-    : "Noted — I'll share the full details on opening day ✨";
+    ? `Noted, ${firstName} — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨`
+    : "Noted — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
 
 }
 
@@ -2722,9 +2703,9 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? I'll share everything on opening day." NEVER promise a callback, tour, visit, or that a founder/team will call. NEVER quote prices, fees, session counts, or any month/year/date.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? We open on Sunday, 26 July 2026 — you're most welcome to visit us then and I'll share the full details before opening day." NEVER promise a callback from the team BEFORE opening day. NEVER quote prices, fees, or session counts.`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared on opening day. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback or a call from the team. NEVER quote prices or dates.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared before opening day (Sunday, 26 July 2026) and you're most welcome to visit us then. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback from the team before opening day. NEVER quote prices.`);
     }
   }
 

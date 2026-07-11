@@ -1,75 +1,70 @@
-# Audit — what actually went wrong in the Lakshya chat
+# Audit — what the chat got wrong
 
-Looking at the transcript against `supabase/functions/_shared/ai-agent-brain.ts` (v4.9.0), three separate bugs compounded:
+Two separate issues in Shubham's transcript, both traceable to code we tightened in the last two rounds:
 
-**1. AI is promising a real founder callback ("call you in the next 2 hours").**
-The v4.8.0 "callback consent short-circuit" (brain lines 825–875) fires whenever the bot offered a callback and the user said "ok/yes". It calls `requestFounderHandoff()` and then emits the hard-coded line:
-> "Locked in, Lakshya ✨ One of our founders will personally call you within the next 2 hours…"
-That contradicts the Founder's Phase rule you just restated: **no callbacks, no tours, no pricing — everything is disclosed only on/after 26 July.** The bot should only *reserve interest*, never commit a human to call.
+**1. Bot refuses to say "26 July 2026" and won't welcome the visitor.**
+After the Lakshya/Raj audits we set `LAUNCH_DATE_LABEL = "opening day"` and wired `redactOpeningDate()` (v5.0.0) to strip **any** month/year/numeric date from every outbound message. The system prompt now says: *"NEVER mention a specific month, year, or opening date — refer to it ONLY as opening day."* That was the correct read of *"don't disclose date"* at that time — but your new instruction reverses it: the date **should** be disclosed, and the tone should be welcoming ("you are most welcome"). Right now the sanitizer would scrub "26 July 2026" even if the LLM produced it.
 
-**2. "Sunday, 26 July 2026" leaked in Hinglish.**
-Turn 4: *"Hum Sunday, 26 July 2026 ko launch kar rahe hain."* v4.5.0 was supposed to redact `<month> 20XX`, but our own constants `EMBARGO_PIVOT_LINE_EN/HI` (lines 157–163) are the source — they hard-code `LAUNCH_DATE_LABEL = "Sunday, 26 July 2026"` and are injected before the sanitizer runs. Same string is echoed by the LLM at 16:48 ("We open on Sunday, 26 July 2026…"). Per your rule the AI must **not disclose the opening date at all** to prospects.
+**2. Bot gives the wrong Instagram handle.**
+The bot answered `@theinclinelife`, which is what our SEO/JSON-LD/footer say. The real handle is **@inclineudaipur** (`https://www.instagram.com/inclineudaipur/`). The bot has no `ai_knowledge` row for social handles, so it fell back to the LLM guessing from the site's `sameAs` array in `index.html` — which points at the stale username. Same stale handle is also in `public/llms.txt`, `public/llms-full.txt`, `ScrollOverlay.tsx`, and `cmsService.ts` (which additionally has a third wrong handle, `inclinefitness`).
 
-**3. Bot loops the same offer ~6 times.**
-After `founder_handoff_task_id` is already stamped, nothing in the LLM path suppresses re-offering "Want our team to lock in your Founding spot?" — Lakshya finally snapped: *"How many times do I have to answer the same question?"* There is no "already-reserved, stop asking" gate on the outbound side, and the hallucinated-action stripper doesn't cover repeated *offers* (only false *claims*).
+# Plan — 2 focused changes
 
----
+## A. Re-enable opening-date disclosure with a warm welcome
 
-# Plan — 3 focused changes, no schema or flow rewrites
-
-## A. Kill callback commitments in Founder's Phase
+Founder's Phase rules are relaxed to: **disclose the date, welcome visitors on opening day, still do NOT quote prices / PT packages / plan tiers.** No callback commitments before opening day (that guard stays).
 
 `supabase/functions/_shared/ai-agent-brain.ts`
-- Replace the callback-consent short-circuit (lines 825–875) with a **Reservation short-circuit**. It still creates an internal task via `requestFounderHandoff()` (so ops sees the lead), but the reason becomes `founding_member_reservation` and the outbound copy becomes:
-  > "You're on the Founding Members list, {name} ✨ We'll share the full details with you on opening day — no calls before then."
-- Remove every "our team will call you" / "founder will call you in 2 hours" string from the brain. Replace with the reservation copy above.
-- Change `EMBARGO_PIVOT_LINE_EN/HI` (lines 158–163) and `embargoPivotLine()` to a no-callback, no-date version:
-  > EN: "Founding Membership spots are open right now — want me to add your name to the list? I'll share everything with you on opening day."
-  > HI: "Founding Membership spots abhi open hain — naam add kar doon? Opening day pe main aapko saari details bhej dunga."
-- Also remove the "Want our team to call you to lock in your Founding spot?" line from `_shared/handoff.ts` `SAFE_CALLBACK_OFFER` and rename it to `SAFE_RESERVATION_OFFER` with the reservation copy. `assertCallbackPromiseAllowed()` becomes `assertNoCallbackPromise()` and strips *any* "team will call / founder will call / callback / 2 hours" sentence, not just the current narrow regex.
-- Update `ai_knowledge` rows (`topic in ('pricing_rules','lead_capture_flow','pt_rules','facts')`) via a migration to strip the words "call you", "callback", "tour", "visit", "2 hours" and any explicit month/year, and replace with reservation language. Same for `ai_purposes.system_prompt` where those phrases appear.
+- Set `LAUNCH_DATE_LABEL = "Sunday, 26 July 2026"`. Keep `LAUNCH_DATE_INTERNAL` as-is.
+- Rewrite `EMBARGO_PIVOT_LINE_EN` / `_HI` to include the date and a welcome:
+  - EN: `"We open on Sunday, 26 July 2026 — you're most welcome to visit us then! Want me to add your name to the Founding Members list so you get the full details first?"`
+  - HI: `"Hum Sunday, 26 July 2026 ko open kar rahe hain — aap zaroor visit kijiye! Naam Founding Members list mein add kar doon?"`
+- Neutralize `redactOpeningDate()` to a pass-through (`return { redacted: text, hit: false }`) so the date is no longer scrubbed. Keep the function signature and CJK/Hangul scrubber intact (still useful).
+- Rewrite the reservation short-circuit copy (~lines 850–895):
+  - "You're on the Founding Members list, {name} ✨ We open on **Sunday, 26 July 2026** — you're most welcome to visit us then. I'll share the full details with you before opening day."
+  - Already-reserved bare-affirmation reply: "You're all set, {name} ✨ See you on **26 July 2026** — we can't wait to welcome you!"
+- Rewrite the system-prompt Founder's Phase block (line 1172–1173):
+  - Replace *"NEVER mention a specific month, year, or opening date"* with *"You MAY (and should) tell users we open on Sunday, 26 July 2026 and warmly welcome them to visit then."*
+  - Keep the "no callback commitments before opening day" and "no pricing / PT / plan-tier disclosure" rules. Change "reach out on opening day" wording accordingly.
+- Update the `KNOWN PLAN_INTEREST` rule strings (lines ~2725/2727): remove "NEVER quote… any month/year/date"; keep the price/session-count ban.
+- Update `getNonMembershipRedirect` / `buildNoReplyFallback` / any hard-coded "opening day" lines to include the actual date.
 
-## B. Plug the opening-date leak everywhere
+`supabase/functions/_shared/handoff.ts`
+- Tighten `HALLUCINATED_CALLBACK_RE` so it strips *only* "call/callback/2 hours" promises — remove the "share personally / reach out / get back / ping you" clauses so warm follow-through phrasing survives.
+- Rename `SAFE_RESERVATION_OFFER` copy to include the date and welcome.
 
-`supabase/functions/_shared/ai-agent-brain.ts`
-- Change `LAUNCH_DATE_LABEL` to `"opening day"` (internal label only — nothing user-facing quotes the actual date anymore). Keep the real date in a separate `LAUNCH_DATE_INTERNAL = "2026-07-26"` constant used only for staff-side task descriptions, never for outbound copy.
-- Extend the v4.5.0 date-redaction sanitizer to also catch:
-  - `\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*20\d{2}\b`
-  - `\b(?:sunday|monday|…)\s*,?\s*\d{1,2}\s*(?:jan|…|dec)[a-z]*\s*20\d{2}\b`
-  - Hinglish patterns: `\b(?:July|Jul(?:ai)?)\s*20\d{2}\b`, `\b26\s*(?:July|Jul(?:ai)?)\b`
-  - Replace with "on opening day".
-- Run the sanitizer on **every** outbound branch (deterministic short-circuits, embargo pivot, LLM output) — right now some short-circuits return before it runs.
-- SEO files under `public/` (llms.txt, llms-full.txt, ai.txt) are **left untouched** — those are for crawlers, not the WhatsApp/IG bot.
+`ai_knowledge` (via one migration — no schema changes):
+- `pricing_rules` row: keep "no prices before opening" but replace "opening day" with "Sunday, 26 July 2026" and add "warmly invite the user to visit on/after 26 July 2026".
+- `launch_timeline` row: restore the specific date; explicitly say "you are most welcome to visit us on or after Sunday, 26 July 2026".
+- Leave the `non_fitness_message` / careers deflection row alone.
 
-## C. Break the "same offer, over and over" loop
+Deploy `whatsapp-webhook` and `meta-webhook` after the edit.
 
-`supabase/functions/_shared/ai-agent-brain.ts`
-- Add an `alreadyReserved` gate at the top of `runUnifiedAgent`: if `chatSettings.founder_handoff_task_id` exists AND the user's message is a bare affirmation / thanks / reaction (`ok`, `yes`, `sure`, `done`, `okok`, emoji), reply once with:
-  > "You're all set on the Founding list, {name} ✨ I'll ping you on opening day."
-  and return. No LLM call, no repeat offer.
-- Extend the hallucinated-action stripper to remove **re-offers** once reserved: strip any sentence matching `/want (?:our|the) team to (?:call|contact|lock)|lock in your (?:founding )?spot|founding member (?:annual|spot)/i` when `founder_handoff_task_id` is set.
-- Add a per-conversation "offer emitted count" guard: if the last 3 assistant turns already contain the reservation offer, suppress a 4th and instead say "Anything specific you'd like me to note for our team before opening day?"
+## B. Fix the Instagram handle everywhere
 
-## Verification (before I call it done)
+Correct handle: **@inclineudaipur** → `https://www.instagram.com/inclineudaipur/`.
 
-- Grep the brain + `_shared/*` for any remaining "call you", "founder will call", "2 hours", `LAUNCH_DATE_LABEL` string interpolation into outbound copy, and `2026`. Expect zero hits in user-facing paths.
-- Add a Deno unit test (`supabase/functions/_shared/__tests__/ai-brain-embargo.test.ts`) with 4 cases:
-  1. User says "ok" after reservation offer → gets reservation confirmation, not callback promise.
-  2. User asks "kab khulega?" → reply contains "opening day", not "July" / "2026" / a numeric date.
-  3. User says "yes" 3 times in a row after already reserved → bot doesn't re-offer.
-  4. LLM returns a string containing "our team will call you" → sanitizer strips it and substitutes reservation copy.
-- Manually replay Lakshya's transcript through the local brain (unit-test harness) and confirm none of the 3 bugs reproduce.
+Files to update:
+- `index.html` — the 3 JSON-LD `sameAs` entries (lines 93, 113, 209).
+- `public/llms.txt` (line 48) and `public/llms-full.txt` (line 184).
+- `src/components/ui/ScrollOverlay.tsx` (lines 215–216) — href + label.
+- `src/services/cmsService.ts` (line 62) — replace stale `instagram.com/inclinefitness`.
+- Add a new `ai_knowledge` row (topic: `social_handles`) with the correct IG/FB/YouTube URLs so the bot answers from knowledge instead of guessing. Include: "If a user asks for our Instagram, reply with @inclineudaipur (https://www.instagram.com/inclineudaipur/)."
 
-## Files touched
+Not touching: WhatsApp/IG/Messenger webhooks, Meta OAuth (`graph.instagram.com` is Meta's API host, unrelated to the public handle), lead capture, RLS, Dashboard.
 
-- `supabase/functions/_shared/ai-agent-brain.ts` (edit — sections A, B, C)
-- `supabase/functions/_shared/handoff.ts` (edit — rename constants, tighten sanitizer)
-- `supabase/migrations/<ts>_founders_phase_no_callback_no_date.sql` (new — scrub `ai_knowledge` + `ai_purposes.system_prompt`)
-- `supabase/functions/_shared/__tests__/ai-brain-embargo.test.ts` (new)
+## Verification
 
-## Explicitly NOT changing
+- `rg -n "theinclinelife|inclinefitness" index.html public/ src/ supabase/functions/_shared/` → zero hits after edit (except the `@theinclinelife.com` email addresses, which stay).
+- `rg -n "opening day"` in `ai-agent-brain.ts` → only appears inside sanitizer/legacy comments; user-facing strings all say the date.
+- Manually replay Shubham's transcript through the brain harness — bot should now say "We open on Sunday, 26 July 2026 — you're most welcome to visit us then" and, when asked for Instagram, reply `@inclineudaipur`.
+- Deploy webhooks and send one live test message on WhatsApp asking (a) "when do you open?" and (b) "insta handle?".
 
-- WhatsApp / IG / Messenger webhooks, lead capture flow, task/handoff plumbing (`requestFounderHandoff` still runs — ops still gets the internal task, just no promise back to the prospect).
-- Interactive-list onboarding steps (name → goal → plan interest).
-- `public/llms*.txt`, `public/ai.txt`, `public/sitemap.xml`, and `index.html` — those are crawler-facing, not chatbot-facing.
-- Dashboard, /register, RLS, migrations outside the knowledge scrub.
+## Files changed
+- `supabase/functions/_shared/ai-agent-brain.ts`
+- `supabase/functions/_shared/handoff.ts`
+- `supabase/migrations/<ts>_founders_phase_disclose_date_and_ig_handle.sql` (new — updates `ai_knowledge` rows, inserts `social_handles` row)
+- `index.html`
+- `public/llms.txt`, `public/llms-full.txt`
+- `src/components/ui/ScrollOverlay.tsx`
+- `src/services/cmsService.ts`

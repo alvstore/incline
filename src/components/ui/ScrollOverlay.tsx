@@ -212,8 +212,8 @@ const ScrollOverlay = () => {
           <div className="flex items-center gap-2.5">
             {[
               {
-                href: "https://www.instagram.com/theinclinelife/",
-                label: "Instagram @theinclinelife",
+                href: "https://www.instagram.com/inclineudaipur/",
+                label: "Instagram @inclineudaipur",
                 Icon: Instagram,
               },
               {
