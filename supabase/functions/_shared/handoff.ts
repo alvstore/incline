@@ -226,11 +226,14 @@ export function lastBotOfferedCallback(
 // is a false promise and must never reach the prospect.
 // v2.0.0 (Lakshya audit) — widened to catch callback/visit/tour/pricing
 // commitments in addition to the original "notified team" hallucinations.
+// v3.0.0 (Shubham audit) — narrowed to strip only callback/call-before-opening
+// promises. Warm "I'll share details / see you on opening day" phrasing now
+// survives so the bot can welcome visitors to the Sunday, 26 July 2026 opening.
 export const HALLUCINATED_CALLBACK_RE =
-  /(i['’]?ve\s+(?:notified|shared|informed|alerted|told|sent|forwarded)|notified\s+(?:our|the)\s+(?:founding|founder|team|sales)|shared\s+your\s+details|forwarded\s+your\s+details|our\s+(?:team|founders?|founding\s+team)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you|get\s+back|revert)|(?:a\s+)?(?:teammate|team\s+member|founder|someone|human)\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you|get\s+back|revert)|team\s+will\s+(?:reach\s+out|call|be\s+in\s+touch|contact\s+you)|(?:will\s+)?(?:personally\s+)?call\s+you\s+(?:back|within|in\s+the\s+next|shortly|soon)|callback\s+(?:within|in|shortly)|within\s+the\s+next\s+\d+\s*(?:hour|hr|min)|locked\s+in|founding\s+team|i['’]?ve\s+(?:added|created|scheduled|booked|registered)\s+(?:a|the|your)|book\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|schedule\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|(?:want\s+(?:our|the)\s+team\s+to\s+call|team\s+to\s+lock\s+in\s+your)|i['’]?ll\s+(?:reach\s+out|ping\s+you|get\s+back|be\s+in\s+touch|contact\s+you|call\s+you|share\s+(?:the\s+)?(?:full\s+)?details?\s+(?:with\s+you\s+)?personally)|team\s+picks?\s+this\s+up|our\s+team\s+picks?)/i;
+  /((?:our\s+)?(?:team|founders?|founding\s+team|teammate|team\s+member|founder|someone|human)\s+will\s+(?:call|be\s+in\s+touch|contact\s+you|get\s+back|revert)(?:\s+(?:you\s+)?(?:back|within|in\s+the\s+next|shortly|soon|in\s+\d+))?|(?:will\s+)?(?:personally\s+)?call\s+you\s+(?:back|within|in\s+the\s+next|shortly|soon)|callback\s+(?:within|in|shortly)|within\s+the\s+next\s+\d+\s*(?:hour|hr|min)|i['’]?ll\s+call\s+you|book\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|schedule\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|want\s+(?:our|the)\s+team\s+to\s+call)/i;
 
 const SAFE_RESERVATION_OFFER =
-  "Want me to add your name to the Founding Members list? I'll share everything on opening day ✨";
+  "Want me to add your name to the Founding Members list? We open on Sunday, 26 July 2026 — you're most welcome to visit us then ✨";
 
 // Sanitizes an LLM-generated reply when no real reservation was
 // triggered this turn. If the reply promises a callback/tour/pricing or
