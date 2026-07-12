@@ -216,18 +216,24 @@ serve(async (req: Request) => {
       const razorpaySignature = req.headers.get("x-razorpay-signature");
       const webhookSecret = integration.credentials?.webhook_secret;
 
-      if (webhookSecret && razorpaySignature) {
-        const expectedSignature = await generateHmacSha256(body, webhookSecret);
-        if (razorpaySignature !== expectedSignature) {
-          outcome.signatureVerified = false;
-          outcome.eventType = payload?.event || null;
-          return reply({ error: "Invalid signature" }, 401, "Invalid Razorpay signature");
-        }
-        outcome.signatureVerified = true;
-      } else if (webhookSecret && !razorpaySignature) {
+      // Fail-closed: reject if webhook secret is not configured or signature is missing/invalid.
+      if (!webhookSecret) {
         outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
+        return reply({ error: "Webhook secret not configured" }, 401, "Razorpay webhook secret not configured for branch — refusing to process unsigned webhook");
+      }
+      if (!razorpaySignature) {
+        outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
         return reply({ error: "Missing signature" }, 401, "Missing Razorpay signature");
       }
+      const expectedSignature = await generateHmacSha256(body, webhookSecret);
+      if (razorpaySignature !== expectedSignature) {
+        outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
+        return reply({ error: "Invalid signature" }, 401, "Invalid Razorpay signature");
+      }
+      outcome.signatureVerified = true;
 
       const event = payload.event;
       outcome.eventType = event;
@@ -301,19 +307,23 @@ serve(async (req: Request) => {
       const saltKey = integration.credentials?.salt_key;
       const saltIndex = integration.credentials?.salt_index || "1";
 
-      if (saltKey && phonePeSignature) {
-        const base64Body = btoa(body);
-        const stringToSign = base64Body + "/pg/v1/status/" + saltKey;
-        const expectedChecksum = await sha256(stringToSign) + "###" + saltIndex;
-        if (phonePeSignature !== expectedChecksum) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Invalid signature" }, 401, "Invalid PhonePe signature");
-        }
-        outcome.signatureVerified = true;
-      } else if (saltKey && !phonePeSignature) {
+      // Fail-closed: reject if salt key not configured or signature missing/invalid.
+      if (!saltKey) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Webhook secret not configured" }, 401, "PhonePe salt key not configured for branch — refusing to process unsigned webhook");
+      }
+      if (!phonePeSignature) {
         outcome.signatureVerified = false;
         return reply({ error: "Missing signature" }, 401, "Missing PhonePe signature");
       }
+      const base64Body = btoa(body);
+      const stringToSign = base64Body + "/pg/v1/status/" + saltKey;
+      const expectedChecksum = await sha256(stringToSign) + "###" + saltIndex;
+      if (phonePeSignature !== expectedChecksum) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Invalid signature" }, 401, "Invalid PhonePe signature");
+      }
+      outcome.signatureVerified = true;
 
       const data = payload.data as PhonePeWebhookPayload;
       let status = "created";
@@ -340,19 +350,22 @@ serve(async (req: Request) => {
       const merchantKey = integration.credentials?.merchant_key;
       const merchantSalt = integration.credentials?.merchant_salt;
 
-      if (merchantKey && merchantSalt) {
-        if (!payload.hash) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Missing signature" }, 401, "Missing PayU hash when merchant credentials are configured");
-        }
-        const reverseHashString = `${merchantSalt}|${payuStatus}||||||${payload.udf5 || ""}|${payload.udf4 || ""}|${payload.udf3 || ""}|${payload.udf2 || ""}|${payload.udf1 || ""}|${payload.email || ""}|${payload.firstname || ""}|${productInfo}|${payuAmount}|${txnId}|${merchantKey}`;
-        const expectedHash = await sha512(reverseHashString);
-        if (payload.hash !== expectedHash) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Invalid signature" }, 401, "Invalid PayU signature");
-        }
-        outcome.signatureVerified = true;
+      // Fail-closed: reject if merchant key/salt not configured or hash missing/invalid.
+      if (!merchantKey || !merchantSalt) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Webhook secret not configured" }, 401, "PayU merchant key/salt not configured for branch — refusing to process unsigned webhook");
       }
+      if (!payload.hash) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Missing signature" }, 401, "Missing PayU hash");
+      }
+      const reverseHashString = `${merchantSalt}|${payuStatus}||||||${payload.udf5 || ""}|${payload.udf4 || ""}|${payload.udf3 || ""}|${payload.udf2 || ""}|${payload.udf1 || ""}|${payload.email || ""}|${payload.firstname || ""}|${productInfo}|${payuAmount}|${txnId}|${merchantKey}`;
+      const expectedHash = await sha512(reverseHashString);
+      if (payload.hash !== expectedHash) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Invalid signature" }, 401, "Invalid PayU signature");
+      }
+      outcome.signatureVerified = true;
 
       outcome.eventType = payuStatus || null;
 
