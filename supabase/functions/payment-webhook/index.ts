@@ -350,19 +350,22 @@ serve(async (req: Request) => {
       const merchantKey = integration.credentials?.merchant_key;
       const merchantSalt = integration.credentials?.merchant_salt;
 
-      if (merchantKey && merchantSalt) {
-        if (!payload.hash) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Missing signature" }, 401, "Missing PayU hash when merchant credentials are configured");
-        }
-        const reverseHashString = `${merchantSalt}|${payuStatus}||||||${payload.udf5 || ""}|${payload.udf4 || ""}|${payload.udf3 || ""}|${payload.udf2 || ""}|${payload.udf1 || ""}|${payload.email || ""}|${payload.firstname || ""}|${productInfo}|${payuAmount}|${txnId}|${merchantKey}`;
-        const expectedHash = await sha512(reverseHashString);
-        if (payload.hash !== expectedHash) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Invalid signature" }, 401, "Invalid PayU signature");
-        }
-        outcome.signatureVerified = true;
+      // Fail-closed: reject if merchant key/salt not configured or hash missing/invalid.
+      if (!merchantKey || !merchantSalt) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Webhook secret not configured" }, 401, "PayU merchant key/salt not configured for branch — refusing to process unsigned webhook");
       }
+      if (!payload.hash) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Missing signature" }, 401, "Missing PayU hash");
+      }
+      const reverseHashString = `${merchantSalt}|${payuStatus}||||||${payload.udf5 || ""}|${payload.udf4 || ""}|${payload.udf3 || ""}|${payload.udf2 || ""}|${payload.udf1 || ""}|${payload.email || ""}|${payload.firstname || ""}|${productInfo}|${payuAmount}|${txnId}|${merchantKey}`;
+      const expectedHash = await sha512(reverseHashString);
+      if (payload.hash !== expectedHash) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Invalid signature" }, 401, "Invalid PayU signature");
+      }
+      outcome.signatureVerified = true;
 
       outcome.eventType = payuStatus || null;
 
