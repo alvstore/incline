@@ -216,18 +216,24 @@ serve(async (req: Request) => {
       const razorpaySignature = req.headers.get("x-razorpay-signature");
       const webhookSecret = integration.credentials?.webhook_secret;
 
-      if (webhookSecret && razorpaySignature) {
-        const expectedSignature = await generateHmacSha256(body, webhookSecret);
-        if (razorpaySignature !== expectedSignature) {
-          outcome.signatureVerified = false;
-          outcome.eventType = payload?.event || null;
-          return reply({ error: "Invalid signature" }, 401, "Invalid Razorpay signature");
-        }
-        outcome.signatureVerified = true;
-      } else if (webhookSecret && !razorpaySignature) {
+      // Fail-closed: reject if webhook secret is not configured or signature is missing/invalid.
+      if (!webhookSecret) {
         outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
+        return reply({ error: "Webhook secret not configured" }, 401, "Razorpay webhook secret not configured for branch — refusing to process unsigned webhook");
+      }
+      if (!razorpaySignature) {
+        outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
         return reply({ error: "Missing signature" }, 401, "Missing Razorpay signature");
       }
+      const expectedSignature = await generateHmacSha256(body, webhookSecret);
+      if (razorpaySignature !== expectedSignature) {
+        outcome.signatureVerified = false;
+        outcome.eventType = payload?.event || null;
+        return reply({ error: "Invalid signature" }, 401, "Invalid Razorpay signature");
+      }
+      outcome.signatureVerified = true;
 
       const event = payload.event;
       outcome.eventType = event;
