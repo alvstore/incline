@@ -13499,6 +13499,10 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_access_member_avatar: {
+        Args: { _path: string; _user_id: string }
+        Returns: boolean
+      }
       can_access_member_measurement_photo: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -13524,6 +13528,10 @@ export type Database = {
         Returns: boolean
       }
       can_write_biometric_photo: {
+        Args: { _path: string; _user_id: string }
+        Returns: boolean
+      }
+      can_write_member_avatar: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
