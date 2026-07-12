@@ -307,19 +307,23 @@ serve(async (req: Request) => {
       const saltKey = integration.credentials?.salt_key;
       const saltIndex = integration.credentials?.salt_index || "1";
 
-      if (saltKey && phonePeSignature) {
-        const base64Body = btoa(body);
-        const stringToSign = base64Body + "/pg/v1/status/" + saltKey;
-        const expectedChecksum = await sha256(stringToSign) + "###" + saltIndex;
-        if (phonePeSignature !== expectedChecksum) {
-          outcome.signatureVerified = false;
-          return reply({ error: "Invalid signature" }, 401, "Invalid PhonePe signature");
-        }
-        outcome.signatureVerified = true;
-      } else if (saltKey && !phonePeSignature) {
+      // Fail-closed: reject if salt key not configured or signature missing/invalid.
+      if (!saltKey) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Webhook secret not configured" }, 401, "PhonePe salt key not configured for branch — refusing to process unsigned webhook");
+      }
+      if (!phonePeSignature) {
         outcome.signatureVerified = false;
         return reply({ error: "Missing signature" }, 401, "Missing PhonePe signature");
       }
+      const base64Body = btoa(body);
+      const stringToSign = base64Body + "/pg/v1/status/" + saltKey;
+      const expectedChecksum = await sha256(stringToSign) + "###" + saltIndex;
+      if (phonePeSignature !== expectedChecksum) {
+        outcome.signatureVerified = false;
+        return reply({ error: "Invalid signature" }, 401, "Invalid PhonePe signature");
+      }
+      outcome.signatureVerified = true;
 
       const data = payload.data as PhonePeWebhookPayload;
       let status = "created";
