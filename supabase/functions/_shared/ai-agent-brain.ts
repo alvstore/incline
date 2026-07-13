@@ -2721,6 +2721,10 @@ async function extractContextDelta(
       const looksLikeQuestion = /\?/.test(lastUser);
       const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
       const hinglishIntent = classifyHinglishIntent(lastUser);
+      // v6.1.0 — reject any "name" that arrives inside a solicitation pitch
+      // (e.g. "I'm Tania from magicpin's growth team"). We must not store
+      // salesperson names as leads.
+      const isSolicitation = classifySolicitation(lastUser).hit;
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
       const candidate = tokens[0] || "";
@@ -2728,7 +2732,7 @@ async function extractContextDelta(
         tokens.length >= 1 && tokens.length <= 3 &&
         /^[\p{L}][\p{L}'.-]{1,}$/u.test(candidate);
       const accepted =
-        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent &&
+        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent && !isSolicitation &&
         passesShape && looksLikeRealName(candidate, memory?.profile?.phone);
 
       console.log(
