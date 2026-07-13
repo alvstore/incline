@@ -1486,6 +1486,52 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
+  //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
+  //     outbound turns without a valid answer, stop looping — hand off to
+  //     staff and go silent. This is what saved the Vera thread from 9
+  //     identical "Founding Member invite" prompts.
+  {
+    const cooldown = detectRepeatedAskLoop(replyText, history);
+    if (cooldown.looping) {
+      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff, going silent`);
+      try {
+        await supabase
+          .from("whatsapp_chat_settings")
+          .upsert(
+            {
+              branch_id: ctx.branchId,
+              phone_number: ctx.senderId,
+              platform: ctx.platform as any,
+              bot_active: false,
+              paused_at: new Date().toISOString(),
+              handoff_reason: `ask_loop_${cooldown.askKind}`,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "branch_id,phone_number" },
+          );
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] ask-loop pause failed:`, (e as Error).message);
+      }
+      try {
+        const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        fetch(`${baseUrl}/functions/v1/notify-staff-handoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            member_phone: ctx.senderId,
+            branch_id: ctx.branchId,
+            reason: `Bot looping on '${cooldown.askKind}' ask (${cooldown.count}x). Human takeover needed.`,
+          }),
+        }).catch(() => {});
+      } catch { /* noop */ }
+      return skip(`ask_loop_${cooldown.askKind}`);
+    }
+  }
+
+
+
 
 
 
