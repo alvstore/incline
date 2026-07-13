@@ -1,70 +1,89 @@
-# Audit — what the chat got wrong
 
-Two separate issues in Shubham's transcript, both traceable to code we tightened in the last two rounds:
+## Audit of the Vera/magicpin chat (+91 89292 53155)
 
-**1. Bot refuses to say "26 July 2026" and won't welcome the visitor.**
-After the Lakshya/Raj audits we set `LAUNCH_DATE_LABEL = "opening day"` and wired `redactOpeningDate()` (v5.0.0) to strip **any** month/year/numeric date from every outbound message. The system prompt now says: *"NEVER mention a specific month, year, or opening date — refer to it ONLY as opening day."* That was the correct read of *"don't disclose date"* at that time — but your new instruction reverses it: the date **should** be disclosed, and the tone should be welcoming ("you are most welcome"). Right now the sanitizer would scrub "26 July 2026" even if the LLM produced it.
+The bot behaved like a scripted form, not a concierge. Root causes, all in `supabase/functions/_shared/ai-agent-brain.ts`:
 
-**2. Bot gives the wrong Instagram handle.**
-The bot answered `@theinclinelife`, which is what our SEO/JSON-LD/footer say. The real handle is **@inclineudaipur** (`https://www.instagram.com/inclineudaipur/`). The bot has no `ai_knowledge` row for social handles, so it fell back to the LLM guessing from the site's `sameAs` array in `index.html` — which points at the stale username. Same stale handle is also in `public/llms.txt`, `public/llms-full.txt`, `ScrollOverlay.tsx`, and `cmsService.ts` (which additionally has a third wrong handle, `inclinefitness`).
+1. **No intent classification before lead-capture kicks in.** Any inbound message from an "unknown" contact enters the ladder Name → Email → Goal → Plan. When the counterpart is a *salesperson / bot / competitor / spam*, we still treat them as a fitness lead.
+2. **Name extractor accepted "Tania" / "Vera" from a sales pitch.** Once "name" was stored, `askNextMissing()` (line 1551), `enforceNoRepeatNameAsk()` (line 1615), `sanitizeFoundersPhaseText()` (line 1691) and `buildNoReplyFallback()` (line 1775) ALL fall through to the same hard-coded line: `Thanks, <name> — what's the best email for your Founding Member invite? ✨`.
+3. **No anti-repeat cooldown on the email ask itself.** The duplicate-guard (line 1586) only dedupes *interactive* payloads, not this plain-text prompt. Result: 9 identical email asks in one thread.
+4. **No handling of explicit opt-outs / off-topic pitches.** Vera said "we won't message you again" — we replied with the same email ask.
+5. **Model output was overridden by guards.** Even when Gemini produced context-aware copy, the "founder's-phase sanitizer" and "name-repeat guard" rewrote it back to the robotic ladder line.
 
-# Plan — 2 focused changes
+Net effect: the AI can't "think" — the guardrails force it onto rails regardless of what the human said.
 
-## A. Re-enable opening-date disclosure with a warm welcome
+---
 
-Founder's Phase rules are relaxed to: **disclose the date, welcome visitors on opening day, still do NOT quote prices / PT packages / plan tiers.** No callback commitments before opening day (that guard stays).
+## Plan — make the AI understand before it answers
 
-`supabase/functions/_shared/ai-agent-brain.ts`
-- Set `LAUNCH_DATE_LABEL = "Sunday, 26 July 2026"`. Keep `LAUNCH_DATE_INTERNAL` as-is.
-- Rewrite `EMBARGO_PIVOT_LINE_EN` / `_HI` to include the date and a welcome:
-  - EN: `"We open on Sunday, 26 July 2026 — you're most welcome to visit us then! Want me to add your name to the Founding Members list so you get the full details first?"`
-  - HI: `"Hum Sunday, 26 July 2026 ko open kar rahe hain — aap zaroor visit kijiye! Naam Founding Members list mein add kar doon?"`
-- Neutralize `redactOpeningDate()` to a pass-through (`return { redacted: text, hit: false }`) so the date is no longer scrubbed. Keep the function signature and CJK/Hangul scrubber intact (still useful).
-- Rewrite the reservation short-circuit copy (~lines 850–895):
-  - "You're on the Founding Members list, {name} ✨ We open on **Sunday, 26 July 2026** — you're most welcome to visit us then. I'll share the full details with you before opening day."
-  - Already-reserved bare-affirmation reply: "You're all set, {name} ✨ See you on **26 July 2026** — we can't wait to welcome you!"
-- Rewrite the system-prompt Founder's Phase block (line 1172–1173):
-  - Replace *"NEVER mention a specific month, year, or opening date"* with *"You MAY (and should) tell users we open on Sunday, 26 July 2026 and warmly welcome them to visit then."*
-  - Keep the "no callback commitments before opening day" and "no pricing / PT / plan-tier disclosure" rules. Change "reach out on opening day" wording accordingly.
-- Update the `KNOWN PLAN_INTEREST` rule strings (lines ~2725/2727): remove "NEVER quote… any month/year/date"; keep the price/session-count ban.
-- Update `getNonMembershipRedirect` / `buildNoReplyFallback` / any hard-coded "opening day" lines to include the actual date.
+### A. New pre-brain intent gate (`_shared/ai-intent-classifier.ts`)
+Cheap Gemini-Flash-Lite classification of every inbound message from *unknown* contacts, before the main brain runs. Returns one of:
 
-`supabase/functions/_shared/handoff.ts`
-- Tighten `HALLUCINATED_CALLBACK_RE` so it strips *only* "call/callback/2 hours" promises — remove the "share personally / reach out / get back / ping you" clauses so warm follow-through phrasing survives.
-- Rename `SAFE_RESERVATION_OFFER` copy to include the date and welcome.
+- `genuine_lead` — normal fitness enquiry → existing flow.
+- `solicitation` — B2B pitch, agency, vendor, marketplace (magicpin/JustDial/Vera/etc.), affiliate, ad-service.
+- `spam_bot` — automated marketing broadcast, template pitch, payment link push.
+- `opt_out` — "stop / don't message / not interested".
+- `wrong_number / off_topic` — casual chat, jokes, tests.
+- `abusive` — profanity/harassment.
+- `ambiguous` — fall back to normal flow but skip aggressive capture.
 
-`ai_knowledge` (via one migration — no schema changes):
-- `pricing_rules` row: keep "no prices before opening" but replace "opening day" with "Sunday, 26 July 2026" and add "warmly invite the user to visit on/after 26 July 2026".
-- `launch_timeline` row: restore the specific date; explicitly say "you are most welcome to visit us on or after Sunday, 26 July 2026".
-- Leave the `non_fitness_message` / careers deflection row alone.
+Signals fed to the classifier: last 6 turns, sender display name, whether *they* opened with a pitch, presence of URLs/prices/₹/trial/subscription/agency keywords, and whether the "name" they gave matches known solicitor patterns (Vera, magicpin, growth team, etc.).
 
-Deploy `whatsapp-webhook` and `meta-webhook` after the edit.
+### B. Route by intent, don't just capture
+In `ai-agent-brain.ts` (near the top of the reply path, before `askNextMissing`):
 
-## B. Fix the Instagram handle everywhere
+| Intent | Behaviour |
+|---|---|
+| `solicitation` / `spam_bot` | One-time polite decline: *"Thanks, but Incline handles growth in-house — please don't add this number to outreach lists."* Then set `whatsapp_chat_settings.do_not_contact = true` and pause AI on the thread. |
+| `opt_out` | Acknowledge, call existing `mark_do_not_contact` RPC, stop. |
+| `wrong_number / off_topic` | Short human reply, no capture ladder. |
+| `abusive` | Silent handoff to staff, no auto-reply. |
+| `genuine_lead` / `ambiguous` | Existing Name→Email→Goal→Plan flow. |
 
-Correct handle: **@inclineudaipur** → `https://www.instagram.com/inclineudaipur/`.
+### C. Harden the name extractor
+Reject as "name" anything that is:
+- a known brand/agency token (magicpin, vera, tania when preceded by "I'm … from"),
+- present in the same message as a URL, ₹ amount, "trial", "subscription", "growth team", "agency",
+- longer than 3 tokens with marketing verbs.
 
-Files to update:
-- `index.html` — the 3 JSON-LD `sameAs` entries (lines 93, 113, 209).
-- `public/llms.txt` (line 48) and `public/llms-full.txt` (line 184).
-- `src/components/ui/ScrollOverlay.tsx` (lines 215–216) — href + label.
-- `src/services/cmsService.ts` (line 62) — replace stale `instagram.com/inclinefitness`.
-- Add a new `ai_knowledge` row (topic: `social_handles`) with the correct IG/FB/YouTube URLs so the bot answers from knowledge instead of guessing. Include: "If a user asks for our Instagram, reply with @inclineudaipur (https://www.instagram.com/inclineudaipur/)."
+Add these to `looksLikeRealName()` / the extractor so we stop storing "Tania" as the lead's name.
 
-Not touching: WhatsApp/IG/Messenger webhooks, Meta OAuth (`graph.instagram.com` is Meta's API host, unrelated to the public handle), lead capture, RLS, Dashboard.
+### D. Anti-repeat cooldown on plain-text asks
+Extend the duplicate-guard (currently interactive-only, line 1568) to *also* dedupe the email/goal/plan text prompts. If the same ask has gone out ≥2 times in the last 6 outbound turns without a valid answer, escalate: **stop asking, hand off to staff, mark thread `needs_human=true`**.
 
-## Verification
+### E. Give the model room to think
+- Add a `<reasoning_first>` block in the system prompt: *"Before replying, silently classify the sender's intent (lead / solicitor / opt-out / off-topic). Only run the capture ladder for genuine leads."*
+- Neuter `enforceNoRepeatNameAsk` and `sanitizeFoundersPhaseText` when intent ≠ `genuine_lead` — currently they force the robotic line even when the LLM did the right thing.
 
-- `rg -n "theinclinelife|inclinefitness" index.html public/ src/ supabase/functions/_shared/` → zero hits after edit (except the `@theinclinelife.com` email addresses, which stay).
-- `rg -n "opening day"` in `ai-agent-brain.ts` → only appears inside sanitizer/legacy comments; user-facing strings all say the date.
-- Manually replay Shubham's transcript through the brain harness — bot should now say "We open on Sunday, 26 July 2026 — you're most welcome to visit us then" and, when asked for Instagram, reply `@inclineudaipur`.
-- Deploy webhooks and send one live test message on WhatsApp asking (a) "when do you open?" and (b) "insta handle?".
+### F. Training data (`ai_knowledge` rows, topic = `solicitor_handling`)
+Seed 8–10 canonical examples so RAG retrieves them for future pitches:
+- magicpin / Vera pitch
+- JustDial / Sulekha listing sales
+- SEO / Google-review agency
+- WhatsApp API reseller
+- Payment-gateway cold pitch
+- Fitness-equipment vendor
+- Influencer collab DM
+- Job seeker
+- Wrong number
+- Casual "hi/test/joke"
 
-## Files changed
-- `supabase/functions/_shared/ai-agent-brain.ts`
-- `supabase/functions/_shared/handoff.ts`
-- `supabase/migrations/<ts>_founders_phase_disclose_date_and_ig_handle.sql` (new — updates `ai_knowledge` rows, inserts `social_handles` row)
-- `index.html`
-- `public/llms.txt`, `public/llms-full.txt`
-- `src/components/ui/ScrollOverlay.tsx`
-- `src/services/cmsService.ts`
+Each row = trigger phrases + the exact response Yogita wants us to send.
+
+### G. Admin surface
+Add a new tab under **Settings → AI Agent → Training** called **"Non-lead responses"** where the owner can:
+- edit the canned decline text,
+- toggle auto-mark-DNC on solicitor detection,
+- see a log of classified inbound (last 50) with the intent label and the reply we sent, plus a "reclassify" button that writes a correction back into `ai_knowledge`.
+
+### H. Verification
+1. Replay the Vera transcript through `ai-test-purpose` — expect exactly ONE polite decline + DNC, not 9 email asks.
+2. Replay 5 real founding-member chats — expect the normal ladder to still complete.
+3. Unit test the new name extractor on {"Vera", "Tania from magicpin", "Raj kumar suthar", "hi", "test"}.
+4. Deploy `whatsapp-webhook`, `meta-webhook`, `ai-test-purpose`.
+
+### Technical notes
+- New file: `supabase/functions/_shared/ai-intent-classifier.ts` (~120 lines, one Gemini call, 200 ms budget, cached per inbound message id).
+- Edits: `_shared/ai-agent-brain.ts` (intent gate + guard bypass), `_shared/ai-prompt.ts` (add `<reasoning_first>` block), `_shared/handoff.ts` (new `solicitor_detected` handoff reason).
+- Migration: `ai_knowledge` seed rows + a new `ai_intent_log` table (message_id, intent, confidence, reply, created_at) for the admin log.
+- No schema-breaking changes; existing lead flow untouched for `genuine_lead`.
+

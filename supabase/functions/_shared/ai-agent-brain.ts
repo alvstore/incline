@@ -194,7 +194,45 @@ const FAKE_NAME_TOKENS = new Set([
   "paisa", "paise", "fees", "fee", "price", "cost", "rate", "rates",
   "location", "address", "open", "khulega", "khulta", "start", "launch",
   "reach", "direction", "directions", "kharcha", "kharch",
+  // v6.1.0 — Solicitor / vendor brand and role tokens. The Vera/magicpin
+  // pitch caused us to store "Vera" and "Tania" as leads. Any of these,
+  // *by themselves*, must never become a first_name.
+  "vera", "magicpin", "magic", "pin", "justdial", "sulekha", "urbanpro",
+  "growth", "team", "sales", "marketing", "agency", "reseller", "vendor",
+  "supplier", "partner", "affiliate", "founder", "ceo", "director",
 ]);
+
+// ─── Solicitation / B2B pitch detector (v6.1.0) ────────────────────────────
+// Detects unsolicited sales / marketing / vendor pitches so the bot doesn't
+// walk them through the founding-member funnel. Runs as a deterministic
+// pre-brain guard; combines strong-signal keyword hits with weaker signals.
+export const SOLICITATION_STRONG_RE =
+  /\b(magicpin|magic\s*pin|justdial|sulekha|urbanpro|noknok|zomato\s+ads?|swiggy\s+ads?|payment\s+gateway|paytm\s+for\s+business|razorpay(?:\s+team)?|phonepe\s+business|shopify\s+plus|whatsapp\s+business\s+api|whatsapp\s+api\s+(?:reseller|provider)|meta\s+partner|gupshup|interakt|wati|aisensy|leadsquared|noise\s+partnership|influencer\s+collab|brand\s+collab|sponsor(?:ship)?\s+opportunity|paid\s+collaboration|from\s+our\s+growth\s+team|growth\s+partner|marketing\s+agency|seo\s+agency|google\s+ads?\s+agency|manage\s+your\s+(?:google|listing|profile|reviews)|boost\s+your\s+(?:sales|leads|visibility|ranking)|rank\s+(?:higher\s+)?on\s+google|list(?:ing)?\s+for\s+free|free\s+trial\s+for\s+rs|7[-\s]?day\s+trial|drive\s+more\s+(?:leads|footfall|customers))\b/i;
+
+// Weaker signals — a single hit is not enough, but ≥2 marks the message as
+// solicitation. Keeps genuine leads asking about pricing out of the net.
+export const SOLICITATION_WEAK_TOKENS: RegExp[] = [
+  /\b(rs\.?|₹|inr)\s*\d{2,}/i,        // explicit price they quote to us
+  /\btrial\b/i,
+  /\bsubscription\b/i,
+  /\bmagp\.in\b/i,                    // magicpin short-links
+  /https?:\/\/\S+/i,                  // any URL
+  /\bpayment\s+link\b/i,
+  /\boffer\s+banner\b/i,
+  /\bad\s+campaigns?\b/i,
+  /\bpaid\s+ads?\b/i,
+  /\brank(?:ing)?\s+ahead\b/i,
+  /\bfrom\s+(?:tania|vera|priya|rahul|amit|neha|sneha|riya)\b/i,  // canned sig
+];
+
+export function classifySolicitation(text: string): { hit: boolean; reason: string } {
+  const t = String(text || "");
+  if (!t.trim()) return { hit: false, reason: "" };
+  if (SOLICITATION_STRONG_RE.test(t)) return { hit: true, reason: "strong_keyword" };
+  const weakHits = SOLICITATION_WEAK_TOKENS.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0);
+  if (weakHits >= 2) return { hit: true, reason: `weak_signals_${weakHits}` };
+  return { hit: false, reason: "" };
+}
 
 // ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
 // English + Hinglish + Hindi. Matched on inbound user text only. v4.3.0
@@ -539,6 +577,74 @@ export async function runUnifiedAgent(
     }
 
     return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
+  }
+
+  // 3b-bis. SOLICITATION / B2B pitch guard (v6.1.0). Detects unsolicited
+  //         vendor / agency / marketplace pitches (magicpin, "growth team",
+  //         payment-link ads, etc.) BEFORE the onboarding funnel runs — so
+  //         we don't robotically ask a salesperson for their "email for their
+  //         Founding Member invite". One-time polite decline + DNC + pause.
+  const solicit = classifySolicitation(String(ctx.messageContent || ""));
+  if (solicit.hit) {
+    const declineText =
+      "Thanks for reaching out — Incline handles growth in-house and isn't taking vendor / agency pitches on this channel. Please don't add this number to outreach lists. 🙏";
+    try {
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          {
+            branch_id: ctx.branchId,
+            phone_number: ctx.senderId,
+            platform: ctx.platform as any,
+            bot_active: false,
+            do_not_contact: true,
+            paused_at: new Date().toISOString(),
+            handoff_reason: `solicitation_${solicit.reason}`,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation pause write failed:`, (e as Error).message);
+    }
+    try {
+      await supabase.rpc("mark_do_not_contact", {
+        p_phone: ctx.senderId,
+        p_branch_id: ctx.branchId,
+        p_reason: `solicitation_${solicit.reason}`,
+        p_source: "ai_guard",
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation DNC failed (continuing):`, (e as Error).message);
+    }
+    try {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        current_intent: "solicitation",
+        do_not_ask_add: ["name", "email", "goal", "plan_interest", "phone"],
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation memory write failed:`, (e as Error).message);
+    }
+    // Dedupe — if the same decline was already sent, stay silent.
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: lastOut } = await supabase
+        .from("whatsapp_messages")
+        .select("content, created_at")
+        .eq("branch_id", ctx.branchId)
+        .eq("phone_number", ctx.senderId)
+        .eq("direction", "outbound")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastOut && String(lastOut.content || "").trim() === declineText.trim()) {
+        console.log(`[AI:${ctx.platform}] solicitation decline already sent, staying silent`);
+        return skip("solicitation_already_declined");
+      }
+    } catch { /* noop */ }
+    console.log(`[AI:${ctx.platform}] solicitation detected (${solicit.reason}) — one-time decline + DNC`);
+    return { replyText: declineText, leadCaptured: false, leadId: null, handoffTriggered: true, skipped: false };
   }
 
   // 3c. HUMAN-HANDOFF / DECLINE intent gate. Runs BEFORE the deterministic
@@ -1380,6 +1486,52 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
+  //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
+  //     outbound turns without a valid answer, stop looping — hand off to
+  //     staff and go silent. This is what saved the Vera thread from 9
+  //     identical "Founding Member invite" prompts.
+  {
+    const cooldown = detectRepeatedAskLoop(replyText, history);
+    if (cooldown.looping) {
+      console.log(`[AI:${ctx.platform}] repeated-ask loop detected (${cooldown.askKind} sent ${cooldown.count}x) — escalating to staff, going silent`);
+      try {
+        await supabase
+          .from("whatsapp_chat_settings")
+          .upsert(
+            {
+              branch_id: ctx.branchId,
+              phone_number: ctx.senderId,
+              platform: ctx.platform as any,
+              bot_active: false,
+              paused_at: new Date().toISOString(),
+              handoff_reason: `ask_loop_${cooldown.askKind}`,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "branch_id,phone_number" },
+          );
+      } catch (e) {
+        console.warn(`[AI:${ctx.platform}] ask-loop pause failed:`, (e as Error).message);
+      }
+      try {
+        const baseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        fetch(`${baseUrl}/functions/v1/notify-staff-handoff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            member_phone: ctx.senderId,
+            branch_id: ctx.branchId,
+            reason: `Bot looping on '${cooldown.askKind}' ask (${cooldown.count}x). Human takeover needed.`,
+          }),
+        }).catch(() => {});
+      } catch { /* noop */ }
+      return skip(`ask_loop_${cooldown.askKind}`);
+    }
+  }
+
+
+
 
 
 
@@ -1603,6 +1755,41 @@ function enforceOutboundInteractiveGuards(input: {
 
   return replyText;
 }
+
+// ─── Repeated-ask cooldown (v6.1.0) ──────────────────────────────────────────
+// Classifies the outbound reply into one of the four onboarding asks, then
+// counts identical asks in the last 6 outbound turns. Threshold ≥2 means the
+// bot has asked twice already and got no valid answer — escalate instead of
+// asking a third time. Fires the "9 identical email prompts" fix.
+type OnboardingAsk = "name" | "email" | "goal" | "plan_interest" | null;
+
+function classifyOnboardingAsk(text: string): OnboardingAsk {
+  if (!text) return null;
+  const t = String(text);
+  // Skip interactive JSON payloads — handled by enforceOutboundInteractiveGuards.
+  const asPlain = t.trim().startsWith("{")
+    ? (() => { try { const p = JSON.parse(t); return String(p?.body?.text ?? p?.body ?? ""); } catch { return t; } })()
+    : t;
+  if (/founding\s+member\s+invite|share\s+your\s+email|best\s+email/i.test(asPlain)) return "email";
+  if (NAME_ASK_DETECT_RE.test(asPlain)) return "name";
+  if (/fitness\s+goal/i.test(asPlain)) return "goal";
+  if (/membership\s+duration|monthly.*quarterly.*half|choose\s+duration/i.test(asPlain)) return "plan_interest";
+  return null;
+}
+
+function detectRepeatedAskLoop(
+  replyText: string,
+  history: Array<{ role: string; content: string }>,
+): { looping: boolean; askKind: OnboardingAsk; count: number } {
+  const currentKind = classifyOnboardingAsk(replyText);
+  if (!currentKind) return { looping: false, askKind: null, count: 0 };
+  const recentOutbound = (history || []).filter((m) => m && m.role !== "user").slice(-6);
+  const priorSame = recentOutbound.filter((m) => classifyOnboardingAsk(String(m.content || "")) === currentKind).length;
+  // Loop threshold: this reply would be the (priorSame+1)-th identical ask.
+  // Escalate when we're about to send the 3rd.
+  return { looping: priorSame >= 2, askKind: currentKind, count: priorSame + 1 };
+}
+
 
 // ─── Name-repeat guard ────────────────────────────────────────────────────────
 // If memory.profile already has a real first name and the LLM produced any
@@ -2534,6 +2721,10 @@ async function extractContextDelta(
       const looksLikeQuestion = /\?/.test(lastUser);
       const isHandoffOrDecline = HUMAN_HANDOFF_RE.test(lastUser) || DECLINE_RE.test(lastUser);
       const hinglishIntent = classifyHinglishIntent(lastUser);
+      // v6.1.0 — reject any "name" that arrives inside a solicitation pitch
+      // (e.g. "I'm Tania from magicpin's growth team"). We must not store
+      // salesperson names as leads.
+      const isSolicitation = classifySolicitation(lastUser).hit;
       const trimmed = lastUser.replace(/[^\p{L}\s'.-]/gu, "").trim();
       const tokens = trimmed.split(/\s+/).filter(Boolean);
       const candidate = tokens[0] || "";
@@ -2541,7 +2732,7 @@ async function extractContextDelta(
         tokens.length >= 1 && tokens.length <= 3 &&
         /^[\p{L}][\p{L}'.-]{1,}$/u.test(candidate);
       const accepted =
-        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent &&
+        !looksLikeQuestion && !isHandoffOrDecline && !hinglishIntent && !isSolicitation &&
         passesShape && looksLikeRealName(candidate, memory?.profile?.phone);
 
       console.log(
@@ -2641,15 +2832,17 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
         // v4.4.0 — Also reject when last inbound was a Hinglish intent question.
         const phoneForGuard = memory?.profile?.phone;
         const hinglishIntentForGuard = classifyHinglishIntent(lastUser);
-        if (parsed.profile.first_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.first_name, phoneForGuard))) {
+        // v6.1.0 — also reject any name extracted from a solicitation pitch.
+        const solicitationForGuard = classifySolicitation(lastUser).hit;
+        if (parsed.profile.first_name && (hinglishIntentForGuard || solicitationForGuard || !looksLikeRealName(parsed.profile.first_name, phoneForGuard))) {
           console.log("[AI Tool Call Attempt] capture_first_name", JSON.stringify({
             sender: ctx.senderId, platform: ctx.platform, source: "llm_enrichment",
             candidate: String(parsed.profile.first_name).slice(0, 40),
-            intent: hinglishIntentForGuard, accepted: false,
+            intent: hinglishIntentForGuard, solicitation: solicitationForGuard, accepted: false,
           }));
           delete parsed.profile.first_name;
         }
-        if (parsed.profile.full_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.full_name, phoneForGuard))) {
+        if (parsed.profile.full_name && (hinglishIntentForGuard || solicitationForGuard || !looksLikeRealName(parsed.profile.full_name, phoneForGuard))) {
           delete parsed.profile.full_name;
         }
 
