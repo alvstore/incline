@@ -2832,15 +2832,17 @@ Only include keys you are confident about. "summary" ≤ 180 chars rolling.`;
         // v4.4.0 — Also reject when last inbound was a Hinglish intent question.
         const phoneForGuard = memory?.profile?.phone;
         const hinglishIntentForGuard = classifyHinglishIntent(lastUser);
-        if (parsed.profile.first_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.first_name, phoneForGuard))) {
+        // v6.1.0 — also reject any name extracted from a solicitation pitch.
+        const solicitationForGuard = classifySolicitation(lastUser).hit;
+        if (parsed.profile.first_name && (hinglishIntentForGuard || solicitationForGuard || !looksLikeRealName(parsed.profile.first_name, phoneForGuard))) {
           console.log("[AI Tool Call Attempt] capture_first_name", JSON.stringify({
             sender: ctx.senderId, platform: ctx.platform, source: "llm_enrichment",
             candidate: String(parsed.profile.first_name).slice(0, 40),
-            intent: hinglishIntentForGuard, accepted: false,
+            intent: hinglishIntentForGuard, solicitation: solicitationForGuard, accepted: false,
           }));
           delete parsed.profile.first_name;
         }
-        if (parsed.profile.full_name && (hinglishIntentForGuard || !looksLikeRealName(parsed.profile.full_name, phoneForGuard))) {
+        if (parsed.profile.full_name && (hinglishIntentForGuard || solicitationForGuard || !looksLikeRealName(parsed.profile.full_name, phoneForGuard))) {
           delete parsed.profile.full_name;
         }
 
