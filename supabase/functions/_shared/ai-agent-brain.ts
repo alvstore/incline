@@ -1501,6 +1501,13 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9d.1 FACT GUARDS (v6.2.0) — canonical facts always win over LLM guesses.
+  //      • correctSocialHandles: fixes wrong Instagram handles like "@incline.life"
+  //      • ensureMapsLink: appends the Google Maps link whenever the address
+  //        is mentioned without it.
+  replyText = correctSocialHandles(replyText);
+  replyText = ensureMapsLink(replyText);
+
   // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
   //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
   //     outbound turns without a valid answer, stop looping — hand off to
