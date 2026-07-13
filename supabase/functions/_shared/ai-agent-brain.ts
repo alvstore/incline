@@ -286,11 +286,26 @@ export function classifyHinglishIntents(text: string): Array<Exclude<HinglishInt
   return order.filter((k) => out.has(k)).slice(0, 2);
 }
 
+// ─── Canonical facts (single source of truth) ──────────────────────────────
+// v6.2.0 — every location reply must include the Google Maps link so members
+// can tap-to-navigate. Instagram handle is anchored here so the AI never
+// invents a wrong username (previous audit: bot fabricated "@incline.life").
+export const INCLINE_LOCATION = {
+  address: "Sector 14, Udaipur, Rajasthan",
+  maps_url: "https://share.google/nO06sYYvXAVXFqugw",
+  geo: { lat: 24.546845, lng: 73.701003 },
+} as const;
+
+export const INCLINE_SOCIALS = {
+  instagram_handle: "inclineudaipur",
+  instagram_url: "https://www.instagram.com/inclineudaipur/",
+} as const;
+
 // Canned regex-fallback answers. Pricing + timeline both collapse to the
 // unified EMBARGO_PIVOT_LINE_EN — the LLM path (via ai_knowledge) returns
 // byte-identical wording so the user experience is consistent.
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
-  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
+  location: `We're at ${INCLINE_LOCATION.address} ✨\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`,
   pricing: EMBARGO_PIVOT_LINE_EN,
   timeline: EMBARGO_PIVOT_LINE_EN,
 };
@@ -1486,6 +1501,13 @@ ADVANCE RULE: move to the FIRST missing field in order name → email → goal �
     leadCaptureEnabled: shouldCaptureLead,
   });
 
+  // 9d.1 FACT GUARDS (v6.2.0) — canonical facts always win over LLM guesses.
+  //      • correctSocialHandles: fixes wrong Instagram handles like "@incline.life"
+  //      • ensureMapsLink: appends the Google Maps link whenever the address
+  //        is mentioned without it.
+  replyText = correctSocialHandles(replyText);
+  replyText = ensureMapsLink(replyText);
+
   // 9e. REPEATED-ASK COOLDOWN (v6.1.0). If we've already sent the same
   //     onboarding ask (name / email / goal / plan) 2+ times in the last 6
   //     outbound turns without a valid answer, stop looping — hand off to
@@ -1776,6 +1798,50 @@ function classifyOnboardingAsk(text: string): OnboardingAsk {
   if (/membership\s+duration|monthly.*quarterly.*half|choose\s+duration/i.test(asPlain)) return "plan_interest";
   return null;
 }
+
+// ─── Fact guards (v6.2.0) ───────────────────────────────────────────────────
+// Deterministic, cannot be bypassed by the LLM. Runs on every outbound reply.
+
+/**
+ * Replace any Instagram handle the model may have hallucinated with the
+ * canonical @inclineudaipur handle. Also normalizes URL variants.
+ */
+export function correctSocialHandles(text: string): string {
+  if (!text) return text;
+  let out = String(text);
+  const canonicalHandle = INCLINE_SOCIALS.instagram_handle;
+  const canonicalUrl = INCLINE_SOCIALS.instagram_url;
+  // Replace any @something handle when the surrounding text mentions Instagram / IG / insta.
+  const igContext = /\b(instagram|insta|ig)\b/i.test(out);
+  if (igContext) {
+    out = out.replace(/@[a-z0-9._]{2,30}/gi, (match) => {
+      const h = match.slice(1).toLowerCase();
+      if (h === canonicalHandle) return match;
+      return `@${canonicalHandle}`;
+    });
+  }
+  // Rewrite any instagram.com/<handle> URL to the canonical one.
+  out = out.replace(
+    /https?:\/\/(?:www\.)?instagram\.com\/[a-z0-9._]+\/?/gi,
+    canonicalUrl,
+  );
+  return out;
+}
+
+/**
+ * When the outbound reply mentions our address (Udaipur / Sector 14 /
+ * "our location") but does not already contain the Google Maps link, append
+ * it on a fresh line so members can tap-to-navigate.
+ */
+export function ensureMapsLink(text: string): string {
+  if (!text) return text;
+  const mentionsAddress = /\b(sector\s*14|udaipur|our\s+(?:address|location)|address\s+is|located\s+at)\b/i.test(text);
+  if (!mentionsAddress) return text;
+  if (/share\.google|maps\.app\.goo\.gl|goo\.gl\/maps|google\.com\/maps/i.test(text)) return text;
+  return `${text.trimEnd()}\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`;
+}
+
+
 
 function detectRepeatedAskLoop(
   replyText: string,
