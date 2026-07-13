@@ -194,7 +194,45 @@ const FAKE_NAME_TOKENS = new Set([
   "paisa", "paise", "fees", "fee", "price", "cost", "rate", "rates",
   "location", "address", "open", "khulega", "khulta", "start", "launch",
   "reach", "direction", "directions", "kharcha", "kharch",
+  // v6.1.0 — Solicitor / vendor brand and role tokens. The Vera/magicpin
+  // pitch caused us to store "Vera" and "Tania" as leads. Any of these,
+  // *by themselves*, must never become a first_name.
+  "vera", "magicpin", "magic", "pin", "justdial", "sulekha", "urbanpro",
+  "growth", "team", "sales", "marketing", "agency", "reseller", "vendor",
+  "supplier", "partner", "affiliate", "founder", "ceo", "director",
 ]);
+
+// ─── Solicitation / B2B pitch detector (v6.1.0) ────────────────────────────
+// Detects unsolicited sales / marketing / vendor pitches so the bot doesn't
+// walk them through the founding-member funnel. Runs as a deterministic
+// pre-brain guard; combines strong-signal keyword hits with weaker signals.
+export const SOLICITATION_STRONG_RE =
+  /\b(magicpin|magic\s*pin|justdial|sulekha|urbanpro|noknok|zomato\s+ads?|swiggy\s+ads?|payment\s+gateway|paytm\s+for\s+business|razorpay(?:\s+team)?|phonepe\s+business|shopify\s+plus|whatsapp\s+business\s+api|whatsapp\s+api\s+(?:reseller|provider)|meta\s+partner|gupshup|interakt|wati|aisensy|leadsquared|noise\s+partnership|influencer\s+collab|brand\s+collab|sponsor(?:ship)?\s+opportunity|paid\s+collaboration|from\s+our\s+growth\s+team|growth\s+partner|marketing\s+agency|seo\s+agency|google\s+ads?\s+agency|manage\s+your\s+(?:google|listing|profile|reviews)|boost\s+your\s+(?:sales|leads|visibility|ranking)|rank\s+(?:higher\s+)?on\s+google|list(?:ing)?\s+for\s+free|free\s+trial\s+for\s+rs|7[-\s]?day\s+trial|drive\s+more\s+(?:leads|footfall|customers))\b/i;
+
+// Weaker signals — a single hit is not enough, but ≥2 marks the message as
+// solicitation. Keeps genuine leads asking about pricing out of the net.
+export const SOLICITATION_WEAK_TOKENS: RegExp[] = [
+  /\b(rs\.?|₹|inr)\s*\d{2,}/i,        // explicit price they quote to us
+  /\btrial\b/i,
+  /\bsubscription\b/i,
+  /\bmagp\.in\b/i,                    // magicpin short-links
+  /https?:\/\/\S+/i,                  // any URL
+  /\bpayment\s+link\b/i,
+  /\boffer\s+banner\b/i,
+  /\bad\s+campaigns?\b/i,
+  /\bpaid\s+ads?\b/i,
+  /\brank(?:ing)?\s+ahead\b/i,
+  /\bfrom\s+(?:tania|vera|priya|rahul|amit|neha|sneha|riya)\b/i,  // canned sig
+];
+
+export function classifySolicitation(text: string): { hit: boolean; reason: string } {
+  const t = String(text || "");
+  if (!t.trim()) return { hit: false, reason: "" };
+  if (SOLICITATION_STRONG_RE.test(t)) return { hit: true, reason: "strong_keyword" };
+  const weakHits = SOLICITATION_WEAK_TOKENS.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0);
+  if (weakHits >= 2) return { hit: true, reason: `weak_signals_${weakHits}` };
+  return { hit: false, reason: "" };
+}
 
 // ─── Human-handoff / decline intent (deterministic, runs BEFORE the funnel) ──
 // English + Hinglish + Hindi. Matched on inbound user text only. v4.3.0
