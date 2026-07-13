@@ -1,89 +1,100 @@
+# Plan — Google Maps location + smarter concierge comprehension
 
-## Audit of the Vera/magicpin chat (+91 89292 53155)
+## Part 1 — Always share the Google Maps link with the address
 
-The bot behaved like a scripted form, not a concierge. Root causes, all in `supabase/functions/_shared/ai-agent-brain.ts`:
+**Goal:** whenever the AI (or any location-related outbound message) shares the Udaipur address, it must also include the Google Maps share link `https://share.google/nO06sYYvXAVXFqugw` on its own line so members can tap to open directions.
 
-1. **No intent classification before lead-capture kicks in.** Any inbound message from an "unknown" contact enters the ladder Name → Email → Goal → Plan. When the counterpart is a *salesperson / bot / competitor / spam*, we still treat them as a fitness lead.
-2. **Name extractor accepted "Tania" / "Vera" from a sales pitch.** Once "name" was stored, `askNextMissing()` (line 1551), `enforceNoRepeatNameAsk()` (line 1615), `sanitizeFoundersPhaseText()` (line 1691) and `buildNoReplyFallback()` (line 1775) ALL fall through to the same hard-coded line: `Thanks, <name> — what's the best email for your Founding Member invite? ✨`.
-3. **No anti-repeat cooldown on the email ask itself.** The duplicate-guard (line 1586) only dedupes *interactive* payloads, not this plain-text prompt. Result: 9 identical email asks in one thread.
-4. **No handling of explicit opt-outs / off-topic pitches.** Vera said "we won't message you again" — we replied with the same email ask.
-5. **Model output was overridden by guards.** Even when Gemini produced context-aware copy, the "founder's-phase sanitizer" and "name-repeat guard" rewrote it back to the robotic ladder line.
+### Changes
+1. **Single source of truth** — add a constant `INCLINE_LOCATION` in `supabase/functions/_shared/ai-agent-brain.ts` (and mirror in `src/config/publicSite.ts` for any client surface):
+   ```
+   address: "Sector 14, Udaipur, Rajasthan"
+   maps_url: "https://share.google/nO06sYYvXAVXFqugw"
+   geo: 24.546845, 73.701003
+   ```
+2. **AI knowledge seed** — insert/update an `ai_knowledge` row (topic = `location`) whose canonical answer is:
+   > "We're at Sector 14, Udaipur, Rajasthan ✨ Google Maps: https://share.google/nO06sYYvXAVXFqugw"
+   
+   High priority + trigger phrases: "location", "where", "address", "map", "directions", "kaha", "kahan", "पता", "location bhejo".
+3. **Prompt rule** in `_shared/ai-prompt.ts` `<strict_rules>`:
+   *"Whenever you mention our address, append the Google Maps link on a new line — never share address without the link."*
+4. **Post-processor guard** in `ai-agent-brain.ts` (small helper `ensureMapsLink(text)`): if outbound text contains "Udaipur" / "Sector 14" / "address" but no `share.google` link, append `\n📍 ${maps_url}` before send. Runs after existing sanitizers.
+5. **Public site** — small tweak on `src/pages/Index.tsx` / footer / contact block to render the Maps link next to the address (visible + `<a>` for SEO). Adds `hasMap` to LocalBusiness JSON-LD.
 
-Net effect: the AI can't "think" — the guardrails force it onto rails regardless of what the human said.
+## Part 2 — Concierge that *understands before it answers*
 
----
+Current problem (confirmed in prior Vera/Tania audit + magicpin transcript): brain runs the capture ladder or a canned response before it actually classifies what the inbound message *means*. Even with the recent solicitation regex, it's still reactive — a real member asking "opening date kya hai?" gets a generic founding-member ask, and a photo/opaque message ("There is no instahandle with this username") gets wrong info.
 
-## Plan — make the AI understand before it answers
+### A. Two-pass "Comprehend → Respond" loop in `ai-agent-brain.ts`
 
-### A. New pre-brain intent gate (`_shared/ai-intent-classifier.ts`)
-Cheap Gemini-Flash-Lite classification of every inbound message from *unknown* contacts, before the main brain runs. Returns one of:
+Before generating any reply, run a lightweight **comprehension pass** (Gemini Flash Lite, ~150 tokens out) that returns structured JSON:
 
-- `genuine_lead` — normal fitness enquiry → existing flow.
-- `solicitation` — B2B pitch, agency, vendor, marketplace (magicpin/JustDial/Vera/etc.), affiliate, ad-service.
-- `spam_bot` — automated marketing broadcast, template pitch, payment link push.
-- `opt_out` — "stop / don't message / not interested".
-- `wrong_number / off_topic` — casual chat, jokes, tests.
-- `abusive` — profanity/harassment.
-- `ambiguous` — fall back to normal flow but skip aggressive capture.
+```json
+{
+  "intent": "location_ask | pricing_ask | opening_date_ask | booking | complaint |
+             solicitation | opt_out | media_only | correction | smalltalk | genuine_lead | ambiguous",
+  "entities": { "topic": "instagram|location|plans|...", "urgency": "low|med|high" },
+  "sentiment": "positive|neutral|negative|frustrated",
+  "language": "en|hi|hinglish",
+  "requires_fact": ["instagram_handle","maps_link","opening_status", ...],
+  "should_capture_lead": true|false,
+  "confidence": 0.0-1.0,
+  "reasoning": "one sentence, private"
+}
+```
 
-Signals fed to the classifier: last 6 turns, sender display name, whether *they* opened with a pitch, presence of URLs/prices/₹/trial/subscription/agency keywords, and whether the "name" they gave matches known solicitor patterns (Vera, magicpin, growth team, etc.).
+Cache per inbound `message_id`; budget 250 ms; fallback = existing deterministic path when the classifier errors or confidence < 0.4.
 
-### B. Route by intent, don't just capture
-In `ai-agent-brain.ts` (near the top of the reply path, before `askNextMissing`):
+### B. Route by intent (replaces "always run ladder")
 
 | Intent | Behaviour |
 |---|---|
-| `solicitation` / `spam_bot` | One-time polite decline: *"Thanks, but Incline handles growth in-house — please don't add this number to outreach lists."* Then set `whatsapp_chat_settings.do_not_contact = true` and pause AI on the thread. |
-| `opt_out` | Acknowledge, call existing `mark_do_not_contact` RPC, stop. |
-| `wrong_number / off_topic` | Short human reply, no capture ladder. |
-| `abusive` | Silent handoff to staff, no auto-reply. |
-| `genuine_lead` / `ambiguous` | Existing Name→Email→Goal→Plan flow. |
+| `location_ask` | Reply with address + Google Maps link (Part 1). No capture ladder. |
+| `opening_date_ask` | Existing embargoed line + offer Founding Member spot. |
+| `pricing_ask` | Redirect to Founding Member benefits, no ₹ figures. |
+| `correction` ("wrong handle", "not working") | Acknowledge, fetch fact from `ai_knowledge` (topic=`socials`), reply with corrected value. |
+| `media_only` (photo/sticker/voice) | Short human "Got it, one sec — anything specific you'd like me to help with?" — never invent facts. |
+| `solicitation` / `opt_out` | Existing guards (already shipped). |
+| `genuine_lead` / `ambiguous` | Existing Name→Email→Goal→Plan ladder. |
+| `complaint` / `negative` sentiment | Hand off to staff via `notify-staff-handoff`, one empathy line, no bot follow-ups. |
 
-### C. Harden the name extractor
-Reject as "name" anything that is:
-- a known brand/agency token (magicpin, vera, tania when preceded by "I'm … from"),
-- present in the same message as a URL, ₹ amount, "trial", "subscription", "growth team", "agency",
-- longer than 3 tokens with marketing verbs.
+### C. Fact-first answering
+When `requires_fact` is non-empty, the brain MUST retrieve those specific `ai_knowledge` topics *before* generating (not rely on generic RAG). Seed the missing facts:
 
-Add these to `looksLikeRealName()` / the extractor so we stop storing "Tania" as the lead's name.
+- `socials.instagram` → `https://www.instagram.com/inclineudaipur/` (fixes the wrong-handle bug from the audited chat)
+- `socials.facebook`, `socials.youtube` (placeholders, editable in admin)
+- `location.address`, `location.maps_url`, `location.geo`
+- `hours.weekdays`, `hours.weekends`
+- `opening.status` = "opening soon, exact date shared personally"
 
-### D. Anti-repeat cooldown on plain-text asks
-Extend the duplicate-guard (currently interactive-only, line 1568) to *also* dedupe the email/goal/plan text prompts. If the same ask has gone out ≥2 times in the last 6 outbound turns without a valid answer, escalate: **stop asking, hand off to staff, mark thread `needs_human=true`**.
+Wrong-fact guard: if outbound contains an `@handle`, it must match a value in `ai_knowledge` topic=`socials` — otherwise strip the handle and replace with the correct one or the profile URL.
 
-### E. Give the model room to think
-- Add a `<reasoning_first>` block in the system prompt: *"Before replying, silently classify the sender's intent (lead / solicitor / opt-out / off-topic). Only run the capture ladder for genuine leads."*
-- Neuter `enforceNoRepeatNameAsk` and `sanitizeFoundersPhaseText` when intent ≠ `genuine_lead` — currently they force the robotic line even when the LLM did the right thing.
+### D. Reasoning-first prompt
+Add `<comprehension>` block to system prompt in `_shared/ai-prompt.ts`:
+> *"Step 1 (silent): read the last 6 turns and the classifier JSON. Decide what the member actually wants. Step 2: answer only that — no ladder, no upsell, no invented facts. Step 3: if you mention address, socials, hours, or opening — pull the exact value from `<knowledge_base>`, never guess."*
 
-### F. Training data (`ai_knowledge` rows, topic = `solicitor_handling`)
-Seed 8–10 canonical examples so RAG retrieves them for future pitches:
-- magicpin / Vera pitch
-- JustDial / Sulekha listing sales
-- SEO / Google-review agency
-- WhatsApp API reseller
-- Payment-gateway cold pitch
-- Fitness-equipment vendor
-- Influencer collab DM
-- Job seeker
-- Wrong number
-- Casual "hi/test/joke"
+Neuter the founding-phase sanitizer + name-repeat guard when intent ∈ {location_ask, correction, media_only, complaint, opt_out}.
 
-Each row = trigger phrases + the exact response Yogita wants us to send.
+### E. Repeated-mistake cooldown (extend existing loop detector)
+If the same *fact* (Instagram handle, address, opening date) is asked twice in the thread and the previous bot answer was corrected by the member ("no", "wrong", "that's not it"), escalate to staff instead of trying a third time.
 
-### G. Admin surface
-Add a new tab under **Settings → AI Agent → Training** called **"Non-lead responses"** where the owner can:
-- edit the canned decline text,
-- toggle auto-mark-DNC on solicitor detection,
-- see a log of classified inbound (last 50) with the intent label and the reply we sent, plus a "reclassify" button that writes a correction back into `ai_knowledge`.
+### F. Admin surface
+Under **Settings → AI Agent → Training**, new tab **"Comprehension log"**: last 100 inbound with intent + confidence + fact list + reply. Owner can flag "wrong intent" — writes a correction row into `ai_knowledge` so future messages match.
 
-### H. Verification
-1. Replay the Vera transcript through `ai-test-purpose` — expect exactly ONE polite decline + DNC, not 9 email asks.
-2. Replay 5 real founding-member chats — expect the normal ladder to still complete.
-3. Unit test the new name extractor on {"Vera", "Tania from magicpin", "Raj kumar suthar", "hi", "test"}.
-4. Deploy `whatsapp-webhook`, `meta-webhook`, `ai-test-purpose`.
+### G. Verification
+1. Replay the audited chat (photo → "no instahandle" → correction) through `ai-test-purpose` — expect the second reply to name `@inclineudaipur` from the fact table, not a made-up handle.
+2. "Where are you?" → returns address + Google Maps link on separate lines.
+3. "26 July kab open?" → returns embargoed opening line (still no date leak) + Founding Member CTA. Owner-facing rule: opening date remains embargoed by AI even after part 1 — that's a business rule, not a bug.
+4. 5 real founding-member conversations still complete Name→Email→Goal→Plan ladder.
+5. Unit test the classifier on 20 canonical inbound (location, price, opening, complaint, sticker, Vera pitch, opt-out, Hinglish "kaha ho", photo-only, wrong-handle correction).
 
-### Technical notes
-- New file: `supabase/functions/_shared/ai-intent-classifier.ts` (~120 lines, one Gemini call, 200 ms budget, cached per inbound message id).
-- Edits: `_shared/ai-agent-brain.ts` (intent gate + guard bypass), `_shared/ai-prompt.ts` (add `<reasoning_first>` block), `_shared/handoff.ts` (new `solicitor_detected` handoff reason).
-- Migration: `ai_knowledge` seed rows + a new `ai_intent_log` table (message_id, intent, confidence, reply, created_at) for the admin log.
-- No schema-breaking changes; existing lead flow untouched for `genuine_lead`.
+## Files touched
+- `supabase/functions/_shared/ai-intent-classifier.ts` (new — comprehension pass)
+- `supabase/functions/_shared/ai-agent-brain.ts` (intent router, fact retrieval, maps-link post-processor, wrong-handle guard)
+- `supabase/functions/_shared/ai-prompt.ts` (comprehension block + fact-first rule)
+- Migration: seed `ai_knowledge` rows for `location.*`, `socials.*`, `hours.*`, `opening.status`; new `ai_comprehension_log` table for admin surface
+- `src/config/publicSite.ts` + `src/pages/Index.tsx` (public Maps link + JSON-LD hasMap)
+- `src/components/settings/AIAgent/ComprehensionLog.tsx` (new admin tab)
 
+## Out of scope
+- Changing the embargoed opening-date policy (still hidden from AI; owner shares 26 Jul 2026 personally).
+- Rewriting existing solicitation guard — it stays; comprehension pass sits *above* it.
