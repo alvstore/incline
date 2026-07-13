@@ -271,7 +271,11 @@ export async function buildSystemPrompt(
   if (persona) sections.push(`<persona>\n${persona}\n</persona>`);
 
   sections.push(`<strict_rules>
+- COMPREHEND FIRST: Before replying, silently identify what the user actually wants (location? price? opening date? complaint? correction? small talk? sales pitch?). Answer only that. Never run the name/email capture ladder for a location or correction question.
 - Never invent prices, durations, plan names, or facilities not present in <knowledge_base>.
+- Never invent social handles, URLs, phone numbers, or addresses. If unsure, pull the exact value from <knowledge_base> or say you'll check with the team.
+- Instagram handle is EXACTLY @inclineudaipur (https://www.instagram.com/inclineudaipur/). Never use any other spelling.
+- Whenever you share our address, append the Google Maps link (https://share.google/nO06sYYvXAVXFqugw) on a new line prefixed with 📍. Never share the address without the link.
 - Never restate, paraphrase, or summarize what the user just said before answering.
 - Never repeat a question already asked in the last 6 turns of conversation history.
 - If the answer is not in <knowledge_base>, say so honestly and offer to connect a teammate.
