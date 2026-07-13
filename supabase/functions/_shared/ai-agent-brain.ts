@@ -1799,6 +1799,50 @@ function classifyOnboardingAsk(text: string): OnboardingAsk {
   return null;
 }
 
+// ─── Fact guards (v6.2.0) ───────────────────────────────────────────────────
+// Deterministic, cannot be bypassed by the LLM. Runs on every outbound reply.
+
+/**
+ * Replace any Instagram handle the model may have hallucinated with the
+ * canonical @inclineudaipur handle. Also normalizes URL variants.
+ */
+export function correctSocialHandles(text: string): string {
+  if (!text) return text;
+  let out = String(text);
+  const canonicalHandle = INCLINE_SOCIALS.instagram_handle;
+  const canonicalUrl = INCLINE_SOCIALS.instagram_url;
+  // Replace any @something handle when the surrounding text mentions Instagram / IG / insta.
+  const igContext = /\b(instagram|insta|ig)\b/i.test(out);
+  if (igContext) {
+    out = out.replace(/@[a-z0-9._]{2,30}/gi, (match) => {
+      const h = match.slice(1).toLowerCase();
+      if (h === canonicalHandle) return match;
+      return `@${canonicalHandle}`;
+    });
+  }
+  // Rewrite any instagram.com/<handle> URL to the canonical one.
+  out = out.replace(
+    /https?:\/\/(?:www\.)?instagram\.com\/[a-z0-9._]+\/?/gi,
+    canonicalUrl,
+  );
+  return out;
+}
+
+/**
+ * When the outbound reply mentions our address (Udaipur / Sector 14 /
+ * "our location") but does not already contain the Google Maps link, append
+ * it on a fresh line so members can tap-to-navigate.
+ */
+export function ensureMapsLink(text: string): string {
+  if (!text) return text;
+  const mentionsAddress = /\b(sector\s*14|udaipur|our\s+(?:address|location)|address\s+is|located\s+at)\b/i.test(text);
+  if (!mentionsAddress) return text;
+  if (/share\.google|maps\.app\.goo\.gl|goo\.gl\/maps|google\.com\/maps/i.test(text)) return text;
+  return `${text.trimEnd()}\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`;
+}
+
+
+
 function detectRepeatedAskLoop(
   replyText: string,
   history: Array<{ role: string; content: string }>,
