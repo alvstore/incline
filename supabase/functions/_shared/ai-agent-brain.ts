@@ -1756,6 +1756,41 @@ function enforceOutboundInteractiveGuards(input: {
   return replyText;
 }
 
+// ─── Repeated-ask cooldown (v6.1.0) ──────────────────────────────────────────
+// Classifies the outbound reply into one of the four onboarding asks, then
+// counts identical asks in the last 6 outbound turns. Threshold ≥2 means the
+// bot has asked twice already and got no valid answer — escalate instead of
+// asking a third time. Fires the "9 identical email prompts" fix.
+type OnboardingAsk = "name" | "email" | "goal" | "plan_interest" | null;
+
+function classifyOnboardingAsk(text: string): OnboardingAsk {
+  if (!text) return null;
+  const t = String(text);
+  // Skip interactive JSON payloads — handled by enforceOutboundInteractiveGuards.
+  const asPlain = t.trim().startsWith("{")
+    ? (() => { try { const p = JSON.parse(t); return String(p?.body?.text ?? p?.body ?? ""); } catch { return t; } })()
+    : t;
+  if (/founding\s+member\s+invite|share\s+your\s+email|best\s+email/i.test(asPlain)) return "email";
+  if (NAME_ASK_DETECT_RE.test(asPlain)) return "name";
+  if (/fitness\s+goal/i.test(asPlain)) return "goal";
+  if (/membership\s+duration|monthly.*quarterly.*half|choose\s+duration/i.test(asPlain)) return "plan_interest";
+  return null;
+}
+
+function detectRepeatedAskLoop(
+  replyText: string,
+  history: Array<{ role: string; content: string }>,
+): { looping: boolean; askKind: OnboardingAsk; count: number } {
+  const currentKind = classifyOnboardingAsk(replyText);
+  if (!currentKind) return { looping: false, askKind: null, count: 0 };
+  const recentOutbound = (history || []).filter((m) => m && m.role !== "user").slice(-6);
+  const priorSame = recentOutbound.filter((m) => classifyOnboardingAsk(String(m.content || "")) === currentKind).length;
+  // Loop threshold: this reply would be the (priorSame+1)-th identical ask.
+  // Escalate when we're about to send the 3rd.
+  return { looping: priorSame >= 2, askKind: currentKind, count: priorSame + 1 };
+}
+
+
 // ─── Name-repeat guard ────────────────────────────────────────────────────────
 // If memory.profile already has a real first name and the LLM produced any
 // variant of "what's your name?", rewrite the reply to acknowledge the user
