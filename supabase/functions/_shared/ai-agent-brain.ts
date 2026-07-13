@@ -579,6 +579,74 @@ export async function runUnifiedAgent(
     return { replyText: REDIRECT, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
   }
 
+  // 3b-bis. SOLICITATION / B2B pitch guard (v6.1.0). Detects unsolicited
+  //         vendor / agency / marketplace pitches (magicpin, "growth team",
+  //         payment-link ads, etc.) BEFORE the onboarding funnel runs — so
+  //         we don't robotically ask a salesperson for their "email for their
+  //         Founding Member invite". One-time polite decline + DNC + pause.
+  const solicit = classifySolicitation(String(ctx.messageContent || ""));
+  if (solicit.hit) {
+    const declineText =
+      "Thanks for reaching out — Incline handles growth in-house and isn't taking vendor / agency pitches on this channel. Please don't add this number to outreach lists. 🙏";
+    try {
+      await supabase
+        .from("whatsapp_chat_settings")
+        .upsert(
+          {
+            branch_id: ctx.branchId,
+            phone_number: ctx.senderId,
+            platform: ctx.platform as any,
+            bot_active: false,
+            do_not_contact: true,
+            paused_at: new Date().toISOString(),
+            handoff_reason: `solicitation_${solicit.reason}`,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation pause write failed:`, (e as Error).message);
+    }
+    try {
+      await supabase.rpc("mark_do_not_contact", {
+        p_phone: ctx.senderId,
+        p_branch_id: ctx.branchId,
+        p_reason: `solicitation_${solicit.reason}`,
+        p_source: "ai_guard",
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation DNC failed (continuing):`, (e as Error).message);
+    }
+    try {
+      await upsertMemory(supabase, ctx.branchId, ctx.platform, ctx.senderId, {
+        current_intent: "solicitation",
+        do_not_ask_add: ["name", "email", "goal", "plan_interest", "phone"],
+      });
+    } catch (e) {
+      console.warn(`[AI:${ctx.platform}] solicitation memory write failed:`, (e as Error).message);
+    }
+    // Dedupe — if the same decline was already sent, stay silent.
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: lastOut } = await supabase
+        .from("whatsapp_messages")
+        .select("content, created_at")
+        .eq("branch_id", ctx.branchId)
+        .eq("phone_number", ctx.senderId)
+        .eq("direction", "outbound")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastOut && String(lastOut.content || "").trim() === declineText.trim()) {
+        console.log(`[AI:${ctx.platform}] solicitation decline already sent, staying silent`);
+        return skip("solicitation_already_declined");
+      }
+    } catch { /* noop */ }
+    console.log(`[AI:${ctx.platform}] solicitation detected (${solicit.reason}) — one-time decline + DNC`);
+    return { replyText: declineText, leadCaptured: false, leadId: null, handoffTriggered: true, skipped: false };
+  }
+
   // 3c. HUMAN-HANDOFF / DECLINE intent gate. Runs BEFORE the deterministic
   //     name/email/goal/plan funnel so "Can I speak to a live person?" or "No"
   //     doesn't get walked through the onboarding script. v4.3.0
