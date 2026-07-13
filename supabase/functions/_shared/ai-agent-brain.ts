@@ -286,11 +286,26 @@ export function classifyHinglishIntents(text: string): Array<Exclude<HinglishInt
   return order.filter((k) => out.has(k)).slice(0, 2);
 }
 
+// ─── Canonical facts (single source of truth) ──────────────────────────────
+// v6.2.0 — every location reply must include the Google Maps link so members
+// can tap-to-navigate. Instagram handle is anchored here so the AI never
+// invents a wrong username (previous audit: bot fabricated "@incline.life").
+export const INCLINE_LOCATION = {
+  address: "Sector 14, Udaipur, Rajasthan",
+  maps_url: "https://share.google/nO06sYYvXAVXFqugw",
+  geo: { lat: 24.546845, lng: 73.701003 },
+} as const;
+
+export const INCLINE_SOCIALS = {
+  instagram_handle: "inclineudaipur",
+  instagram_url: "https://www.instagram.com/inclineudaipur/",
+} as const;
+
 // Canned regex-fallback answers. Pricing + timeline both collapse to the
 // unified EMBARGO_PIVOT_LINE_EN — the LLM path (via ai_knowledge) returns
 // byte-identical wording so the user experience is consistent.
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
-  location: "We're at Sector 14, Udaipur, Rajasthan ✨",
+  location: `We're at ${INCLINE_LOCATION.address} ✨\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`,
   pricing: EMBARGO_PIVOT_LINE_EN,
   timeline: EMBARGO_PIVOT_LINE_EN,
 };
