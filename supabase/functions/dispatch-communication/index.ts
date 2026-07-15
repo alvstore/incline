@@ -208,14 +208,53 @@ function resolveVarValue(
   return '';
 }
 
+/** Safe visible fallback per variable-key type. Meta rejects whitespace-only
+ *  or leading/trailing-space body params on many marketing templates (132018),
+ *  so we substitute a real, sensible token instead of " ". */
+function safeFallbackForKey(key: string): string {
+  const k = String(key || '').toLowerCase();
+  if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') return 'there';
+  if (k.includes('plan')) return 'your plan';
+  if (k.includes('trainer')) return 'your trainer';
+  if (k.includes('branch')) return 'our club';
+  if (k.includes('amount') || k.includes('price')) return '—';
+  if (k.includes('invoice')) return '—';
+  if (k.includes('date')) return 'soon';
+  if (k.includes('document') || k.includes('link') || k.includes('url')) return '';
+  return '—';
+}
+
 function templateComponents(keys: string[], values: Record<string, unknown> | undefined): Array<Record<string, unknown>> | null | undefined {
   if (keys.length === 0) return undefined;
   const params = keys.map((key, index) => {
-    const text = resolveVarValue(key, values, index);
-    // Meta requires non-empty text params; substitute a single space to avoid 132000 errors.
-    return { type: 'text', text: text || ' ' };
+    const raw = resolveVarValue(key, values, index);
+    const trimmed = String(raw ?? '').trim();
+    // Never send whitespace-only or empty text params — Meta returns 132018.
+    // Substitute a safe visible fallback based on key semantics.
+    const text = trimmed || safeFallbackForKey(key);
+    return { type: 'text', text: text || 'there' };
   });
   return [{ type: 'body', parameters: params }];
+}
+
+/** True when a template body variable is required (i.e. name-like) and the
+ *  resolved value is empty — used to fail-closed on marketing sends before
+ *  hitting Meta and burning quota. */
+function requiredKeysMissing(
+  keys: string[],
+  values: Record<string, unknown> | undefined,
+): string[] {
+  const missing: string[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    const raw = resolveVarValue(keys[i], values, i);
+    if (String(raw ?? '').trim()) continue;
+    const k = String(keys[i] || '').toLowerCase();
+    // Name is the only key we treat as *required*; other slots fall back safely.
+    if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') {
+      missing.push(keys[i]);
+    }
+  }
+  return missing;
 }
 
 function appendAttachmentLinkForBodyOnlyTemplate(
