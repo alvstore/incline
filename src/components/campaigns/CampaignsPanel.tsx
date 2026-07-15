@@ -118,6 +118,7 @@ export function CampaignsPanel() {
           <select className="h-9 rounded-xl border bg-card px-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
+            <option value="pending_template_approval">Awaiting Meta approval</option>
             <option value="scheduled">Scheduled</option>
             <option value="sending">Sending</option>
             <option value="sent">Sent</option>
