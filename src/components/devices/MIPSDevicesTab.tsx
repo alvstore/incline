@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import {
   Monitor, DoorOpen, RotateCcw, Globe,
 } from "lucide-react";
@@ -15,12 +17,17 @@ interface MIPSDeviceCardProps {
   branchName?: string;
   branchId?: string;
   publicIp?: string;
+  localDeviceId?: string;
+  doorRole?: 'entry' | 'exit' | 'both';
 }
 
-const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCardProps) => {
+
+const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId, doorRole }: MIPSDeviceCardProps) => {
+  const qc = useQueryClient();
   const isOnline = device.onlineFlag === 1 || device.status === 1;
   const [isOpening, setIsOpening] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
 
   const handleOpenDoor = async () => {
     setIsOpening(true);
@@ -47,6 +54,25 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCa
       setIsRestarting(false);
     }
   };
+
+  const handleRoleChange = async (val: string) => {
+    if (!localDeviceId) return;
+    setSavingRole(true);
+    try {
+      const { error } = await supabase
+        .from("access_devices")
+        .update({ door_role: val })
+        .eq("id", localDeviceId);
+      if (error) throw error;
+      toast.success(`Role set to ${val}`);
+      qc.invalidateQueries({ queryKey: ["access-devices-sns"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save role");
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
 
   return (
     <Card className={`rounded-2xl shadow-lg transition-all ${isOnline ? "shadow-success/20 border-success/20" : "shadow-muted/20"}`}>
@@ -123,6 +149,22 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCa
             <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
           </Button>
         </div>
+
+        {localDeviceId && (
+          <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider whitespace-nowrap">Door role</Label>
+            <Select value={doorRole || 'both'} onValueChange={handleRoleChange} disabled={savingRole}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entry">Entry only</SelectItem>
+                <SelectItem value="exit">Exit only</SelectItem>
+                <SelectItem value="both">Entry + Exit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -136,12 +178,13 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
   const { data: localDevices } = useQuery({
     queryKey: ["access-devices-sns", branchId],
     queryFn: async () => {
-      let query = supabase.from("access_devices").select("serial_number, branch_id, public_ip");
+      let query = supabase.from("access_devices").select("id, serial_number, branch_id, public_ip, door_role");
       if (branchId) query = query.eq("branch_id", branchId);
       const { data } = await query;
       return data || [];
     },
   });
+
 
   const { data: branchesList } = useQuery({
     queryKey: ["branches-list-names"],
@@ -167,14 +210,18 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
 
   const snToBranch = new Map<string, string>();
   const snToPublicIp = new Map<string, string>();
+  const snToLocal = new Map<string, { id: string; door_role?: 'entry' | 'exit' | 'both' }>();
   if (localDevices && branchesList) {
     const branchMap = new Map(branchesList.map((b) => [b.id, b.name]));
-    for (const ld of localDevices) {
+    for (const ld of localDevices as any[]) {
       if (ld.serial_number && ld.branch_id) {
         snToBranch.set(ld.serial_number.toUpperCase(), branchMap.get(ld.branch_id) || "");
       }
-      if (ld.serial_number && (ld as any).public_ip) {
-        snToPublicIp.set(ld.serial_number.toUpperCase(), (ld as any).public_ip);
+      if (ld.serial_number && ld.public_ip) {
+        snToPublicIp.set(ld.serial_number.toUpperCase(), ld.public_ip);
+      }
+      if (ld.serial_number && ld.id) {
+        snToLocal.set(ld.serial_number.toUpperCase(), { id: ld.id, door_role: ld.door_role });
       }
     }
   }
@@ -203,15 +250,21 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {filteredDevices.map((device) => (
-        <MIPSDeviceCard
-          key={device.id || device.deviceKey}
-          device={device}
-          branchId={branchId}
-          branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
-          publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
-        />
-      ))}
+      {filteredDevices.map((device) => {
+        const local = snToLocal.get(device.deviceKey?.toUpperCase());
+        return (
+          <MIPSDeviceCard
+            key={device.id || device.deviceKey}
+            device={device}
+            branchId={branchId}
+            branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
+            publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
+            localDeviceId={local?.id}
+            doorRole={local?.door_role}
+          />
+        );
+      })}
+
     </div>
   );
 };

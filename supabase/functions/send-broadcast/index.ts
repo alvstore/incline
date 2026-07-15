@@ -1,3 +1,6 @@
+// v4.1.0 — Auto-fallback to RCS/SMS on Meta pacing (131049/130472) when
+//          `campaigns.fallback_policy.on_pacing` is true. Records
+//          `fallback_used/fallback_channel/pacing_code` on campaign_recipients.
 // v4.0.0 — Background execution: ACK 202 immediately, then run the full
 //          dispatch loop inside EdgeRuntime.waitUntil so the browser stops
 //          spinning and campaigns can send to 300+ recipients without
@@ -6,6 +9,7 @@
 // v3.4.0 — Per-recipient variables + auto-pause on terminal template errors.
 // v3.3.0 — Attachment kind 'video' supported.
 // v3.1.0 — Route through dispatch-communication with Meta template support.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // deno-lint-ignore no-explicit-any
@@ -171,8 +175,54 @@ Deno.serve(async (req) => {
     // so it runs after the ACK. It closes over all variables above.
     // ---------------------------------------------------------------
     async function dispatchLoop() {
-    // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
+    // Load campaign fallback policy (default: on_pacing = true).
+    let fallbackOnPacing = true;
+    if (campaign_id) {
+      try {
+        const { data: c } = await adminClient
+          .from('campaigns').select('fallback_policy').eq('id', campaign_id).maybeSingle();
+        const fp = (c as any)?.fallback_policy;
+        if (fp && typeof fp === 'object' && fp.on_pacing === false) fallbackOnPacing = false;
+      } catch { /* default true */ }
+    }
+
+    // Attempt RCS/SMS fallback for a WhatsApp send that Meta paced.
+    // Returns { ok, channel, error }.
+    async function tryPacingFallback(
+      r: { source_type: string; source_ref_id: string; phone?: string; email?: string; full_name?: string },
+      personalized: string,
+      perVars: Record<string, string> | undefined,
+    ): Promise<{ ok: boolean; channel: string; error: string | null }> {
+      if (!r.phone) return { ok: false, channel: 'rcs', error: 'no_phone_for_fallback' };
+      try {
+        const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
+          body: {
+            branch_id,
+            channel: 'rcs', // dispatch-communication routes rcs→sms fallback internally
+            recipient: r.phone,
+            category: 'marketing',
+            payload: { body: personalized, variables: perVars },
+            member_id: r.source_type === 'member' ? r.source_ref_id : null,
+            dedupe_key: campaign_id
+              ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:fallback:${Date.now()}`
+              : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}:fallback`,
+            force: true,
+          },
+        });
+        const ok = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
+        const usedChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
+        return {
+          ok,
+          channel: usedChannel,
+          error: ok ? null : (fbErr?.message || (fbRes as any)?.reason || (fbRes as any)?.error || 'fallback_failed'),
+        };
+      } catch (e: any) {
+        return { ok: false, channel: 'rcs', error: e?.message || 'fallback_exception' };
+      }
+    }
+
     if (Array.isArray(recipients) && recipients.length > 0) {
+
       let sent = 0, failed = 0, skipped_dnc = 0;
       const recipientRows: any[] = [];
 
@@ -265,16 +315,40 @@ Deno.serve(async (req) => {
             },
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
-          if (ok) sent++; else failed++;
-          const reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
+          let reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
+          let pacingCode: number | null = null;
+          let fallbackUsed = false;
+          let fallbackChannel: string | null = null;
+          let finalStatus: 'sent' | 'failed' = ok ? 'sent' : 'failed';
+
+          if (!ok && channel === 'whatsapp' && fallbackOnPacing) {
+            pacingCode = extractPacingCode(reasonStr) ?? extractPacingCode(JSON.stringify((dispatchRes as any) || {}));
+            if (pacingCode) {
+              const fb = await tryPacingFallback(r, personalized, perVars);
+              fallbackUsed = true;
+              fallbackChannel = fb.channel;
+              if (fb.ok) {
+                finalStatus = 'sent';
+                reasonStr = `paced_${pacingCode}_fallback_via_${fb.channel}`;
+              } else {
+                reasonStr = `paced_${pacingCode}; fallback_${fb.channel}_failed: ${fb.error}`;
+              }
+            }
+          }
+
+          if (finalStatus === 'sent') sent++; else failed++;
           recipientRows.push({
             campaign_id: campaign_id ?? null,
             source_type: r.source_type, source_ref_id: r.source_ref_id,
             full_name: r.full_name, phone: r.phone, email: r.email,
-            status: ok ? 'sent' : 'failed',
+            status: finalStatus,
             error: reasonStr,
             dispatched_at: new Date().toISOString(),
+            fallback_used: fallbackUsed,
+            fallback_channel: fallbackChannel,
+            pacing_code: pacingCode,
           });
+
         } catch (e: any) {
           failed++;
           recipientRows.push({
@@ -526,8 +600,12 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-function json(payload: unknown, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+// Detect Meta pacing / low-quality throttle codes in an error string.
+// 131049 = "not delivered to maintain healthy ecosystem engagement"
+// 130472 = "user is in an experiment"
+function extractPacingCode(errText: string | null | undefined): number | null {
+  if (!errText) return null;
+  const m = String(errText).match(/\b(131049|130472)\b/);
+  return m ? parseInt(m[1], 10) : null;
 }
+

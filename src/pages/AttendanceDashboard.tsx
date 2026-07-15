@@ -507,16 +507,21 @@ export default function AttendanceDashboard() {
                 variant="outline"
                 className="gap-2 border-primary text-primary hover:bg-primary/10"
                 onClick={async () => {
-                  toast.info('Opening door...');
-                  const result = await remoteOpenDoorByBranch(effectiveBranchId);
-                  if (result.success) toast.success(result.message);
-                  else toast.error(result.message);
+                  const t = toast.loading('Opening entry doors...');
+                  const result = await remoteOpenDoorByBranch(effectiveBranchId, { role: 'entry' });
+                  toast.dismiss(t);
+                  const detail = (result.attempts || []).map(a =>
+                    `${a.device_name}: ${a.success ? '✓' : '✗'} ${a.latency_ms}ms${a.success ? '' : ` — ${a.message}`}`
+                  ).join('\n');
+                  if (result.success) toast.success(result.message, { description: detail || undefined });
+                  else toast.error(result.message, { description: detail || undefined });
                 }}
               >
                 <DoorOpen className="h-4 w-4" />
                 Override Entry
               </Button>
             )}
+
             <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-[180px]" />
             <div className="hidden md:flex items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5">
