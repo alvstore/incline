@@ -410,8 +410,8 @@ async function processStatusUpdates(value: any, branchId: string | null) {
       const sourceLogId = (waMessage?.media_meta as any)?.source_log_id ?? null;
 
       const { data: log } = sourceLogId
-        ? await supabase.from("communication_logs").select("id").eq("id", sourceLogId).maybeSingle()
-        : await supabase.from("communication_logs").select("id").eq("provider_message_id", status.id).maybeSingle();
+        ? await supabase.from("communication_logs").select("id, delivery_metadata").eq("id", sourceLogId).maybeSingle()
+        : await supabase.from("communication_logs").select("id, delivery_metadata").eq("provider_message_id", status.id).maybeSingle();
 
       if (log?.id) {
         const mapped =
@@ -434,6 +434,7 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             status: mapped,
             provider_message_id: status.id,
             delivery_metadata: {
+              ...(((log as any).delivery_metadata as Record<string, unknown> | null) ?? {}),
               wa_status: newStatus,
               last_event_status: mapped,
               last_event_at: new Date().toISOString(),
