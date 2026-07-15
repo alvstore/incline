@@ -1,4 +1,9 @@
+// v3.3.0 — Per-recipient staff_name variable for team alerts (fixes 132018
+//          template_param_empty on internal_lead_alert). Profile queries now
+//          select full_name; dispatch() accepts varsOverride merged over the
+//          shared vars bag.
 // v3.2.0 — Enriched team-alert variables (plan_interest, fitness_goal, goals,
+
 //          budget, preferred_time, fitness_experience, expected_start_date,
 //          temperature, score, notes, utm_*, landing_page, referrer_url,
 //          campaign_name, ad_id, preferred_contact_channel, captured_at,
@@ -255,8 +260,12 @@ Deno.serve(async (req) => {
       template_id?: string | null;
       dedupe_suffix: string;
       use_branded_template?: boolean;
+      varsOverride?: Record<string, string>;
     }) => {
       try {
+        const mergedVars = input.varsOverride
+          ? { ...vars, ...input.varsOverride }
+          : vars;
         const resp = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
           method: "POST",
           headers: {
@@ -272,7 +281,7 @@ Deno.serve(async (req) => {
             payload: {
               subject: input.subject,
               body: input.body,
-              variables: vars,
+              variables: mergedVars,
               use_branded_template: input.use_branded_template ?? true,
             },
             dedupe_key: `lead:${lead.id}:${input.channel}:${input.dedupe_suffix}`,
@@ -295,6 +304,7 @@ Deno.serve(async (req) => {
         });
       }
     };
+
 
     // 6) Lead-facing welcome messages (lead is in-window → freeform OK)
     if (rules.sms_to_lead && lead.phone) {
@@ -339,11 +349,18 @@ Deno.serve(async (req) => {
       : buildAutoEmailBody();
 
     const sendTeamBundle = async (
-      profile: { id?: string; phone: string | null; email?: string | null },
+      profile: { id?: string; full_name?: string | null; phone: string | null; email?: string | null },
       pref: { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean },
       audience: "admin" | "manager",
     ) => {
       const tag = `${audience}:${profile.id || profile.phone || profile.email}`;
+      const staffName = (profile.full_name || "").trim() || "Team";
+      const staffFirstName = staffName.split(/\s+/)[0] || staffName;
+      const perRecipientVars: Record<string, string> = {
+        staff_name: staffFirstName,
+        team_member_name: staffFirstName,
+        recipient_name: staffFirstName,
+      };
 
       if (rules[`sms_to_${audience}s`] && pref.sms_enabled && profile.phone) {
         await dispatch({
@@ -352,6 +369,7 @@ Deno.serve(async (req) => {
           recipient: profile.phone,
           body: teamAlertSmsBody,
           dedupe_suffix: `team:${tag}`,
+          varsOverride: perRecipientVars,
         });
       }
       if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
@@ -372,6 +390,7 @@ Deno.serve(async (req) => {
             template_id: teamWaTemplateId,
             body: teamAlertWaFreeformBody,
             dedupe_suffix: `team:${tag}`,
+            varsOverride: perRecipientVars,
           });
         }
       }
@@ -383,9 +402,11 @@ Deno.serve(async (req) => {
           subject: teamAlertEmailSubject,
           body: teamAlertEmailBody,
           dedupe_suffix: `team:${tag}`,
+          varsOverride: perRecipientVars,
         });
       }
     };
+
 
     // 8) Admins (owners + admins) — per-admin opt-out
     if (rules.sms_to_admins || rules.whatsapp_to_admins || rules.email_to_admins) {
@@ -395,7 +416,7 @@ Deno.serve(async (req) => {
 
       if (adminIds.length) {
         const [{ data: profiles }, { data: prefRows }] = await Promise.all([
-          supabase.from("profiles").select("id, phone, email").in("id", adminIds),
+          supabase.from("profiles").select("id, full_name, phone, email").in("id", adminIds),
           supabase
             .from("lead_notification_admin_prefs")
             .select("user_id, whatsapp_enabled, sms_enabled, email_enabled")
@@ -421,7 +442,7 @@ Deno.serve(async (req) => {
 
       if (mgrIds.length) {
         const { data: profiles } = await supabase
-          .from("profiles").select("id, phone, email").in("id", mgrIds);
+          .from("profiles").select("id, full_name, phone, email").in("id", mgrIds);
         for (const profile of profiles || []) {
           await sendTeamBundle(
             profile,

@@ -724,8 +724,22 @@ Deno.serve(async (req) => {
               // Pre-flight: refuse to burn a Meta send when a required
               // name-like variable is missing. Prevents 132018 loops when
               // leads have no captured full_name.
+              // Defence-in-depth: for internal team-alert categories,
+              // auto-fill missing staff/recipient-name slots with "Team"
+              // so a caller that forgets can't hard-block ops.
+              const INTERNAL_TEAM_CATEGORIES = new Set(['new_lead', 'task_reminder', 'low_stock', 'payment_alert']);
+              if (INTERNAL_TEAM_CATEGORIES.has(String(input.category))) {
+                for (let i = 0; i < keys.length; i++) {
+                  const k = String(keys[i] || '').toLowerCase();
+                  const cur = String(resolveVarValue(keys[i], templateValues, i) ?? '').trim();
+                  if (!cur && /^(staff|team_member|recipient)_name$/.test(k)) {
+                    (templateValues as Record<string, unknown>)[keys[i]] = 'Team';
+                  }
+                }
+              }
               const missingRequired = requiredKeysMissing(keys, templateValues);
               if (missingRequired.length > 0 && String(wt?.category || '').toUpperCase() === 'MARKETING') {
+
                 const reason = `template_param_empty:${missingRequired.join(',')}`;
                 await supabase
                   .from('communication_logs')
