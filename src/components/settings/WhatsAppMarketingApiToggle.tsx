@@ -42,9 +42,12 @@ export function WhatsAppMarketingApiToggle() {
     },
   });
 
-  const anyEnabled = integrations.some((i: any) => i.config?.mm_api_enabled === true);
-  const acceptedAt = integrations.find((i: any) => i.config?.mm_api_tos_accepted_at)?.config
-    ?.mm_api_tos_accepted_at as string | undefined;
+  const anyEnabled = integrations.some(
+    (i: any) => (i.config as Record<string, unknown> | null)?.mm_api_enabled === true,
+  );
+  const acceptedAt = integrations
+    .map((i: any) => (i.config as Record<string, unknown> | null)?.mm_api_tos_accepted_at)
+    .find((v: unknown): v is string => typeof v === 'string' && v.length > 0);
 
   const setEnabled = async (enabled: boolean) => {
     if (!integrations.length) {
