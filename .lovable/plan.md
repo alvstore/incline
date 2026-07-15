@@ -1,76 +1,88 @@
-## Root causes
 
-**1. Stats show 0 (SENT 0 / DELIVERED 0 / FAILED 0)**
-The card in the screenshot reads `campaigns.recipients_count / success_count / failure_count`. Those fields are only written at the very END of `send-broadcast` (after the whole audience finishes). While the campaign is `sending` — or if the client aborted the invoke before completion — the counters stay at `0`. There is also no reconciliation of `delivered/read` back into the summary counters; the second screenshot (Telinfy panel: 78 delivered / 10 read / 19 sent-pending / 217 failed) shows the truth, but our card cannot match it because we only track the point-of-send success (`sent`), never DLR outcomes.
+## Goal
 
-**2. Campaign send spins forever instead of saving + running in background**
-`sendCampaignNow` in `campaignService.ts` does `supabase.functions.invoke('send-broadcast', …)` and `await`s the full response. `send-broadcast` loops the audience *synchronously* calling `dispatch-communication` per recipient (~200–800 ms each). For 324 contacts that is 60–300 s — well past Vite HMR proxy timeouts and past Supabase edge invoke client timeouts — so the browser button spins, the wizard never closes, and the row is left at `status='sending'` with `0/0/0`. Classic edge-function timeout / long-request anti-pattern.
+1. **Live Feed** in Communication Hub must show only *transactional / 1-to-1* messages. All campaign / broadcast traffic disappears from it.
+2. **Campaign Detail drawer** becomes the single source of truth for that campaign: real KPIs, per-recipient status with error reason, and buttons to **Retry failed** and **Re-trigger campaign**.
 
-**3. Card shows "SENDING" long after Telinfy has already returned results**
-Same cause as #2 plus the missing reconciliation from #1. When `send-broadcast` eventually finishes it writes final counters, but if the client already navigated away, or if the invoke was killed, we never flip status off `sending`, and we never fold in the Telinfy DLR breakdown.
+Root cause of the empty drawer (screenshot 1): the drawer currently reads `campaign_runs`, but `send-broadcast` writes to `campaign_recipients` + `communication_logs` (dedupe_key `campaign:<id>:<source>:<ref>`). That table is empty ⇒ everything shows 0.
 
 ---
 
-## Fix plan
+## Changes
 
-### A. Background-execute campaign sends (kill the spinner)
+### 1. Filter campaigns out of Live Feed
+`src/components/communications/LiveFeed.tsx`
+- Both queries (`page1` and `loadOlder`) add `.not('dedupe_key','ilike','campaign:%').not('dedupe_key','ilike','broadcast:%')`.
+- Realtime subscription: on INSERT, skip rows whose `dedupe_key` starts with `campaign:` / `broadcast:` before invalidating (avoids noisy refetches).
+- KpiStrip counts recompute from the filtered result — no code change needed since they derive from `logs`.
+- Add a subtle helper line under the "Live Feed" title: *"Campaign sends are tracked in Campaigns → View details."*
 
-`supabase/functions/send-broadcast/index.ts`
-- Add early acknowledgement: as soon as the request is authenticated and validated, mark `campaigns` row `status='sending'`, `recipients_count=<audience length>`, `success_count=0`, `failure_count=0`, `last_run_error=null`, and return `202 { accepted: true, campaign_id, total }` immediately.
-- Move the entire dispatch loop into a `runInBackground()` async fn wrapped with `EdgeRuntime.waitUntil(runInBackground())` so Deno keeps the isolate alive past the response.
-- Inside the background loop, after every recipient, `UPDATE campaigns SET success_count=…, failure_count=…` (throttled: every N recipients or every ~2s) so the UI can watch progress live.
-- On completion, set final status (`sent` / `failed` / `paused`) exactly as today. On uncaught exception, set `status='failed'` + `last_run_error`.
+### 2. Rebuild Campaign Detail drawer as SSOT
+`src/components/campaigns/CampaignDetailDrawer.tsx` — full rewrite of the data layer:
 
-`src/services/campaignService.ts` — `sendCampaignNow`
-- Do not `await` a synchronous result payload. Invoke `send-broadcast`, expect `202 accepted`, and return immediately with `{ accepted: true, total }`.
+- **Data source switch**: read `campaign_recipients` (source_type, source_ref_id, recipient_phone/email, status, error, created_at) instead of `campaign_runs`.
+- **DLR join**: fetch `communication_logs` where `dedupe_key like 'campaign:<id>:%'`, index by dedupe_key, merge into each recipient row to get true `delivery_status` (sent/delivered/read/failed), provider `error_code`/`error_message`, `delivered_at`, `read_at`.
+- **Header KPI strip (5 tiles)**: Total · Sent · Delivered · Read · Failed. Numbers come from the merged view, not the stale `campaigns.*_count` columns; also show a small "auto-reconciles every 2 min" tag linking to the existing `reconcile-campaign-stats` fn.
+- **Progress bar** while `campaign.status === 'sending'` (same math as the card).
+- **Recipient table** (virtualised list, filterable):
+  - Filter chips: All / Delivered / Failed / Pending.
+  - Search by name/phone/email.
+  - Row shows: name (via existing resolver pattern), channel icon, recipient, status pill, timestamp, and — when failed — a human-friendly reason via `parseCommError()` (same helper Live Feed uses) with the raw provider code in a tooltip.
+- **Actions panel** (top-right of drawer):
+  - **Retry failed** — visible when `failed > 0`. Calls a new edge fn `retry-campaign-failed` (see §3). Confirms count first.
+  - **Re-trigger campaign** — re-sends to *all* original recipients. Confirmation dialog with total. Calls `sendCampaignNow(campaign.id, { mode: 'all' })`.
+  - **Reconcile now** — invokes `reconcile-campaign-stats` for this campaign_id so the user isn't waiting on cron.
+  - Buttons disabled while `status='sending'`.
 
-`src/components/campaigns/CampaignWizard.tsx`
-- On Send Now: fire `sendCampaignNow`, toast `"Campaign queued — <n> recipients. We'll keep sending in the background."`, `invalidateQueries(['campaigns', branchId])`, close the wizard. Do NOT block on `result.sent/failed`.
-- Remove the "Campaign failed / delivered X" toasts that assumed a synchronous result.
+### 3. New edge function `retry-campaign-failed`
+`supabase/functions/retry-campaign-failed/index.ts`
+- Input: `{ campaign_id }`.
+- Loads `campaign_recipients` where merged status is `failed` (recipient row `status='failed'` OR joined log `delivery_status in ('failed','bounced')`).
+- Builds a fresh audience array (same `source_type`/`source_ref_id` shape send-broadcast expects) and invokes `send-broadcast` with `{ campaign_id, audience, retry: true }`.
+- Returns `202 { accepted, retrying }`.
+- `send-broadcast` gets a small tweak: when `retry === true`, use a distinct dedupe_key suffix `:retry:<attempt>` so DLRs from the retry don't collide with the original log rows, and increment an `attempt` counter on `campaign_recipients` (new column, see §4).
 
+### 4. Migration
+`supabase/migrations/<ts>_campaign_recipient_retry.sql`
+- `ALTER TABLE public.campaign_recipients ADD COLUMN IF NOT EXISTS attempt smallint NOT NULL DEFAULT 1, ADD COLUMN IF NOT EXISTS last_error text, ADD COLUMN IF NOT EXISTS last_retried_at timestamptz;`
+- Index: `CREATE INDEX IF NOT EXISTS campaign_recipients_campaign_status_idx ON public.campaign_recipients (campaign_id, status);`
+- Index on `communication_logs (dedupe_key text_pattern_ops)` if missing, to keep the `LIKE 'campaign:<id>:%'` join fast.
+- Grants unchanged (table already has them).
+
+### 5. Service layer
+`src/services/campaignService.ts`
+- Add `retryFailedRecipients(campaignId): Promise<{ accepted: number }>` — invokes `retry-campaign-failed`.
+- Add `reconcileCampaignStats(campaignId)` — invokes `reconcile-campaign-stats`.
+- Existing `sendCampaignNow` unchanged.
+
+### 6. Panel touch-ups
 `src/components/campaigns/CampaignsPanel.tsx`
-- Add a `useQuery` `refetchInterval: campaign.status === 'sending' ? 3000 : false` so cards live-update the `SENT / DELIVERED / FAILED` numbers as the background job progresses (same pattern already used in `CampaignReportDrawer.tsx`).
-- Show a small progress bar `success_count + failure_count / recipients_count` on cards in `sending` state.
+- No behaviour change; card already links to the drawer. Just make the "SENDING" spinner honour the same disabled-actions rule (Retry / Re-trigger hidden while status is `sending`).
 
-### B. Reconcile true delivery back into the card (fix 0/0/0)
+---
 
-Two levels of stats need to exist:
-- **Send-time** (`campaigns.success_count` = accepted by provider, `failure_count` = rejected at send).
-- **Delivery-time** (delivered / read / undelivered from provider DLRs, already living in `communication_logs.delivery_status` and `campaign_recipients.status`).
+## Technical notes
 
-New edge function `supabase/functions/reconcile-campaign-stats/index.ts`
-- Input: `{ campaign_id }` OR none → picks all campaigns updated in last 24h whose `status IN ('sending','sent')`.
-- Aggregates `campaign_recipients` joined with `communication_logs` (via `provider_message_id` / `dedupe_key`) to compute `delivered / read / failed_after_send`.
-- Writes new columns on `campaigns`: `delivered_count`, `read_count` (migration adds them, default 0).
-- Flips `status`: still `sending` if any queued/pending, else `sent` (or `partial` when `failed_count > 0`).
-
-Migration `supabase/migrations/<ts>_campaign_delivery_stats.sql`
-- `ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS delivered_count int NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS read_count int NOT NULL DEFAULT 0;`
-- Grants preserved (no new table).
-- Cron: `select cron.schedule('reconcile-campaign-stats-every-2min', '*/2 * * * *', $$ select net.http_post(...reconcile-campaign-stats...) $$)`.
-
-`CampaignsPanel.tsx` card
-- Replace the three-column strip with four: `SENT` (`success_count`), `DELIVERED` (`delivered_count`), `READ` (`read_count`), `FAILED` (`failure_count`). Matches the Telinfy panel layout in the second screenshot.
-
-### C. Guard against half-finished sends
-
-`send-broadcast` background wrapper
-- On isolate abort (`try/finally`), if we exit with unwritten counters, write `status='failed'`, `last_run_error='background_aborted'` — no more permanently-`sending` rows.
-
-One-time backfill run (in the reconcile fn's first pass): any `campaigns.status='sending'` older than 30 min with `recipients_count=0` → set `status='failed', last_run_error='stuck_sending_backfill'` so the currently-stuck card in the screenshot clears.
+- **Why keep `campaign_runs`?** Not deleted — legacy rows might still exist; the drawer just stops reading it. A follow-up cleanup migration can drop it later once verified empty in prod.
+- **Dedupe key contract** stays `campaign:<campaign_id>:<source_type>:<source_ref_id>[:retry:<n>]` so `reconcile-campaign-stats` continues to work; that fn's `LIKE 'campaign:<id>:%'` already covers retries.
+- **RLS / Grants**: `campaign_recipients` and `communication_logs` already have authenticated SELECT for branch members via existing policies — no policy changes.
+- **CI comms guard**: `retry-campaign-failed` only invokes `send-broadcast` (not `send-*` directly) so the guard stays green.
+- **No changes to `dispatch-communication`, `send-rcs`, `reconcile-rcs-pending`, or Telinfy handling.
 
 ---
 
 ## Files touched
 
-- edit `supabase/functions/send-broadcast/index.ts` — 202 + `EdgeRuntime.waitUntil` + progress writes
-- edit `src/services/campaignService.ts` — `sendCampaignNow` returns immediately
-- edit `src/components/campaigns/CampaignWizard.tsx` — queued toast, no await on counts
-- edit `src/components/campaigns/CampaignsPanel.tsx` — polling, progress bar, 4-stat strip
-- new `supabase/functions/reconcile-campaign-stats/index.ts`
-- new `supabase/migrations/<ts>_campaign_delivery_stats.sql` — 2 new columns + cron
+- edit  `src/components/communications/LiveFeed.tsx`
+- rewrite  `src/components/campaigns/CampaignDetailDrawer.tsx`
+- edit  `src/components/campaigns/CampaignsPanel.tsx` (tiny)
+- edit  `src/services/campaignService.ts`
+- edit  `supabase/functions/send-broadcast/index.ts` (retry suffix + attempt bump)
+- new   `supabase/functions/retry-campaign-failed/index.ts`
+- new   `supabase/migrations/<ts>_campaign_recipient_retry.sql`
 
-## Out of scope (already handled elsewhere, will not re-touch)
+## Out of scope
 
-- `reconcile-rcs-pending` already flips individual RCS logs to delivered/read/failed and fires SMS fallback — the new reconcile fn only *reads* those outcomes into the campaign summary.
-- Telinfy per-handset undeliverable (Error 404 on iPhones) is a carrier issue documented in prior turns; nothing new here.
+- Redesigning the Campaigns card grid
+- Changing scheduled-campaign cron
+- Deleting the legacy `campaign_runs` table (separate cleanup PR)

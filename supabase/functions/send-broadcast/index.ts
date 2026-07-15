@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Forbidden: Staff access required" }), { status: 403, headers: corsHeaders });
     }
 
-    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename } = await req.json();
+    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = await req.json();
+    const retrySuffix = retry ? `:retry:${Date.now()}` : '';
 
     const attachment = attachment_url
       ? {
@@ -258,7 +259,7 @@ Deno.serve(async (req) => {
               payload: { subject: subject || undefined, body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
-              dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
+              dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}${retrySuffix}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
               force: true,
               ...(attachment ? { attachment } : {}),
             },
@@ -442,7 +443,7 @@ Deno.serve(async (req) => {
             payload: { subject: subject || undefined, body: personalizedMsg, variables: variables || undefined },
             template_id: template_id || null,
             member_id: member.id,
-            dedupe_key: campaign_id ? `campaign:${campaign_id}:member:${member.id}` : `broadcast:${Date.now()}:member:${member.id}`,
+            dedupe_key: campaign_id ? `campaign:${campaign_id}:member:${member.id}${retrySuffix}` : `broadcast:${Date.now()}:member:${member.id}`,
             force: true,
             ...(attachment ? { attachment } : {}),
           },

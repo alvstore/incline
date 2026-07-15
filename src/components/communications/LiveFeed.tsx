@@ -93,9 +93,13 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   const { data: page1 = [], isLoading } = useQuery({
     queryKey: ['comm-live-feed', branchId, pageSize],
     queryFn: async () => {
+      // Live Feed shows only transactional/1:1 traffic. Campaign & broadcast
+      // sends are tracked in their own Campaign Details drawer, not here.
       let q = supabase
         .from('communication_logs')
         .select('*')
+        .not('dedupe_key', 'ilike', 'campaign:%')
+        .not('dedupe_key', 'ilike', 'broadcast:%')
         .order('created_at', { ascending: false })
         .limit(pageSize);
       if (branchId) q = q.eq('branch_id', branchId);
@@ -122,6 +126,8 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       let q = supabase
         .from('communication_logs')
         .select('*')
+        .not('dedupe_key', 'ilike', 'campaign:%')
+        .not('dedupe_key', 'ilike', 'broadcast:%')
         .lt('created_at', last.created_at)
         .order('created_at', { ascending: false })
         .limit(pageSize);
@@ -258,14 +264,16 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   }, [nameMap]);
 
   useEffect(() => {
-    const invalidate = () => {
+    const invalidate = (payload?: any) => {
+      const dk = payload?.new?.dedupe_key || payload?.old?.dedupe_key || '';
+      if (typeof dk === 'string' && (dk.startsWith('campaign:') || dk.startsWith('broadcast:'))) return;
       qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'comm-live-feed' });
       setLivePulse((p) => p + 1);
     };
     const ch = supabase
       .channel('comm-live-feed-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'communication_logs' }, invalidate)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'communication_delivery_events' }, invalidate)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'communication_delivery_events' }, () => invalidate())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
@@ -432,6 +440,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               </div>
               <span className="text-sm font-semibold text-foreground">Live Feed</span>
               <Badge variant="outline" className="rounded-full text-[10px] tabular-nums">{filtered.length}</Badge>
+              <span className="hidden md:inline text-[11px] text-muted-foreground ml-2">Transactional & 1:1 only — campaign sends live in Campaigns → View details.</span>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <div className="relative">
