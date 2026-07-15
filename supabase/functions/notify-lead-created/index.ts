@@ -411,7 +411,7 @@ Deno.serve(async (req) => {
 
       if (adminIds.length) {
         const [{ data: profiles }, { data: prefRows }] = await Promise.all([
-          supabase.from("profiles").select("id, phone, email").in("id", adminIds),
+          supabase.from("profiles").select("id, full_name, phone, email").in("id", adminIds),
           supabase
             .from("lead_notification_admin_prefs")
             .select("user_id, whatsapp_enabled, sms_enabled, email_enabled")
