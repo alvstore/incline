@@ -40,6 +40,10 @@ const META_ERROR_MAP: Record<number, { short: string; hint: string }> = {
     short: 'Outside 24-hour window',
     hint: 'Last user message is >24h old — must send a template to re-open the session.',
   },
+  131049: {
+    short: 'Meta pacing limit',
+    hint: 'Meta accepted the template but did not deliver it to protect WhatsApp engagement health. Retry later or use a less frequent/warmer audience.',
+  },
   131051: {
     short: 'Unsupported message type',
     hint: 'Channel does not support this media kind — fallback to document or text.',
