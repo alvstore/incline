@@ -803,8 +803,35 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 </button>
               ))}
             </div>
+
+            {(campaignType === 'promotion' || campaignType === 'lead_reengagement') && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-lg leading-none mt-0.5">⚠️</span>
+                  <div className="text-[12px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                    <p className="font-semibold mb-1">About WhatsApp Marketing pacing (error 131049)</p>
+                    <p>
+                      Meta throttles MARKETING templates per recipient based on their engagement history — this happens on <b>every</b> WhatsApp API (Cloud, On-Prem, Marketing Messages Lite). Swapping APIs does not bypass it.
+                      To actually reach paced users, enable the automatic fallback below.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={fallbackOnPacing}
+                    onChange={(e) => setFallbackOnPacing(e.target.checked)}
+                    className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="text-amber-900 dark:text-amber-200">
+                    Auto-fallback to <b>RCS / SMS</b> when Meta paces a recipient (131049 / 130472)
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
         )}
+
 
         {step === audienceStepIndex && (
           <div className="space-y-5">
