@@ -315,16 +315,40 @@ Deno.serve(async (req) => {
             },
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
-          if (ok) sent++; else failed++;
-          const reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
+          let reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
+          let pacingCode: number | null = null;
+          let fallbackUsed = false;
+          let fallbackChannel: string | null = null;
+          let finalStatus: 'sent' | 'failed' = ok ? 'sent' : 'failed';
+
+          if (!ok && channel === 'whatsapp' && fallbackOnPacing) {
+            pacingCode = extractPacingCode(reasonStr) ?? extractPacingCode(JSON.stringify((dispatchRes as any) || {}));
+            if (pacingCode) {
+              const fb = await tryPacingFallback(r, personalized, perVars);
+              fallbackUsed = true;
+              fallbackChannel = fb.channel;
+              if (fb.ok) {
+                finalStatus = 'sent';
+                reasonStr = `paced_${pacingCode}_fallback_via_${fb.channel}`;
+              } else {
+                reasonStr = `paced_${pacingCode}; fallback_${fb.channel}_failed: ${fb.error}`;
+              }
+            }
+          }
+
+          if (finalStatus === 'sent') sent++; else failed++;
           recipientRows.push({
             campaign_id: campaign_id ?? null,
             source_type: r.source_type, source_ref_id: r.source_ref_id,
             full_name: r.full_name, phone: r.phone, email: r.email,
-            status: ok ? 'sent' : 'failed',
+            status: finalStatus,
             error: reasonStr,
             dispatched_at: new Date().toISOString(),
+            fallback_used: fallbackUsed,
+            fallback_channel: fallbackChannel,
+            pacing_code: pacingCode,
           });
+
         } catch (e: any) {
           failed++;
           recipientRows.push({
