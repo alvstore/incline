@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import {
   Monitor, DoorOpen, RotateCcw, Globe,
 } from "lucide-react";
@@ -15,7 +17,10 @@ interface MIPSDeviceCardProps {
   branchName?: string;
   branchId?: string;
   publicIp?: string;
+  localDeviceId?: string;
+  doorRole?: 'entry' | 'exit' | 'both';
 }
+
 
 const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCardProps) => {
   const isOnline = device.onlineFlag === 1 || device.status === 1;
