@@ -1058,6 +1058,7 @@ Deno.serve(async (req) => {
     if (providerMessageId) finalMeta.provider_message_id = providerMessageId;
     if ((input as any).__category_drift) finalMeta.category_drift = true;
     if ((input as any).__auto_resolved_template) finalMeta.auto_resolved_template = (input as any).__auto_resolved_template;
+    if ((input as any).__header_source) finalMeta.header_source = (input as any).__header_source;
     if (input.source_caller) finalMeta.source_caller = input.source_caller;
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
