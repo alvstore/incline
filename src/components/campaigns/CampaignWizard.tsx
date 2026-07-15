@@ -454,14 +454,24 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const isCsv = filter.audience_kind === 'csv_import';
   const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
   const templatePicked = useApprovedTemplate && !!selectedTemplateId && !selectedTemplateId.startsWith('__meta__:');
-  const blockedByTemplate = requiresTemplate && !templatePicked;
+  // Selected template's live Meta status (may be PENDING when scheduling ahead of approval).
+  const selectedTemplateMeta = (approvedTemplates as any[]).find((t) => t.id && t.id === selectedTemplateId);
+  const selectedTemplatePending = selectedTemplateMeta?.meta_template_status === 'PENDING';
+  // For send_now, PENDING templates are useless — Meta will reject. For
+  // scheduled / automated triggers, PENDING is allowed: the worker re-checks
+  // template status at fire time (issue #2).
+  const templateReadyForTrigger = templatePicked && (trigger !== 'send_now' || !selectedTemplatePending);
+  const blockedByTemplate = requiresTemplate && !templateReadyForTrigger;
 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (!message.trim()) { toast.error('Message required'); return; }
     if (totalCount === 0) { toast.error('Audience is empty'); return; }
     if (blockedByTemplate) {
-      toast.error(`${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`);
+      const detail = requiresTemplate && templatePicked && selectedTemplatePending && trigger === 'send_now'
+        ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
+        : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
+      toast.error(detail);
       return;
     }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
