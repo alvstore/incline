@@ -1,3 +1,6 @@
+// v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
+//          recipients when a Meta template is used; auto-pause campaign on
+//          terminal template errors (132000/132012/132018/132001/131051).
 // v3.3.0 — Attachment kind 'video' supported (mapped via dispatcher).
 // v3.1.0 — Route all broadcast sends through dispatch-communication with Meta template support.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
