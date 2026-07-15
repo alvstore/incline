@@ -719,13 +719,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
           : undefined;
         const result = await sendCampaignNow(campaign, { ...audience, variables: rcsVariables });
-        if (result.failed > 0 && result.sent === 0) {
-          toast.error(`Campaign failed — 0 delivered, ${result.failed} failed${(result as any).first_error ? `: ${(result as any).first_error}` : ''}`);
-        } else if (result.failed > 0) {
-          toast.warning(`Campaign sent with errors — ${result.sent} delivered, ${result.failed} failed`);
-        } else {
-          toast.success(`Campaign sent — ${result.sent} delivered`);
-        }
+        toast.success(
+          `Campaign queued — sending to ${result.total} recipients in the background. Watch the card for live progress.`,
+        );
       } else if (trigger === 'scheduled') {
         toast.success(`Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}`);
       } else {
