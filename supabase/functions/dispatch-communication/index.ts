@@ -1025,12 +1025,19 @@ Deno.serve(async (req) => {
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
               source_caller: input.source_caller ?? null,
+              // Route marketing template sends through MM API for WhatsApp when
+              // the branch's WA integration has `config.mm_api_enabled=true`.
+              // send-whatsapp falls back to Cloud API automatically otherwise.
+              use_mm_api: input.category === 'marketing' && !!templateName,
             },
           });
           captureMetaErrorFields(r);
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { whatsapp_message_id?: string; message_id?: string })?.whatsapp_message_id
             ?? (r.data as { message_id?: string })?.message_id;
+          // Persist route (cloud_api | mm_api) on the log's delivery_metadata bag.
+          const route = (r.data as { provider_route?: string })?.provider_route;
+          if (route) finalMeta.provider_route = route;
           break;
         }
         case 'sms': {
