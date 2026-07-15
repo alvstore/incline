@@ -2030,12 +2030,15 @@ export type Database = {
           channel: string
           created_at: string
           created_by: string | null
+          delivered_count: number
           event_meta: Json
           failure_count: number
           id: string
+          last_progress_at: string | null
           last_run_error: string | null
           message: string
           name: string
+          read_count: number
           recipients_count: number
           scheduled_at: string | null
           sent_at: string | null
@@ -2057,12 +2060,15 @@ export type Database = {
           channel: string
           created_at?: string
           created_by?: string | null
+          delivered_count?: number
           event_meta?: Json
           failure_count?: number
           id?: string
+          last_progress_at?: string | null
           last_run_error?: string | null
           message: string
           name: string
+          read_count?: number
           recipients_count?: number
           scheduled_at?: string | null
           sent_at?: string | null
@@ -2084,12 +2090,15 @@ export type Database = {
           channel?: string
           created_at?: string
           created_by?: string | null
+          delivered_count?: number
           event_meta?: Json
           failure_count?: number
           id?: string
+          last_progress_at?: string | null
           last_run_error?: string | null
           message?: string
           name?: string
+          read_count?: number
           recipients_count?: number
           scheduled_at?: string | null
           sent_at?: string | null
