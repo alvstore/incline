@@ -123,6 +123,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [submittingMeta, setSubmittingMeta] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrencePreset>('weekly_mon');
   const [customCron, setCustomCron] = useState('0 10 * * 1');
+  // Auto-fallback to RCS/SMS when Meta paces this recipient (131049/130472).
+  // Applies only to promotion/lead_reengagement WhatsApp sends.
+  const [fallbackOnPacing, setFallbackOnPacing] = useState(true);
+
 
   // Approved Meta WhatsApp template (cold-audience-compliant path)
   const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
