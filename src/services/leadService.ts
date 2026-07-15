@@ -245,6 +245,14 @@ export const leadService = {
       };
       throw new Error(friendly[code] || `Lead conversion failed: ${code}`);
     }
+    // Best-effort: mint an auth user + profile so the new member can log in and
+    // downstream systems (MIPS sync, comms) have complete personal data.
+    // Non-blocking: conversion still succeeds if provisioning fails.
+    if (result.member_id) {
+      supabase.functions.invoke('provision-member-login', {
+        body: { member_id: result.member_id },
+      }).catch((e) => console.warn('provision-member-login failed:', e?.message || e));
+    }
     return { memberId: result.member_id, idempotent: !!result.idempotent_hit };
   },
 
