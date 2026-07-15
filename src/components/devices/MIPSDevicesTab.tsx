@@ -167,6 +167,22 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
             </Select>
           </div>
         )}
+
+        {!localDeviceId && onRegister && (
+          <div className="flex items-center justify-between pt-2 border-t border-border/50">
+            <span className="text-[10px] text-warning uppercase tracking-wider">Not in CRM</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={registering}
+              onClick={() => onRegister(device)}
+            >
+              <Plus className={`h-3 w-3 mr-1 ${registering ? "animate-pulse" : ""}`} />
+              Register in CRM
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
