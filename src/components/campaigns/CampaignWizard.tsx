@@ -84,6 +84,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // Approved Meta WhatsApp template (cold-audience-compliant path)
   const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  // Draft campaign row created when the user submits a template to Meta from
+  // this wizard. Lets subsequent Save/Schedule/Send actions update that same
+  // row instead of orphaning the template submission (issue #1).
+  const [draftCampaignId, setDraftCampaignId] = useState<string | null>(null);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
 
   const [syncingTemplates, setSyncingTemplates] = useState(false);
 
