@@ -43,6 +43,49 @@ interface Props {
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
 
+// ─── Variable resolution (kept in lock-step with dispatch-communication + send-broadcast) ───
+// Positional Meta vars ({{1}}, {{2}}, ...) map to these keys in order.
+// Named vars ({{first_name}}, ...) map to themselves.
+const POSITIONAL_VAR_MEANINGS: Record<string, { label: string; sample: string }> = {
+  '1': { label: 'Recipient first name', sample: 'Rahul' },
+  '2': { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  '3': { label: 'Branch name', sample: 'Incline HQ' },
+};
+const NAMED_VAR_MEANINGS: Record<string, { label: string; sample: string }> = {
+  first_name: { label: 'Recipient first name', sample: 'Rahul' },
+  member_name: { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  full_name: { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  name: { label: 'Recipient first name', sample: 'Rahul' },
+  member_code: { label: 'Member code', sample: 'INC-000123' },
+  branch_name: { label: 'Branch name', sample: 'Incline HQ' },
+};
+
+interface TplVar { token: string; key: string; positional: boolean; label: string; sample: string; }
+function extractTemplateVars(body: string): TplVar[] {
+  const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+  const seen = new Set<string>();
+  const out: TplVar[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const key = m[1];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const positional = /^\d+$/.test(key);
+    const meta = positional
+      ? (POSITIONAL_VAR_MEANINGS[key] ?? { label: `Positional variable #${key}`, sample: 'Sample' })
+      : (NAMED_VAR_MEANINGS[key.toLowerCase()] ?? { label: key.replace(/_/g, ' '), sample: 'Sample' });
+    out.push({ token: `{{${key}}}`, key, positional, label: meta.label, sample: meta.sample });
+  }
+  return out;
+}
+function renderPreview(body: string, sampleOverrides: Record<string, string> = {}): string {
+  return body.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+    if (sampleOverrides[key]) return sampleOverrides[key];
+    if (/^\d+$/.test(key)) return POSITIONAL_VAR_MEANINGS[key]?.sample ?? 'Sample';
+    return NAMED_VAR_MEANINGS[key.toLowerCase()]?.sample ?? 'Sample';
+  });
+}
+
 type CampaignType = 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
 
 const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: string; color: string }[] = [
