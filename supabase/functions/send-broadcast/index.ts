@@ -1,13 +1,15 @@
-// v3.5.0 — Explicit-audience guard: never silently fall through to the
-//          whole-branch members path when caller passed empty recipients/
-//          member_ids. Members path now inserts per-recipient rows into
-//          campaign_recipients so the delivery drawer works for member sends.
-// v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
-//          recipients when a Meta template is used; auto-pause campaign on
-//          terminal template errors (132000/132012/132018/132001/131051).
-// v3.3.0 — Attachment kind 'video' supported (mapped via dispatcher).
-// v3.1.0 — Route all broadcast sends through dispatch-communication with Meta template support.
+// v4.0.0 — Background execution: ACK 202 immediately, then run the full
+//          dispatch loop inside EdgeRuntime.waitUntil so the browser stops
+//          spinning and campaigns can send to 300+ recipients without
+//          hitting client/proxy timeouts. Progress writes every ~5 recipients.
+// v3.5.0 — Explicit-audience guard.
+// v3.4.0 — Per-recipient variables + auto-pause on terminal template errors.
+// v3.3.0 — Attachment kind 'video' supported.
+// v3.1.0 — Route through dispatch-communication with Meta template support.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
