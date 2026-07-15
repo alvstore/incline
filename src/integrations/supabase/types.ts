@@ -1931,6 +1931,7 @@ export type Database = {
           last_retried_at: string | null
           pacing_code: number | null
           phone: string | null
+          provider_route: string | null
           read_at: string | null
           source_label: string | null
           source_ref_id: string | null
@@ -1954,6 +1955,7 @@ export type Database = {
           last_retried_at?: string | null
           pacing_code?: number | null
           phone?: string | null
+          provider_route?: string | null
           read_at?: string | null
           source_label?: string | null
           source_ref_id?: string | null
@@ -1977,6 +1979,7 @@ export type Database = {
           last_retried_at?: string | null
           pacing_code?: number | null
           phone?: string | null
+          provider_route?: string | null
           read_at?: string | null
           source_label?: string | null
           source_ref_id?: string | null
