@@ -342,9 +342,43 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         toast.error(`Meta rejected: ${detail}`, { duration: 9000 });
         return;
       }
-      toast.success(`Submitted to Meta as "${r?.name}" — status: ${r?.status || 'PENDING'}`);
+
+      // Persist a draft campaign row so this work shows up in the Campaigns
+      // list and can be scheduled/sent once Meta approves the template.
+      try {
+        const draft = await upsertDraftCampaignForTemplate(draftCampaignId, {
+          branch_id: branchId,
+          name: (name || safeName).trim(),
+          channel: 'whatsapp',
+          audience_filter: filter,
+          message: message.trim(),
+          subject: null,
+          trigger_type: trigger,
+          scheduled_at: trigger === 'scheduled' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          attachment_url: attachment?.url ?? null,
+          attachment_kind: attachment?.kind ?? null,
+          attachment_filename: attachment?.filename ?? null,
+          campaign_type: campaignType,
+          event_meta: isEvent ? {
+            name: eventName.trim(), date: eventDate || null, time: eventTime || null,
+            venue: eventVenue.trim() || null, rsvp_url: eventRsvpUrl.trim() || null,
+          } : {},
+          template_id: localRow!.id,
+          status: 'pending_template_approval',
+        });
+        setDraftCampaignId(draft.id);
+        // Auto-pre-select the just-submitted template so realtime picks it up
+        // as soon as Meta approves.
+        setUseApprovedTemplate(true);
+        setSelectedTemplateId(localRow!.id);
+      } catch (persistErr: any) {
+        console.error('Failed to persist draft campaign', persistErr);
+      }
+
+      toast.success(`Template submitted to Meta · draft campaign saved. It will send once Meta approves "${r?.name}".`, { duration: 8000 });
       qc.invalidateQueries({ queryKey: ['approved-whatsapp-templates'] });
       qc.invalidateQueries({ queryKey: ['communication-templates'] });
+      qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit to Meta');
     } finally { setSubmittingMeta(false); }
