@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       const isTerminal = TERMINAL_META_CODES.some((code) => errMsg.includes(String(code)));
 
 
-      if (isLast) {
+      if (isLast || isTerminal) {
         await supabase
           .from("whatsapp_send_queue")
           .update({
