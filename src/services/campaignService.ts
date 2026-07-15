@@ -135,6 +135,9 @@ export interface Campaign {
   recipients_count: number;
   success_count: number;
   failure_count: number;
+  delivered_count?: number;
+  read_count?: number;
+  last_progress_at?: string | null;
   scheduled_at: string | null;
   sent_at: string | null;
   created_at: string;
