@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
-  Monitor, DoorOpen, RotateCcw, Globe,
+  Monitor, DoorOpen, RotateCcw, Globe, Plus, Download,
 } from "lucide-react";
 import { fetchMIPSDevices, remoteOpenDoor, restartDevice, type MIPSDevice } from "@/services/mipsService";
 import { supabase } from "@/integrations/supabase/client";
