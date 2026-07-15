@@ -1,13 +1,15 @@
-// v3.5.0 — Explicit-audience guard: never silently fall through to the
-//          whole-branch members path when caller passed empty recipients/
-//          member_ids. Members path now inserts per-recipient rows into
-//          campaign_recipients so the delivery drawer works for member sends.
-// v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
-//          recipients when a Meta template is used; auto-pause campaign on
-//          terminal template errors (132000/132012/132018/132001/131051).
-// v3.3.0 — Attachment kind 'video' supported (mapped via dispatcher).
-// v3.1.0 — Route all broadcast sends through dispatch-communication with Meta template support.
+// v4.0.0 — Background execution: ACK 202 immediately, then run the full
+//          dispatch loop inside EdgeRuntime.waitUntil so the browser stops
+//          spinning and campaigns can send to 300+ recipients without
+//          hitting client/proxy timeouts. Progress writes every ~5 recipients.
+// v3.5.0 — Explicit-audience guard.
+// v3.4.0 — Per-recipient variables + auto-pause on terminal template errors.
+// v3.3.0 — Attachment kind 'video' supported.
+// v3.1.0 — Route through dispatch-communication with Meta template support.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +111,65 @@ Deno.serve(async (req) => {
       return json({ success: true, sent: 0, failed: 0, total: 0, reason: 'audience_empty' });
     }
 
+    // ── Estimate total & ACK 202 immediately, then run the dispatch loop
+    //    in the background via EdgeRuntime.waitUntil. This unblocks the
+    //    browser (previous behaviour stalled the wizard for 60-300s on a
+    //    300-recipient campaign until the client-side invoke timed out).
+    const estimatedTotal = Array.isArray(recipients) && recipients.length > 0
+      ? recipients.length
+      : (Array.isArray(member_ids) && member_ids.length > 0 ? member_ids.length : 0);
+
+    if (campaign_id) {
+      await adminClient.from('campaigns').update({
+        status: 'sending',
+        recipients_count: estimatedTotal,
+        success_count: 0,
+        delivered_count: 0,
+        read_count: 0,
+        failure_count: 0,
+        last_run_error: null,
+        last_progress_at: new Date().toISOString(),
+      }).eq('id', campaign_id);
+    }
+
+    const runBroadcast = async () => {
+      try {
+        await dispatchLoop();
+      } catch (e: any) {
+        console.error('[send-broadcast bg] fatal:', e);
+        if (campaign_id) {
+          try {
+            await adminClient.from('campaigns').update({
+              status: 'failed',
+              last_run_error: `background_error: ${e?.message || String(e)}`.slice(0, 500),
+              sent_at: new Date().toISOString(),
+            }).eq('id', campaign_id);
+          } catch { /* swallow */ }
+        }
+      }
+    };
+
+    // Fire-and-forget: keep isolate alive past the response.
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(runBroadcast());
+    } else {
+      // Local dev fallback — don't await, but at least kick it off.
+      runBroadcast();
+    }
+
+    // Immediately ACK to caller.
+    return json({
+      accepted: true,
+      background: true,
+      campaign_id: campaign_id || null,
+      total: estimatedTotal,
+    }, 202);
+
+    // ---------------------------------------------------------------
+    // Below: the actual dispatch pipeline, moved into a nested closure
+    // so it runs after the ACK. It closes over all variables above.
+    // ---------------------------------------------------------------
+    async function dispatchLoop() {
     // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
     if (Array.isArray(recipients) && recipients.length > 0) {
       let sent = 0, failed = 0, skipped_dnc = 0;
@@ -223,6 +284,17 @@ Deno.serve(async (req) => {
             dispatched_at: new Date().toISOString(),
           });
         }
+
+        // Progress ping every 5 recipients so the UI polls something fresh.
+        if (campaign_id && ((sent + failed) % 5 === 0)) {
+          try {
+            await adminClient.from('campaigns').update({
+              success_count: sent,
+              failure_count: failed,
+              last_progress_at: new Date().toISOString(),
+            }).eq('id', campaign_id);
+          } catch { /* progress writes are best-effort */ }
+        }
       }
 
       if (campaign_id && recipientRows.length > 0) {
@@ -265,7 +337,7 @@ Deno.serve(async (req) => {
         type: 'info', category: 'communication',
       });
 
-      return json({ success: true, sent, failed, total: recipients.length });
+      return;
     }
 
     // Resolve recipients (skip members who asked us to stop messaging).
@@ -284,7 +356,7 @@ Deno.serve(async (req) => {
         .gte("end_date", new Date().toISOString().split("T")[0]);
       const ids = [...new Set((activeMemberIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No active members found" });
+      else { console.log("No active members"); return; }
     } else if (audience === "expiring") {
       const today = new Date();
       const sevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -293,21 +365,21 @@ Deno.serve(async (req) => {
         .lte("end_date", sevenDays.toISOString().split("T")[0]).gte("end_date", today.toISOString().split("T")[0]);
       const ids = [...new Set((expiringIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No expiring members found" });
+      else { console.log("No expiring members"); return; }
     } else if (audience === "expired") {
       const { data: expiredIds } = await adminClient
         .from("memberships").select("member_id").eq("branch_id", branch_id)
         .lt("end_date", new Date().toISOString().split("T")[0]);
       const ids = [...new Set((expiredIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No expired members found" });
+      else { console.log("No expired members"); return; }
     }
 
     const { data: members, error: membersError } = await membersQuery;
     if (membersError) throw membersError;
 
     if (!members || members.length === 0) {
-      return json({ success: true, sent: 0, message: "No recipients found" });
+      return;
     }
 
     let sent = 0;
@@ -400,6 +472,17 @@ Deno.serve(async (req) => {
           dispatched_at: new Date().toISOString(),
         });
       }
+
+      // Progress ping every 5 recipients
+      if (campaign_id && ((sent + failed) % 5 === 0)) {
+        try {
+          await adminClient.from('campaigns').update({
+            success_count: sent,
+            failure_count: failed,
+            last_progress_at: new Date().toISOString(),
+          }).eq('id', campaign_id);
+        } catch { /* best effort */ }
+      }
     }
 
     await adminClient.from("notifications").insert({
@@ -426,7 +509,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ success: true, sent, failed, total: members.length });
+    return;
+    } // end dispatchLoop
   } catch (error: any) {
     console.error("Broadcast error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
@@ -434,6 +518,12 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
