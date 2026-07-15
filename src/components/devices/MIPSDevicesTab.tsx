@@ -22,10 +22,12 @@ interface MIPSDeviceCardProps {
 }
 
 
-const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCardProps) => {
+const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId, doorRole }: MIPSDeviceCardProps) => {
+  const qc = useQueryClient();
   const isOnline = device.onlineFlag === 1 || device.status === 1;
   const [isOpening, setIsOpening] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
 
   const handleOpenDoor = async () => {
     setIsOpening(true);
@@ -52,6 +54,25 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp }: MIPSDeviceCa
       setIsRestarting(false);
     }
   };
+
+  const handleRoleChange = async (val: string) => {
+    if (!localDeviceId) return;
+    setSavingRole(true);
+    try {
+      const { error } = await supabase
+        .from("access_devices")
+        .update({ door_role: val })
+        .eq("id", localDeviceId);
+      if (error) throw error;
+      toast.success(`Role set to ${val}`);
+      qc.invalidateQueries({ queryKey: ["access-devices-sns"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save role");
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
 
   return (
     <Card className={`rounded-2xl shadow-lg transition-all ${isOnline ? "shadow-success/20 border-success/20" : "shadow-muted/20"}`}>
