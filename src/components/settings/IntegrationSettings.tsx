@@ -575,6 +575,10 @@ export function IntegrationSettings() {
             </CardContent>
           </Card>
 
+          {/* Marketing Messages API for WhatsApp (formerly MM Lite) — optional
+              higher-delivery route for promotional templates. */}
+          <WhatsAppMarketingApiToggle />
+
           {/* WhatsApp Templates moved to Settings → Templates Manager (single source of truth). */}
 
           {/* WhatsApp Business API Setup Guide — Collapsible */}
