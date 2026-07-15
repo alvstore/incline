@@ -199,7 +199,10 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
     queryKey: ["mips-devices", branchId || "all"],
     queryFn: () => fetchMIPSDevices(branchId),
     staleTime: 30_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   });
+
 
   const filteredDevices = branchId && localDevices
     ? devices.filter((d) => {
