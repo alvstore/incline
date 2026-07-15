@@ -652,6 +652,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       toast.error(detail);
       return;
     }
+    if (channel === 'rcs' && !rcsTemplateId) {
+      toast.error('Pick an RCS template — Telinfy RCS is template-only');
+      return;
+    }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
