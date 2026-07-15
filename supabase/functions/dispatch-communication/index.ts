@@ -169,9 +169,22 @@ function orderedTemplateKeys(content: string, variables: unknown): string[] {
   const configured = Array.isArray(variables)
     ? variables.map((v) => stripBraces(String(v))).filter(Boolean)
     : [];
+  const placeholders = Array.from(content.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g))
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+
+  // Meta only cares about positional BODY parameter count. Our CRM stores a
+  // friendly mapping (`variables: ["first_name"]`) while Meta text often stays
+  // positional (`Hi {{1}}`). Treat configured[n] as the label for {{n+1}}
+  // instead of adding BOTH keys — otherwise a one-slot Meta template receives
+  // two body params and fails with 132000.
+  if (configured.length > 0 && placeholders.every((key) => /^\d+$/.test(key))) {
+    const maxSlot = placeholders.reduce((max, key) => Math.max(max, Number(key)), 0);
+    if (maxSlot <= configured.length) return configured.slice(0, maxSlot);
+  }
+
   const keys: string[] = [...configured];
-  for (const match of content.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-    const key = match[1].trim();
+  for (const key of placeholders) {
     if (!keys.includes(key)) keys.push(key);
   }
   return keys;
