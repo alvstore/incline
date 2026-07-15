@@ -509,7 +509,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ success: true, sent, failed, total: members.length });
+    return;
+    } // end dispatchLoop
   } catch (error: any) {
     console.error("Broadcast error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
@@ -517,6 +518,12 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
