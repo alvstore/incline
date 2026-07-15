@@ -1014,6 +1014,17 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               </button>
             ))}
 
+            {selectedTemplatePending && trigger !== 'send_now' && (
+              <div className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-3 flex gap-2.5">
+                <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="text-sm text-warning">
+                  <p className="font-semibold mb-0.5">This template is still awaiting Meta approval.</p>
+                  <p className="text-[12px]">If Meta approves it before your scheduled time, we send. If Meta rejects it, the campaign fails and you get a notification — no messages go out with a bad template.</p>
+                </div>
+              </div>
+            )}
+
+
             {trigger === 'scheduled' && (
               <div className="rounded-2xl border-2 border-warning/25 bg-warning/10 p-4 space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-warning font-semibold">Send at (Asia/Kolkata)</Label>
