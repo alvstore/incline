@@ -1,3 +1,8 @@
+// v2.6.0 — Hard-fail on media-header templates when a Meta handle cannot be
+//          obtained (missing app_id, unreachable sample URL, or upload rejection).
+//          Returns success:false + header_upload_diagnostics so the wizard can
+//          surface an actionable error instead of silently approving a
+//          body-only template. Reads app_id from config OR credentials.
 // v2.5.0 — Personalization guard: auto-fix "Hi Sample" / "Hello Member" bodies by
 //          replacing the literal name with {{1}}; reject MARKETING bodies with no
 //          placeholder at all (fixes the wait_is_over_july "Hi Sample" regression).
