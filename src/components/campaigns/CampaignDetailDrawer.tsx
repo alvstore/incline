@@ -115,13 +115,14 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     queryFn: async () => {
       const { data } = await supabase
         .from('campaign_recipients')
-        .select('id, source_type, source_ref_id, full_name, phone, email, status, error, attempt, dispatched_at, created_at')
+        .select('id, source_type, source_ref_id, full_name, phone, email, status, error, attempt, dispatched_at, created_at, fallback_used, fallback_channel, pacing_code')
         .eq('campaign_id', campaign!.id)
         .order('created_at', { ascending: false })
         .limit(2000);
       return data || [];
     },
   });
+
 
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ['campaign-logs', campaign?.id],
