@@ -320,6 +320,7 @@ Deno.serve(async (req) => {
           let fallbackUsed = false;
           let fallbackChannel: string | null = null;
           let finalStatus: 'sent' | 'failed' = ok ? 'sent' : 'failed';
+          let providerRoute: string | null = (dispatchRes as any)?.provider_route ?? (channel === 'whatsapp' ? 'cloud_api' : channel);
 
           if (!ok && channel === 'whatsapp' && fallbackOnPacing) {
             pacingCode = extractPacingCode(reasonStr) ?? extractPacingCode(JSON.stringify((dispatchRes as any) || {}));
@@ -330,6 +331,7 @@ Deno.serve(async (req) => {
               if (fb.ok) {
                 finalStatus = 'sent';
                 reasonStr = `paced_${pacingCode}_fallback_via_${fb.channel}`;
+                providerRoute = fb.channel; // rcs | sms
               } else {
                 reasonStr = `paced_${pacingCode}; fallback_${fb.channel}_failed: ${fb.error}`;
               }
@@ -347,6 +349,7 @@ Deno.serve(async (req) => {
             fallback_used: fallbackUsed,
             fallback_channel: fallbackChannel,
             pacing_code: pacingCode,
+            provider_route: providerRoute,
           });
 
         } catch (e: any) {

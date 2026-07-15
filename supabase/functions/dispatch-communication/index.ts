@@ -619,6 +619,7 @@ Deno.serve(async (req) => {
         'meta_code', 'meta_subcode', 'fbtrace_id',
         'pace_limited', 'category_issue', 'session_required',
         'recipient_unreachable', 'fallbackable',
+        'provider_route', // 'cloud_api' | 'mm_api' — MM API for WhatsApp routing
       ]) {
         if (d[k] !== undefined && d[k] !== null) metaErrorFields[k] = d[k];
       }
@@ -1025,12 +1026,19 @@ Deno.serve(async (req) => {
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
               source_caller: input.source_caller ?? null,
+              // Route marketing template sends through MM API for WhatsApp when
+              // the branch's WA integration has `config.mm_api_enabled=true`.
+              // send-whatsapp falls back to Cloud API automatically otherwise.
+              use_mm_api: input.category === 'marketing' && !!templateName,
             },
           });
           captureMetaErrorFields(r);
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { whatsapp_message_id?: string; message_id?: string })?.whatsapp_message_id
             ?? (r.data as { message_id?: string })?.message_id;
+          // Persist route (cloud_api | mm_api) on the log's delivery_metadata bag
+          // via captureMetaErrorFields (also fires on success — sets provider_route).
+          captureMetaErrorFields(r);
           break;
         }
         case 'sms': {
@@ -1241,10 +1249,11 @@ Deno.serve(async (req) => {
       })
       .eq('id', log!.id);
 
+    const providerRoute = (metaErrorFields.provider_route as string | undefined) ?? null;
     if (sendError || callbackAlreadyTerminal) {
-      return ok({ status: 'failed', log_id: log!.id, reason: sendError });
+      return ok({ status: 'failed', log_id: log!.id, reason: sendError, provider_route: providerRoute });
     }
-    return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId });
+    return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId, provider_route: providerRoute });
   } catch (e) {
     return bad(500, { error: 'unexpected', detail: (e as Error).message });
   }

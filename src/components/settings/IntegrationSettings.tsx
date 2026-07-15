@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
 import { RcsHub } from './rcs/RcsHub';
+import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
@@ -574,6 +575,10 @@ export function IntegrationSettings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Marketing Messages API for WhatsApp (formerly MM Lite) — optional
+              higher-delivery route for promotional templates. */}
+          <WhatsAppMarketingApiToggle />
 
           {/* WhatsApp Templates moved to Settings → Templates Manager (single source of truth). */}
 

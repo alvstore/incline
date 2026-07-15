@@ -1,3 +1,10 @@
+// v2.8.0 — MM API for WhatsApp routing: when the caller sets `use_mm_api: true` on a
+//           template send AND the WhatsApp integration has `config.mm_api_enabled = true`,
+//           the request goes to `/{PHONE_ID}/marketing_messages` (Marketing Messages API,
+//           formerly "MM Lite") instead of `/{PHONE_ID}/messages` (Cloud API). MM API is
+//           marketing-template-only and reuses the same permanent access token + messages
+//           webhook. Response now includes `provider_route: 'cloud_api' | 'mm_api'` so
+//           dispatch-communication can persist the route on `communication_logs`.
 // v2.7.0 — Structured Meta error envelope: returns meta_code/meta_subcode/fallbackable/
 //           category_issue/pace_limited so dispatch-communication can persist them in
 //           communication_logs.delivery_metadata and stop retrying category-drift loops.
@@ -35,6 +42,14 @@ async function computeAppSecretProof(accessToken: string, appSecret: string): Pr
 
 function buildMetaUrl(phoneNumberId: string, accessToken: string, appSecret?: string | null, proof?: string | null): string {
   let url = `${META_API_BASE}/${phoneNumberId}/messages`;
+  if (appSecret && proof) {
+    url += `?appsecret_proof=${proof}`;
+  }
+  return url;
+}
+
+function buildMetaMarketingUrl(phoneNumberId: string, appSecret?: string | null, proof?: string | null): string {
+  let url = `${META_API_BASE}/${phoneNumberId}/marketing_messages`;
   if (appSecret && proof) {
     url += `?appsecret_proof=${proof}`;
   }
@@ -106,6 +121,10 @@ serve(async (req) => {
     const template_name = body.template_name;
     const template_language = body.template_language || "en";
     const template_components = body.template_components;
+    // MM API for WhatsApp routing hint from caller (dispatch-communication passes
+    // true for `category === 'marketing'`). Only honored on template sends and
+    // only when the branch's WhatsApp integration has `config.mm_api_enabled=true`.
+    const use_mm_api_hint = body.use_mm_api === true;
 
     if (!message_id || !phone_number || !branch_id) {
       return new Response(
@@ -270,8 +289,14 @@ serve(async (req) => {
       metaPayload.text = { body: content };
     }
 
-    // Send via Meta Cloud API
-    const metaUrl = buildMetaUrl(phoneNumberId, accessToken, appSecret, proof);
+    // Route selection: MM API for WhatsApp for marketing template sends when
+    // the branch has accepted Meta ToS & enabled it; otherwise Cloud API.
+    const mmApiEnabled = integration.config?.mm_api_enabled === true;
+    const useMmApi = use_mm_api_hint && message_type === "template" && mmApiEnabled;
+    const providerRoute: "mm_api" | "cloud_api" = useMmApi ? "mm_api" : "cloud_api";
+    const metaUrl = useMmApi
+      ? buildMetaMarketingUrl(phoneNumberId, appSecret, proof)
+      : buildMetaUrl(phoneNumberId, accessToken, appSecret, proof);
 
     let metaResponse: Response;
     let metaData: any;
@@ -359,6 +384,7 @@ serve(async (req) => {
           session_required,
           recipient_unreachable,
           fallbackable,
+          provider_route: providerRoute,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -387,7 +413,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, whatsapp_message_id: waMessageId }), {
+    return new Response(JSON.stringify({ success: true, whatsapp_message_id: waMessageId, provider_route: providerRoute }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
