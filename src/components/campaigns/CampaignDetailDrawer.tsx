@@ -240,9 +240,30 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     onError: (e: any) => toast.error(e?.message || 'Re-trigger failed'),
   });
 
+  const resetMut = useMutation({
+    mutationFn: async () => {
+      if (!campaign) throw new Error('no campaign');
+      const { data, error } = await supabase.rpc('reset_campaign_to_draft' as any, { p_campaign_id: campaign.id });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Campaign reset to Draft — you can re-trigger it now');
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Reset failed'),
+  });
+
   if (!campaign) return null;
 
   const isSending = campaign.status === 'sending';
+  // A "zombie" send: status stuck at sending but no recipients ever landed AND
+  // the campaign is older than 15 min — the wizard call to send-broadcast must
+  // have aborted client-side before any recipient rows were written.
+  const isZombieSending =
+    isSending &&
+    ((campaign as any).recipients_count ?? 0) === 0 &&
+    (Date.now() - new Date(campaign.created_at).getTime()) > 15 * 60_000;
   const isLoading = recLoading || logsLoading;
   const progressPct = counts.total > 0
     ? Math.min(100, Math.round(((counts.sent + counts.failed + counts.skipped) / counts.total) * 100))
@@ -280,12 +301,32 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
           <Button
             size="sm" className="rounded-xl gap-2 bg-primary hover:bg-primary text-primary-foreground"
             onClick={() => setConfirmRetrigger(true)}
-            disabled={retriggerMut.isPending || isSending}
+            disabled={retriggerMut.isPending || (isSending && !isZombieSending)}
           >
             <Repeat className="h-3.5 w-3.5" />
             Re-trigger to all
           </Button>
+          {isZombieSending && (
+            <Button
+              size="sm" variant="destructive" className="rounded-xl gap-2"
+              onClick={() => resetMut.mutate()}
+              disabled={resetMut.isPending}
+              title="Wizard aborted before any recipient rows were written. Reset back to draft so you can re-send."
+            >
+              <RotateCcw className={`h-3.5 w-3.5 ${resetMut.isPending ? 'animate-spin' : ''}`} />
+              Reset to Draft (stuck)
+            </Button>
+          )}
         </div>
+
+        {isZombieSending && (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+            <strong>Stuck in "sending":</strong> no recipients were dispatched. The wizard call
+            to <code>send-broadcast</code> aborted before any messages went out — usually because
+            the browser tab was closed or the audience resolver failed. Click <em>Reset to Draft</em>,
+            then re-open the campaign and hit Send again.
+          </div>
+        )}
 
         <div className="mt-5 space-y-5">
           {/* KPI strip: 5 tiles */}

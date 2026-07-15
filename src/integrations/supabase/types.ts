@@ -14529,6 +14529,10 @@ export type Database = {
           read_ct: number
         }[]
       }
+      reap_stuck_sending_campaigns: {
+        Args: { p_max_age_min?: number }
+        Returns: number
+      }
       reconcile_payments_daily: { Args: never; Returns: Json }
       record_consent: {
         Args: {
@@ -14612,6 +14616,10 @@ export type Database = {
           p_target_user_id: string
         }
         Returns: Json
+      }
+      reset_campaign_to_draft: {
+        Args: { p_campaign_id: string }
+        Returns: boolean
       }
       resolve_campaign_audience: {
         Args: { p_branch_id: string; p_filter: Json }
