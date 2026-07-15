@@ -1,3 +1,11 @@
+// v6.5.0 — Delivery callback hardening: update communication_logs directly
+//          from Meta statuses after recording the delivery event. The RPC path
+//          is best-effort; direct patch guarantees Communication Hub mirrors
+//          whatsapp_messages for 131049/failed callbacks.
+// v6.4.0 — Delivery callback race fix: resolve dispatcher log by
+//          whatsapp_messages.media_meta.source_log_id when Meta status webhooks
+//          arrive before communication_logs.provider_message_id is finalized.
+//          Also persists failure_code/failure_reason on whatsapp_messages.
 // v6.3.0 — Observability: every silent sendAiReply / triggerAiAutoReply early
 //          return (skipReason, send-lock-held, missing integration, missing
 //          credentials) now writes to error_logs so we can audit why the AI
@@ -368,10 +376,23 @@ async function processStatusUpdates(value: any, branchId: string | null) {
       ? `${status.errors[0]?.code ?? ''}: ${status.errors[0]?.title ?? status.errors[0]?.message ?? ''}`.trim()
       : null;
 
+    const failureCode = Array.isArray(status.errors) && status.errors.length
+      ? String(status.errors[0]?.code ?? status.errors[0]?.error_code ?? '') || null
+      : null;
+
     // 1. WhatsApp inbox row
+    const messagePatch: Record<string, unknown> = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (newStatus === "failed") {
+      messagePatch.failed_at = new Date().toISOString();
+      messagePatch.failure_code = failureCode;
+      messagePatch.failure_reason = errMsg;
+    }
     let updateQuery = supabase
       .from("whatsapp_messages")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update(messagePatch)
       .eq("whatsapp_message_id", status.id);
     if (branchId) updateQuery = updateQuery.eq("branch_id", branchId);
     const { error } = await updateQuery;
@@ -381,11 +402,17 @@ async function processStatusUpdates(value: any, branchId: string | null) {
     //    record_delivery_event SSOT so the Live Feed rail advances
     //    Queued → Sent → Delivered → Read for WA messages.
     try {
-      const { data: log } = await supabase
-        .from("communication_logs")
-        .select("id")
-        .eq("provider_message_id", status.id)
+      const { data: waMessage } = await supabase
+        .from("whatsapp_messages")
+        .select("media_meta")
+        .eq("whatsapp_message_id", status.id)
         .maybeSingle();
+      const sourceLogId = (waMessage?.media_meta as any)?.source_log_id ?? null;
+
+      const { data: log } = sourceLogId
+        ? await supabase.from("communication_logs").select("id, delivery_metadata").eq("id", sourceLogId).maybeSingle()
+        : await supabase.from("communication_logs").select("id, delivery_metadata").eq("provider_message_id", status.id).maybeSingle();
+
       if (log?.id) {
         const mapped =
           newStatus === "delivered" ? "delivered" :
@@ -401,6 +428,28 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             p_error: mapped === "failed" ? errMsg : null,
             p_metadata: { wa_status: newStatus, raw: status },
           });
+
+          const logPatch: Record<string, unknown> = {
+            delivery_status: mapped,
+            status: mapped,
+            provider_message_id: status.id,
+            delivery_metadata: {
+              ...(((log as any).delivery_metadata as Record<string, unknown> | null) ?? {}),
+              wa_status: newStatus,
+              last_event_status: mapped,
+              last_event_at: new Date().toISOString(),
+              raw_status: status,
+            },
+          };
+          if (mapped === "failed") {
+            logPatch.error_message = errMsg;
+            logPatch.failed_at = new Date().toISOString();
+          } else if (mapped === "delivered") {
+            logPatch.delivered_at = new Date().toISOString();
+          } else if (mapped === "read") {
+            logPatch.read_at = new Date().toISOString();
+          }
+          await supabase.from("communication_logs").update(logPatch).eq("id", log.id);
         }
       }
     } catch (e) {
