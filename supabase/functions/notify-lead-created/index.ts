@@ -437,7 +437,7 @@ Deno.serve(async (req) => {
 
       if (mgrIds.length) {
         const { data: profiles } = await supabase
-          .from("profiles").select("id, phone, email").in("id", mgrIds);
+          .from("profiles").select("id, full_name, phone, email").in("id", mgrIds);
         for (const profile of profiles || []) {
           await sendTeamBundle(
             profile,
