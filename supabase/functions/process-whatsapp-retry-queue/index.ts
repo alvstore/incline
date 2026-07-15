@@ -63,6 +63,11 @@ Deno.serve(async (req) => {
       }
 
       const errMsg = dispatch.error.message ?? String(dispatch.error);
+      // Terminal Meta error codes — never retry. The error strings vary but
+      // dispatcher / send-whatsapp surface the numeric code in the message.
+      const TERMINAL_META_CODES = [131049, 131026, 131047, 132000, 132001, 132015, 132016, 132018];
+      const isTerminal = TERMINAL_META_CODES.some((code) => errMsg.includes(String(code)));
+
 
       if (isLast) {
         await supabase
