@@ -53,7 +53,12 @@ export function CampaignsPanel() {
     queryKey: ['campaigns', branchId],
     queryFn: () => listCampaigns(branchId!),
     enabled: !!branchId,
-    refetchInterval: 30000,
+    // Poll fast while anything is actively sending so the card reflects
+    // send-broadcast's live progress writes; slow poll otherwise.
+    refetchInterval: (q) => {
+      const rows = (q.state.data || []) as Campaign[];
+      return rows.some((c) => c.status === 'sending') ? 3000 : 30000;
+    },
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
