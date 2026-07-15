@@ -29,8 +29,6 @@ import {
   sendCampaignNow,
   upsertDraftCampaignForTemplate,
 } from '@/services/campaignService';
-import { TelinfyBulkExportButton } from './TelinfyBulkExport';
-import type { ResolvedRecipient } from '@/services/campaignService';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
