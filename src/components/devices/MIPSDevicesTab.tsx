@@ -193,6 +193,10 @@ interface MIPSDevicesTabProps {
 }
 
 const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
+  const qc = useQueryClient();
+  const [registeringSN, setRegisteringSN] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
   const { data: localDevices } = useQuery({
     queryKey: ["access-devices-sns", branchId],
     queryFn: async () => {
@@ -222,12 +226,10 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
   });
 
 
-  const filteredDevices = branchId && localDevices
-    ? devices.filter((d) => {
-        const localSNs = new Set(localDevices.map((ld: any) => ld.serial_number?.toUpperCase()));
-        return localSNs.has(d.deviceKey?.toUpperCase());
-      })
-    : devices;
+  // Show ALL MIPS-server devices — do not hide unmapped hardware. Instead,
+  // surface an inline "Register in CRM" action so operators can adopt new
+  // devices in one click.
+  const filteredDevices = devices;
 
   const snToBranch = new Map<string, string>();
   const snToPublicIp = new Map<string, string>();
@@ -247,6 +249,57 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
     }
   }
 
+  const registerDevice = async (device: MIPSDevice) => {
+    if (!branchId) {
+      toast.error("Select a branch first to register this device");
+      return;
+    }
+    setRegisteringSN(device.deviceKey);
+    try {
+      const { error } = await supabase.from("access_devices").insert({
+        branch_id: branchId,
+        serial_number: device.deviceKey,
+        device_name: device.name || device.deviceKey,
+        ip_address: device.ip || "0.0.0.0",
+        mips_device_id: device.id,
+        is_online: device.onlineFlag === 1 || device.status === 1,
+        door_role: "both",
+      });
+      if (error) throw error;
+      toast.success(`${device.name || device.deviceKey} registered`);
+      qc.invalidateQueries({ queryKey: ["access-devices-sns"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to register device");
+    } finally {
+      setRegisteringSN(null);
+    }
+  };
+
+  const importAll = async () => {
+    if (!branchId) {
+      toast.error("Select a branch first");
+      return;
+    }
+    setImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mips-import-devices", {
+        body: { branch_id: branchId },
+      });
+      if (error) throw error;
+      toast.success(`Imported ${data?.imported ?? 0} device(s), ${data?.updated ?? 0} updated`);
+      qc.invalidateQueries({ queryKey: ["access-devices-sns"] });
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const unmappedCount = filteredDevices.filter(
+    (d) => !snToLocal.has(d.deviceKey?.toUpperCase())
+  ).length;
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -259,7 +312,7 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
     return (
       <div className="flex flex-col items-center py-12 text-muted-foreground">
         <Monitor className="h-12 w-12 mb-3 opacity-30" />
-        <p className="text-sm">{branchId ? "No devices found for this branch" : "No devices found on MIPS server"}</p>
+        <p className="text-sm">No devices found on MIPS server</p>
         <p className="text-xs mt-1">Make sure the MIPS server is running and devices are connected</p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
           <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
@@ -270,22 +323,40 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {filteredDevices.map((device) => {
-        const local = snToLocal.get(device.deviceKey?.toUpperCase());
-        return (
-          <MIPSDeviceCard
-            key={device.id || device.deviceKey}
-            device={device}
-            branchId={branchId}
-            branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
-            publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
-            localDeviceId={local?.id}
-            doorRole={local?.door_role}
-          />
-        );
-      })}
+    <div className="space-y-4">
+      {branchId && unmappedCount > 0 && (
+        <Card className="rounded-2xl border-warning/30 bg-warning/5">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="text-sm">
+              <span className="font-semibold text-warning">{unmappedCount}</span>
+              <span className="text-muted-foreground"> device(s) on the MIPS server aren't registered in the CRM yet.</span>
+            </div>
+            <Button size="sm" onClick={importAll} disabled={importing}>
+              <Download className={`h-3.5 w-3.5 mr-1.5 ${importing ? "animate-pulse" : ""}`} />
+              {importing ? "Importing..." : `Import all ${unmappedCount}`}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
+      <div className="grid gap-4 md:grid-cols-2">
+        {filteredDevices.map((device) => {
+          const local = snToLocal.get(device.deviceKey?.toUpperCase());
+          return (
+            <MIPSDeviceCard
+              key={device.id || device.deviceKey}
+              device={device}
+              branchId={branchId}
+              branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
+              publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
+              localDeviceId={local?.id}
+              doorRole={local?.door_role}
+              onRegister={branchId ? registerDevice : undefined}
+              registering={registeringSN === device.deviceKey}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 };
