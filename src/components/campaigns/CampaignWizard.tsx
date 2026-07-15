@@ -97,12 +97,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // We left-join `templates.id` by meta_template_name so the send pipeline still
   // receives a valid `template_id` UUID.
   const { data: approvedTemplates = [], refetch: refetchTemplates } = useQuery({
-    queryKey: ['approved-whatsapp-templates', branchId],
+    queryKey: ['approved-whatsapp-templates', branchId, trigger],
     queryFn: async () => {
+      // For scheduled/automated triggers we ALSO surface PENDING templates so
+      // the user can queue a campaign that will fire the moment Meta approves.
+      // send_now still enforces APPROVED-only (Meta rejects PENDING at runtime).
+      const allowedStatuses = trigger === 'send_now'
+        ? ['APPROVED']
+        : ['APPROVED', 'PENDING'];
       let q = supabase
         .from('whatsapp_templates')
         .select('id, name, language, category, components, branch_id, status')
-        .eq('status', 'APPROVED');
+        .in('status', allowedStatuses);
       if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
       const { data: meta, error } = await q.order('name');
       if (error) throw error;
@@ -111,7 +117,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       const { data: locals } = names.length
         ? await supabase
             .from('templates')
-            .select('id, meta_template_name, header_type, header_media_url')
+            .select('id, meta_template_name, header_type, header_media_url, evergreen_kind')
             .in('meta_template_name', names)
         : { data: [] as any[] };
 
@@ -130,8 +136,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           category: m.category,
           header_type: local?.header_type || headerFmt,
           content: bodyText,
-          meta_template_status: 'APPROVED' as const,
+          meta_template_status: (m.status || 'APPROVED') as 'APPROVED' | 'PENDING',
           meta_template_name: m.name,
+          evergreen_kind: local?.evergreen_kind || null,
         };
       });
     },
