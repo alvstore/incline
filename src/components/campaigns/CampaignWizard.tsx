@@ -426,6 +426,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
+    setDraftCampaignId(null); setShowAllTemplates(false);
     setEvergreenAppliedFor(null); setEvergreenPickedName(null);
   };
 
