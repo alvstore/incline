@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export type CampaignChannel = 'whatsapp' | 'email' | 'sms';
-export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused';
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused' | 'pending_template_approval';
 export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 
 export type AudienceKind = 'members' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
