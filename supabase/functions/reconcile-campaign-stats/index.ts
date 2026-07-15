@@ -1,3 +1,5 @@
+// v1.1.0 — Collapse duplicate retry rows by source key and understand
+//          `:retry:<ts>` dedupe suffixes before counting delivery status.
 // v1.0.0 — Fold provider DLR outcomes back into `campaigns` counters so
 // the Communication Hub card matches what Telinfy/Meta actually delivered.
 //
@@ -61,11 +63,25 @@ Deno.serve(async (req) => {
       .like('dedupe_key', `campaign:${cid}:%`);
 
     const dlrByKey = new Map<string, any>();
-    for (const l of logs || []) dlrByKey.set(String((l as any).dedupe_key), l);
+    for (const l of logs || []) {
+      const base = String((l as any).dedupe_key || '').replace(/:retry:\d+$/, '');
+      const existing = dlrByKey.get(base);
+      if (!existing || statusRank((l as any).delivery_status) > statusRank(existing.delivery_status)) {
+        dlrByKey.set(base, l);
+      }
+    }
 
-    let sent = 0, delivered = 0, read = 0, failed = 0;
+    const recByKey = new Map<string, any>();
     for (const r of recips || []) {
       const key = `campaign:${cid}:${(r as any).source_type}:${(r as any).source_ref_id}`;
+      const existing = recByKey.get(key);
+      if (!existing || recipientRank((r as any).status) > recipientRank(existing.status)) {
+        recByKey.set(key, r);
+      }
+    }
+
+    let sent = 0, delivered = 0, read = 0, failed = 0;
+    for (const [key, r] of recByKey.entries()) {
       const dlr = dlrByKey.get(key);
       const dlrStatus = String(dlr?.delivery_status || '').toLowerCase();
       const recStatus = String((r as any).status || '').toLowerCase();
@@ -77,7 +93,7 @@ Deno.serve(async (req) => {
       if (recStatus === 'sent' || dlrStatus === 'sent' || dlrStatus === 'queued') { sent++; continue; }
     }
 
-    const total = (recips || []).length || (c as any).recipients_count || 0;
+    const total = recByKey.size || (c as any).recipients_count || 0;
 
     // Stuck-sending backfill
     const ageMin = (Date.now() - new Date((c as any).created_at).getTime()) / 60000;
@@ -127,3 +143,24 @@ Deno.serve(async (req) => {
     results,
   });
 });
+
+function statusRank(status: unknown): number {
+  switch (String(status || '').toLowerCase()) {
+    case 'read': return 5;
+    case 'delivered': return 4;
+    case 'sent': return 3;
+    case 'queued': return 2;
+    case 'failed':
+    case 'bounced': return 1;
+    default: return 0;
+  }
+}
+
+function recipientRank(status: unknown): number {
+  switch (String(status || '').toLowerCase()) {
+    case 'sent': return 3;
+    case 'failed': return 2;
+    case 'skipped': return 1;
+    default: return 0;
+  }
+}

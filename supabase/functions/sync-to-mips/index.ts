@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const PERMANENT_END = "2099-12-31 23:59:59";
+const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 
 let cachedToken: string | null = null;
@@ -410,6 +411,8 @@ Deno.serve(async (req) => {
     let tableName: string;
     let deptId = 100;
     let effectiveBranchId = branch_id;
+    let shouldRevokeInstead = false;
+    let revokeReason = "Inactive/offboarded staff must not be synced";
 
     if (person_type === "member") {
       tableName = "members";
@@ -462,13 +465,15 @@ Deno.serve(async (req) => {
       email = profile?.email || "";
       photoUrl = emp.biometric_photo_url || profile?.avatar_url || "";
       effectiveBranchId = effectiveBranchId || emp.branch_id;
+      shouldRevokeInstead = emp.is_active === false || !!emp.exit_date;
+      revokeReason = emp.exit_type ? `Staff offboarded: ${emp.exit_type}` : revokeReason;
       validTimeEnd = PERMANENT_END;
     } else if (person_type === "trainer") {
       tableName = "trainers";
       deptId = 101;
       const { data: trainer, error } = await supabase
         .from("trainers")
-        .select("id, branch_id, biometric_photo_url, is_active, user_id, mips_sync_status, mips_person_id")
+        .select("id, branch_id, biometric_photo_url, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Trainer query error: ${error.message}`);
@@ -490,6 +495,8 @@ Deno.serve(async (req) => {
       email = profile?.email || "";
       photoUrl = (trainer as any).biometric_photo_url || profile?.avatar_url || "";
       effectiveBranchId = effectiveBranchId || trainer.branch_id;
+      shouldRevokeInstead = trainer.is_active === false || !!(trainer as any).exit_date;
+      revokeReason = (trainer as any).exit_type ? `Trainer offboarded: ${(trainer as any).exit_type}` : revokeReason;
       validTimeEnd = PERMANENT_END;
 
       // Generate trainer code: TRN-{first4chars} (consistent with UI)
@@ -507,6 +514,37 @@ Deno.serve(async (req) => {
     // Step 2: Check if person already exists in MIPS
     const existing = await lookupPerson(baseUrl, token, mipsPersonSn);
     console.log(`MIPS lookup: ${existing ? `found personId=${existing.personId}` : "not found"}`);
+
+    if (shouldRevokeInstead && (person_type === "employee" || person_type === "trainer")) {
+      if (existing) {
+        const updatedPerson = { ...existing, validTimeEnd: REVOKED_DATE, remark: revokeReason };
+        const putRes = await fetch(`${baseUrl}/personInfo/person`, {
+          method: "PUT",
+          headers: authHeaders(token),
+          body: JSON.stringify(updatedPerson),
+        });
+        const putJson = await putRes.json().catch(() => ({}));
+        const ok = putJson.code === 200 || putJson.code === 0;
+        if (!ok) throw new Error(`MIPS revoke failed: ${putJson.msg || JSON.stringify(putJson)}`);
+        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId); } catch (_) { /* non-fatal */ }
+      }
+
+      await supabase.from(tableName).update({
+        mips_sync_status: "revoked",
+        mips_person_sn: mipsPersonSn,
+        ...(existing?.personId ? { mips_person_id: String(existing.personId) } : {}),
+      }).eq("id", person_id);
+
+      return new Response(JSON.stringify({
+        success: true,
+        action: "revoked_instead_of_synced",
+        reason: revokeReason,
+        mips_person_id: existing?.personId ?? null,
+        person: { name, personSn: mipsPersonSn, originalCode: personNo },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Step 3: Create or update person
     const personPayload: Record<string, unknown> = {

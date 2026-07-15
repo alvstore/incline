@@ -131,7 +131,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     queryFn: async () => {
       const { data } = await supabase
         .from('communication_logs')
-        .select('dedupe_key, delivery_status, status, error_code, error_message, delivered_at, read_at, created_at')
+        .select('dedupe_key, delivery_status, status, error_message, delivered_at, read_at, created_at')
         .like('dedupe_key', `campaign:${campaign!.id}:%`)
         .order('created_at', { ascending: false })
         .limit(5000);
@@ -149,10 +149,19 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         byKey.set(base, l);
       }
     }
-    return (recipients as any[]).map((r) => {
+    const byRecipient = new Map<string, any>();
+    for (const r of recipients as any[]) {
+      const key = `${r.source_type}:${r.source_ref_id}`;
+      const existing = byRecipient.get(key);
+      if (!existing || recipientRank(r.status) > recipientRank(existing.status)) {
+        byRecipient.set(key, r);
+      }
+    }
+
+    return Array.from(byRecipient.values()).map((r) => {
       const key = `campaign:${campaign!.id}:${r.source_type}:${r.source_ref_id}`;
       const dlr = byKey.get(key);
-      const errRaw = r.error || dlr?.error_message || dlr?.error_code || null;
+      const errRaw = r.error || dlr?.error_message || null;
       const label = errRaw ? parseCommError(errRaw)?.short || errRaw : null;
       const base = {
         id: r.id,
@@ -174,6 +183,15 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
       return { ...base, final: finalOf(base) };
     });
   }, [recipients, logs, campaign?.id]);
+
+  const recipientRank = (status: string | null | undefined) => {
+    switch (String(status || '').toLowerCase()) {
+      case 'sent': return 3;
+      case 'failed': return 2;
+      case 'skipped': return 1;
+      default: return 0;
+    }
+  };
 
   const counts = useMemo(() => {
     const c = { total: merged.length, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0, skipped: 0 };
