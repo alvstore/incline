@@ -434,6 +434,51 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     } finally { setSubmittingMeta(false); }
   };
 
+  const handleSendTest = async () => {
+    const target = testRecipient.trim();
+    if (!target) { toast.error(channel === 'email' ? 'Enter a test email' : 'Enter a test phone (+91…)'); return; }
+    if (!message.trim()) { toast.error('Draft a message first'); return; }
+    if (channel === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) { toast.error('Invalid email'); return; }
+    if (channel !== 'email' && !/^\+?\d{7,15}$/.test(target.replace(/\s+/g, ''))) { toast.error('Invalid phone (use +91XXXXXXXXXX)'); return; }
+
+    setSendingTest(true);
+    try {
+      const templateId =
+        channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:')
+          ? selectedTemplateId
+          : null;
+      const testName = 'Test User';
+      const recipient = {
+        source_type: 'test',
+        source_ref_id: 'test',
+        full_name: testName,
+        first_name: testName.split(/\s+/)[0],
+        phone: channel === 'email' ? null : (target.startsWith('+') ? target : `+${target}`),
+        email: channel === 'email' ? target : null,
+      };
+      const { data, error } = await supabase.functions.invoke('send-broadcast', {
+        body: {
+          channel,
+          message: buildFinalMessage(),
+          subject: channel === 'email' ? subject.trim() || 'Test message' : undefined,
+          branch_id: branchId,
+          recipients: [recipient],
+          template_id: templateId,
+          attachment_url: attachment?.url ?? undefined,
+          attachment_kind: attachment?.kind ?? undefined,
+          attachment_filename: attachment?.filename ?? undefined,
+          attachment: attachment ? { url: attachment.url, kind: attachment.kind, filename: attachment.filename } : undefined,
+        },
+      });
+      if (error) throw error;
+      const r = data as any;
+      if (r?.sent > 0) toast.success(`Test sent to ${target}`);
+      else toast.error(`Test failed: ${r?.recipients?.[0]?.error || r?.reason || 'unknown'}`, { duration: 9000 });
+    } catch (e: any) {
+      toast.error(e?.message || 'Test send failed');
+    } finally { setSendingTest(false); }
+  };
+
   const handleAiDraft = async () => {
     if (!aiPrompt.trim()) { toast.error('Describe the campaign first'); return; }
     setAiLoading(true);
