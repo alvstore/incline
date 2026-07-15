@@ -147,7 +147,9 @@ export interface Campaign {
   attachment_filename?: string | null;
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
+  fallback_policy?: { on_pacing?: boolean } | null;
 }
+
 
 /**
  * Resolves the actual member IDs that match the given audience filter.
