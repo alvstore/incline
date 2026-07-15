@@ -1,55 +1,66 @@
+# Plan — Align RCS/Telinfy, add bulk export, mitigate WA 131049
 
-## Audit: why +91 98876 01200 (Rajat) failed
+## Context found in audit
 
-Rajat is a **staff/admin recipient** of the internal new-lead alert (not the lead itself). Three failures in `communication_logs` all show:
+- **Dispatcher** (`dispatch-communication` v1.17.0) already routes `channel:'rcs'` → `send-rcs` (Telinfy). Telinfy RCS is template-only; freeform falls back to SMS.
+- **RCS Hub** exists at `Settings → RCS Hub` (Templates / Test Send / Wallet / Reports / Webhooks) — but the **Campaign Manager wizard has no RCS option**. `CampaignChannel = 'whatsapp' | 'email' | 'sms'` in `src/services/campaignService.ts`. That's the root of the "how to send RCS from campaigns" gap.
+- **Telinfy bulk-send format** (from `SampleData.xlsx`): columns `CountryCode | MSISDN | <var1> | <var2> | …` — first row is the header, MSISDN is digits only (no `+`), CountryCode separate (91). Extra columns are per-template `lcustomParam` variables (named exactly as in the Telinfy template, e.g. `name`, `amount`, `due_date`, and for the INCLINE template `CUSTOM_PARAM1`).
+- **WA 131049** = Meta's per-user pacing throttle on marketing templates when quality/engagement is low. Not a code bug — Meta silently drops the send. Only mitigations are behavioural: use a warmer/opted-in audience, throttle send rate, prefer utility/authentication categories, rotate templates, and (crucially) not resend the same paced template to the same number.
 
-```
-error: 132018: template_param_empty:staff_name,lead_name
-       (blocked pre-flight; provide full_name or use a no-name template)
-template: internal_lead_alert
-category: new_lead
-```
+## Changes
 
-### Root cause
+### 1. Add RCS as a first-class campaign channel
 
-Meta template `internal_lead_alert` body:
-```
-Hi {{1}}, a new lead has been generated. Name: {{2}}, Interest: {{3}}, Source: {{4}}.
-```
-Local `whatsapp_templates.variables` maps positional slots → `[staff_name, lead_name, plan_interest, lead_source]`.
+- `src/services/campaignService.ts` → `CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'rcs'`.
+- `src/components/campaigns/CampaignWizard.tsx`:
+  - Add RCS tile to the channel picker (icon `Radio`, purple).
+  - When `channel === 'rcs'`:
+    - Show an **RCS template picker** sourced from `rcs_templates` (branch + global) — reusing the same query pattern as WhatsApp templates. Template selection is **mandatory** (Telinfy RCS has no freeform).
+    - Render a **variable-mapping block**: for each `{{param}}` / `lcustomParam` key on the picked template, allow choosing a CRM field (`first_name`, `full_name`, `email`, static value, etc.) — mirrors the WhatsApp variable panel already in the wizard, so users don't need to guess `{{1}}` vs `{{CUSTOM_PARAM1}}` again.
+    - Live preview showing the resolved message for the first audience member (fixes the recurring "what am I actually sending" confusion the earlier turns were about).
+    - Test-send button already exists — route it via `dispatchCommunication({ channel:'rcs', template_id, payload:{ variables } })`.
+  - Hide the freeform body editor when channel is RCS (or show it read-only as "SMS fallback text").
+- `send-broadcast` edge fn: pass `channel:'rcs'` and the resolved `variables` map through to the dispatcher (dispatcher already handles the Telinfy call and SMS fallback for `status:'unsupported'`).
 
-In `supabase/functions/notify-lead-created/index.ts`:
-- The `vars` bag built at line 155 contains `lead_name`, `plan_interest`, `lead_source` — **but never `staff_name`**.
-- `sendTeamBundle` fetches admin/manager profiles with only `id, phone, email` (no `full_name`), then dispatches the same shared `vars` for every recipient.
-- Dispatcher pre-flight (`dispatch-communication/index.ts:727`) sees `staff_name` empty → hard-fails with 132018 before hitting Meta.
-- Retry queue re-runs the same payload → same failure. That is exactly the pattern for Rajat's row (`dedupe_key: retry:...:2`).
+### 2. Bulk export "Telinfy Emergency Send" CSV/XLSX
 
-`lead_name` shows up in the "missing" list on some rows because those particular leads had no `full_name` captured (self-onboard first step). The `|| "Guest"` default is fine going forward; the real gap is `staff_name`.
+New button on the Campaigns page toolbar and inside the wizard's Review step: **"Download Telinfy bulk file"**.
 
-### Fix
+- Component: `src/components/campaigns/TelinfyBulkExport.tsx`.
+- Input: the resolved audience (`resolvedMemberIds` already computed in the wizard) + selected template's variable keys.
+- Output: an `.xlsx` matching the Telinfy sample exactly:
+  - Row 1 header: `CountryCode`, `MSISDN`, then one column per template variable (using the template's actual param names, e.g. `CUSTOM_PARAM1` for the INCLINE template).
+  - Row N: `91`, digits-only phone (strip `+91`), then resolved variable values per contact.
+- Uses `xlsx`/`SheetJS` (already in the project via existing CSV utilities) to write the workbook client-side; falls back to CSV if xlsx bundle not desired.
+- Works for **any** channel selection but is labelled "For Telinfy manual upload (emergency)" so operators know it's a fallback path.
 
-**1. `supabase/functions/notify-lead-created/index.ts`**
-   - Include `full_name` in the `profiles` selects for admins and managers.
-   - Change `sendTeamBundle` to accept the recipient profile's name and pass a **per-recipient variables override** to `dispatch`, merging `{ staff_name: profile.full_name || 'Team' }` on top of the shared `vars`.
-   - Update the `dispatch()` helper to accept an optional `varsOverride` and merge it into the payload's `variables`.
-   - Keep `lead_name: lead.full_name || 'Guest'` default (already correct).
+### 3. WhatsApp 131049 pacing — product-level mitigations
 
-**2. `supabase/functions/dispatch-communication/index.ts` (defence-in-depth)**
-   - In the pre-flight `missingRequired` check, when `input.category === 'new_lead'`, auto-fill any missing `staff_name`/`team_member_name`/`recipient_name` key with `'Team'` before evaluating (so a future caller that forgets can't block internal ops). Still enforce for genuinely lead-facing MARKETING sends.
+Not a fix in code (Meta pacing is opaque), but the app should stop making it worse and give the operator visibility:
 
-**3. Clear the poisoned retry rows**
-   - Mark the three still-`failed` new_lead logs for +91 98876 01200 as `suppressed` (with metadata note `manual_backfill: pre_flight_bug_fixed`) so the retry queue doesn't keep churning on the old payloads. New lead events after deploy will use the fixed path.
+- **Retry suppression**: in `process-whatsapp-retry-queue`, treat `131049` as **terminal** (do NOT retry). Currently it retries, which further tanks template quality. Add `131049` to the terminal-error set alongside `131026`, `131047`, `132000`, `132015`, `132016`.
+- **Per-recipient cooldown**: before enqueuing a marketing send, check `communication_logs` for a `131049` failure to the same `recipient + template_id` in the last 24 h → skip with `delivery_status='suppressed'`, reason `pacing_cooldown`.
+- **Wizard warning banner**: on the Review step, if the selected template has ≥3 `131049` events in the last 7 days (quick count query on `communication_logs`), show an amber banner: *"Meta is pacing this template. Consider rotating templates, warming the audience, or using RCS/SMS."* with a one-click "Switch to RCS" if an equivalent RCS template exists.
+- **Docs**: add a short section to `docs/communication-dispatcher.md` explaining 131049 and the mitigations above so the team stops treating it as a bug.
 
-### Files touched
-- `supabase/functions/notify-lead-created/index.ts` — vars override + fetch `full_name`
-- `supabase/functions/dispatch-communication/index.ts` — `new_lead` fallback for `staff_name`
-- One-shot SQL update on `communication_logs` for the 3 stuck rows
+### 4. Variable-alignment recap (from earlier turns, now closed)
 
-### Not changed
-- Meta template stays as-is (already APPROVED with 4 vars).
-- No schema changes; no client changes.
-- Retry queue logic unchanged — the fix removes the source of the failure.
+Already fixed in prior edits — restating so this plan is self-contained:
+- CRM template `variables` array is derived from the highest `{{N}}` in the body, and the dispatcher's `orderedTemplateKeys` maps `first_name → {{1}}` without duplicating parameters.
+- The new RCS variable-mapping UI extends the same pattern to `lcustomParam` keys so both Meta WhatsApp templates and Telinfy RCS templates behave identically in the wizard.
 
-### Verify after deploy
-- Create a test lead → check `communication_logs` for a `sent` row with `delivery_metadata.template=internal_lead_alert` to Rajat's number, no `pre_flight_block`.
-- Confirm Meta message renders `Hi Rajat, a new lead has been generated. Name: <lead>, Interest: <plan>, Source: <src>.`
+## Files touched
+
+- `src/services/campaignService.ts` — add `'rcs'` to `CampaignChannel`.
+- `src/components/campaigns/CampaignWizard.tsx` — RCS tile, RCS template picker, variable mapper, preview, hide freeform body.
+- `src/components/campaigns/TelinfyBulkExport.tsx` *(new)* — xlsx export in Telinfy format.
+- `src/components/campaigns/RcsTemplatePicker.tsx` *(new)* — reads `rcs_templates`, exposes param keys.
+- `supabase/functions/send-broadcast/index.ts` — accept `channel:'rcs'` + `variables` map.
+- `supabase/functions/process-whatsapp-retry-queue/index.ts` — add `131049` to terminal set.
+- `supabase/functions/dispatch-communication/index.ts` — pre-send 24 h pacing cooldown for `131049`.
+- `docs/communication-dispatcher.md` — 131049 mitigation notes.
+
+## Out of scope
+
+- Changing Meta template categories or resubmitting templates (requires Meta approval, not a code change).
+- Auto-syncing Telinfy template param names into the CRM — currently Telinfy templates are already synced by `rcs-templates-sync`; we just surface their param keys in the wizard.
