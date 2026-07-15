@@ -208,14 +208,33 @@ export function CampaignsPanel() {
                     Sends {formatDistanceToNow(new Date(c.scheduled_at!), { addSuffix: true })}
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-2 text-center pt-3 border-t">
+                {inFlight && c.recipients_count > 0 && (() => {
+                  const done = (c.success_count || 0) + (c.failure_count || 0);
+                  const pct = Math.min(100, Math.round((done / Math.max(1, c.recipients_count)) * 100));
+                  return (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                        <span>Sending in background</span>
+                        <span>{done}/{c.recipients_count} · {pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className="grid grid-cols-4 gap-2 text-center pt-3 border-t">
                   <div>
                     <p className="text-lg font-bold text-foreground">{c.recipients_count}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Sent to</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">Total</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-success">{c.success_count}</p>
+                    <p className="text-lg font-bold text-success">{c.delivered_count ?? c.success_count}</p>
                     <p className="text-[10px] text-muted-foreground uppercase">Delivered</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-primary">{c.read_count ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">Read</p>
                   </div>
                   <div>
                     <p className="text-lg font-bold text-destructive">{c.failure_count}</p>
