@@ -85,6 +85,30 @@ Deno.serve(async (req) => {
       console.warn("[send-broadcast] do-not-contact load failed (continuing):", e);
     }
 
+    // Explicit-audience guard: if the caller passed `recipients` or
+    // `member_ids` (even as an empty array), that IS the audience. Do NOT
+    // silently fall through to "broadcast to every member in the branch" —
+    // that behaviour previously mis-sent to unrelated members and left the
+    // originating campaign stuck at status='sending' with 0 recipients.
+    const callerProvidedRecipients = Array.isArray(recipients);
+    const callerProvidedMemberIds = Array.isArray(member_ids);
+    const explicitAudienceEmpty =
+      (callerProvidedRecipients && recipients.length === 0) &&
+      (!callerProvidedMemberIds || member_ids.length === 0);
+    if (explicitAudienceEmpty) {
+      if (campaign_id) {
+        await adminClient.from('campaigns').update({
+          status: 'failed',
+          recipients_count: 0,
+          success_count: 0,
+          failure_count: 0,
+          last_run_error: 'audience_empty',
+          sent_at: new Date().toISOString(),
+        }).eq('id', campaign_id);
+      }
+      return json({ success: true, sent: 0, failed: 0, total: 0, reason: 'audience_empty' });
+    }
+
     // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
     if (Array.isArray(recipients) && recipients.length > 0) {
       let sent = 0, failed = 0, skipped_dnc = 0;
