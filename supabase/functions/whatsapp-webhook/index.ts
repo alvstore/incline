@@ -1,3 +1,7 @@
+// v6.5.0 — Delivery callback hardening: update communication_logs directly
+//          from Meta statuses after recording the delivery event. The RPC path
+//          is best-effort; direct patch guarantees Communication Hub mirrors
+//          whatsapp_messages for 131049/failed callbacks.
 // v6.4.0 — Delivery callback race fix: resolve dispatcher log by
 //          whatsapp_messages.media_meta.source_log_id when Meta status webhooks
 //          arrive before communication_logs.provider_message_id is finalized.
@@ -424,6 +428,27 @@ async function processStatusUpdates(value: any, branchId: string | null) {
             p_error: mapped === "failed" ? errMsg : null,
             p_metadata: { wa_status: newStatus, raw: status },
           });
+
+          const logPatch: Record<string, unknown> = {
+            delivery_status: mapped,
+            status: mapped,
+            provider_message_id: status.id,
+            delivery_metadata: {
+              wa_status: newStatus,
+              last_event_status: mapped,
+              last_event_at: new Date().toISOString(),
+              raw_status: status,
+            },
+          };
+          if (mapped === "failed") {
+            logPatch.error_message = errMsg;
+            logPatch.failed_at = new Date().toISOString();
+          } else if (mapped === "delivered") {
+            logPatch.delivered_at = new Date().toISOString();
+          } else if (mapped === "read") {
+            logPatch.read_at = new Date().toISOString();
+          }
+          await supabase.from("communication_logs").update(logPatch).eq("id", log.id);
         }
       }
     } catch (e) {
