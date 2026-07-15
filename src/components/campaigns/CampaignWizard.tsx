@@ -1220,12 +1220,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                     try {
                       const { resolveCampaignAudience } = await import('@/services/campaignService');
                       const recips = await resolveCampaignAudience(branchId, filter);
-                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name'];
+                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name', 'last_name'];
                       const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
                       const csv = buildTelinfyCsv({
                         campaignName: name || 'campaign',
                         recipients: recips as any,
-                        variableKeys: keys.length ? keys : ['first_name'],
+                        variableKeys: keys.length ? keys : ['first_name', 'last_name'],
                         resolveVar: channel === 'rcs' && selectedRcsTemplate
                           ? (r: any, k: string) => {
                               const mapped = rcsVarMap[k] || '';

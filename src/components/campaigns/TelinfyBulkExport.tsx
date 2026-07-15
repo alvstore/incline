@@ -22,12 +22,23 @@ export interface TelinfyBulkExportProps {
   resolveVar?: (r: ResolvedRecipient, key: string, index: number) => string;
 }
 
+function splitName(full?: string | null): { first: string; last: string } {
+  const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: '', last: '' };
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
+}
+
 function defaultResolve(r: ResolvedRecipient, key: string, index: number): string {
-  const first = (r.full_name || '').trim().split(/\s+/)[0] || '';
-  if (index === 0) return first || 'there';
-  if (/name|first/i.test(key)) return first || 'there';
-  if (/full/i.test(key)) return r.full_name || '';
-  if (/email/i.test(key)) return r.email || '';
+  // Tolerate alt shapes coming from RPCs / CSV imports (name, first_name, last_name).
+  const anyR = r as any;
+  const fullRaw = r.full_name || anyR.name || [anyR.first_name, anyR.last_name].filter(Boolean).join(' ') || '';
+  const { first, last } = splitName(fullRaw);
+  const k = key.toLowerCase();
+  if (k === 'last_name' || /last|surname|family/i.test(k)) return last || '';
+  if (k === 'full_name' || /full/i.test(k)) return fullRaw || first || 'there';
+  if (k === 'email' || /email|mail/i.test(k)) return r.email || '';
+  if (k === 'first_name' || /first|name/i.test(k) || index === 0) return first || 'there';
   return '';
 }
 
