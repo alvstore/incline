@@ -986,6 +986,76 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               </div>
             </div>
 
+            {/* ─── Variable Legend + Live Preview + Send Test ───────────────── */}
+            {message.trim().length > 0 && (() => {
+              const vars = extractTemplateVars(buildFinalMessage());
+              const anyPositional = vars.some((v) => v.positional);
+              const previewText = renderPreview(buildFinalMessage());
+              return (
+                <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs uppercase tracking-wider text-primary font-semibold">Preview &amp; Test</Label>
+                    {anyPositional && (
+                      <span className="text-[10px] text-primary/80 font-mono">Meta positional variables detected</span>
+                    )}
+                  </div>
+
+                  {vars.length > 0 && (
+                    <div className="rounded-xl bg-card border p-2.5 space-y-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Variables in this message</p>
+                      {vars.map((v) => (
+                        <div key={v.token} className="flex items-center gap-2 text-[12px]">
+                          <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0">{v.token}</code>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="text-foreground truncate"><b>{v.label}</b></span>
+                          <span className="text-muted-foreground text-[11px] truncate">e.g. "{v.sample}"</span>
+                        </div>
+                      ))}
+                      {anyPositional && (
+                        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Our sender maps them to the same fields as the named tokens above — nothing else to configure.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-card border p-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">What recipients will see</p>
+                    <pre className="text-xs whitespace-pre-wrap text-foreground font-sans leading-relaxed">{previewText}</pre>
+                    {attachment && (
+                      <p className="text-[10px] text-muted-foreground mt-1.5">+ attachment: {attachment.filename} ({attachment.kind})</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="rounded-xl h-9 text-sm flex-1"
+                      placeholder={channel === 'email' ? 'you@example.com' : '+91XXXXXXXXXX'}
+                      value={testRecipient}
+                      onChange={(e) => setTestRecipient(e.target.value)}
+                      disabled={sendingTest}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSendTest}
+                      disabled={sendingTest || !testRecipient.trim()}
+                      className="rounded-full h-9 px-4 gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
+                      title="Send this exact message to yourself using the same pipeline as real campaigns"
+                    >
+                      {sendingTest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Send Test
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground -mt-1">
+                    Uses the exact same delivery path as a real send (template, attachments, variables). Test-Sends are not logged to campaign analytics.
+                  </p>
+                </div>
+              );
+            })()}
+
+
+
             {(channel === 'whatsapp' || channel === 'email') && (
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block flex items-center gap-1.5">
