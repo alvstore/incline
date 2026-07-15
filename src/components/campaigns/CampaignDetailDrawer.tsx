@@ -100,6 +100,15 @@ const channelIcon = (channel: string) => {
   return MessageSquare;
 };
 
+const recipientRank = (status: string | null | undefined) => {
+  switch (String(status || '').toLowerCase()) {
+    case 'sent': return 3;
+    case 'failed': return 2;
+    case 'skipped': return 1;
+    default: return 0;
+  }
+};
+
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'delivered' | 'failed' | 'pending'>('all');
@@ -183,15 +192,6 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
       return { ...base, final: finalOf(base) };
     });
   }, [recipients, logs, campaign?.id]);
-
-  const recipientRank = (status: string | null | undefined) => {
-    switch (String(status || '').toLowerCase()) {
-      case 'sent': return 3;
-      case 'failed': return 2;
-      case 'skipped': return 1;
-      default: return 0;
-    }
-  };
 
   const counts = useMemo(() => {
     const c = { total: merged.length, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0, skipped: 0 };

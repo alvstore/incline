@@ -1110,7 +1110,7 @@ Deno.serve(async (req) => {
           // then convert newlines to <br> so they render correctly inside the
           // branded shell. HTML markup already in the body is preserved.
           const rawBody = String(input.payload.body || '');
-          const emailHtml = (/\s*(br|p|div|table|html)\b/i.test(rawBody)
+          const emailHtml = (/<\s*(br|p|div|table|html)\b/i.test(rawBody)
             ? rawBody.replace(/\\r\\n|\\n/g, '<br>')
             : rawBody.replace(/\\r\\n|\\n/g, '\n').replace(/\r?\n/g, '<br>')) + attachmentHtml;
           const r = await supabase.functions.invoke('send-email', {
