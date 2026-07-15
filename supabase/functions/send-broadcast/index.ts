@@ -530,8 +530,12 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-function json(payload: unknown, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+// Detect Meta pacing / low-quality throttle codes in an error string.
+// 131049 = "not delivered to maintain healthy ecosystem engagement"
+// 130472 = "user is in an experiment"
+function extractPacingCode(errText: string | null | undefined): number | null {
+  if (!errText) return null;
+  const m = String(errText).match(/\b(131049|130472)\b/);
+  return m ? parseInt(m[1], 10) : null;
 }
+
