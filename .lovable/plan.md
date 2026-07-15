@@ -1,88 +1,75 @@
-## Corrected Audit — I was wrong earlier
+## Root causes (verified with DB + code inspection)
 
-You were right. There ARE two distinct WhatsApp send APIs from Meta, and we're only using one:
+**1. Only one device shows in CRM (Gate 2), Gate 1 hidden**
+`MIPSDevicesTab.tsx` filters MIPS devices by matching `deviceKey` against rows in `access_devices`. Only `F06D92740D0062CF` is registered locally, so `D1146D682A96B1C2` (Gate 1) is stripped out even though MIPS returns it. Requiring manual "Add Device" for hardware already visible on the MIPS server is redundant.
 
-| | **Cloud API** (what we use) | **MM API for WhatsApp** (what we're missing) |
-|---|---|---|
-| Endpoint | `POST /{PHONE_ID}/messages` | `POST /{PHONE_ID}/marketing_messages` |
-| Purpose | All message types (utility, auth, service, marketing) | **Marketing templates only** |
-| Delivery optimization | Standard Meta pacing → high 131049 rate on promo blasts | ML-based per-recipient delivery optimization → materially lower 131049 |
-| Insights | Basic DLR | Adds performance benchmarks, cost/delivery, ad-account linked measurement |
-| Runs on same WABA phone | — | Yes, in parallel with Cloud API |
-| Auth | Same permanent token (`whatsapp_business_messaging` scope) | Same token — no new secret |
-| Onboarding | Already done | Accept ToS in App Dashboard → WhatsApp → Quickstart → "Improve ROI with marketing messages" |
-| Availability | Global | Geo-gated; **India is currently eligible** (GA'd 2025, formerly "MM Lite") |
-| Meta Pixel/CAPI | Optional | Required for conversion measurement (optional for basic send) |
+**2. Love Kumar Paliwal syncs as "Unknown" with no email/gender/DOB and wrong dates**
+Member `INC-26-0004` has `user_id = NULL`, `biometric_photo_url = NULL`, and no `active` membership yet. The sync-to-mips function only joins `profiles:user_id` and only loads `memberships` where `status='active'`. Result: name="Unknown", email/phone empty, dates default to today→2099-12-31. The lead row already holds `full_name`, `email`, `phone` — we're just not reading them.
 
-Source: developers.facebook.com/docs/whatsapp/marketing-messages-lite-api/ (fetched today).
+**3. Trainers/employees missing department, birthday, gender, email, mobile on MIPS**
+`sync-to-mips` sends a fixed payload: hardcoded `gender:"M"`, no `birthday`, no `deptName`, and `mobile/email` only come from `profiles`. Employees.department, employees.date_of_birth, employees.gender, trainer specialization etc. are never sent. MIPS Employee Management screen therefore shows blanks.
 
-**My earlier claim that "no separate marketing API exists" was incorrect.** MM API won't eliminate 131049 entirely (Meta still gates over-messaged recipients), but Meta's own testing shows meaningfully higher reads/clicks vs sending the same marketing template via Cloud API.
+**4. Converted-from-lead members have no profile / login ID**
+`convert_lead_to_member` RPC creates a `members` row but does NOT create an `auth.users` + `profiles` row, so the member has no `user_id`, cannot log in, and cascades into the "Unknown" MIPS problem.
 
 ---
 
-## The 3 Epics — Plan
+## Plan
 
-### Epic 1 — Backend: Dual-endpoint dispatcher (MM API + Cloud API)
+### A. Auto-import devices from MIPS (removes "add in CRM" friction)
+- **MIPSDevicesTab**: stop hiding MIPS-server devices that aren't in `access_devices`. Show every device the MIPS server returns for the branch; overlay `branchName / publicIp / doorRole` only when a local mapping exists. If a device has no local mapping, show an inline "Register in CRM" button that creates the `access_devices` row (SN + branch pre-filled) with one click.
+- New edge function `mips-import-devices` (service-role): pulls `/through/device/list`, upserts into `access_devices` by `serial_number` (never overwriting `branch_id` / `door_role` / `public_ip` if already set), stamps `mips_device_id`, `is_online`, `last_seen_at`. Wire it to the existing `mips_reconcile_devices` cron so new hardware auto-appears without any manual step.
 
-**1.1 Schema (`integration_settings.config` for WhatsApp, per-branch + global):**
-- `mm_api_enabled: boolean` (default false — flip on after ToS accepted)
-- `mm_api_tos_accepted_at: timestamptz` (set from UI when admin confirms)
-- No new secret; reuses existing `access_token` + `phone_number_id`.
+### B. Fix personnel data sent to MIPS (`sync-to-mips` v1.5.0)
+Before calling `/personInfo/person`, build a merged profile from every available source, in priority order:
 
-**1.2 New edge fn `send-whatsapp-marketing`** (thin, mirrors `send-whatsapp`):
-- `POST {META_API_BASE}/{phone_number_id}/marketing_messages` with the exact same `{ messaging_product, to, type:'template', template:{...} }` body.
-- Handles same DLR/webhook events (MM API reuses the existing messages webhook — no new subscription needed).
-- Terminal-error handling identical to `send-whatsapp` (131049/131047/132001/etc).
-- Records `provider_route: 'mm_api' | 'cloud_api'` on `communication_logs`.
+1. **Members** — `profiles(user_id)` → `leads(lead_id)` → member row fallback. Extract `name, email, phone, gender, date_of_birth, avatar_url`. If `biometric_photo_url` is null, fall back to `avatar_url`.
+2. **Employees** — merge `profiles + employees` (department, position, date_of_birth, gender, personal_email, personal_phone).
+3. **Trainers** — merge `profiles + trainers` (specialization → deptName, DOB, gender, personal contacts).
 
-**1.3 Router in `send-broadcast/index.ts`:**
-- For every campaign recipient where `template.category = 'MARKETING'`:
-  - If branch WA config `mm_api_enabled = true` → call `send-whatsapp-marketing`.
-  - Else fall back to existing `send-whatsapp` (Cloud API) — no behavior change.
-- Non-marketing templates (utility/auth/service) → always Cloud API. MM API rejects them.
-- Existing `fallback_policy` (RCS/SMS on 131049) still fires on pacing errors from either route.
+Enrich the outbound payload with the fields the RuoYi API actually accepts:
+- `name`, `mobile`, `email` (never send empty string; omit when unknown so MIPS keeps prior value)
+- `gender`: `"M"` / `"F"` / `"U"` from CRM data — not hardcoded
+- `birthday`: `YYYY-MM-DD` from DOB
+- `deptId` + `deptName`: `100/"Members"`, `101/"Staff"`, `102/"Trainer"` (add a dept lookup helper)
+- `remark`: department + position for staff, plan name for members
 
-**1.4 `dispatch-communication` (unchanged) — one-to-one transactional traffic keeps using Cloud API.** MM API is broadcast-only by design.
+**Validity dates for members** — load the newest membership regardless of status (active + frozen + future + expired) and pick:
+- Active → `start_date` → `end_date`
+- Frozen → `start_date` → `end_date` (paused, but MIPS still needs a window)
+- Future → future `start_date` → `end_date` (so access opens only on start day)
+- Expired → `validTimeEnd = REVOKED_DATE` (blocks access)
+- No membership → 24h probation window, not 2099
 
-### Epic 2 — Frontend: Marketing route toggle + campaign transparency
+Log the final payload so future field additions are traceable.
 
-**2.1 Settings → Integrations → WhatsApp card:**
-- Add "Marketing Messages API" section with:
-  - Status pill (Not enrolled / Enrolled)
-  - "Accept ToS in Meta" deep link → App Dashboard Quickstart
-  - "I've accepted — enable MM API for marketing sends" toggle (writes `mm_api_enabled` + timestamp)
-  - Advisory: "Marketing templates will route through MM API for higher delivery. Utility/auth/service messages continue via Cloud API."
+### C. Ensure converted leads get a real profile/login
+Extend `convert_lead_to_member` RPC:
+1. If lead has a phone or email and no matching `auth.users`, mint a member auth user via a small edge function `provision-member-login` (service-role, uses `admin.createUser`, random password, `email_confirm=true`).
+2. Insert into `profiles` (id, full_name, email, phone, avatar_url) copied from the lead.
+3. Set `members.user_id`.
+4. Fire the existing `member_welcome` communication trigger so the member gets a set-password link.
 
-**2.2 `CampaignWizard` → Type step:**
-- When user selects **Promotion**, show a green info chip: *"Will send via WhatsApp Marketing Messages API (higher delivery)"* — or amber warning if MM API not enabled, with 1-click link to Settings.
+Existing broken row (`INC-26-0004`) is backfilled by running the same edge function once, then re-syncing to MIPS.
 
-**2.3 `CampaignDetailDrawer`:**
-- New column/badge on the recipients list: `via MM API` or `via Cloud API`.
-- KPI strip shows a "Route" breakdown when a campaign mixes routes (e.g., MM API enabled mid-campaign, or fallback fired).
-- Failure tooltip already shows pacing/error reason from prior work — extend to note whether it came from MM or Cloud path.
+### D. CURL verification harness
+Add `supabase/functions/mips-field-probe/index.ts` (service-role, one-shot): calls `/personInfo/person/list?pageSize=1`, `/through/device/list`, `/system/dept/list`, and returns the raw JSON keys so we can lock the payload contract in code + docs. Run it once from the "Debug" tab and paste result into `.lovable/mips-api-reference.md`.
 
-### Epic 3 — Observability & migration
-
-**3.1 Migration:**
-- Backfill `communication_logs.provider_route = 'cloud_api'` for existing rows.
-- New DB view `v_campaign_route_stats` (campaign_id, route, sent, delivered, read, failed) powering the drawer's Route breakdown.
-
-**3.2 Docs / runbook update** (`docs/communication-dispatcher.md`):
-- Add "Marketing vs Cloud API routing" section with the decision table.
-- Note MM API prerequisites (ToS + at least one approved marketing template + messages webhook subscribed — already done).
-
-**3.3 No mock traffic, no dev-mode shortcut.** MM API onboarding must be done for real in Meta; the toggle is gated behind the timestamp.
+### E. UI polish
+- **Personnel Sync** cards show DOB, gender, department, email, phone chips when present, and a red "Missing fields" pill when any are empty — so operators can fix data in CRM before re-syncing.
+- Device Command Center: online/offline count now reflects raw MIPS list (not filtered), with a "Register X unmapped devices" prompt.
 
 ---
 
-## Out of scope for this change
-- Meta Pixel / Conversions API wiring for conversion measurement (Epic 3.b — separate ticket).
-- Rewriting the wizard's audience engine.
-- Any change to the Live Feed / dedupe / 24h-window logic.
+## Files touched
 
-## Rollout
-1. Ship code with `mm_api_enabled = false` everywhere → zero behavioral change.
-2. Admin accepts Meta ToS, flips the toggle in Settings for the branch's WA config.
-3. Next promotional campaign automatically routes through `marketing_messages`. Monitor via drawer's Route KPI vs the Cloud-API baseline for 2–3 sends before enabling globally.
+- `supabase/functions/sync-to-mips/index.ts` — merged profile loader, membership-aware validity, dept lookup, enriched payload, gender/DOB/deptName
+- `supabase/functions/mips-import-devices/index.ts` — NEW, auto-upsert
+- `supabase/functions/provision-member-login/index.ts` — NEW, mint auth user + profile
+- `supabase/functions/mips-field-probe/index.ts` — NEW, diagnostic
+- Migration: extend `convert_lead_to_member` RPC to call provisioning + copy lead → profile; add `automation_rules` row for `mips_import_devices` (every 15 min)
+- `src/components/devices/MIPSDevicesTab.tsx` — show all, unmapped inline register button
+- `src/components/devices/PersonnelSyncTab.tsx` — data-quality chips
+- `src/services/mipsService.ts` — `importDevicesFromMips()` helper
 
-Approve and I'll implement Epics 1–3 in one pass (roughly: 1 migration, 1 new edge fn, edits to `send-broadcast`, `CampaignWizard`, `CampaignDetailDrawer`, WhatsApp integration settings UI, dispatcher docs).
+No changes to member-facing checkout, billing, or RLS beyond the RPC extension.
