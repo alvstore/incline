@@ -149,6 +149,22 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
             <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
           </Button>
         </div>
+
+        {localDeviceId && (
+          <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider whitespace-nowrap">Door role</Label>
+            <Select value={doorRole || 'both'} onValueChange={handleRoleChange} disabled={savingRole}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entry">Entry only</SelectItem>
+                <SelectItem value="exit">Exit only</SelectItem>
+                <SelectItem value="both">Entry + Exit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -162,12 +178,13 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
   const { data: localDevices } = useQuery({
     queryKey: ["access-devices-sns", branchId],
     queryFn: async () => {
-      let query = supabase.from("access_devices").select("serial_number, branch_id, public_ip");
+      let query = supabase.from("access_devices").select("id, serial_number, branch_id, public_ip, door_role");
       if (branchId) query = query.eq("branch_id", branchId);
       const { data } = await query;
       return data || [];
     },
   });
+
 
   const { data: branchesList } = useQuery({
     queryKey: ["branches-list-names"],
