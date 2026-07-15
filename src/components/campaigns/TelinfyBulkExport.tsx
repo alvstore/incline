@@ -32,13 +32,14 @@ function splitName(full?: string | null): { first: string; last: string } {
 function defaultResolve(r: ResolvedRecipient, key: string, index: number): string {
   // Tolerate alt shapes coming from RPCs / CSV imports (name, first_name, last_name).
   const anyR = r as any;
-  const fullRaw = r.full_name || anyR.name || [anyR.first_name, anyR.last_name].filter(Boolean).join(' ') || '';
+  const fullRaw = (r.full_name || anyR.name || [anyR.first_name, anyR.last_name].filter(Boolean).join(' ') || '').trim();
   const { first, last } = splitName(fullRaw);
   const k = key.toLowerCase();
   if (k === 'last_name' || /last|surname|family/i.test(k)) return last || '';
-  if (k === 'full_name' || /full/i.test(k)) return fullRaw || first || 'there';
+  if (k === 'first_name' || /first/i.test(k)) return first || 'there';
   if (k === 'email' || /email|mail/i.test(k)) return r.email || '';
-  if (k === 'first_name' || /first|name/i.test(k) || index === 0) return first || 'there';
+  // Default (full_name, name, CUSTOM_PARAM1, first column, …): send the full name.
+  if (k === 'full_name' || /full|name/i.test(k) || index === 0) return fullRaw || first || 'there';
   return '';
 }
 
