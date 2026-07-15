@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
         type: 'info', category: 'communication',
       });
 
-      return json({ success: true, sent, failed, total: recipients.length });
+      return;
     }
 
     // Resolve recipients (skip members who asked us to stop messaging).
