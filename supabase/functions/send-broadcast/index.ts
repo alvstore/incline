@@ -138,13 +138,20 @@ Deno.serve(async (req) => {
         }
 
         const firstName = (r.full_name || '').trim().split(/\s+/)[0] || '';
+        const nameFallback = firstName || r.full_name || 'there';
         const perVars: Record<string, string> = {
           member_name: r.full_name || 'there',
           full_name: r.full_name || 'there',
           first_name: firstName || 'there',
-          name: firstName || r.full_name || 'there',
+          name: nameFallback,
+          // Meta positional aliases — templates with body `Hi {{1}},` (no
+          // variables[] mapping saved locally) resolve directly from these.
+          '1': nameFallback,
+          v1: nameFallback,
+          param1: nameFallback,
           ...(variables && typeof variables === 'object' ? variables : {}),
         };
+
 
         // Skip missing-name recipients on Meta template sends — otherwise
         // Meta rejects the whole batch with 132018 and the campaign fails.
