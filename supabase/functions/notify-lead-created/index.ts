@@ -255,8 +255,12 @@ Deno.serve(async (req) => {
       template_id?: string | null;
       dedupe_suffix: string;
       use_branded_template?: boolean;
+      varsOverride?: Record<string, string>;
     }) => {
       try {
+        const mergedVars = input.varsOverride
+          ? { ...vars, ...input.varsOverride }
+          : vars;
         const resp = await fetch(`${supabaseUrl}/functions/v1/dispatch-communication`, {
           method: "POST",
           headers: {
@@ -272,7 +276,7 @@ Deno.serve(async (req) => {
             payload: {
               subject: input.subject,
               body: input.body,
-              variables: vars,
+              variables: mergedVars,
               use_branded_template: input.use_branded_template ?? true,
             },
             dedupe_key: `lead:${lead.id}:${input.channel}:${input.dedupe_suffix}`,
@@ -295,6 +299,7 @@ Deno.serve(async (req) => {
         });
       }
     };
+
 
     // 6) Lead-facing welcome messages (lead is in-window → freeform OK)
     if (rules.sms_to_lead && lead.phone) {
