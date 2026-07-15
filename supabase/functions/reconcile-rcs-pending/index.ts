@@ -138,9 +138,9 @@ Deno.serve(async (req) => {
               body: {
                 branch_id: (row as any).branch_id,
                 channel: 'sms',
-                recipient: to,
-                content: body,
                 category: (row as any).category || 'marketing',
+                recipient: to,
+                payload: { body },
                 dedupe_key: `rcs-fallback:${rid}`,
                 source: 'rcs_fallback',
               },
