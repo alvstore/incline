@@ -93,9 +93,13 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   const { data: page1 = [], isLoading } = useQuery({
     queryKey: ['comm-live-feed', branchId, pageSize],
     queryFn: async () => {
+      // Live Feed shows only transactional/1:1 traffic. Campaign & broadcast
+      // sends are tracked in their own Campaign Details drawer, not here.
       let q = supabase
         .from('communication_logs')
         .select('*')
+        .not('dedupe_key', 'ilike', 'campaign:%')
+        .not('dedupe_key', 'ilike', 'broadcast:%')
         .order('created_at', { ascending: false })
         .limit(pageSize);
       if (branchId) q = q.eq('branch_id', branchId);
