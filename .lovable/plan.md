@@ -1,82 +1,55 @@
 
-## Problem audit
+## Audit: why +91 98876 01200 (Rajat) failed
 
-I traced all three complaints to the same underlying flaw: **the Campaign Wizard treats "Submit to Meta" as a side quest that has no relationship with the campaign the user is actually building.**
+Rajat is a **staff/admin recipient** of the internal new-lead alert (not the lead itself). Three failures in `communication_logs` all show:
 
-Concretely, in `src/components/campaigns/CampaignWizard.tsx`:
+```
+error: 132018: template_param_empty:staff_name,lead_name
+       (blocked pre-flight; provide full_name or use a no-name template)
+template: internal_lead_alert
+category: new_lead
+```
 
-- `handleSubmitMetaTemplate()` (line 277) creates a `templates` + `whatsapp_templates` row named `campaign_<timestamp>` and stops there. **It never writes to `campaigns`.** That is why `whatsapp_templates` has `campaign_1784104215124` but `SELECT count(*) FROM campaigns` returns 0 — the Campaigns page has nothing to show.
-- `handleSubmit()` (line 411) hard-blocks scheduling whenever `blockedByTemplate` is true, and the picker (`approvedTemplates` query, line 93) only lists `status='APPROVED'` rows. So a user who just submitted a template for approval **cannot schedule a send at all** — the flow forces them to either wait days for Meta or send freeform (which fails for cold audiences).
-- The picker returns every approved WhatsApp template in the workspace (91 rows), unfiltered by campaign type, name prefix, or "this session's submission". That is the "confusion" the user is describing.
+### Root cause
 
-Everything below fixes these three symptoms as one connected change.
+Meta template `internal_lead_alert` body:
+```
+Hi {{1}}, a new lead has been generated. Name: {{2}}, Interest: {{3}}, Source: {{4}}.
+```
+Local `whatsapp_templates.variables` maps positional slots → `[staff_name, lead_name, plan_interest, lead_source]`.
 
----
+In `supabase/functions/notify-lead-created/index.ts`:
+- The `vars` bag built at line 155 contains `lead_name`, `plan_interest`, `lead_source` — **but never `staff_name`**.
+- `sendTeamBundle` fetches admin/manager profiles with only `id, phone, email` (no `full_name`), then dispatches the same shared `vars` for every recipient.
+- Dispatcher pre-flight (`dispatch-communication/index.ts:727`) sees `staff_name` empty → hard-fails with 132018 before hitting Meta.
+- Retry queue re-runs the same payload → same failure. That is exactly the pattern for Rajat's row (`dedupe_key: retry:...:2`).
 
-## Plan
+`lead_name` shows up in the "missing" list on some rows because those particular leads had no `full_name` captured (self-onboard first step). The `|| "Guest"` default is fine going forward; the real gap is `staff_name`.
 
-### 1. "Submit to Meta" persists a draft campaign (issue #1)
+### Fix
 
-In `handleSubmitMetaTemplate()`:
+**1. `supabase/functions/notify-lead-created/index.ts`**
+   - Include `full_name` in the `profiles` selects for admins and managers.
+   - Change `sendTeamBundle` to accept the recipient profile's name and pass a **per-recipient variables override** to `dispatch`, merging `{ staff_name: profile.full_name || 'Team' }` on top of the shared `vars`.
+   - Update the `dispatch()` helper to accept an optional `varsOverride` and merge it into the payload's `variables`.
+   - Keep `lead_name: lead.full_name || 'Guest'` default (already correct).
 
-- After the `manage-whatsapp-templates` call succeeds, `upsert` a row in `campaigns` with:
-  - `name` = the user-typed campaign name (fallback to `safeName`)
-  - `status` = `'pending_template_approval'` (new status value)
-  - `template_id` = the local `templates.id` just created
-  - `channel`, `campaign_type`, `message`, `subject`, `audience_filter`, `attachment_*`, `event_meta` = current wizard state
-  - `trigger_type` = whatever is selected (`send_now` becomes `draft` here — nothing sends yet)
-- Store the returned `campaign.id` in wizard state (`draftCampaignId`) so any later "Save"/"Schedule" click *updates* that row instead of creating a duplicate.
-- Toast changes to: *"Template submitted to Meta · draft campaign saved. You can schedule it now — it will send once Meta approves."*
-- Invalidate `['campaigns', branchId]` so the Campaigns list renders it immediately with a "Awaiting Meta approval" badge.
+**2. `supabase/functions/dispatch-communication/index.ts` (defence-in-depth)**
+   - In the pre-flight `missingRequired` check, when `input.category === 'new_lead'`, auto-fill any missing `staff_name`/`team_member_name`/`recipient_name` key with `'Team'` before evaluating (so a future caller that forgets can't block internal ops). Still enforce for genuinely lead-facing MARKETING sends.
 
-Campaigns list badge: add `pending_template_approval` to `CampaignStatusBadge` (amber, "Awaiting Meta approval"). The existing `getCampaignReport()` path is unaffected.
+**3. Clear the poisoned retry rows**
+   - Mark the three still-`failed` new_lead logs for +91 98876 01200 as `suppressed` (with metadata note `manual_backfill: pre_flight_bug_fixed`) so the retry queue doesn't keep churning on the old payloads. New lead events after deploy will use the fixed path.
 
-### 2. Allow scheduling while template is PENDING (issue #2)
+### Files touched
+- `supabase/functions/notify-lead-created/index.ts` — vars override + fetch `full_name`
+- `supabase/functions/dispatch-communication/index.ts` — `new_lead` fallback for `staff_name`
+- One-shot SQL update on `communication_logs` for the 3 stuck rows
 
-Wizard changes:
+### Not changed
+- Meta template stays as-is (already APPROVED with 4 vars).
+- No schema changes; no client changes.
+- Retry queue logic unchanged — the fix removes the source of the failure.
 
-- Extend the picker query to include `status IN ('APPROVED','PENDING')` when `trigger === 'scheduled'` or `trigger === 'automated'`. `SelectItem` shows a small amber "PENDING" chip next to pending rows.
-- Relax `blockedByTemplate`: for scheduled/automated triggers, a PENDING template counts as "picked" and the Schedule button becomes enabled. Freeform `send_now` still requires APPROVED (unchanged, matches Meta rules).
-- In `handleSubmit()`, when the template is PENDING and trigger is scheduled/automated:
-  - Save campaign as `status='scheduled'` with `template_id` set. Add a `delivery_metadata.awaiting_template_approval = true` flag.
-  - Show summary line: *"Will send at 8:00 PM IST — only if Meta has approved the template by then."*
-
-Worker (`process-scheduled-campaigns` edge fn) changes:
-
-- Before dispatching, re-fetch `whatsapp_templates` by the linked local `templates.meta_template_name`.
-  - `APPROVED` → send as today.
-  - `REJECTED` / `DISABLED` / `PAUSED` → mark campaign `status='failed'`, write `last_run_error='Meta rejected/disabled template <name>: <reason>'`, and fire a `dispatchCommunication` internal alert to the owner/creator so they see it in the notification bell + email.
-  - Still `PENDING` at fire time → move the scheduled slot forward by 30 min, up to 24h. After 24h, fail with `last_run_error='Template still pending Meta approval after 24h grace window'`.
-- Reconciler already exists (`reconcile-whatsapp-pending`); no change needed there.
-
-### 3. Template picker auto-scopes to the current campaign (issue #3)
-
-Two-tier filter in the `approvedTemplates` query, in this priority:
-
-1. **This-campaign templates first** — anything with `templates.meta_template_name` matching the auto-generated `campaign_<timestamp>` naming convention **or** matching `campaigns.template_id` on rows the user created in this wizard session (tracked via `draftCampaignId`). These render at the top of the Select under a `"For this campaign"` group.
-2. **Campaign-type-matching templates** — filter by `templates.evergreen_kind = campaignType` (promotion / event / announcement / lead_reengagement). Rendered under `"Suggested for {campaign_type}"`.
-3. A small `"Show all approved templates"` toggle at the bottom of the Select expands the full list — for the rare case the user wants a template outside their campaign type. Default: off.
-
-Also: when the user hits "Submit to Meta", auto-set `useApprovedTemplate = true` and `selectedTemplateId = <local templates.id>` for the just-created row so it is pre-selected the moment Meta approves (via the existing realtime subscription on `whatsapp_templates`).
-
-### 4. Small UX polish (touch-ups only, no scope creep)
-
-- The Trigger step shows a callout when a PENDING template is attached: *"This template is still awaiting Meta approval. If approved before your scheduled time, we will send. If rejected, the campaign fails with a notification."*
-- Campaigns list row for `pending_template_approval` shows a "View Meta status" link that deep-links to Settings → Communication Templates → the row, so the user can chase approval without hunting.
-
----
-
-## Files affected
-
-- `src/components/campaigns/CampaignWizard.tsx` — draft-campaign persistence, extended picker query, relaxed block logic, PENDING callout.
-- `src/services/campaignService.ts` — accept new `status='pending_template_approval'`, small helper to upsert-or-update the draft campaign, and grouping helper for the picker.
-- `src/components/campaigns/CampaignStatusBadge.tsx` (or equivalent) — new amber badge for `pending_template_approval`.
-- `supabase/functions/process-scheduled-campaigns/index.ts` — pre-dispatch template status check with PENDING regrace + REJECTED failure path + owner notification.
-- `supabase/migrations/<new>.sql` — extend `campaigns.status` allowed values if enforced by CHECK constraint (verify first; if `text` no migration needed).
-
-## Verification
-
-- Submit a fresh template from the wizard → campaign row appears immediately in Campaigns list with amber "Awaiting Meta approval" badge.
-- Schedule a send for +5 min while template is PENDING → row saves as `scheduled`; worker log shows the regrace behavior; when I manually flip the template to `APPROVED` in the DB, next tick sends successfully.
-- Manually flip the template to `REJECTED` → next tick fails the campaign and fires an in-app notification.
-- Reopen the wizard on a new campaign of type `promotion` → picker shows only promotion-tagged templates + a "Show all" toggle, not all 91 rows.
+### Verify after deploy
+- Create a test lead → check `communication_logs` for a `sent` row with `delivery_metadata.template=internal_lead_alert` to Rajat's number, no `pre_flight_block`.
+- Confirm Meta message renders `Hi Rajat, a new lead has been generated. Name: <lead>, Interest: <plan>, Source: <src>.`
