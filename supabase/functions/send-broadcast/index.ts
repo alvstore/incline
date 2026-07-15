@@ -111,6 +111,65 @@ Deno.serve(async (req) => {
       return json({ success: true, sent: 0, failed: 0, total: 0, reason: 'audience_empty' });
     }
 
+    // ── Estimate total & ACK 202 immediately, then run the dispatch loop
+    //    in the background via EdgeRuntime.waitUntil. This unblocks the
+    //    browser (previous behaviour stalled the wizard for 60-300s on a
+    //    300-recipient campaign until the client-side invoke timed out).
+    const estimatedTotal = Array.isArray(recipients) && recipients.length > 0
+      ? recipients.length
+      : (Array.isArray(member_ids) && member_ids.length > 0 ? member_ids.length : 0);
+
+    if (campaign_id) {
+      await adminClient.from('campaigns').update({
+        status: 'sending',
+        recipients_count: estimatedTotal,
+        success_count: 0,
+        delivered_count: 0,
+        read_count: 0,
+        failure_count: 0,
+        last_run_error: null,
+        last_progress_at: new Date().toISOString(),
+      }).eq('id', campaign_id);
+    }
+
+    const runBroadcast = async () => {
+      try {
+        await dispatchLoop();
+      } catch (e: any) {
+        console.error('[send-broadcast bg] fatal:', e);
+        if (campaign_id) {
+          try {
+            await adminClient.from('campaigns').update({
+              status: 'failed',
+              last_run_error: `background_error: ${e?.message || String(e)}`.slice(0, 500),
+              sent_at: new Date().toISOString(),
+            }).eq('id', campaign_id);
+          } catch { /* swallow */ }
+        }
+      }
+    };
+
+    // Fire-and-forget: keep isolate alive past the response.
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(runBroadcast());
+    } else {
+      // Local dev fallback — don't await, but at least kick it off.
+      runBroadcast();
+    }
+
+    // Immediately ACK to caller.
+    return json({
+      accepted: true,
+      background: true,
+      campaign_id: campaign_id || null,
+      total: estimatedTotal,
+    }, 202);
+
+    // ---------------------------------------------------------------
+    // Below: the actual dispatch pipeline, moved into a nested closure
+    // so it runs after the ACK. It closes over all variables above.
+    // ---------------------------------------------------------------
+    async function dispatchLoop() {
     // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
     if (Array.isArray(recipients) && recipients.length > 0) {
       let sent = 0, failed = 0, skipped_dnc = 0;
