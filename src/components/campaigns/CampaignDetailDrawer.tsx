@@ -377,7 +377,22 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
                                 retry ×{r.attempt}
                               </Badge>
                             )}
+                            {(r as any).fallback_used && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[9px] rounded-full px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-700">
+                                    paced → {(r as any).fallback_channel || 'sms'}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p className="text-xs">
+                                    Meta paced this WhatsApp send (code {(r as any).pacing_code || '131049'}) — automatically re-sent via {(r as any).fallback_channel || 'RCS/SMS'}.
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                           </div>
+
                           <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                             {displayContact}
                           </p>
