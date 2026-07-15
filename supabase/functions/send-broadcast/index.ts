@@ -203,15 +203,7 @@ Deno.serve(async (req) => {
           failure_count: failed,
           sent_at: new Date().toISOString(),
           ...(shouldPause ? {
-            error_summary: {
-              code: worstCode,
-              count: worstCount,
-              hint: 'Terminal template error — fix template or recipient data before resuming.',
-              sample_recipients: recipientRows
-                .filter((r) => r.status === 'failed')
-                .slice(0, 5)
-                .map((r) => ({ phone: r.phone, error: r.error })),
-            },
+            last_run_error: `Meta ${worstCode} on ${worstCount}/${recipients.length} recipients — auto-paused. Fix template or recipient data before resuming. Sample: ${recipientRows.filter((r) => r.status === 'failed').slice(0, 3).map((r) => `${r.phone}:${(r.error || '').slice(0, 80)}`).join(' | ')}`,
           } : {}),
         }).eq('id', campaign_id);
       }
