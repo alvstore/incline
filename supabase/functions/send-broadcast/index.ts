@@ -175,8 +175,54 @@ Deno.serve(async (req) => {
     // so it runs after the ACK. It closes over all variables above.
     // ---------------------------------------------------------------
     async function dispatchLoop() {
-    // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
+    // Load campaign fallback policy (default: on_pacing = true).
+    let fallbackOnPacing = true;
+    if (campaign_id) {
+      try {
+        const { data: c } = await adminClient
+          .from('campaigns').select('fallback_policy').eq('id', campaign_id).maybeSingle();
+        const fp = (c as any)?.fallback_policy;
+        if (fp && typeof fp === 'object' && fp.on_pacing === false) fallbackOnPacing = false;
+      } catch { /* default true */ }
+    }
+
+    // Attempt RCS/SMS fallback for a WhatsApp send that Meta paced.
+    // Returns { ok, channel, error }.
+    async function tryPacingFallback(
+      r: { source_type: string; source_ref_id: string; phone?: string; email?: string; full_name?: string },
+      personalized: string,
+      perVars: Record<string, string> | undefined,
+    ): Promise<{ ok: boolean; channel: string; error: string | null }> {
+      if (!r.phone) return { ok: false, channel: 'rcs', error: 'no_phone_for_fallback' };
+      try {
+        const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
+          body: {
+            branch_id,
+            channel: 'rcs', // dispatch-communication routes rcs→sms fallback internally
+            recipient: r.phone,
+            category: 'marketing',
+            payload: { body: personalized, variables: perVars },
+            member_id: r.source_type === 'member' ? r.source_ref_id : null,
+            dedupe_key: campaign_id
+              ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:fallback:${Date.now()}`
+              : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}:fallback`,
+            force: true,
+          },
+        });
+        const ok = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
+        const usedChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
+        return {
+          ok,
+          channel: usedChannel,
+          error: ok ? null : (fbErr?.message || (fbRes as any)?.reason || (fbRes as any)?.error || 'fallback_failed'),
+        };
+      } catch (e: any) {
+        return { ok: false, channel: 'rcs', error: e?.message || 'fallback_exception' };
+      }
+    }
+
     if (Array.isArray(recipients) && recipients.length > 0) {
+
       let sent = 0, failed = 0, skipped_dnc = 0;
       const recipientRows: any[] = [];
 
