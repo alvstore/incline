@@ -21,11 +21,13 @@ export type Database = {
           created_at: string | null
           device_name: string
           device_type: string
+          door_role: string
           firmware_version: string | null
           id: string
           ip_address: unknown
           is_online: boolean | null
           last_heartbeat: string | null
+          last_reconcile_at: string | null
           last_sync: string | null
           mac_address: string | null
           mips_device_id: number | null
@@ -42,11 +44,13 @@ export type Database = {
           created_at?: string | null
           device_name: string
           device_type?: string
+          door_role?: string
           firmware_version?: string | null
           id?: string
           ip_address: unknown
           is_online?: boolean | null
           last_heartbeat?: string | null
+          last_reconcile_at?: string | null
           last_sync?: string | null
           mac_address?: string | null
           mips_device_id?: number | null
@@ -63,11 +67,13 @@ export type Database = {
           created_at?: string | null
           device_name?: string
           device_type?: string
+          door_role?: string
           firmware_version?: string | null
           id?: string
           ip_address?: unknown
           is_online?: boolean | null
           last_heartbeat?: string | null
+          last_reconcile_at?: string | null
           last_sync?: string | null
           mac_address?: string | null
           mips_device_id?: number | null
@@ -1917,10 +1923,13 @@ export type Database = {
           error: string | null
           error_code: string | null
           error_reason: string | null
+          fallback_channel: string | null
+          fallback_used: boolean
           full_name: string | null
           id: string
           in_window: boolean | null
           last_retried_at: string | null
+          pacing_code: number | null
           phone: string | null
           read_at: string | null
           source_label: string | null
@@ -1937,10 +1946,13 @@ export type Database = {
           error?: string | null
           error_code?: string | null
           error_reason?: string | null
+          fallback_channel?: string | null
+          fallback_used?: boolean
           full_name?: string | null
           id?: string
           in_window?: boolean | null
           last_retried_at?: string | null
+          pacing_code?: number | null
           phone?: string | null
           read_at?: string | null
           source_label?: string | null
@@ -1957,10 +1969,13 @@ export type Database = {
           error?: string | null
           error_code?: string | null
           error_reason?: string | null
+          fallback_channel?: string | null
+          fallback_used?: boolean
           full_name?: string | null
           id?: string
           in_window?: boolean | null
           last_retried_at?: string | null
+          pacing_code?: number | null
           phone?: string | null
           read_at?: string | null
           source_label?: string | null
@@ -2039,6 +2054,7 @@ export type Database = {
           delivered_count: number
           event_meta: Json
           failure_count: number
+          fallback_policy: Json
           id: string
           last_progress_at: string | null
           last_run_error: string | null
@@ -2069,6 +2085,7 @@ export type Database = {
           delivered_count?: number
           event_meta?: Json
           failure_count?: number
+          fallback_policy?: Json
           id?: string
           last_progress_at?: string | null
           last_run_error?: string | null
@@ -2099,6 +2116,7 @@ export type Database = {
           delivered_count?: number
           event_meta?: Json
           failure_count?: number
+          fallback_policy?: Json
           id?: string
           last_progress_at?: string | null
           last_run_error?: string | null
