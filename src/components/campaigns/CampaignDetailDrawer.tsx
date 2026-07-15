@@ -61,9 +61,9 @@ const finalOf = (r: {
   const ds = (r.dlrStatus || '').toLowerCase();
   if (r.readAt || ds === 'read') return 'read';
   if (r.deliveredAt || ds === 'delivered') return 'delivered';
+  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
   if (ds === 'failed' || ds === 'bounced' || rs === 'failed') return 'failed';
   if (rs === 'skipped') return 'skipped';
-  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
   return 'pending';
 };
 

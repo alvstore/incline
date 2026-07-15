@@ -88,9 +88,9 @@ Deno.serve(async (req) => {
 
       if (dlrStatus === 'read' || dlr?.read_at) { read++; delivered++; sent++; continue; }
       if (dlrStatus === 'delivered' || dlr?.delivered_at) { delivered++; sent++; continue; }
+      if (recStatus === 'sent' || dlrStatus === 'sent' || dlrStatus === 'queued') { sent++; continue; }
       if (dlrStatus === 'failed' || recStatus === 'failed') { failed++; continue; }
       if (recStatus === 'skipped') { failed++; continue; }
-      if (recStatus === 'sent' || dlrStatus === 'sent' || dlrStatus === 'queued') { sent++; continue; }
     }
 
     const total = recByKey.size || (c as any).recipients_count || 0;
