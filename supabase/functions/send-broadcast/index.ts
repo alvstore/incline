@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Forbidden: Staff access required" }), { status: 403, headers: corsHeaders });
     }
 
-    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename } = await req.json();
+    const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = await req.json();
+    const retrySuffix = retry ? `:retry:${Date.now()}` : '';
 
     const attachment = attachment_url
       ? {
