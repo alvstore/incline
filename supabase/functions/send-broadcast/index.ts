@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
         .gte("end_date", new Date().toISOString().split("T")[0]);
       const ids = [...new Set((activeMemberIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No active members found" });
+      else { console.log("No active members"); return; }
     } else if (audience === "expiring") {
       const today = new Date();
       const sevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -365,21 +365,21 @@ Deno.serve(async (req) => {
         .lte("end_date", sevenDays.toISOString().split("T")[0]).gte("end_date", today.toISOString().split("T")[0]);
       const ids = [...new Set((expiringIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No expiring members found" });
+      else { console.log("No expiring members"); return; }
     } else if (audience === "expired") {
       const { data: expiredIds } = await adminClient
         .from("memberships").select("member_id").eq("branch_id", branch_id)
         .lt("end_date", new Date().toISOString().split("T")[0]);
       const ids = [...new Set((expiredIds || []).map((m: any) => m.member_id))];
       if (ids.length > 0) membersQuery = membersQuery.in("id", ids);
-      else return json({ success: true, sent: 0, message: "No expired members found" });
+      else { console.log("No expired members"); return; }
     }
 
     const { data: members, error: membersError } = await membersQuery;
     if (membersError) throw membersError;
 
     if (!members || members.length === 0) {
-      return json({ success: true, sent: 0, message: "No recipients found" });
+      return;
     }
 
     let sent = 0;
