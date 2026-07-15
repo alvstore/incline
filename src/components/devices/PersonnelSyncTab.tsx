@@ -55,20 +55,23 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let memberQuery = supabase
         .from("members")
-        .select("id, member_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url)")
+        .select("id, member_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url), leads:lead_id(full_name, avatar_url)")
         .order("created_at", { ascending: false });
       if (branchId) memberQuery = memberQuery.eq("branch_id", branchId);
       const { data: members } = await memberQuery;
       if (members) {
         for (const m of members) {
           const profile = m.profiles as any;
+          const lead = (m as any).leads as any;
+          const name = profile?.full_name || lead?.full_name || `Member ${m.member_code || ""}`.trim() || "Unknown";
+          const avatar = profile?.avatar_url || lead?.avatar_url || null;
           people.push({
             id: m.id,
-            name: profile?.full_name || "Unknown",
+            name,
             code: m.member_code || "",
             type: "member",
-            hasPhoto: !!(m.biometric_photo_url || profile?.avatar_url),
-            avatarUrl: profile?.avatar_url || null,
+            hasPhoto: !!(m.biometric_photo_url || avatar),
+            avatarUrl: avatar,
             mipsSyncStatus: (m as any).mips_sync_status || "pending",
             mipsPersonId: (m as any).mips_person_id || null,
             branchId: m.branch_id,
@@ -78,7 +81,9 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let empQuery = supabase
         .from("employees")
-        .select("id, employee_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url)")
+        .select("id, employee_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .eq("is_active", true)
+        .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
       if (branchId) empQuery = empQuery.eq("branch_id", branchId);
       const { data: employees } = await empQuery;
@@ -87,7 +92,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           const profile = e.profiles as any;
           people.push({
             id: e.id,
-            name: profile?.full_name || "Unknown",
+            name: profile?.full_name || `Staff ${e.employee_code || ""}`.trim() || "Unknown",
             code: e.employee_code || "",
             type: "employee",
             hasPhoto: !!(e.biometric_photo_url || profile?.avatar_url),
@@ -103,6 +108,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         .from("trainers")
         .select("id, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
+        .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
       if (branchId) trainerQuery = trainerQuery.eq("branch_id", branchId);
       const { data: trainers } = await trainerQuery;
@@ -111,7 +117,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           const profile = (t as any).profiles as any;
           people.push({
             id: t.id,
-            name: profile?.full_name || "Unknown",
+            name: profile?.full_name || `Trainer ${t.id.substring(0, 4).toUpperCase()}`,
             code: `TRN-${t.id.substring(0, 4).toUpperCase()}`,
             type: "trainer",
             hasPhoto: !!(t.biometric_photo_url || profile?.avatar_url),
@@ -126,6 +132,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       return people;
     },
   });
+
 
   const syncMutation = useMutation({
     mutationFn: async (person: SyncPerson) => {

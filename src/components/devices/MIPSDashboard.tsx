@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+
 import MIPSConnectionCard from "./MIPSConnectionCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,15 +29,21 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
     staleTime: 10_000,
     refetchInterval: 15_000,
     retry: false,
+    placeholderData: keepPreviousData,
   });
 
   const { data: mipsDevices = [] as MIPSDevice[], dataUpdatedAt } = useQuery<MIPSDevice[]>({
     queryKey: ["mips-devices", branchId || "all"],
     queryFn: () => fetchMIPSDevices(branchId),
+    // Once we've fetched devices once, keep displaying them even if a subsequent
+    // connection test blips — prevents the stat cards from flashing to zero.
     enabled: !!mipsConnection?.success,
     staleTime: 10_000,
     refetchInterval: 15_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   });
+
 
   useEffect(() => {
     if (dataUpdatedAt) {

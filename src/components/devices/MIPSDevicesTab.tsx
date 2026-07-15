@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -199,7 +199,10 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
     queryKey: ["mips-devices", branchId || "all"],
     queryFn: () => fetchMIPSDevices(branchId),
     staleTime: 30_000,
+    retry: 1,
+    placeholderData: keepPreviousData,
   });
+
 
   const filteredDevices = branchId && localDevices
     ? devices.filter((d) => {
