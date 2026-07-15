@@ -1145,13 +1145,33 @@ Deno.serve(async (req) => {
     if (input.source_caller) finalMeta.source_caller = input.source_caller;
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
+    let callbackTerminalStatus: string | null = null;
+    let callbackTerminalError: string | null = null;
+    if (!sendError && input.channel === 'whatsapp' && providerMessageId) {
+      const { data: linkedWaMessage } = await supabase
+        .from('whatsapp_messages')
+        .select('status, failure_code, failure_reason')
+        .eq('whatsapp_message_id', providerMessageId)
+        .maybeSingle();
+      const linkedStatus = String(linkedWaMessage?.status || '').toLowerCase();
+      if (['failed', 'bounced', 'suppressed'].includes(linkedStatus)) {
+        callbackTerminalStatus = linkedStatus;
+        callbackTerminalError = linkedWaMessage?.failure_reason
+          ?? (linkedWaMessage?.failure_code ? `Meta delivery failed: ${linkedWaMessage.failure_code}` : null);
+        finalMeta.callback_terminal_from_whatsapp_messages = true;
+      }
+    }
+
     const { data: currentLogBeforeFinalize } = await supabase
       .from('communication_logs')
       .select('delivery_status, error_message, delivery_metadata')
       .eq('id', log!.id)
       .maybeSingle();
     const currentStatus = String(currentLogBeforeFinalize?.delivery_status || '').toLowerCase();
-    const callbackAlreadyTerminal = !sendError && ['failed', 'bounced', 'suppressed'].includes(currentStatus);
+    const callbackAlreadyTerminal = !sendError && (
+      ['failed', 'bounced', 'suppressed'].includes(currentStatus) || !!callbackTerminalStatus
+    );
+    const finalTerminalStatus = callbackTerminalStatus || currentStatus;
     const mergedFinalMeta = {
       ...(((currentLogBeforeFinalize?.delivery_metadata as Record<string, unknown> | null) ?? {})),
       ...finalMeta,
@@ -1161,15 +1181,15 @@ Deno.serve(async (req) => {
       .from('communication_logs')
       .update({
         delivery_status: callbackAlreadyTerminal
-          ? currentStatus
+          ? finalTerminalStatus
           : (sendError ? 'failed' : 'sent'),
         status: callbackAlreadyTerminal
-          ? currentStatus
+          ? finalTerminalStatus
           : (sendError ? 'failed' : 'sent'),
         provider_message_id: providerMessageId ?? null,
         delivery_metadata: Object.keys(mergedFinalMeta).length ? mergedFinalMeta : {},
         error_message: callbackAlreadyTerminal
-          ? (currentLogBeforeFinalize?.error_message ?? null)
+          ? (callbackTerminalError ?? currentLogBeforeFinalize?.error_message ?? null)
           : (sendError ?? null),
         // Re-write content from the (now possibly cleaned) rendered body so the
         // audit row matches what was actually delivered to WhatsApp.
