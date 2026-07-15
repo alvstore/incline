@@ -126,6 +126,8 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
       let q = supabase
         .from('communication_logs')
         .select('*')
+        .not('dedupe_key', 'ilike', 'campaign:%')
+        .not('dedupe_key', 'ilike', 'broadcast:%')
         .lt('created_at', last.created_at)
         .order('created_at', { ascending: false })
         .limit(pageSize);
