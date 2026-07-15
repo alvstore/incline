@@ -28,11 +28,12 @@ import { format, formatDistanceToNow } from 'date-fns';
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
 const statusBadge = (s: string) => {
   switch (s) {
-    case 'sent': return { c: 'bg-success/15 text-success border-success/25', icon: CheckCircle2 };
-    case 'sending': return { c: 'bg-info/15 text-info border-info/25', icon: Loader2 };
-    case 'scheduled': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock };
-    case 'failed': return { c: 'bg-destructive/15 text-destructive border-destructive/25', icon: AlertTriangle };
-    default: return { c: 'bg-muted text-foreground border-border', icon: Clock };
+    case 'sent': return { c: 'bg-success/15 text-success border-success/25', icon: CheckCircle2, label: 'sent' };
+    case 'sending': return { c: 'bg-info/15 text-info border-info/25', icon: Loader2, label: 'sending' };
+    case 'scheduled': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock, label: 'scheduled' };
+    case 'pending_template_approval': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock, label: 'awaiting Meta approval' };
+    case 'failed': return { c: 'bg-destructive/15 text-destructive border-destructive/25', icon: AlertTriangle, label: 'failed' };
+    default: return { c: 'bg-muted text-foreground border-border', icon: Clock, label: s };
   }
 };
 
