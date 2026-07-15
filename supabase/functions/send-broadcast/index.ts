@@ -109,9 +109,32 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const firstName = (r.full_name || '').trim().split(/\s+/)[0] || '';
+        const perVars: Record<string, string> = {
+          member_name: r.full_name || 'there',
+          full_name: r.full_name || 'there',
+          first_name: firstName || 'there',
+          name: firstName || r.full_name || 'there',
+          ...(variables && typeof variables === 'object' ? variables : {}),
+        };
+
+        // Skip missing-name recipients on Meta template sends — otherwise
+        // Meta rejects the whole batch with 132018 and the campaign fails.
+        if (channel === 'whatsapp' && template_id && !r.full_name?.trim()) {
+          failed++;
+          recipientRows.push({
+            campaign_id: campaign_id ?? null,
+            source_type: r.source_type, source_ref_id: r.source_ref_id,
+            full_name: r.full_name, phone: r.phone, email: r.email,
+            status: 'skipped', error: 'missing_required_variable:name',
+          });
+          continue;
+        }
+
         const personalized = message
-          .replace(/\{\{member_name\}\}/g, r.full_name || 'there')
-          .replace(/\{\{full_name\}\}/g, r.full_name || 'there');
+          .replace(/\{\{member_name\}\}/g, perVars.member_name)
+          .replace(/\{\{full_name\}\}/g, perVars.full_name)
+          .replace(/\{\{first_name\}\}/g, perVars.first_name);
 
         try {
           const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
@@ -120,7 +143,7 @@ Deno.serve(async (req) => {
               channel,
               recipient: target,
               category: 'marketing',
-              payload: { subject: subject || undefined, body: personalized, variables: variables || undefined },
+              payload: { subject: subject || undefined, body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
@@ -130,12 +153,13 @@ Deno.serve(async (req) => {
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
           if (ok) sent++; else failed++;
+          const reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
           recipientRows.push({
             campaign_id: campaign_id ?? null,
             source_type: r.source_type, source_ref_id: r.source_ref_id,
             full_name: r.full_name, phone: r.phone, email: r.email,
             status: ok ? 'sent' : 'failed',
-            error: ok ? null : (dispatchErr?.message || (dispatchRes as any)?.error || 'dispatch_failed'),
+            error: reasonStr,
             dispatched_at: new Date().toISOString(),
           });
         } catch (e: any) {
