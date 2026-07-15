@@ -301,12 +301,32 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
           <Button
             size="sm" className="rounded-xl gap-2 bg-primary hover:bg-primary text-primary-foreground"
             onClick={() => setConfirmRetrigger(true)}
-            disabled={retriggerMut.isPending || isSending}
+            disabled={retriggerMut.isPending || (isSending && !isZombieSending)}
           >
             <Repeat className="h-3.5 w-3.5" />
             Re-trigger to all
           </Button>
+          {isZombieSending && (
+            <Button
+              size="sm" variant="destructive" className="rounded-xl gap-2"
+              onClick={() => resetMut.mutate()}
+              disabled={resetMut.isPending}
+              title="Wizard aborted before any recipient rows were written. Reset back to draft so you can re-send."
+            >
+              <RotateCcw className={`h-3.5 w-3.5 ${resetMut.isPending ? 'animate-spin' : ''}`} />
+              Reset to Draft (stuck)
+            </Button>
+          )}
         </div>
+
+        {isZombieSending && (
+          <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+            <strong>Stuck in "sending":</strong> no recipients were dispatched. The wizard call
+            to <code>send-broadcast</code> aborted before any messages went out — usually because
+            the browser tab was closed or the audience resolver failed. Click <em>Reset to Draft</em>,
+            then re-open the campaign and hit Send again.
+          </div>
+        )}
 
         <div className="mt-5 space-y-5">
           {/* KPI strip: 5 tiles */}
