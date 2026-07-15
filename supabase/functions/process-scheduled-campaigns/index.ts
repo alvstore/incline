@@ -218,3 +218,22 @@ function json(body: any, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+/**
+ * Fire an in-app notification to the campaign creator (best-effort — never
+ * throws). Used when a scheduled campaign is failed due to template status.
+ */
+async function notifyOwner(admin: any, campaign: any, message: string) {
+  try {
+    if (!campaign.created_by) return;
+    await admin.from('notifications').insert({
+      user_id: campaign.created_by,
+      title: 'Campaign failed',
+      message,
+      type: 'campaign_failed',
+      metadata: { campaign_id: campaign.id, branch_id: campaign.branch_id },
+    });
+  } catch (e) {
+    console.error('notifyOwner failed', e);
+  }
+}
