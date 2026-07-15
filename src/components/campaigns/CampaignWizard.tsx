@@ -43,6 +43,49 @@ interface Props {
 
 const VARIABLES = ['{{member_name}}', '{{member_code}}', '{{first_name}}', '{{branch_name}}'];
 
+// ─── Variable resolution (kept in lock-step with dispatch-communication + send-broadcast) ───
+// Positional Meta vars ({{1}}, {{2}}, ...) map to these keys in order.
+// Named vars ({{first_name}}, ...) map to themselves.
+const POSITIONAL_VAR_MEANINGS: Record<string, { label: string; sample: string }> = {
+  '1': { label: 'Recipient first name', sample: 'Rahul' },
+  '2': { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  '3': { label: 'Branch name', sample: 'Incline HQ' },
+};
+const NAMED_VAR_MEANINGS: Record<string, { label: string; sample: string }> = {
+  first_name: { label: 'Recipient first name', sample: 'Rahul' },
+  member_name: { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  full_name: { label: 'Recipient full name', sample: 'Rahul Sharma' },
+  name: { label: 'Recipient first name', sample: 'Rahul' },
+  member_code: { label: 'Member code', sample: 'INC-000123' },
+  branch_name: { label: 'Branch name', sample: 'Incline HQ' },
+};
+
+interface TplVar { token: string; key: string; positional: boolean; label: string; sample: string; }
+function extractTemplateVars(body: string): TplVar[] {
+  const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+  const seen = new Set<string>();
+  const out: TplVar[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    const key = m[1];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const positional = /^\d+$/.test(key);
+    const meta = positional
+      ? (POSITIONAL_VAR_MEANINGS[key] ?? { label: `Positional variable #${key}`, sample: 'Sample' })
+      : (NAMED_VAR_MEANINGS[key.toLowerCase()] ?? { label: key.replace(/_/g, ' '), sample: 'Sample' });
+    out.push({ token: `{{${key}}}`, key, positional, label: meta.label, sample: meta.sample });
+  }
+  return out;
+}
+function renderPreview(body: string, sampleOverrides: Record<string, string> = {}): string {
+  return body.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+    if (sampleOverrides[key]) return sampleOverrides[key];
+    if (/^\d+$/.test(key)) return POSITIONAL_VAR_MEANINGS[key]?.sample ?? 'Sample';
+    return NAMED_VAR_MEANINGS[key.toLowerCase()]?.sample ?? 'Sample';
+  });
+}
+
 type CampaignType = 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
 
 const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: string; color: string }[] = [
@@ -91,6 +134,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [showAllTemplates, setShowAllTemplates] = useState(false);
 
   const [syncingTemplates, setSyncingTemplates] = useState(false);
+
+  // Test send (Preview & Test panel)
+  const [testRecipient, setTestRecipient] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
 
   // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
   // is selectable, even if there's no local CRM `templates` row yet.
@@ -385,6 +432,51 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit to Meta');
     } finally { setSubmittingMeta(false); }
+  };
+
+  const handleSendTest = async () => {
+    const target = testRecipient.trim();
+    if (!target) { toast.error(channel === 'email' ? 'Enter a test email' : 'Enter a test phone (+91…)'); return; }
+    if (!message.trim()) { toast.error('Draft a message first'); return; }
+    if (channel === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) { toast.error('Invalid email'); return; }
+    if (channel !== 'email' && !/^\+?\d{7,15}$/.test(target.replace(/\s+/g, ''))) { toast.error('Invalid phone (use +91XXXXXXXXXX)'); return; }
+
+    setSendingTest(true);
+    try {
+      const templateId =
+        channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:')
+          ? selectedTemplateId
+          : null;
+      const testName = 'Test User';
+      const recipient = {
+        source_type: 'test',
+        source_ref_id: 'test',
+        full_name: testName,
+        first_name: testName.split(/\s+/)[0],
+        phone: channel === 'email' ? null : (target.startsWith('+') ? target : `+${target}`),
+        email: channel === 'email' ? target : null,
+      };
+      const { data, error } = await supabase.functions.invoke('send-broadcast', {
+        body: {
+          channel,
+          message: buildFinalMessage(),
+          subject: channel === 'email' ? subject.trim() || 'Test message' : undefined,
+          branch_id: branchId,
+          recipients: [recipient],
+          template_id: templateId,
+          attachment_url: attachment?.url ?? undefined,
+          attachment_kind: attachment?.kind ?? undefined,
+          attachment_filename: attachment?.filename ?? undefined,
+          attachment: attachment ? { url: attachment.url, kind: attachment.kind, filename: attachment.filename } : undefined,
+        },
+      });
+      if (error) throw error;
+      const r = data as any;
+      if (r?.sent > 0) toast.success(`Test sent to ${target}`);
+      else toast.error(`Test failed: ${r?.recipients?.[0]?.error || r?.reason || 'unknown'}`, { duration: 9000 });
+    } catch (e: any) {
+      toast.error(e?.message || 'Test send failed');
+    } finally { setSendingTest(false); }
   };
 
   const handleAiDraft = async () => {
@@ -893,6 +985,76 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 )}
               </div>
             </div>
+
+            {/* ─── Variable Legend + Live Preview + Send Test ───────────────── */}
+            {message.trim().length > 0 && (() => {
+              const vars = extractTemplateVars(buildFinalMessage());
+              const anyPositional = vars.some((v) => v.positional);
+              const previewText = renderPreview(buildFinalMessage());
+              return (
+                <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs uppercase tracking-wider text-primary font-semibold">Preview &amp; Test</Label>
+                    {anyPositional && (
+                      <span className="text-[10px] text-primary/80 font-mono">Meta positional variables detected</span>
+                    )}
+                  </div>
+
+                  {vars.length > 0 && (
+                    <div className="rounded-xl bg-card border p-2.5 space-y-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Variables in this message</p>
+                      {vars.map((v) => (
+                        <div key={v.token} className="flex items-center gap-2 text-[12px]">
+                          <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] text-foreground shrink-0">{v.token}</code>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="text-foreground truncate"><b>{v.label}</b></span>
+                          <span className="text-muted-foreground text-[11px] truncate">e.g. "{v.sample}"</span>
+                        </div>
+                      ))}
+                      {anyPositional && (
+                        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                          Meta stores approved templates with numbered slots ({'{{1}}, {{2}}…'}). Our sender maps them to the same fields as the named tokens above — nothing else to configure.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-card border p-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">What recipients will see</p>
+                    <pre className="text-xs whitespace-pre-wrap text-foreground font-sans leading-relaxed">{previewText}</pre>
+                    {attachment && (
+                      <p className="text-[10px] text-muted-foreground mt-1.5">+ attachment: {attachment.filename} ({attachment.kind})</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="rounded-xl h-9 text-sm flex-1"
+                      placeholder={channel === 'email' ? 'you@example.com' : '+91XXXXXXXXXX'}
+                      value={testRecipient}
+                      onChange={(e) => setTestRecipient(e.target.value)}
+                      disabled={sendingTest}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSendTest}
+                      disabled={sendingTest || !testRecipient.trim()}
+                      className="rounded-full h-9 px-4 gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
+                      title="Send this exact message to yourself using the same pipeline as real campaigns"
+                    >
+                      {sendingTest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Send Test
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground -mt-1">
+                    Uses the exact same delivery path as a real send (template, attachments, variables). Test-Sends are not logged to campaign analytics.
+                  </p>
+                </div>
+              );
+            })()}
+
+
 
             {(channel === 'whatsapp' || channel === 'email') && (
               <div>
