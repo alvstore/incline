@@ -1,4 +1,8 @@
-// dispatch-communication v1.17.0
+// dispatch-communication v1.18.0
+// v1.18.0: FIX — Meta positional placeholders like {{1}} are mapped to CRM
+//          variable labels like first_name without duplicating body params.
+//          Prevents 132000 when CRM variables=["first_name"] and approved Meta
+//          body has exactly one {{1}} slot.
 // v1.17.0: FIX — finalize update no longer sets delivery_metadata=null (NOT NULL
 //          column → silent update failure → WA/SMS/email logs stuck in 'sending'
 //          forever). Also injects URL-button component for AUTHENTICATION (OTP)
@@ -169,9 +173,22 @@ function orderedTemplateKeys(content: string, variables: unknown): string[] {
   const configured = Array.isArray(variables)
     ? variables.map((v) => stripBraces(String(v))).filter(Boolean)
     : [];
+  const placeholders = Array.from(content.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g))
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+
+  // Meta only cares about positional BODY parameter count. Our CRM stores a
+  // friendly mapping (`variables: ["first_name"]`) while Meta text often stays
+  // positional (`Hi {{1}}`). Treat configured[n] as the label for {{n+1}}
+  // instead of adding BOTH keys — otherwise a one-slot Meta template receives
+  // two body params and fails with 132000.
+  if (configured.length > 0 && placeholders.every((key) => /^\d+$/.test(key))) {
+    const maxSlot = placeholders.reduce((max, key) => Math.max(max, Number(key)), 0);
+    if (maxSlot <= configured.length) return configured.slice(0, maxSlot);
+  }
+
   const keys: string[] = [...configured];
-  for (const match of content.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-    const key = match[1].trim();
+  for (const key of placeholders) {
     if (!keys.includes(key)) keys.push(key);
   }
   return keys;
