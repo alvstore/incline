@@ -1,3 +1,6 @@
+// v4.1.0 — Auto-fallback to RCS/SMS on Meta pacing (131049/130472) when
+//          `campaigns.fallback_policy.on_pacing` is true. Records
+//          `fallback_used/fallback_channel/pacing_code` on campaign_recipients.
 // v4.0.0 — Background execution: ACK 202 immediately, then run the full
 //          dispatch loop inside EdgeRuntime.waitUntil so the browser stops
 //          spinning and campaigns can send to 300+ recipients without
@@ -6,6 +9,7 @@
 // v3.4.0 — Per-recipient variables + auto-pause on terminal template errors.
 // v3.3.0 — Attachment kind 'video' supported.
 // v3.1.0 — Route through dispatch-communication with Meta template support.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // deno-lint-ignore no-explicit-any
