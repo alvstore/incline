@@ -1,3 +1,5 @@
+// v1.1.0 — Retry only currently failed recipients; do not retry contacts that
+// already have a successful send log for the same campaign/source key.
 // v1.0.0 — Retry only the failed recipients of a campaign.
 // Reads campaign_recipients where status='failed' (or merged log status is
 // failed/bounced), builds a fresh `recipients` array in the shape send-broadcast
@@ -59,15 +61,23 @@ Deno.serve(async (req) => {
       .eq('campaign_id', campaign_id)
       .in('status', ['failed']);
 
-    // Also merge DLR-failed logs that recipient row still marks as 'sent'.
-    const { data: failedLogs } = await admin
+    // Merge provider DLR states. Base keys strip any :retry:<ts> suffix so all
+    // attempts for the same recipient collapse to one current outcome.
+    const { data: campaignLogs } = await admin
       .from('communication_logs')
       .select('dedupe_key, delivery_status, status')
       .like('dedupe_key', `campaign:${campaign_id}:%`)
-      .in('delivery_status', ['failed', 'bounced']);
+      .order('created_at', { ascending: false });
+
+    const successfulKeys = new Set(
+      (campaignLogs || [])
+        .filter((l: any) => ['sent', 'delivered', 'read'].includes(String(l.delivery_status || l.status || '').toLowerCase()))
+        .map((l: any) => String(l.dedupe_key || '').replace(/:retry:\d+$/, '')),
+    );
 
     const dlrFailedKeys = new Set(
-      (failedLogs || [])
+      (campaignLogs || [])
+        .filter((l: any) => ['failed', 'bounced'].includes(String(l.delivery_status || '').toLowerCase()))
         .map((l: any) => String(l.dedupe_key || ''))
         // strip any :retry:N suffix so we compare to the original recipient key
         .map((k: string) => k.replace(/:retry:\d+$/, '')),
@@ -86,7 +96,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const merged = [...(recRows || []), ...dlrFailedRecipients];
+    const merged = [...(recRows || []), ...dlrFailedRecipients]
+      .filter((r: any) => !successfulKeys.has(`campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}`));
     // Dedupe by (source_type, source_ref_id)
     const seen = new Set<string>();
     const audience = merged.filter((r: any) => {
@@ -103,7 +114,6 @@ Deno.serve(async (req) => {
     // Bump attempt + last_retried_at on these recipient rows.
     const ids = audience.map((r: any) => r.id).filter(Boolean);
     if (ids.length > 0) {
-      await admin.rpc('sql', { q: '' }).catch(() => {}); // no-op guard
       for (const row of audience) {
         await admin
           .from('campaign_recipients')

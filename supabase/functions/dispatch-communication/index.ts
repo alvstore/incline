@@ -1,4 +1,7 @@
-// dispatch-communication v1.20.0
+// dispatch-communication v1.21.0
+// v1.21.0: Email broadcast hardening — images are embedded by URL and large
+//          documents are linked instead of base64-attached per recipient. This
+//          avoids Edge worker resource exhaustion during 300+ recipient sends.
 // v1.20.0: FIX — do not overwrite a Meta delivery callback that already
 //          marked the log failed/bounced while dispatch finalization was still
 //          running. Provider ACK means "accepted", not guaranteed delivered.
@@ -1059,27 +1062,47 @@ Deno.serve(async (req) => {
         }
         case 'email': {
           // Build email attachments by fetching the attachment.url and base64-encoding.
+          // For high-volume marketing broadcasts, repeatedly downloading and
+          // base64-encoding the same creative for every recipient can exhaust
+          // Edge worker memory/CPU. Images render better as linked creatives;
+          // large documents are linked instead of attached.
           let emailAttachments: Array<{ filename: string; content_base64: string; content_type: string }> | undefined;
+          let attachmentHtml = '';
           if (input.attachment?.url) {
-            try {
-              const res = await fetch(input.attachment.url);
-              if (!res.ok) throw new Error(`attachment_fetch_${res.status}`);
-              const buf = new Uint8Array(await res.arrayBuffer());
-              if (buf.byteLength < 1024) {
-                throw new Error(`attachment_too_small_${buf.byteLength}b`);
+            const kind = String(input.attachment.kind || '').toLowerCase();
+            const contentType = String(input.attachment.content_type || '').toLowerCase();
+            const safeUrl = input.attachment.url;
+            const safeName = input.attachment.filename || 'attachment';
+
+            if (kind === 'image' || contentType.startsWith('image/')) {
+              attachmentHtml = `<p style="margin:24px 0 0;"><img src="${safeUrl}" alt="${safeName}" style="max-width:100%;height:auto;border-radius:12px;display:block;" /></p>`;
+            } else if (input.category === 'marketing') {
+              attachmentHtml = `<p style="margin:24px 0 0;"><a href="${safeUrl}" style="color:#EAB308;font-weight:700;">Open ${safeName}</a></p>`;
+            } else {
+              try {
+                const res = await fetch(input.attachment.url);
+                if (!res.ok) throw new Error(`attachment_fetch_${res.status}`);
+                const buf = new Uint8Array(await res.arrayBuffer());
+                if (buf.byteLength < 1024) {
+                  throw new Error(`attachment_too_small_${buf.byteLength}b`);
+                }
+                if (buf.byteLength > 2_500_000) {
+                  attachmentHtml = `<p style="margin:24px 0 0;"><a href="${safeUrl}" style="color:#EAB308;font-weight:700;">Open ${safeName}</a></p>`;
+                } else {
+                  // Chunked base64 to avoid stack overflow on large PDFs
+                  let bin = '';
+                  for (let i = 0; i < buf.length; i += 0x8000) {
+                    bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)));
+                  }
+                  emailAttachments = [{
+                    filename: input.attachment.filename,
+                    content_base64: btoa(bin),
+                    content_type: input.attachment.content_type ?? 'application/pdf',
+                  }];
+                }
+              } catch (e) {
+                throw new Error(`attachment_error: ${(e as Error).message}`);
               }
-              // Chunked base64 to avoid stack overflow on large PDFs
-              let bin = '';
-              for (let i = 0; i < buf.length; i += 0x8000) {
-                bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)));
-              }
-              emailAttachments = [{
-                filename: input.attachment.filename,
-                content_base64: btoa(bin),
-                content_type: input.attachment.content_type ?? 'application/pdf',
-              }];
-            } catch (e) {
-              throw new Error(`attachment_error: ${(e as Error).message}`);
             }
           }
           // Normalize plain-text bodies for HTML email: decode literal `\n` escape
@@ -1087,9 +1110,9 @@ Deno.serve(async (req) => {
           // then convert newlines to <br> so they render correctly inside the
           // branded shell. HTML markup already in the body is preserved.
           const rawBody = String(input.payload.body || '');
-          const emailHtml = /<\s*(br|p|div|table|html)\b/i.test(rawBody)
+          const emailHtml = (/<\s*(br|p|div|table|html)\b/i.test(rawBody)
             ? rawBody.replace(/\\r\\n|\\n/g, '<br>')
-            : rawBody.replace(/\\r\\n|\\n/g, '\n').replace(/\r?\n/g, '<br>');
+            : rawBody.replace(/\\r\\n|\\n/g, '\n').replace(/\r?\n/g, '<br>')) + attachmentHtml;
           const r = await supabase.functions.invoke('send-email', {
             body: {
               to: input.recipient,

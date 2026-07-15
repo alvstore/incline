@@ -61,9 +61,9 @@ const finalOf = (r: {
   const ds = (r.dlrStatus || '').toLowerCase();
   if (r.readAt || ds === 'read') return 'read';
   if (r.deliveredAt || ds === 'delivered') return 'delivered';
+  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
   if (ds === 'failed' || ds === 'bounced' || rs === 'failed') return 'failed';
   if (rs === 'skipped') return 'skipped';
-  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
   return 'pending';
 };
 
@@ -100,6 +100,15 @@ const channelIcon = (channel: string) => {
   return MessageSquare;
 };
 
+const recipientRank = (status: string | null | undefined) => {
+  switch (String(status || '').toLowerCase()) {
+    case 'sent': return 3;
+    case 'failed': return 2;
+    case 'skipped': return 1;
+    default: return 0;
+  }
+};
+
 export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'delivered' | 'failed' | 'pending'>('all');
@@ -131,7 +140,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     queryFn: async () => {
       const { data } = await supabase
         .from('communication_logs')
-        .select('dedupe_key, delivery_status, status, error_code, error_message, delivered_at, read_at, created_at')
+        .select('dedupe_key, delivery_status, status, error_message, delivered_at, read_at, created_at')
         .like('dedupe_key', `campaign:${campaign!.id}:%`)
         .order('created_at', { ascending: false })
         .limit(5000);
@@ -149,10 +158,19 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
         byKey.set(base, l);
       }
     }
-    return (recipients as any[]).map((r) => {
+    const byRecipient = new Map<string, any>();
+    for (const r of recipients as any[]) {
+      const key = `${r.source_type}:${r.source_ref_id}`;
+      const existing = byRecipient.get(key);
+      if (!existing || recipientRank(r.status) > recipientRank(existing.status)) {
+        byRecipient.set(key, r);
+      }
+    }
+
+    return Array.from(byRecipient.values()).map((r) => {
       const key = `campaign:${campaign!.id}:${r.source_type}:${r.source_ref_id}`;
       const dlr = byKey.get(key);
-      const errRaw = r.error || dlr?.error_message || dlr?.error_code || null;
+      const errRaw = r.error || dlr?.error_message || null;
       const label = errRaw ? parseCommError(errRaw)?.short || errRaw : null;
       const base = {
         id: r.id,
