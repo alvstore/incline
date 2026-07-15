@@ -1249,10 +1249,11 @@ Deno.serve(async (req) => {
       })
       .eq('id', log!.id);
 
+    const providerRoute = (metaErrorFields.provider_route as string | undefined) ?? null;
     if (sendError || callbackAlreadyTerminal) {
-      return ok({ status: 'failed', log_id: log!.id, reason: sendError });
+      return ok({ status: 'failed', log_id: log!.id, reason: sendError, provider_route: providerRoute });
     }
-    return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId });
+    return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId, provider_route: providerRoute });
   } catch (e) {
     return bad(500, { error: 'unexpected', detail: (e as Error).message });
   }
