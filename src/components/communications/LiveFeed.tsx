@@ -264,14 +264,16 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
   }, [nameMap]);
 
   useEffect(() => {
-    const invalidate = () => {
+    const invalidate = (payload?: any) => {
+      const dk = payload?.new?.dedupe_key || payload?.old?.dedupe_key || '';
+      if (typeof dk === 'string' && (dk.startsWith('campaign:') || dk.startsWith('broadcast:'))) return;
       qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'comm-live-feed' });
       setLivePulse((p) => p + 1);
     };
     const ch = supabase
       .channel('comm-live-feed-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'communication_logs' }, invalidate)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'communication_delivery_events' }, invalidate)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'communication_delivery_events' }, () => invalidate())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
