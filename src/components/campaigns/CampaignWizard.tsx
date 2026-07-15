@@ -1210,32 +1210,53 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 <div className="min-w-0">
                   <p className="text-xs font-semibold">Emergency bulk send</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) to upload manually if the CRM pipeline is unavailable.
+                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) for manual upload if the CRM pipeline is unavailable.
                   </p>
                 </div>
-                <TelinfyBulkExportButton
-                  campaignName={name || 'campaign'}
-                  recipients={[]}
-                  variableKeys={channel === 'rcs' ? rcsVarKeys : ['first_name']}
-                  disabled={false}
-                  resolveVar={undefined}
-                  {...({
-                    // Lazy resolver — computed at click via resolveCampaignAudience.
-                  } as any)}
-                />
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="hidden"
-                  aria-hidden
-                />
-                <TelinfyLazyExport
-                  branchId={branchId}
-                  filter={filter}
-                  campaignName={name || 'campaign'}
-                  variableKeys={channel === 'rcs' ? rcsVarKeys : ['first_name']}
-                />
+                  className="rounded-full h-8 px-3 text-xs gap-1.5 shrink-0"
+                  onClick={async () => {
+                    try {
+                      const { resolveCampaignAudience } = await import('@/services/campaignService');
+                      const recips = await resolveCampaignAudience(branchId, filter);
+                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name'];
+                      const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
+                      const csv = buildTelinfyCsv({
+                        campaignName: name || 'campaign',
+                        recipients: recips as any,
+                        variableKeys: keys.length ? keys : ['first_name'],
+                        resolveVar: channel === 'rcs' && selectedRcsTemplate
+                          ? (r: any, k: string) => {
+                              const mapped = rcsVarMap[k] || '';
+                              const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
+                              const full = r.full_name || 'there';
+                              return String(mapped)
+                                .replace(/\{\{\s*first_name\s*\}\}/gi, first)
+                                .replace(/\{\{\s*full_name\s*\}\}/gi, full)
+                                .replace(/\{\{\s*member_name\s*\}\}/gi, full)
+                                .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
+                            }
+                          : undefined,
+                      });
+                      const safe = (name || 'campaign').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `telinfy_${safe}_${new Date().toISOString().slice(0, 10)}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success(`Downloaded ${(recips as any[]).filter((r: any) => r.phone).length} rows`);
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Export failed');
+                    }
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5" /> Telinfy CSV
+                </Button>
               </div>
             )}
 
