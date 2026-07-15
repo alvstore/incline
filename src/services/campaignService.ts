@@ -509,7 +509,38 @@ export async function getCampaignReport(campaignId: string): Promise<{
     .eq('campaign_id', campaignId)
     .order('dispatched_at', { ascending: false, nullsFirst: false });
   if (error) throw error;
-  const rows = (data as any as CampaignRecipientRow[]) || [];
+  let rows = (data as any as CampaignRecipientRow[]) || [];
+
+  // Fallback: hydrate from communication_logs when no campaign_recipients rows
+  // exist yet (legacy campaigns run before recipient rows were persisted, or
+  // in-flight sends that haven't materialised recipients yet). Read-only —
+  // never writes back to campaign_recipients.
+  if (rows.length === 0) {
+    const { data: logs } = await supabase
+      .from('communication_logs')
+      .select('id, recipient, status, delivery_status, error_message, sent_at, created_at, delivery_metadata')
+      .like('dedupe_key', `campaign:${campaignId}:%`)
+      .order('created_at', { ascending: false });
+    rows = ((logs as any[]) || []).map((l) => {
+      const meta = (l.delivery_metadata || {}) as any;
+      const rawErr = String(l.error_message || '');
+      const codeMatch = rawErr.match(/\b(13\d{4}|132\d{3})\b/);
+      return {
+        id: l.id,
+        source_type: 'log',
+        source_label: 'communication_log',
+        full_name: null,
+        phone: String(l.recipient || '').startsWith('+') ? l.recipient : l.recipient || null,
+        email: null,
+        status: (l.delivery_status || l.status || 'unknown') as string,
+        error_code: codeMatch ? codeMatch[1] : null,
+        error_reason: l.error_message || null,
+        in_window: null,
+        read_at: meta?.wa_status_at || null,
+        dispatched_at: l.sent_at || l.created_at,
+      } as CampaignRecipientRow;
+    });
+  }
 
   const failures = rows.filter((r) => r.status === 'failed');
   const map = new Map<string, FailureGroup>();
