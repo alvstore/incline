@@ -1,88 +1,103 @@
+## Audit summary
 
-## Goal
+### 1. WhatsApp 131049 ("not delivered to maintain healthy ecosystem engagement")
 
-1. **Live Feed** in Communication Hub must show only *transactional / 1-to-1* messages. All campaign / broadcast traffic disappears from it.
-2. **Campaign Detail drawer** becomes the single source of truth for that campaign: real KPIs, per-recipient status with error reason, and buttons to **Retry failed** and **Re-trigger campaign**.
+**Reality check first:** There is no separate "Marketing API" that bypasses 131049. All WhatsApp business messaging (Cloud API, On-Premise, BSP, and the newer "Marketing Messages Lite API") funnels through the same Meta pacing engine. 131049 fires when Meta judges the *recipient* is over-messaged or unlikely to engage — the API endpoint doesn't change the verdict. What actually reduces 131049:
 
-Root cause of the empty drawer (screenshot 1): the drawer currently reads `campaign_runs`, but `send-broadcast` writes to `campaign_recipients` + `communication_logs` (dedupe_key `campaign:<id>:<source>:<ref>`). That table is empty ⇒ everything shows 0.
+- Sending MARKETING templates only to users who opted in and engaged recently
+- Using a high-quality-rated template (Meta quality tier)
+- Falling back to another channel (RCS/SMS) when Meta paces
+- Correct category on the template (misclassified UTILITY→MARKETING gets paced hardest)
 
----
+We already have the pacing cooldown + category-drift warning in `dispatch-communication` (v1.14+) and the humanised error in `metaErrorLabels.ts`. The real gap is UX: the campaign wizard doesn't tell the user "this will use WhatsApp MARKETING category which is subject to pacing" and doesn't offer an automatic RCS/SMS fallback per recipient.
 
-## Changes
+**Plan (issue 1):**
+- Campaign Wizard "Promotion" type → add an inline advisory + a toggle **"Auto-fallback to RCS/SMS on Meta pacing (131049/130472)"** (default ON). Persist to `campaigns.fallback_policy`.
+- `send-broadcast` → when dispatcher returns `meta_code in (131049,130472)` and fallback_policy is on, immediately re-dispatch that single recipient via `channel:'rcs'` (which itself falls back to SMS for freeform per existing rule). Log both attempts in `campaign_recipients` with `fallback_used=true`.
+- Campaign Detail Drawer → surface a new "Paced by Meta → fallback sent via RCS/SMS" row so the operator sees exactly what happened.
+- Add a short KB entry on the Promotion step explaining why 131049 happens and that swapping APIs won't fix it, so the user stops chasing that assumption.
 
-### 1. Filter campaigns out of Live Feed
-`src/components/communications/LiveFeed.tsx`
-- Both queries (`page1` and `loadOlder`) add `.not('dedupe_key','ilike','campaign:%').not('dedupe_key','ilike','broadcast:%')`.
-- Realtime subscription: on INSERT, skip rows whose `dedupe_key` starts with `campaign:` / `broadcast:` before invalidating (avoids noisy refetches).
-- KpiStrip counts recompute from the filtered result — no code change needed since they derive from `logs`.
-- Add a subtle helper line under the "Live Feed" title: *"Campaign sends are tracked in Campaigns → View details."*
-
-### 2. Rebuild Campaign Detail drawer as SSOT
-`src/components/campaigns/CampaignDetailDrawer.tsx` — full rewrite of the data layer:
-
-- **Data source switch**: read `campaign_recipients` (source_type, source_ref_id, recipient_phone/email, status, error, created_at) instead of `campaign_runs`.
-- **DLR join**: fetch `communication_logs` where `dedupe_key like 'campaign:<id>:%'`, index by dedupe_key, merge into each recipient row to get true `delivery_status` (sent/delivered/read/failed), provider `error_code`/`error_message`, `delivered_at`, `read_at`.
-- **Header KPI strip (5 tiles)**: Total · Sent · Delivered · Read · Failed. Numbers come from the merged view, not the stale `campaigns.*_count` columns; also show a small "auto-reconciles every 2 min" tag linking to the existing `reconcile-campaign-stats` fn.
-- **Progress bar** while `campaign.status === 'sending'` (same math as the card).
-- **Recipient table** (virtualised list, filterable):
-  - Filter chips: All / Delivered / Failed / Pending.
-  - Search by name/phone/email.
-  - Row shows: name (via existing resolver pattern), channel icon, recipient, status pill, timestamp, and — when failed — a human-friendly reason via `parseCommError()` (same helper Live Feed uses) with the raw provider code in a tooltip.
-- **Actions panel** (top-right of drawer):
-  - **Retry failed** — visible when `failed > 0`. Calls a new edge fn `retry-campaign-failed` (see §3). Confirms count first.
-  - **Re-trigger campaign** — re-sends to *all* original recipients. Confirmation dialog with total. Calls `sendCampaignNow(campaign.id, { mode: 'all' })`.
-  - **Reconcile now** — invokes `reconcile-campaign-stats` for this campaign_id so the user isn't waiting on cron.
-  - Buttons disabled while `status='sending'`.
-
-### 3. New edge function `retry-campaign-failed`
-`supabase/functions/retry-campaign-failed/index.ts`
-- Input: `{ campaign_id }`.
-- Loads `campaign_recipients` where merged status is `failed` (recipient row `status='failed'` OR joined log `delivery_status in ('failed','bounced')`).
-- Builds a fresh audience array (same `source_type`/`source_ref_id` shape send-broadcast expects) and invokes `send-broadcast` with `{ campaign_id, audience, retry: true }`.
-- Returns `202 { accepted, retrying }`.
-- `send-broadcast` gets a small tweak: when `retry === true`, use a distinct dedupe_key suffix `:retry:<attempt>` so DLRs from the retry don't collide with the original log rows, and increment an `attempt` counter on `campaign_recipients` (new column, see §4).
-
-### 4. Migration
-`supabase/migrations/<ts>_campaign_recipient_retry.sql`
-- `ALTER TABLE public.campaign_recipients ADD COLUMN IF NOT EXISTS attempt smallint NOT NULL DEFAULT 1, ADD COLUMN IF NOT EXISTS last_error text, ADD COLUMN IF NOT EXISTS last_retried_at timestamptz;`
-- Index: `CREATE INDEX IF NOT EXISTS campaign_recipients_campaign_status_idx ON public.campaign_recipients (campaign_id, status);`
-- Index on `communication_logs (dedupe_key text_pattern_ops)` if missing, to keep the `LIKE 'campaign:<id>:%'` join fast.
-- Grants unchanged (table already has them).
-
-### 5. Service layer
-`src/services/campaignService.ts`
-- Add `retryFailedRecipients(campaignId): Promise<{ accepted: number }>` — invokes `retry-campaign-failed`.
-- Add `reconcileCampaignStats(campaignId)` — invokes `reconcile-campaign-stats`.
-- Existing `sendCampaignNow` unchanged.
-
-### 6. Panel touch-ups
-`src/components/campaigns/CampaignsPanel.tsx`
-- No behaviour change; card already links to the drawer. Just make the "SENDING" spinner honour the same disabled-actions rule (Retry / Re-trigger hidden while status is `sending`).
+*Out of scope:* enrolling in Meta's Marketing Messages Lite API — it requires a separate Meta application, is invite-only in India, and would not eliminate 131049.
 
 ---
 
-## Technical notes
+### 2. Dual facial-terminal sync (two devices, both directions)
 
-- **Why keep `campaign_runs`?** Not deleted — legacy rows might still exist; the drawer just stops reading it. A follow-up cleanup migration can drop it later once verified empty in prod.
-- **Dedupe key contract** stays `campaign:<campaign_id>:<source_type>:<source_ref_id>[:retry:<n>]` so `reconcile-campaign-stats` continues to work; that fn's `LIKE 'campaign:<id>:%'` already covers retries.
-- **RLS / Grants**: `campaign_recipients` and `communication_logs` already have authenticated SELECT for branch members via existing policies — no policy changes.
-- **CI comms guard**: `retry-campaign-failed` only invokes `send-broadcast` (not `send-*` directly) so the guard stays green.
-- **No changes to `dispatch-communication`, `send-rcs`, `reconcile-rcs-pending`, or Telinfy handling.
+**Current state:** `sync-to-mips` already dispatches a person to *all* `mips_device_id`s found for the branch in one `syncPerson` call (see `supabase/functions/sync-to-mips/index.ts` L243-306), and `mips-access` does the same for permission grants. So new enrolments *do* land on both devices — provided both devices have `is_online=true` and a non-null `mips_device_id` in `access_devices`.
+
+**Real gaps observed:**
+- Nothing reconciles when device B was offline at enrolment time — that person never lands on B.
+- Deletions/photo re-enrolments only re-push the row that changed; if a device was down we never retry.
+- There is no "both-ways" view: staff can't see per-device presence for a single member.
+
+**Plan (issue 2):**
+- New edge fn **`mips-reconcile-devices`** (cron every 15 min): for each branch with ≥2 devices, list persons on each device via `/through/person/list`, diff against `members`+`employees` scoped to that branch, and re-issue `syncPerson` for any missing pairing. Writes to `mips_sync_failures` on hard errors.
+- New Personnel Sync UI column **"Devices"** showing green/red pill per device SN so ops can spot drift instantly, plus a **"Re-sync to all devices"** row action that calls `assignDevicePermission(personMipsId, allDeviceIds)`.
+- `syncPersonToMIPS` service call: change from single `targetDeviceId` to *all* online device IDs in that branch (currently sends only one when called from PersonnelSyncTab).
+- Migration: add `access_devices.last_reconcile_at timestamptz` for observability.
 
 ---
 
-## Files touched
+### 3. Override Entry on `/attendance-dashboard` — which device, and why slow?
 
-- edit  `src/components/communications/LiveFeed.tsx`
-- rewrite  `src/components/campaigns/CampaignDetailDrawer.tsx`
-- edit  `src/components/campaigns/CampaignsPanel.tsx` (tiny)
-- edit  `src/services/campaignService.ts`
-- edit  `supabase/functions/send-broadcast/index.ts` (retry suffix + attempt bump)
-- new   `supabase/functions/retry-campaign-failed/index.ts`
-- new   `supabase/migrations/<ts>_campaign_recipient_retry.sql`
+**Current behaviour** (`remoteOpenDoorByBranch` in `src/services/mipsService.ts` L233-262):
+1. Queries `access_devices` filtered by branch + `is_online=true`
+2. Picks the *first* row that has a `mips_device_id` — non-deterministic when two devices exist
+3. Falls back to the first online device in the raw MIPS list otherwise
+4. Issues a single MIPS proxy GET to `/through/device/openDoor/{id}`
+
+So today it opens whichever of Device 1 / Device 2 the DB returns first — usually the entry device, but not guaranteed. The latency is the round-trip *localhost MIPS server → device → local relay → callback*, which is bounded by MIPS's own polling window (~2-4 s) plus edge-fn cold start.
+
+**Plan (issue 3):**
+- Add a nullable enum column `access_devices.door_role text check (door_role in ('entry','exit','both')) default 'both'` (migration).
+- Device Management → device edit sheet → Role selector (Entry / Exit / Both).
+- `remoteOpenDoorByBranch(branchId, { role = 'entry' })`:
+  - Prefer devices where `door_role IN ('entry','both')` and `is_online=true`.
+  - If multiple match, fire `openDoor` **in parallel to all** and resolve on first success (so it opens whichever terminal the person is standing at). This also removes the "which one is it opening" ambiguity — both entry-role doors will click.
+  - Return per-device outcome to the UI.
+- Override Entry button: replace the single toast with an inline mini-panel that lists each device attempted with a green tick / red cross + latency in ms, so the operator sees "Entry-01 opened in 1.2 s, Entry-02 timeout".
+- Warm the `mips-proxy` edge fn via a lightweight ping when the Attendance Dashboard mounts to shave ~800 ms off first-click cold start.
+
+---
+
+## Technical layout
+
+```text
+src/
+  pages/
+    AttendanceDashboard.tsx          # richer override-entry result panel + warm-ping on mount
+    DeviceManagement.tsx             # door_role selector, per-device presence pill
+  components/campaigns/
+    CampaignWizard.tsx               # 131049 advisory + fallback toggle on Promotion
+    CampaignDetailDrawer.tsx         # show fallback_used per recipient
+  components/devices/
+    PersonnelSyncTab.tsx             # per-device presence + "Re-sync to all devices"
+  services/
+    mipsService.ts                   # remoteOpenDoorByBranch(role, parallel), syncPersonToMIPS→all devices
+
+supabase/functions/
+  send-broadcast/index.ts            # honour campaigns.fallback_policy on 131049/130472
+  mips-reconcile-devices/index.ts    # NEW cron — diff+repair per branch
+  sync-to-mips/index.ts              # unchanged (already multi-device); add reconcile hook
+
+supabase/migrations/
+  <ts>_door_role_and_fallback_policy.sql
+    ALTER TABLE access_devices ADD COLUMN door_role text …;
+    ALTER TABLE access_devices ADD COLUMN last_reconcile_at timestamptz;
+    ALTER TABLE campaigns ADD COLUMN fallback_policy jsonb DEFAULT '{"on_pacing":true}'::jsonb;
+```
+
+Cron: `mips-reconcile-devices` every 15 min via existing `automation-brain-tick` rule (no new pg_cron entry).
+
+## Verification
+
+1. Fire a MARKETING campaign to a phone previously paced → expect immediate RCS/SMS fallback row visible in Campaign Detail.
+2. Take Device 2 offline, enrol a new member, bring Device 2 online, wait ≤15 min → member appears on Device 2 (verified via `/through/person/list`).
+3. Click Override Entry with two entry-role devices → both click, panel shows both latencies.
+4. Set Device 2 role to Exit → Override Entry only opens Device 1.
 
 ## Out of scope
 
-- Redesigning the Campaigns card grid
-- Changing scheduled-campaign cron
-- Deleting the legacy `campaign_runs` table (separate cleanup PR)
+- Migrating to Meta's Marketing Messages Lite API (invite-only, wouldn't remove 131049).
+- Rebuilding the MIPS tunnel/latency stack.
+- Any Live Feed / campaign stats work beyond adding the fallback column.
