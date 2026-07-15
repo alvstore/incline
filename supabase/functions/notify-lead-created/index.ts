@@ -1,4 +1,9 @@
+// v3.3.0 — Per-recipient staff_name variable for team alerts (fixes 132018
+//          template_param_empty on internal_lead_alert). Profile queries now
+//          select full_name; dispatch() accepts varsOverride merged over the
+//          shared vars bag.
 // v3.2.0 — Enriched team-alert variables (plan_interest, fitness_goal, goals,
+
 //          budget, preferred_time, fitness_experience, expected_start_date,
 //          temperature, score, notes, utm_*, landing_page, referrer_url,
 //          campaign_name, ad_id, preferred_contact_channel, captured_at,
