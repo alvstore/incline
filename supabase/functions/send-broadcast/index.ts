@@ -284,6 +284,17 @@ Deno.serve(async (req) => {
             dispatched_at: new Date().toISOString(),
           });
         }
+
+        // Progress ping every 5 recipients so the UI polls something fresh.
+        if (campaign_id && ((sent + failed) % 5 === 0)) {
+          try {
+            await adminClient.from('campaigns').update({
+              success_count: sent,
+              failure_count: failed,
+              last_progress_at: new Date().toISOString(),
+            }).eq('id', campaign_id);
+          } catch { /* progress writes are best-effort */ }
+        }
       }
 
       if (campaign_id && recipientRows.length > 0) {
