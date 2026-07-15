@@ -1,3 +1,7 @@
+// v3.5.0 — Explicit-audience guard: never silently fall through to the
+//          whole-branch members path when caller passed empty recipients/
+//          member_ids. Members path now inserts per-recipient rows into
+//          campaign_recipients so the delivery drawer works for member sends.
 // v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
 //          recipients when a Meta template is used; auto-pause campaign on
 //          terminal template errors (132000/132012/132018/132001/131051).
@@ -79,6 +83,30 @@ Deno.serve(async (req) => {
       for (const r of (dncMembers.data || [])) dncDigits.add(digits((r as any).phone_number));
     } catch (e) {
       console.warn("[send-broadcast] do-not-contact load failed (continuing):", e);
+    }
+
+    // Explicit-audience guard: if the caller passed `recipients` or
+    // `member_ids` (even as an empty array), that IS the audience. Do NOT
+    // silently fall through to "broadcast to every member in the branch" —
+    // that behaviour previously mis-sent to unrelated members and left the
+    // originating campaign stuck at status='sending' with 0 recipients.
+    const callerProvidedRecipients = Array.isArray(recipients);
+    const callerProvidedMemberIds = Array.isArray(member_ids);
+    const explicitAudienceEmpty =
+      (callerProvidedRecipients && recipients.length === 0) &&
+      (!callerProvidedMemberIds || member_ids.length === 0);
+    if (explicitAudienceEmpty) {
+      if (campaign_id) {
+        await adminClient.from('campaigns').update({
+          status: 'failed',
+          recipients_count: 0,
+          success_count: 0,
+          failure_count: 0,
+          last_run_error: 'audience_empty',
+          sent_at: new Date().toISOString(),
+        }).eq('id', campaign_id);
+      }
+      return json({ success: true, sent: 0, failed: 0, total: 0, reason: 'audience_empty' });
     }
 
     // ---- Path A: caller passed an explicit resolved recipient list (members + leads + contacts) ----
@@ -261,14 +289,27 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     let failed = 0;
-
     let skippedDnc = 0;
+    const memberRecipientRows: any[] = [];
+
     for (const member of members) {
       const profile = (member as any).profiles;
       if (!profile) continue;
       // Defence-in-depth — phone match against pre-loaded DNC set.
       if (profile.phone && dncDigits.has(digits(profile.phone))) {
         skippedDnc++;
+        if (campaign_id) {
+          memberRecipientRows.push({
+            campaign_id,
+            source_type: 'member',
+            source_ref_id: member.id,
+            full_name: profile.full_name || null,
+            phone: profile.phone || null,
+            email: profile.email || null,
+            status: 'skipped',
+            error: 'do_not_contact',
+          });
+        }
         continue;
       }
 
@@ -277,12 +318,26 @@ Deno.serve(async (req) => {
         .replace(/\{\{member_code\}\}/g, member.member_code || "");
 
       let recipient = channel === "email" ? profile.email : profile.phone;
-      let status = "failed";
+      let status: 'sent' | 'failed' | 'skipped' = "failed";
+      let errorReason: string | null = null;
+
+      if (!recipient) {
+        if (campaign_id) {
+          memberRecipientRows.push({
+            campaign_id,
+            source_type: 'member',
+            source_ref_id: member.id,
+            full_name: profile.full_name || null,
+            phone: profile.phone || null,
+            email: profile.email || null,
+            status: 'skipped',
+            error: 'missing_channel_address',
+          });
+        }
+        continue;
+      }
 
       try {
-        if (!recipient) {
-          continue;
-        }
         const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
           body: {
             branch_id,
@@ -297,15 +352,31 @@ Deno.serve(async (req) => {
             ...(attachment ? { attachment } : {}),
           },
         });
-        status = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || '')) ? "sent" : "failed";
-      } catch (e) {
+        const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
+        status = ok ? 'sent' : 'failed';
+        if (!ok) errorReason = dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed';
+      } catch (e: any) {
         console.error(`Broadcast dispatch error for ${recipient}:`, e);
-        status = "failed";
+        status = 'failed';
+        errorReason = e?.message || 'exception';
       }
 
       if (status === "sent") sent++;
       else failed++;
 
+      if (campaign_id) {
+        memberRecipientRows.push({
+          campaign_id,
+          source_type: 'member',
+          source_ref_id: member.id,
+          full_name: profile.full_name || null,
+          phone: profile.phone || null,
+          email: profile.email || null,
+          status,
+          error: errorReason,
+          dispatched_at: new Date().toISOString(),
+        });
+      }
     }
 
     await adminClient.from("notifications").insert({
@@ -314,9 +385,12 @@ Deno.serve(async (req) => {
       type: "info", category: "communication",
     });
 
-    // If invoked from a campaign, update its counters & status
+    // If invoked from a campaign, update its counters & persist recipient rows.
     if (campaign_id) {
       try {
+        if (memberRecipientRows.length > 0) {
+          await adminClient.from('campaign_recipients').insert(memberRecipientRows);
+        }
         await adminClient.from("campaigns").update({
           status: failed > 0 && sent === 0 ? "failed" : "sent",
           recipients_count: members.length,

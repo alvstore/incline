@@ -460,6 +460,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         const audience = useResolver
           ? { recipients: await (await import('@/services/campaignService')).resolveCampaignAudience(branchId, filter) }
           : { memberIds: resolvedMemberIds };
+        const audienceSize = useResolver
+          ? (audience as any).recipients?.length ?? 0
+          : (audience as any).memberIds?.length ?? 0;
+        if (audienceSize === 0) {
+          // Reset campaign so it doesn't stay stuck at status='sending'.
+          try {
+            await updateCampaign(campaign.id, { status: 'draft' as any });
+          } catch {}
+          toast.error('Audience is empty — pick contacts or members before sending.');
+          setSubmitting(false);
+          return;
+        }
         const result = await sendCampaignNow(campaign, audience);
         if (result.failed > 0 && result.sent === 0) {
           toast.error(`Campaign failed — 0 delivered, ${result.failed} failed${(result as any).first_error ? `: ${(result as any).first_error}` : ''}`);
