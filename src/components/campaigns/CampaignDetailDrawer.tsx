@@ -1,161 +1,461 @@
-import { useQuery } from '@tanstack/react-query';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle2, AlertTriangle, Clock, Users, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Loader2, CheckCircle2, AlertTriangle, Clock, Users, Eye, Send,
+  RefreshCw, Repeat, RotateCcw, Search, MessageSquare, Mail, Phone, XCircle,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import type { Campaign } from '@/services/campaignService';
+import { toast } from 'sonner';
+import {
+  type Campaign,
+  retryFailedRecipients,
+  reconcileCampaignStats,
+  sendCampaignNow,
+  resolveCampaignAudience,
+} from '@/services/campaignService';
+import { parseCommError } from '@/lib/comms/metaErrorLabels';
+import { formatPhoneDisplay } from '@/lib/contacts/phone';
 
-interface CampaignDetailDrawerProps {
+interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campaign: Campaign | null;
 }
 
-const statusPill = (s: string) => {
-  const k = (s || '').toLowerCase();
-  if (['sent', 'delivered', 'read', 'success'].includes(k)) return 'bg-success/15 text-success';
-  if (['failed', 'error', 'bounced'].includes(k)) return 'bg-destructive/15 text-destructive';
-  if (['queued', 'pending', 'sending'].includes(k)) return 'bg-warning/15 text-warning';
-  return 'bg-muted text-foreground';
+type MergedRecipient = {
+  id: string;
+  source_type: string;
+  source_ref_id: string | null;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  recipientStatus: string;
+  recipientError: string | null;
+  attempt: number;
+  dlrStatus: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  timestamp: string | null;
+  errorLabel: string | null;
+  errorRaw: string | null;
+  final: 'delivered' | 'read' | 'sent' | 'failed' | 'pending' | 'skipped';
 };
 
-export function CampaignDetailDrawer({ open, onOpenChange, campaign }: CampaignDetailDrawerProps) {
-  const { data: runs = [], isLoading } = useQuery({
-    queryKey: ['campaign-runs', campaign?.id],
+const finalOf = (r: {
+  recipientStatus: string;
+  dlrStatus: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+}): MergedRecipient['final'] => {
+  const rs = (r.recipientStatus || '').toLowerCase();
+  const ds = (r.dlrStatus || '').toLowerCase();
+  if (r.readAt || ds === 'read') return 'read';
+  if (r.deliveredAt || ds === 'delivered') return 'delivered';
+  if (ds === 'failed' || ds === 'bounced' || rs === 'failed') return 'failed';
+  if (rs === 'skipped') return 'skipped';
+  if (rs === 'sent' || ds === 'sent' || ds === 'queued') return 'sent';
+  return 'pending';
+};
+
+const statusBadgeClass = (s: MergedRecipient['final']) => {
+  switch (s) {
+    case 'read':
+      return 'bg-primary/15 text-primary';
+    case 'delivered':
+      return 'bg-success/15 text-success';
+    case 'sent':
+      return 'bg-info/15 text-info';
+    case 'failed':
+      return 'bg-destructive/15 text-destructive';
+    case 'skipped':
+      return 'bg-muted text-muted-foreground';
+    default:
+      return 'bg-warning/15 text-warning';
+  }
+};
+
+const StatusIcon = ({ s }: { s: MergedRecipient['final'] }) => {
+  const cls = 'h-3 w-3';
+  if (s === 'read') return <Eye className={cls} />;
+  if (s === 'delivered') return <CheckCircle2 className={cls} />;
+  if (s === 'sent') return <Send className={cls} />;
+  if (s === 'failed') return <XCircle className={cls} />;
+  if (s === 'skipped') return <AlertTriangle className={cls} />;
+  return <Clock className={cls} />;
+};
+
+const channelIcon = (channel: string) => {
+  if (channel === 'email') return Mail;
+  if (channel === 'sms') return Phone;
+  return MessageSquare;
+};
+
+export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<'all' | 'delivered' | 'failed' | 'pending'>('all');
+  const [search, setSearch] = useState('');
+  const [confirmRetrigger, setConfirmRetrigger] = useState(false);
+
+  const enabled = !!campaign?.id && open;
+
+  const { data: recipients = [], isLoading: recLoading } = useQuery({
+    queryKey: ['campaign-recipients', campaign?.id],
+    enabled,
+    refetchInterval: campaign?.status === 'sending' ? 3000 : false,
     queryFn: async () => {
-      if (!campaign?.id) return [];
       const { data } = await supabase
-        .from('campaign_runs')
-        .select('id, recipient_id, recipient_phone, recipient_email, status, error, sent_at')
-        .eq('campaign_id', campaign.id)
-        .order('sent_at', { ascending: false, nullsFirst: false })
-        .limit(500);
+        .from('campaign_recipients')
+        .select('id, source_type, source_ref_id, full_name, phone, email, status, error, attempt, dispatched_at, created_at')
+        .eq('campaign_id', campaign!.id)
+        .order('created_at', { ascending: false })
+        .limit(2000);
       return data || [];
     },
-    enabled: !!campaign?.id && open,
   });
 
-  // Conversion attribution: members created from same phone after campaign sent_at
-  const { data: conversions = 0 } = useQuery({
-    queryKey: ['campaign-conversions', campaign?.id, campaign?.sent_at],
+  const { data: logs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ['campaign-logs', campaign?.id],
+    enabled,
+    refetchInterval: campaign?.status === 'sending' ? 5000 : false,
     queryFn: async () => {
-      if (!campaign?.sent_at || runs.length === 0) return 0;
-      const phones = Array.from(
-        new Set(runs.map((r: any) => r.recipient_phone).filter(Boolean))
-      );
-      if (phones.length === 0) return 0;
-      const sb: any = supabase;
-      const { count } = await sb
-        .from('members')
-        .select('id', { count: 'exact', head: true })
-        .in('phone', phones)
-        .gte('created_at', campaign.sent_at);
-      return count || 0;
+      const { data } = await supabase
+        .from('communication_logs')
+        .select('dedupe_key, delivery_status, status, error_code, error_message, delivered_at, read_at, created_at')
+        .like('dedupe_key', `campaign:${campaign!.id}:%`)
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      return data || [];
     },
-    enabled: !!campaign?.sent_at && runs.length > 0 && open,
+  });
+
+  const merged: MergedRecipient[] = useMemo(() => {
+    const byKey = new Map<string, any>();
+    for (const l of logs as any[]) {
+      // strip any :retry:N suffix and take the freshest log per base key
+      const base = String(l.dedupe_key || '').replace(/:retry:\d+$/, '');
+      const existing = byKey.get(base);
+      if (!existing || new Date(l.created_at) > new Date(existing.created_at)) {
+        byKey.set(base, l);
+      }
+    }
+    return (recipients as any[]).map((r) => {
+      const key = `campaign:${campaign!.id}:${r.source_type}:${r.source_ref_id}`;
+      const dlr = byKey.get(key);
+      const errRaw = r.error || dlr?.error_message || dlr?.error_code || null;
+      const label = errRaw ? parseCommError(errRaw)?.label || errRaw : null;
+      const base = {
+        id: r.id,
+        source_type: r.source_type,
+        source_ref_id: r.source_ref_id,
+        full_name: r.full_name,
+        phone: r.phone,
+        email: r.email,
+        recipientStatus: r.status,
+        recipientError: r.error,
+        attempt: r.attempt || 1,
+        dlrStatus: dlr?.delivery_status || dlr?.status || null,
+        deliveredAt: dlr?.delivered_at || null,
+        readAt: dlr?.read_at || null,
+        timestamp: r.dispatched_at || dlr?.delivered_at || dlr?.read_at || r.created_at,
+        errorLabel: label,
+        errorRaw: errRaw,
+      };
+      return { ...base, final: finalOf(base) };
+    });
+  }, [recipients, logs, campaign?.id]);
+
+  const counts = useMemo(() => {
+    const c = { total: merged.length, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0, skipped: 0 };
+    for (const m of merged) {
+      if (m.final === 'read') { c.read++; c.delivered++; c.sent++; }
+      else if (m.final === 'delivered') { c.delivered++; c.sent++; }
+      else if (m.final === 'sent') { c.sent++; }
+      else if (m.final === 'failed') { c.failed++; }
+      else if (m.final === 'skipped') { c.skipped++; }
+      else { c.pending++; }
+    }
+    return c;
+  }, [merged]);
+
+  const filtered = useMemo(() => {
+    return merged.filter((m) => {
+      if (filter === 'delivered' && !['delivered', 'read'].includes(m.final)) return false;
+      if (filter === 'failed' && m.final !== 'failed') return false;
+      if (filter === 'pending' && !['pending', 'sent'].includes(m.final)) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const hay = `${m.full_name || ''} ${m.phone || ''} ${m.email || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [merged, filter, search]);
+
+  const retryMut = useMutation({
+    mutationFn: () => retryFailedRecipients(campaign!.id),
+    onSuccess: (r) => {
+      toast.success(`Retrying ${r.accepted} failed recipient${r.accepted === 1 ? '' : 's'}`);
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['campaign-recipients', campaign?.id] });
+      qc.invalidateQueries({ queryKey: ['campaign-logs', campaign?.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Retry failed'),
+  });
+
+  const reconcileMut = useMutation({
+    mutationFn: () => reconcileCampaignStats(campaign!.id),
+    onSuccess: () => {
+      toast.success('Stats refreshed');
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      qc.invalidateQueries({ queryKey: ['campaign-recipients', campaign?.id] });
+      qc.invalidateQueries({ queryKey: ['campaign-logs', campaign?.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Reconcile failed'),
+  });
+
+  const retriggerMut = useMutation({
+    mutationFn: async () => {
+      if (!campaign) throw new Error('no campaign');
+      // Re-resolve audience from saved filter and send again.
+      const resolved = await resolveCampaignAudience(campaign.branch_id, campaign.audience_filter || {});
+      const { total } = await sendCampaignNow(campaign, { recipients: resolved });
+      return total;
+    },
+    onSuccess: (total) => {
+      toast.success(`Re-triggered — queued ${total} recipients`);
+      setConfirmRetrigger(false);
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Re-trigger failed'),
   });
 
   if (!campaign) return null;
 
-  const total = runs.length;
-  const sent = runs.filter((r: any) => ['sent', 'delivered', 'read'].includes((r.status || '').toLowerCase())).length;
-  const failed = runs.filter((r: any) => ['failed', 'error', 'bounced'].includes((r.status || '').toLowerCase())).length;
-  const queued = total - sent - failed;
-  const conversionRate = sent > 0 ? ((conversions / sent) * 100).toFixed(1) : '0.0';
+  const isSending = campaign.status === 'sending';
+  const isLoading = recLoading || logsLoading;
+  const progressPct = counts.total > 0
+    ? Math.min(100, Math.round(((counts.sent + counts.failed + counts.skipped) / counts.total) * 100))
+    : 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{campaign.name}</SheetTitle>
+          <SheetTitle className="pr-8">{campaign.name}</SheetTitle>
           <SheetDescription>
-            Recipient delivery breakdown and conversion attribution
+            Full delivery breakdown for this campaign. Live Feed shows only 1:1 transactional messages.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-5">
-          {/* Summary cards */}
-          <div className="grid grid-cols-4 gap-2">
-            <div className="rounded-xl bg-muted p-3 text-center">
-              <Users className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
-              <p className="text-xl font-bold text-foreground">{total}</p>
-              <p className="text-[10px] uppercase text-muted-foreground">Total</p>
-            </div>
-            <div className="rounded-xl bg-success/10 p-3 text-center">
-              <CheckCircle2 className="h-4 w-4 mx-auto text-success mb-1" />
-              <p className="text-xl font-bold text-success">{sent}</p>
-              <p className="text-[10px] uppercase text-success">Delivered</p>
-            </div>
-            <div className="rounded-xl bg-destructive/10 p-3 text-center">
-              <AlertTriangle className="h-4 w-4 mx-auto text-destructive mb-1" />
-              <p className="text-xl font-bold text-destructive">{failed}</p>
-              <p className="text-[10px] uppercase text-destructive">Failed</p>
-            </div>
-            <div className="rounded-xl bg-warning/10 p-3 text-center">
-              <Clock className="h-4 w-4 mx-auto text-warning mb-1" />
-              <p className="text-xl font-bold text-warning">{queued}</p>
-              <p className="text-[10px] uppercase text-warning">Queued</p>
-            </div>
+        {/* Action bar */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            size="sm" variant="outline" className="rounded-xl gap-2"
+            onClick={() => reconcileMut.mutate()}
+            disabled={reconcileMut.isPending}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reconcileMut.isPending ? 'animate-spin' : ''}`} />
+            Reconcile now
+          </Button>
+          <Button
+            size="sm" variant="outline" className="rounded-xl gap-2"
+            onClick={() => retryMut.mutate()}
+            disabled={retryMut.isPending || isSending || counts.failed === 0}
+            title={counts.failed === 0 ? 'No failed recipients' : `Retry ${counts.failed} failed`}
+          >
+            <RotateCcw className={`h-3.5 w-3.5 ${retryMut.isPending ? 'animate-spin' : ''}`} />
+            Retry failed ({counts.failed})
+          </Button>
+          <Button
+            size="sm" className="rounded-xl gap-2 bg-primary hover:bg-primary text-primary-foreground"
+            onClick={() => setConfirmRetrigger(true)}
+            disabled={retriggerMut.isPending || isSending}
+          >
+            <Repeat className="h-3.5 w-3.5" />
+            Re-trigger to all
+          </Button>
+        </div>
+
+        <div className="mt-5 space-y-5">
+          {/* KPI strip: 5 tiles */}
+          <div className="grid grid-cols-5 gap-2">
+            <KpiTile icon={Users} label="Total" value={counts.total} tone="muted" />
+            <KpiTile icon={Send} label="Sent" value={counts.sent} tone="info" />
+            <KpiTile icon={CheckCircle2} label="Delivered" value={counts.delivered} tone="success" />
+            <KpiTile icon={Eye} label="Read" value={counts.read} tone="primary" />
+            <KpiTile icon={XCircle} label="Failed" value={counts.failed} tone="destructive" />
           </div>
 
-          {/* Conversion strip */}
-          {campaign.sent_at && (
-            <div className="rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground p-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider opacity-80">
-                  <TrendingUp className="h-3.5 w-3.5" /> Conversions
-                </div>
-                <p className="text-2xl font-bold mt-0.5">{conversions}</p>
-                <p className="text-xs opacity-80 mt-0.5">
-                  Members signed up from these contacts after send
-                </p>
+          {isSending && counts.total > 0 && (
+            <div>
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                <span>Sending in background</span>
+                <span>{counts.sent + counts.failed}/{counts.total} · {progressPct}%</span>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold">{conversionRate}%</p>
-                <p className="text-[10px] uppercase opacity-80">conv rate</p>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-primary transition-all" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
           )}
 
-          {/* Recipients table */}
+          <p className="text-[11px] text-muted-foreground">
+            Stats auto-reconcile every 2 minutes from provider delivery receipts. Use <em>Reconcile now</em> to refresh instantly.
+          </p>
+
+          {/* Filter chips + search */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['all', 'delivered', 'failed', 'pending'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setFilter(k)}
+                className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                  filter === k
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-card text-foreground border-border hover:bg-muted'
+                }`}
+              >
+                {k.charAt(0).toUpperCase() + k.slice(1)}
+              </button>
+            ))}
+            <div className="relative flex-1 min-w-[160px]">
+              <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8 rounded-xl text-xs"
+                placeholder="Search name, phone or email"
+              />
+            </div>
+          </div>
+
+          {/* Recipient list */}
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Recipients ({total})
+              Recipients ({filtered.length}{filtered.length !== counts.total ? ` of ${counts.total}` : ''})
             </h4>
             {isLoading ? (
-              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : total === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">No recipients yet.</p>
-            ) : (
-              <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
-                {runs.map((r: any) => (
-                  <div key={r.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-card border border-border/50 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate text-foreground">
-                        {r.recipient_phone || r.recipient_email || '—'}
-                      </p>
-                      {r.error && (
-                        <p className="text-xs text-destructive truncate" title={r.error}>{r.error}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {r.sent_at && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {format(new Date(r.sent_at), 'dd MMM HH:mm')}
-                        </span>
-                      )}
-                      <Badge className={`${statusPill(r.status)} rounded-full text-[10px] uppercase`}>
-                        {r.status || 'pending'}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
+            ) : filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                {counts.total === 0 ? 'No recipients yet.' : 'No recipients match this filter.'}
+              </p>
+            ) : (
+              <TooltipProvider>
+                <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
+                  {filtered.map((r) => {
+                    const ChanIcon = channelIcon(campaign.channel);
+                    const displayContact =
+                      campaign.channel === 'email'
+                        ? r.email || '—'
+                        : formatPhoneDisplay(r.phone || '') || r.phone || r.email || '—';
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-start justify-between gap-2 px-3 py-2 rounded-lg bg-card border border-border/50 text-sm"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <ChanIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <p className="font-medium truncate text-foreground">
+                              {r.full_name || 'Unknown'}
+                            </p>
+                            {r.attempt > 1 && (
+                              <Badge variant="outline" className="text-[9px] rounded-full px-1.5 py-0">
+                                retry ×{r.attempt}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {displayContact}
+                          </p>
+                          {r.final === 'failed' && r.errorLabel && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="text-[11px] text-destructive truncate mt-1 cursor-help">
+                                  {r.errorLabel}
+                                </p>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="text-xs break-words">{r.errorRaw}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge className={`${statusBadgeClass(r.final)} rounded-full text-[10px] uppercase gap-1`}>
+                            <StatusIcon s={r.final} />
+                            {r.final}
+                          </Badge>
+                          {r.timestamp && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {format(new Date(r.timestamp), 'dd MMM HH:mm')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </TooltipProvider>
             )}
           </div>
         </div>
+
+        {/* Re-trigger confirmation */}
+        {confirmRetrigger && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmRetrigger(false)}>
+            <div className="bg-card rounded-2xl p-5 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-semibold text-foreground mb-1">Re-trigger campaign?</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                This will re-resolve the saved audience and re-send to <strong>all</strong> matching recipients — including those already delivered. Use <em>Retry failed</em> to re-send only failures.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" className="rounded-xl" onClick={() => setConfirmRetrigger(false)} disabled={retriggerMut.isPending}>
+                  Cancel
+                </Button>
+                <Button className="rounded-xl bg-primary hover:bg-primary text-primary-foreground" onClick={() => retriggerMut.mutate()} disabled={retriggerMut.isPending}>
+                  {retriggerMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Re-trigger'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function KpiTile({
+  icon: Icon, label, value, tone,
+}: {
+  icon: any; label: string; value: number;
+  tone: 'muted' | 'success' | 'destructive' | 'warning' | 'info' | 'primary';
+}) {
+  const toneMap: Record<string, string> = {
+    muted: 'bg-muted text-foreground',
+    success: 'bg-success/10 text-success',
+    destructive: 'bg-destructive/10 text-destructive',
+    warning: 'bg-warning/10 text-warning',
+    info: 'bg-info/10 text-info',
+    primary: 'bg-primary/10 text-primary',
+  };
+  return (
+    <div className={`rounded-xl ${toneMap[tone]} p-3 text-center`}>
+      <Icon className="h-4 w-4 mx-auto mb-1 opacity-80" />
+      <p className="text-xl font-bold">{value}</p>
+      <p className="text-[10px] uppercase opacity-80">{label}</p>
+    </div>
   );
 }
