@@ -541,15 +541,17 @@ serve(async (req) => {
 
       // Resolve the App ID needed for the resumable-upload API.
       const appId =
+        (activeIntegration.config as any)?.app_id ||
         (activeIntegration.credentials as any)?.app_id ||
         Deno.env.get("META_APP_ID") ||
         null;
 
       let resolvedHandle: string | null = null;
+      const headerDiagnostics: { reason: string; detail?: string } | null = hasMediaHeader ? { reason: 'pending' } : null;
+
       if (hasMediaHeader && looksLikeMetaHandle(header_sample_url)) {
         resolvedHandle = header_sample_url;
       } else if (hasMediaHeader && header_sample_url && /^https?:\/\//i.test(header_sample_url) && appId) {
-        // Auto-upload the public URL to Meta and use the returned handle.
         const fallbackType =
           header_type === 'image' ? 'image/jpeg' :
           header_type === 'video' ? 'video/mp4' : 'application/pdf';
@@ -559,11 +561,42 @@ serve(async (req) => {
           sampleUrl: header_sample_url,
           fallbackContentType: fallbackType,
         });
-        if (!resolvedHandle) {
-          console.warn(
-            `[manage-whatsapp-templates] sample upload failed for ${header_sample_url}; submitting as text-only.`
-          );
+        if (!resolvedHandle && headerDiagnostics) {
+          headerDiagnostics.reason = 'meta_upload_failed';
+          headerDiagnostics.detail = `Meta resumable-upload API rejected the sample ${header_type} at ${header_sample_url}. Check that the URL is publicly reachable and the file is a valid ${fallbackType}.`;
         }
+      } else if (hasMediaHeader && headerDiagnostics) {
+        if (!header_sample_url) {
+          headerDiagnostics.reason = 'missing_sample_url';
+          headerDiagnostics.detail = `header_type='${header_type}' requires a sample media URL (attachment_source='static' + header_media_url).`;
+        } else if (!/^https?:\/\//i.test(header_sample_url)) {
+          headerDiagnostics.reason = 'invalid_sample_url';
+          headerDiagnostics.detail = `header_sample_url must be a public http(s) URL (got: ${header_sample_url}).`;
+        } else if (!appId) {
+          headerDiagnostics.reason = 'missing_app_id';
+          headerDiagnostics.detail = `Meta App ID is not configured on the active WhatsApp integration. Open Settings → Integrations → WhatsApp (Meta Cloud API) and fill in "Meta App ID" so image/video/document headers can be uploaded to Meta for template approval.`;
+        }
+      }
+
+      // Hard-fail instead of silently downgrading to text-only. The prior
+      // behaviour approved body-only templates against the user's intent
+      // (see 'choose_what_deserves_your_effort' regression).
+      if (hasMediaHeader && !resolvedHandle) {
+        const diag = headerDiagnostics || { reason: 'unknown', detail: 'Could not obtain a Meta media handle.' };
+        const userMsg = `Cannot submit '${header_type}' header template: ${diag.detail || diag.reason}`;
+        console.error(`[manage-whatsapp-templates] blocking submission — ${diag.reason}: ${diag.detail}`);
+        if (local_template_id) {
+          await supabase.from('templates').update({
+            meta_template_status: 'DRAFT',
+            meta_rejection_reason: userMsg,
+          }).eq('id', local_template_id);
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: userMsg,
+          header_upload_diagnostics: diag,
+          saved_as_draft: !!local_template_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (hasMediaHeader && resolvedHandle) {
@@ -572,10 +605,6 @@ serve(async (req) => {
           format: header_type.toUpperCase(),
           example: { header_handle: [resolvedHandle] },
         });
-      } else if (hasMediaHeader) {
-        console.warn(
-          `[manage-whatsapp-templates] header_type=${header_type} without Meta handle (appId=${appId ? 'set' : 'missing'}) — submitting as text-only template (sample URL: ${header_sample_url || 'none'})`
-        );
       }
       components.push(bodyComponent);
 
