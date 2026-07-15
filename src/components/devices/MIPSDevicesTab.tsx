@@ -210,14 +210,18 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
 
   const snToBranch = new Map<string, string>();
   const snToPublicIp = new Map<string, string>();
+  const snToLocal = new Map<string, { id: string; door_role?: 'entry' | 'exit' | 'both' }>();
   if (localDevices && branchesList) {
     const branchMap = new Map(branchesList.map((b) => [b.id, b.name]));
-    for (const ld of localDevices) {
+    for (const ld of localDevices as any[]) {
       if (ld.serial_number && ld.branch_id) {
         snToBranch.set(ld.serial_number.toUpperCase(), branchMap.get(ld.branch_id) || "");
       }
-      if (ld.serial_number && (ld as any).public_ip) {
-        snToPublicIp.set(ld.serial_number.toUpperCase(), (ld as any).public_ip);
+      if (ld.serial_number && ld.public_ip) {
+        snToPublicIp.set(ld.serial_number.toUpperCase(), ld.public_ip);
+      }
+      if (ld.serial_number && ld.id) {
+        snToLocal.set(ld.serial_number.toUpperCase(), { id: ld.id, door_role: ld.door_role });
       }
     }
   }
@@ -246,15 +250,21 @@ const MIPSDevicesTab = ({ branchId }: MIPSDevicesTabProps) => {
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {filteredDevices.map((device) => (
-        <MIPSDeviceCard
-          key={device.id || device.deviceKey}
-          device={device}
-          branchId={branchId}
-          branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
-          publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
-        />
-      ))}
+      {filteredDevices.map((device) => {
+        const local = snToLocal.get(device.deviceKey?.toUpperCase());
+        return (
+          <MIPSDeviceCard
+            key={device.id || device.deviceKey}
+            device={device}
+            branchId={branchId}
+            branchName={snToBranch.get(device.deviceKey?.toUpperCase()) || undefined}
+            publicIp={snToPublicIp.get(device.deviceKey?.toUpperCase()) || undefined}
+            localDeviceId={local?.id}
+            doorRole={local?.door_role}
+          />
+        );
+      })}
+
     </div>
   );
 };
