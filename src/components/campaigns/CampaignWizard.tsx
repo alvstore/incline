@@ -532,6 +532,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         phone: channel === 'email' ? null : (target.startsWith('+') ? target : `+${target}`),
         email: channel === 'email' ? target : null,
       };
+      // For RCS, pack template_name + resolved variables into the `variables`
+      // map — the dispatcher pops template_name and passes the rest as Telinfy
+      // lcustomParam. For other channels this is a no-op.
+      const rcsVariables = channel === 'rcs' && selectedRcsTemplate
+        ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient(recipient) }
+        : undefined;
       const { data, error } = await supabase.functions.invoke('send-broadcast', {
         body: {
           channel,
@@ -540,6 +546,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           branch_id: branchId,
           recipients: [recipient],
           template_id: templateId,
+          variables: rcsVariables,
           attachment_url: attachment?.url ?? undefined,
           attachment_kind: attachment?.kind ?? undefined,
           attachment_filename: attachment?.filename ?? undefined,
