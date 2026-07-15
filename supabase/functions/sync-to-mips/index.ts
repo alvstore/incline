@@ -400,52 +400,93 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 1: Fetch CRM data based on person type
+    // Step 1: Fetch CRM data based on person type — merge every available source
+    // (profile → lead → row) so lead-converted members don't sync as "Unknown".
     let name = "Unknown";
     let personNo = "";
     let phone = "";
     let email = "";
     let photoUrl = "";
+    let gender: "M" | "F" | "U" = "U";
+    let birthday: string | null = null;                     // YYYY-MM-DD
+    let deptId = 100;
+    let deptName = "Members";
+    let remarkExtra = "";
     let validTimeBegin = formatDate(new Date().toISOString(), "2024-01-01 00:00:00");
     let validTimeEnd = PERMANENT_END;
     let tableName: string;
-    let deptId = 100;
     let effectiveBranchId = branch_id;
     let shouldRevokeInstead = false;
     let revokeReason = "Inactive/offboarded staff must not be synced";
 
+    const normGender = (g?: string | null): "M" | "F" | "U" => {
+      const s = (g || "").trim().toLowerCase();
+      if (s.startsWith("m")) return "M";
+      if (s.startsWith("f")) return "F";
+      return "U";
+    };
+    const fmtDob = (d?: string | null): string | null => {
+      if (!d) return null;
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return null;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+    };
+    const pick = (...vals: Array<string | null | undefined>) =>
+      vals.find((v) => v && String(v).trim().length > 0) as string | undefined;
+
     if (person_type === "member") {
       tableName = "members";
       deptId = 100;
+      deptName = "Members";
       const { data: member, error } = await supabase
         .from("members")
-        .select("*, profiles:user_id(full_name, phone, avatar_url, email)")
+        .select("*, profiles:user_id(full_name, phone, avatar_url, email), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Member query error: ${error.message}`);
       if (!member) throw new Error(`Member not found with id: ${person_id}`);
 
-      const profile = member.profiles as any;
-      name = profile?.full_name || "Unknown";
+      const profile = (member as any).profiles || null;
+      const lead = (member as any).leads || null;
+
+      name = pick(profile?.full_name, lead?.full_name) || `Member ${member.member_code || ""}`.trim() || "Unknown";
       personNo = member.member_code || person_id.substring(0, 8);
-      phone = profile?.phone || "";
-      email = profile?.email || "";
-      photoUrl = member.biometric_photo_url || profile?.avatar_url || "";
+      phone = pick(profile?.phone, lead?.phone) || "";
+      email = pick(profile?.email, lead?.email) || "";
+      photoUrl = pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url) || "";
+      gender = normGender(lead?.gender);
+      birthday = fmtDob(lead?.date_of_birth);
       effectiveBranchId = effectiveBranchId || member.branch_id;
 
-      // Members get validity from membership dates
+      // Membership validity — pick newest membership regardless of status so
+      // future/frozen/expired members get correct MIPS access windows.
       const { data: membership } = await supabase
         .from("memberships")
-        .select("start_date, end_date")
+        .select("start_date, end_date, status")
         .eq("member_id", person_id)
-        .eq("status", "active")
         .order("end_date", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (membership) {
-        validTimeBegin = formatDate(membership.start_date + "T00:00:00", validTimeBegin);
-        validTimeEnd = formatDate(membership.end_date + "T23:59:59", validTimeEnd);
+        remarkExtra = `Membership ${membership.status}`;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const endDate = new Date(membership.end_date + "T23:59:59");
+        if (membership.status === "expired" || membership.status === "cancelled" || endDate < today) {
+          // Expired → block access on device
+          validTimeBegin = formatDate(membership.start_date + "T00:00:00", validTimeBegin);
+          validTimeEnd = REVOKED_DATE;
+        } else {
+          // active | frozen | future — send real dates so access opens on start
+          validTimeBegin = formatDate(membership.start_date + "T00:00:00", validTimeBegin);
+          validTimeEnd = formatDate(membership.end_date + "T23:59:59", validTimeEnd);
+        }
+      } else {
+        // No membership yet — give a 24h probation window instead of 2099
+        remarkExtra = "No active membership (probation window)";
+        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        validTimeEnd = formatDate(tomorrow.toISOString(), validTimeEnd);
       }
     } else if (person_type === "employee") {
       tableName = "employees";
@@ -458,22 +499,26 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`Employee query error: ${error.message}`);
       if (!emp) throw new Error(`Employee not found with id: ${person_id}`);
 
-      const profile = emp.profiles as any;
-      name = profile?.full_name || "Unknown";
+      const profile = (emp as any).profiles || null;
+      name = pick(profile?.full_name, (emp as any).full_name) || "Unknown";
       personNo = emp.employee_code || person_id.substring(0, 8);
-      phone = profile?.phone || "";
-      email = profile?.email || "";
-      photoUrl = emp.biometric_photo_url || profile?.avatar_url || "";
+      phone = pick(profile?.phone, (emp as any).personal_phone, (emp as any).phone) || "";
+      email = pick(profile?.email, (emp as any).personal_email, (emp as any).email) || "";
+      photoUrl = pick(emp.biometric_photo_url, profile?.avatar_url) || "";
+      gender = normGender((emp as any).gender);
+      birthday = fmtDob((emp as any).date_of_birth);
+      deptName = (emp as any).department || "Staff";
+      remarkExtra = [ (emp as any).department, (emp as any).position ].filter(Boolean).join(" · ");
       effectiveBranchId = effectiveBranchId || emp.branch_id;
       shouldRevokeInstead = emp.is_active === false || !!emp.exit_date;
       revokeReason = emp.exit_type ? `Staff offboarded: ${emp.exit_type}` : revokeReason;
       validTimeEnd = PERMANENT_END;
     } else if (person_type === "trainer") {
       tableName = "trainers";
-      deptId = 101;
+      deptId = 102;
       const { data: trainer, error } = await supabase
         .from("trainers")
-        .select("id, branch_id, biometric_photo_url, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type")
+        .select("id, branch_id, biometric_photo_url, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type, specializations")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Trainer query error: ${error.message}`);
@@ -494,6 +539,9 @@ Deno.serve(async (req) => {
       phone = profile?.phone || "";
       email = profile?.email || "";
       photoUrl = (trainer as any).biometric_photo_url || profile?.avatar_url || "";
+      const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
+      deptName = specs.length > 0 ? `Trainer · ${specs[0]}` : "Trainer";
+      remarkExtra = specs.join(", ");
       effectiveBranchId = effectiveBranchId || trainer.branch_id;
       shouldRevokeInstead = trainer.is_active === false || !!(trainer as any).exit_date;
       revokeReason = (trainer as any).exit_type ? `Trainer offboarded: ${(trainer as any).exit_type}` : revokeReason;
@@ -509,7 +557,7 @@ Deno.serve(async (req) => {
     }
 
     const mipsPersonSn = stripHyphens(personNo);
-    console.log(`Syncing ${person_type}: ${name} (${personNo} → ${mipsPersonSn})`);
+    console.log(`Syncing ${person_type}: ${name} (${personNo} → ${mipsPersonSn}) gender=${gender} dob=${birthday || "-"} dept=${deptName}`);
 
     // Step 2: Check if person already exists in MIPS
     const existing = await lookupPerson(baseUrl, token, mipsPersonSn);
@@ -546,21 +594,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 3: Create or update person
+    // Step 3: Create or update person — omit empty strings so MIPS keeps prior values
+    const personType = person_type === "member" ? 1 : 2;
     const personPayload: Record<string, unknown> = {
       personSn: mipsPersonSn,
-      personType: 1,
+      personType,
       deptId,
+      deptName,
       name,
-      mobile: phone,
-      email: email || undefined,
-      gender: "M",
       attendance: "1",
       holiday: "1",
       validTimeBegin,
       validTimeEnd,
-      remark: person_type === "member" ? "Gym Member" : person_type === "trainer" ? "Trainer" : "Staff",
+      gender,
+      remark: [
+        person_type === "member" ? "Gym Member" : person_type === "trainer" ? "Trainer" : "Staff",
+        remarkExtra,
+      ].filter(Boolean).join(" — "),
     };
+    if (phone) personPayload.mobile = phone;
+    if (email) personPayload.email = email;
+    if (birthday) personPayload.birthday = birthday;
 
     const { success, personId, response: mipsResponse } = await upsertPerson(
       baseUrl, token, personPayload, existing
