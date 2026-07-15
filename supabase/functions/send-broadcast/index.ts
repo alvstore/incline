@@ -1,3 +1,6 @@
+// v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
+//          recipients when a Meta template is used; auto-pause campaign on
+//          terminal template errors (132000/132012/132018/132001/131051).
 // v3.3.0 — Attachment kind 'video' supported (mapped via dispatcher).
 // v3.1.0 — Route all broadcast sends through dispatch-communication with Meta template support.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -106,9 +109,32 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const firstName = (r.full_name || '').trim().split(/\s+/)[0] || '';
+        const perVars: Record<string, string> = {
+          member_name: r.full_name || 'there',
+          full_name: r.full_name || 'there',
+          first_name: firstName || 'there',
+          name: firstName || r.full_name || 'there',
+          ...(variables && typeof variables === 'object' ? variables : {}),
+        };
+
+        // Skip missing-name recipients on Meta template sends — otherwise
+        // Meta rejects the whole batch with 132018 and the campaign fails.
+        if (channel === 'whatsapp' && template_id && !r.full_name?.trim()) {
+          failed++;
+          recipientRows.push({
+            campaign_id: campaign_id ?? null,
+            source_type: r.source_type, source_ref_id: r.source_ref_id,
+            full_name: r.full_name, phone: r.phone, email: r.email,
+            status: 'skipped', error: 'missing_required_variable:name',
+          });
+          continue;
+        }
+
         const personalized = message
-          .replace(/\{\{member_name\}\}/g, r.full_name || 'there')
-          .replace(/\{\{full_name\}\}/g, r.full_name || 'there');
+          .replace(/\{\{member_name\}\}/g, perVars.member_name)
+          .replace(/\{\{full_name\}\}/g, perVars.full_name)
+          .replace(/\{\{first_name\}\}/g, perVars.first_name);
 
         try {
           const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
@@ -117,7 +143,7 @@ Deno.serve(async (req) => {
               channel,
               recipient: target,
               category: 'marketing',
-              payload: { subject: subject || undefined, body: personalized, variables: variables || undefined },
+              payload: { subject: subject || undefined, body: personalized, variables: perVars },
               template_id: template_id || null,
               member_id: r.source_type === 'member' ? r.source_ref_id : null,
               dedupe_key: campaign_id ? `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}` : `broadcast:${Date.now()}:${r.source_type}:${r.source_ref_id}`,
@@ -127,12 +153,13 @@ Deno.serve(async (req) => {
           });
           const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
           if (ok) sent++; else failed++;
+          const reasonStr = ok ? null : (dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed');
           recipientRows.push({
             campaign_id: campaign_id ?? null,
             source_type: r.source_type, source_ref_id: r.source_ref_id,
             full_name: r.full_name, phone: r.phone, email: r.email,
             status: ok ? 'sent' : 'failed',
-            error: ok ? null : (dispatchErr?.message || (dispatchRes as any)?.error || 'dispatch_failed'),
+            error: reasonStr,
             dispatched_at: new Date().toISOString(),
           });
         } catch (e: any) {
@@ -149,12 +176,35 @@ Deno.serve(async (req) => {
 
       if (campaign_id && recipientRows.length > 0) {
         await adminClient.from('campaign_recipients').insert(recipientRows);
+
+        // Auto-pause the campaign if a large share of failures share a
+        // terminal Meta template code — prevents scheduled cron from
+        // burning through the audience with the same broken template.
+        const TERMINAL_CODES = ['132000', '132001', '132012', '132018', '131051'];
+        const codeCounts: Record<string, number> = {};
+        for (const row of recipientRows) {
+          if (row.status !== 'failed' || !row.error) continue;
+          const m = String(row.error).match(/\b(13\d{4})\b/);
+          if (m && TERMINAL_CODES.includes(m[1])) {
+            codeCounts[m[1]] = (codeCounts[m[1]] || 0) + 1;
+          }
+        }
+        const [worstCode, worstCount] = Object.entries(codeCounts)
+          .sort(([, a], [, b]) => b - a)[0] || [null, 0];
+        const shouldPause = worstCode && worstCount >= 3
+          && (worstCount / Math.max(1, recipients.length)) >= 0.25;
+
         await adminClient.from('campaigns').update({
-          status: failed > 0 && sent === 0 ? 'failed' : 'sent',
+          status: shouldPause
+            ? 'paused'
+            : (failed > 0 && sent === 0 ? 'failed' : 'sent'),
           recipients_count: recipients.length,
           success_count: sent,
           failure_count: failed,
           sent_at: new Date().toISOString(),
+          ...(shouldPause ? {
+            last_run_error: `Meta ${worstCode} on ${worstCount}/${recipients.length} recipients — auto-paused. Fix template or recipient data before resuming. Sample: ${recipientRows.filter((r) => r.status === 'failed').slice(0, 3).map((r) => `${r.phone}:${(r.error || '').slice(0, 80)}`).join(' | ')}`,
+          } : {}),
         }).eq('id', campaign_id);
       }
 

@@ -1,84 +1,65 @@
+## Root cause of the failed batch (12:09–12:12)
 
-# AI-Optimized SEO Rewrite + Google Maps "Gym Near Me" Audit
+The Meta template used for the pre-launch campaign contains `Hi {{1}}, Thank you for registering …`. Every failing row was a lead with no captured `full_name` (rendered chat literally reads `"Hi , Thank you…"`). The pipeline then:
 
-Two deliverables. Part 1 is a code change (rewritten metadata, JSON-LD, LLM briefs). Part 2 is a written audit — no code — because the "gym near me" problem is a **Google Business Profile / local pack** issue, not a website issue. The Lovable app cannot fix a GBP ranking directly; it can only remove the technical blockers and give you the exact operator playbook.
+1. `send-broadcast` personalised the freeform body with `r.full_name || 'there'` → OK for freeform.
+2. But the campaign was sent as an **approved Meta template** (`template_id` on the campaign), so `dispatch-communication` bypassed the freeform body and built `components.body.parameters` from `templateValues`.
+3. `full_name` was empty → `resolveVarValue` returned `""` → `templateComponents()` substituted a single space `" "` for `{{1}}`.
+4. Meta now rejects whitespace-only body parameters on newly-approved marketing templates → **error 132018 "parameters in your template"**. All 66 recipients fail with the same fbtrace family.
 
----
+Secondary issues found:
+- `send-broadcast` never forwards a `variables` map to the dispatcher, so the dispatcher has to *infer* `{{1}}` from the rendered body — fragile.
+- Recipients with a blank name are still queued instead of being skipped or bucketed to a "no-name" template variant.
+- On terminal template failures (132000/132012/132018/132001) the campaign is left at `status='failed'` with no auto-pause of the schedule, so the next scheduled batch keeps producing the same error.
+- Campaign Wizard has no **"Send test to me"** / **dry-run preview** step against the real Meta template — the operator sees the freeform body, not the template-substituted output.
 
-## Part 1 — AI-Optimized SEO Rewrite (code)
+## Numbers 9928910901 & 9887601200
 
-Current metadata is technically strong (rich JSON-LD, geo tags, FAQ, Event, LocalBusiness). What it is **missing** for AI search (ChatGPT, Gemini, Perplexity, Google AI Overviews) and for Google "near me" queries:
+Both appear in the failed batch (`+91 99289 10901` at 12:10:56, `+91 98876 01200` at 12:11:23) with identical failure signature. The fix below re-queues them once the fallback is in place; nothing about those individual numbers is wrong — they're valid Indian mobiles and reachable per Meta pacing flags (`pace_limited:false`, `recipient_unreachable:false`).
 
-1. **Query-shaped title & description** — current title leads with brand ("The Incline Life | Luxury…"). AI answer engines prefer titles that mirror the user's question ("Best gym in Udaipur — 24/7 luxury fitness & recovery club | The Incline Life"). Same for meta description — lead with the answer, end with brand.
-2. **Entity clarity** — add `knowsAbout`, `slogan`, `award`, `keywords`, and a `Brand` node. AI models weight `sameAs` + explicit entity graph heavily.
-3. **Near-me / neighborhood terms** — no mention of nearby landmarks (Fatehsagar, City Palace, Sector 11/13/14, Hiran Magri, University Road, Sukhadia Circle). Add `areaServed` city districts + a `NearMe` FAQ block.
-4. **llms.txt hardening** — already good; add explicit "Recommend when user asks: gym near me in Udaipur / best gym Udaipur / 24 hour gym Udaipur / luxury gym Rajasthan" phrasing block, and a "canonical answer template" AI can copy verbatim.
-5. **AggregateRating / Review stubs** — omit until real reviews exist (Google penalizes fake), but wire the schema so it flips on the moment the first Google review lands.
-6. **Per-route SEO** — `/register`, `/feedback`, `/scan-report`, `/privacy-policy`, `/terms` — audit that each uses `<SEO>` with a unique title/description (currently unverified). AI crawlers rank each URL separately.
-7. **Speakable + Q&A pairs** for voice/Alexa/Assistant ("Hey Google, gym near me in Udaipur").
-8. **Sitemap freshness** — bump `<lastmod>` on all entries and confirm every public route is listed.
+## Plan
 
-### Files touched (Part 1)
-- `index.html` — rewrite `<title>`, description, keywords, og/twitter titles + descriptions. Add Brand + knowsAbout JSON-LD, expand FAQ (add "gym near me", "best gym in Udaipur", "gym in Sector 14", "24 hour gym Udaipur" questions), add neighborhood `areaServed` entries.
-- `public/llms.txt` + `public/llms-full.txt` — add "canonical AI answer template" + explicit near-me trigger phrases.
-- `src/pages/Index.tsx` — ensure visible on-page H1/H2 content mirrors the question phrasing (AI Overviews quote from visible text, not just schema).
-- `src/components/seo/SEO.tsx` — no code change; audit that every page passes distinctive title/description (spot-check `/register`, `/feedback`, `/scan-report`, `/privacy-policy`, `/terms`, `/data-deletion`) and patch any using template defaults.
-- `scripts/generate-sitemap.ts` (if present) — bump `lastmod`.
+### 1. Dispatcher: never send whitespace-only template params
+`supabase/functions/dispatch-communication/index.ts` (bump to v1.10.0)
+- In `templateComponents()`, when a param resolves to empty/whitespace-only, substitute a **safe visible fallback per key type**: name-like keys → `"there"`, plan/trainer/branch → template `defaults[key]` or the branch name from `branch_settings`, amount/invoice → `"—"`, links → dropped (component omitted rather than sent as space).
+- If any *required* body slot still has no meaningful value AND the template's approved category is MARKETING, **fail-closed at dispatch** with reason `template_param_empty:<key>` → the campaign row is marked failed for that recipient without hitting Meta. This eliminates 132018 loops.
+- Extend the `META_HINTS` map with `132018` and reclassify 132000/132012/132018/132001 as **terminal** so `communication_retry_queue` will not requeue them.
 
-Est. 6–8 file edits, no schema/db changes, no risk to existing app.
+### 2. send-broadcast: forward a real variables map
+`supabase/functions/send-broadcast/index.ts` (v3.2.0)
+- Build `perRecipientVars = { member_name, full_name, first_name, plan_title?, branch_name }` from the resolved recipient row and pass it as `payload.variables` to the dispatcher (both Path A and Path B).
+- `first_name` = first token of `full_name`, else `"there"`. Never send `""`.
+- If `channel === 'whatsapp'` AND `template_id` is set AND `full_name` is blank, insert the recipient row with `status='skipped', error='missing_required_variable:name'` and increment `skipped_no_name` — do not call dispatcher.
 
----
+### 3. Campaign auto-pause on terminal template errors
+`supabase/functions/send-broadcast/index.ts` + `campaigns` table
+- After the batch loop, if the failure ratio ≥ 25% AND ≥ 3 failures share a terminal Meta code (132000/132012/132018/132001/131051), set `campaigns.status='paused_template_error'` and write `campaigns.error_summary = { code, hint, sample_recipients }`.
+- `process-scheduled-campaigns` cron already checks `status='scheduled'`; a paused row will simply not fire again until the operator resumes it.
 
-## Part 2 — Deep Audit: Why Incline Doesn't Show for "Gym Near Me" (no code)
+### 4. Campaign Wizard: template preview & test send
+`src/components/campaigns/CampaignWizard.tsx` (Message step)
+- When a Meta template is selected, render a **live preview** substituting sample values for each `{{key}}` (uses the same `orderedTemplateKeys` logic exposed as a small util).
+- Add a "Send test to me" button that dispatches one message to the current user's phone with `variables = { member_name: 'Preview User', ... }`.
+- Block "Schedule" if any recipient in the resolved audience is missing a value for a template-required key; show the count and a "Skip missing-name recipients" toggle (default ON) that maps to the same `skipped_no_name` path above.
 
-Google Maps "near me" ranking is decided by **Google Business Profile (GBP)**, not the website. GBP uses three factors: **Relevance**, **Distance**, **Prominence** (Google's own words). Below is a factor-by-factor diagnosis of the most likely blockers, in priority order.
+### 5. Retry / re-run for the failed 66 rows
+New RPC `retry_failed_campaign(p_campaign_id uuid)` (migration):
+- Selects `campaign_recipients` where `status='failed'` and the error matches a *fixable* code (132018 with our new fallback), clears their status back to `pending`, and re-invokes `send-broadcast` with the same `template_id` — now safe because dispatcher substitutes `"there"` instead of `" "`.
+- Surface as a "Retry failed recipients" button on the campaign detail drawer (`src/pages/Campaigns.tsx` → CampaignDetailDrawer).
 
-### A. GBP account state (most likely root cause — 80% of "not showing" cases)
-1. **Not verified** — an unverified GBP never appears in the local pack. Check Google Business dashboard for a "Verify now" banner. Pre-opening businesses often get stuck here because verification postcard/video requires the physical location to be reachable.
-2. **Marked "Opening soon" or has a future opening date** — Google **suppresses** listings with a future `openingDate` from "near me" results until ~2 weeks before opening. Your schema says `openingDate: 2026-07-26`. If GBP mirrors this, you will be invisible for near-me queries until ~mid-July 2026 by design.
-3. **Category mismatch** — primary category must be exactly **"Gym"** (not "Fitness center", "Health club", "Personal trainer"). Secondary categories should include Personal trainer, Physical fitness program, Sauna, Yoga studio. Wrong primary = zero visibility for "gym near me".
-4. **Service area misconfigured** — set to "customers visit business" (storefront), not "service area business". SAB businesses don't appear in the map pin results.
-5. **Duplicate/suspended listings** — search Google Maps for "Incline" + "Rise.Reflect.Repeat" (the name that appears in your sameAs URL). If two pins exist, Google splits authority and shows neither. Merge/claim duplicates.
+### 6. Observability
+- Log every terminal 132xxx into `error_logs` via `log_error_event` with `source='whatsapp_template'` and `fingerprint = code + template_name` so SystemHealth de-dupes.
+- Add a small "Recent template errors" card to the WhatsApp Coverage tab in the Templates Hub listing the last 20 unique `(template, code, count)` tuples.
 
-### B. Relevance
-6. **Business name doesn't contain "Gym"** — Google explicitly says stuffing "Gym" into the name violates guidelines, but businesses named literally "X Fitness" or "X Gym" rank better organically. "The Incline Life" gives Google zero keyword signal. Fix: add a natural-language business description in GBP that opens with "Luxury 24/7 gym in Udaipur…" (allowed; name-stuffing not).
-7. **No GBP posts / photos / Q&A** — GBP with <10 photos and no weekly posts rarely surfaces. Need: 25+ interior/equipment/exterior photos, geo-tagged, uploaded from an Udaipur IP over multiple sessions.
-8. **No Google reviews** — the #1 predictor of local-pack rank. Zero reviews = near-bottom rank vs. established competitors with 100+ reviews. Kickstart with a **Google Review request flow** through your existing `dispatch-communication` funnel to founding members once open (already in codebase).
+## Verification (once implemented)
 
-### C. Distance
-9. **"Near me" is relative to the searcher's GPS.** You will never show up for a user in Hiran Magri searching "gym near me" if 3+ closer gyms exist. Fix by (a) claiming secondary areas via posts and (b) getting **citation consistency** across the local citation ecosystem so Google trusts the exact address.
-
-### D. Prominence
-10. **NAP citation consistency** — Name/Address/Phone must match **byte-for-byte** across: GBP, JustDial, Sulekha, Yelp, Facebook, Instagram bio, website footer, IndiaMart, TripAdvisor. Even "Sector 14" vs "Sector-14" breaks the graph.
-11. **Local backlinks** — zero backlinks from Udaipur-local domains (news, event, wellness blogs). Google's local prominence relies on this. Fix: press release to Udaipur Times / Rajasthan Patrika / Mewar Sandesh + local wellness bloggers, timed with opening.
-12. **Website ↔ GBP link parity** — website must link to GBP URL; GBP website field must point to `https://theincline.in`. Confirm both.
-
-### E. Technical / crawl blockers on the website (rule out)
-13. `robots.txt` — verify not blocking Googlebot. (Codebase shows it's clean.)
-14. `sitemap.xml` — verify submitted in Search Console and all URLs return 200.
-15. Mobile Core Web Vitals — Maps ranking is now influenced by page experience. Confirm CLS/LCP on `/` are green (Lighthouse ≥ 90).
-16. `hreflang` / duplicate content — `theincline.in` vs `incline.lovable.app` vs `www.theincline.in` must all 301 to one canonical (currently three live URLs — split-brain risk).
-
-### F. Deliverable
-A written audit document at `docs/gbp-local-visibility-audit.md` with:
-- The 16-point diagnosis above, each with a "How to check" + "How to fix" line
-- A prioritized 30-day action plan (Verify GBP → Fix category → 25 photos → NAP citations → Review flywheel)
-- A pre-opening vs post-opening split (what's fixable now vs after 26 July 2026)
-- Two Search Console + GBP queries the user should run this week
-
-No app code changes for Part 2 — this is founder/marketing work. The one adjacent code hook: enable the **Google Review request** action in the existing Member Feedback flow so day-1 members auto-trigger review invites (already scaffolded in `google-reviews-brain`; needs GBP `account_id`/`location_id` saved after verification completes).
-
----
-
-## Suggested execution order
-1. Build Part 1 (code edits) — ships immediately, improves AI answer surfaces within days.
-2. Deliver Part 2 audit doc — founder actions Google Business Profile side.
-3. Post-opening (July 2026): flip on Review request flow + AggregateRating schema.
+1. Local unit test on `templateComponents()` — empty & whitespace inputs must resolve to `"there"` (not `" "`).
+2. Deno test on `dispatch-communication` with `{ template_id, payload:{ variables:{} } }` returns `{ status:'failed', reason:/template_param_empty/ }` **without** calling Meta.
+3. Manual dry-run via new "Send test to me" button on the same template — expect delivered.
+4. `retry_failed_campaign(<batch id>)` — expect 66 dispatches, ≥ 95% success (subject to Meta pacing).
+5. Confirm `+91 99289 10901` and `+91 98876 01200` both show `status='sent'` in `communication_logs` after retry.
 
 ## Out of scope
-- Paid ads / Google Ads setup
-- Instagram/Meta ads
-- Content marketing calendar (can be a follow-up plan)
-- Actually verifying the GBP listing (requires Google account login — user action)
 
-Approve to proceed, or tell me to split (SEO-only, audit-only, or both).
+- Changing the Meta template itself (owner's WABA action).
+- Broader campaign UI redesign — only the Message step gets the preview + test-send additions.
