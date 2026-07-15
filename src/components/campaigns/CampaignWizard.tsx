@@ -1204,6 +1204,41 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
               );
             })()}
 
+            {/* ─── Telinfy Bulk CSV Export (emergency fallback) ─────────────── */}
+            {(channel === 'rcs' || channel === 'whatsapp' || channel === 'sms') && (
+              <div className="rounded-2xl border border-dashed p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">Emergency bulk send</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) to upload manually if the CRM pipeline is unavailable.
+                  </p>
+                </div>
+                <TelinfyBulkExportButton
+                  campaignName={name || 'campaign'}
+                  recipients={[]}
+                  variableKeys={channel === 'rcs' ? rcsVarKeys : ['first_name']}
+                  disabled={false}
+                  resolveVar={undefined}
+                  {...({
+                    // Lazy resolver — computed at click via resolveCampaignAudience.
+                  } as any)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="hidden"
+                  aria-hidden
+                />
+                <TelinfyLazyExport
+                  branchId={branchId}
+                  filter={filter}
+                  campaignName={name || 'campaign'}
+                  variableKeys={channel === 'rcs' ? rcsVarKeys : ['first_name']}
+                />
+              </div>
+            )}
+
 
 
             {(channel === 'whatsapp' || channel === 'email') && (
