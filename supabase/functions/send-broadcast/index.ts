@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
 
         await adminClient.from('campaigns').update({
           status: shouldPause
-            ? 'paused_template_error'
+            ? 'paused'
             : (failed > 0 && sent === 0 ? 'failed' : 'sent'),
           recipients_count: recipients.length,
           success_count: sent,
