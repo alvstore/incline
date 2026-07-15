@@ -370,7 +370,10 @@ export async function duplicateCampaign(id: string): Promise<Campaign> {
 export async function sendCampaignNow(
   campaign: Campaign & { attachment_url?: string | null; attachment_kind?: string | null; attachment_filename?: string | null },
   audience: { memberIds?: string[]; recipients?: ResolvedRecipient[]; variables?: Record<string, string> }
-): Promise<{ sent: number; failed: number; total: number }> {
+): Promise<{ accepted: true; total: number }> {
+  // send-broadcast v4 ACKs 202 immediately and runs the dispatch loop in the
+  // background. Do NOT await final counts here — the wizard should close and
+  // the campaign card polls `success_count / failure_count / delivered_count`.
   await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
 
   const { data, error } = await supabase.functions.invoke('send-broadcast', {
@@ -390,7 +393,9 @@ export async function sendCampaignNow(
     },
   });
   if (error) throw error;
-  return data as any;
+  const total =
+    (audience.recipients?.length ?? audience.memberIds?.length ?? (data as any)?.total ?? 0);
+  return { accepted: true, total };
 }
 
 // ---------- Recurring automation rule ----------
