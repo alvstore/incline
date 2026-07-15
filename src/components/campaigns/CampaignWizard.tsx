@@ -509,8 +509,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           trigger === 'scheduled' ? 'scheduled' : 'draft'
         ) as any,
       };
-      const campaign = isEditing && editingCampaign
-        ? await updateCampaign(editingCampaign.id, payload as any).then((c) => c)
+      // If we already have a draft campaign from "Submit to Meta", update it in
+      // place so we don't leave orphan rows (issue #1).
+      const targetId = editingCampaign?.id || draftCampaignId;
+      const campaign = targetId
+        ? await updateCampaign(targetId, payload as any).then((c) => c)
         : await createCampaign(payload as any);
 
       if (trigger === 'send_now') {
