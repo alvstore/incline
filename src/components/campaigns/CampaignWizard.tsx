@@ -1225,7 +1225,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                       const csv = buildTelinfyCsv({
                         campaignName: name || 'campaign',
                         recipients: recips as any,
-                        variableKeys: keys.length ? keys : ['first_name'],
+                        variableKeys: keys.length ? keys : ['first_name', 'last_name'],
                         resolveVar: channel === 'rcs' && selectedRcsTemplate
                           ? (r: any, k: string) => {
                               const mapped = rcsVarMap[k] || '';
