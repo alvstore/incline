@@ -289,14 +289,27 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     let failed = 0;
-
     let skippedDnc = 0;
+    const memberRecipientRows: any[] = [];
+
     for (const member of members) {
       const profile = (member as any).profiles;
       if (!profile) continue;
       // Defence-in-depth — phone match against pre-loaded DNC set.
       if (profile.phone && dncDigits.has(digits(profile.phone))) {
         skippedDnc++;
+        if (campaign_id) {
+          memberRecipientRows.push({
+            campaign_id,
+            source_type: 'member',
+            source_ref_id: member.id,
+            full_name: profile.full_name || null,
+            phone: profile.phone || null,
+            email: profile.email || null,
+            status: 'skipped',
+            error: 'do_not_contact',
+          });
+        }
         continue;
       }
 
@@ -305,12 +318,26 @@ Deno.serve(async (req) => {
         .replace(/\{\{member_code\}\}/g, member.member_code || "");
 
       let recipient = channel === "email" ? profile.email : profile.phone;
-      let status = "failed";
+      let status: 'sent' | 'failed' | 'skipped' = "failed";
+      let errorReason: string | null = null;
+
+      if (!recipient) {
+        if (campaign_id) {
+          memberRecipientRows.push({
+            campaign_id,
+            source_type: 'member',
+            source_ref_id: member.id,
+            full_name: profile.full_name || null,
+            phone: profile.phone || null,
+            email: profile.email || null,
+            status: 'skipped',
+            error: 'missing_channel_address',
+          });
+        }
+        continue;
+      }
 
       try {
-        if (!recipient) {
-          continue;
-        }
         const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
           body: {
             branch_id,
@@ -325,15 +352,31 @@ Deno.serve(async (req) => {
             ...(attachment ? { attachment } : {}),
           },
         });
-        status = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || '')) ? "sent" : "failed";
-      } catch (e) {
+        const ok = !dispatchErr && ['sent', 'queued', 'deduped'].includes(String((dispatchRes as any)?.status || ''));
+        status = ok ? 'sent' : 'failed';
+        if (!ok) errorReason = dispatchErr?.message || (dispatchRes as any)?.reason || (dispatchRes as any)?.error || 'dispatch_failed';
+      } catch (e: any) {
         console.error(`Broadcast dispatch error for ${recipient}:`, e);
-        status = "failed";
+        status = 'failed';
+        errorReason = e?.message || 'exception';
       }
 
       if (status === "sent") sent++;
       else failed++;
 
+      if (campaign_id) {
+        memberRecipientRows.push({
+          campaign_id,
+          source_type: 'member',
+          source_ref_id: member.id,
+          full_name: profile.full_name || null,
+          phone: profile.phone || null,
+          email: profile.email || null,
+          status,
+          error: errorReason,
+          dispatched_at: new Date().toISOString(),
+        });
+      }
     }
 
     await adminClient.from("notifications").insert({
@@ -342,9 +385,12 @@ Deno.serve(async (req) => {
       type: "info", category: "communication",
     });
 
-    // If invoked from a campaign, update its counters & status
+    // If invoked from a campaign, update its counters & persist recipient rows.
     if (campaign_id) {
       try {
+        if (memberRecipientRows.length > 0) {
+          await adminClient.from('campaign_recipients').insert(memberRecipientRows);
+        }
         await adminClient.from("campaigns").update({
           status: failed > 0 && sent === 0 ? "failed" : "sent",
           recipients_count: members.length,
