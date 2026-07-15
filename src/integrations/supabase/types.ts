@@ -1909,6 +1909,7 @@ export type Database = {
       }
       campaign_recipients: {
         Row: {
+          attempt: number
           campaign_id: string
           created_at: string
           dispatched_at: string | null
@@ -1919,6 +1920,7 @@ export type Database = {
           full_name: string | null
           id: string
           in_window: boolean | null
+          last_retried_at: string | null
           phone: string | null
           read_at: string | null
           source_label: string | null
@@ -1927,6 +1929,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          attempt?: number
           campaign_id: string
           created_at?: string
           dispatched_at?: string | null
@@ -1937,6 +1940,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           in_window?: boolean | null
+          last_retried_at?: string | null
           phone?: string | null
           read_at?: string | null
           source_label?: string | null
@@ -1945,6 +1949,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          attempt?: number
           campaign_id?: string
           created_at?: string
           dispatched_at?: string | null
@@ -1955,6 +1960,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           in_window?: boolean | null
+          last_retried_at?: string | null
           phone?: string | null
           read_at?: string | null
           source_label?: string | null
