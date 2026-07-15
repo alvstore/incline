@@ -603,13 +603,40 @@ Deno.serve(async (req) => {
           if (input.template_id) {
             const { data: tpl, error: tplError } = await supabase
               .from('templates')
-              .select('content, variables, meta_template_name, header_type, attachment_source')
+              .select('content, variables, meta_template_name, header_type, attachment_source, header_media_url')
               .eq('id', input.template_id)
               .maybeSingle();
             if (tplError) throw new Error(tplError.message);
             if (tpl?.meta_template_name) {
               templateName = tpl.meta_template_name;
               templateHeaderType = (tpl.header_type ?? 'none').toLowerCase();
+
+              // Auto-attach the template's default header media when caller
+              // didn't supply one. Meta rejects media-header templates without
+              // a HEADER component (131051 / 132018); this guarantees marketing
+              // image/video templates always render with their designed art.
+              const mediaKinds = new Set(['image', 'document', 'video']);
+              if (
+                !input.attachment?.url &&
+                mediaKinds.has(templateHeaderType) &&
+                typeof (tpl as any).header_media_url === 'string' &&
+                (tpl as any).header_media_url
+              ) {
+                const url = (tpl as any).header_media_url as string;
+                input.attachment = {
+                  url,
+                  filename:
+                    templateHeaderType === 'image' ? 'image.jpg'
+                    : templateHeaderType === 'video' ? 'video.mp4'
+                    : 'document.pdf',
+                  content_type:
+                    templateHeaderType === 'image' ? 'image/jpeg'
+                    : templateHeaderType === 'video' ? 'video/mp4'
+                    : 'application/pdf',
+                  kind: templateHeaderType as 'image' | 'video' | 'document',
+                };
+                (input as any).__header_source = 'template_default';
+              }
 
               // ── Live Meta health pre-flight ──────────────────────────────
               // whatsapp_templates is the canonical mirror of Meta's WABA state.
