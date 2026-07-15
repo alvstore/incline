@@ -141,6 +141,67 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const [testRecipient, setTestRecipient] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
 
+  // ── RCS (Telinfy) template selection + per-variable mapping ──
+  const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
+  const [rcsVarMap, setRcsVarMap] = useState<Record<string, string>>({});
+
+  const { data: rcsTemplates = [] } = useQuery({
+    queryKey: ['rcs-templates', branchId],
+    queryFn: async () => {
+      let q = supabase.from('rcs_templates').select('id, template_name, body_preview, variables, kind, status');
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q.order('template_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && channel === 'rcs',
+  });
+
+  const selectedRcsTemplate = (rcsTemplates as any[]).find((t) => t.id === rcsTemplateId) || null;
+  const rcsVarKeys: string[] = (() => {
+    if (!selectedRcsTemplate) return [];
+    const declared = Array.isArray(selectedRcsTemplate.variables) ? selectedRcsTemplate.variables : [];
+    const fromBody = Array.from(
+      new Set(
+        String(selectedRcsTemplate.body_preview || '')
+          .match(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
+          ?.map((m: string) => m.replace(/[{}\s]/g, '')) || [],
+      ),
+    );
+    // Prefer declared variables (Telinfy panel), fall back to body-scan.
+    return declared.length ? declared.map(String) : (fromBody as string[]);
+  })();
+
+  // Seed default mapping when template changes (first key → first_name, others → blank).
+  useEffect(() => {
+    if (!selectedRcsTemplate) return;
+    setRcsVarMap((prev) => {
+      const next = { ...prev };
+      rcsVarKeys.forEach((k, i) => {
+        if (next[k] !== undefined) return;
+        if (i === 0 || /name|first/i.test(k)) next[k] = '{{first_name}}';
+        else next[k] = '';
+      });
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rcsTemplateId]);
+
+  /** Resolve the RCS variable map for a single recipient at send-time. */
+  const resolveRcsVarsForRecipient = (r: { full_name?: string | null; email?: string | null }): Record<string, string> => {
+    const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
+    const full = r.full_name || 'there';
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rcsVarMap)) {
+      out[k] = String(v || '')
+        .replace(/\{\{\s*first_name\s*\}\}/gi, first)
+        .replace(/\{\{\s*full_name\s*\}\}/gi, full)
+        .replace(/\{\{\s*member_name\s*\}\}/gi, full)
+        .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
+    }
+    return out;
+  };
+
   // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
   // is selectable, even if there's no local CRM `templates` row yet.
   // We left-join `templates.id` by meta_template_name so the send pipeline still
