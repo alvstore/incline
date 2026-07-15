@@ -282,6 +282,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       setUseApprovedTemplate(false);
       setSelectedTemplateId(null);
     }
+    // Track the editing row so any "Submit to Meta" resubmission updates it
+    // instead of creating a duplicate draft (issue #1).
+    setDraftCampaignId(c.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCampaign?.id]);
 
