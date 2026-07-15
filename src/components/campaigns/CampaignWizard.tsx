@@ -487,6 +487,8 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           attachment_kind: attachment?.kind ?? null,
           attachment_filename: attachment?.filename ?? null,
           campaign_type: campaignType,
+          fallback_policy: { on_pacing: fallbackOnPacing } as any,
+
           event_meta: isEvent ? {
             name: eventName.trim(), date: eventDate || null, time: eventTime || null,
             venue: eventVenue.trim() || null, rsvp_url: eventRsvpUrl.trim() || null,
