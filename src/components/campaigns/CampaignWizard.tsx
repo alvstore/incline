@@ -703,30 +703,53 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                         <p className="font-semibold">No approved Meta templates yet.</p>
                         <p>Generate one in <strong>Settings → Communication Templates → AI Studio</strong>, or click <strong>Sync from Meta</strong> above to pull the latest approval list.</p>
                       </div>
-                    ) : (
-                      <Select
-                        value={selectedTemplateId || ''}
-                        onValueChange={(id) => {
-                          setSelectedTemplateId(id);
-                          const t: any = approvedTemplates.find((x: any) => x.id === id);
-                          if (t?.content) setMessage(t.content);
-                          if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
-                            toast.info(`This template needs a ${t.header_type} header — upload one below.`);
-                          }
-                        }}
+                    ) : (() => {
+                        // Scope templates to this campaign first, then by campaign type.
+                        // Full list only when the user explicitly asks for it.
+                        const all = approvedTemplates as any[];
+                        const forThis = all.filter((t) => t.id && t.id === selectedTemplateId);
+                        const forType = all.filter((t) =>
+                          !forThis.includes(t) && (t.evergreen_kind === campaignType),
+                        );
+                        const other = all.filter((t) => !forThis.includes(t) && !forType.includes(t));
+                        const scoped = showAllTemplates ? [...forThis, ...forType, ...other] : [...forThis, ...forType];
+                        const renderList = scoped.length ? scoped : all; // never leave the picker empty
+                        return (
+                          <Select
+                            value={selectedTemplateId || ''}
+                            onValueChange={(id) => {
+                              setSelectedTemplateId(id);
+                              const t: any = all.find((x: any) => x.id === id);
+                              if (t?.content) setMessage(t.content);
+                              if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
+                                toast.info(`This template needs a ${t.header_type} header — upload one below.`);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick a template…" /></SelectTrigger>
+                            <SelectContent>
+                              {renderList.map((t: any) => (
+                                <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
+                                  {t.name}
+                                  {t.meta_template_status === 'PENDING' ? '  · ⏳ pending Meta' : ''}
+                                  {t.category ? ` · ${t.category.toLowerCase()}` : ''}
+                                  {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
+                                  {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        );
+                      })()
+                    }
+                    {approvedTemplates.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllTemplates((v) => !v)}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
                       >
-                        <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
-                        <SelectContent>
-                          {approvedTemplates.map((t: any) => (
-                            <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
-                              {t.name}
-                              {t.category ? ` · ${t.category.toLowerCase()}` : ''}
-                              {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
-                              {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {showAllTemplates ? 'Show only templates for this campaign type' : `Show all ${approvedTemplates.length} templates`}
+                      </button>
                     )}
                     {selectedTemplateId && selectedTemplateId.startsWith('__meta__:') && (
                       <p className="text-[11px] text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
