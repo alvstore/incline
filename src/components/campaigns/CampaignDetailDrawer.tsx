@@ -152,7 +152,7 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
       const key = `campaign:${campaign!.id}:${r.source_type}:${r.source_ref_id}`;
       const dlr = byKey.get(key);
       const errRaw = r.error || dlr?.error_message || dlr?.error_code || null;
-      const label = errRaw ? parseCommError(errRaw)?.label || errRaw : null;
+      const label = errRaw ? parseCommError(errRaw)?.short || errRaw : null;
       const base = {
         id: r.id,
         source_type: r.source_type,
