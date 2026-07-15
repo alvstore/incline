@@ -581,11 +581,12 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       // Backend now returns 200 with success:false for Meta business rejections.
       if (data?.success === false || data?.error) {
         const me = data.meta_error || {};
+        const diag = data.header_upload_diagnostics;
         setMetaError({
           message: data.error || 'Meta rejected this template',
-          user_title: me.user_title,
-          user_msg: me.user_msg,
-          code: me.code,
+          user_title: diag ? 'Header media could not be uploaded to Meta' : me.user_title,
+          user_msg: diag?.detail || me.user_msg,
+          code: diag ? `header_${diag.reason}` : me.code,
           subcode: me.subcode,
           fbtrace_id: me.fbtrace_id,
         });
