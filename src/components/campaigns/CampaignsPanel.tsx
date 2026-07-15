@@ -141,7 +141,7 @@ export function CampaignsPanel() {
             const sb = statusBadge(c.status);
             const Sicon = sb.icon;
             const isScheduled = c.status === 'scheduled' && c.scheduled_at;
-            const editable = c.status === 'draft' || c.status === 'scheduled';
+            const editable = c.status === 'draft' || c.status === 'scheduled' || c.status === 'pending_template_approval';
             const inFlight = c.status === 'sending';
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow/50 hover:shadow-lg hover:ring-1 hover:ring-primary/25 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary relative">
