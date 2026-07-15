@@ -157,7 +157,7 @@ export function CampaignsPanel() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Badge variant="outline" className={`${sb.c} rounded-full text-[10px] uppercase`}>
-                      <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {c.status}
+                      <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {sb.label}
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
