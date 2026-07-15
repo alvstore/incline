@@ -398,6 +398,28 @@ export async function sendCampaignNow(
   return { accepted: true, total };
 }
 
+/**
+ * Retry only the failed recipients from a previous send.
+ * Delegates to edge fn `retry-campaign-failed`, which reads
+ * `campaign_recipients` where status='failed', constructs a fresh
+ * `recipients` array and invokes `send-broadcast` with retry=true.
+ */
+export async function retryFailedRecipients(campaignId: string): Promise<{ accepted: number }> {
+  const { data, error } = await supabase.functions.invoke('retry-campaign-failed', {
+    body: { campaign_id: campaignId },
+  });
+  if (error) throw error;
+  return { accepted: (data as any)?.accepted ?? 0 };
+}
+
+/** Ask the reconciler to refresh this campaign's stats immediately (no cron wait). */
+export async function reconcileCampaignStats(campaignId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('reconcile-campaign-stats', {
+    body: { campaign_id: campaignId },
+  });
+  if (error) throw error;
+}
+
 // ---------- Recurring automation rule ----------
 export type RecurrencePreset = 'daily' | 'weekly_mon' | 'weekly_fri' | 'monthly_1st' | 'custom';
 
