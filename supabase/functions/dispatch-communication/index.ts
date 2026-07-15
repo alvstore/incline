@@ -1,4 +1,8 @@
-// dispatch-communication v1.19.0
+// dispatch-communication v1.20.0
+// v1.20.0: FIX — do not overwrite a Meta delivery callback that already
+//          marked the log failed/bounced while dispatch finalization was still
+//          running. Provider ACK means "accepted", not guaranteed delivered.
+//          This keeps 131049 ecosystem pacing visible as Failed.
 // v1.19.0: FIX — stamp whatsapp_messages.media_meta.source_log_id before
 //          provider callbacks can arrive. Meta status webhooks can beat the
 //          dispatcher's final provider_message_id update, so callbacks need a
@@ -1141,14 +1145,32 @@ Deno.serve(async (req) => {
     if (input.source_caller) finalMeta.source_caller = input.source_caller;
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
+    const { data: currentLogBeforeFinalize } = await supabase
+      .from('communication_logs')
+      .select('delivery_status, error_message, delivery_metadata')
+      .eq('id', log!.id)
+      .maybeSingle();
+    const currentStatus = String(currentLogBeforeFinalize?.delivery_status || '').toLowerCase();
+    const callbackAlreadyTerminal = !sendError && ['failed', 'bounced', 'suppressed'].includes(currentStatus);
+    const mergedFinalMeta = {
+      ...(((currentLogBeforeFinalize?.delivery_metadata as Record<string, unknown> | null) ?? {})),
+      ...finalMeta,
+    };
+
     await supabase
       .from('communication_logs')
       .update({
-        delivery_status: sendError ? 'failed' : 'sent',
-        status: sendError ? 'failed' : 'sent',
+        delivery_status: callbackAlreadyTerminal
+          ? currentStatus
+          : (sendError ? 'failed' : 'sent'),
+        status: callbackAlreadyTerminal
+          ? currentStatus
+          : (sendError ? 'failed' : 'sent'),
         provider_message_id: providerMessageId ?? null,
-        delivery_metadata: Object.keys(finalMeta).length ? finalMeta : {},
-        error_message: sendError ?? null,
+        delivery_metadata: Object.keys(mergedFinalMeta).length ? mergedFinalMeta : {},
+        error_message: callbackAlreadyTerminal
+          ? (currentLogBeforeFinalize?.error_message ?? null)
+          : (sendError ?? null),
         // Re-write content from the (now possibly cleaned) rendered body so the
         // audit row matches what was actually delivered to WhatsApp.
         content: input.payload.body,
@@ -1157,7 +1179,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', log!.id);
 
-    if (sendError) {
+    if (sendError || callbackAlreadyTerminal) {
       return ok({ status: 'failed', log_id: log!.id, reason: sendError });
     }
     return ok({ status: 'sent', log_id: log!.id, provider_message_id: providerMessageId });
