@@ -240,9 +240,30 @@ export function CampaignDetailDrawer({ open, onOpenChange, campaign }: Props) {
     onError: (e: any) => toast.error(e?.message || 'Re-trigger failed'),
   });
 
+  const resetMut = useMutation({
+    mutationFn: async () => {
+      if (!campaign) throw new Error('no campaign');
+      const { data, error } = await supabase.rpc('reset_campaign_to_draft' as any, { p_campaign_id: campaign.id });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Campaign reset to Draft — you can re-trigger it now');
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Reset failed'),
+  });
+
   if (!campaign) return null;
 
   const isSending = campaign.status === 'sending';
+  // A "zombie" send: status stuck at sending but no recipients ever landed AND
+  // the campaign is older than 15 min — the wizard call to send-broadcast must
+  // have aborted client-side before any recipient rows were written.
+  const isZombieSending =
+    isSending &&
+    ((campaign as any).recipients_count ?? 0) === 0 &&
+    (Date.now() - new Date(campaign.created_at).getTime()) > 15 * 60_000;
   const isLoading = recLoading || logsLoading;
   const progressPct = counts.total > 0
     ? Math.min(100, Math.round(((counts.sent + counts.failed + counts.skipped) / counts.total) * 100))
