@@ -1,3 +1,7 @@
+// v3.5.0 — Explicit-audience guard: never silently fall through to the
+//          whole-branch members path when caller passed empty recipients/
+//          member_ids. Members path now inserts per-recipient rows into
+//          campaign_recipients so the delivery drawer works for member sends.
 // v3.4.0 — Forward per-recipient variables to dispatcher; skip missing-name
 //          recipients when a Meta template is used; auto-pause campaign on
 //          terminal template errors (132000/132012/132018/132001/131051).
