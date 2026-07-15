@@ -806,14 +806,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           <div className="space-y-5">
             <div>
               <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Channel</Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {([
                   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'emerald' },
+                  { id: 'rcs', label: 'RCS', icon: Radio, color: 'violet' },
                   { id: 'email', label: 'Email', icon: Mail, color: 'blue' },
                   { id: 'sms', label: 'SMS', icon: MessageSquare, color: 'amber' },
                 ] as const).map((c) => (
                   <button key={c.id} type="button" onClick={() => setChannel(c.id as CampaignChannel)}
-                    className={`flex-1 rounded-xl p-3 border-2 transition-all ${
+                    className={`rounded-xl p-3 border-2 transition-all ${
                       channel === c.id ? `border-${c.color}-500 bg-${c.color}-50 dark:bg-${c.color}-500/10` : 'border-border bg-card'
                     }`}>
                     <c.icon className={`h-5 w-5 mx-auto ${channel === c.id ? `text-${c.color}-600` : 'text-muted-foreground'}`} />
@@ -822,6 +823,63 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 ))}
               </div>
             </div>
+
+            {/* ── RCS (Telinfy) template selection + variable mapping ── */}
+            {channel === 'rcs' && (
+              <div className="rounded-2xl border-2 border-violet-500/25 bg-violet-500/5 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-violet-600" />
+                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS (Telinfy) — template required</Label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Telinfy RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
+                  Recipients on non-RCS devices automatically fall back to SMS.
+                </p>
+                {rcsTemplates.length === 0 ? (
+                  <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
+                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync from Telinfy.
+                  </div>
+                ) : (
+                  <>
+                    <Select value={rcsTemplateId || ''} onValueChange={setRcsTemplateId}>
+                      <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick an RCS template…" /></SelectTrigger>
+                      <SelectContent>
+                        {(rcsTemplates as any[]).map((t: any) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.template_name}{t.kind ? ` · ${t.kind}` : ''}{t.status && t.status !== 'approved' ? ` · ${t.status}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedRcsTemplate && (
+                      <div className="rounded-xl border bg-card p-2.5 space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Template preview</p>
+                        <pre className="text-xs whitespace-pre-wrap text-foreground font-sans">{selectedRcsTemplate.body_preview || '(no body preview available)'}</pre>
+                      </div>
+                    )}
+                    {rcsVarKeys.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Variable mapping</p>
+                        {rcsVarKeys.map((k) => (
+                          <div key={k} className="flex items-center gap-2">
+                            <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] shrink-0 min-w-[110px] truncate">{`{{${k}}}`}</code>
+                            <Input
+                              className="rounded-lg h-8 text-xs flex-1"
+                              placeholder="Static value or {{first_name}} / {{full_name}} / {{email}}"
+                              value={rcsVarMap[k] ?? ''}
+                              onChange={(e) => setRcsVarMap((m) => ({ ...m, [k]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-muted-foreground">
+                          Tokens <code>{'{{first_name}}'}</code>, <code>{'{{full_name}}'}</code>, and <code>{'{{email}}'}</code> resolve per recipient at send-time.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {channel === 'email' && (
               <div>
