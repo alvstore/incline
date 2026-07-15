@@ -611,33 +611,6 @@ Deno.serve(async (req) => {
               templateName = tpl.meta_template_name;
               templateHeaderType = (tpl.header_type ?? 'none').toLowerCase();
 
-              // Auto-attach the template's default header media when caller
-              // didn't supply one. Meta rejects media-header templates without
-              // a HEADER component (131051 / 132018); this guarantees marketing
-              // image/video templates always render with their designed art.
-              const mediaKinds = new Set(['image', 'document', 'video']);
-              if (
-                !input.attachment?.url &&
-                mediaKinds.has(templateHeaderType) &&
-                typeof (tpl as any).header_media_url === 'string' &&
-                (tpl as any).header_media_url
-              ) {
-                const url = (tpl as any).header_media_url as string;
-                input.attachment = {
-                  url,
-                  filename:
-                    templateHeaderType === 'image' ? 'image.jpg'
-                    : templateHeaderType === 'video' ? 'video.mp4'
-                    : 'document.pdf',
-                  content_type:
-                    templateHeaderType === 'image' ? 'image/jpeg'
-                    : templateHeaderType === 'video' ? 'video/mp4'
-                    : 'application/pdf',
-                  kind: templateHeaderType as 'image' | 'video' | 'document',
-                };
-                (input as any).__header_source = 'template_default';
-              }
-
               // ── Live Meta health pre-flight ──────────────────────────────
               // whatsapp_templates is the canonical mirror of Meta's WABA state.
               // If the row is missing, not APPROVED, or stale, suppress cleanly
@@ -690,6 +663,50 @@ Deno.serve(async (req) => {
                     `Send will proceed but is subject to Meta pacing (131049).`,
                   );
                 }
+              }
+
+              // Reconcile header_type against the LIVE Meta template — source
+              // of truth. Local `templates.header_type` may claim IMAGE while
+              // the approved Meta template has no HEADER component (or vice
+              // versa). Sending mismatched HEADER params triggers 132018.
+              const liveComponentsForHeader = Array.isArray((wt as any)?.components) ? (wt as any).components : [];
+              const liveHeaderComp = liveComponentsForHeader.find((c: any) => String(c?.type || '').toUpperCase() === 'HEADER');
+              const liveHeaderFormat = liveHeaderComp ? String(liveHeaderComp.format || '').toLowerCase() : 'none';
+              if (liveHeaderComp) {
+                templateHeaderType = liveHeaderFormat || templateHeaderType;
+              } else {
+                // Meta template has no HEADER — don't send one, even if the
+                // local row says otherwise. Prevents 132018 for body-only
+                // approved templates that were saved locally with a header.
+                templateHeaderType = 'none';
+              }
+
+              // Auto-attach the template's default header media when caller
+              // didn't supply one AND the LIVE Meta template actually has a
+              // matching media header component. Guarantees marketing
+              // image/video templates always render with their designed art
+              // without triggering 132018 on body-only templates.
+              const mediaKinds = new Set(['image', 'document', 'video']);
+              if (
+                !input.attachment?.url &&
+                mediaKinds.has(templateHeaderType) &&
+                typeof (tpl as any).header_media_url === 'string' &&
+                (tpl as any).header_media_url
+              ) {
+                const url = (tpl as any).header_media_url as string;
+                input.attachment = {
+                  url,
+                  filename:
+                    templateHeaderType === 'image' ? 'image.jpg'
+                    : templateHeaderType === 'video' ? 'video.mp4'
+                    : 'document.pdf',
+                  content_type:
+                    templateHeaderType === 'image' ? 'image/jpeg'
+                    : templateHeaderType === 'video' ? 'video/mp4'
+                    : 'application/pdf',
+                  kind: templateHeaderType as 'image' | 'video' | 'document',
+                };
+                (input as any).__header_source = 'template_default';
               }
 
               const keys = orderedTemplateKeys(tpl.content ?? input.payload.body, tpl.variables);
