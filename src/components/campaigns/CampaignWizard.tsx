@@ -351,6 +351,17 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     try {
       const safeName = (name || `campaign_${Date.now()}`).toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 48);
 
+      // Derive positional variable mapping from the message body so the
+      // sender knows {{1}} → first_name (and downstream slots keep a stable
+      // key). Without this, dispatcher gets keys=['1'] with no aliases and
+      // ships an empty "Hi ," to Meta.
+      const positionalCount = (message.match(/\{\{\s*\d+\s*\}\}/g) || [])
+        .map((m) => parseInt(m.replace(/[^\d]/g, ''), 10))
+        .reduce((max, n) => Math.max(max, n), 0);
+      const positionalVars = positionalCount > 0
+        ? ['first_name', ...Array.from({ length: positionalCount - 1 }, (_, i) => `var${i + 2}`)]
+        : [];
+
       // Create a local CRM row first so the Meta sync + send pipeline can resolve it.
       const { data: localRow, error: localErr } = await supabase
         .from('templates')
@@ -362,10 +373,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           is_active: true,
           header_type: attachment?.kind || 'none',
           header_media_url: attachment?.url || null,
+          variables: positionalVars,
         })
         .select('id')
         .single();
       if (localErr) throw localErr;
+
 
       const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
         body: {

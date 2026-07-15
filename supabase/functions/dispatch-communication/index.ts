@@ -201,11 +201,22 @@ function resolveVarValue(
   if (k.includes('branch')) tryKeys.push('branch_name');
   if (k.includes('date')) tryKeys.push('date');
   if (k.includes('document') || k.includes('link') || k.includes('url')) tryKeys.push('document_link', 'url', 'link');
+  // Meta positional slots ({{1}}, {{2}}, …). By convention slot #1 is the
+  // recipient's first name (matches CampaignWizard's variable legend and
+  // manage-whatsapp-templates auto-personalization). Without this the
+  // wamid ships with an empty "Hi ,", i.e. delivered but visibly broken.
+  if (/^\d+$/.test(key)) {
+    if (index === 0 || key === '1') {
+      tryKeys.push('first_name', 'name', 'full_name', 'member_name');
+    }
+    tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
+  }
   for (const tk of tryKeys) {
     const v = values[tk];
     if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
   }
   return '';
+
 }
 
 /** Safe visible fallback per variable-key type. Meta rejects whitespace-only
