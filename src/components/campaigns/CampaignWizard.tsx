@@ -135,6 +135,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
 
   const [syncingTemplates, setSyncingTemplates] = useState(false);
 
+  // Test send (Preview & Test panel)
+  const [testRecipient, setTestRecipient] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+
   // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
   // is selectable, even if there's no local CRM `templates` row yet.
   // We left-join `templates.id` by meta_template_name so the send pipeline still
