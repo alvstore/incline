@@ -19,10 +19,12 @@ interface MIPSDeviceCardProps {
   publicIp?: string;
   localDeviceId?: string;
   doorRole?: 'entry' | 'exit' | 'both';
+  onRegister?: (device: MIPSDevice) => void;
+  registering?: boolean;
 }
 
 
-const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId, doorRole }: MIPSDeviceCardProps) => {
+const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId, doorRole, onRegister, registering }: MIPSDeviceCardProps) => {
   const qc = useQueryClient();
   const isOnline = device.onlineFlag === 1 || device.status === 1;
   const [isOpening, setIsOpening] = useState(false);
