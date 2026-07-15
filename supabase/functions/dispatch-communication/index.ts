@@ -619,6 +619,7 @@ Deno.serve(async (req) => {
         'meta_code', 'meta_subcode', 'fbtrace_id',
         'pace_limited', 'category_issue', 'session_required',
         'recipient_unreachable', 'fallbackable',
+        'provider_route', // 'cloud_api' | 'mm_api' — MM API for WhatsApp routing
       ]) {
         if (d[k] !== undefined && d[k] !== null) metaErrorFields[k] = d[k];
       }
