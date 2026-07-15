@@ -53,6 +53,55 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const c of due) {
+      // ── Pre-dispatch WhatsApp template gate ──
+      // If this campaign was scheduled while its template was still pending
+      // Meta approval, re-check status live. APPROVED → send. REJECTED/etc →
+      // fail with an operator alert. PENDING → postpone by 30 min (max 24h).
+      if (c.channel === 'whatsapp' && c.template_id) {
+        const { data: localTpl } = await admin
+          .from('templates')
+          .select('meta_template_name, name')
+          .eq('id', c.template_id)
+          .maybeSingle();
+        const metaName = (localTpl as any)?.meta_template_name || (localTpl as any)?.name;
+        if (metaName) {
+          const { data: metaTpl } = await admin
+            .from('whatsapp_templates')
+            .select('status, meta_last_error')
+            .eq('name', metaName)
+            .maybeSingle();
+          const metaStatus = (metaTpl as any)?.status || 'PENDING';
+          if (metaStatus === 'PENDING') {
+            const scheduledMs = new Date(c.scheduled_at).getTime();
+            const graceMs = 24 * 60 * 60 * 1000;
+            if (Date.now() - scheduledMs > graceMs) {
+              await admin.from('campaigns').update({
+                status: 'failed',
+                last_run_error: `Template "${metaName}" still pending Meta approval after 24h grace window`,
+              }).eq('id', c.id);
+              await notifyOwner(admin, c, `Campaign "${c.name}" failed: template still pending Meta approval after 24h.`);
+              results.push({ id: c.id, error: 'template_pending_grace_exhausted' });
+            } else {
+              // Push the schedule forward 30 min and let the next tick recheck.
+              const nextRun = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+              await admin.from('campaigns').update({ scheduled_at: nextRun }).eq('id', c.id);
+              results.push({ id: c.id, note: 'template_pending_deferred', next_run: nextRun });
+            }
+            continue;
+          }
+          if (metaStatus !== 'APPROVED') {
+            const reason = (metaTpl as any)?.meta_last_error || `Meta status: ${metaStatus}`;
+            await admin.from('campaigns').update({
+              status: 'failed',
+              last_run_error: `Template "${metaName}" ${metaStatus.toLowerCase()} by Meta: ${reason}`,
+            }).eq('id', c.id);
+            await notifyOwner(admin, c, `Campaign "${c.name}" failed: Meta ${metaStatus.toLowerCase()} template "${metaName}".`);
+            results.push({ id: c.id, error: `template_${metaStatus.toLowerCase()}` });
+            continue;
+          }
+        }
+      }
+
       // Mark sending (optimistic lock)
       const { data: locked } = await admin
         .from("campaigns")
