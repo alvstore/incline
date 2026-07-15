@@ -176,12 +176,43 @@ Deno.serve(async (req) => {
 
       if (campaign_id && recipientRows.length > 0) {
         await adminClient.from('campaign_recipients').insert(recipientRows);
+
+        // Auto-pause the campaign if a large share of failures share a
+        // terminal Meta template code — prevents scheduled cron from
+        // burning through the audience with the same broken template.
+        const TERMINAL_CODES = ['132000', '132001', '132012', '132018', '131051'];
+        const codeCounts: Record<string, number> = {};
+        for (const row of recipientRows) {
+          if (row.status !== 'failed' || !row.error) continue;
+          const m = String(row.error).match(/\b(13\d{4})\b/);
+          if (m && TERMINAL_CODES.includes(m[1])) {
+            codeCounts[m[1]] = (codeCounts[m[1]] || 0) + 1;
+          }
+        }
+        const [worstCode, worstCount] = Object.entries(codeCounts)
+          .sort(([, a], [, b]) => b - a)[0] || [null, 0];
+        const shouldPause = worstCode && worstCount >= 3
+          && (worstCount / Math.max(1, recipients.length)) >= 0.25;
+
         await adminClient.from('campaigns').update({
-          status: failed > 0 && sent === 0 ? 'failed' : 'sent',
+          status: shouldPause
+            ? 'paused_template_error'
+            : (failed > 0 && sent === 0 ? 'failed' : 'sent'),
           recipients_count: recipients.length,
           success_count: sent,
           failure_count: failed,
           sent_at: new Date().toISOString(),
+          ...(shouldPause ? {
+            error_summary: {
+              code: worstCode,
+              count: worstCount,
+              hint: 'Terminal template error — fix template or recipient data before resuming.',
+              sample_recipients: recipientRows
+                .filter((r) => r.status === 'failed')
+                .slice(0, 5)
+                .map((r) => ({ phone: r.phone, error: r.error })),
+            },
+          } : {}),
         }).eq('id', campaign_id);
       }
 
