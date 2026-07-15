@@ -27,6 +27,7 @@ import {
   createRecurringCampaignRule,
   recurrencePresetToCron,
   sendCampaignNow,
+  upsertDraftCampaignForTemplate,
 } from '@/services/campaignService';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -83,6 +84,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // Approved Meta WhatsApp template (cold-audience-compliant path)
   const [useApprovedTemplate, setUseApprovedTemplate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  // Draft campaign row created when the user submits a template to Meta from
+  // this wizard. Lets subsequent Save/Schedule/Send actions update that same
+  // row instead of orphaning the template submission (issue #1).
+  const [draftCampaignId, setDraftCampaignId] = useState<string | null>(null);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
 
   const [syncingTemplates, setSyncingTemplates] = useState(false);
 
@@ -91,12 +97,18 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // We left-join `templates.id` by meta_template_name so the send pipeline still
   // receives a valid `template_id` UUID.
   const { data: approvedTemplates = [], refetch: refetchTemplates } = useQuery({
-    queryKey: ['approved-whatsapp-templates', branchId],
+    queryKey: ['approved-whatsapp-templates', branchId, trigger],
     queryFn: async () => {
+      // For scheduled/automated triggers we ALSO surface PENDING templates so
+      // the user can queue a campaign that will fire the moment Meta approves.
+      // send_now still enforces APPROVED-only (Meta rejects PENDING at runtime).
+      const allowedStatuses = trigger === 'send_now'
+        ? ['APPROVED']
+        : ['APPROVED', 'PENDING'];
       let q = supabase
         .from('whatsapp_templates')
         .select('id, name, language, category, components, branch_id, status')
-        .eq('status', 'APPROVED');
+        .in('status', allowedStatuses);
       if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
       const { data: meta, error } = await q.order('name');
       if (error) throw error;
@@ -105,7 +117,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       const { data: locals } = names.length
         ? await supabase
             .from('templates')
-            .select('id, meta_template_name, header_type, header_media_url')
+            .select('id, meta_template_name, header_type, header_media_url, evergreen_kind')
             .in('meta_template_name', names)
         : { data: [] as any[] };
 
@@ -124,8 +136,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           category: m.category,
           header_type: local?.header_type || headerFmt,
           content: bodyText,
-          meta_template_status: 'APPROVED' as const,
+          meta_template_status: (m.status || 'APPROVED') as 'APPROVED' | 'PENDING',
           meta_template_name: m.name,
+          evergreen_kind: local?.evergreen_kind || null,
         };
       });
     },
@@ -269,6 +282,9 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       setUseApprovedTemplate(false);
       setSelectedTemplateId(null);
     }
+    // Track the editing row so any "Submit to Meta" resubmission updates it
+    // instead of creating a duplicate draft (issue #1).
+    setDraftCampaignId(c.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingCampaign?.id]);
 
@@ -329,9 +345,43 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         toast.error(`Meta rejected: ${detail}`, { duration: 9000 });
         return;
       }
-      toast.success(`Submitted to Meta as "${r?.name}" — status: ${r?.status || 'PENDING'}`);
+
+      // Persist a draft campaign row so this work shows up in the Campaigns
+      // list and can be scheduled/sent once Meta approves the template.
+      try {
+        const draft = await upsertDraftCampaignForTemplate(draftCampaignId, {
+          branch_id: branchId,
+          name: (name || safeName).trim(),
+          channel: 'whatsapp',
+          audience_filter: filter,
+          message: message.trim(),
+          subject: null,
+          trigger_type: trigger,
+          scheduled_at: trigger === 'scheduled' && scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          attachment_url: attachment?.url ?? null,
+          attachment_kind: attachment?.kind ?? null,
+          attachment_filename: attachment?.filename ?? null,
+          campaign_type: campaignType,
+          event_meta: isEvent ? {
+            name: eventName.trim(), date: eventDate || null, time: eventTime || null,
+            venue: eventVenue.trim() || null, rsvp_url: eventRsvpUrl.trim() || null,
+          } : {},
+          template_id: localRow!.id,
+          status: 'pending_template_approval',
+        });
+        setDraftCampaignId(draft.id);
+        // Auto-pre-select the just-submitted template so realtime picks it up
+        // as soon as Meta approves.
+        setUseApprovedTemplate(true);
+        setSelectedTemplateId(localRow!.id);
+      } catch (persistErr: any) {
+        console.error('Failed to persist draft campaign', persistErr);
+      }
+
+      toast.success(`Template submitted to Meta · draft campaign saved. It will send once Meta approves "${r?.name}".`, { duration: 8000 });
       qc.invalidateQueries({ queryKey: ['approved-whatsapp-templates'] });
       qc.invalidateQueries({ queryKey: ['communication-templates'] });
+      qc.invalidateQueries({ queryKey: ['campaigns', branchId] });
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit to Meta');
     } finally { setSubmittingMeta(false); }
@@ -379,6 +429,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
     setAttachment(null);
     setEventName(''); setEventDate(''); setEventTime(''); setEventVenue(''); setEventRsvpUrl('');
     setUseApprovedTemplate(false); setSelectedTemplateId(null);
+    setDraftCampaignId(null); setShowAllTemplates(false);
     setEvergreenAppliedFor(null); setEvergreenPickedName(null);
   };
 
@@ -406,14 +457,24 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   const isCsv = filter.audience_kind === 'csv_import';
   const requiresTemplate = channel === 'whatsapp' && (coldCount > 0 || isCsv);
   const templatePicked = useApprovedTemplate && !!selectedTemplateId && !selectedTemplateId.startsWith('__meta__:');
-  const blockedByTemplate = requiresTemplate && !templatePicked;
+  // Selected template's live Meta status (may be PENDING when scheduling ahead of approval).
+  const selectedTemplateMeta = (approvedTemplates as any[]).find((t) => t.id && t.id === selectedTemplateId);
+  const selectedTemplatePending = selectedTemplateMeta?.meta_template_status === 'PENDING';
+  // For send_now, PENDING templates are useless — Meta will reject. For
+  // scheduled / automated triggers, PENDING is allowed: the worker re-checks
+  // template status at fire time (issue #2).
+  const templateReadyForTrigger = templatePicked && (trigger !== 'send_now' || !selectedTemplatePending);
+  const blockedByTemplate = requiresTemplate && !templateReadyForTrigger;
 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Campaign name required'); return; }
     if (!message.trim()) { toast.error('Message required'); return; }
     if (totalCount === 0) { toast.error('Audience is empty'); return; }
     if (blockedByTemplate) {
-      toast.error(`${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`);
+      const detail = requiresTemplate && templatePicked && selectedTemplatePending && trigger === 'send_now'
+        ? 'This template is still awaiting Meta approval — schedule for later, or pick an APPROVED template.'
+        : `${coldCount} recipient(s) are outside the 24h WhatsApp window — pick an APPROVED Meta template before sending.`;
+      toast.error(detail);
       return;
     }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
@@ -451,8 +512,11 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           trigger === 'scheduled' ? 'scheduled' : 'draft'
         ) as any,
       };
-      const campaign = isEditing && editingCampaign
-        ? await updateCampaign(editingCampaign.id, payload as any).then((c) => c)
+      // If we already have a draft campaign from "Submit to Meta", update it in
+      // place so we don't leave orphan rows (issue #1).
+      const targetId = editingCampaign?.id || draftCampaignId;
+      const campaign = targetId
+        ? await updateCampaign(targetId, payload as any).then((c) => c)
         : await createCampaign(payload as any);
 
       if (trigger === 'send_now') {
@@ -655,30 +719,53 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                         <p className="font-semibold">No approved Meta templates yet.</p>
                         <p>Generate one in <strong>Settings → Communication Templates → AI Studio</strong>, or click <strong>Sync from Meta</strong> above to pull the latest approval list.</p>
                       </div>
-                    ) : (
-                      <Select
-                        value={selectedTemplateId || ''}
-                        onValueChange={(id) => {
-                          setSelectedTemplateId(id);
-                          const t: any = approvedTemplates.find((x: any) => x.id === id);
-                          if (t?.content) setMessage(t.content);
-                          if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
-                            toast.info(`This template needs a ${t.header_type} header — upload one below.`);
-                          }
-                        }}
+                    ) : (() => {
+                        // Scope templates to this campaign first, then by campaign type.
+                        // Full list only when the user explicitly asks for it.
+                        const all = approvedTemplates as any[];
+                        const forThis = all.filter((t) => t.id && t.id === selectedTemplateId);
+                        const forType = all.filter((t) =>
+                          !forThis.includes(t) && (t.evergreen_kind === campaignType),
+                        );
+                        const other = all.filter((t) => !forThis.includes(t) && !forType.includes(t));
+                        const scoped = showAllTemplates ? [...forThis, ...forType, ...other] : [...forThis, ...forType];
+                        const renderList = scoped.length ? scoped : all; // never leave the picker empty
+                        return (
+                          <Select
+                            value={selectedTemplateId || ''}
+                            onValueChange={(id) => {
+                              setSelectedTemplateId(id);
+                              const t: any = all.find((x: any) => x.id === id);
+                              if (t?.content) setMessage(t.content);
+                              if (t?.header_type && t.header_type !== 'none' && attachment?.kind !== t.header_type) {
+                                toast.info(`This template needs a ${t.header_type} header — upload one below.`);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick a template…" /></SelectTrigger>
+                            <SelectContent>
+                              {renderList.map((t: any) => (
+                                <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
+                                  {t.name}
+                                  {t.meta_template_status === 'PENDING' ? '  · ⏳ pending Meta' : ''}
+                                  {t.category ? ` · ${t.category.toLowerCase()}` : ''}
+                                  {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
+                                  {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        );
+                      })()
+                    }
+                    {approvedTemplates.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllTemplates((v) => !v)}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
                       >
-                        <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick an approved template…" /></SelectTrigger>
-                        <SelectContent>
-                          {approvedTemplates.map((t: any) => (
-                            <SelectItem key={t.meta_template_name} value={t.id || `__meta__:${t.meta_template_name}`}>
-                              {t.name}
-                              {t.category ? ` · ${t.category.toLowerCase()}` : ''}
-                              {t.header_type && t.header_type !== 'none' ? ` · ${t.header_type}` : ''}
-                              {t.language && t.language !== 'en' ? ` · ${t.language}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {showAllTemplates ? 'Show only templates for this campaign type' : `Show all ${approvedTemplates.length} templates`}
+                      </button>
                     )}
                     {selectedTemplateId && selectedTemplateId.startsWith('__meta__:') && (
                       <p className="text-[11px] text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
@@ -929,6 +1016,17 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 </div>
               </button>
             ))}
+
+            {selectedTemplatePending && trigger !== 'send_now' && (
+              <div className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-3 flex gap-2.5">
+                <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="text-sm text-warning">
+                  <p className="font-semibold mb-0.5">This template is still awaiting Meta approval.</p>
+                  <p className="text-[12px]">If Meta approves it before your scheduled time, we send. If Meta rejects it, the campaign fails and you get a notification — no messages go out with a bad template.</p>
+                </div>
+              </div>
+            )}
+
 
             {trigger === 'scheduled' && (
               <div className="rounded-2xl border-2 border-warning/25 bg-warning/10 p-4 space-y-2">

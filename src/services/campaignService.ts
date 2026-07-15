@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export type CampaignChannel = 'whatsapp' | 'email' | 'sms';
-export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused';
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused' | 'pending_template_approval';
 export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 
 export type AudienceKind = 'members' | 'leads' | 'lost_leads' | 'contacts' | 'staff' | 'segment' | 'mixed' | 'csv_import';
@@ -308,6 +308,37 @@ export async function deleteCampaign(id: string): Promise<void> {
 
 export async function cancelScheduledCampaign(id: string): Promise<Campaign> {
   return updateCampaign(id, { status: 'draft' as CampaignStatus, scheduled_at: null, trigger_type: 'send_now' as CampaignTriggerType });
+}
+
+/**
+ * Insert-or-update a campaign row tied to a WhatsApp template that was just
+ * submitted to Meta. Keeps the campaign visible in the Campaigns list with a
+ * "pending_template_approval" badge so the user can schedule/send it once
+ * Meta approves the template — instead of losing the work entirely.
+ */
+export async function upsertDraftCampaignForTemplate(
+  existingCampaignId: string | null,
+  input: Parameters<typeof createCampaign>[0],
+): Promise<Campaign> {
+  if (existingCampaignId) {
+    return updateCampaign(existingCampaignId, {
+      name: input.name,
+      channel: input.channel,
+      audience_filter: input.audience_filter,
+      message: input.message,
+      subject: input.subject ?? null,
+      trigger_type: input.trigger_type,
+      scheduled_at: input.scheduled_at ?? null,
+      attachment_url: input.attachment_url ?? null,
+      attachment_kind: input.attachment_kind ?? null,
+      attachment_filename: input.attachment_filename ?? null,
+      campaign_type: input.campaign_type,
+      event_meta: input.event_meta ?? {},
+      template_id: input.template_id ?? null,
+      status: (input.status ?? 'pending_template_approval') as CampaignStatus,
+    });
+  }
+  return createCampaign({ ...input, status: input.status ?? 'pending_template_approval' });
 }
 
 export async function duplicateCampaign(id: string): Promise<Campaign> {

@@ -1,84 +1,82 @@
-## Audit findings — `choose_what_deserves_your_effort`
 
-I queried Meta's approved template payload for this template and confirmed it has **only a `BODY` component, no `HEADER`**. So Meta was never asked to approve an image header — that's why every send is text-only, regardless of what the dispatcher tries to attach.
+## Problem audit
 
-### Why the header was dropped at submission
+I traced all three complaints to the same underlying flaw: **the Campaign Wizard treats "Submit to Meta" as a side quest that has no relationship with the campaign the user is actually building.**
 
-`manage-whatsapp-templates/index.ts` (v2.4.0, action `create`, lines 531–580) auto-uploads the sample image to Meta's resumable-upload endpoint to obtain the required `h:...` handle. If it can't, it **silently strips the HEADER** and submits body-only:
+Concretely, in `src/components/campaigns/CampaignWizard.tsx`:
 
-```
-} else if (hasMediaHeader) {
-  console.warn(`... — submitting as text-only template ...`);
-}
-components.push(bodyComponent);   // header never added
-```
+- `handleSubmitMetaTemplate()` (line 277) creates a `templates` + `whatsapp_templates` row named `campaign_<timestamp>` and stops there. **It never writes to `campaigns`.** That is why `whatsapp_templates` has `campaign_1784104215124` but `SELECT count(*) FROM campaigns` returns 0 — the Campaigns page has nothing to show.
+- `handleSubmit()` (line 411) hard-blocks scheduling whenever `blockedByTemplate` is true, and the picker (`approvedTemplates` query, line 93) only lists `status='APPROVED'` rows. So a user who just submitted a template for approval **cannot schedule a send at all** — the flow forces them to either wait days for Meta or send freeform (which fails for cold audiences).
+- The picker returns every approved WhatsApp template in the workspace (91 rows), unfiltered by campaign type, name prefix, or "this session's submission". That is the "confusion" the user is describing.
 
-The upload is skipped whenever:
-1. `credentials.app_id` is missing on the WhatsApp integration **and** `META_APP_ID` env is unset, **or**
-2. The resumable upload itself errors (bad URL, wrong content-type, <256 bytes).
-
-I checked `integration_settings` — the active `meta_cloud` row has `has_app_id = false`. So condition (1) was true: every media-header submission from this workspace has been quietly downgraded to text-only. The UI never told the user; the DB row was stored with `status='APPROVED'` and no header component; the dispatcher can now do nothing (v1.x correctly refuses to attach media that Meta hasn't approved).
-
-### Why the message arrived as "Hi —,"
-
-Meta template body is `Hi {{1}},\nThank you...`. Dispatcher substituted `{{1}}` with an em-dash / blank because the recipient (raw phone) had no matching member and `member_name` resolved to empty. There's no "safe fallback" (e.g. `there`) when personalization is missing.
+Everything below fixes these three symptoms as one connected change.
 
 ---
 
 ## Plan
 
-### 1. Stop silent header drops in `manage-whatsapp-templates/index.ts`
+### 1. "Submit to Meta" persists a draft campaign (issue #1)
 
-Replace the silent `console.warn` fallback with a **hard 400** whenever `header_type ∈ {image, video, document}` but no valid Meta handle could be resolved. Message must tell the user exactly which precondition failed:
+In `handleSubmitMetaTemplate()`:
 
-- `app_id` missing on the WhatsApp integration → "Add the Meta App ID to Settings → Integrations → WhatsApp so image/video/document headers can be uploaded to Meta."
-- Upload succeeded on Meta side but returned no handle → surface Meta's error.
-- Sample URL unreachable / too small → surface fetch status.
+- After the `manage-whatsapp-templates` call succeeds, `upsert` a row in `campaigns` with:
+  - `name` = the user-typed campaign name (fallback to `safeName`)
+  - `status` = `'pending_template_approval'` (new status value)
+  - `template_id` = the local `templates.id` just created
+  - `channel`, `campaign_type`, `message`, `subject`, `audience_filter`, `attachment_*`, `event_meta` = current wizard state
+  - `trigger_type` = whatever is selected (`send_now` becomes `draft` here — nothing sends yet)
+- Store the returned `campaign.id` in wizard state (`draftCampaignId`) so any later "Save"/"Schedule" click *updates* that row instead of creating a duplicate.
+- Toast changes to: *"Template submitted to Meta · draft campaign saved. You can schedule it now — it will send once Meta approves."*
+- Invalidate `['campaigns', branchId]` so the Campaigns list renders it immediately with a "Awaiting Meta approval" badge.
 
-Also return `header_upload_diagnostics` in the JSON response so the wizard can render an inline banner instead of the current success toast.
+Campaigns list badge: add `pending_template_approval` to `CampaignStatusBadge` (amber, "Awaiting Meta approval"). The existing `getCampaignReport()` path is unaffected.
 
-### 2. Wizard UX — never let users think an image-template was approved when it wasn't
+### 2. Allow scheduling while template is PENDING (issue #2)
 
-In `TemplateWizard` (or the equivalent submit dialog under `Settings → Communication Templates → WhatsApp → CRM Templates`):
+Wizard changes:
 
-- Read `header_upload_diagnostics` from the response.
-- If present, show a red inline error and keep the local `templates` row as `DRAFT` (do not persist status=`PENDING/APPROVED`).
-- Add a pre-flight check: if `header_type='image|video|document'` and the wizard cannot detect `credentials.app_id` on the active WhatsApp integration, block "Submit for Approval" with a link to Settings → Integrations.
+- Extend the picker query to include `status IN ('APPROVED','PENDING')` when `trigger === 'scheduled'` or `trigger === 'automated'`. `SelectItem` shows a small amber "PENDING" chip next to pending rows.
+- Relax `blockedByTemplate`: for scheduled/automated triggers, a PENDING template counts as "picked" and the Schedule button becomes enabled. Freeform `send_now` still requires APPROVED (unchanged, matches Meta rules).
+- In `handleSubmit()`, when the template is PENDING and trigger is scheduled/automated:
+  - Save campaign as `status='scheduled'` with `template_id` set. Add a `delivery_metadata.awaiting_template_approval = true` flag.
+  - Show summary line: *"Will send at 8:00 PM IST — only if Meta has approved the template by then."*
 
-### 3. Expose `app_id` on the WhatsApp integration
+Worker (`process-scheduled-campaigns` edge fn) changes:
 
-In `Settings → Integrations → WhatsApp` (Meta Cloud form), add an **App ID** field (text, required for media-header templates, optional otherwise) and persist to `integration_settings.credentials.app_id`. Existing rows keep working for body-only templates.
+- Before dispatching, re-fetch `whatsapp_templates` by the linked local `templates.meta_template_name`.
+  - `APPROVED` → send as today.
+  - `REJECTED` / `DISABLED` / `PAUSED` → mark campaign `status='failed'`, write `last_run_error='Meta rejected/disabled template <name>: <reason>'`, and fire a `dispatchCommunication` internal alert to the owner/creator so they see it in the notification bell + email.
+  - Still `PENDING` at fire time → move the scheduled slot forward by 30 min, up to 24h. After 24h, fail with `last_run_error='Template still pending Meta approval after 24h grace window'`.
+- Reconciler already exists (`reconcile-whatsapp-pending`); no change needed there.
 
-### 4. Backfill the broken approved template
+### 3. Template picker auto-scopes to the current campaign (issue #3)
 
-`choose_what_deserves_your_effort` is already `APPROVED` at Meta as body-only. Meta doesn't let you add a HEADER to an approved template via edit. Path forward:
+Two-tier filter in the `approvedTemplates` query, in this priority:
 
-- Add a "Re-submit with image header" action on the row that:
-  - clones the template under a new safe name (e.g. `choose_what_deserves_your_effort_v2`),
-  - includes the HEADER component using the newly-uploaded handle,
-  - marks the old row `is_stale = true` so the wizard hides it.
+1. **This-campaign templates first** — anything with `templates.meta_template_name` matching the auto-generated `campaign_<timestamp>` naming convention **or** matching `campaigns.template_id` on rows the user created in this wizard session (tracked via `draftCampaignId`). These render at the top of the Select under a `"For this campaign"` group.
+2. **Campaign-type-matching templates** — filter by `templates.evergreen_kind = campaignType` (promotion / event / announcement / lead_reengagement). Rendered under `"Suggested for {campaign_type}"`.
+3. A small `"Show all approved templates"` toggle at the bottom of the Select expands the full list — for the rare case the user wants a template outside their campaign type. Default: off.
 
-### 5. Safe personalization fallback in `dispatch-communication`
+Also: when the user hits "Submit to Meta", auto-set `useApprovedTemplate = true` and `selectedTemplateId = <local templates.id>` for the just-created row so it is pre-selected the moment Meta approves (via the existing realtime subscription on `whatsapp_templates`).
 
-When resolving `{{1}}` / `{{member_name}}`:
+### 4. Small UX polish (touch-ups only, no scope creep)
 
-- If the resolved value is empty, whitespace, `—`, `-`, `null`, or `undefined`, substitute the string `there` (configurable per-branch later).
-- Log `delivery_metadata.name_fallback = true` so we can audit how often this fires.
-- This alone would have turned "Hi —," into "Hi there,".
+- The Trigger step shows a callout when a PENDING template is attached: *"This template is still awaiting Meta approval. If approved before your scheduled time, we will send. If rejected, the campaign fails with a notification."*
+- Campaigns list row for `pending_template_approval` shows a "View Meta status" link that deep-links to Settings → Communication Templates → the row, so the user can chase approval without hunting.
 
-### 6. Verification
+---
 
-- Re-open the wizard, confirm the App ID field appears and is required for image templates.
-- Attempt to submit an image-header template **without** `app_id` → confirm hard error, no DB row promoted.
-- Add `app_id`, re-submit → confirm HEADER component reaches Meta (log the payload), template goes to `PENDING`.
-- Send once approved to `+91 99289 10901` and `+91 98876 01200`; confirm image renders and body reads "Hi Yogita," / "Hi there,".
+## Files affected
 
-### Files to change
+- `src/components/campaigns/CampaignWizard.tsx` — draft-campaign persistence, extended picker query, relaxed block logic, PENDING callout.
+- `src/services/campaignService.ts` — accept new `status='pending_template_approval'`, small helper to upsert-or-update the draft campaign, and grouping helper for the picker.
+- `src/components/campaigns/CampaignStatusBadge.tsx` (or equivalent) — new amber badge for `pending_template_approval`.
+- `supabase/functions/process-scheduled-campaigns/index.ts` — pre-dispatch template status check with PENDING regrace + REJECTED failure path + owner notification.
+- `supabase/migrations/<new>.sql` — extend `campaigns.status` allowed values if enforced by CHECK constraint (verify first; if `text` no migration needed).
 
-- `supabase/functions/manage-whatsapp-templates/index.ts` — hard-fail on missing handle; add diagnostics; expose `app_id` from credentials.
-- `supabase/functions/dispatch-communication/index.ts` — safe name fallback + `name_fallback` metadata.
-- `src/components/templates/TemplateWizard.tsx` (or equivalent) — pre-flight check, error banner on diagnostics, keep DRAFT on failure.
-- `src/pages/Settings.tsx` → Integrations → WhatsApp form — add `app_id` field.
-- New action in `WhatsAppTemplatesList` — "Re-submit with header as v2".
+## Verification
 
-No DB migration required; `integration_settings.credentials` is JSONB and the DB already stores `header_type` semantics via `whatsapp_templates.components`.
+- Submit a fresh template from the wizard → campaign row appears immediately in Campaigns list with amber "Awaiting Meta approval" badge.
+- Schedule a send for +5 min while template is PENDING → row saves as `scheduled`; worker log shows the regrace behavior; when I manually flip the template to `APPROVED` in the DB, next tick sends successfully.
+- Manually flip the template to `REJECTED` → next tick fails the campaign and fires an in-app notification.
+- Reopen the wizard on a new campaign of type `promotion` → picker shows only promotion-tagged templates + a "Show all" toggle, not all 91 rows.

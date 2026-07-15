@@ -28,11 +28,12 @@ import { format, formatDistanceToNow } from 'date-fns';
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
 const statusBadge = (s: string) => {
   switch (s) {
-    case 'sent': return { c: 'bg-success/15 text-success border-success/25', icon: CheckCircle2 };
-    case 'sending': return { c: 'bg-info/15 text-info border-info/25', icon: Loader2 };
-    case 'scheduled': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock };
-    case 'failed': return { c: 'bg-destructive/15 text-destructive border-destructive/25', icon: AlertTriangle };
-    default: return { c: 'bg-muted text-foreground border-border', icon: Clock };
+    case 'sent': return { c: 'bg-success/15 text-success border-success/25', icon: CheckCircle2, label: 'sent' };
+    case 'sending': return { c: 'bg-info/15 text-info border-info/25', icon: Loader2, label: 'sending' };
+    case 'scheduled': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock, label: 'scheduled' };
+    case 'pending_template_approval': return { c: 'bg-warning/15 text-warning border-warning/25', icon: Clock, label: 'awaiting Meta approval' };
+    case 'failed': return { c: 'bg-destructive/15 text-destructive border-destructive/25', icon: AlertTriangle, label: 'failed' };
+    default: return { c: 'bg-muted text-foreground border-border', icon: Clock, label: s };
   }
 };
 
@@ -117,6 +118,7 @@ export function CampaignsPanel() {
           <select className="h-9 rounded-xl border bg-card px-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
+            <option value="pending_template_approval">Awaiting Meta approval</option>
             <option value="scheduled">Scheduled</option>
             <option value="sending">Sending</option>
             <option value="sent">Sent</option>
@@ -140,7 +142,7 @@ export function CampaignsPanel() {
             const sb = statusBadge(c.status);
             const Sicon = sb.icon;
             const isScheduled = c.status === 'scheduled' && c.scheduled_at;
-            const editable = c.status === 'draft' || c.status === 'scheduled';
+            const editable = c.status === 'draft' || c.status === 'scheduled' || c.status === 'pending_template_approval';
             const inFlight = c.status === 'sending';
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow/50 hover:shadow-lg hover:ring-1 hover:ring-primary/25 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary relative">
@@ -156,7 +158,7 @@ export function CampaignsPanel() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Badge variant="outline" className={`${sb.c} rounded-full text-[10px] uppercase`}>
-                      <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {c.status}
+                      <Sicon className={`h-3 w-3 mr-1 ${c.status === 'sending' ? 'animate-spin' : ''}`} /> {sb.label}
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
