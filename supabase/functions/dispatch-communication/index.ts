@@ -995,6 +995,7 @@ Deno.serve(async (req) => {
         '132000': 'Template parameter count mismatch — the body has {{n}} placeholders that were not provided at send time.',
         '132001': 'Template does not exist in this WABA — re-sync from Meta in Templates Hub.',
         '132012': 'Template parameter format invalid — usually a missing variable value.',
+        '132018': 'Template parameter format invalid (empty/whitespace variable — often a missing recipient name). Fix upstream data or use a no-name template variant.',
         '133010': 'Phone number is not registered with WhatsApp.',
       };
       if (code && META_HINTS[code]) {
