@@ -711,7 +711,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           setSubmitting(false);
           return;
         }
-        const result = await sendCampaignNow(campaign, audience);
+        // For RCS, pack template_name + per-variable *tokens* (send-broadcast
+        // resolves {{first_name}} / {{full_name}} / {{email}} per-recipient).
+        const rcsVariables = channel === 'rcs' && selectedRcsTemplate
+          ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
+          : undefined;
+        const result = await sendCampaignNow(campaign, { ...audience, variables: rcsVariables });
         if (result.failed > 0 && result.sent === 0) {
           toast.error(`Campaign failed — 0 delivered, ${result.failed} failed${(result as any).first_error ? `: ${(result as any).first_error}` : ''}`);
         } else if (result.failed > 0) {
