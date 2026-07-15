@@ -1,4 +1,9 @@
-// v1.2.0 — Accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain).
+// v1.3.0 — Pre-dispatch WhatsApp template status check.
+//          Scheduled campaigns with a template_id are only sent if the linked
+//          `whatsapp_templates` row is APPROVED. PENDING → the scheduled slot
+//          is postponed by 30 minutes (up to a 24h grace window). REJECTED /
+//          DISABLED / PAUSED → campaign fails, in-app + email alert to owner.
+//          Accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain).
 //          Honors audience_kind (members | leads | staff | contacts | mixed | segment).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
