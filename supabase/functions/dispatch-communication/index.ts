@@ -1036,9 +1036,9 @@ Deno.serve(async (req) => {
           if (r.error) throw new Error(await functionErrorDetail(r.error));
           providerMessageId = (r.data as { whatsapp_message_id?: string; message_id?: string })?.whatsapp_message_id
             ?? (r.data as { message_id?: string })?.message_id;
-          // Persist route (cloud_api | mm_api) on the log's delivery_metadata bag.
-          const route = (r.data as { provider_route?: string })?.provider_route;
-          if (route) finalMeta.provider_route = route;
+          // Persist route (cloud_api | mm_api) on the log's delivery_metadata bag
+          // via captureMetaErrorFields (also fires on success — sets provider_route).
+          captureMetaErrorFields(r);
           break;
         }
         case 'sms': {
