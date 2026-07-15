@@ -440,6 +440,7 @@ export function LiveFeed({ branchId }: { branchId?: string }) {
               </div>
               <span className="text-sm font-semibold text-foreground">Live Feed</span>
               <Badge variant="outline" className="rounded-full text-[10px] tabular-nums">{filtered.length}</Badge>
+              <span className="hidden md:inline text-[11px] text-muted-foreground ml-2">Transactional & 1:1 only — campaign sends live in Campaigns → View details.</span>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <div className="relative">
