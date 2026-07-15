@@ -229,37 +229,78 @@ export async function fetchOnlineDeviceIds(): Promise<number[]> {
   }
 }
 
-// Remote open door by branch — finds the active device for a branch and opens it
-export async function remoteOpenDoorByBranch(branchId: string): Promise<{ success: boolean; message: string }> {
+export interface DoorOpenAttempt {
+  device_id: number | null;
+  device_name: string;
+  success: boolean;
+  message: string;
+  latency_ms: number;
+}
+
+// Remote open door by branch — fires openDoor in PARALLEL to every device
+// whose door_role matches (default 'entry'). Returns per-device outcome so
+// the UI can render "Entry-01 opened in 1.2s, Entry-02 timeout".
+export async function remoteOpenDoorByBranch(
+  branchId: string,
+  opts: { role?: 'entry' | 'exit' | 'both' } = {}
+): Promise<{ success: boolean; message: string; attempts: DoorOpenAttempt[] }> {
+  const role = opts.role || 'entry';
   try {
     const { data: devices } = await supabase
       .from("access_devices")
-      .select("mips_device_id, device_name")
+      .select("mips_device_id, device_name, door_role, is_online")
       .eq("branch_id", branchId)
       .eq("is_online", true);
 
-    if (!devices || devices.length === 0) {
-      // Fallback: try MIPS device list
-      const mipsDevices = await fetchMIPSDevices();
-      const online = mipsDevices.filter(d => d.onlineFlag === 1 || d.status === 1);
-      if (online.length === 0) return { success: false, message: "No online devices found" };
-      return remoteOpenDoor(online[0].id);
+    const roleMatches = (devices || []).filter(
+      (d: any) => d.mips_device_id && (d.door_role === role || d.door_role === 'both' || !d.door_role)
+    );
+
+    let targets: Array<{ id: number; name: string }> = roleMatches.map((d: any) => ({
+      id: Number(d.mips_device_id),
+      name: d.device_name || `Device ${d.mips_device_id}`,
+    }));
+
+    // Fallback: no DB mapping → query MIPS live list, open all online ones.
+    if (targets.length === 0) {
+      const mipsDevices = await fetchMIPSDevices(branchId);
+      targets = mipsDevices
+        .filter(d => d.onlineFlag === 1 || d.status === 1)
+        .map(d => ({ id: d.id, name: d.name || d.deviceKey || `Device ${d.id}` }));
     }
 
-    const deviceWithMipsId = devices.find((d: any) => d.mips_device_id);
-    if (!deviceWithMipsId) {
-      // Fallback to MIPS device list
-      const mipsDevices = await fetchMIPSDevices();
-      const online = mipsDevices.filter(d => d.onlineFlag === 1 || d.status === 1);
-      if (online.length === 0) return { success: false, message: "No online devices found" };
-      return remoteOpenDoor(online[0].id);
+    if (targets.length === 0) {
+      return { success: false, message: "No online devices found", attempts: [] };
     }
 
-    return remoteOpenDoor(deviceWithMipsId.mips_device_id);
+    const attempts: DoorOpenAttempt[] = await Promise.all(
+      targets.map(async (t) => {
+        const started = Date.now();
+        const r = await remoteOpenDoor(t.id, branchId);
+        return {
+          device_id: t.id,
+          device_name: t.name,
+          success: r.success,
+          message: r.message,
+          latency_ms: Date.now() - started,
+        };
+      })
+    );
+
+    const anyOk = attempts.some(a => a.success);
+    const summary = anyOk
+      ? `Opened ${attempts.filter(a => a.success).length}/${attempts.length} door(s)`
+      : `All ${attempts.length} door(s) failed`;
+    return { success: anyOk, message: summary, attempts };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : String(e) };
+    return {
+      success: false,
+      message: e instanceof Error ? e.message : String(e),
+      attempts: [],
+    };
   }
 }
+
 
 // Assign device permission for a synced person
 export async function assignDevicePermission(
