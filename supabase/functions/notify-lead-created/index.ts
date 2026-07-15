@@ -344,11 +344,18 @@ Deno.serve(async (req) => {
       : buildAutoEmailBody();
 
     const sendTeamBundle = async (
-      profile: { id?: string; phone: string | null; email?: string | null },
+      profile: { id?: string; full_name?: string | null; phone: string | null; email?: string | null },
       pref: { whatsapp_enabled: boolean; sms_enabled: boolean; email_enabled: boolean },
       audience: "admin" | "manager",
     ) => {
       const tag = `${audience}:${profile.id || profile.phone || profile.email}`;
+      const staffName = (profile.full_name || "").trim() || "Team";
+      const staffFirstName = staffName.split(/\s+/)[0] || staffName;
+      const perRecipientVars: Record<string, string> = {
+        staff_name: staffFirstName,
+        team_member_name: staffFirstName,
+        recipient_name: staffFirstName,
+      };
 
       if (rules[`sms_to_${audience}s`] && pref.sms_enabled && profile.phone) {
         await dispatch({
@@ -357,6 +364,7 @@ Deno.serve(async (req) => {
           recipient: profile.phone,
           body: teamAlertSmsBody,
           dedupe_suffix: `team:${tag}`,
+          varsOverride: perRecipientVars,
         });
       }
       if (rules[`whatsapp_to_${audience}s`] && pref.whatsapp_enabled && profile.phone) {
@@ -377,6 +385,7 @@ Deno.serve(async (req) => {
             template_id: teamWaTemplateId,
             body: teamAlertWaFreeformBody,
             dedupe_suffix: `team:${tag}`,
+            varsOverride: perRecipientVars,
           });
         }
       }
@@ -388,9 +397,11 @@ Deno.serve(async (req) => {
           subject: teamAlertEmailSubject,
           body: teamAlertEmailBody,
           dedupe_suffix: `team:${tag}`,
+          varsOverride: perRecipientVars,
         });
       }
     };
+
 
     // 8) Admins (owners + admins) — per-admin opt-out
     if (rules.sms_to_admins || rules.whatsapp_to_admins || rules.email_to_admins) {
