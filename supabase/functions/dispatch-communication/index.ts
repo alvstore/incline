@@ -1,4 +1,8 @@
-// dispatch-communication v1.17.0
+// dispatch-communication v1.18.0
+// v1.18.0: FIX — Meta positional placeholders like {{1}} are mapped to CRM
+//          variable labels like first_name without duplicating body params.
+//          Prevents 132000 when CRM variables=["first_name"] and approved Meta
+//          body has exactly one {{1}} slot.
 // v1.17.0: FIX — finalize update no longer sets delivery_metadata=null (NOT NULL
 //          column → silent update failure → WA/SMS/email logs stuck in 'sending'
 //          forever). Also injects URL-button component for AUTHENTICATION (OTP)
