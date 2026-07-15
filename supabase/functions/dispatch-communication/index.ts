@@ -486,6 +486,48 @@ Deno.serve(async (req) => {
         return ok({ status: 'suppressed', log_id: log?.id, reason: reason ?? 'preference_block' });
       }
 
+      // ── 2b) 131049 pacing cooldown ──
+      // Meta silently rate-limits marketing templates per recipient when
+      // engagement is low. Retrying inside the pacing window keeps digging
+      // the same hole (tanks template quality further). Suppress cleanly
+      // for 24 h after any 131049 to the same recipient.
+      if (input.channel === 'whatsapp' && input.category === 'marketing') {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: paced } = await supabase
+          .from('communication_logs')
+          .select('id')
+          .eq('type', 'whatsapp')
+          .eq('recipient', input.recipient)
+          .in('delivery_status', ['failed', 'bounced'])
+          .contains('delivery_metadata', { meta_code: 131049 } as any)
+          .gte('created_at', since)
+          .limit(1);
+        if (paced && paced.length > 0) {
+          const { data: log } = await supabase
+            .from('communication_logs')
+            .insert({
+              branch_id: input.branch_id,
+              member_id: input.member_id ?? null,
+              user_id: input.user_id ?? null,
+              type: input.channel,
+              channel: input.channel,
+              category: input.category,
+              recipient: input.recipient,
+              subject: input.payload.subject ?? null,
+              content: input.payload.body,
+              template_id: input.template_id ?? null,
+              dedupe_key: input.dedupe_key,
+              status: 'suppressed',
+              delivery_status: 'suppressed',
+              error_message: 'pacing_cooldown_24h (Meta 131049 recently)',
+              delivery_metadata: { suppressed_by: 'pacing_cooldown', meta_code: 131049 } as any,
+            })
+            .select('id')
+            .single();
+          return ok({ status: 'suppressed', log_id: log?.id, reason: 'pacing_cooldown_24h' });
+        }
+      }
+
       // ── 3) quiet hours ──
       if (input.member_id && input.channel !== 'in_app') {
         const { data: quiet } = await supabase.rpc('is_in_quiet_hours', { p_member_id: input.member_id });

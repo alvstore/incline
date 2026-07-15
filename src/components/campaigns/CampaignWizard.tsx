@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Mail, Send, Save, Loader2, Megaphone, Clock, Paperclip, ImageIcon, FileText, Film, X, Sparkles, Wand2, AlertTriangle, Radio } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadAttachment } from '@/utils/uploadAttachment';
 import { supabase } from '@/integrations/supabase/client';
@@ -138,6 +138,67 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
   // Test send (Preview & Test panel)
   const [testRecipient, setTestRecipient] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+
+  // ── RCS (Telinfy) template selection + per-variable mapping ──
+  const [rcsTemplateId, setRcsTemplateId] = useState<string | null>(null);
+  const [rcsVarMap, setRcsVarMap] = useState<Record<string, string>>({});
+
+  const { data: rcsTemplates = [] } = useQuery({
+    queryKey: ['rcs-templates', branchId],
+    queryFn: async () => {
+      let q = supabase.from('rcs_templates').select('id, template_name, body_preview, variables, kind, status');
+      if (branchId) q = q.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      const { data, error } = await q.order('template_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && channel === 'rcs',
+  });
+
+  const selectedRcsTemplate = (rcsTemplates as any[]).find((t) => t.id === rcsTemplateId) || null;
+  const rcsVarKeys: string[] = (() => {
+    if (!selectedRcsTemplate) return [];
+    const declared = Array.isArray(selectedRcsTemplate.variables) ? selectedRcsTemplate.variables : [];
+    const fromBody = Array.from(
+      new Set(
+        String(selectedRcsTemplate.body_preview || '')
+          .match(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
+          ?.map((m: string) => m.replace(/[{}\s]/g, '')) || [],
+      ),
+    );
+    // Prefer declared variables (Telinfy panel), fall back to body-scan.
+    return declared.length ? declared.map(String) : (fromBody as string[]);
+  })();
+
+  // Seed default mapping when template changes (first key → first_name, others → blank).
+  useEffect(() => {
+    if (!selectedRcsTemplate) return;
+    setRcsVarMap((prev) => {
+      const next = { ...prev };
+      rcsVarKeys.forEach((k, i) => {
+        if (next[k] !== undefined) return;
+        if (i === 0 || /name|first/i.test(k)) next[k] = '{{first_name}}';
+        else next[k] = '';
+      });
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rcsTemplateId]);
+
+  /** Resolve the RCS variable map for a single recipient at send-time. */
+  const resolveRcsVarsForRecipient = (r: { full_name?: string | null; email?: string | null }): Record<string, string> => {
+    const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
+    const full = r.full_name || 'there';
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rcsVarMap)) {
+      out[k] = String(v || '')
+        .replace(/\{\{\s*first_name\s*\}\}/gi, first)
+        .replace(/\{\{\s*full_name\s*\}\}/gi, full)
+        .replace(/\{\{\s*member_name\s*\}\}/gi, full)
+        .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
+    }
+    return out;
+  };
 
   // Source of truth = `whatsapp_templates` (Meta cache) so anything Meta has approved
   // is selectable, even if there's no local CRM `templates` row yet.
@@ -469,6 +530,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         phone: channel === 'email' ? null : (target.startsWith('+') ? target : `+${target}`),
         email: channel === 'email' ? target : null,
       };
+      // For RCS, pack template_name + resolved variables into the `variables`
+      // map — the dispatcher pops template_name and passes the rest as Telinfy
+      // lcustomParam. For other channels this is a no-op.
+      const rcsVariables = channel === 'rcs' && selectedRcsTemplate
+        ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient(recipient) }
+        : undefined;
       const { data, error } = await supabase.functions.invoke('send-broadcast', {
         body: {
           channel,
@@ -477,6 +544,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           branch_id: branchId,
           recipients: [recipient],
           template_id: templateId,
+          variables: rcsVariables,
           attachment_url: attachment?.url ?? undefined,
           attachment_kind: attachment?.kind ?? undefined,
           attachment_filename: attachment?.filename ?? undefined,
@@ -582,6 +650,10 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       toast.error(detail);
       return;
     }
+    if (channel === 'rcs' && !rcsTemplateId) {
+      toast.error('Pick an RCS template — Telinfy RCS is template-only');
+      return;
+    }
     if (isEvent && !eventName.trim()) { toast.error('Event name required'); return; }
     if (trigger === 'scheduled' && !scheduledAt) { toast.error('Pick a date and time'); return; }
     if (trigger === 'scheduled' && new Date(scheduledAt).getTime() <= Date.now()) {
@@ -641,7 +713,12 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           setSubmitting(false);
           return;
         }
-        const result = await sendCampaignNow(campaign, audience);
+        // For RCS, pack template_name + per-variable *tokens* (send-broadcast
+        // resolves {{first_name}} / {{full_name}} / {{email}} per-recipient).
+        const rcsVariables = channel === 'rcs' && selectedRcsTemplate
+          ? { template_name: selectedRcsTemplate.template_name, ...rcsVarMap }
+          : undefined;
+        const result = await sendCampaignNow(campaign, { ...audience, variables: rcsVariables });
         if (result.failed > 0 && result.sent === 0) {
           toast.error(`Campaign failed — 0 delivered, ${result.failed} failed${(result as any).first_error ? `: ${(result as any).first_error}` : ''}`);
         } else if (result.failed > 0) {
@@ -743,14 +820,15 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           <div className="space-y-5">
             <div>
               <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Channel</Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {([
                   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, color: 'emerald' },
+                  { id: 'rcs', label: 'RCS', icon: Radio, color: 'violet' },
                   { id: 'email', label: 'Email', icon: Mail, color: 'blue' },
                   { id: 'sms', label: 'SMS', icon: MessageSquare, color: 'amber' },
                 ] as const).map((c) => (
                   <button key={c.id} type="button" onClick={() => setChannel(c.id as CampaignChannel)}
-                    className={`flex-1 rounded-xl p-3 border-2 transition-all ${
+                    className={`rounded-xl p-3 border-2 transition-all ${
                       channel === c.id ? `border-${c.color}-500 bg-${c.color}-50 dark:bg-${c.color}-500/10` : 'border-border bg-card'
                     }`}>
                     <c.icon className={`h-5 w-5 mx-auto ${channel === c.id ? `text-${c.color}-600` : 'text-muted-foreground'}`} />
@@ -759,6 +837,63 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 ))}
               </div>
             </div>
+
+            {/* ── RCS (Telinfy) template selection + variable mapping ── */}
+            {channel === 'rcs' && (
+              <div className="rounded-2xl border-2 border-violet-500/25 bg-violet-500/5 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-violet-600" />
+                  <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">RCS (Telinfy) — template required</Label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Telinfy RCS is template-only. Pick an approved template and map each variable to a CRM field or a static value.
+                  Recipients on non-RCS devices automatically fall back to SMS.
+                </p>
+                {rcsTemplates.length === 0 ? (
+                  <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-lg p-2">
+                    No RCS templates synced yet. Go to <strong>Settings → RCS Hub → Templates</strong> to sync from Telinfy.
+                  </div>
+                ) : (
+                  <>
+                    <Select value={rcsTemplateId || ''} onValueChange={setRcsTemplateId}>
+                      <SelectTrigger className="rounded-xl bg-card"><SelectValue placeholder="Pick an RCS template…" /></SelectTrigger>
+                      <SelectContent>
+                        {(rcsTemplates as any[]).map((t: any) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.template_name}{t.kind ? ` · ${t.kind}` : ''}{t.status && t.status !== 'approved' ? ` · ${t.status}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedRcsTemplate && (
+                      <div className="rounded-xl border bg-card p-2.5 space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Template preview</p>
+                        <pre className="text-xs whitespace-pre-wrap text-foreground font-sans">{selectedRcsTemplate.body_preview || '(no body preview available)'}</pre>
+                      </div>
+                    )}
+                    {rcsVarKeys.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Variable mapping</p>
+                        {rcsVarKeys.map((k) => (
+                          <div key={k} className="flex items-center gap-2">
+                            <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px] shrink-0 min-w-[110px] truncate">{`{{${k}}}`}</code>
+                            <Input
+                              className="rounded-lg h-8 text-xs flex-1"
+                              placeholder="Static value or {{first_name}} / {{full_name}} / {{email}}"
+                              value={rcsVarMap[k] ?? ''}
+                              onChange={(e) => setRcsVarMap((m) => ({ ...m, [k]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-muted-foreground">
+                          Tokens <code>{'{{first_name}}'}</code>, <code>{'{{full_name}}'}</code>, and <code>{'{{email}}'}</code> resolve per recipient at send-time.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {channel === 'email' && (
               <div>
@@ -1066,6 +1201,62 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                 </div>
               );
             })()}
+
+            {/* ─── Telinfy Bulk CSV Export (emergency fallback) ─────────────── */}
+            {(channel === 'rcs' || channel === 'whatsapp' || channel === 'sms') && (
+              <div className="rounded-2xl border border-dashed p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">Emergency bulk send</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Download this audience in Telinfy's CSV format (CountryCode, MSISDN, per-variable columns) for manual upload if the CRM pipeline is unavailable.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full h-8 px-3 text-xs gap-1.5 shrink-0"
+                  onClick={async () => {
+                    try {
+                      const { resolveCampaignAudience } = await import('@/services/campaignService');
+                      const recips = await resolveCampaignAudience(branchId, filter);
+                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name'];
+                      const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
+                      const csv = buildTelinfyCsv({
+                        campaignName: name || 'campaign',
+                        recipients: recips as any,
+                        variableKeys: keys.length ? keys : ['first_name'],
+                        resolveVar: channel === 'rcs' && selectedRcsTemplate
+                          ? (r: any, k: string) => {
+                              const mapped = rcsVarMap[k] || '';
+                              const first = (r.full_name || '').trim().split(/\s+/)[0] || 'there';
+                              const full = r.full_name || 'there';
+                              return String(mapped)
+                                .replace(/\{\{\s*first_name\s*\}\}/gi, first)
+                                .replace(/\{\{\s*full_name\s*\}\}/gi, full)
+                                .replace(/\{\{\s*member_name\s*\}\}/gi, full)
+                                .replace(/\{\{\s*email\s*\}\}/gi, r.email || '');
+                            }
+                          : undefined,
+                      });
+                      const safe = (name || 'campaign').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `telinfy_${safe}_${new Date().toISOString().slice(0, 10)}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success(`Downloaded ${(recips as any[]).filter((r: any) => r.phone).length} rows`);
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Export failed');
+                    }
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5" /> Telinfy CSV
+                </Button>
+              </div>
+            )}
 
 
 

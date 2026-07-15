@@ -1,6 +1,10 @@
-// process-whatsapp-retry-queue v1.0.0
+// process-whatsapp-retry-queue v1.1.0
 // Drains pending rows from `whatsapp_send_queue` by re-invoking
 // `dispatch-communication`. Capped retries with exponential backoff.
+// v1.1.0: terminal Meta error codes (131049 pacing, 131026 unreachable,
+//         131047 24h window, 132000/132001/132015/132016 template errors)
+//         are abandoned immediately — retrying them just burns quota and
+//         tanks template quality further.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -59,8 +63,13 @@ Deno.serve(async (req) => {
       }
 
       const errMsg = dispatch.error.message ?? String(dispatch.error);
+      // Terminal Meta error codes — never retry. The error strings vary but
+      // dispatcher / send-whatsapp surface the numeric code in the message.
+      const TERMINAL_META_CODES = [131049, 131026, 131047, 132000, 132001, 132015, 132016, 132018];
+      const isTerminal = TERMINAL_META_CODES.some((code) => errMsg.includes(String(code)));
 
-      if (isLast) {
+
+      if (isLast || isTerminal) {
         await supabase
           .from("whatsapp_send_queue")
           .update({

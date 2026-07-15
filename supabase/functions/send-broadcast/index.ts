@@ -149,7 +149,23 @@ Deno.serve(async (req) => {
           '1': nameFallback,
           v1: nameFallback,
           param1: nameFallback,
-          ...(variables && typeof variables === 'object' ? variables : {}),
+          // Per-recipient token substitution inside incoming variable values —
+          // lets RCS/Telinfy templates receive `{{first_name}}` tokens that
+          // resolve to the actual recipient's name, not a literal string.
+          ...(variables && typeof variables === 'object'
+            ? Object.fromEntries(
+                Object.entries(variables as Record<string, unknown>).map(([k, v]) => [
+                  k,
+                  typeof v === 'string'
+                    ? v
+                        .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
+                        .replace(/\{\{\s*full_name\s*\}\}/gi, r.full_name || 'there')
+                        .replace(/\{\{\s*member_name\s*\}\}/gi, r.full_name || 'there')
+                        .replace(/\{\{\s*email\s*\}\}/gi, r.email || '')
+                    : v,
+                ]),
+              )
+            : {}),
         };
 
 

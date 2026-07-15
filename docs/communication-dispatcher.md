@@ -67,3 +67,19 @@ Members configure `quiet_hours_start`, `quiet_hours_end`, and `timezone` in `mem
 - 24h `deduped` count (signals high cron-replay rate — investigate)
 - 24h `suppressed` count (signals high opt-out rate — review templates)
 - 24h `failed` count + recent `error_message` samples
+
+## WhatsApp 131049 pacing — mitigation
+
+Meta returns error `131049` ("This message was not delivered to maintain healthy ecosystem engagement") when the recipient's engagement score with your business is low OR your template's quality rating has dropped. Meta accepts the send (HTTP 200) but silently drops delivery. It is **not a code bug** — the dispatcher, template, and phone number are all valid.
+
+The dispatcher and retry queue apply three product-level mitigations so the app stops making pacing worse:
+
+1. **Retry suppression** — `process-whatsapp-retry-queue` treats `131049` (and `131026`, `131047`, `132000`, `132001`, `132015`, `132016`, `132018`) as terminal. Re-sending inside the pacing window tanks the template's quality further.
+2. **24-h per-recipient cooldown** — before sending any `channel='whatsapp'` + `category='marketing'` message, the dispatcher checks `communication_logs` for a prior `131049` failure to the same `recipient` in the last 24 h. If found, the row is inserted as `delivery_status='suppressed'` with reason `pacing_cooldown_24h` and the provider call is skipped entirely.
+3. **Operator guidance** — when pacing is repeatedly hit for a template, the operator should:
+   - Rotate templates (Meta paces templates individually).
+   - Use a warmer, opted-in audience (in-window WhatsApp contacts).
+   - Prefer UTILITY over MARKETING category when the intent is truly transactional.
+   - Fall back to **RCS** (Telinfy) or SMS for cold outreach — RCS is not subject to Meta pacing.
+
+For emergency manual sends, the Campaign Wizard's "Emergency bulk send" panel exports the resolved audience in Telinfy's CSV format (`CountryCode | MSISDN | <var1> | <var2> | …`) so operators can upload the file directly in the Telinfy panel.

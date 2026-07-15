@@ -26,7 +26,7 @@ interface Props {
   onChange: (filter: AudienceFilter) => void;
   onResolved: (memberIds: string[]) => void;
   onBreakdown?: (b: AudienceBreakdown | null) => void;
-  channel?: 'whatsapp' | 'email' | 'sms';
+  channel?: 'whatsapp' | 'email' | 'sms' | 'rcs';
 }
 
 const KIND_OPTIONS: { id: AudienceKind; label: string; desc: string; icon: any }[] = [

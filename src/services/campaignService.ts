@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type CampaignChannel = 'whatsapp' | 'email' | 'sms';
+export type CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'rcs';
 export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused' | 'pending_template_approval';
 export type CampaignTriggerType = 'send_now' | 'automated' | 'scheduled';
 
@@ -366,7 +366,7 @@ export async function duplicateCampaign(id: string): Promise<Campaign> {
 
 export async function sendCampaignNow(
   campaign: Campaign & { attachment_url?: string | null; attachment_kind?: string | null; attachment_filename?: string | null },
-  audience: { memberIds?: string[]; recipients?: ResolvedRecipient[] }
+  audience: { memberIds?: string[]; recipients?: ResolvedRecipient[]; variables?: Record<string, string> }
 ): Promise<{ sent: number; failed: number; total: number }> {
   await supabase.from('campaigns').update({ status: 'sending' }).eq('id', campaign.id);
 
@@ -378,6 +378,7 @@ export async function sendCampaignNow(
       branch_id: campaign.branch_id,
       member_ids: audience.memberIds,
       recipients: audience.recipients,
+      variables: audience.variables,
       campaign_id: campaign.id,
       template_id: (campaign as any).template_id ?? undefined,
       attachment_url: (campaign as any).attachment_url ?? undefined,
