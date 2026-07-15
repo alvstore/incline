@@ -1,4 +1,9 @@
-// dispatch-communication v1.18.0
+// dispatch-communication v1.19.0
+// v1.19.0: FIX — stamp whatsapp_messages.media_meta.source_log_id before
+//          provider callbacks can arrive. Meta status webhooks can beat the
+//          dispatcher's final provider_message_id update, so callbacks need a
+//          stable log id to prevent Communication Logs saying "sent" while the
+//          inbox row already says "failed".
 // v1.18.0: FIX — Meta positional placeholders like {{1}} are mapped to CRM
 //          variable labels like first_name without duplicating body params.
 //          Prevents 132000 when CRM variables=["first_name"] and approved Meta
@@ -902,6 +907,11 @@ Deno.serve(async (req) => {
                 status: 'pending',
                 message_type: kind,
                 media_url: input.attachment.url,
+                media_meta: {
+                  source_log_id: log!.id,
+                  dispatch_dedupe_key: input.dedupe_key,
+                  template_id: input.template_id ?? null,
+                },
               })
               .select('id')
               .single();
@@ -939,6 +949,12 @@ Deno.serve(async (req) => {
             message_type: sendAsNativeHeaderTemplate
               ? (templateHeaderType === 'image' ? 'image' : templateHeaderType === 'video' ? 'video' : 'document')
               : messageType,
+            media_meta: {
+              source_log_id: log!.id,
+              dispatch_dedupe_key: input.dedupe_key,
+              template_id: input.template_id ?? null,
+              template_name: templateName ?? null,
+            },
           };
           if (sendAsNativeHeaderTemplate) waInsert.media_url = input.attachment!.url;
           const { data: waRow, error: waErr } = await supabase
