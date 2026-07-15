@@ -673,6 +673,28 @@ Deno.serve(async (req) => {
               const templateValues = hasMediaHeader
                 ? baseValues
                 : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
+              // Pre-flight: refuse to burn a Meta send when a required
+              // name-like variable is missing. Prevents 132018 loops when
+              // leads have no captured full_name.
+              const missingRequired = requiredKeysMissing(keys, templateValues);
+              if (missingRequired.length > 0 && String(wt?.category || '').toUpperCase() === 'MARKETING') {
+                const reason = `template_param_empty:${missingRequired.join(',')}`;
+                await supabase
+                  .from('communication_logs')
+                  .update({
+                    delivery_status: 'failed',
+                    status: 'failed',
+                    error_message: `132018: ${reason} (blocked pre-flight; provide full_name or use a no-name template)`,
+                    delivery_metadata: {
+                      pre_flight_block: true,
+                      missing_keys: missingRequired,
+                      template: templateName,
+                    },
+                    sent_at: new Date().toISOString(),
+                  })
+                  .eq('id', log!.id);
+                return ok({ status: 'failed', log_id: log!.id, reason });
+              }
               components = templateComponents(keys, templateValues);
 
               // AUTHENTICATION templates (OTP) require an extra `button` component
