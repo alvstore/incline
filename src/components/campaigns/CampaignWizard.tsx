@@ -1220,7 +1220,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
                     try {
                       const { resolveCampaignAudience } = await import('@/services/campaignService');
                       const recips = await resolveCampaignAudience(branchId, filter);
-                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name'];
+                      const keys = channel === 'rcs' ? rcsVarKeys : ['first_name', 'last_name'];
                       const { buildTelinfyCsv } = await import('./TelinfyBulkExport');
                       const csv = buildTelinfyCsv({
                         campaignName: name || 'campaign',
