@@ -214,6 +214,10 @@ function resolveVarValue(
 function safeFallbackForKey(key: string): string {
   const k = String(key || '').toLowerCase();
   if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') return 'there';
+  // Purely numeric keys (Meta positional {{1}}, {{2}}, …) — the first slot is
+  // almost always a name/greeting on Incline templates, so fall back to
+  // "there" instead of "—" to avoid "Hi —," style output.
+  if (/^\d+$/.test(k)) return k === '1' ? 'there' : '—';
   if (k.includes('plan')) return 'your plan';
   if (k.includes('trainer')) return 'your trainer';
   if (k.includes('branch')) return 'our club';
