@@ -1,65 +1,85 @@
-## Cluster 1 — `mips_sweep_expired_access` 401 Unauthorized (27 occurrences)
+## Audit findings
 
-**Root cause (confirmed by code read):**
-- `automation-brain/index.ts` `callEdge()` invokes worker functions with headers `{ apikey: SERVICE_KEY, x-system-call: "automation-brain" }` — **no `Authorization` header**.
-- `mips-access/index.ts` auth gate (v2.1.0, lines 434–461) only accepts `Authorization: Bearer <SERVICE_KEY>` OR a user JWT with owner/admin/manager role. It does not honor `x-system-call`.
-- Result: every 30-min cron tick invokes `edge:mips-access` → 401 → automation_runs records `error`. This is the sole cause of the 27 occurrences.
+1. **The send itself is working now**
+   - Recent sends to `+919887601200` reached WhatsApp and were marked **read**.
+   - They used the MM WhatsApp route and template `campaign_1784104215124`.
 
-**Fix (one file):** `supabase/functions/mips-access/index.ts`
+2. **Why the message says “Hi Test”**
+   - The Campaign Wizard test-send path hardcodes the test recipient name as `Test User`.
+   - That becomes `first_name = Test`, so Meta receives the approved template variable `{{1}} = Test`.
+   - This is not a Meta sync failure for the latest send; it is our test-send code using a fake name instead of resolving the real lead/member/contact name for the phone number.
 
-Replace the auth gate to also accept the internal system-call header (mirroring the pattern already in `automation-brain/index.ts` v2.3.0):
+3. **Why earlier “unknown” happened**
+   - The old UI interpreted the async broadcast ACK as a failed test.
+   - That was partly fixed by switching test-send to `dispatch-communication`, but the catch block still falls back to generic messages if the function error body is nested.
 
-```ts
-const authHeader = req.headers.get("Authorization") || "";
-const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-const apikey = req.headers.get("apikey") || "";
-const sysCall = req.headers.get("x-system-call") || "";
-const isService =
-  (bearer && bearer === SERVICE_KEY) ||
-  (apikey === SERVICE_KEY && sysCall === "automation-brain");
-if (!isService) {
-  // …existing user-JWT + role check unchanged…
-}
-```
+4. **Campaign risk found during audit**
+   - The newer explicit-recipient broadcast path builds `first_name`, `member_name`, and positional `1` correctly.
+   - The legacy `member_ids` path does **not** pass per-member WhatsApp template variables, so member-only campaigns can still send empty/fallback variables or stale placeholder rendering.
 
-Bump header to `// v2.2.0 — accept x-system-call from automation-brain`. Then redeploy `mips-access`, click **Run Now** on the rule, verify `automation_runs` shows `success` and `error_logs` count stops climbing.
+## Fix plan
 
----
+### 1. Fix Campaign Wizard test-send personalization
+**File:** `src/components/campaigns/CampaignWizard.tsx`
 
-## Issue 2 — MM (Meta Cloud) WhatsApp broadcast: "Test failed — Unknown" for marketing template
+- Before sending a WhatsApp/SMS/RCS test, look up the entered phone in the backend:
+  - `profiles.phone`
+  - `leads.phone`
+  - `contacts.phone`
+- Use the best matching real name as the test variable source.
+- Fallback only if no record exists:
+  - full name: `Test User`
+  - first name: `Test`
+- Send Meta variables as:
+  - `first_name`
+  - `member_name`
+  - `full_name`
+  - `name`
+  - positional aliases `1`, `v1`, `param1`
+- Update the success toast to show which name was used, so testing is auditable.
 
-**Investigation plan (before code changes):**
+### 2. Fix unknown test errors
+**File:** `src/components/campaigns/CampaignWizard.tsx`
 
-1. **Reproduce with real curl** against `dispatch-communication` for `+919887601200`, using the exact template shown in the screenshot (`choose_what_deserves_your_effort`, category `marketing`). Capture:
-   - Meta Graph API HTTP status + full JSON error (code / subcode / details).
-   - Row written to `communication_logs` (delivery_status, error_message, provider_message_id).
-2. Read `dispatch-communication/index.ts` marketing branch to confirm which of these fires:
-   - 24h `pacing_cooldown_24h` suppression (docs/communication-dispatcher.md) → surfaces as `suppressed` but campaign UI may show "unknown".
-   - Template-parameter mismatch (variable count vs. approved template body).
-   - Header media missing for templates that require `image/video/document` header.
-   - Wrong WABA/phone_number_id for MM (multi-tenant) — the "MM" provider row in `integration_settings` may be pointed at a different phone number than the approved template's WABA.
-3. Inspect `campaign_recipients.error_message` / `communication_logs.error_message` for the last failed broadcast to `+919887601200` to get the concrete Meta error code.
+- Replace the generic catch fallback with a robust error extractor that checks:
+  - `error.message`
+  - edge function response body from `error.context`
+  - `meta_error`, `meta_code`, `reason`, `error_message`
+- Show specific errors like `132018 template_param_empty`, `131049 Meta pacing`, or `template_stale_in_meta` instead of “unknown”.
 
-**Most likely root causes (ranked, based on prior debugging patterns in this project):**
+### 3. Fix legacy member broadcast template variables
+**File:** `supabase/functions/send-broadcast/index.ts`
 
-- **A.** Client-side "Test" button surfaces raw `Error` object without `.message` → user sees "Unknown". Actual failure is one of B/C/D below but hidden.
-- **B.** Marketing template requires a **header media** (image/PDF) — Meta rejects with `#132000` "parameter_count_mismatch" when header is empty; template is approved but send-time payload omits header_handle. Dispatcher v1.6.0 injects `{{document_link}}` only for document-event templates, not marketing.
-- **C.** Recipient outside 24h window + template variable resolution returns empty string → Meta rejects with `#132001` "template_param_missing".
-- **D.** `pacing_cooldown_24h` from a prior `131049` on the same recipient — dispatcher inserts `suppressed` and returns without provider call; UI treats non-`sent` status as failure.
+- In the `member_ids` dispatch loop, build the same per-recipient variable map already used by the explicit `recipients` path:
+  - `member_name`
+  - `full_name`
+  - `first_name`
+  - `name`
+  - `member_code`
+  - `1`, `v1`, `param1`
+- Pass those variables to `dispatch-communication` for WhatsApp template sends.
+- Add the same missing-name guard for WhatsApp approved templates so Meta does not receive empty name parameters.
 
-**Fix plan (executed after step 1–3 confirms the code):**
+### 4. Improve dispatcher response detail for MM/Meta failures
+**File:** `supabase/functions/dispatch-communication/index.ts`
 
-1. **`src/components/campaigns/CampaignWizard.tsx`** (or the "Test send" handler wherever "Test failed — Unknown" is thrown): surface `error.message ?? error.reason ?? JSON.stringify(error)` instead of bare "Unknown", and show the `communication_logs.error_message` when status is `failed` / `suppressed`.
-2. **`supabase/functions/dispatch-communication/index.ts`**: for `channel='whatsapp' + category='marketing'` sends with a `template_id`, validate that any header component of type `IMAGE/VIDEO/DOCUMENT` has a corresponding `attachment_url` in the payload; return a specific error `template_header_media_required` instead of forwarding to Meta.
-3. **`supabase/functions/send-whatsapp/index.ts`**: propagate Meta's `error.code`, `error.error_subcode`, and `error.error_data.details` verbatim into `communication_logs.error_message` so operators see the real cause.
-4. **CURL harness**: add a new edge fn `whatsapp-template-probe` (service-role) that takes `{ template_name, recipient, variables?, header_media_url? }`, calls `/messages` directly on the currently-active MM integration row, and returns the full Meta response — for one-shot debugging without touching campaigns.
-5. **End-to-end verify**: send the approved `choose_what_deserves_your_effort` template to `+919887601200` via the probe, then via the Campaign Wizard, and confirm both land or return a specific actionable error.
+- When `send-whatsapp` returns a function error, preserve the structured JSON body in the final `communication_logs.error_message` and response reason.
+- Include `provider_route`, `meta_code`, `meta_subcode`, and `fbtrace_id` when available.
 
-### Deliverables
+### 5. Deploy and test
 
-- `supabase/functions/mips-access/index.ts` — auth-gate patch (Cluster 1, done in the same turn).
-- `supabase/functions/whatsapp-template-probe/index.ts` — new debug function.
-- `supabase/functions/dispatch-communication/index.ts` — header-media validation + verbose error passthrough.
-- `supabase/functions/send-whatsapp/index.ts` — verbose Meta error capture.
-- `src/components/campaigns/CampaignWizard.tsx` — surface real error message.
-- Redeploy affected functions; test-send to +91 98876 01200 and paste the resulting `communication_logs` row.
+- Deploy changed backend functions:
+  - `send-broadcast`
+  - `dispatch-communication`
+- Run a direct test send to `+919887601200` through the Campaign Wizard path.
+- Verify backend rows show:
+  - delivery status is `sent/read` or a specific Meta error
+  - `content` has the resolved name, not unresolved `{{1}}`
+  - `delivery_metadata.provider_route` is `mm_api` or `cloud_api`
+
+## Expected result
+
+- If the phone number exists as a lead/contact/member, the test WhatsApp will say the real name instead of `Test`.
+- If the number is only a manual test number, it will still say `Test` by design.
+- Campaign broadcasts will use each recipient’s own name consistently.
+- “Unknown” failures will become actionable Meta/provider errors.

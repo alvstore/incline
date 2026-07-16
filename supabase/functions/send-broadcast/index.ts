@@ -486,9 +486,58 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      const fullName = String(profile.full_name || '').trim();
+      const firstName = fullName.split(/\s+/)[0] || '';
+      const nameFallback = firstName || fullName || 'there';
+      const perVars: Record<string, string> = {
+        member_name: fullName || 'there',
+        full_name: fullName || 'there',
+        first_name: firstName || 'there',
+        name: nameFallback,
+        member_code: member.member_code || '',
+        '1': nameFallback,
+        v1: nameFallback,
+        param1: nameFallback,
+        ...(variables && typeof variables === 'object'
+          ? Object.fromEntries(
+              Object.entries(variables as Record<string, unknown>).map(([k, v]) => [
+                k,
+                typeof v === 'string'
+                  ? v
+                      .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
+                      .replace(/\{\{\s*full_name\s*\}\}/gi, fullName || 'there')
+                      .replace(/\{\{\s*member_name\s*\}\}/gi, fullName || 'there')
+                      .replace(/\{\{\s*member_code\s*\}\}/gi, member.member_code || '')
+                      .replace(/\{\{\s*email\s*\}\}/gi, profile.email || '')
+                  : String(v ?? ''),
+              ]),
+            )
+          : {}),
+      };
+
+      if (channel === 'whatsapp' && template_id && !fullName) {
+        failed++;
+        if (campaign_id) {
+          memberRecipientRows.push({
+            campaign_id,
+            source_type: 'member',
+            source_ref_id: member.id,
+            full_name: null,
+            phone: profile.phone || null,
+            email: profile.email || null,
+            status: 'skipped',
+            error: 'missing_required_variable:name',
+          });
+        }
+        continue;
+      }
+
       const personalizedMsg = message
-        .replace(/\{\{member_name\}\}/g, profile.full_name || "Member")
-        .replace(/\{\{member_code\}\}/g, member.member_code || "");
+        .replace(/\{\{\s*member_name\s*\}\}/gi, perVars.member_name)
+        .replace(/\{\{\s*full_name\s*\}\}/gi, perVars.full_name)
+        .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name)
+        .replace(/\{\{\s*member_code\s*\}\}/gi, perVars.member_code)
+        .replace(/\{\{\s*1\s*\}\}/g, perVars['1']);
 
       let recipient = channel === "email" ? profile.email : profile.phone;
       let status: 'sent' | 'failed' | 'skipped' = "failed";
@@ -517,7 +566,7 @@ Deno.serve(async (req) => {
             channel,
             recipient,
             category: 'marketing',
-            payload: { subject: subject || undefined, body: personalizedMsg, variables: variables || undefined },
+            payload: { subject: subject || undefined, body: personalizedMsg, variables: perVars },
             template_id: template_id || null,
             member_id: member.id,
             dedupe_key: campaign_id ? `campaign:${campaign_id}:member:${member.id}${retrySuffix}` : `broadcast:${Date.now()}:member:${member.id}`,
