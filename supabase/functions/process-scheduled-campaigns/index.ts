@@ -1,3 +1,6 @@
+// v1.5.0 — Hand off to send-broadcast v5 chunked pipeline (mode='materialize');
+//          added watchdog that resumes 'sending' campaigns with no progress in
+//          5+ minutes so a dead isolate never leaves a broadcast half-done.
 // v1.4.0 — Respect send-broadcast v4.x async ACK (accepted/background). Do not
 //          overwrite terminal status; broadcast loop owns final campaign state.
 //          Prevents "sent 337 · 0 delivered · 0 failed" race for large audiences.
@@ -114,63 +117,10 @@ Deno.serve(async (req) => {
       if (!locked) continue;
 
       try {
-        // Resolve audience server-side honoring audience_kind
-        const filter = (c.audience_filter || {}) as any;
-        const isMembersKind = !filter.audience_kind || filter.audience_kind === "members";
-        const today = new Date().toISOString().split("T")[0];
-
-        const broadcastBody: any = {
-          channel: c.channel,
-          message: c.message,
-          subject: c.subject,
-          branch_id: c.branch_id,
-          campaign_id: c.id,
-          template_id: c.template_id ?? undefined,
-          attachment_url: c.attachment_url ?? undefined,
-          attachment_kind: c.attachment_kind ?? undefined,
-          attachment_filename: c.attachment_filename ?? undefined,
-        };
-
-        let totalRecipients = 0;
-
-        if (isMembersKind) {
-          let memberIds: string[] = [];
-          const status = filter.member_status || filter.status;
-          if (status === "active") {
-            const { data } = await admin.from("memberships")
-              .select("member_id").eq("branch_id", c.branch_id)
-              .eq("status", "active").gte("end_date", today);
-            memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
-          } else if (status === "expired") {
-            const { data } = await admin.from("memberships")
-              .select("member_id").eq("branch_id", c.branch_id).lt("end_date", today);
-            memberIds = [...new Set((data || []).map((m: any) => m.member_id))];
-          } else {
-            const { data } = await admin.from("members").select("id").eq("branch_id", c.branch_id);
-            memberIds = (data || []).map((m: any) => m.id);
-          }
-          broadcastBody.member_ids = memberIds;
-          totalRecipients = memberIds.length;
-        } else {
-          const { data: recipients, error: rErr } = await admin.rpc("resolve_campaign_audience" as any, {
-            p_branch_id: c.branch_id,
-            p_filter: filter,
-          });
-          if (rErr) throw new Error(`Audience resolve failed: ${rErr.message}`);
-          broadcastBody.recipients = recipients || [];
-          totalRecipients = broadcastBody.recipients.length;
-        }
-
-        if (totalRecipients === 0) {
-          await admin.from("campaigns").update({
-            status: "sent", sent_at: new Date().toISOString(), recipients_count: 0,
-            last_run_error: null,
-          }).eq("id", c.id);
-          results.push({ id: c.id, sent: 0, note: "no_recipients" });
-          continue;
-        }
-
-        // Invoke send-broadcast with service-role auth
+        // v1.5.0 — Hand the audience off to send-broadcast's chunked pipeline.
+        // We no longer resolve recipients here (that duplicates work and burns
+        // a big chunk of cron isolate time on 5k+ audiences); mode='materialize'
+        // does it once and then self-drives the chunk loop.
         const resp = await fetch(`${supabaseUrl}/functions/v1/send-broadcast`, {
           method: "POST",
           headers: {
@@ -179,7 +129,11 @@ Deno.serve(async (req) => {
             apikey: serviceKey,
             "x-system-call": "scheduled-campaigns",
           },
-          body: JSON.stringify(broadcastBody),
+          body: JSON.stringify({
+            mode: 'materialize',
+            campaign_id: c.id,
+            branch_id: c.branch_id,
+          }),
         });
 
         const body = await resp.json().catch(() => ({}));
@@ -191,25 +145,7 @@ Deno.serve(async (req) => {
           results.push({ id: c.id, error: body?.error });
           continue;
         }
-
-        // send-broadcast v4.x ACKs 202 with { accepted:true, background:true }
-        // and owns the terminal status write itself. Do NOT overwrite the campaign
-        // to 'sent' with success=0 — that races the background loop and made the
-        // UI report "0 delivered / 0 failed" for a still-running campaign.
-        if (body?.background || body?.accepted) {
-          results.push({ id: c.id, accepted: true, total: body?.total ?? totalRecipients });
-        } else {
-          // Legacy synchronous path (kept for older deployments).
-          await admin.from("campaigns").update({
-            status: "sent",
-            sent_at: new Date().toISOString(),
-            recipients_count: totalRecipients,
-            success_count: body.sent || 0,
-            failure_count: body.failed || 0,
-            last_run_error: null,
-          }).eq("id", c.id);
-          results.push({ id: c.id, sent: body.sent || 0, failed: body.failed || 0 });
-        }
+        results.push({ id: c.id, accepted: true, materialized: body?.materialized ?? body?.already_materialized ?? 0 });
       } catch (e: any) {
         await admin.from("campaigns").update({
           status: "failed", last_run_error: e?.message || String(e),
@@ -217,6 +153,48 @@ Deno.serve(async (req) => {
         results.push({ id: c.id, error: e?.message });
       }
     }
+
+    // ── Watchdog: resume any 'sending' campaign that hasn't made progress in
+    // 5+ minutes and still has pending/dispatching recipients. Guarantees the
+    // pipeline recovers if a chunk isolate dies without self-invoking.
+    try {
+      const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: stalled } = await admin
+        .from('campaigns')
+        .select('id, branch_id, last_progress_at')
+        .eq('status', 'sending')
+        .lt('last_progress_at', staleCutoff)
+        .limit(20);
+      for (const s of (stalled || [])) {
+        const { count: pending } = await admin
+          .from('campaign_recipients')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', (s as any).id)
+          .in('status', ['pending', 'dispatching']);
+        if ((pending ?? 0) > 0) {
+          await fetch(`${supabaseUrl}/functions/v1/send-broadcast`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${serviceKey}`,
+              apikey: serviceKey,
+              'x-system-call': 'stalled-reaper',
+            },
+            body: JSON.stringify({ mode: 'chunk', campaign_id: (s as any).id }),
+          }).catch((e) => console.warn('[reaper] resume failed:', e?.message || e));
+          results.push({ id: (s as any).id, resumed: true, pending });
+        } else {
+          // No pending rows but status still 'sending' → close it out.
+          await admin.from('campaigns').update({
+            status: 'sent', sent_at: new Date().toISOString(),
+          }).eq('id', (s as any).id);
+          results.push({ id: (s as any).id, closed_out: true });
+        }
+      }
+    } catch (e: any) {
+      console.warn('[reaper] scan failed:', e?.message || e);
+    }
+
 
     return json({ processed: results.length, results });
   } catch (e: any) {
