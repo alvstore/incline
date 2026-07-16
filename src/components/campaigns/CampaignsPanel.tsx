@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle,
   Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX, Search, BarChart3,
+  RotateCw,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 import { useBranchContext } from '@/contexts/BranchContext';
 import {
   listCampaigns, deleteCampaign, duplicateCampaign, cancelScheduledCampaign,
+  retryFailedCampaign,
   type Campaign,
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
