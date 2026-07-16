@@ -1,3 +1,7 @@
+// v4.3.0 — Batched flush of campaign_recipients (every 5) so partial progress
+//          persists if the edge isolate is recycled mid-send. Fixes the
+//          "337 total / 0 recipients / 0 sent" phantom-sent race. Auto-pause
+//          recomputes from campaign_recipients (in-memory buffer is cleared).
 // v4.2.0 — Accept system calls (service-role bearer OR apikey+x-system-call)
 //          so process-scheduled-campaigns / automation-brain can invoke without
 //          a user JWT. Restores triggered sends for scheduled campaigns.
@@ -384,6 +388,9 @@ Deno.serve(async (req) => {
         }
 
         // Progress ping every 5 recipients so the UI polls something fresh.
+        // Also FLUSH the recipient rows to campaign_recipients — previously we
+        // held them in memory until end-of-loop, so an isolate recycle killed
+        // all visibility (campaign showed 337 total / 0 sent / 0 recipients).
         if (campaign_id && ((sent + failed) % 5 === 0)) {
           try {
             await adminClient.from('campaigns').update({
@@ -392,28 +399,49 @@ Deno.serve(async (req) => {
               last_progress_at: new Date().toISOString(),
             }).eq('id', campaign_id);
           } catch { /* progress writes are best-effort */ }
+          if (recipientRows.length > 0) {
+            try {
+              await adminClient.from('campaign_recipients').insert(recipientRows);
+              recipientRows.length = 0; // clear after flush
+            } catch (e) { console.warn('[send-broadcast] flush recipients failed:', e); }
+          }
         }
       }
 
       if (campaign_id && recipientRows.length > 0) {
-        await adminClient.from('campaign_recipients').insert(recipientRows);
+        try { await adminClient.from('campaign_recipients').insert(recipientRows); }
+        catch (e) { console.warn('[send-broadcast] final flush failed:', e); }
+        recipientRows.length = 0;
+      }
 
-        // Auto-pause the campaign if a large share of failures share a
-        // terminal Meta template code — prevents scheduled cron from
-        // burning through the audience with the same broken template.
+      // Auto-pause the campaign if a large share of failures share a
+      // terminal Meta template code — prevents scheduled cron from
+      // burning through the audience with the same broken template.
+      // We recompute from campaign_recipients (since in-memory buffer was
+      // flushed in batches during the loop).
+      if (campaign_id) {
         const TERMINAL_CODES = ['132000', '132001', '132012', '132018', '131051'];
         const codeCounts: Record<string, number> = {};
-        for (const row of recipientRows) {
-          if (row.status !== 'failed' || !row.error) continue;
-          const m = String(row.error).match(/\b(13\d{4})\b/);
-          if (m && TERMINAL_CODES.includes(m[1])) {
-            codeCounts[m[1]] = (codeCounts[m[1]] || 0) + 1;
+        let sampleFails: Array<{ phone: string | null; error: string | null }> = [];
+        try {
+          const { data: failedRows } = await adminClient
+            .from('campaign_recipients')
+            .select('phone, error')
+            .eq('campaign_id', campaign_id)
+            .eq('status', 'failed');
+          for (const row of (failedRows || [])) {
+            const err = String((row as any).error || '');
+            const m = err.match(/\b(13\d{4})\b/);
+            if (m && TERMINAL_CODES.includes(m[1])) {
+              codeCounts[m[1]] = (codeCounts[m[1]] || 0) + 1;
+            }
           }
-        }
+          sampleFails = (failedRows || []).slice(0, 3).map((r: any) => ({ phone: r.phone, error: r.error }));
+        } catch { /* best effort */ }
         const [worstCode, worstCount] = Object.entries(codeCounts)
           .sort(([, a], [, b]) => b - a)[0] || [null, 0];
-        const shouldPause = worstCode && worstCount >= 3
-          && (worstCount / Math.max(1, recipients.length)) >= 0.25;
+        const shouldPause = worstCode && (worstCount as number) >= 3
+          && ((worstCount as number) / Math.max(1, recipients.length)) >= 0.25;
 
         await adminClient.from('campaigns').update({
           status: shouldPause
@@ -424,7 +452,7 @@ Deno.serve(async (req) => {
           failure_count: failed,
           sent_at: new Date().toISOString(),
           ...(shouldPause ? {
-            last_run_error: `Meta ${worstCode} on ${worstCount}/${recipients.length} recipients — auto-paused. Fix template or recipient data before resuming. Sample: ${recipientRows.filter((r) => r.status === 'failed').slice(0, 3).map((r) => `${r.phone}:${(r.error || '').slice(0, 80)}`).join(' | ')}`,
+            last_run_error: `Meta ${worstCode} on ${worstCount}/${recipients.length} recipients — auto-paused. Fix template or recipient data before resuming. Sample: ${sampleFails.map((r) => `${r.phone}:${(r.error || '').slice(0, 80)}`).join(' | ')}`,
           } : {}),
         }).eq('id', campaign_id);
       }
@@ -620,7 +648,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Progress ping every 5 recipients
+      // Progress ping + flush every 5 recipients — same reason as the
+      // recipients path: don't lose all visibility if the isolate is recycled.
       if (campaign_id && ((sent + failed) % 5 === 0)) {
         try {
           await adminClient.from('campaigns').update({
@@ -629,6 +658,12 @@ Deno.serve(async (req) => {
             last_progress_at: new Date().toISOString(),
           }).eq('id', campaign_id);
         } catch { /* best effort */ }
+        if (memberRecipientRows.length > 0) {
+          try {
+            await adminClient.from('campaign_recipients').insert(memberRecipientRows);
+            memberRecipientRows.length = 0;
+          } catch (e) { console.warn('[send-broadcast members] flush failed:', e); }
+        }
       }
     }
 

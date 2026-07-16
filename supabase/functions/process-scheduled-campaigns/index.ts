@@ -1,10 +1,11 @@
+// v1.4.0 — Respect send-broadcast v4.x async ACK (accepted/background). Do not
+//          overwrite terminal status; broadcast loop owns final campaign state.
+//          Prevents "sent 337 · 0 delivered · 0 failed" race for large audiences.
 // v1.3.0 — Pre-dispatch WhatsApp template status check.
 //          Scheduled campaigns with a template_id are only sent if the linked
 //          `whatsapp_templates` row is APPROVED. PENDING → the scheduled slot
 //          is postponed by 30 minutes (up to a 24h grace window). REJECTED /
 //          DISABLED / PAUSED → campaign fails, in-app + email alert to owner.
-//          Accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain).
-//          Honors audience_kind (members | leads | staff | contacts | mixed | segment).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -191,16 +192,24 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        await admin.from("campaigns").update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          recipients_count: totalRecipients,
-          success_count: body.sent || 0,
-          failure_count: body.failed || 0,
-          last_run_error: null,
-        }).eq("id", c.id);
-
-        results.push({ id: c.id, sent: body.sent || 0, failed: body.failed || 0 });
+        // send-broadcast v4.x ACKs 202 with { accepted:true, background:true }
+        // and owns the terminal status write itself. Do NOT overwrite the campaign
+        // to 'sent' with success=0 — that races the background loop and made the
+        // UI report "0 delivered / 0 failed" for a still-running campaign.
+        if (body?.background || body?.accepted) {
+          results.push({ id: c.id, accepted: true, total: body?.total ?? totalRecipients });
+        } else {
+          // Legacy synchronous path (kept for older deployments).
+          await admin.from("campaigns").update({
+            status: "sent",
+            sent_at: new Date().toISOString(),
+            recipients_count: totalRecipients,
+            success_count: body.sent || 0,
+            failure_count: body.failed || 0,
+            last_run_error: null,
+          }).eq("id", c.id);
+          results.push({ id: c.id, sent: body.sent || 0, failed: body.failed || 0 });
+        }
       } catch (e: any) {
         await admin.from("campaigns").update({
           status: "failed", last_run_error: e?.message || String(e),
