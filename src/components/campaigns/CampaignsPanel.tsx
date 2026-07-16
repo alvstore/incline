@@ -197,6 +197,11 @@ export function CampaignsPanel() {
                             <CalendarX className="h-4 w-4 mr-2" /> Cancel schedule
                           </DropdownMenuItem>
                         )}
+                        {isFailed && (
+                          <DropdownMenuItem onClick={() => retryMut.mutate(c.id)} disabled={retryMut.isPending}>
+                            <RotateCw className="h-4 w-4 mr-2" /> Retry now
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive focus:bg-destructive/10"
