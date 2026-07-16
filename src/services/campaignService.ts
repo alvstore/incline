@@ -148,6 +148,7 @@ export interface Campaign {
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
   fallback_policy?: { on_pacing?: boolean } | null;
+  last_run_error?: string | null;
 }
 
 
@@ -313,6 +314,19 @@ export async function deleteCampaign(id: string): Promise<void> {
 
 export async function cancelScheduledCampaign(id: string): Promise<Campaign> {
   return updateCampaign(id, { status: 'draft' as CampaignStatus, scheduled_at: null, trigger_type: 'send_now' as CampaignTriggerType });
+}
+
+/**
+ * Retry a failed campaign — resets status to 'scheduled' 1 min from now so the
+ * scheduled-campaigns cron picks it up on the next tick. Clears last_run_error.
+ */
+export async function retryFailedCampaign(id: string): Promise<Campaign> {
+  const nextRun = new Date(Date.now() + 60 * 1000).toISOString();
+  return updateCampaign(id, {
+    status: 'scheduled' as CampaignStatus,
+    scheduled_at: nextRun,
+    last_run_error: null as any,
+  } as any);
 }
 
 /**

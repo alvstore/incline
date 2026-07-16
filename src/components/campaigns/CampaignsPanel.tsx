@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Megaphone, Plus, MessageSquare, Mail, CheckCircle2, Clock, AlertTriangle,
   Loader2, MoreVertical, Pencil, Trash2, Copy, CalendarX, Search, BarChart3,
+  RotateCw,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 import { useBranchContext } from '@/contexts/BranchContext';
 import {
   listCampaigns, deleteCampaign, duplicateCampaign, cancelScheduledCampaign,
+  retryFailedCampaign,
   type Campaign,
 } from '@/services/campaignService';
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
@@ -77,6 +79,11 @@ export function CampaignsPanel() {
     mutationFn: (id: string) => cancelScheduledCampaign(id),
     onSuccess: () => { toast.success('Schedule cancelled — moved to draft'); refresh(); },
     onError: (e: any) => toast.error(e?.message || 'Cancel failed'),
+  });
+  const retryMut = useMutation({
+    mutationFn: (id: string) => retryFailedCampaign(id),
+    onSuccess: () => { toast.success('Campaign requeued — will send within 1 minute'); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Retry failed'),
   });
 
   const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
@@ -147,8 +154,9 @@ export function CampaignsPanel() {
             const sb = statusBadge(c.status);
             const Sicon = sb.icon;
             const isScheduled = c.status === 'scheduled' && c.scheduled_at;
-            const editable = c.status === 'draft' || c.status === 'scheduled' || c.status === 'pending_template_approval';
+            const editable = c.status === 'draft' || c.status === 'scheduled' || c.status === 'pending_template_approval' || c.status === 'failed';
             const inFlight = c.status === 'sending';
+            const isFailed = c.status === 'failed';
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => setDetailCampaign(c)} onKeyDown={(e) => { if (e.key === 'Enter') setDetailCampaign(c); }} className="rounded-2xl bg-card p-5 shadow-md shadow/50 hover:shadow-lg hover:ring-1 hover:ring-primary/25 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary relative">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -189,6 +197,11 @@ export function CampaignsPanel() {
                             <CalendarX className="h-4 w-4 mr-2" /> Cancel schedule
                           </DropdownMenuItem>
                         )}
+                        {isFailed && (
+                          <DropdownMenuItem onClick={() => retryMut.mutate(c.id)} disabled={retryMut.isPending}>
+                            <RotateCw className="h-4 w-4 mr-2" /> Retry now
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -202,6 +215,15 @@ export function CampaignsPanel() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.message}</p>
+                {isFailed && c.last_run_error && (
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/25 px-2.5 py-2 mb-3 text-xs text-destructive flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-semibold uppercase tracking-wider text-[10px]">Last failure</p>
+                      <p className="line-clamp-2 break-words">{c.last_run_error}</p>
+                    </div>
+                  </div>
+                )}
                 {isScheduled && (
                   <div className="rounded-lg bg-warning/10 border border-warning/25 px-2.5 py-1.5 mb-3 text-xs text-warning flex items-center gap-1.5">
                     <Clock className="h-3 w-3" />

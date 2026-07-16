@@ -1,3 +1,6 @@
+// v4.2.0 — Accept system calls (service-role bearer OR apikey+x-system-call)
+//          so process-scheduled-campaigns / automation-brain can invoke without
+//          a user JWT. Restores triggered sends for scheduled campaigns.
 // v4.1.0 — Auto-fallback to RCS/SMS on Meta pacing (131049/130472) when
 //          `campaigns.fallback_policy.on_pacing` is true. Records
 //          `fallback_used/fallback_channel/pacing_code` on campaign_recipients.
@@ -28,32 +31,49 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-    }
+    const apikeyHeader = req.headers.get("apikey") || "";
+    const sysCall = req.headers.get("x-system-call") || "";
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const authClient = createClient(supabaseUrl, supabaseAnon, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace("Bearer ", ""));
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    // System-call gate — allows scheduled-campaigns cron and automation-brain
+    // to invoke without a user JWT. Either:
+    //   1. Authorization: Bearer <SERVICE_ROLE_KEY>, OR
+    //   2. apikey: <SERVICE_ROLE_KEY> + x-system-call: <caller>
+    const bearer = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
+    const isSystem =
+      (bearer && bearer === supabaseServiceKey) ||
+      (apikeyHeader === supabaseServiceKey && sysCall.length > 0);
+
+    let userId: string | null = null;
+
+    if (!isSystem) {
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+      }
+      const authClient = createClient(supabaseUrl, supabaseAnon, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace("Bearer ", ""));
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+      }
+      userId = claimsData.claims.sub as string;
     }
-    const userId = claimsData.claims.sub as string;
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: roleData } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .in("role", ["owner", "admin", "manager", "staff"]);
-    if (!roleData || roleData.length === 0) {
-      return new Response(JSON.stringify({ error: "Forbidden: Staff access required" }), { status: 403, headers: corsHeaders });
+    if (!isSystem && userId) {
+      const { data: roleData } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .in("role", ["owner", "admin", "manager", "staff"]);
+      if (!roleData || roleData.length === 0) {
+        return new Response(JSON.stringify({ error: "Forbidden: Staff access required" }), { status: 403, headers: corsHeaders });
+      }
     }
 
     const { channel, message, audience, branch_id, subject, member_ids, recipients, campaign_id, template_id, variables, attachment_url, attachment_kind, attachment_filename, retry } = await req.json();

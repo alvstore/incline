@@ -1,85 +1,132 @@
-## Audit findings
+## Root cause of "CHOOSE_WHAT_DESERVES" not triggering
 
-1. **The send itself is working now**
-   - Recent sends to `+919887601200` reached WhatsApp and were marked **read**.
-   - They used the MM WhatsApp route and template `campaign_1784104215124`.
+Audit trail:
+- Cron rule `process_scheduled_campaigns` fires every minute and is healthy (last_status=success).
+- It picks the due campaign, locks it to `sending`, resolves audience, then POSTs to `send-broadcast` with `Authorization: Bearer <SERVICE_ROLE_KEY>`.
+- `send-broadcast` v4.1.0 authenticates via `authClient.auth.getClaims(token)` — a **user JWT check**. A service-role key is not a user JWT, so `getClaims` fails and the function returns **HTTP 401 `Unauthorized`**.
+- `process-scheduled-campaigns` writes that string to `campaigns.last_run_error = "Unauthorized"` and flips status to `failed`. Zero recipients ever resolved because the audience branch (`audience_kind='contacts'`) also runs, but the send never happens.
+- On the UI: Edit is disabled for `status='failed'`, so the user can't recover the campaign — only Duplicate works, and the duplicate would fail again for the same reason.
 
-2. **Why the message says “Hi Test”**
-   - The Campaign Wizard test-send path hardcodes the test recipient name as `Test User`.
-   - That becomes `first_name = Test`, so Meta receives the approved template variable `{{1}} = Test`.
-   - This is not a Meta sync failure for the latest send; it is our test-send code using a fake name instead of resolving the real lead/member/contact name for the phone number.
+Same class of bug already fixed in `mips-access` and `automation-brain` (system-call gate). `send-broadcast` was missed.
 
-3. **Why earlier “unknown” happened**
-   - The old UI interpreted the async broadcast ACK as a failed test.
-   - That was partly fixed by switching test-send to `dispatch-communication`, but the catch block still falls back to generic messages if the function error body is nested.
-
-4. **Campaign risk found during audit**
-   - The newer explicit-recipient broadcast path builds `first_name`, `member_name`, and positional `1` correctly.
-   - The legacy `member_ids` path does **not** pass per-member WhatsApp template variables, so member-only campaigns can still send empty/fallback variables or stale placeholder rendering.
+---
 
 ## Fix plan
 
-### 1. Fix Campaign Wizard test-send personalization
-**File:** `src/components/campaigns/CampaignWizard.tsx`
+### 1. `supabase/functions/send-broadcast/index.ts` — accept system calls
+Add a system-call gate BEFORE `getClaims`:
+- If `Authorization: Bearer <SERVICE_ROLE_KEY>` OR (`apikey === SERVICE_ROLE_KEY` and `x-system-call` present) → treat as system, skip user-role check, skip `getClaims`.
+- Otherwise keep the existing user JWT + `user_roles ∈ (owner,admin,manager,staff)` gate.
+- Bump header to `// v4.2.0 — system-call gate for scheduled campaigns / automation-brain`.
 
-- Before sending a WhatsApp/SMS/RCS test, look up the entered phone in the backend:
-  - `profiles.phone`
-  - `leads.phone`
-  - `contacts.phone`
-- Use the best matching real name as the test variable source.
-- Fallback only if no record exists:
-  - full name: `Test User`
-  - first name: `Test`
-- Send Meta variables as:
-  - `first_name`
-  - `member_name`
-  - `full_name`
-  - `name`
-  - positional aliases `1`, `v1`, `param1`
-- Update the success toast to show which name was used, so testing is auditable.
+### 2. `supabase/functions/process-scheduled-campaigns/index.ts` — send system-call headers
+Post to send-broadcast with both:
+```
+apikey: <SERVICE_ROLE_KEY>
+x-system-call: scheduled-campaigns
+Authorization: Bearer <SERVICE_ROLE_KEY>
+```
+(defense in depth — either gate satisfies the new fn).
 
-### 2. Fix unknown test errors
-**File:** `src/components/campaigns/CampaignWizard.tsx`
+### 3. Unstick the current failed campaign
+One-time UPDATE via migration or admin action:
+```sql
+update campaigns
+set status='scheduled',
+    scheduled_at = now() + interval '2 minutes',
+    last_run_error = null
+where id='264bd41f-4d46-4bfc-af98-36fc926bfd1f';
+```
+Next cron tick will pick it up cleanly.
 
-- Replace the generic catch fallback with a robust error extractor that checks:
-  - `error.message`
-  - edge function response body from `error.context`
-  - `meta_error`, `meta_code`, `reason`, `error_message`
-- Show specific errors like `132018 template_param_empty`, `131049 Meta pacing`, or `template_stale_in_meta` instead of “unknown”.
+### 4. `CampaignsPanel.tsx` — recover from failed
+- Allow **Edit** when `status in ('draft','scheduled','pending_template_approval','failed')` — editing a failed campaign resets it to `draft` in the wizard save path.
+- Add a first-class **"Retry"** dropdown item for `status='failed'` that resets to `scheduled` with `scheduled_at = now()+1min` and clears `last_run_error` (single RPC or update).
+- Show `last_run_error` inline on the failed card (currently hidden).
 
-### 3. Fix legacy member broadcast template variables
-**File:** `supabase/functions/send-broadcast/index.ts`
+---
 
-- In the `member_ids` dispatch loop, build the same per-recipient variable map already used by the explicit `recipients` path:
-  - `member_name`
-  - `full_name`
-  - `first_name`
-  - `name`
-  - `member_code`
-  - `1`, `v1`, `param1`
-- Pass those variables to `dispatch-communication` for WhatsApp template sends.
-- Add the same missing-name guard for WhatsApp approved templates so Meta does not receive empty name parameters.
+## Marketing & Campaigns — full UI/UX redesign (2026, /skill:ui-ux-pro-max)
 
-### 4. Improve dispatcher response detail for MM/Meta failures
-**File:** `supabase/functions/dispatch-communication/index.ts`
+Applies UUPM design-system output to the Vuexy token set (indigo/violet, Inter, rounded-2xl, soft slate shadows). Scope: `src/components/campaigns/*` + the Campaigns tab inside `/announcements`.
 
-- When `send-whatsapp` returns a function error, preserve the structured JSON body in the final `communication_logs.error_message` and response reason.
-- Include `provider_route`, `meta_code`, `meta_subcode`, and `fbtrace_id` when available.
+### New layout
+```
+┌─ Header ─────────────────────────────────────────────────────────┐
+│  Marketing & Campaigns          [+ New campaign]  [+ Announce]  │
+│  Segmented / recurring sends with attachments · WA · SMS · Email│
+└─────────────────────────────────────────────────────────────────┘
+┌─ KPI Row (5 gradient/soft cards) ───────────────────────────────┐
+│ Sent 30d │ Delivery% │ Read% │ Failure% │ Meta pacing hits 7d   │
+└─────────────────────────────────────────────────────────────────┘
+┌─ Filters strip ─────────────────────────────────────────────────┐
+│ [All] [Draft] [Scheduled] [Sending] [Sent] [Failed]  [Channel▾]│
+│ [Date range]  🔍 search                                         │
+└─────────────────────────────────────────────────────────────────┘
+┌─ Campaign cards (rounded-2xl, shadow-lg) ───────────────────────┐
+│  Name · channel chip · status badge · schedule chip · … menu    │
+│  Preview snippet (2 lines)                                       │
+│  Mini funnel bar: Total → Delivered → Read → Failed             │
+│  Failure reason banner (if failed, red-50 pill w/ code + hint)  │
+│  Footer: recipients, created_by avatar, "View report"           │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-### 5. Deploy and test
+### CampaignReportDrawer (redesign)
+Right-side Sheet, `sm:max-w-2xl`, three vertical sections:
 
-- Deploy changed backend functions:
-  - `send-broadcast`
-  - `dispatch-communication`
-- Run a direct test send to `+919887601200` through the Campaign Wizard path.
-- Verify backend rows show:
-  - delivery status is `sent/read` or a specific Meta error
-  - `content` has the resolved name, not unresolved `{{1}}`
-  - `delivery_metadata.provider_route` is `mm_api` or `cloud_api`
+1. **Header** — name, channel, status, template name, created info, primary actions `Reconcile now`, `Retry failed (n)`, `Re-trigger to all`.
+2. **Funnel strip** — 5 gradient stat cards (Total / Sent / Delivered / Read / Failed) with 24h delta arrows.
+3. **Delivery timeline** — sparkline of send/delivered/read/failed per 5-min bucket (pulled from `campaign_recipients.updated_at` — already stored).
+4. **Failure breakdown card** — grouped by `meta_code / reason` with human labels from `src/lib/comms/metaErrorLabels.ts`:
+   - `131049 — Meta pacing (recipient engagement)` · count + "Fall back to SMS" button
+   - `132000 — Template variable mismatch` · count + "Fix template" link
+   - `pacing_cooldown_24h — dispatcher suppressed` · count
+   - `template_stale_in_meta` · count + "Resync template" button
+   - Free-text errors bucketed into "Other".
+5. **Recipients table** — sticky-header, filter chips `All / Delivered / Failed / Pending`, columns: Name · Phone · Status badge · Reason (truncated + tooltip) · Sent at · Action (Retry). Row hover, virtualized if >100 rows.
 
-## Expected result
+### Editing / Retry
+- Wizard opens for `draft | scheduled | failed`. Editing a `failed` campaign resets to `draft` (saved via wizard's existing patch).
+- New dropdown items in card menu: **Retry now**, **Fall back to SMS/RCS**, **Reschedule…**.
 
-- If the phone number exists as a lead/contact/member, the test WhatsApp will say the real name instead of `Test`.
-- If the number is only a manual test number, it will still say `Test` by design.
-- Campaign broadcasts will use each recipient’s own name consistently.
-- “Unknown” failures will become actionable Meta/provider errors.
+### CampaignWizard polish
+- Replace channel chip row with segmented Vuexy chips (violet-600 active).
+- Step 3 (Creative) drops file preview cards with size + kind pill.
+- Recipient step: audience count updates live via `resolve_campaign_audience` preview RPC; show top 5 sample recipient names.
+- Review step: green-emerald "Ready to send" summary card, or amber "Template pending Meta approval — will queue" banner.
+
+### Empty / loading / error states
+- Empty: centered SVG (existing lucide `MessageSquare`), "Launch your first campaign" CTA.
+- Loading: 3 skeleton cards matching new card height.
+- Error: red-50 banner with `Retry` (calls `queryClient.invalidateQueries`).
+
+### Accessibility
+- Every icon-only action has `aria-label`.
+- Status badges use text + color (never color alone).
+- All cards are keyboard-focusable, focus ring `focus:ring-2 focus:ring-indigo-500`.
+
+---
+
+## Files changed
+
+Backend
+- `supabase/functions/send-broadcast/index.ts` — v4.2.0 system-call gate
+- `supabase/functions/process-scheduled-campaigns/index.ts` — send `apikey`+`x-system-call`
+- One-time SQL to reset stuck campaign
+
+Frontend
+- `src/components/campaigns/CampaignsPanel.tsx` — allow edit/retry on failed, inline error, redesigned card, KPI row, filter strip
+- `src/components/campaigns/CampaignReportDrawer.tsx` — funnel, failure breakdown, timeline, recipient table
+- `src/components/campaigns/CampaignWizard.tsx` — reset failed→draft on save, wizard polish
+- `src/lib/comms/metaErrorLabels.ts` — extend map with product-facing hints (fall-back suggestions)
+
+---
+
+## Verification
+
+1. Reset the stuck campaign via the SQL above; watch cron tick — expect `status='sent'` within 1 min.
+2. Curl `send-broadcast` with `Authorization: Bearer <SERVICE_KEY>` → 200 (was 401).
+3. Curl same fn with a normal user JWT → still 200; with anon → 401.
+4. UI check: failed card now shows "Unauthorized" reason, Edit + Retry are enabled.
+5. Redesigned report drawer renders funnel + failure breakdown for a real campaign with mixed failures.

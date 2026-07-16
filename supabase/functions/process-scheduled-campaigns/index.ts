@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
           subject: c.subject,
           branch_id: c.branch_id,
           campaign_id: c.id,
+          template_id: c.template_id ?? undefined,
           attachment_url: c.attachment_url ?? undefined,
           attachment_kind: c.attachment_kind ?? undefined,
           attachment_filename: c.attachment_filename ?? undefined,
@@ -174,6 +175,8 @@ Deno.serve(async (req) => {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+            "x-system-call": "scheduled-campaigns",
           },
           body: JSON.stringify(broadcastBody),
         });
