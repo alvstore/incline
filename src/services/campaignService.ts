@@ -148,6 +148,7 @@ export interface Campaign {
   campaign_type?: 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
   event_meta?: Record<string, any>;
   fallback_policy?: { on_pacing?: boolean } | null;
+  last_run_error?: string | null;
 }
 
 
