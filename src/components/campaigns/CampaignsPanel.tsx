@@ -215,6 +215,15 @@ export function CampaignsPanel() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{c.message}</p>
+                {isFailed && c.last_run_error && (
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/25 px-2.5 py-2 mb-3 text-xs text-destructive flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-semibold uppercase tracking-wider text-[10px]">Last failure</p>
+                      <p className="line-clamp-2 break-words">{c.last_run_error}</p>
+                    </div>
+                  </div>
+                )}
                 {isScheduled && (
                   <div className="rounded-lg bg-warning/10 border border-warning/25 px-2.5 py-1.5 mb-3 text-xs text-warning flex items-center gap-1.5">
                     <Clock className="h-3 w-3" />
