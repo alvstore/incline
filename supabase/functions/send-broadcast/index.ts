@@ -1,3 +1,6 @@
+// v4.2.0 — Accept system calls (service-role bearer OR apikey+x-system-call)
+//          so process-scheduled-campaigns / automation-brain can invoke without
+//          a user JWT. Restores triggered sends for scheduled campaigns.
 // v4.1.0 — Auto-fallback to RCS/SMS on Meta pacing (131049/130472) when
 //          `campaigns.fallback_policy.on_pacing` is true. Records
 //          `fallback_used/fallback_channel/pacing_code` on campaign_recipients.
