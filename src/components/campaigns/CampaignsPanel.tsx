@@ -80,6 +80,11 @@ export function CampaignsPanel() {
     onSuccess: () => { toast.success('Schedule cancelled — moved to draft'); refresh(); },
     onError: (e: any) => toast.error(e?.message || 'Cancel failed'),
   });
+  const retryMut = useMutation({
+    mutationFn: (id: string) => retryFailedCampaign(id),
+    onSuccess: () => { toast.success('Campaign requeued — will send within 1 minute'); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Retry failed'),
+  });
 
   const openCreate = () => { setEditingCampaign(null); setWizardOpen(true); };
   const openEdit = (c: Campaign) => { setEditingCampaign(c); setWizardOpen(true); };
