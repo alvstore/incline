@@ -589,18 +589,22 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         const pickMatch = (rows: Array<{ full_name?: string | null; phone?: string | null }> | null | undefined) =>
           (rows || []).find((row) => phoneLast10(row.phone || '') === targetLast10 && String(row.full_name || '').trim());
 
-        const [leadRes, contactRes, profileRes] = await Promise.all([
+        const [leadRes, contactRes, profileRes, chatRes] = await Promise.all([
           supabase.from('leads').select('full_name, phone').eq('branch_id', branchId).ilike('phone', `%${last4}%`).limit(25),
           supabase.from('contacts').select('full_name, phone').eq('branch_id', branchId).ilike('phone', `%${last4}%`).limit(25),
           supabase.from('profiles').select('full_name, phone').ilike('phone', `%${last4}%`).limit(25),
+          supabase.from('whatsapp_chat_settings').select('contact_name, phone_number').eq('branch_id', branchId).ilike('phone_number', `%${last4}%`).limit(25),
         ]);
         const leadMatch = pickMatch(leadRes.data as any[]);
         const contactMatch = pickMatch(contactRes.data as any[]);
         const profileMatch = pickMatch(profileRes.data as any[]);
-        const matched = leadMatch || contactMatch || profileMatch;
+        const chatMatch = (chatRes.data || [])
+          .map((row: any) => ({ full_name: String(row.contact_name || '').replace(/^@+/, '').trim(), phone: row.phone_number }))
+          .find((row: any) => phoneLast10(row.phone || '') === targetLast10 && row.full_name);
+        const matched = leadMatch || contactMatch || profileMatch || chatMatch;
         if (matched?.full_name?.trim()) {
           testName = matched.full_name.trim();
-          nameSource = leadMatch ? 'lead record' : contactMatch ? 'contact record' : 'profile record';
+          nameSource = leadMatch ? 'lead record' : contactMatch ? 'contact record' : profileMatch ? 'profile record' : 'WhatsApp contact';
         }
       }
       const firstName = testName.split(/\s+/)[0];
