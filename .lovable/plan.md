@@ -1,75 +1,65 @@
-## Root causes (verified with DB + code inspection)
+## Cluster 1 — `mips_sweep_expired_access` 401 Unauthorized (27 occurrences)
 
-**1. Only one device shows in CRM (Gate 2), Gate 1 hidden**
-`MIPSDevicesTab.tsx` filters MIPS devices by matching `deviceKey` against rows in `access_devices`. Only `F06D92740D0062CF` is registered locally, so `D1146D682A96B1C2` (Gate 1) is stripped out even though MIPS returns it. Requiring manual "Add Device" for hardware already visible on the MIPS server is redundant.
+**Root cause (confirmed by code read):**
+- `automation-brain/index.ts` `callEdge()` invokes worker functions with headers `{ apikey: SERVICE_KEY, x-system-call: "automation-brain" }` — **no `Authorization` header**.
+- `mips-access/index.ts` auth gate (v2.1.0, lines 434–461) only accepts `Authorization: Bearer <SERVICE_KEY>` OR a user JWT with owner/admin/manager role. It does not honor `x-system-call`.
+- Result: every 30-min cron tick invokes `edge:mips-access` → 401 → automation_runs records `error`. This is the sole cause of the 27 occurrences.
 
-**2. Love Kumar Paliwal syncs as "Unknown" with no email/gender/DOB and wrong dates**
-Member `INC-26-0004` has `user_id = NULL`, `biometric_photo_url = NULL`, and no `active` membership yet. The sync-to-mips function only joins `profiles:user_id` and only loads `memberships` where `status='active'`. Result: name="Unknown", email/phone empty, dates default to today→2099-12-31. The lead row already holds `full_name`, `email`, `phone` — we're just not reading them.
+**Fix (one file):** `supabase/functions/mips-access/index.ts`
 
-**3. Trainers/employees missing department, birthday, gender, email, mobile on MIPS**
-`sync-to-mips` sends a fixed payload: hardcoded `gender:"M"`, no `birthday`, no `deptName`, and `mobile/email` only come from `profiles`. Employees.department, employees.date_of_birth, employees.gender, trainer specialization etc. are never sent. MIPS Employee Management screen therefore shows blanks.
+Replace the auth gate to also accept the internal system-call header (mirroring the pattern already in `automation-brain/index.ts` v2.3.0):
 
-**4. Converted-from-lead members have no profile / login ID**
-`convert_lead_to_member` RPC creates a `members` row but does NOT create an `auth.users` + `profiles` row, so the member has no `user_id`, cannot log in, and cascades into the "Unknown" MIPS problem.
+```ts
+const authHeader = req.headers.get("Authorization") || "";
+const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+const apikey = req.headers.get("apikey") || "";
+const sysCall = req.headers.get("x-system-call") || "";
+const isService =
+  (bearer && bearer === SERVICE_KEY) ||
+  (apikey === SERVICE_KEY && sysCall === "automation-brain");
+if (!isService) {
+  // …existing user-JWT + role check unchanged…
+}
+```
 
----
-
-## Plan
-
-### A. Auto-import devices from MIPS (removes "add in CRM" friction)
-- **MIPSDevicesTab**: stop hiding MIPS-server devices that aren't in `access_devices`. Show every device the MIPS server returns for the branch; overlay `branchName / publicIp / doorRole` only when a local mapping exists. If a device has no local mapping, show an inline "Register in CRM" button that creates the `access_devices` row (SN + branch pre-filled) with one click.
-- New edge function `mips-import-devices` (service-role): pulls `/through/device/list`, upserts into `access_devices` by `serial_number` (never overwriting `branch_id` / `door_role` / `public_ip` if already set), stamps `mips_device_id`, `is_online`, `last_seen_at`. Wire it to the existing `mips_reconcile_devices` cron so new hardware auto-appears without any manual step.
-
-### B. Fix personnel data sent to MIPS (`sync-to-mips` v1.5.0)
-Before calling `/personInfo/person`, build a merged profile from every available source, in priority order:
-
-1. **Members** — `profiles(user_id)` → `leads(lead_id)` → member row fallback. Extract `name, email, phone, gender, date_of_birth, avatar_url`. If `biometric_photo_url` is null, fall back to `avatar_url`.
-2. **Employees** — merge `profiles + employees` (department, position, date_of_birth, gender, personal_email, personal_phone).
-3. **Trainers** — merge `profiles + trainers` (specialization → deptName, DOB, gender, personal contacts).
-
-Enrich the outbound payload with the fields the RuoYi API actually accepts:
-- `name`, `mobile`, `email` (never send empty string; omit when unknown so MIPS keeps prior value)
-- `gender`: `"M"` / `"F"` / `"U"` from CRM data — not hardcoded
-- `birthday`: `YYYY-MM-DD` from DOB
-- `deptId` + `deptName`: `100/"Members"`, `101/"Staff"`, `102/"Trainer"` (add a dept lookup helper)
-- `remark`: department + position for staff, plan name for members
-
-**Validity dates for members** — load the newest membership regardless of status (active + frozen + future + expired) and pick:
-- Active → `start_date` → `end_date`
-- Frozen → `start_date` → `end_date` (paused, but MIPS still needs a window)
-- Future → future `start_date` → `end_date` (so access opens only on start day)
-- Expired → `validTimeEnd = REVOKED_DATE` (blocks access)
-- No membership → 24h probation window, not 2099
-
-Log the final payload so future field additions are traceable.
-
-### C. Ensure converted leads get a real profile/login
-Extend `convert_lead_to_member` RPC:
-1. If lead has a phone or email and no matching `auth.users`, mint a member auth user via a small edge function `provision-member-login` (service-role, uses `admin.createUser`, random password, `email_confirm=true`).
-2. Insert into `profiles` (id, full_name, email, phone, avatar_url) copied from the lead.
-3. Set `members.user_id`.
-4. Fire the existing `member_welcome` communication trigger so the member gets a set-password link.
-
-Existing broken row (`INC-26-0004`) is backfilled by running the same edge function once, then re-syncing to MIPS.
-
-### D. CURL verification harness
-Add `supabase/functions/mips-field-probe/index.ts` (service-role, one-shot): calls `/personInfo/person/list?pageSize=1`, `/through/device/list`, `/system/dept/list`, and returns the raw JSON keys so we can lock the payload contract in code + docs. Run it once from the "Debug" tab and paste result into `.lovable/mips-api-reference.md`.
-
-### E. UI polish
-- **Personnel Sync** cards show DOB, gender, department, email, phone chips when present, and a red "Missing fields" pill when any are empty — so operators can fix data in CRM before re-syncing.
-- Device Command Center: online/offline count now reflects raw MIPS list (not filtered), with a "Register X unmapped devices" prompt.
+Bump header to `// v2.2.0 — accept x-system-call from automation-brain`. Then redeploy `mips-access`, click **Run Now** on the rule, verify `automation_runs` shows `success` and `error_logs` count stops climbing.
 
 ---
 
-## Files touched
+## Issue 2 — MM (Meta Cloud) WhatsApp broadcast: "Test failed — Unknown" for marketing template
 
-- `supabase/functions/sync-to-mips/index.ts` — merged profile loader, membership-aware validity, dept lookup, enriched payload, gender/DOB/deptName
-- `supabase/functions/mips-import-devices/index.ts` — NEW, auto-upsert
-- `supabase/functions/provision-member-login/index.ts` — NEW, mint auth user + profile
-- `supabase/functions/mips-field-probe/index.ts` — NEW, diagnostic
-- Migration: extend `convert_lead_to_member` RPC to call provisioning + copy lead → profile; add `automation_rules` row for `mips_import_devices` (every 15 min)
-- `src/components/devices/MIPSDevicesTab.tsx` — show all, unmapped inline register button
-- `src/components/devices/PersonnelSyncTab.tsx` — data-quality chips
-- `src/services/mipsService.ts` — `importDevicesFromMips()` helper
+**Investigation plan (before code changes):**
 
-No changes to member-facing checkout, billing, or RLS beyond the RPC extension.
+1. **Reproduce with real curl** against `dispatch-communication` for `+919887601200`, using the exact template shown in the screenshot (`choose_what_deserves_your_effort`, category `marketing`). Capture:
+   - Meta Graph API HTTP status + full JSON error (code / subcode / details).
+   - Row written to `communication_logs` (delivery_status, error_message, provider_message_id).
+2. Read `dispatch-communication/index.ts` marketing branch to confirm which of these fires:
+   - 24h `pacing_cooldown_24h` suppression (docs/communication-dispatcher.md) → surfaces as `suppressed` but campaign UI may show "unknown".
+   - Template-parameter mismatch (variable count vs. approved template body).
+   - Header media missing for templates that require `image/video/document` header.
+   - Wrong WABA/phone_number_id for MM (multi-tenant) — the "MM" provider row in `integration_settings` may be pointed at a different phone number than the approved template's WABA.
+3. Inspect `campaign_recipients.error_message` / `communication_logs.error_message` for the last failed broadcast to `+919887601200` to get the concrete Meta error code.
+
+**Most likely root causes (ranked, based on prior debugging patterns in this project):**
+
+- **A.** Client-side "Test" button surfaces raw `Error` object without `.message` → user sees "Unknown". Actual failure is one of B/C/D below but hidden.
+- **B.** Marketing template requires a **header media** (image/PDF) — Meta rejects with `#132000` "parameter_count_mismatch" when header is empty; template is approved but send-time payload omits header_handle. Dispatcher v1.6.0 injects `{{document_link}}` only for document-event templates, not marketing.
+- **C.** Recipient outside 24h window + template variable resolution returns empty string → Meta rejects with `#132001` "template_param_missing".
+- **D.** `pacing_cooldown_24h` from a prior `131049` on the same recipient — dispatcher inserts `suppressed` and returns without provider call; UI treats non-`sent` status as failure.
+
+**Fix plan (executed after step 1–3 confirms the code):**
+
+1. **`src/components/campaigns/CampaignWizard.tsx`** (or the "Test send" handler wherever "Test failed — Unknown" is thrown): surface `error.message ?? error.reason ?? JSON.stringify(error)` instead of bare "Unknown", and show the `communication_logs.error_message` when status is `failed` / `suppressed`.
+2. **`supabase/functions/dispatch-communication/index.ts`**: for `channel='whatsapp' + category='marketing'` sends with a `template_id`, validate that any header component of type `IMAGE/VIDEO/DOCUMENT` has a corresponding `attachment_url` in the payload; return a specific error `template_header_media_required` instead of forwarding to Meta.
+3. **`supabase/functions/send-whatsapp/index.ts`**: propagate Meta's `error.code`, `error.error_subcode`, and `error.error_data.details` verbatim into `communication_logs.error_message` so operators see the real cause.
+4. **CURL harness**: add a new edge fn `whatsapp-template-probe` (service-role) that takes `{ template_name, recipient, variables?, header_media_url? }`, calls `/messages` directly on the currently-active MM integration row, and returns the full Meta response — for one-shot debugging without touching campaigns.
+5. **End-to-end verify**: send the approved `choose_what_deserves_your_effort` template to `+919887601200` via the probe, then via the Campaign Wizard, and confirm both land or return a specific actionable error.
+
+### Deliverables
+
+- `supabase/functions/mips-access/index.ts` — auth-gate patch (Cluster 1, done in the same turn).
+- `supabase/functions/whatsapp-template-probe/index.ts` — new debug function.
+- `supabase/functions/dispatch-communication/index.ts` — header-media validation + verbose error passthrough.
+- `supabase/functions/send-whatsapp/index.ts` — verbose Meta error capture.
+- `src/components/campaigns/CampaignWizard.tsx` — surface real error message.
+- Redeploy affected functions; test-send to +91 98876 01200 and paste the resulting `communication_logs` row.

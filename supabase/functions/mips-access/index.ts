@@ -1,3 +1,4 @@
+// v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
 // Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
