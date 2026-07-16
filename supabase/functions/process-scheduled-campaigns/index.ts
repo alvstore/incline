@@ -50,13 +50,13 @@ Deno.serve(async (req) => {
       .limit(20);
 
     if (error) throw error;
-    if (!due || due.length === 0) {
-      return json({ processed: 0 });
-    }
+    // NOTE: don't early-return when `due` is empty — we still need to run the
+    // stalled-campaign watchdog block below (v1.5.0).
 
     const results: any[] = [];
+    const dueList = due || [];
 
-    for (const c of due) {
+    for (const c of dueList) {
       // ── Pre-dispatch WhatsApp template gate ──
       // If this campaign was scheduled while its template was still pending
       // Meta approval, re-check status live. APPROVED → send. REJECTED/etc →
