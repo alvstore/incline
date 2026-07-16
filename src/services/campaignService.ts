@@ -317,6 +317,19 @@ export async function cancelScheduledCampaign(id: string): Promise<Campaign> {
 }
 
 /**
+ * Retry a failed campaign — resets status to 'scheduled' 1 min from now so the
+ * scheduled-campaigns cron picks it up on the next tick. Clears last_run_error.
+ */
+export async function retryFailedCampaign(id: string): Promise<Campaign> {
+  const nextRun = new Date(Date.now() + 60 * 1000).toISOString();
+  return updateCampaign(id, {
+    status: 'scheduled' as CampaignStatus,
+    scheduled_at: nextRun,
+    last_run_error: null as any,
+  } as any);
+}
+
+/**
  * Insert-or-update a campaign row tied to a WhatsApp template that was just
  * submitted to Meta. Keeps the campaign visible in the Campaigns list with a
  * "pending_template_approval" badge so the user can schedule/send it once
