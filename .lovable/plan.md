@@ -1,132 +1,146 @@
-## Root cause of "CHOOSE_WHAT_DESERVES" not triggering
 
-Audit trail:
-- Cron rule `process_scheduled_campaigns` fires every minute and is healthy (last_status=success).
-- It picks the due campaign, locks it to `sending`, resolves audience, then POSTs to `send-broadcast` with `Authorization: Bearer <SERVICE_ROLE_KEY>`.
-- `send-broadcast` v4.1.0 authenticates via `authClient.auth.getClaims(token)` — a **user JWT check**. A service-role key is not a user JWT, so `getClaims` fails and the function returns **HTTP 401 `Unauthorized`**.
-- `process-scheduled-campaigns` writes that string to `campaigns.last_run_error = "Unauthorized"` and flips status to `failed`. Zero recipients ever resolved because the audience branch (`audience_kind='contacts'`) also runs, but the send never happens.
-- On the UI: Edit is disabled for `status='failed'`, so the user can't recover the campaign — only Duplicate works, and the duplicate would fail again for the same reason.
+# Reliable Chunked Broadcast Pipeline (reuse `send-broadcast`)
 
-Same class of bug already fixed in `mips-access` and `automation-brain` (system-call gate). `send-broadcast` was missed.
+## Problem (recap)
 
----
+`send-broadcast` runs the entire audience in one edge invocation. Isolates get recycled around ~150 s / CPU-quota, which is why the 337-recipient campaign dispatched ~30 messages, wrote 0 `campaign_recipients`, and looked "sent 0/0". We already batched the flush; now we need to eliminate the "one giant loop" itself so no invocation ever handles more than 20 recipients.
 
-## Fix plan
+## Goal
 
-### 1. `supabase/functions/send-broadcast/index.ts` — accept system calls
-Add a system-call gate BEFORE `getClaims`:
-- If `Authorization: Bearer <SERVICE_ROLE_KEY>` OR (`apikey === SERVICE_ROLE_KEY` and `x-system-call` present) → treat as system, skip user-role check, skip `getClaims`.
-- Otherwise keep the existing user JWT + `user_roles ∈ (owner,admin,manager,staff)` gate.
-- Bump header to `// v4.2.0 — system-call gate for scheduled campaigns / automation-brain`.
+- ≤ **20 recipients per invocation** — safe under isolate limits.
+- Every dispatched row persisted immediately.
+- Campaign auto-resumes until every recipient is processed.
+- Pacing between sends to reduce Meta 131049 rejections.
+- No new edge function — extend `send-broadcast` with a `mode` switch.
 
-### 2. `supabase/functions/process-scheduled-campaigns/index.ts` — send system-call headers
-Post to send-broadcast with both:
+## Architecture
+
+```text
+CampaignWizard ──► campaigns row (status=scheduled)
+                        │
+        cron/5min ──► process-scheduled-campaigns
+                        │
+                        └─► send-broadcast { mode:'materialize', campaign_id }
+                                 │
+                                 │  writes N rows → campaign_recipients(status=pending)
+                                 │  sets campaigns.status='sending'
+                                 │
+                                 └─► send-broadcast { mode:'chunk', campaign_id, batch_size:20 }
+                                          │
+                                          ├─ pulls next 20 pending rows (FOR UPDATE SKIP LOCKED)
+                                          ├─ dispatches via dispatch-communication
+                                          ├─ updates each row (status/error/pacing_code/…)
+                                          ├─ updates campaigns counters
+                                          └─ if pending remaining:
+                                                fire-and-forget fetch(SELF, mode:'chunk')
+                                                (EdgeRuntime.waitUntil, 3 s gap)
+                                             else:
+                                                status='sent', sent_at=now(), notify
 ```
-apikey: <SERVICE_ROLE_KEY>
-x-system-call: scheduled-campaigns
-Authorization: Bearer <SERVICE_ROLE_KEY>
-```
-(defense in depth — either gate satisfies the new fn).
 
-### 3. Unstick the current failed campaign
-One-time UPDATE via migration or admin action:
+Every chunk is a fresh isolate — 337 recipients ≈ 17 chunks, each ~30 s. Nothing ever stalls.
+
+## Changes — all inside `send-broadcast/index.ts`
+
+### 1. Add a `mode` router at the top of the handler
+
+```
+mode = body.mode ?? 'auto'
+  'materialize' → materialize recipients, then self-invoke mode='chunk', ACK 202
+  'chunk'       → process one batch of ≤20, self-invoke again if more pending
+  'auto'        → legacy path (ad-hoc/member_ids, ≤ 50) — keep as-is for admin UI
+```
+
+If a caller passes `campaign_id` with `mode='auto'` and audience > 50, auto-upgrade to `mode='materialize'` so no future caller can accidentally revive the giant-loop path.
+
+### 2. `mode: 'materialize'`
+
+- Idempotent: skip if `campaign_recipients` already has rows for the campaign.
+- Resolve audience once (existing member_ids path OR `recipients[]` array OR `resolve_campaign_audience` RPC for kind='contacts|leads|mixed|segment').
+- Bulk INSERT into `campaign_recipients` with `status='pending'`, `attempt=0`, `source_type`, `source_ref_id`, `full_name`, `phone`, `email`.
+- UPDATE campaigns: `status='sending'`, `recipients_count = N`, `success_count=0`, `failure_count=0`, `last_progress_at=now()`, `last_run_error=null`.
+- Self-invoke `mode='chunk'` via `EdgeRuntime.waitUntil(fetch(SELF_URL, { ..., 'x-system-call': 'broadcast-chunk' }))`.
+- Return 202 `{ accepted:true, materialized:N }`.
+
+### 3. `mode: 'chunk'` — the workhorse
+
+Per invocation:
+1. `pg_try_advisory_xact_lock(hashtext(campaign_id))` — if not acquired, return `{ skipped:'locked' }` (another chunk is running).
+2. Load campaign meta (channel, template_id, branch_id, message, variables, attachment_*, fallback_policy) once.
+3. Load DNC digit set once for branch.
+4. Pull batch via RPC (see §5) — atomic `SELECT … FOR UPDATE SKIP LOCKED LIMIT 20` returning rows already flipped to `status='dispatching'`. Prevents any duplicate send.
+5. For each row (sequential, 1.5 s spacing):
+   - Personalize body + `perVars` from `full_name`.
+   - Invoke `dispatch-communication` with `dedupe_key = campaign:<id>:<source_type>:<source_ref_id>:attempt<N>`.
+   - Existing pacing-fallback logic (131049/130472 → RCS/SMS) preserved.
+   - UPDATE the row: `status='sent'|'failed'`, `error`, `pacing_code`, `fallback_used`, `fallback_channel`, `provider_route`, `dispatched_at=now()`, `attempt=attempt+1`.
+   - `await sleep(pacing_ms)`.
+6. Recompute campaign counters from DB (single `COUNT` grouped by status) and UPDATE `campaigns`.
+7. Auto-pause check (terminal Meta codes ≥ 25% of failures) — existing logic, but reading from DB not the in-memory buffer.
+8. Remaining pending?
+   - Yes → fire-and-forget self-invoke, return `{ processed:B, remaining:R }`.
+   - No  → UPDATE `campaigns.status='sent'`, `sent_at=now()`, insert notification, return `{ done:true }`.
+
+### 4. `process-scheduled-campaigns`
+
+Change the invocation body from the current "send-broadcast with full recipients[] array" to:
+
+```
+POST /send-broadcast { mode:'materialize', campaign_id: c.id }
+```
+
+Drop the audience resolution + payload construction — the materialize path owns it now. Keep the pre-dispatch WhatsApp template gate (APPROVED/PENDING/REJECTED) and the 202-ACK handling from v1.4.0.
+
+### 5. Small SQL migration
+
+- **RPC** `claim_broadcast_batch(p_campaign_id uuid, p_limit int)` — one round-trip pull-and-lock:
+
 ```sql
-update campaigns
-set status='scheduled',
-    scheduled_at = now() + interval '2 minutes',
-    last_run_error = null
-where id='264bd41f-4d46-4bfc-af98-36fc926bfd1f';
-```
-Next cron tick will pick it up cleanly.
-
-### 4. `CampaignsPanel.tsx` — recover from failed
-- Allow **Edit** when `status in ('draft','scheduled','pending_template_approval','failed')` — editing a failed campaign resets it to `draft` in the wizard save path.
-- Add a first-class **"Retry"** dropdown item for `status='failed'` that resets to `scheduled` with `scheduled_at = now()+1min` and clears `last_run_error` (single RPC or update).
-- Show `last_run_error` inline on the failed card (currently hidden).
-
----
-
-## Marketing & Campaigns — full UI/UX redesign (2026, /skill:ui-ux-pro-max)
-
-Applies UUPM design-system output to the Vuexy token set (indigo/violet, Inter, rounded-2xl, soft slate shadows). Scope: `src/components/campaigns/*` + the Campaigns tab inside `/announcements`.
-
-### New layout
-```
-┌─ Header ─────────────────────────────────────────────────────────┐
-│  Marketing & Campaigns          [+ New campaign]  [+ Announce]  │
-│  Segmented / recurring sends with attachments · WA · SMS · Email│
-└─────────────────────────────────────────────────────────────────┘
-┌─ KPI Row (5 gradient/soft cards) ───────────────────────────────┐
-│ Sent 30d │ Delivery% │ Read% │ Failure% │ Meta pacing hits 7d   │
-└─────────────────────────────────────────────────────────────────┘
-┌─ Filters strip ─────────────────────────────────────────────────┐
-│ [All] [Draft] [Scheduled] [Sending] [Sent] [Failed]  [Channel▾]│
-│ [Date range]  🔍 search                                         │
-└─────────────────────────────────────────────────────────────────┘
-┌─ Campaign cards (rounded-2xl, shadow-lg) ───────────────────────┐
-│  Name · channel chip · status badge · schedule chip · … menu    │
-│  Preview snippet (2 lines)                                       │
-│  Mini funnel bar: Total → Delivered → Read → Failed             │
-│  Failure reason banner (if failed, red-50 pill w/ code + hint)  │
-│  Footer: recipients, created_by avatar, "View report"           │
-└─────────────────────────────────────────────────────────────────┘
+UPDATE campaign_recipients
+SET status='dispatching', attempt=attempt+1, last_retried_at=now()
+WHERE id IN (
+  SELECT id FROM campaign_recipients
+  WHERE campaign_id = p_campaign_id AND status='pending'
+  ORDER BY created_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT p_limit
+)
+RETURNING *;
 ```
 
-### CampaignReportDrawer (redesign)
-Right-side Sheet, `sm:max-w-2xl`, three vertical sections:
+- **Partial index** `idx_campaign_recipients_pending ON campaign_recipients(campaign_id) WHERE status='pending'` — keeps chunk pulls O(log N) even on 100k-row tables.
+- **Watchdog automation rule** `reap_stalled_campaigns` (every 5 min) — for campaigns in `status='sending'` with `last_progress_at < now() - interval '10 min'` AND remaining pending rows, POST `send-broadcast { mode:'chunk', campaign_id }`. Handles the rare case where a chunk isolate dies mid-flight without self-invoking.
+- **Max-attempts guard** inside chunk: rows with `attempt >= 3` and still `dispatching` get flipped to `failed` with `error='max_attempts_exceeded'`.
 
-1. **Header** — name, channel, status, template name, created info, primary actions `Reconcile now`, `Retry failed (n)`, `Re-trigger to all`.
-2. **Funnel strip** — 5 gradient stat cards (Total / Sent / Delivered / Read / Failed) with 24h delta arrows.
-3. **Delivery timeline** — sparkline of send/delivered/read/failed per 5-min bucket (pulled from `campaign_recipients.updated_at` — already stored).
-4. **Failure breakdown card** — grouped by `meta_code / reason` with human labels from `src/lib/comms/metaErrorLabels.ts`:
-   - `131049 — Meta pacing (recipient engagement)` · count + "Fall back to SMS" button
-   - `132000 — Template variable mismatch` · count + "Fix template" link
-   - `pacing_cooldown_24h — dispatcher suppressed` · count
-   - `template_stale_in_meta` · count + "Resync template" button
-   - Free-text errors bucketed into "Other".
-5. **Recipients table** — sticky-header, filter chips `All / Delivered / Failed / Pending`, columns: Name · Phone · Status badge · Reason (truncated + tooltip) · Sent at · Action (Retry). Row hover, virtualized if >100 rows.
+### 6. UI (tiny)
 
-### Editing / Retry
-- Wizard opens for `draft | scheduled | failed`. Editing a `failed` campaign resets to `draft` (saved via wizard's existing patch).
-- New dropdown items in card menu: **Retry now**, **Fall back to SMS/RCS**, **Reschedule…**.
+`src/components/campaigns/CampaignsPanel.tsx` — when `status='sending'`, show `"{success+failure}/{recipients_count} sent"` under the card. `CampaignReportDrawer` needs no changes; it already reads from `campaign_recipients` and now sees live rows.
 
-### CampaignWizard polish
-- Replace channel chip row with segmented Vuexy chips (violet-600 active).
-- Step 3 (Creative) drops file preview cards with size + kind pill.
-- Recipient step: audience count updates live via `resolve_campaign_audience` preview RPC; show top 5 sample recipient names.
-- Review step: green-emerald "Ready to send" summary card, or amber "Template pending Meta approval — will queue" banner.
+## Technical Details
 
-### Empty / loading / error states
-- Empty: centered SVG (existing lucide `MessageSquare`), "Launch your first campaign" CTA.
-- Loading: 3 skeleton cards matching new card height.
-- Error: red-50 banner with `Retry` (calls `queryClient.invalidateQueries`).
+**Files to modify (build-mode):**
+- `supabase/functions/send-broadcast/index.ts` — add mode router, materialize path, chunk path; keep legacy `auto` for ad-hoc UI (guarded to ≤50)
+- `supabase/functions/process-scheduled-campaigns/index.ts` — call materialize instead of building recipients[]
+- `src/components/campaigns/CampaignsPanel.tsx` — inline progress line
+- 1 SQL migration: `claim_broadcast_batch` RPC + partial index + automation_rules row for watchdog
 
-### Accessibility
-- Every icon-only action has `aria-label`.
-- Status badges use text + color (never color alone).
-- All cards are keyboard-focusable, focus ring `focus:ring-2 focus:ring-indigo-500`.
+**Defaults (tunable via campaigns.fallback_policy JSONB):**
+- `batch_size = 20`
+- `pacing_ms = 1500` (≈ 40 msg/min → ~2000 msg/hour)
+- `chunk_gap_ms = 3000` between self-invocations
+- `max_attempts = 3`
 
----
+**Auth (existing v4.2.0 pattern):**
+- Self-invoke and cron use `apikey: SERVICE_ROLE_KEY` + `x-system-call: broadcast-chunk`.
+- Ad-hoc admin calls still JWT-checked.
 
-## Files changed
+**Backwards compatibility:**
+- Old callers passing `recipients[]` + `campaign_id` without `mode` → auto-routed through materialize (their array becomes the input to the bulk insert). No client changes required.
 
-Backend
-- `supabase/functions/send-broadcast/index.ts` — v4.2.0 system-call gate
-- `supabase/functions/process-scheduled-campaigns/index.ts` — send `apikey`+`x-system-call`
-- One-time SQL to reset stuck campaign
+## Success criteria
 
-Frontend
-- `src/components/campaigns/CampaignsPanel.tsx` — allow edit/retry on failed, inline error, redesigned card, KPI row, filter strip
-- `src/components/campaigns/CampaignReportDrawer.tsx` — funnel, failure breakdown, timeline, recipient table
-- `src/components/campaigns/CampaignWizard.tsx` — reset failed→draft on save, wizard polish
-- `src/lib/comms/metaErrorLabels.ts` — extend map with product-facing hints (fall-back suggestions)
-
----
-
-## Verification
-
-1. Reset the stuck campaign via the SQL above; watch cron tick — expect `status='sent'` within 1 min.
-2. Curl `send-broadcast` with `Authorization: Bearer <SERVICE_KEY>` → 200 (was 401).
-3. Curl same fn with a normal user JWT → still 200; with anon → 401.
-4. UI check: failed card now shows "Unauthorized" reason, Edit + Retry are enabled.
-5. Redesigned report drawer renders funnel + failure breakdown for a real campaign with mixed failures.
+- 500-recipient campaign completes with no single isolate > 30 s wall time.
+- `count(campaign_recipients) == recipients_count` for every campaign, always.
+- Drawer stats always match Meta's insights within one reconcile cycle.
+- Meta 131049 failure rate visibly drops after 1.5 s pacing is live.
+- Zero "phantom sent 0/0" cases in the next week's System Health.

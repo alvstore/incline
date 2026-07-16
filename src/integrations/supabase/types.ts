@@ -13619,6 +13619,39 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_broadcast_batch: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          attempt: number
+          campaign_id: string
+          created_at: string
+          dispatched_at: string | null
+          email: string | null
+          error: string | null
+          error_code: string | null
+          error_reason: string | null
+          fallback_channel: string | null
+          fallback_used: boolean
+          full_name: string | null
+          id: string
+          in_window: boolean | null
+          last_retried_at: string | null
+          pacing_code: number | null
+          phone: string | null
+          provider_route: string | null
+          read_at: string | null
+          source_label: string | null
+          source_ref_id: string | null
+          source_type: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "campaign_recipients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_meta_ai_reply: {
         Args: {
           p_branch_id: string
