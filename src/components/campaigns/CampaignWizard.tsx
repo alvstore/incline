@@ -543,7 +543,7 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       const rcsVars = channel === 'rcs' && selectedRcsTemplate
         ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
             source_type: 'test', source_ref_id: 'test', full_name: testName, first_name: firstName,
-            phone: channel === 'email' ? null : recipientAddress, email: channel === 'email' ? target : null,
+            phone: recipientAddress, email: null,
           } as any) }
         : null;
 
