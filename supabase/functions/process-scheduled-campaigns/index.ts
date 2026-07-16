@@ -174,6 +174,8 @@ Deno.serve(async (req) => {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+            "x-system-call": "scheduled-campaigns",
           },
           body: JSON.stringify(broadcastBody),
         });
