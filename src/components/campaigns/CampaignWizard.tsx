@@ -528,43 +528,62 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
           ? selectedTemplateId
           : null;
       const testName = 'Test User';
-      const recipient = {
-        source_type: 'test',
-        source_ref_id: 'test',
-        full_name: testName,
-        first_name: testName.split(/\s+/)[0],
-        phone: channel === 'email' ? null : (target.startsWith('+') ? target : `+${target}`),
-        email: channel === 'email' ? target : null,
+      const firstName = testName.split(/\s+/)[0];
+      const recipientAddress = channel === 'email'
+        ? target
+        : (target.startsWith('+') ? target : `+${target}`);
+
+      // Build per-recipient variables (mirrors send-broadcast perVars so
+      // Meta template positional params resolve identically).
+      const perVars: Record<string, string> = {
+        member_name: testName, full_name: testName, first_name: firstName, name: firstName,
+        '1': firstName, v1: firstName, param1: firstName,
       };
-      // For RCS, pack template_name + resolved variables into the `variables`
-      // map — the dispatcher pops template_name and passes the rest as Telinfy
-      // lcustomParam. For other channels this is a no-op.
-      const rcsVariables = channel === 'rcs' && selectedRcsTemplate
-        ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient(recipient) }
-        : undefined;
-      const { data, error } = await supabase.functions.invoke('send-broadcast', {
+      // For RCS, template_name is packed into variables (Telinfy lcustomParam).
+      const rcsVars = channel === 'rcs' && selectedRcsTemplate
+        ? { template_name: selectedRcsTemplate.template_name, ...resolveRcsVarsForRecipient({
+            source_type: 'test', source_ref_id: 'test', full_name: testName, first_name: firstName,
+            phone: recipientAddress, email: null,
+          } as any) }
+        : null;
+
+      // Call dispatcher DIRECTLY so we get a real per-send result. Going
+      // through send-broadcast returns an async 202 ACK (v4.0.0 background
+      // mode) with no `sent` count — the wizard used to interpret that as
+      // "Test failed: unknown" even when the message actually went out.
+      const dedupe = `wizard_test:${channel}:${recipientAddress}:${Date.now()}`;
+      const { data, error } = await supabase.functions.invoke('dispatch-communication', {
         body: {
-          channel,
-          message: buildFinalMessage(),
-          subject: channel === 'email' ? subject.trim() || 'Test message' : undefined,
           branch_id: branchId,
-          recipients: [recipient],
+          channel,
+          recipient: recipientAddress,
+          category: 'marketing',
+          payload: {
+            subject: channel === 'email' ? (subject.trim() || 'Test message') : undefined,
+            body: buildFinalMessage(),
+            variables: rcsVars ?? perVars,
+          },
           template_id: templateId,
-          variables: rcsVariables,
-          attachment_url: attachment?.url ?? undefined,
-          attachment_kind: attachment?.kind ?? undefined,
-          attachment_filename: attachment?.filename ?? undefined,
-          attachment: attachment ? { url: attachment.url, kind: attachment.kind, filename: attachment.filename } : undefined,
+          dedupe_key: dedupe,
+          force: true,
+          ...(attachment ? { attachment: { url: attachment.url, kind: attachment.kind, filename: attachment.filename } } : {}),
         },
       });
       if (error) throw error;
-      const r = data as any;
-      if (r?.sent > 0) toast.success(`Test sent to ${target}`);
-      else toast.error(`Test failed: ${r?.recipients?.[0]?.error || r?.reason || 'unknown'}`, { duration: 9000 });
+      const r = (data ?? {}) as any;
+      const status = String(r?.status ?? '').toLowerCase();
+      if (['sent', 'queued', 'deduped'].includes(status)) {
+        toast.success(`Test ${status} to ${target}${r?.provider_message_id ? ` (id: ${r.provider_message_id})` : ''}`);
+      } else {
+        const detail = r?.error_message || r?.reason || r?.error || r?.provider_response
+          || (typeof r === 'object' ? JSON.stringify(r) : String(r)) || 'unknown';
+        toast.error(`Test ${status || 'failed'}: ${detail}`, { duration: 12000 });
+      }
     } catch (e: any) {
-      toast.error(e?.message || 'Test send failed');
+      toast.error(e?.message || e?.error_description || 'Test send failed');
     } finally { setSendingTest(false); }
   };
+
 
   const handleAiDraft = async () => {
     if (!aiPrompt.trim()) { toast.error('Describe the campaign first'); return; }

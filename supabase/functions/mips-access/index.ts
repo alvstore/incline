@@ -1,3 +1,4 @@
+// v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
 // Body: { action: "revoke" | "restore" | "sweep_expired" | "revoke_staff" | "restore_staff",
@@ -431,11 +432,15 @@ Deno.serve(async (req) => {
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
-  // ---- AUTH GATE (v2.1.0) ----
-  // Allow internal service-role callers OR authenticated manager/admin/owner JWTs.
+  // ---- AUTH GATE (v2.2.0) ----
+  // Allow: service-role bearer, automation-brain system-call, or authenticated manager/admin/owner JWT.
   const authHeader = req.headers.get("Authorization") || "";
-  const bearer = authHeader.replace(/^Bearer\s+/i, "");
-  const isService = bearer && bearer === SERVICE_KEY;
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const apikey = req.headers.get("apikey") || "";
+  const sysCall = req.headers.get("x-system-call") || "";
+  const isService =
+    (bearer && bearer === SERVICE_KEY) ||
+    (apikey === SERVICE_KEY && sysCall === "automation-brain");
   if (!isService) {
     if (!bearer) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
