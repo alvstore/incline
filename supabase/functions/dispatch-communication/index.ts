@@ -1,4 +1,7 @@
-// dispatch-communication v1.21.0
+// dispatch-communication v1.22.0
+// v1.22.0: Preserve structured Meta/MM API error details from nested Edge
+//          Function failures so Campaign Wizard and logs show actionable
+//          meta_code/provider_route/fbtrace instead of generic "unknown".
 // v1.21.0: Email broadcast hardening — images are embedded by URL and large
 //          documents are linked instead of base64-attached per recipient. This
 //          avoids Edge worker resource exhaustion during 300+ recipient sends.
@@ -161,10 +164,51 @@ async function functionErrorDetail(error: unknown): Promise<string> {
     const ctx = (error as { context?: unknown })?.context;
     if (ctx instanceof Response) {
       const text = await ctx.clone().text();
-      return text || base;
+      if (!text) return base;
+      try {
+        const payload = JSON.parse(text);
+        return compactProviderError(payload, text);
+      } catch {
+        return text;
+      }
     }
   } catch (_) { /* noop */ }
   return base;
+}
+
+function compactProviderError(payload: unknown, fallback = 'provider_error'): string {
+  if (!payload || typeof payload !== 'object') return String(payload || fallback);
+  const data = payload as Record<string, any>;
+  const nested = data.error && typeof data.error === 'object' ? data.error : null;
+  const metaCode = data.meta_code ?? nested?.code ?? null;
+  const metaSubcode = data.meta_subcode ?? nested?.error_subcode ?? null;
+  const message = data.meta_error
+    || data.error_message
+    || data.reason
+    || data.details
+    || data.detail
+    || (typeof data.error === 'string' ? data.error : nested?.message)
+    || data.message
+    || fallback;
+  const parts = [
+    metaCode ? `meta_code=${metaCode}${metaSubcode ? `/${metaSubcode}` : ''}` : null,
+    `message=${String(message).slice(0, 260)}`,
+    data.provider_route ? `provider_route=${data.provider_route}` : null,
+    data.fbtrace_id ? `fbtrace_id=${data.fbtrace_id}` : null,
+  ].filter(Boolean);
+  return parts.join('; ');
+}
+
+function metaFieldsFromErrorText(text: string): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  const code = text.match(/meta_code=(\d{3,6})(?:\/(\d+))?/i) || text.match(/\b(13\d{4})\b/);
+  if (code?.[1]) fields.meta_code = Number(code[1]);
+  if (code?.[2]) fields.meta_subcode = Number(code[2]);
+  const route = text.match(/provider_route=([a-z_]+)/i);
+  if (route?.[1]) fields.provider_route = route[1];
+  const fbtrace = text.match(/fbtrace_id=([A-Za-z0-9_-]+)/i);
+  if (fbtrace?.[1]) fields.fbtrace_id = fbtrace[1];
+  return fields;
 }
 
 function normalizePhoneDigits(value: unknown): string | null {
@@ -1216,6 +1260,7 @@ Deno.serve(async (req) => {
     if ((input as any).__auto_resolved_template) finalMeta.auto_resolved_template = (input as any).__auto_resolved_template;
     if ((input as any).__header_source) finalMeta.header_source = (input as any).__header_source;
     if (input.source_caller) finalMeta.source_caller = input.source_caller;
+    if (sendError && input.channel === 'whatsapp') Object.assign(finalMeta, metaFieldsFromErrorText(String(sendError)));
     if (Object.keys(metaErrorFields).length) Object.assign(finalMeta, metaErrorFields);
 
     let callbackTerminalStatus: string | null = null;

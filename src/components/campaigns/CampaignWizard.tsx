@@ -86,6 +86,60 @@ function renderPreview(body: string, sampleOverrides: Record<string, string> = {
   });
 }
 
+function phoneLast10(value: string): string {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length <= 10) return digits;
+  return digits.slice(-10);
+}
+
+function firstNameOf(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName.trim();
+}
+
+function describeProviderPayload(payload: unknown): string {
+  if (!payload) return '';
+  if (typeof payload === 'string') return payload;
+  if (typeof payload !== 'object') return String(payload);
+  const data = payload as Record<string, any>;
+  const nestedError = data.error;
+  const message = data.error_message
+    || data.reason
+    || data.meta_error
+    || data.details
+    || data.detail
+    || (typeof nestedError === 'string' ? nestedError : nestedError?.message)
+    || data.message;
+  const parts: string[] = [];
+  const metaCode = data.meta_code ?? nestedError?.code;
+  const metaSubcode = data.meta_subcode ?? nestedError?.error_subcode;
+  if (metaCode) parts.push(`Meta ${metaCode}${metaSubcode ? `/${metaSubcode}` : ''}`);
+  if (message) parts.push(String(message));
+  if (data.provider_route) parts.push(`route=${data.provider_route}`);
+  if (data.fbtrace_id) parts.push(`fbtrace=${data.fbtrace_id}`);
+  return parts.length ? parts.join(' · ') : JSON.stringify(data);
+}
+
+async function describeInvokeError(error: any): Promise<string> {
+  const base = error?.message || error?.error_description || String(error || 'Test send failed');
+  const ctx = error?.context;
+  if (ctx && typeof ctx.clone === 'function') {
+    try {
+      const text = await ctx.clone().text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          return describeProviderPayload(parsed) || text;
+        } catch {
+          return text;
+        }
+      }
+    } catch {
+      // Fall through to base message.
+    }
+  }
+  return base;
+}
+
 type CampaignType = 'promotion' | 'event' | 'announcement' | 'lead_reengagement';
 
 const CAMPAIGN_TYPES: { id: CampaignType; label: string; desc: string; emoji: string; color: string }[] = [
@@ -527,7 +581,28 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
         channel === 'whatsapp' && useApprovedTemplate && selectedTemplateId && !selectedTemplateId.startsWith('__meta__:')
           ? selectedTemplateId
           : null;
-      const testName = 'Test User';
+      const targetLast10 = phoneLast10(target);
+      let testName = 'Test User';
+      let nameSource = 'manual test fallback';
+      if (channel !== 'email' && targetLast10.length >= 7) {
+        const last4 = targetLast10.slice(-4);
+        const pickMatch = (rows: Array<{ full_name?: string | null; phone?: string | null }> | null | undefined) =>
+          (rows || []).find((row) => phoneLast10(row.phone || '') === targetLast10 && String(row.full_name || '').trim());
+
+        const [leadRes, contactRes, profileRes] = await Promise.all([
+          supabase.from('leads').select('full_name, phone').eq('branch_id', branchId).ilike('phone', `%${last4}%`).limit(25),
+          supabase.from('contacts').select('full_name, phone').eq('branch_id', branchId).ilike('phone', `%${last4}%`).limit(25),
+          supabase.from('profiles').select('full_name, phone').ilike('phone', `%${last4}%`).limit(25),
+        ]);
+        const leadMatch = pickMatch(leadRes.data as any[]);
+        const contactMatch = pickMatch(contactRes.data as any[]);
+        const profileMatch = pickMatch(profileRes.data as any[]);
+        const matched = leadMatch || contactMatch || profileMatch;
+        if (matched?.full_name?.trim()) {
+          testName = matched.full_name.trim();
+          nameSource = leadMatch ? 'lead record' : contactMatch ? 'contact record' : 'profile record';
+        }
+      }
       const firstName = testName.split(/\s+/)[0];
       const recipientAddress = channel === 'email'
         ? target
@@ -573,14 +648,13 @@ export function CampaignWizard({ open, onOpenChange, branchId, editingCampaign }
       const r = (data ?? {}) as any;
       const status = String(r?.status ?? '').toLowerCase();
       if (['sent', 'queued', 'deduped'].includes(status)) {
-        toast.success(`Test ${status} to ${target}${r?.provider_message_id ? ` (id: ${r.provider_message_id})` : ''}`);
+        toast.success(`Test ${status} to ${target} as ${firstName} (${nameSource})${r?.provider_message_id ? ` · id: ${r.provider_message_id}` : ''}`);
       } else {
-        const detail = r?.error_message || r?.reason || r?.error || r?.provider_response
-          || (typeof r === 'object' ? JSON.stringify(r) : String(r)) || 'unknown';
+        const detail = describeProviderPayload(r) || 'No provider detail returned';
         toast.error(`Test ${status || 'failed'}: ${detail}`, { duration: 12000 });
       }
     } catch (e: any) {
-      toast.error(e?.message || e?.error_description || 'Test send failed');
+      toast.error(`Test send failed: ${await describeInvokeError(e)}`, { duration: 12000 });
     } finally { setSendingTest(false); }
   };
 
