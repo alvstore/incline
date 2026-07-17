@@ -25,6 +25,7 @@ import {
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
 import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
+import { CampaignFailureBreakdown } from '@/components/campaigns/CampaignFailureBreakdown';
 import { format, formatDistanceToNow } from 'date-fns';
 
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
