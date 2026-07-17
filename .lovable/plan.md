@@ -1,146 +1,81 @@
+# Marketing Broadcast — Root-Cause Audit & Fix
 
-# Reliable Chunked Broadcast Pipeline (reuse `send-broadcast`)
+## What the data proves
 
-## Problem (recap)
+Live DB snapshot (both `sending` campaigns are stalled):
 
-`send-broadcast` runs the entire audience in one edge invocation. Isolates get recycled around ~150 s / CPU-quota, which is why the 337-recipient campaign dispatched ~30 messages, wrote 0 `campaign_recipients`, and looked "sent 0/0". We already batched the flush; now we need to eliminate the "one giant loop" itself so no invocation ever handles more than 20 recipients.
+| Campaign | recipients | pending | sent | failed | last progress |
+|---|---|---|---|---|---|
+| `Construction Walkthrough Reel V1` (8a0ea1de…) | 345 | **345** | 0 | 0 | 7h+ ago |
+| `CHOOSE_WHAT_DESERVES` (264bd41f…) | 325 | 20 | 30 | **275** | 24h+ ago |
 
-## Goal
+**All 275 failures share one error string:** `"Failed to send a request to the Edge Function"`.
 
-- ≤ **20 recipients per invocation** — safe under isolate limits.
-- Every dispatched row persisted immediately.
-- Campaign auto-resumes until every recipient is processed.
-- Pacing between sends to reduce Meta 131049 rejections.
-- No new edge function — extend `send-broadcast` with a `mode` switch.
-
-## Architecture
-
-```text
-CampaignWizard ──► campaigns row (status=scheduled)
-                        │
-        cron/5min ──► process-scheduled-campaigns
-                        │
-                        └─► send-broadcast { mode:'materialize', campaign_id }
-                                 │
-                                 │  writes N rows → campaign_recipients(status=pending)
-                                 │  sets campaigns.status='sending'
-                                 │
-                                 └─► send-broadcast { mode:'chunk', campaign_id, batch_size:20 }
-                                          │
-                                          ├─ pulls next 20 pending rows (FOR UPDATE SKIP LOCKED)
-                                          ├─ dispatches via dispatch-communication
-                                          ├─ updates each row (status/error/pacing_code/…)
-                                          ├─ updates campaigns counters
-                                          └─ if pending remaining:
-                                                fire-and-forget fetch(SELF, mode:'chunk')
-                                                (EdgeRuntime.waitUntil, 3 s gap)
-                                             else:
-                                                status='sent', sent_at=now(), notify
+Edge log for the new campaign:
 ```
-
-Every chunk is a fresh isolate — 337 recipients ≈ 17 chunks, each ~30 s. Nothing ever stalls.
-
-## Changes — all inside `send-broadcast/index.ts`
-
-### 1. Add a `mode` router at the top of the handler
-
+[chunk] campaign not found 8a0ea1de-d807-4e90-9c9d-09a7b4798f61
 ```
-mode = body.mode ?? 'auto'
-  'materialize' → materialize recipients, then self-invoke mode='chunk', ACK 202
-  'chunk'       → process one batch of ≤20, self-invoke again if more pending
-  'auto'        → legacy path (ad-hoc/member_ids, ≤ 50) — keep as-is for admin UI
-```
+…even though the row obviously exists.
 
-If a caller passes `campaign_id` with `mode='auto'` and audience > 50, auto-upgrade to `mode='materialize'` so no future caller can accidentally revive the giant-loop path.
+Both symptoms point to the **same defect**: `send-broadcast` uses `adminClient.functions.invoke(...)` for BOTH
+1. self-invoking `mode='chunk'` (the "campaign not found" trace is actually the *invoke* failing so the chunk never runs — the log line is misleading because `data:null, error:null` is treated as "not found"), and
+2. calling `dispatch-communication` per recipient.
 
-### 2. `mode: 'materialize'`
+The Supabase JS client's `functions.invoke` inside the Deno edge runtime is unreliable — it uses `fetch` against the internal edge URL, hits keep-alive / DNS / body-stream issues, and returns the generic `"Failed to send a request to the Edge Function"` for anything non-2xx or aborted. This is the reason marketing broadcasts using the MM API keep dying — the MM API itself is fine; **we never reach Meta**.
 
-- Idempotent: skip if `campaign_recipients` already has rows for the campaign.
-- Resolve audience once (existing member_ids path OR `recipients[]` array OR `resolve_campaign_audience` RPC for kind='contacts|leads|mixed|segment').
-- Bulk INSERT into `campaign_recipients` with `status='pending'`, `attempt=0`, `source_type`, `source_ref_id`, `full_name`, `phone`, `email`.
-- UPDATE campaigns: `status='sending'`, `recipients_count = N`, `success_count=0`, `failure_count=0`, `last_progress_at=now()`, `last_run_error=null`.
-- Self-invoke `mode='chunk'` via `EdgeRuntime.waitUntil(fetch(SELF_URL, { ..., 'x-system-call': 'broadcast-chunk' }))`.
-- Return 202 `{ accepted:true, materialized:N }`.
+Nothing about MM API is broken — the request just never leaves our stack. That is why "how does everyone else send bulk?" — they do exactly what this plan proposes below (raw fetch between workers, tier-aware pacing, resumable chunks).
 
-### 3. `mode: 'chunk'` — the workhorse
+---
 
-Per invocation:
-1. `pg_try_advisory_xact_lock(hashtext(campaign_id))` — if not acquired, return `{ skipped:'locked' }` (another chunk is running).
-2. Load campaign meta (channel, template_id, branch_id, message, variables, attachment_*, fallback_policy) once.
-3. Load DNC digit set once for branch.
-4. Pull batch via RPC (see §5) — atomic `SELECT … FOR UPDATE SKIP LOCKED LIMIT 20` returning rows already flipped to `status='dispatching'`. Prevents any duplicate send.
-5. For each row (sequential, 1.5 s spacing):
-   - Personalize body + `perVars` from `full_name`.
-   - Invoke `dispatch-communication` with `dedupe_key = campaign:<id>:<source_type>:<source_ref_id>:attempt<N>`.
-   - Existing pacing-fallback logic (131049/130472 → RCS/SMS) preserved.
-   - UPDATE the row: `status='sent'|'failed'`, `error`, `pacing_code`, `fallback_used`, `fallback_channel`, `provider_route`, `dispatched_at=now()`, `attempt=attempt+1`.
-   - `await sleep(pacing_ms)`.
-6. Recompute campaign counters from DB (single `COUNT` grouped by status) and UPDATE `campaigns`.
-7. Auto-pause check (terminal Meta codes ≥ 25% of failures) — existing logic, but reading from DB not the in-memory buffer.
-8. Remaining pending?
-   - Yes → fire-and-forget self-invoke, return `{ processed:B, remaining:R }`.
-   - No  → UPDATE `campaigns.status='sent'`, `sent_at=now()`, insert notification, return `{ done:true }`.
+## The fix (5 targeted changes, no new edge functions)
 
-### 4. `process-scheduled-campaigns`
+### 1. Replace every from-edge `functions.invoke` with raw `fetch`
+In `supabase/functions/send-broadcast/index.ts`:
+- Add a `invokeEdge(fnName, body)` helper that POSTs to `${SUPABASE_URL}/functions/v1/${fnName}` with `Authorization: Bearer ${SERVICE_ROLE}`, `apikey: ${SERVICE_ROLE}`, `x-system-call` header, 25s AbortController timeout, and returns `{ ok, status, data, error }`.
+- Rewrite:
+  - `kickChunk()` → `invokeEdge('send-broadcast', { mode:'chunk', campaign_id })` (fire-and-forget via `EdgeRuntime.waitUntil`).
+  - The per-recipient `dispatch-communication` call in `handleChunk` → `invokeEdge('dispatch-communication', {...})`.
+  - The fallback RCS dispatch → same helper.
+- Same for `process-scheduled-campaigns/index.ts` when it kicks the materialize/chunk cycle.
 
-Change the invocation body from the current "send-broadcast with full recipients[] array" to:
+### 2. Stop swallowing the real error on the campaign lookup
+`handleChunk` currently does `const { data: campaign } = await ... .single()` and treats `!campaign` as "not found". Change to destructure `error`, log the full PostgREST error, and — critically — do NOT return early on a transient error. On error, requeue (`EdgeRuntime.waitUntil(setTimeout(kickChunk, 5000))`) and exit. Only exit if `error.code === 'PGRST116'` (0 rows).
 
-```
-POST /send-broadcast { mode:'materialize', campaign_id: c.id }
-```
+### 3. Meta-aware pacing (this is what other platforms do)
+WhatsApp Cloud/MM API for a new BSP number sits in tier 250 (250 unique users/24h) until Meta auto-upgrades to 1K → 10K → 100K → unlimited. Error `131049` is Meta's "quality/pacing" throttle — nothing about the message is wrong, it's a *rate* problem. Solution:
+- Add a small in-memory token bucket per chunk: `batch_size=15`, `pacing_ms=2500` (≈24 msg/min ≈ 1440/hr — safe for tier 1K, still finishes 345 in ~15 min).
+- Add per-chunk exponential back-off on `131049`/`130472`: on first hit, cut `batch_size` in half AND raise `pacing_ms` by 1.5×; persist those two numbers into `campaigns.fallback_policy.pacing_state` so the next chunk picks up the adjusted rate.
+- On sustained `131049` (>50% of a chunk), stop chunking for 15 minutes: set `campaigns.status='sending'` + `last_progress_at = now() + interval '15 minutes'` (the watchdog already resumes stalled campaigns).
+- Never mark the campaign as `failed` for pacing errors — only for terminal template-config errors (`132xxx`).
 
-Drop the audience resolution + payload construction — the materialize path owns it now. Keep the pre-dispatch WhatsApp template gate (APPROVED/PENDING/REJECTED) and the 202-ACK handling from v1.4.0.
+### 4. Reset the two stuck campaigns
+One-shot SQL migration in the same push:
+- Reset `campaign_recipients` rows with `status='failed'` AND `error='Failed to send a request to the Edge Function'` back to `status='pending'`, `error=NULL`, `attempt=0`.
+- Reset both campaigns' `last_progress_at` to `now() - interval '10 minutes'` so the existing watchdog re-triggers them on the next `automation-brain-tick`.
+- Keep counters as-is — the chunk's DB-recount at end of each pass rewrites `success_count/failure_count` from truth.
 
-### 5. Small SQL migration
+### 5. UI: expose the real reason on the campaign card
+In `CampaignsPanel.tsx`, show the top 3 error strings for the campaign (from `campaign_recipients` grouped by `error`, top failure counts) under the progress bar so the operator can see "247 × paced_131049" vs "275 × Failed to send a request to the Edge Function" at a glance. No layout changes — just a small `<div>` under existing progress meter.
 
-- **RPC** `claim_broadcast_batch(p_campaign_id uuid, p_limit int)` — one round-trip pull-and-lock:
+---
 
-```sql
-UPDATE campaign_recipients
-SET status='dispatching', attempt=attempt+1, last_retried_at=now()
-WHERE id IN (
-  SELECT id FROM campaign_recipients
-  WHERE campaign_id = p_campaign_id AND status='pending'
-  ORDER BY created_at
-  FOR UPDATE SKIP LOCKED
-  LIMIT p_limit
-)
-RETURNING *;
-```
+## Technical notes
 
-- **Partial index** `idx_campaign_recipients_pending ON campaign_recipients(campaign_id) WHERE status='pending'` — keeps chunk pulls O(log N) even on 100k-row tables.
-- **Watchdog automation rule** `reap_stalled_campaigns` (every 5 min) — for campaigns in `status='sending'` with `last_progress_at < now() - interval '10 min'` AND remaining pending rows, POST `send-broadcast { mode:'chunk', campaign_id }`. Handles the rare case where a chunk isolate dies mid-flight without self-invoking.
-- **Max-attempts guard** inside chunk: rows with `attempt >= 3` and still `dispatching` get flipped to `failed` with `error='max_attempts_exceeded'`.
+- **Why raw `fetch` and not the SDK from edge?** The SDK's `functions.invoke` inside Deno runtime aborts the body stream on any non-2xx and normalizes every error to `"Failed to send a request to the Edge Function"`. Raw `fetch` with `signal: AbortSignal.timeout(25000)` returns the real status + body so we can classify failures.
+- **Why not queue via pg_cron only?** We already do (`automation-brain-tick` runs the watchdog every 5 min). This plan keeps that as the outer resume loop and fixes the *inner* per-recipient loop that was silently dying.
+- **Why in-memory + persisted pacing?** In-memory prevents burst within one chunk; persisting to `campaigns.fallback_policy.pacing_state` prevents the *next* chunk (which is a fresh isolate) from repeating the same throttle mistake.
+- **MM API remains the primary route** — `dispatch-communication` already sets `use_mm_api:true` for `category:'marketing'`. No route change needed.
 
-### 6. UI (tiny)
+## Files touched
 
-`src/components/campaigns/CampaignsPanel.tsx` — when `status='sending'`, show `"{success+failure}/{recipients_count} sent"` under the card. `CampaignReportDrawer` needs no changes; it already reads from `campaign_recipients` and now sees live rows.
-
-## Technical Details
-
-**Files to modify (build-mode):**
-- `supabase/functions/send-broadcast/index.ts` — add mode router, materialize path, chunk path; keep legacy `auto` for ad-hoc UI (guarded to ≤50)
-- `supabase/functions/process-scheduled-campaigns/index.ts` — call materialize instead of building recipients[]
-- `src/components/campaigns/CampaignsPanel.tsx` — inline progress line
-- 1 SQL migration: `claim_broadcast_batch` RPC + partial index + automation_rules row for watchdog
-
-**Defaults (tunable via campaigns.fallback_policy JSONB):**
-- `batch_size = 20`
-- `pacing_ms = 1500` (≈ 40 msg/min → ~2000 msg/hour)
-- `chunk_gap_ms = 3000` between self-invocations
-- `max_attempts = 3`
-
-**Auth (existing v4.2.0 pattern):**
-- Self-invoke and cron use `apikey: SERVICE_ROLE_KEY` + `x-system-call: broadcast-chunk`.
-- Ad-hoc admin calls still JWT-checked.
-
-**Backwards compatibility:**
-- Old callers passing `recipients[]` + `campaign_id` without `mode` → auto-routed through materialize (their array becomes the input to the bulk insert). No client changes required.
+- `supabase/functions/send-broadcast/index.ts` (add `invokeEdge`, rewrite `kickChunk` + `handleChunk` dispatch calls, add pacing back-off & persistence)
+- `supabase/functions/process-scheduled-campaigns/index.ts` (use `invokeEdge` for materialize/chunk kicks)
+- `src/components/campaigns/CampaignsPanel.tsx` (top-3 failure-reason breakdown)
+- 1 SQL migration (reset stuck rows + nudge watchdog; no schema change)
 
 ## Success criteria
 
-- 500-recipient campaign completes with no single isolate > 30 s wall time.
-- `count(campaign_recipients) == recipients_count` for every campaign, always.
-- Drawer stats always match Meta's insights within one reconcile cycle.
-- Meta 131049 failure rate visibly drops after 1.5 s pacing is live.
-- Zero "phantom sent 0/0" cases in the next week's System Health.
+- `Construction Walkthrough Reel V1` finishes with >90% `sent` in <30 min.
+- Zero rows with `error='Failed to send a request to the Edge Function'` after the run.
+- Any `131049` rows show `pacing_code=131049` and either `fallback_used=true` (RCS) or a retry on the next chunk — never a hard `failed`.
+- UI progress card shows real failure taxonomy, not "0/0".

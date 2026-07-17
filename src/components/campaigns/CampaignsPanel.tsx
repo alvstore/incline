@@ -25,6 +25,7 @@ import {
 import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
 import { CampaignDetailDrawer } from '@/components/campaigns/CampaignDetailDrawer';
 import { CampaignReportDrawer } from '@/components/campaigns/CampaignReportDrawer';
+import { CampaignFailureBreakdown } from '@/components/campaigns/CampaignFailureBreakdown';
 import { format, formatDistanceToNow } from 'date-fns';
 
 const channelIcon = (c: string) => (c === 'email' ? Mail : MessageSquare);
@@ -245,6 +246,9 @@ export function CampaignsPanel() {
                     </div>
                   );
                 })()}
+                {(c.failure_count || 0) > 0 && (
+                  <CampaignFailureBreakdown campaignId={c.id} active={inFlight} />
+                )}
                 <div className="grid grid-cols-4 gap-2 text-center pt-3 border-t">
                   <div>
                     <p className="text-lg font-bold text-foreground">{c.recipients_count}</p>

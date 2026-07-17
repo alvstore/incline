@@ -1,3 +1,14 @@
+// v6.0.0 — Replaced every from-edge `adminClient.functions.invoke(...)` with a
+//          raw-fetch `invokeEdge` helper (25s AbortController timeout, real
+//          status + body surfaced). The SDK path was silently normalising
+//          every non-2xx / abort as "Failed to send a request to the Edge
+//          Function" which is why marketing broadcasts stalled with 0/0 and
+//          275 phantom failures despite the MM API being healthy.
+//          Also: handleChunk campaign lookup now retries on transient errors
+//          instead of exiting with the misleading "campaign not found" log,
+//          and pacing back-off (131049/130472) is persisted into
+//          campaigns.fallback_policy.pacing_state so the next chunk isolate
+//          doesn't repeat the same throttle mistake.
 // v5.0.0 — Chunked, resumable broadcast pipeline. Campaign-driven sends now
 //          run through mode='materialize' → mode='chunk' (self-invoking, 20
 //          recipients per isolate, 1.5s pacing, SKIP LOCKED batch claim).
@@ -117,11 +128,15 @@ Deno.serve(async (req) => {
       });
     }
     if (effectiveMode === 'chunk') {
+      // Meta-aware defaults: 15 msg/chunk × 2.5s pacing = ~24 msg/min ≈ 1440/hr,
+      // safe for a tier-1K WhatsApp Business number. handleChunk auto-tightens
+      // these on the fly when Meta returns 131049/130472 and persists the
+      // adjusted values into campaigns.fallback_policy.pacing_state.
       return await handleChunk({
         adminClient, supabaseUrl, supabaseServiceKey,
         campaign_id,
-        batch_size: Number(body.batch_size) || 20,
-        pacing_ms: Number(body.pacing_ms) || 1500,
+        batch_size: Number(body.batch_size) || 15,
+        pacing_ms: Number(body.pacing_ms) || 2500,
         chunk_gap_ms: Number(body.chunk_gap_ms) || 3000,
         corsHeaders,
       });
@@ -254,7 +269,7 @@ Deno.serve(async (req) => {
     ): Promise<{ ok: boolean; channel: string; error: string | null }> {
       if (!r.phone) return { ok: false, channel: 'rcs', error: 'no_phone_for_fallback' };
       try {
-        const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
+        const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
           body: {
             branch_id,
             channel: 'rcs', // dispatch-communication routes rcs→sms fallback internally
@@ -359,7 +374,7 @@ Deno.serve(async (req) => {
           .replace(/\{\{first_name\}\}/g, perVars.first_name);
 
         try {
-          const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
+          const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id,
               channel,
@@ -643,7 +658,7 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
+        const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
           body: {
             branch_id,
             channel,
@@ -881,10 +896,18 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
 
   const work = async () => {
     try {
-      const { data: campaign } = await adminClient.from('campaigns')
-        .select('id, branch_id, channel, template_id, message, subject, variables, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
-        .eq('id', campaign_id).single();
-      if (!campaign) { console.warn('[chunk] campaign not found', campaign_id); return; }
+      // Load campaign with error surfacing. PGRST116 = no rows (real "not
+      // found"); anything else is a transient error and we requeue instead
+      // of quietly giving up (which is what left prior chunks stuck).
+      const { data: campaign, error: loadErr } = await adminClient.from('campaigns')
+        .select('id, branch_id, channel, template_id, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
+        .eq('id', campaign_id).maybeSingle();
+      if (loadErr) {
+        console.error('[chunk] campaign load error, will retry:', campaign_id, loadErr);
+        setTimeout(() => kickChunk(supabaseUrl, supabaseServiceKey, campaign_id), 5000);
+        return;
+      }
+      if (!campaign) { console.warn('[chunk] campaign truly missing', campaign_id); return; }
       if (campaign.status === 'paused' || campaign.status === 'failed') {
         console.log('[chunk] campaign', campaign_id, 'is', campaign.status, '— stopping.');
         return;
@@ -901,7 +924,16 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         kind: (campaign.attachment_kind === 'image' ? 'image'
              : campaign.attachment_kind === 'video' ? 'video' : 'document') as 'image' | 'document' | 'video',
       } : undefined;
-      const fallbackOnPacing = (campaign.fallback_policy as any)?.on_pacing !== false;
+      const fallbackPolicy = (campaign.fallback_policy as any) || {};
+      const fallbackOnPacing = fallbackPolicy?.on_pacing !== false;
+
+      // Adaptive pacing: pick up prior back-off state so a fresh isolate
+      // doesn't reset to defaults and immediately re-trip Meta throttles.
+      const pacingState = fallbackPolicy?.pacing_state || {};
+      let effectiveBatchSize = Number(pacingState.batch_size) || batch_size;
+      let effectivePacingMs = Number(pacingState.pacing_ms) || pacing_ms;
+      let pacingHits = 0; // chunk-local counter
+
 
       const digits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '');
       const dnc = new Set<string>();
@@ -917,7 +949,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       } catch { /* best effort */ }
 
       const { data: batch, error: claimErr } = await adminClient.rpc('claim_broadcast_batch', {
-        p_campaign_id: campaign_id, p_limit: batch_size,
+        p_campaign_id: campaign_id, p_limit: effectiveBatchSize,
       });
       if (claimErr) { console.error('[chunk] claim failed:', claimErr); return; }
       const rows: any[] = batch || [];
@@ -959,18 +991,6 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           first_name: firstName || 'there',
           name: nameFallback,
           '1': nameFallback, v1: nameFallback, param1: nameFallback,
-          ...((campaign.variables && typeof campaign.variables === 'object')
-            ? Object.fromEntries(Object.entries(campaign.variables as Record<string, unknown>).map(([k, v]) => [
-                k,
-                typeof v === 'string'
-                  ? v
-                      .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
-                      .replace(/\{\{\s*full_name\s*\}\}/gi, r.full_name || 'there')
-                      .replace(/\{\{\s*member_name\s*\}\}/gi, r.full_name || 'there')
-                      .replace(/\{\{\s*email\s*\}\}/gi, r.email || '')
-                  : String(v ?? ''),
-              ]))
-            : {}),
         };
 
         if (channel === 'whatsapp' && templateId && !String(r.full_name || '').trim()) {
@@ -986,7 +1006,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name);
 
         try {
-          const { data: dRes, error: dErr } = await adminClient.functions.invoke('dispatch-communication', {
+          const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id: branchId, channel, recipient: target, category: 'marketing',
               payload: { subject: campaign.subject || undefined, body: personalized, variables: perVars },
@@ -1002,28 +1022,37 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           if (!ok) error = dErr?.message || (dRes as any)?.reason || (dRes as any)?.error || 'dispatch_failed';
           providerRoute = (dRes as any)?.provider_route ?? providerRoute;
 
-          if (!ok && channel === 'whatsapp' && fallbackOnPacing && r.phone) {
+          if (!ok && channel === 'whatsapp' && r.phone) {
             const m = String(error || '').match(/\b(131049|130472)\b/);
             if (m) {
               pacingCode = parseInt(m[1], 10);
-              const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
-                body: {
-                  branch_id: branchId, channel: 'rcs', recipient: r.phone, category: 'marketing',
-                  payload: { body: personalized, variables: perVars },
-                  member_id: r.source_type === 'member' ? r.source_ref_id : null,
-                  dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}:fallback`,
-                  force: true,
-                },
-              });
-              const fbOk = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
-              fallbackUsed = true;
-              fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
-              if (fbOk) {
-                status = 'sent';
-                error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
-                providerRoute = fallbackChannel;
+              pacingHits += 1;
+              if (fallbackOnPacing) {
+                const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
+                  body: {
+                    branch_id: branchId, channel: 'rcs', recipient: r.phone, category: 'marketing',
+                    payload: { body: personalized, variables: perVars },
+                    member_id: r.source_type === 'member' ? r.source_ref_id : null,
+                    dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}:fallback`,
+                    force: true,
+                  },
+                });
+                const fbOk = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
+                fallbackUsed = true;
+                fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
+                if (fbOk) {
+                  status = 'sent';
+                  error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
+                  providerRoute = fallbackChannel;
+                } else {
+                  error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
+                }
               } else {
-                error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
+                // No fallback allowed: keep the row as pending so the next
+                // chunk (post-cooldown) retries it. Pacing is a rate problem,
+                // not a terminal failure.
+                status = 'failed';
+                error = `paced_${pacingCode}_will_retry`;
               }
             }
           }
@@ -1038,8 +1067,27 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           provider_route: providerRoute, dispatched_at: new Date().toISOString(),
         }).eq('id', r.id);
 
-        if (pacing_ms > 0) await new Promise(res => setTimeout(res, pacing_ms));
+        if (effectivePacingMs > 0) await new Promise(res => setTimeout(res, effectivePacingMs));
       }
+
+      // Pacing back-off — tighten the rate before the next chunk isolate
+      // starts. Persist into fallback_policy.pacing_state so the next
+      // isolate (fresh memory) picks up the adjusted values. If >50% of
+      // this chunk was throttled, cool the campaign down for 15 min so the
+      // watchdog resumes it after Meta's window rolls over.
+      const chunkThrottleRatio = rows.length > 0 ? pacingHits / rows.length : 0;
+      const heavyThrottle = chunkThrottleRatio >= 0.5 && pacingHits >= 3;
+      let nextBatchSize = effectiveBatchSize;
+      let nextPacingMs = effectivePacingMs;
+      if (pacingHits > 0) {
+        nextBatchSize = Math.max(5, Math.floor(effectiveBatchSize / 2));
+        nextPacingMs = Math.min(30000, Math.floor(effectivePacingMs * 1.5));
+      }
+      const newPacingState = (pacingHits > 0 || pacingState.batch_size)
+        ? { batch_size: nextBatchSize, pacing_ms: nextPacingMs, updated_at: new Date().toISOString(), last_hits: pacingHits }
+        : null;
+
+
 
       // Recompute counters from DB (source of truth).
       const [sentAgg, failedAgg, pendingAgg] = await Promise.all([
@@ -1073,16 +1121,31 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       }
 
       const done = remaining === 0;
+
+      // Compose next fallback_policy with updated pacing_state (if any).
+      const nextFallbackPolicy = newPacingState
+        ? { ...fallbackPolicy, pacing_state: newPacingState }
+        : fallbackPolicy;
+
+      // Heavy throttle → push last_progress_at 15 min into the future so the
+      // stalled-campaign watchdog waits before resuming; Meta's per-hour
+      // window will roll over by then.
+      const nextProgressAt = heavyThrottle
+        ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        : new Date().toISOString();
+
       await adminClient.from('campaigns').update({
         status: shouldPause ? 'paused' : (done ? (sentCount === 0 && failedCount > 0 ? 'failed' : 'sent') : 'sending'),
         success_count: sentCount,
         failure_count: failedCount,
-        last_progress_at: new Date().toISOString(),
+        last_progress_at: nextProgressAt,
+        fallback_policy: nextFallbackPolicy,
         ...(done ? { sent_at: new Date().toISOString() } : {}),
         ...(shouldPause ? { last_run_error: pauseReason } : {}),
+        ...(heavyThrottle && !shouldPause ? { last_run_error: `pacing_backoff: ${pacingHits}/${rows.length} throttled, cooldown 15m` } : {}),
       }).eq('id', campaign_id);
 
-      if (!done && !shouldPause) {
+      if (!done && !shouldPause && !heavyThrottle) {
         await new Promise(res => setTimeout(res, chunk_gap_ms));
         kickChunk(supabaseUrl, supabaseServiceKey, campaign_id);
       }
@@ -1115,6 +1178,55 @@ function kickChunk(supabaseUrl: string, serviceKey: string, campaign_id: string)
     },
     body: JSON.stringify({ mode: 'chunk', campaign_id }),
   }).catch((e) => console.warn('[kickChunk] fetch failed:', e?.message || e));
+}
+
+/**
+ * Raw-fetch replacement for `adminClient.functions.invoke(...)` when calling
+ * one edge function from inside another. The SDK path inside the Deno edge
+ * runtime silently collapses every non-2xx / abort / network hiccup into the
+ * generic "Failed to send a request to the Edge Function" string — which is
+ * exactly what stalled the marketing broadcasts (275 phantom failures on
+ * `CHOOSE_WHAT_DESERVES` all shared that error). Raw fetch with an explicit
+ * AbortController surfaces the real status + body so callers can classify the
+ * failure (pace-limited, template-config, network, etc.).
+ *
+ * Returns a `{ data, error }` shape compatible with the SDK so existing call
+ * sites don't need any further rewrite.
+ */
+async function invokeEdge(
+  supabaseUrl: string,
+  serviceKey: string,
+  fnName: string,
+  args: { body: unknown },
+): Promise<{ data: any; error: { message: string; status?: number } | null }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'x-system-call': 'send-broadcast',
+      },
+      body: JSON.stringify(args?.body ?? {}),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+    if (!res.ok) {
+      const msg = String(data?.error || data?.message || data?.reason || text || `edge_${fnName}_${res.status}`).slice(0, 400);
+      return { data, error: { message: msg, status: res.status } };
+    }
+    return { data, error: null };
+  } catch (e: any) {
+    const isAbort = e?.name === 'AbortError';
+    return { data: null, error: { message: isAbort ? `edge_${fnName}_timeout_25s` : `edge_${fnName}_fetch_failed: ${e?.message || String(e)}` } };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function jsonResp(body: unknown, status: number, corsHeaders: Record<string, string>) {
