@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
     ): Promise<{ ok: boolean; channel: string; error: string | null }> {
       if (!r.phone) return { ok: false, channel: 'rcs', error: 'no_phone_for_fallback' };
       try {
-        const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
+        const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
           body: {
             branch_id,
             channel: 'rcs', // dispatch-communication routes rcs→sms fallback internally
@@ -359,7 +359,7 @@ Deno.serve(async (req) => {
           .replace(/\{\{first_name\}\}/g, perVars.first_name);
 
         try {
-          const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
+          const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id,
               channel,
@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const { data: dispatchRes, error: dispatchErr } = await adminClient.functions.invoke('dispatch-communication', {
+        const { data: dispatchRes, error: dispatchErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
           body: {
             branch_id,
             channel,
@@ -986,7 +986,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           .replace(/\{\{\s*first_name\s*\}\}/gi, perVars.first_name);
 
         try {
-          const { data: dRes, error: dErr } = await adminClient.functions.invoke('dispatch-communication', {
+          const { data: dRes, error: dErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
             body: {
               branch_id: branchId, channel, recipient: target, category: 'marketing',
               payload: { subject: campaign.subject || undefined, body: personalized, variables: perVars },
@@ -1006,7 +1006,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
             const m = String(error || '').match(/\b(131049|130472)\b/);
             if (m) {
               pacingCode = parseInt(m[1], 10);
-              const { data: fbRes, error: fbErr } = await adminClient.functions.invoke('dispatch-communication', {
+              const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
                 body: {
                   branch_id: branchId, channel: 'rcs', recipient: r.phone, category: 'marketing',
                   payload: { body: personalized, variables: perVars },
