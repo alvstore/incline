@@ -949,7 +949,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       } catch { /* best effort */ }
 
       const { data: batch, error: claimErr } = await adminClient.rpc('claim_broadcast_batch', {
-        p_campaign_id: campaign_id, p_limit: batch_size,
+        p_campaign_id: campaign_id, p_limit: effectiveBatchSize,
       });
       if (claimErr) { console.error('[chunk] claim failed:', claimErr); return; }
       const rows: any[] = batch || [];
