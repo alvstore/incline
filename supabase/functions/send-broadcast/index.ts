@@ -128,11 +128,15 @@ Deno.serve(async (req) => {
       });
     }
     if (effectiveMode === 'chunk') {
+      // Meta-aware defaults: 15 msg/chunk × 2.5s pacing = ~24 msg/min ≈ 1440/hr,
+      // safe for a tier-1K WhatsApp Business number. handleChunk auto-tightens
+      // these on the fly when Meta returns 131049/130472 and persists the
+      // adjusted values into campaigns.fallback_policy.pacing_state.
       return await handleChunk({
         adminClient, supabaseUrl, supabaseServiceKey,
         campaign_id,
-        batch_size: Number(body.batch_size) || 20,
-        pacing_ms: Number(body.pacing_ms) || 1500,
+        batch_size: Number(body.batch_size) || 15,
+        pacing_ms: Number(body.pacing_ms) || 2500,
         chunk_gap_ms: Number(body.chunk_gap_ms) || 3000,
         corsHeaders,
       });
