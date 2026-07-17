@@ -896,10 +896,18 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
 
   const work = async () => {
     try {
-      const { data: campaign } = await adminClient.from('campaigns')
+      // Load campaign with error surfacing. PGRST116 = no rows (real "not
+      // found"); anything else is a transient error and we requeue instead
+      // of quietly giving up (which is what left prior chunks stuck).
+      const { data: campaign, error: loadErr } = await adminClient.from('campaigns')
         .select('id, branch_id, channel, template_id, message, subject, variables, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
-        .eq('id', campaign_id).single();
-      if (!campaign) { console.warn('[chunk] campaign not found', campaign_id); return; }
+        .eq('id', campaign_id).maybeSingle();
+      if (loadErr) {
+        console.error('[chunk] campaign load error, will retry:', campaign_id, loadErr);
+        setTimeout(() => kickChunk(supabaseUrl, supabaseServiceKey, campaign_id), 5000);
+        return;
+      }
+      if (!campaign) { console.warn('[chunk] campaign truly missing', campaign_id); return; }
       if (campaign.status === 'paused' || campaign.status === 'failed') {
         console.log('[chunk] campaign', campaign_id, 'is', campaign.status, '— stopping.');
         return;
@@ -916,7 +924,16 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         kind: (campaign.attachment_kind === 'image' ? 'image'
              : campaign.attachment_kind === 'video' ? 'video' : 'document') as 'image' | 'document' | 'video',
       } : undefined;
-      const fallbackOnPacing = (campaign.fallback_policy as any)?.on_pacing !== false;
+      const fallbackPolicy = (campaign.fallback_policy as any) || {};
+      const fallbackOnPacing = fallbackPolicy?.on_pacing !== false;
+
+      // Adaptive pacing: pick up prior back-off state so a fresh isolate
+      // doesn't reset to defaults and immediately re-trip Meta throttles.
+      const pacingState = fallbackPolicy?.pacing_state || {};
+      let effectiveBatchSize = Number(pacingState.batch_size) || batch_size;
+      let effectivePacingMs = Number(pacingState.pacing_ms) || pacing_ms;
+      let pacingHits = 0; // chunk-local counter
+
 
       const digits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '');
       const dnc = new Set<string>();
