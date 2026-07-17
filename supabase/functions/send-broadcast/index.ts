@@ -1034,28 +1034,37 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           if (!ok) error = dErr?.message || (dRes as any)?.reason || (dRes as any)?.error || 'dispatch_failed';
           providerRoute = (dRes as any)?.provider_route ?? providerRoute;
 
-          if (!ok && channel === 'whatsapp' && fallbackOnPacing && r.phone) {
+          if (!ok && channel === 'whatsapp' && r.phone) {
             const m = String(error || '').match(/\b(131049|130472)\b/);
             if (m) {
               pacingCode = parseInt(m[1], 10);
-              const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
-                body: {
-                  branch_id: branchId, channel: 'rcs', recipient: r.phone, category: 'marketing',
-                  payload: { body: personalized, variables: perVars },
-                  member_id: r.source_type === 'member' ? r.source_ref_id : null,
-                  dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}:fallback`,
-                  force: true,
-                },
-              });
-              const fbOk = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
-              fallbackUsed = true;
-              fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
-              if (fbOk) {
-                status = 'sent';
-                error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
-                providerRoute = fallbackChannel;
+              pacingHits += 1;
+              if (fallbackOnPacing) {
+                const { data: fbRes, error: fbErr } = await invokeEdge(supabaseUrl, supabaseServiceKey, 'dispatch-communication', {
+                  body: {
+                    branch_id: branchId, channel: 'rcs', recipient: r.phone, category: 'marketing',
+                    payload: { body: personalized, variables: perVars },
+                    member_id: r.source_type === 'member' ? r.source_ref_id : null,
+                    dedupe_key: `campaign:${campaign_id}:${r.source_type}:${r.source_ref_id}:a${r.attempt || 1}:fallback`,
+                    force: true,
+                  },
+                });
+                const fbOk = !fbErr && ['sent', 'queued', 'deduped'].includes(String((fbRes as any)?.status || ''));
+                fallbackUsed = true;
+                fallbackChannel = String((fbRes as any)?.channel_used || (fbRes as any)?.channel || 'rcs');
+                if (fbOk) {
+                  status = 'sent';
+                  error = `paced_${pacingCode}_fallback_via_${fallbackChannel}`;
+                  providerRoute = fallbackChannel;
+                } else {
+                  error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
+                }
               } else {
-                error = `paced_${pacingCode}; fallback_${fallbackChannel}_failed: ${fbErr?.message || (fbRes as any)?.reason || 'unknown'}`;
+                // No fallback allowed: keep the row as pending so the next
+                // chunk (post-cooldown) retries it. Pacing is a rate problem,
+                // not a terminal failure.
+                status = 'failed';
+                error = `paced_${pacingCode}_will_retry`;
               }
             }
           }
