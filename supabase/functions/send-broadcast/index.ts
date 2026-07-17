@@ -1133,16 +1133,31 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       }
 
       const done = remaining === 0;
+
+      // Compose next fallback_policy with updated pacing_state (if any).
+      const nextFallbackPolicy = newPacingState
+        ? { ...fallbackPolicy, pacing_state: newPacingState }
+        : fallbackPolicy;
+
+      // Heavy throttle → push last_progress_at 15 min into the future so the
+      // stalled-campaign watchdog waits before resuming; Meta's per-hour
+      // window will roll over by then.
+      const nextProgressAt = heavyThrottle
+        ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        : new Date().toISOString();
+
       await adminClient.from('campaigns').update({
         status: shouldPause ? 'paused' : (done ? (sentCount === 0 && failedCount > 0 ? 'failed' : 'sent') : 'sending'),
         success_count: sentCount,
         failure_count: failedCount,
-        last_progress_at: new Date().toISOString(),
+        last_progress_at: nextProgressAt,
+        fallback_policy: nextFallbackPolicy,
         ...(done ? { sent_at: new Date().toISOString() } : {}),
         ...(shouldPause ? { last_run_error: pauseReason } : {}),
+        ...(heavyThrottle && !shouldPause ? { last_run_error: `pacing_backoff: ${pacingHits}/${rows.length} throttled, cooldown 15m` } : {}),
       }).eq('id', campaign_id);
 
-      if (!done && !shouldPause) {
+      if (!done && !shouldPause && !heavyThrottle) {
         await new Promise(res => setTimeout(res, chunk_gap_ms));
         kickChunk(supabaseUrl, supabaseServiceKey, campaign_id);
       }
