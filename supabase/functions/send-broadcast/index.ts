@@ -1079,8 +1079,27 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           provider_route: providerRoute, dispatched_at: new Date().toISOString(),
         }).eq('id', r.id);
 
-        if (pacing_ms > 0) await new Promise(res => setTimeout(res, pacing_ms));
+        if (effectivePacingMs > 0) await new Promise(res => setTimeout(res, effectivePacingMs));
       }
+
+      // Pacing back-off — tighten the rate before the next chunk isolate
+      // starts. Persist into fallback_policy.pacing_state so the next
+      // isolate (fresh memory) picks up the adjusted values. If >50% of
+      // this chunk was throttled, cool the campaign down for 15 min so the
+      // watchdog resumes it after Meta's window rolls over.
+      const chunkThrottleRatio = rows.length > 0 ? pacingHits / rows.length : 0;
+      const heavyThrottle = chunkThrottleRatio >= 0.5 && pacingHits >= 3;
+      let nextBatchSize = effectiveBatchSize;
+      let nextPacingMs = effectivePacingMs;
+      if (pacingHits > 0) {
+        nextBatchSize = Math.max(5, Math.floor(effectiveBatchSize / 2));
+        nextPacingMs = Math.min(30000, Math.floor(effectivePacingMs * 1.5));
+      }
+      const newPacingState = (pacingHits > 0 || pacingState.batch_size)
+        ? { batch_size: nextBatchSize, pacing_ms: nextPacingMs, updated_at: new Date().toISOString(), last_hits: pacingHits }
+        : null;
+
+
 
       // Recompute counters from DB (source of truth).
       const [sentAgg, failedAgg, pendingAgg] = await Promise.all([
