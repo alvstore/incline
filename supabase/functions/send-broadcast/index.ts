@@ -1192,6 +1192,55 @@ function kickChunk(supabaseUrl: string, serviceKey: string, campaign_id: string)
   }).catch((e) => console.warn('[kickChunk] fetch failed:', e?.message || e));
 }
 
+/**
+ * Raw-fetch replacement for `adminClient.functions.invoke(...)` when calling
+ * one edge function from inside another. The SDK path inside the Deno edge
+ * runtime silently collapses every non-2xx / abort / network hiccup into the
+ * generic "Failed to send a request to the Edge Function" string — which is
+ * exactly what stalled the marketing broadcasts (275 phantom failures on
+ * `CHOOSE_WHAT_DESERVES` all shared that error). Raw fetch with an explicit
+ * AbortController surfaces the real status + body so callers can classify the
+ * failure (pace-limited, template-config, network, etc.).
+ *
+ * Returns a `{ data, error }` shape compatible with the SDK so existing call
+ * sites don't need any further rewrite.
+ */
+async function invokeEdge(
+  supabaseUrl: string,
+  serviceKey: string,
+  fnName: string,
+  args: { body: unknown },
+): Promise<{ data: any; error: { message: string; status?: number } | null }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'x-system-call': 'send-broadcast',
+      },
+      body: JSON.stringify(args?.body ?? {}),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+    if (!res.ok) {
+      const msg = String(data?.error || data?.message || data?.reason || text || `edge_${fnName}_${res.status}`).slice(0, 400);
+      return { data, error: { message: msg, status: res.status } };
+    }
+    return { data, error: null };
+  } catch (e: any) {
+    const isAbort = e?.name === 'AbortError';
+    return { data: null, error: { message: isAbort ? `edge_${fnName}_timeout_25s` : `edge_${fnName}_fetch_failed: ${e?.message || String(e)}` } };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function jsonResp(body: unknown, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
