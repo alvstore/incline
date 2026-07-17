@@ -900,7 +900,7 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
       // found"); anything else is a transient error and we requeue instead
       // of quietly giving up (which is what left prior chunks stuck).
       const { data: campaign, error: loadErr } = await adminClient.from('campaigns')
-        .select('id, branch_id, channel, template_id, message, subject, variables, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
+        .select('id, branch_id, channel, template_id, message, subject, attachment_url, attachment_kind, attachment_filename, fallback_policy, status')
         .eq('id', campaign_id).maybeSingle();
       if (loadErr) {
         console.error('[chunk] campaign load error, will retry:', campaign_id, loadErr);
