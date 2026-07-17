@@ -1,3 +1,14 @@
+// v6.0.0 — Replaced every from-edge `adminClient.functions.invoke(...)` with a
+//          raw-fetch `invokeEdge` helper (25s AbortController timeout, real
+//          status + body surfaced). The SDK path was silently normalising
+//          every non-2xx / abort as "Failed to send a request to the Edge
+//          Function" which is why marketing broadcasts stalled with 0/0 and
+//          275 phantom failures despite the MM API being healthy.
+//          Also: handleChunk campaign lookup now retries on transient errors
+//          instead of exiting with the misleading "campaign not found" log,
+//          and pacing back-off (131049/130472) is persisted into
+//          campaigns.fallback_policy.pacing_state so the next chunk isolate
+//          doesn't repeat the same throttle mistake.
 // v5.0.0 — Chunked, resumable broadcast pipeline. Campaign-driven sends now
 //          run through mode='materialize' → mode='chunk' (self-invoking, 20
 //          recipients per isolate, 1.5s pacing, SKIP LOCKED batch claim).
