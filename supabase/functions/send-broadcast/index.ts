@@ -991,18 +991,6 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
           first_name: firstName || 'there',
           name: nameFallback,
           '1': nameFallback, v1: nameFallback, param1: nameFallback,
-          ...((campaign.variables && typeof campaign.variables === 'object')
-            ? Object.fromEntries(Object.entries(campaign.variables as Record<string, unknown>).map(([k, v]) => [
-                k,
-                typeof v === 'string'
-                  ? v
-                      .replace(/\{\{\s*first_name\s*\}\}/gi, firstName || 'there')
-                      .replace(/\{\{\s*full_name\s*\}\}/gi, r.full_name || 'there')
-                      .replace(/\{\{\s*member_name\s*\}\}/gi, r.full_name || 'there')
-                      .replace(/\{\{\s*email\s*\}\}/gi, r.email || '')
-                  : String(v ?? ''),
-              ]))
-            : {}),
         };
 
         if (channel === 'whatsapp' && templateId && !String(r.full_name || '').trim()) {
