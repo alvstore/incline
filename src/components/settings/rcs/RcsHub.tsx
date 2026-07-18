@@ -604,9 +604,12 @@ function WebhooksPanel() {
     toast.success(`${label} URL copied`);
   };
   const rows: Array<[string, string, string]> = [
-    ['Delivery (DLR)', WEBHOOK_URLS.delivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
-    ['User Action', WEBHOOK_URLS.userAction, 'Receives button-click events from RCS rich cards'],
-    ['User Message', WEBHOOK_URLS.userMessage, 'Inbound MO; honors STOP/opt-out; hands to AI brain'],
+    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
+    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards'],
+    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain'],
+    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery'],
+    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards'],
+    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping'],
   ];
   const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
   const snippets: Array<[string, string]> = [
