@@ -68,7 +68,8 @@ const SMS_PROVIDERS = [
 ];
 
 const RCS_PROVIDERS = [
-  { id: 'telinfy', name: 'Telinfy / GreenAds Global', description: 'Indian RCS Business Messaging — text + rich cards' },
+  { id: 'smartping', name: 'Smartping RCS Cloud', description: 'rcsapi.rcscloud.smartping.io — token auth, standard / rich card / carousel' },
+  { id: 'telinfy', name: 'Telinfy / GreenAds Global', description: 'Legacy fallback — x-api-key, template-only' },
   { id: 'msg91', name: 'MSG91 RCS', description: 'MSG91 RCS channel (dispatcher pending — credentials only)' },
 ];
 
