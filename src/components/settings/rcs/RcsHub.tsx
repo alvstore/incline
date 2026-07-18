@@ -74,21 +74,34 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const branchId = (selectedBranch as any)?.id ?? null;
   const [tab, setTab] = useState('overview');
 
-  // Telinfy config probe — drives empty / disabled / active state.
+  // Probe BOTH providers; pick the active one (Smartping preferred if active).
   const { data: cfg, isLoading: cfgLoading } = useQuery({
-    queryKey: ['rcs-telinfy-cfg', branchId],
+    queryKey: ['rcs-cfg', branchId],
     queryFn: async () => {
       const q = supabase.from('integration_settings')
-        .select('is_active, credentials, config, updated_at')
-        .eq('integration_type', 'rcs').eq('provider', 'telinfy');
+        .select('provider, is_active, credentials, config, updated_at, branch_id')
+        .eq('integration_type', 'rcs')
+        .in('provider', ['telinfy', 'smartping']);
       const { data } = branchId
-        ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false }).limit(1)
-        : await q.is('branch_id', null).limit(1);
-      return ((data as any[]) ?? [])[0] ?? null;
+        ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false })
+        : await q.is('branch_id', null);
+      const list = ((data as any[]) ?? []);
+      // Prefer active Smartping, then active Telinfy, then any Smartping, then any Telinfy.
+      return (
+        list.find((r) => r.provider === 'smartping' && r.is_active) ||
+        list.find((r) => r.provider === 'telinfy' && r.is_active) ||
+        list.find((r) => r.provider === 'smartping') ||
+        list[0] || null
+      );
     },
   });
 
-  const hasCreds = !!(cfg && ((cfg as any).credentials?.api_key || (cfg as any).credentials?.has_key));
+  const activeProvider: 'telinfy' | 'smartping' = (cfg as any)?.provider === 'smartping' ? 'smartping' : 'telinfy';
+  const hasCreds = !!(cfg && (
+    (cfg as any).credentials?.api_key ||
+    (cfg as any).credentials?.has_key ||
+    ((cfg as any).credentials?.user_id && (cfg as any).credentials?.api_key)
+  ));
   const isActive = !!cfg?.is_active;
   const state: 'unconfigured' | 'inactive' | 'active' =
     !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
