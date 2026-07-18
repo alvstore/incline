@@ -33,9 +33,17 @@ import { toast } from 'sonner';
 
 const FN_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const WEBHOOK_URLS = {
+  // Legacy Telinfy URLs (kept working)
   delivery: `${FN_BASE}/rcs-webhook/delivery`,
   userAction: `${FN_BASE}/rcs-webhook/user-action`,
   userMessage: `${FN_BASE}/rcs-webhook/user-message`,
+  // Provider-scoped URLs (preferred going forward)
+  telinfyDelivery: `${FN_BASE}/rcs-webhook/telinfy/delivery`,
+  telinfyAction: `${FN_BASE}/rcs-webhook/telinfy/user-action`,
+  telinfyMessage: `${FN_BASE}/rcs-webhook/telinfy/user-message`,
+  smartpingDelivery: `${FN_BASE}/rcs-webhook/smartping/delivery`,
+  smartpingAction: `${FN_BASE}/rcs-webhook/smartping/user-action`,
+  smartpingMessage: `${FN_BASE}/rcs-webhook/smartping/user-message`,
 };
 
 type Template = {
