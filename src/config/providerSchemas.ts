@@ -180,6 +180,12 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'template_id', label: 'Default RCS Template ID', placeholder: 'MSG91 RCS template ID', type: 'text', section: 'config' },
     { key: 'auth_key', label: 'Auth Key', placeholder: 'Enter MSG91 Auth Key', type: 'password', section: 'credentials' },
   ],
+  rcs_smartping: [
+    { key: 'sender_id', label: 'RCS Bot / Agent ID (optional)', placeholder: 'Smartping-provisioned bot name', type: 'text', section: 'config' },
+    { key: 'base_url', label: 'API Base URL', placeholder: 'https://rcsapi.rcscloud.smartping.io', type: 'text', section: 'config' },
+    { key: 'user_id', label: 'User ID', placeholder: 'RCS user account name (e.g. Test_USR)', type: 'text', section: 'credentials' },
+    { key: 'api_key', label: 'Static API Key', placeholder: 'Static API key from Broadcast portal (Email 2FA)', type: 'password', section: 'credentials' },
+  ],
 
   // ── Email ──
   email_smtp: [
