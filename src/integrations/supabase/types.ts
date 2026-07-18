@@ -10368,10 +10368,12 @@ export type Database = {
           body_preview: string | null
           branch_id: string | null
           created_at: string
+          external_template_id: string | null
           id: string
           kind: string | null
           last_synced_at: string
           media_url: string | null
+          provider: string
           raw: Json | null
           status: string
           template_name: string
@@ -10382,10 +10384,12 @@ export type Database = {
           body_preview?: string | null
           branch_id?: string | null
           created_at?: string
+          external_template_id?: string | null
           id?: string
           kind?: string | null
           last_synced_at?: string
           media_url?: string | null
+          provider?: string
           raw?: Json | null
           status?: string
           template_name: string
@@ -10396,10 +10400,12 @@ export type Database = {
           body_preview?: string | null
           branch_id?: string | null
           created_at?: string
+          external_template_id?: string | null
           id?: string
           kind?: string | null
           last_synced_at?: string
           media_url?: string | null
+          provider?: string
           raw?: Json | null
           status?: string
           template_name?: string

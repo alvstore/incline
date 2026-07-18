@@ -33,9 +33,17 @@ import { toast } from 'sonner';
 
 const FN_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const WEBHOOK_URLS = {
+  // Legacy Telinfy URLs (kept working)
   delivery: `${FN_BASE}/rcs-webhook/delivery`,
   userAction: `${FN_BASE}/rcs-webhook/user-action`,
   userMessage: `${FN_BASE}/rcs-webhook/user-message`,
+  // Provider-scoped URLs (preferred going forward)
+  telinfyDelivery: `${FN_BASE}/rcs-webhook/telinfy/delivery`,
+  telinfyAction: `${FN_BASE}/rcs-webhook/telinfy/user-action`,
+  telinfyMessage: `${FN_BASE}/rcs-webhook/telinfy/user-message`,
+  smartpingDelivery: `${FN_BASE}/rcs-webhook/smartping/delivery`,
+  smartpingAction: `${FN_BASE}/rcs-webhook/smartping/user-action`,
+  smartpingMessage: `${FN_BASE}/rcs-webhook/smartping/user-message`,
 };
 
 type Template = {
@@ -66,21 +74,34 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const branchId = (selectedBranch as any)?.id ?? null;
   const [tab, setTab] = useState('overview');
 
-  // Telinfy config probe — drives empty / disabled / active state.
+  // Probe BOTH providers; pick the active one (Smartping preferred if active).
   const { data: cfg, isLoading: cfgLoading } = useQuery({
-    queryKey: ['rcs-telinfy-cfg', branchId],
+    queryKey: ['rcs-cfg', branchId],
     queryFn: async () => {
       const q = supabase.from('integration_settings')
-        .select('is_active, credentials, config, updated_at')
-        .eq('integration_type', 'rcs').eq('provider', 'telinfy');
+        .select('provider, is_active, credentials, config, updated_at, branch_id')
+        .eq('integration_type', 'rcs')
+        .in('provider', ['telinfy', 'smartping']);
       const { data } = branchId
-        ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false }).limit(1)
-        : await q.is('branch_id', null).limit(1);
-      return ((data as any[]) ?? [])[0] ?? null;
+        ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false })
+        : await q.is('branch_id', null);
+      const list = ((data as any[]) ?? []);
+      // Prefer active Smartping, then active Telinfy, then any Smartping, then any Telinfy.
+      return (
+        list.find((r) => r.provider === 'smartping' && r.is_active) ||
+        list.find((r) => r.provider === 'telinfy' && r.is_active) ||
+        list.find((r) => r.provider === 'smartping') ||
+        list[0] || null
+      );
     },
   });
 
-  const hasCreds = !!(cfg && ((cfg as any).credentials?.api_key || (cfg as any).credentials?.has_key));
+  const activeProvider: 'telinfy' | 'smartping' = (cfg as any)?.provider === 'smartping' ? 'smartping' : 'telinfy';
+  const hasCreds = !!(cfg && (
+    (cfg as any).credentials?.api_key ||
+    (cfg as any).credentials?.has_key ||
+    ((cfg as any).credentials?.user_id && (cfg as any).credentials?.api_key)
+  ));
   const isActive = !!cfg?.is_active;
   const state: 'unconfigured' | 'inactive' | 'active' =
     !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
@@ -118,7 +139,7 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 flex-wrap">
               <Radio className="h-5 w-5 text-primary" />
-              RCS Hub <span className="text-slate-400 font-normal">— Telinfy</span>
+              RCS Hub <span className="text-slate-400 font-normal">— {activeProvider === 'smartping' ? 'Smartping' : 'Telinfy'}</span>
               <Badge variant="secondary" className="ml-1">Beta</Badge>
               <StatusPill state={state} loading={cfgLoading} />
             </CardTitle>
@@ -596,9 +617,12 @@ function WebhooksPanel() {
     toast.success(`${label} URL copied`);
   };
   const rows: Array<[string, string, string]> = [
-    ['Delivery (DLR)', WEBHOOK_URLS.delivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
-    ['User Action', WEBHOOK_URLS.userAction, 'Receives button-click events from RCS rich cards'],
-    ['User Message', WEBHOOK_URLS.userMessage, 'Inbound MO; honors STOP/opt-out; hands to AI brain'],
+    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
+    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards'],
+    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain'],
+    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery'],
+    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards'],
+    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping'],
   ];
   const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
   const snippets: Array<[string, string]> = [
