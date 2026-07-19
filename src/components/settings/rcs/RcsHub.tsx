@@ -106,6 +106,8 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const state: 'unconfigured' | 'inactive' | 'active' =
     !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
 
+  const providerLabel = activeProvider === 'smartping' ? 'Smartping' : 'Telinfy';
+
   const testMut = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('rcs-wallet', { body: { branch_id: branchId } });
@@ -119,15 +121,20 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
       }
       return data as any;
     },
-    onSuccess: (d: any) =>
-      toast.success(`Telinfy reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`, {
+    onSuccess: (d: any) => {
+      if (d?.unsupported) {
+        toast.success(`${providerLabel} reachable — wallet endpoint not exposed by this provider`);
+        return;
+      }
+      toast.success(`${providerLabel} reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`, {
         description: d.endpoint ? `via ${d.endpoint}` : undefined,
-      }),
+      });
+    },
     onError: (e: any) => {
       const desc = Array.isArray(e?.attempts)
         ? e.attempts.map((a: any) => `${a.status} ${a.url}`).join('\n')
         : undefined;
-      toast.error(`Telinfy unreachable: ${e.message}`, { description: desc, duration: 10_000 });
+      toast.error(`${providerLabel} unreachable: ${e.message}`, { description: desc, duration: 10_000 });
     },
   });
 
