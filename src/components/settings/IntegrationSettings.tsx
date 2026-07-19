@@ -400,7 +400,7 @@ export function IntegrationSettings() {
               </div>
             </CardContent>
           </Card>
-          <RcsHub onConfigure={() => openConfig('rcs', 'telinfy')} />
+          <RcsHub onConfigure={() => openConfig('rcs', 'smartping')} />
         </TabsContent>
 
         <TabsContent value="email" className="space-y-4">
