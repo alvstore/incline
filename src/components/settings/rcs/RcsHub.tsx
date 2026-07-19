@@ -329,7 +329,7 @@ function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value:
 }
 
 /* ─────────────────────────────────────────── Templates ────────────────── */
-function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmin: boolean }) {
+function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { branchId: string | null; isAdmin: boolean; providerLabel?: string }) {
   const qc = useQueryClient();
   const { data: templates, isLoading } = useQuery({
     queryKey: ['rcs-templates', branchId],
