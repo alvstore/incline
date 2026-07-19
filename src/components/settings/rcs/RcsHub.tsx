@@ -500,13 +500,13 @@ function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'P
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} disabled={disabled} title={disabled ? 'Enable Telinfy integration to send' : undefined}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
+      <Button onClick={() => setOpen(true)} disabled={disabled} title={disabled ? `Enable ${providerLabel} integration to send` : undefined}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Send RCS Test Message</SheetTitle>
-            <SheetDescription>Routes through dispatch-communication → send-rcs → Telinfy.</SheetDescription>
+            <SheetDescription>Routes through dispatch-communication → send-rcs → {providerLabel}.</SheetDescription>
           </SheetHeader>
 
           <div className="space-y-4 py-4">
