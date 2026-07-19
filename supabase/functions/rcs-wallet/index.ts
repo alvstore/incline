@@ -1,6 +1,10 @@
-// v1.1.0 — Fetch Telinfy RCS wallet balance with path fallback + verbose diagnostics.
+// v2.0.0 — Provider-aware wallet fetch. Routes via `integration_settings` (Smartping preferred, Telinfy fallback).
+//   • Telinfy: probes candidate /rcs/wallet paths with x-api-key.
+//   • Smartping: wallet endpoint is NOT publicly documented → returns { ok:true, unsupported:true }
+//     so the UI can show "wallet not exposed" without treating it as an error.
 //   POST /rcs-wallet { branch_id?: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveRcsProvider } from '../_shared/rcsProviders.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,17 +14,9 @@ const corsHeaders = {
 const json = (s: number, b: unknown) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-const ENV_API_KEY = Deno.env.get('TELINFY_API_KEY') || '';
-const ENV_BASE = (Deno.env.get('TELINFY_BASE_URL') || 'https://hub.telinfy.com/unified/developer/api/v1').replace(/\/+$/, '');
-
-// Candidate paths — Telinfy's RCS wallet endpoint location varies by tenant. Try common ones.
-const CANDIDATE_PATHS = [
-  '/rcs/wallet',
-  '/rcs/wallet/balance',
-  '/wallet',
-  '/wallet/balance',
-  '/account/wallet',
-  '/sms/wallet',
+const TELINFY_CANDIDATE_PATHS = [
+  '/rcs/wallet', '/rcs/wallet/balance',
+  '/wallet', '/wallet/balance', '/account/wallet', '/sms/wallet',
 ];
 
 Deno.serve(async (req) => {
@@ -30,34 +26,34 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const branchId: string | null = body?.branch_id || null;
 
-    let apiKey = ENV_API_KEY;
-    let baseUrl = ENV_BASE;
-    const { data: cfg } = await supabase
-      .from('integration_settings')
-      .select('config, credentials, is_active')
-      .eq('integration_type', 'rcs').eq('provider', 'telinfy')
-      .in('branch_id', branchId ? [branchId, null] : [null])
-      .order('branch_id', { ascending: false, nullsFirst: false })
-      .limit(1).maybeSingle();
-    if (cfg) {
-      const dbKey = (cfg as any).credentials?.api_key;
-      if (dbKey) apiKey = dbKey;
-      const dbBase = (cfg as any).config?.base_url;
-      if (dbBase) baseUrl = String(dbBase).replace(/\/+$/, '');
+    const cfg = await resolveRcsProvider(supabase, branchId);
+    if (!cfg.is_active) return json(200, { ok: false, reason: `${cfg.provider} integration is disabled`, provider: cfg.provider });
+
+    // ---- Smartping: no documented public wallet endpoint ----
+    if (cfg.provider === 'smartping') {
+      await supabase.from('rcs_wallet_snapshots').insert({
+        branch_id: branchId, balance: null, currency: 'INR', raw: { unsupported: true, provider: 'smartping' },
+      });
+      return json(200, {
+        ok: true, unsupported: true, provider: 'smartping', balance: null, currency: 'INR',
+        reason: 'Smartping RCS API does not expose a wallet balance endpoint. Check balance in the Smartping dashboard.',
+      });
     }
-    if (!apiKey) return json(200, { ok: false, reason: 'TELINFY_API_KEY missing' });
+
+    // ---- Telinfy: probe candidate paths ----
+    const apiKey = cfg.credentials?.api_key || Deno.env.get('TELINFY_API_KEY') || '';
+    if (!apiKey) return json(200, { ok: false, provider: 'telinfy', reason: 'Telinfy API key missing' });
 
     const attempts: Array<{ url: string; status: number; body: any }> = [];
     let success: { url: string; data: any } | null = null;
-    for (const p of CANDIDATE_PATHS) {
-      const url = `${baseUrl}${p}`;
+    for (const p of TELINFY_CANDIDATE_PATHS) {
+      const url = `${cfg.base_url}${p}`;
       try {
         const resp = await fetch(url, { method: 'GET', headers: { 'x-api-key': apiKey, 'Accept': 'application/json' } });
         const text = await resp.text();
         let data: any = null; try { data = JSON.parse(text); } catch { /* keep */ }
         attempts.push({ url, status: resp.status, body: data ?? text?.slice(0, 200) });
         if (resp.ok) { success = { url, data }; break; }
-        // 401/403 means key is wrong — no point trying other paths
         if (resp.status === 401 || resp.status === 403) break;
       } catch (e) {
         attempts.push({ url, status: 0, body: e instanceof Error ? e.message : String(e) });
@@ -65,14 +61,13 @@ Deno.serve(async (req) => {
     }
 
     if (!success) {
-      console.error('[rcs-wallet] all candidates failed', JSON.stringify(attempts));
-      const last = attempts[attempts.length - 1] ?? { status: 0, body: 'no response' };
+      const last = attempts[attempts.length - 1] ?? { status: 0 };
       const reason =
-        last.status === 401 ? 'Invalid API key — check x-api-key in Provider credentials' :
+        last.status === 401 ? 'Invalid API key' :
         last.status === 403 ? 'API key lacks wallet permission' :
-        last.status === 404 ? `No wallet endpoint found on ${baseUrl} (tried ${attempts.length} paths)` :
+        last.status === 404 ? `No wallet endpoint found on ${cfg.base_url}` :
         `HTTP ${last.status}`;
-      return json(200, { ok: false, reason, attempts, base_url: baseUrl });
+      return json(200, { ok: false, provider: 'telinfy', reason, attempts, base_url: cfg.base_url });
     }
 
     const d = success.data;
@@ -84,11 +79,9 @@ Deno.serve(async (req) => {
     });
 
     return json(200, {
-      ok: true,
+      ok: true, provider: 'telinfy',
       balance: Number.isFinite(balance) ? balance : null,
-      currency,
-      endpoint: success.url,
-      raw: d,
+      currency, endpoint: success.url, raw: d,
     });
   } catch (e) {
     console.error('[rcs-wallet] error', e);

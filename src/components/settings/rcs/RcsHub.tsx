@@ -106,6 +106,8 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const state: 'unconfigured' | 'inactive' | 'active' =
     !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
 
+  const providerLabel = activeProvider === 'smartping' ? 'Smartping' : 'Telinfy';
+
   const testMut = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('rcs-wallet', { body: { branch_id: branchId } });
@@ -119,15 +121,20 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
       }
       return data as any;
     },
-    onSuccess: (d: any) =>
-      toast.success(`Telinfy reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`, {
+    onSuccess: (d: any) => {
+      if (d?.unsupported) {
+        toast.success(`${providerLabel} reachable — wallet endpoint not exposed by this provider`);
+        return;
+      }
+      toast.success(`${providerLabel} reachable — wallet ${d.currency || 'INR'} ${Number(d.balance ?? 0).toLocaleString('en-IN')}`, {
         description: d.endpoint ? `via ${d.endpoint}` : undefined,
-      }),
+      });
+    },
     onError: (e: any) => {
       const desc = Array.isArray(e?.attempts)
         ? e.attempts.map((a: any) => `${a.status} ${a.url}`).join('\n')
         : undefined;
-      toast.error(`Telinfy unreachable: ${e.message}`, { description: desc, duration: 10_000 });
+      toast.error(`${providerLabel} unreachable: ${e.message}`, { description: desc, duration: 10_000 });
     },
   });
 
@@ -188,19 +195,19 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
                 <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet} />
               </TabsContent>
               <TabsContent value="templates" className="mt-4">
-                <TemplatesPanel branchId={branchId} isAdmin={isAdmin} />
+                <TemplatesPanel branchId={branchId} isAdmin={isAdmin} providerLabel={providerLabel} />
               </TabsContent>
               <TabsContent value="test" className="mt-4">
-                <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} />
+                <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} providerLabel={providerLabel} />
               </TabsContent>
               <TabsContent value="wallet" className="mt-4">
-                {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+                {canSeeWallet ? <WalletPanel branchId={branchId} providerLabel={providerLabel} /> : <div className="text-sm text-muted-foreground">No access.</div>}
               </TabsContent>
               <TabsContent value="reports" className="mt-4">
                 <ReportsPanel branchId={branchId} />
               </TabsContent>
               <TabsContent value="webhooks" className="mt-4">
-                <WebhooksPanel />
+                <WebhooksPanel activeProvider={activeProvider} />
               </TabsContent>
             </Tabs>
           </>
@@ -227,13 +234,13 @@ function EmptyConfigure({ onConfigure }: { onConfigure?: () => void }) {
       <div className="mx-auto h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
         <Radio className="h-6 w-6" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-900">Telinfy RCS isn't connected yet</h3>
+      <h3 className="text-sm font-semibold text-slate-900">RCS provider isn't connected yet</h3>
       <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-        Add your Telinfy <code className="px-1 py-0.5 rounded bg-slate-200 font-mono text-[11px]">x-api-key</code> and (optional) Brand ID in Provider credentials above, then enable the integration.
+        Configure Smartping (preferred) or Telinfy credentials in Provider settings above, then enable the integration to start sending.
       </p>
       {onConfigure && (
         <Button className="mt-4" onClick={onConfigure}>
-          <Send className="h-4 w-4 mr-2" />Configure Telinfy
+          <Send className="h-4 w-4 mr-2" />Configure provider
         </Button>
       )}
     </div>
@@ -322,7 +329,7 @@ function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value:
 }
 
 /* ─────────────────────────────────────────── Templates ────────────────── */
-function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmin: boolean }) {
+function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { branchId: string | null; isAdmin: boolean; providerLabel?: string }) {
   const qc = useQueryClient();
   const { data: templates, isLoading } = useQuery({
     queryKey: ['rcs-templates', branchId],
@@ -342,7 +349,7 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
       return data;
     },
     onSuccess: (d: any) => {
-      toast.success(`Synced ${d.upserted}/${d.count} templates from Telinfy`);
+      toast.success(`Synced ${d.upserted}/${d.count} templates from ${providerLabel}`);
       qc.invalidateQueries({ queryKey: ['rcs-templates'] });
     },
     onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
@@ -352,12 +359,12 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-600">
-          {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from Telinfy.
+          {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from {providerLabel}.
         </p>
         {isAdmin && (
           <Button size="sm" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>
             {syncMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Sync from Telinfy
+            Sync from {providerLabel}
           </Button>
         )}
       </div>
@@ -365,8 +372,8 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
         templates && templates.length > 0 ? (
           <>
             <p className="text-xs text-slate-500">
-              Rich-media RCS messages (image cards, carousels, suggested replies) are pre-approved on the Telinfy dashboard.
-              To add a new rich card, create it in Telinfy → Templates, then click "Sync from Telinfy".
+              Rich-media RCS (image cards, carousels, suggested replies) must be pre-approved on the {providerLabel} dashboard.
+              Create it there, then click "Sync from {providerLabel}" to mirror it here.
             </p>
             {(['rich', 'basic'] as const).map((bucket) => {
               const rows = templates.filter((t) => bucket === 'rich' ? isRichKind(t.kind) : !isRichKind(t.kind));
@@ -421,7 +428,7 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
         ) : (
           <Card className="rounded-2xl border-dashed border-2 border-slate-200">
             <CardContent className="p-8 text-center text-sm text-slate-500">
-              No templates synced yet. Click "Sync from Telinfy" to import approved templates.
+              No templates synced yet. Click "Sync from {providerLabel}" to import approved templates.
             </CardContent>
           </Card>
         )}
@@ -430,7 +437,7 @@ function TemplatesPanel({ branchId, isAdmin }: { branchId: string | null; isAdmi
 }
 
 /* ─────────────────────────────────────────── Test Send ────────────────── */
-function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: string | null; isAdmin: boolean; disabled?: boolean }) {
+function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'Provider' }: { branchId: string | null; isAdmin: boolean; disabled?: boolean; providerLabel?: string }) {
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState('919887601200');
   const [templateName, setTemplateName] = useState('');
@@ -493,13 +500,13 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} disabled={disabled} title={disabled ? 'Enable Telinfy integration to send' : undefined}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
+      <Button onClick={() => setOpen(true)} disabled={disabled} title={disabled ? `Enable ${providerLabel} integration to send` : undefined}><Send className="h-4 w-4 mr-2" />Open Test Console</Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Send RCS Test Message</SheetTitle>
-            <SheetDescription>Routes through dispatch-communication → send-rcs → Telinfy.</SheetDescription>
+            <SheetDescription>Routes through dispatch-communication → send-rcs → {providerLabel}.</SheetDescription>
           </SheetHeader>
 
           <div className="space-y-4 py-4">
@@ -564,7 +571,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false }: { branchId: stri
 }
 
 /* ─────────────────────────────────────────── Wallet ───────────────────── */
-function WalletPanel({ branchId }: { branchId: string | null }) {
+function WalletPanel({ branchId, providerLabel = 'Provider' }: { branchId: string | null; providerLabel?: string }) {
   const qc = useQueryClient();
   const { data: snaps, isLoading } = useQuery({
     queryKey: ['rcs-wallet-snaps', branchId],
@@ -582,8 +589,12 @@ function WalletPanel({ branchId }: { branchId: string | null }) {
       if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'wallet_failed');
       return data;
     },
-    onSuccess: () => {
-      toast.success('Wallet refreshed');
+    onSuccess: (d: any) => {
+      if (d?.unsupported) {
+        toast.info(`${providerLabel} does not expose a wallet endpoint`);
+      } else {
+        toast.success(`${providerLabel} wallet refreshed`);
+      }
       qc.invalidateQueries({ queryKey: ['rcs-wallet-snaps'] });
       qc.invalidateQueries({ queryKey: ['rcs-wallet-latest'] });
     },
@@ -613,21 +624,32 @@ function WalletPanel({ branchId }: { branchId: string | null }) {
 }
 
 /* ─────────────────────────────────────────── Webhooks ─────────────────── */
-function WebhooksPanel() {
+function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telinfy' | 'smartping' }) {
   const copy = (s: string, label: string) => {
     navigator.clipboard.writeText(s);
     toast.success(`${label} URL copied`);
   };
-  const rows: Array<[string, string, string]> = [
-    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
-    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards'],
-    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain'],
-    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery'],
-    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards'],
-    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping'],
+  const allRows: Array<[string, string, string, 'telinfy' | 'smartping']> = [
+    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL', 'telinfy'],
+    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards', 'telinfy'],
+    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain', 'telinfy'],
+    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery', 'smartping'],
+    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards', 'smartping'],
+    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping', 'smartping'],
   ];
+  const rows = allRows.filter((r) => r[3] === activeProvider);
+
   const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
-  const snippets: Array<[string, string]> = [
+  const SMARTPING_BASE = 'https://rcsapi.rcscloud.smartping.io';
+  const snippets: Array<[string, string]> = activeProvider === 'smartping' ? [
+    ['Authorize (get token)', `curl -X POST -H "Content-Type: application/json" \\
+  -d '{"userId":"$SMARTPING_USER","apiKey":"$SMARTPING_KEY"}' \\
+  ${SMARTPING_BASE}/rcs/api/user/authorize`],
+    ['List templates', `curl -H "Authorization: $TOKEN" ${SMARTPING_BASE}/rcs/api/template/list`],
+    ['Send message', `curl -X POST -H "Authorization: $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"messages":[{"templateId":"<uuid>","to":"919887601200","components":{"standard":[{"type":"messageText","parameters":["John"]}]}}]}' \\
+  ${SMARTPING_BASE}/rcs/api/message/send`],
+  ] : [
     ['List templates', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/templates`],
     ['Send message', `curl -X POST -H "x-api-key: $TELINFY_KEY" -H "Content-Type: application/json" \\
   -d '{"templateName":"welcome","lcustomParam":{"NAME":"John"}}' \\
@@ -635,6 +657,7 @@ function WebhooksPanel() {
     ['Wallet balance', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/wallet`],
     ['Record by ID', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/record/12345`],
   ];
+  const snippetLabel = activeProvider === 'smartping' ? 'Smartping REST — curl snippets' : 'Telinfy REST — curl snippets';
   return (
     <div className="space-y-4">
       <div className="space-y-3">
@@ -661,7 +684,7 @@ function WebhooksPanel() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-slate-500" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Telinfy REST — curl snippets</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{snippetLabel}</span>
         </div>
         <p className="text-xs text-slate-500">
           For ad-hoc testing only. Production sends MUST go through{' '}

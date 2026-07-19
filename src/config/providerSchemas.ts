@@ -175,11 +175,6 @@ const PROVIDER_SCHEMAS: Record<string, ProviderFieldDef[]> = {
     { key: 'base_url', label: 'API Base URL', placeholder: 'https://hub.telinfy.com/unified/developer/api/v1', type: 'text', section: 'config' },
     { key: 'api_key', label: 'API Key (x-api-key)', placeholder: 'Paste Telinfy developer API key', type: 'password', section: 'credentials' },
   ],
-  rcs_msg91: [
-    { key: 'sender_id', label: 'RCS Sender / Brand ID', placeholder: 'MSG91 approved RCS brand ID', type: 'text', section: 'config' },
-    { key: 'template_id', label: 'Default RCS Template ID', placeholder: 'MSG91 RCS template ID', type: 'text', section: 'config' },
-    { key: 'auth_key', label: 'Auth Key', placeholder: 'Enter MSG91 Auth Key', type: 'password', section: 'credentials' },
-  ],
   rcs_smartping: [
     { key: 'sender_id', label: 'RCS Bot / Agent ID (optional)', placeholder: 'Smartping-provisioned bot name', type: 'text', section: 'config' },
     { key: 'base_url', label: 'API Base URL', placeholder: 'https://rcsapi.rcscloud.smartping.io', type: 'text', section: 'config' },

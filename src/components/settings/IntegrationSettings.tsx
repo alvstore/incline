@@ -70,7 +70,6 @@ const SMS_PROVIDERS = [
 const RCS_PROVIDERS = [
   { id: 'smartping', name: 'Smartping RCS Cloud', description: 'rcsapi.rcscloud.smartping.io — token auth, standard / rich card / carousel' },
   { id: 'telinfy', name: 'Telinfy / GreenAds Global', description: 'Legacy fallback — x-api-key, template-only' },
-  { id: 'msg91', name: 'MSG91 RCS', description: 'MSG91 RCS channel (dispatcher pending — credentials only)' },
 ];
 
 // RoundSMS defaults and labels now live in providerSchemas.ts
@@ -366,7 +365,7 @@ export function IntegrationSettings() {
               <CardTitle className="flex items-center gap-2 text-base">
                 <Settings className="h-4 w-4" /> Provider credentials
               </CardTitle>
-              <CardDescription>Configure per-branch overrides for Telinfy / MSG91 API keys. Save credentials first, then enable to start sending.</CardDescription>
+              <CardDescription>Configure Smartping (preferred) or Telinfy credentials. Save first, then enable to start sending.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2">
@@ -401,7 +400,7 @@ export function IntegrationSettings() {
               </div>
             </CardContent>
           </Card>
-          <RcsHub onConfigure={() => openConfig('rcs', 'telinfy')} />
+          <RcsHub onConfigure={() => openConfig('rcs', 'smartping')} />
         </TabsContent>
 
         <TabsContent value="email" className="space-y-4">
