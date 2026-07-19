@@ -1,3 +1,5 @@
+// v2.9.0 — Downgrade Meta 131000/133000 echoes from process-comm-retry-queue to
+//           severity=warning so a single flaky send doesn't spam SystemHealth.
 // v2.8.0 — MM API for WhatsApp routing: when the caller sets `use_mm_api: true` on a
 //           template send AND the WhatsApp integration has `config.mm_api_enabled = true`,
 //           the request goes to `/{PHONE_ID}/marketing_messages` (Marketing Messages API,
