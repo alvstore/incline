@@ -372,8 +372,8 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
         templates && templates.length > 0 ? (
           <>
             <p className="text-xs text-slate-500">
-              Rich-media RCS messages (image cards, carousels, suggested replies) are pre-approved on the Telinfy dashboard.
-              To add a new rich card, create it in Telinfy → Templates, then click "Sync from Telinfy".
+              Rich-media RCS (image cards, carousels, suggested replies) must be pre-approved on the {providerLabel} dashboard.
+              Create it there, then click "Sync from {providerLabel}" to mirror it here.
             </p>
             {(['rich', 'basic'] as const).map((bucket) => {
               const rows = templates.filter((t) => bucket === 'rich' ? isRichKind(t.kind) : !isRichKind(t.kind));
