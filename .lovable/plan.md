@@ -1,68 +1,66 @@
+## 1. Retry Queue — Stop / Stop-All controls
 
-# Add Smartping RCS — unified `send-rcs` (no per-provider edge fns)
+**Root cause:** `RetryQueuePanel` has a per-row Cancel button rendered only as an unlabeled `Ban` icon (`size="icon" variant="ghost"`) with no `aria-label` or tooltip, and no bulk "Stop all"/"Retry all" affordance. Users read this as "no stop button." Also, `process-comm-retry-queue` does not treat Meta code **131000** ("Something went wrong") as terminal, so the same row runs the full 1→2→3 retry ladder and each failure fingerprints in error logs → 45 rows for one recipient/template pair.
 
-Keep a **single** `send-rcs` edge function that internally routes to Telinfy or Smartping based on `integration_settings.provider`. Same for templates sync, DLR webhook, and record lookup. No new per-provider functions — just internal adapters inside one file each.
+**Fix (`src/components/communications/RetryQueuePanel.tsx`)**
+- Replace icon-only cancel with `Button variant="outline" className="text-destructive"` labeled **"Stop"** with `Ban` icon (matches the Retry button's shape).
+- Add a header actions row: **"Retry all"** (bulk `retryNow` over currently loaded rows) and **"Stop all"** (bulk update `status='cancelled'` for the filtered set) with a confirm `AlertDialog`.
+- Add a filter chip row: `Pending | Retrying | Failed | Exhausted` (currently exhausted rows are hidden — add so users can also **Restart** an exhausted item by resetting `retry_count=0, status='pending', next_retry_at=now()`).
+- Add per-row **"Restart"** shown only when `status='exhausted'`.
 
-## What I need from you first
+**Fix (`supabase/functions/process-comm-retry-queue/index.ts` v2.2.0)**
+- Add `131000` to `TERMINAL_META_CODES` **after 1 retry** (not immediately): introduce a `SOFT_TERMINAL_META_CODES` set checked as `retry_count >= 1 && soft.has(code)` → mark exhausted with reason `meta_131000_transient_exhausted`. This kills the 3× loop without losing a genuine 1-retry recovery.
 
-1. **Credentials** — I'll open a secure form for:
-   - `SMARTPING_RCS_USER_ID`
-   - `SMARTPING_RCS_API_KEY`
-2. **IP whitelisting** on Smartping's firewall for Supabase Edge egress (raise ticket with them). Sends will 401 until this is done — surfaced in UI.
-3. **Bot / Agent ID** provisioned for Incline.
-4. **Webhook URL** to register in Smartping panel (given after deploy): `.../functions/v1/rcs-webhook/smartping/delivery` (and `/user-action`, `/user-message`).
+## 2. Two System Health clusters
 
-## Unified edge functions (edit, don't create)
+**Cluster 1 (45×) — `send-whatsapp` Meta 131000 loop for `construction_walkthrough_reel_v1`.**
+- Root cause: template send returns Meta's generic 500/131000; `process-comm-retry-queue` retries 3× per queued row, and every failed batch created a fresh queue row for the same recipient (retry-of-retry) because 131000 isn't terminal. Each attempt logs a fingerprinted `error` row.
+- Fix: the retry-queue policy change in §1 (cap 131000 at 1 retry). Additionally in `supabase/functions/send-whatsapp/index.ts` downgrade the second-and-later 131000 log for the same `source_log_id` to `severity='warning'` (add `severity: newRetryCount>0 && Number(metaCode)===131000 ? 'warning' : 'error'`) — stops the SystemHealth spam.
 
-1. **`supabase/functions/_shared/rcsProviders.ts`** (new, shared adapter module only — not an edge fn)
-   - `resolveRcsProvider(supabase, branch_id)` → `{provider, base_url, credentials, is_active}` from `integration_settings` (prefers `is_active=true`; if multiple, prefers `is_default`).
-   - `telinfyAdapter` — current Telinfy calls (send / templates / record / DLR mapping).
-   - `smartpingAdapter` — token cache (`settings` key `smartping_rcs_token`, 23h TTL, auto-refresh on 401), send builders for `standard | richCard | carouselCard` on `/rcs/api/message/send`, template fetch, DLR event mapping. Correlates via `customOne = log_id`.
-   - One typed contract: `send(payload) → {status, provider_message_id, provider_record_id, raw}`, `syncTemplates()`, `mapDlr(event)`.
+**Cluster 2 (1×) — `DialogContent requires a DialogTitle` on `/leads` mobile.**
+- Root cause: `src/components/layout/AppSidebar.tsx` renders `<SheetContent>` (mobile nav drawer) without a `SheetTitle`. Radix Dialog underneath fires the a11y warning the first time the sidebar opens on mobile. Route is `/leads` because that's where the user was.
+- Fix: add `<SheetHeader><VisuallyHidden><SheetTitle>Navigation</SheetTitle></VisuallyHidden></SheetHeader>` at the top of the SheetContent.
 
-2. **`send-rcs/index.ts`** (edit, v0.5) — no logic change to callers. Resolve provider → call adapter → write to `communication_logs`. Freeform still falls back with `status:'unsupported'` when the resolved provider requires a template.
+**Shared cause?** No — independent. One fix per cluster.
 
-3. **`rcs-templates-sync/index.ts`** (edit, v1.3) — call `adapter.syncTemplates()`. Add columns to `rcs_templates`: `provider text default 'telinfy'`, `external_template_id text`, unique `(branch_id, provider, template_name)`.
+## 3. RCS Hub — hide/relabel until a provider is enabled
 
-4. **`rcs-webhook/index.ts`** (edit, v0.4) — path suffix already routes `/delivery|/user-action|/user-message`. Add one more suffix segment for provider: `/rcs-webhook/telinfy/...` and `/rcs-webhook/smartping/...`. Adapter's `mapDlr()` decides status. Correlation:
-   - Telinfy → `communication_logs.provider_record_id`
-   - Smartping → `communication_logs.id` via `customOne` (or `provider_message_id`)
+**Current:** Card always renders "RCS Hub — Telinfy" with a "Disabled" badge, regardless of whether Telinfy or Smartping is the enabled provider. Confusing when the enabled row is Smartping (or none).
 
-5. **`rcs-record/index.ts`** (edit) — dispatch to `adapter.fetchRecord(recordId)`.
+**Fix (`src/components/settings/rcs/RcsHub.tsx` + `IntegrationSettings.tsx`):**
+- Rename hub title to just **"RCS Hub"** with a right-aligned provider chip: `Telinfy` / `Smartping` / `None`. Chip is driven by whichever `integration_settings` row has `is_active=true` (probe already exists in `cfg`).
+- When both providers are disabled: collapse the hub to a single "Set up RCS" empty-state card (Overview/Templates/Test/Wallet/Reports/Webhooks tabs hidden). Keep the amber "Credentials saved, but integration is disabled" banner as-is when credentials exist but toggle is off.
+- Move the hub card so it renders **inside the enabled provider's Settings → Integrations card** (accordion body below Telinfy/Smartping), not as a standalone global card. When neither is enabled, hub is not rendered at all.
+- Webhooks tab: show only the enabled provider's URLs (currently shows both Telinfy + Smartping rows unconditionally).
 
-## Database (one migration)
-```
-ALTER TABLE rcs_templates
-  ADD COLUMN provider text NOT NULL DEFAULT 'telinfy',
-  ADD COLUMN external_template_id text;
-ALTER TABLE rcs_templates DROP CONSTRAINT rcs_templates_branch_id_template_name_key;
-ALTER TABLE rcs_templates ADD CONSTRAINT rcs_templates_branch_provider_name_key
-  UNIQUE (branch_id, provider, template_name);
-```
-No new tables, no RLS/GRANT changes.
+## 4. Finish Smartping RCS integration + UUPM redesign
 
-## Frontend (Vuexy Sheets, no dialogs)
-- **`Settings → RCS Hub → Providers` tab** (new component `RcsProvidersTab.tsx`) — lists Telinfy + Smartping cards, each opens a right-side Sheet (`RcsProviderSheet.tsx` reused for both) with fields driven by provider schema. "Set as default sender" radio (writes `integration_settings.is_default`).
-- **Templates tab** — add Provider column + filter; "Sync templates" reads active provider(s).
-- **CampaignWizard RCS step** — show provider chip on each template card. No flow changes.
+**Backend**
+- `supabase/functions/rcs-templates-sync/index.ts`: branch on active provider from `integration_settings`; call `adapter.syncTemplates()` (Smartping list endpoint) and upsert into `rcs_templates` with `provider='smartping'` + `external_template_id`. Preserve Telinfy path.
+- `supabase/functions/send-rcs/index.ts`: verify adapter passes `customOne=<log_id>` for Smartping so DLR correlation works (already in v0.5.0 per memory — re-test).
+- `supabase/functions/rcs-webhook/index.ts`: confirm `/smartping/{delivery,user-action,user-message}` map to `communication_logs.status` transitions (`sent → delivered → read`, `failed`) via `customOne`.
+- `supabase/functions/reconcile-rcs-pending/index.ts`: extend to poll Smartping `/rcs/api/report` for pending 24h+ rows.
+- New optional edge fn `rcs-wallet` already exists — add a Smartping balance branch (`/rcs/api/wallet` or equivalent from the Postman collection) so the Wallet card shows a real number for the enabled provider.
 
-## Live test to +91 98876 01200
-After secrets + whitelist:
-1. `curl` `send-rcs` with `provider=smartping` templateId.
-2. Check `communication_logs` → sent + `provider_message_id`.
-3. Wait for Smartping DLR → confirm status flips via `rcs-webhook/smartping/delivery`.
-4. Paste function logs + drawer screenshot.
+**UI (redesigned with UUPM aesthetic — kept aligned to Vuexy tokens)**
+- Overview tab becomes a data-dense KPI strip: 24h Sent · Delivered · Read · Failed · Wallet, with a Sparkline row below sourced from `communication_logs` grouped 24×1h.
+- Templates tab: cards grid (`grid-cols-1 md:grid-cols-2`) with kind chip (Rich/Basic · Standard/Dynamic), provider chip, `Preview`/`Test Send`/`Copy ID` actions. Empty state links to provider docs.
+- Test Send tab: single-column form (recipient, template select filtered by active provider, variables inputs auto-generated from template), live status timeline `queued → sent → delivered → read` streaming from `communication_logs` realtime.
+- Reports tab: recent 50 sends table with per-row **View Timeline** drawer calling `rcs-record` for Telinfy or Smartping `/rcs/api/report/{id}`.
+- Webhooks tab: copy-boxes for **only** the enabled provider + a "Test webhook" button that curls the webhook fn with a synthetic payload.
+- Wallet tab: gradient hero card (existing) but adds "Top up" deep-link to provider portal + `last_synced_at` freshness pill.
+- Provider Config: add "IP Whitelist required" callout for Smartping with our current Supabase egress info.
 
-## Memory (after apply)
-- `mem://integrations/rcs-multi-provider` — unified `send-rcs` with adapter pattern; provider resolution via `integration_settings`; webhook path `/rcs-webhook/{provider}/{event}`; Smartping token TTL 24h; correlation via `customOne`.
-- Core index update: RCS is multi-provider via one edge fn.
+**Secrets required (to be added when moving to live testing):** `SMARTPING_RCS_USER_ID`, `SMARTPING_RCS_API_KEY` — will request via `add_secret` in the build step.
 
-## Skills applied
-`senior-architect` (adapter pattern inside single edge fn), `senior-backend` (token cache, webhook routing), `ui-ux-pro-max` (Vuexy providers tab / sheet), `code-reviewer` (input validation on public webhook, no secret leaks), `supabase-postgres-best-practices` (schema change with unique constraint, no policy impact).
-
-## Explicitly not doing
-- No new `send-rcs-smartping`, `rcs-smartping-webhook`, or `rcs-smartping-templates-sync` edge fns.
-- No dispatcher (`dispatch-communication`) changes — it still just invokes `send-rcs`.
-- No campaign chunker changes.
-
-Approve and I'll (1) request the two secrets, (2) ship the shared adapter + 4 edited edge fns + 1 migration + UI, (3) run the live test and paste DLR evidence.
+### Files touched
+- `src/components/communications/RetryQueuePanel.tsx`
+- `supabase/functions/process-comm-retry-queue/index.ts`
+- `supabase/functions/send-whatsapp/index.ts`
+- `src/components/layout/AppSidebar.tsx`
+- `src/components/settings/rcs/RcsHub.tsx`
+- `src/components/settings/IntegrationSettings.tsx`
+- `supabase/functions/rcs-templates-sync/index.ts`
+- `supabase/functions/rcs-webhook/index.ts` (verify)
+- `supabase/functions/reconcile-rcs-pending/index.ts`
+- `supabase/functions/rcs-wallet/index.ts`
