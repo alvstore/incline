@@ -684,7 +684,7 @@ function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telin
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-slate-500" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Telinfy REST — curl snippets</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{snippetLabel}</span>
         </div>
         <p className="text-xs text-slate-500">
           For ad-hoc testing only. Production sends MUST go through{' '}
