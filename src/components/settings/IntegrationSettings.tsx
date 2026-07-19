@@ -365,7 +365,7 @@ export function IntegrationSettings() {
               <CardTitle className="flex items-center gap-2 text-base">
                 <Settings className="h-4 w-4" /> Provider credentials
               </CardTitle>
-              <CardDescription>Configure per-branch overrides for Telinfy / MSG91 API keys. Save credentials first, then enable to start sending.</CardDescription>
+              <CardDescription>Configure Smartping (preferred) or Telinfy credentials. Save first, then enable to start sending.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2">
