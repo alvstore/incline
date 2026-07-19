@@ -571,7 +571,7 @@ function TestSendPanel({ branchId, isAdmin, disabled = false, providerLabel = 'P
 }
 
 /* ─────────────────────────────────────────── Wallet ───────────────────── */
-function WalletPanel({ branchId }: { branchId: string | null }) {
+function WalletPanel({ branchId, providerLabel = 'Provider' }: { branchId: string | null; providerLabel?: string }) {
   const qc = useQueryClient();
   const { data: snaps, isLoading } = useQuery({
     queryKey: ['rcs-wallet-snaps', branchId],
