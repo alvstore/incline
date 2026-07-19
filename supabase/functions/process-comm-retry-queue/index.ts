@@ -1,5 +1,7 @@
-// process-comm-retry-queue v2.2.0
-// v2.2.0: Hardened terminal-reason table — any of these dispatcher reasons OR
+// process-comm-retry-queue v2.3.0
+// v2.3.0: Soft-terminal Meta codes — 131000 ("something went wrong") is transient
+//          but flaky Meta backends can loop it. Cap after 1 retry: on the SECOND
+//          occurrence for the same queue row we mark exhausted instead of a 3rd try.
 //          Meta error codes immediately abandons the queue row (status='exhausted')
 //          with no further retries:
 //            • no_active_session_no_template
@@ -50,12 +52,22 @@ const TERMINAL_META_CODES = new Set([
   133010, // phone not registered with WhatsApp
 ]);
 
-function isTerminalReason(reason: string | null | undefined): boolean {
+// Meta codes that are transient but should be capped after 1 retry.
+const SOFT_TERMINAL_META_CODES = new Set([
+  131000, // generic "Something went wrong" — often persists for the same payload
+  133000, // account or asset restriction (transient sometimes, usually sticky)
+]);
+
+function isTerminalReason(reason: string | null | undefined, retryCount = 0): boolean {
   if (!reason) return false;
   const s = String(reason);
   if (TERMINAL_REASON_PATTERNS.some((re) => re.test(s))) return true;
   const codeMatch = s.match(/\b(13\d{4})\b/);
-  if (codeMatch && TERMINAL_META_CODES.has(Number(codeMatch[1]))) return true;
+  if (codeMatch) {
+    const code = Number(codeMatch[1]);
+    if (TERMINAL_META_CODES.has(code)) return true;
+    if (SOFT_TERMINAL_META_CODES.has(code) && retryCount >= 1) return true;
+  }
   return false;
 }
 
@@ -111,7 +123,7 @@ Deno.serve(async (req) => {
       }
 
       // ── Pre-flight: if the previous error reason is terminal, abandon now.
-      if (isTerminalReason(row.last_error)) {
+      if (isTerminalReason(row.last_error, row.retry_count || 0)) {
         await supabase
           .from("communication_retry_queue")
           .update({ status: "exhausted" })
