@@ -428,7 +428,7 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
         ) : (
           <Card className="rounded-2xl border-dashed border-2 border-slate-200">
             <CardContent className="p-8 text-center text-sm text-slate-500">
-              No templates synced yet. Click "Sync from Telinfy" to import approved templates.
+              No templates synced yet. Click "Sync from {providerLabel}" to import approved templates.
             </CardContent>
           </Card>
         )}
