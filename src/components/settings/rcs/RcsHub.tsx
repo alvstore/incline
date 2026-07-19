@@ -349,7 +349,7 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
       return data;
     },
     onSuccess: (d: any) => {
-      toast.success(`Synced ${d.upserted}/${d.count} templates from Telinfy`);
+      toast.success(`Synced ${d.upserted}/${d.count} templates from ${providerLabel}`);
       qc.invalidateQueries({ queryKey: ['rcs-templates'] });
     },
     onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
