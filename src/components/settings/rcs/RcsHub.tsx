@@ -195,19 +195,19 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
                 <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet} />
               </TabsContent>
               <TabsContent value="templates" className="mt-4">
-                <TemplatesPanel branchId={branchId} isAdmin={isAdmin} />
+                <TemplatesPanel branchId={branchId} isAdmin={isAdmin} providerLabel={providerLabel} />
               </TabsContent>
               <TabsContent value="test" className="mt-4">
-                <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} />
+                <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} providerLabel={providerLabel} />
               </TabsContent>
               <TabsContent value="wallet" className="mt-4">
-                {canSeeWallet ? <WalletPanel branchId={branchId} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+                {canSeeWallet ? <WalletPanel branchId={branchId} providerLabel={providerLabel} /> : <div className="text-sm text-muted-foreground">No access.</div>}
               </TabsContent>
               <TabsContent value="reports" className="mt-4">
                 <ReportsPanel branchId={branchId} />
               </TabsContent>
               <TabsContent value="webhooks" className="mt-4">
-                <WebhooksPanel />
+                <WebhooksPanel activeProvider={activeProvider} />
               </TabsContent>
             </Tabs>
           </>
