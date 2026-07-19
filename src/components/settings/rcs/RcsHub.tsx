@@ -359,12 +359,12 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-600">
-          {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from Telinfy.
+          {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from {providerLabel}.
         </p>
         {isAdmin && (
           <Button size="sm" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>
             {syncMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Sync from Telinfy
+            Sync from {providerLabel}
           </Button>
         )}
       </div>
