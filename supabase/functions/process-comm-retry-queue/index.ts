@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
         results.push({ id: row.id, status: "succeeded", attempts: newRetryCount });
       } else {
         // Terminal reason in the fresh error → abandon now (no reschedule).
-        const terminal = isTerminalReason(errorMsg) || newRetryCount >= (row.max_retries || 3);
+        const terminal = isTerminalReason(errorMsg, newRetryCount) || newRetryCount >= (row.max_retries || 3);
         if (terminal) {
           await supabase
             .from("communication_retry_queue")
