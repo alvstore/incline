@@ -1,9 +1,12 @@
-// v1.2.0 — Fetch RCS templates from Telinfy. Handles grouped response
-//          { richStandard, basicStandard, richDynamic, basicDynamic } and
-//          populates `kind` + `media_url` per row so the UI can group/preview rich templates.
+// v2.0.0 — Provider-aware RCS template sync.
+//   Routes via `integration_settings` (Smartping preferred, Telinfy fallback).
+//   • Telinfy: GET /rcs/templates (probes several paths); handles grouped
+//     {richStandard, basicStandard, richDynamic, basicDynamic} or flat arrays.
+//   • Smartping: authorize → GET /rcs/api/template/list; normalizes into
+//     rcs_templates rows with provider='smartping' and external_template_id=<UUID>.
 //   POST /rcs-templates-sync { branch_id?: string }
-// Requires authenticated user with owner|admin role; uses service-role for upsert.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveRcsProvider } from '../_shared/rcsProviders.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,12 +16,23 @@ const corsHeaders = {
 const json = (s: number, b: unknown) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-const ENV_API_KEY = Deno.env.get('TELINFY_API_KEY') || '';
-const ENV_BASE = (Deno.env.get('TELINFY_BASE_URL') || 'https://hub.telinfy.com/unified/developer/api/v1').replace(/\/+$/, '');
-
 function extractVars(text: string): string[] {
   const matches = String(text || '').match(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g) || [];
   return Array.from(new Set(matches.map((m) => m.replace(/[{}\s]/g, ''))));
+}
+
+async function smartpingAuthorize(baseUrl: string, userId: string, apiKey: string): Promise<string | null> {
+  const resp = await fetch(`${baseUrl}/rcs/api/user/authorize`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, apiKey }),
+  });
+  const text = await resp.text();
+  let parsed: any = null; try { parsed = JSON.parse(text); } catch { /* keep */ }
+  if (!resp.ok) return null;
+  const token = parsed?.token || parsed?.authorization || parsed?.jwt ||
+    parsed?.data?.token || parsed?.data?.authorization ||
+    resp.headers.get('authorization') || resp.headers.get('Authorization');
+  return token ? String(token).replace(/^Bearer\s+/i, '') : null;
 }
 
 Deno.serve(async (req) => {
@@ -29,30 +43,81 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const branchId: string | null = body?.branch_id || null;
 
-    let apiKey = ENV_API_KEY;
-    let baseUrl = ENV_BASE;
-    const { data: cfg } = await supabase
-      .from('integration_settings')
-      .select('config, credentials, is_active')
-      .eq('integration_type', 'rcs')
-      .eq('provider', 'telinfy')
-      .in('branch_id', branchId ? [branchId, null] : [null])
-      .order('branch_id', { ascending: false, nullsFirst: false })
-      .limit(1).maybeSingle();
-    if (cfg) {
-      const dbKey = (cfg as any).credentials?.api_key;
-      if (dbKey) apiKey = dbKey;
-      const dbBase = (cfg as any).config?.base_url;
-      if (dbBase) baseUrl = String(dbBase).replace(/\/+$/, '');
+    const cfg = await resolveRcsProvider(supabase, branchId);
+    if (!cfg.is_active) return json(200, { ok: false, provider: cfg.provider, reason: `${cfg.provider} integration is disabled` });
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // SMARTPING
+    // ══════════════════════════════════════════════════════════════════════════════
+    if (cfg.provider === 'smartping') {
+      const userId = cfg.credentials?.user_id || Deno.env.get('SMARTPING_RCS_USER_ID');
+      const apiKey = cfg.credentials?.api_key || Deno.env.get('SMARTPING_RCS_API_KEY');
+      if (!userId || !apiKey) return json(200, { ok: false, provider: 'smartping', reason: 'Smartping user_id / api_key missing' });
+
+      const token = await smartpingAuthorize(cfg.base_url, userId, apiKey);
+      if (!token) return json(200, { ok: false, provider: 'smartping', reason: 'Smartping authorize failed (check credentials + IP whitelist)' });
+
+      const CANDIDATE_PATHS = ['/rcs/api/template/list', '/rcs/api/templates', '/rcs/api/template'];
+      const attempts: Array<{ url: string; status: number; body: any }> = [];
+      let data: any = null; let usedUrl = '';
+      for (const p of CANDIDATE_PATHS) {
+        const url = `${cfg.base_url}${p}`;
+        const resp = await fetch(url, { method: 'GET', headers: { 'Authorization': token, 'Accept': 'application/json' } });
+        const text = await resp.text();
+        let parsed: any = null; try { parsed = JSON.parse(text); } catch { /* keep */ }
+        attempts.push({ url, status: resp.status, body: parsed ?? text?.slice(0, 200) });
+        if (resp.ok) { data = parsed; usedUrl = url; break; }
+        if (resp.status === 401 || resp.status === 403) break;
+      }
+      if (!data) {
+        const last = attempts[attempts.length - 1] ?? { status: 0 };
+        return json(200, { ok: false, provider: 'smartping', reason: `HTTP ${last.status}`, attempts, base_url: cfg.base_url });
+      }
+
+      const list: any[] = Array.isArray(data) ? data :
+        (data?.templates || data?.data || data?.result || data?.list || []);
+      let upserted = 0;
+      for (const t of list) {
+        const name = t?.templateName || t?.name || t?.template_name;
+        const extId = t?.templateId || t?.template_id || t?.id;
+        if (!name || !extId) continue;
+        const preview = t?.body || t?.messageText || t?.text || t?.description || '';
+        const vars = Array.isArray(t?.variables) ? t.variables : extractVars(preview);
+        const status = (t?.status || t?.approvalStatus || 'approved').toString().toLowerCase();
+        const mediaUrl = t?.mediaUrl || t?.imageUrl || t?.image || t?.thumbnailUrl || null;
+        const kindRaw = String(t?.templateType || t?.type || '').toLowerCase();
+        const kind =
+          kindRaw.includes('rich') || kindRaw.includes('card') || kindRaw.includes('carousel') ? 'rich_standard' :
+          mediaUrl ? 'rich_standard' : 'basic_standard';
+        const { error } = await supabase.from('rcs_templates').upsert({
+          branch_id: branchId,
+          provider: 'smartping',
+          template_name: name,
+          external_template_id: String(extId),
+          body_preview: preview,
+          variables: vars,
+          status,
+          kind,
+          media_url: mediaUrl,
+          raw: t,
+          last_synced_at: new Date().toISOString(),
+        }, { onConflict: 'branch_id,provider,template_name' });
+        if (!error) upserted++;
+      }
+      return json(200, { ok: true, provider: 'smartping', count: list.length, upserted, endpoint: usedUrl });
     }
-    if (!apiKey) return json(200, { ok: false, reason: 'TELINFY_API_KEY missing' });
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // TELINFY (legacy)
+    // ══════════════════════════════════════════════════════════════════════════════
+    const apiKey = cfg.credentials?.api_key || Deno.env.get('TELINFY_API_KEY') || '';
+    if (!apiKey) return json(200, { ok: false, provider: 'telinfy', reason: 'Telinfy API key missing' });
 
     const CANDIDATE_PATHS = ['/rcs/templates', '/rcs/template', '/rcs/templates/list', '/templates/rcs', '/rcs/templates/approved'];
     const attempts: Array<{ url: string; status: number; body: any }> = [];
-    let data: any = null;
-    let usedUrl = '';
+    let data: any = null; let usedUrl = '';
     for (const p of CANDIDATE_PATHS) {
-      const url = `${baseUrl}${p}`;
+      const url = `${cfg.base_url}${p}`;
       const resp = await fetch(url, { method: 'GET', headers: { 'x-api-key': apiKey, 'Accept': 'application/json' } });
       const text = await resp.text();
       let parsed: any = null; try { parsed = JSON.parse(text); } catch { /* keep */ }
@@ -65,13 +130,11 @@ Deno.serve(async (req) => {
       const reason =
         last.status === 401 ? 'Invalid API key' :
         last.status === 403 ? 'API key lacks template permission' :
-        last.status === 404 ? `No templates endpoint found on ${baseUrl}` :
+        last.status === 404 ? `No templates endpoint found on ${cfg.base_url}` :
         `HTTP ${last.status}`;
-      return json(200, { ok: false, reason, attempts, base_url: baseUrl });
+      return json(200, { ok: false, provider: 'telinfy', reason, attempts, base_url: cfg.base_url });
     }
 
-    // Telinfy returns a grouped object: { richStandard:[], basicStandard:[], richDynamic:[], basicDynamic:[] }.
-    // Older tenants may return a flat array. Normalize either shape into [{kind, t}].
     const KIND_KEYS = ['richStandard', 'basicStandard', 'richDynamic', 'basicDynamic'] as const;
     const KIND_MAP: Record<string, string> = {
       richStandard: 'rich_standard', basicStandard: 'basic_standard',
@@ -107,6 +170,7 @@ Deno.serve(async (req) => {
       const inferredKind = kind || (mediaUrl ? 'rich_standard' : 'basic_standard');
       const { error } = await supabase.from('rcs_templates').upsert({
         branch_id: branchId,
+        provider: 'telinfy',
         template_name: name,
         body_preview: preview,
         variables: vars,
@@ -115,11 +179,11 @@ Deno.serve(async (req) => {
         media_url: mediaUrl,
         raw: t,
         last_synced_at: new Date().toISOString(),
-      }, { onConflict: 'branch_id,template_name' });
+      }, { onConflict: 'branch_id,provider,template_name' });
       if (!error) upserted++;
     }
 
-    return json(200, { ok: true, count: flat.length, upserted, endpoint: usedUrl });
+    return json(200, { ok: true, provider: 'telinfy', count: flat.length, upserted, endpoint: usedUrl });
   } catch (e) {
     console.error('[rcs-templates-sync] error', e);
     return json(500, { ok: false, error: e instanceof Error ? e.message : String(e) });
