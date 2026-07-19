@@ -139,12 +139,14 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 flex-wrap">
               <Radio className="h-5 w-5 text-primary" />
-              RCS Hub <span className="text-slate-400 font-normal">— {activeProvider === 'smartping' ? 'Smartping' : 'Telinfy'}</span>
+              RCS Hub{state === 'active' && (
+                <span className="text-slate-400 font-normal">— {activeProvider === 'smartping' ? 'Smartping' : 'Telinfy'}</span>
+              )}
               <Badge variant="secondary" className="ml-1">Beta</Badge>
               <StatusPill state={state} loading={cfgLoading} />
             </CardTitle>
             <CardDescription className="mt-1">
-              Templates, direct sends, wallet, reports, and inbound webhooks for Telinfy RCS.
+              Templates, direct sends, wallet, reports, and inbound webhooks for RCS Business Messaging.
             </CardDescription>
           </div>
           {state === 'active' && (

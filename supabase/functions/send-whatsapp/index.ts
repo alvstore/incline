@@ -1,3 +1,5 @@
+// v2.9.0 — Downgrade Meta 131000/133000 echoes from process-comm-retry-queue to
+//           severity=warning so a single flaky send doesn't spam SystemHealth.
 // v2.8.0 — MM API for WhatsApp routing: when the caller sets `use_mm_api: true` on a
 //           template send AND the WhatsApp integration has `config.mm_api_enabled = true`,
 //           the request goes to `/{PHONE_ID}/marketing_messages` (Marketing Messages API,
@@ -361,6 +363,13 @@ serve(async (req) => {
       // mirror is auto-marked stale above so subsequent sends are suppressed.
       // Spamming `severity=error` for the same fbtrace adds no signal.
       const terminalTemplateIssue = category_issue || recipient_unreachable;
+      // Downgrade generic Meta 131000 retries fired by the retry queue — they
+      // are transient and self-heal (or exhaust) via process-comm-retry-queue,
+      // so repeated `severity=error` rows just noise up SystemHealth.
+      const isRetryEcho = body.source_caller === "process-comm-retry-queue"
+        && (Number(metaCode) === 131000 || Number(metaCode) === 133000);
+      const severity: "warning" | "error" =
+        (terminalTemplateIssue || isRetryEcho) ? "warning" : "error";
       await logError(supabase, branch_id, "send-whatsapp", `Meta API ${metaResponse.status} (${metaCode ?? '?'})`, metaErrorMsg, {
         template_name: template_name ?? null,
         recipient_last4: String(phone_number || '').slice(-4),
@@ -370,7 +379,7 @@ serve(async (req) => {
         message_type,
         source_caller: body.source_caller ?? null,
         source_log_id: body.source_log_id ?? null,
-      }, terminalTemplateIssue ? "warning" : "error");
+      }, severity);
 
       return new Response(
         JSON.stringify({

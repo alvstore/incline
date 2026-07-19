@@ -5,7 +5,8 @@ import { getMenuForRole } from '@/config/menu';
 import { useMemberHasPtPackage } from '@/hooks/useMemberHasPtPackage';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Menu, LogOut, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
@@ -333,6 +334,10 @@ export function MobileNav() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0 bg-sidebar">
+        <VisuallyHidden>
+          <SheetTitle>Navigation menu</SheetTitle>
+          <SheetDescription>Primary navigation for the app</SheetDescription>
+        </VisuallyHidden>
         <div className="px-5 py-4 border-b border-sidebar-border">
           <BrandLogo mobile />
         </div>
