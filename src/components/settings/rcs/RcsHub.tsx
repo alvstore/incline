@@ -589,8 +589,12 @@ function WalletPanel({ branchId, providerLabel = 'Provider' }: { branchId: strin
       if (!(data as any)?.ok) throw new Error((data as any)?.reason || 'wallet_failed');
       return data;
     },
-    onSuccess: () => {
-      toast.success('Wallet refreshed');
+    onSuccess: (d: any) => {
+      if (d?.unsupported) {
+        toast.info(`${providerLabel} does not expose a wallet endpoint`);
+      } else {
+        toast.success(`${providerLabel} wallet refreshed`);
+      }
       qc.invalidateQueries({ queryKey: ['rcs-wallet-snaps'] });
       qc.invalidateQueries({ queryKey: ['rcs-wallet-latest'] });
     },
