@@ -234,13 +234,13 @@ function EmptyConfigure({ onConfigure }: { onConfigure?: () => void }) {
       <div className="mx-auto h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
         <Radio className="h-6 w-6" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-900">Telinfy RCS isn't connected yet</h3>
+      <h3 className="text-sm font-semibold text-slate-900">RCS provider isn't connected yet</h3>
       <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-        Add your Telinfy <code className="px-1 py-0.5 rounded bg-slate-200 font-mono text-[11px]">x-api-key</code> and (optional) Brand ID in Provider credentials above, then enable the integration.
+        Configure Smartping (preferred) or Telinfy credentials in Provider settings above, then enable the integration to start sending.
       </p>
       {onConfigure && (
         <Button className="mt-4" onClick={onConfigure}>
-          <Send className="h-4 w-4 mr-2" />Configure Telinfy
+          <Send className="h-4 w-4 mr-2" />Configure provider
         </Button>
       )}
     </div>
