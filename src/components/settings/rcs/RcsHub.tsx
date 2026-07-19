@@ -624,21 +624,32 @@ function WalletPanel({ branchId, providerLabel = 'Provider' }: { branchId: strin
 }
 
 /* ─────────────────────────────────────────── Webhooks ─────────────────── */
-function WebhooksPanel() {
+function WebhooksPanel({ activeProvider = 'telinfy' }: { activeProvider?: 'telinfy' | 'smartping' }) {
   const copy = (s: string, label: string) => {
     navigator.clipboard.writeText(s);
     toast.success(`${label} URL copied`);
   };
-  const rows: Array<[string, string, string]> = [
-    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL'],
-    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards'],
-    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain'],
-    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery'],
-    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards'],
-    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping'],
+  const allRows: Array<[string, string, string, 'telinfy' | 'smartping']> = [
+    ['Telinfy — Delivery (DLR)', WEBHOOK_URLS.telinfyDelivery, 'Paste in Telinfy Hub → RCS → Webhooks → Delivery URL', 'telinfy'],
+    ['Telinfy — User Action', WEBHOOK_URLS.telinfyAction, 'Button-click events from Telinfy rich cards', 'telinfy'],
+    ['Telinfy — User Message', WEBHOOK_URLS.telinfyMessage, 'Inbound MO from Telinfy; STOP/opt-out + AI brain', 'telinfy'],
+    ['Smartping — Delivery (DLR)', WEBHOOK_URLS.smartpingDelivery, 'Register in Smartping panel → Webhooks → Delivery', 'smartping'],
+    ['Smartping — User Action', WEBHOOK_URLS.smartpingAction, 'Button-click events from Smartping cards', 'smartping'],
+    ['Smartping — User Message', WEBHOOK_URLS.smartpingMessage, 'Inbound MO from Smartping', 'smartping'],
   ];
+  const rows = allRows.filter((r) => r[3] === activeProvider);
+
   const TELINFY_BASE = 'https://hub.telinfy.com/unified/developer/api/v1';
-  const snippets: Array<[string, string]> = [
+  const SMARTPING_BASE = 'https://rcsapi.rcscloud.smartping.io';
+  const snippets: Array<[string, string]> = activeProvider === 'smartping' ? [
+    ['Authorize (get token)', `curl -X POST -H "Content-Type: application/json" \\
+  -d '{"userId":"$SMARTPING_USER","apiKey":"$SMARTPING_KEY"}' \\
+  ${SMARTPING_BASE}/rcs/api/user/authorize`],
+    ['List templates', `curl -H "Authorization: $TOKEN" ${SMARTPING_BASE}/rcs/api/template/list`],
+    ['Send message', `curl -X POST -H "Authorization: $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"messages":[{"templateId":"<uuid>","to":"919887601200","components":{"standard":[{"type":"messageText","parameters":["John"]}]}}]}' \\
+  ${SMARTPING_BASE}/rcs/api/message/send`],
+  ] : [
     ['List templates', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/templates`],
     ['Send message', `curl -X POST -H "x-api-key: $TELINFY_KEY" -H "Content-Type: application/json" \\
   -d '{"templateName":"welcome","lcustomParam":{"NAME":"John"}}' \\
@@ -646,6 +657,7 @@ function WebhooksPanel() {
     ['Wallet balance', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/wallet`],
     ['Record by ID', `curl -H "x-api-key: $TELINFY_KEY" ${TELINFY_BASE}/rcs/record/12345`],
   ];
+  const snippetLabel = activeProvider === 'smartping' ? 'Smartping REST — curl snippets' : 'Telinfy REST — curl snippets';
   return (
     <div className="space-y-4">
       <div className="space-y-3">
