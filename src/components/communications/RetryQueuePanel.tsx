@@ -196,7 +196,7 @@ export function RetryQueuePanel() {
               <Badge variant="destructive" className="rounded-full ml-1">{rows.length}</Badge>
             )}
           </CardTitle>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               size="sm" variant="outline" className="h-8 rounded-lg gap-1.5"
               onClick={() => retryAll.mutate()}
@@ -206,7 +206,13 @@ export function RetryQueuePanel() {
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 rounded-lg gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive" disabled={visible.length === 0}>
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 rounded-lg gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                  disabled={
+                    visible.filter((r: any) => r.status !== 'exhausted' && r.status !== 'cancelled').length === 0
+                  }
+                >
                   <Ban className="h-3.5 w-3.5" />Stop all
                 </Button>
               </AlertDialogTrigger>
@@ -214,14 +220,40 @@ export function RetryQueuePanel() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Stop all queued retries?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This cancels every message currently in the visible list (except already-exhausted rows).
-                    Cancelled messages will not be re-sent.
+                    Cancels every live message currently in the visible list (pending, retrying, failed).
+                    Already-exhausted rows are untouched — use "Clear exhausted" to remove those.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Keep them</AlertDialogCancel>
                   <AlertDialogAction onClick={() => stopAll.mutate()} className="bg-destructive text-destructive-foreground">
                     Stop all
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 rounded-lg gap-1.5"
+                  disabled={visible.filter((r: any) => r.status === 'exhausted').length === 0}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />Clear exhausted
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear exhausted messages?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Permanently removes every exhausted row from the visible list.
+                    They've already failed their max attempts and won't be retried automatically.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep them</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => clearExhausted.mutate()} className="bg-destructive text-destructive-foreground">
+                    Clear
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
