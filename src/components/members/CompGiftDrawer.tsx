@@ -31,9 +31,12 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
   const { hasAnyRole } = useAuth();
   const [days, setDays] = useState('');
   const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
   const [compSessions, setCompSessions] = useState('1');
   const [compBenefitTypeId, setCompBenefitTypeId] = useState('');
   const [compReason, setCompReason] = useState('');
+  const [compNotes, setCompNotes] = useState('');
+  const [compExpiresAt, setCompExpiresAt] = useState('');
 
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
 
@@ -190,7 +193,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Comp sessions mutation — role-aware
+  // Comp sessions mutation — atomic via grant_member_comp RPC
   const compMutation = useMutation({
     mutationFn: async () => {
       if (!compBenefitTypeId) throw new Error('Select a benefit type');
@@ -199,30 +202,26 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
 
       const { data: { user } } = await supabase.auth.getUser();
       const selectedBenefit = benefitTypes.find((bt: any) => bt.id === compBenefitTypeId);
+      const expiresIso = compExpiresAt ? new Date(compExpiresAt).toISOString() : null;
 
       if (isManagerOrAbove) {
-        // Direct execution for admin/manager/owner
-        const { error } = await supabase.from('member_comps').insert({
-          member_id: memberId,
-          benefit_type_id: compBenefitTypeId,
-          comp_sessions: sessions,
-          used_sessions: 0,
-          reason: compReason || 'Complimentary sessions',
-          granted_by: user?.id,
-        } as any);
-        if (error) throw error;
-
-        // Log in audit
-        await supabase.from('audit_logs').insert({
-          action: 'COMP_SESSIONS',
-          table_name: 'member_comps',
-          record_id: memberId,
-          user_id: user?.id,
-          branch_id: branchId,
-          actor_name: user?.email || 'Admin',
-          action_description: `Granted ${sessions} comp ${selectedBenefit?.name || 'benefit'} sessions to ${memberName}. Reason: ${compReason || 'Complimentary'}`,
-          new_data: { sessions, benefitType: selectedBenefit?.name, reason: compReason } as any,
+        // Direct execution — one atomic RPC (comp + audit + branch scoping)
+        const { data, error } = await supabase.rpc('grant_member_comp', {
+          p_member_id: memberId,
+          p_benefit_type_id: compBenefitTypeId,
+          p_sessions: sessions,
+          p_reason: compReason || 'Complimentary sessions',
+          p_notes: compNotes || null,
+          p_expires_at: expiresIso,
+          p_source: 'direct',
+          p_approval_request_id: null,
+          p_membership_id: membershipId || null,
+          p_branch_id: branchId,
+          p_granted_by: user?.id ?? null,
         });
+        if (error) throw error;
+        const res = data as { success?: boolean; error?: string } | null;
+        if (!res?.success) throw new Error(res?.error || 'Failed to grant comp');
       } else {
         // Staff: submit for approval
         const { error } = await supabase.from('approval_requests').insert({
@@ -239,6 +238,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
             benefitTypeName: selectedBenefit?.name || 'Benefit',
             sessions,
             reason: compReason || 'Complimentary sessions',
+            notes: compNotes || null,
+            expiresAt: expiresIso,
           },
         });
         if (error) throw error;
@@ -258,6 +259,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
       setCompSessions('1');
       setCompBenefitTypeId('');
       setCompReason('');
+      setCompNotes('');
+      setCompExpiresAt('');
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e.message),
@@ -475,14 +478,53 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Number of Free Sessions *</Label>
-              <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Free Sessions *</Label>
+                <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Expires on</Label>
+                <Input type="date" value={compExpiresAt} onChange={e => setCompExpiresAt(e.target.value)} />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Reason *</Label>
               <Textarea value={compReason} onChange={e => setCompReason(e.target.value)} placeholder="e.g. Birthday gift, complaint resolution" />
             </div>
+            <div className="space-y-2">
+              <Label>Internal notes</Label>
+              <Textarea value={compNotes} onChange={e => setCompNotes(e.target.value)} placeholder="Optional — visible to managers only" rows={2} />
+            </div>
+
+            {existingComps.length > 0 && (
+              <div className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Comp history</p>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {existingComps.map((c: any) => (
+                    <div key={c.id} className="flex items-start justify-between text-xs gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-slate-900">{c.benefit_types?.name || 'Benefit'}</span>
+                          <Badge className={`h-4 text-[10px] px-1.5 ${c.source === 'approval' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {c.source === 'approval' ? 'Approval' : 'Direct'}
+                          </Badge>
+                        </div>
+                        <p className="text-slate-500 truncate">{c.reason || '—'}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {format(new Date(c.created_at), 'dd MMM yyyy')}
+                          {c.expires_at && ` · expires ${format(new Date(c.expires_at), 'dd MMM yyyy')}`}
+                        </p>
+                      </div>
+                      <span className="text-slate-700 font-semibold whitespace-nowrap">
+                        {c.used_sessions}/{c.comp_sessions}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <SheetFooter>
               <Button onClick={() => compMutation.mutate()} disabled={compMutation.isPending}>
                 {isManagerOrAbove ? (
