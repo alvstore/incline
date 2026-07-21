@@ -79,6 +79,20 @@ Deno.serve(async (req) => {
         p_error: err,
         p_metadata: { resend_event: type, raw: evt?.data ?? evt },
       });
+
+      // Mirror WhatsApp/RCS pattern: hard bounces & complaints suppress the address
+      if (type === 'email.bounced' || type === 'email.complained') {
+        const recipient =
+          (Array.isArray(evt?.data?.to) ? evt.data.to[0] : evt?.data?.to) ||
+          evt?.data?.recipient || null;
+        if (recipient) {
+          await supabase.from('suppressed_emails').upsert({
+            email: String(recipient).toLowerCase(),
+            reason: type === 'email.complained' ? 'complaint' : 'bounce',
+            metadata: { resend_event: type, bounce: evt?.data?.bounce ?? null, at: new Date().toISOString() },
+          }, { onConflict: 'email' });
+        }
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
