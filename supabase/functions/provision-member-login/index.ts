@@ -20,14 +20,20 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPA_URL, SERVICE_KEY);
 
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  const isSystemCall = req.headers.get("x-lovable-system") === "1";
+  const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
   if (bearer !== SERVICE_KEY) {
-    if (!bearer) return json({ error: "Unauthorized" }, 401);
-    const { data: userRes } = await admin.auth.getUser(bearer);
-    const uid = userRes?.user?.id;
-    if (!uid) return json({ error: "Unauthorized" }, 401);
-    const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", uid);
-    const allowed = new Set(["owner", "admin", "manager", "staff"]);
-    if (!(roles || []).some((r: any) => allowed.has(r.role))) return json({ error: "Forbidden" }, 403);
+    if (isSystemCall && bearer && bearer === ANON_KEY) {
+      // Trigger-initiated call from Postgres via pg_net (anon bearer + system header).
+    } else {
+      if (!bearer) return json({ error: "Unauthorized" }, 401);
+      const { data: userRes } = await admin.auth.getUser(bearer);
+      const uid = userRes?.user?.id;
+      if (!uid) return json({ error: "Unauthorized" }, 401);
+      const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", uid);
+      const allowed = new Set(["owner", "admin", "manager", "staff"]);
+      if (!(roles || []).some((r: any) => allowed.has(r.role))) return json({ error: "Forbidden" }, 403);
+    }
   }
 
   try {
