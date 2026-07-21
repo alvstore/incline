@@ -7109,44 +7109,76 @@ export type Database = {
       }
       member_comps: {
         Row: {
+          approval_request_id: string | null
           benefit_type_id: string
+          branch_id: string | null
           comp_sessions: number
           created_at: string
+          expires_at: string | null
           granted_by: string | null
           id: string
           member_id: string
           membership_id: string | null
+          notes: string | null
           reason: string | null
+          source: string
+          updated_at: string
           used_sessions: number
         }
         Insert: {
+          approval_request_id?: string | null
           benefit_type_id: string
+          branch_id?: string | null
           comp_sessions?: number
           created_at?: string
+          expires_at?: string | null
           granted_by?: string | null
           id?: string
           member_id: string
           membership_id?: string | null
+          notes?: string | null
           reason?: string | null
+          source?: string
+          updated_at?: string
           used_sessions?: number
         }
         Update: {
+          approval_request_id?: string | null
           benefit_type_id?: string
+          branch_id?: string | null
           comp_sessions?: number
           created_at?: string
+          expires_at?: string | null
           granted_by?: string | null
           id?: string
           member_id?: string
           membership_id?: string | null
+          notes?: string | null
           reason?: string | null
+          source?: string
+          updated_at?: string
           used_sessions?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "member_comps_approval_request_id_fkey"
+            columns: ["approval_request_id"]
+            isOneToOne: false
+            referencedRelation: "approval_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "member_comps_benefit_type_id_fkey"
             columns: ["benefit_type_id"]
             isOneToOne: false
             referencedRelation: "benefit_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_comps_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
           {
@@ -14152,6 +14184,22 @@ export type Database = {
         }[]
       }
       get_user_branch: { Args: { _user_id: string }; Returns: string }
+      grant_member_comp: {
+        Args: {
+          p_approval_request_id?: string
+          p_benefit_type_id: string
+          p_branch_id?: string
+          p_expires_at?: string
+          p_granted_by?: string
+          p_member_id: string
+          p_membership_id?: string
+          p_notes?: string
+          p_reason: string
+          p_sessions: number
+          p_source?: string
+        }
+        Returns: Json
+      }
       has_active_benefit: {
         Args: {
           _benefit: Database["public"]["Enums"]["benefit_type"]
