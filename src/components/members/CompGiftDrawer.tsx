@@ -31,9 +31,12 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
   const { hasAnyRole } = useAuth();
   const [days, setDays] = useState('');
   const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
   const [compSessions, setCompSessions] = useState('1');
   const [compBenefitTypeId, setCompBenefitTypeId] = useState('');
   const [compReason, setCompReason] = useState('');
+  const [compNotes, setCompNotes] = useState('');
+  const [compExpiresAt, setCompExpiresAt] = useState('');
 
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
 
