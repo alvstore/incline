@@ -478,14 +478,53 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Number of Free Sessions *</Label>
-              <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Free Sessions *</Label>
+                <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Expires on</Label>
+                <Input type="date" value={compExpiresAt} onChange={e => setCompExpiresAt(e.target.value)} />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Reason *</Label>
               <Textarea value={compReason} onChange={e => setCompReason(e.target.value)} placeholder="e.g. Birthday gift, complaint resolution" />
             </div>
+            <div className="space-y-2">
+              <Label>Internal notes</Label>
+              <Textarea value={compNotes} onChange={e => setCompNotes(e.target.value)} placeholder="Optional — visible to managers only" rows={2} />
+            </div>
+
+            {existingComps.length > 0 && (
+              <div className="rounded-2xl bg-white shadow-lg shadow-slate-200/50 p-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Comp history</p>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {existingComps.map((c: any) => (
+                    <div key={c.id} className="flex items-start justify-between text-xs gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-slate-900">{c.benefit_types?.name || 'Benefit'}</span>
+                          <Badge className={`h-4 text-[10px] px-1.5 ${c.source === 'approval' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {c.source === 'approval' ? 'Approval' : 'Direct'}
+                          </Badge>
+                        </div>
+                        <p className="text-slate-500 truncate">{c.reason || '—'}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {format(new Date(c.created_at), 'dd MMM yyyy')}
+                          {c.expires_at && ` · expires ${format(new Date(c.expires_at), 'dd MMM yyyy')}`}
+                        </p>
+                      </div>
+                      <span className="text-slate-700 font-semibold whitespace-nowrap">
+                        {c.used_sessions}/{c.comp_sessions}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <SheetFooter>
               <Button onClick={() => compMutation.mutate()} disabled={compMutation.isPending}>
                 {isManagerOrAbove ? (
