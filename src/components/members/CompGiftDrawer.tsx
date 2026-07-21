@@ -193,7 +193,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Comp sessions mutation — role-aware
+  // Comp sessions mutation — atomic via grant_member_comp RPC
   const compMutation = useMutation({
     mutationFn: async () => {
       if (!compBenefitTypeId) throw new Error('Select a benefit type');
@@ -202,30 +202,26 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
 
       const { data: { user } } = await supabase.auth.getUser();
       const selectedBenefit = benefitTypes.find((bt: any) => bt.id === compBenefitTypeId);
+      const expiresIso = compExpiresAt ? new Date(compExpiresAt).toISOString() : null;
 
       if (isManagerOrAbove) {
-        // Direct execution for admin/manager/owner
-        const { error } = await supabase.from('member_comps').insert({
-          member_id: memberId,
-          benefit_type_id: compBenefitTypeId,
-          comp_sessions: sessions,
-          used_sessions: 0,
-          reason: compReason || 'Complimentary sessions',
-          granted_by: user?.id,
-        } as any);
-        if (error) throw error;
-
-        // Log in audit
-        await supabase.from('audit_logs').insert({
-          action: 'COMP_SESSIONS',
-          table_name: 'member_comps',
-          record_id: memberId,
-          user_id: user?.id,
-          branch_id: branchId,
-          actor_name: user?.email || 'Admin',
-          action_description: `Granted ${sessions} comp ${selectedBenefit?.name || 'benefit'} sessions to ${memberName}. Reason: ${compReason || 'Complimentary'}`,
-          new_data: { sessions, benefitType: selectedBenefit?.name, reason: compReason } as any,
+        // Direct execution — one atomic RPC (comp + audit + branch scoping)
+        const { data, error } = await supabase.rpc('grant_member_comp', {
+          p_member_id: memberId,
+          p_benefit_type_id: compBenefitTypeId,
+          p_sessions: sessions,
+          p_reason: compReason || 'Complimentary sessions',
+          p_notes: compNotes || null,
+          p_expires_at: expiresIso,
+          p_source: 'direct',
+          p_approval_request_id: null,
+          p_membership_id: membershipId || null,
+          p_branch_id: branchId,
+          p_granted_by: user?.id ?? null,
         });
+        if (error) throw error;
+        const res = data as { success?: boolean; error?: string } | null;
+        if (!res?.success) throw new Error(res?.error || 'Failed to grant comp');
       } else {
         // Staff: submit for approval
         const { error } = await supabase.from('approval_requests').insert({
@@ -242,6 +238,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
             benefitTypeName: selectedBenefit?.name || 'Benefit',
             sessions,
             reason: compReason || 'Complimentary sessions',
+            notes: compNotes || null,
+            expiresAt: expiresIso,
           },
         });
         if (error) throw error;
@@ -261,6 +259,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
       setCompSessions('1');
       setCompBenefitTypeId('');
       setCompReason('');
+      setCompNotes('');
+      setCompExpiresAt('');
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e.message),
