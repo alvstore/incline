@@ -115,7 +115,8 @@ export function RetryQueuePanel() {
 
   const stopAll = useMutation({
     mutationFn: async () => {
-      const ids = visible.filter((r: any) => r.status !== 'exhausted').map((r: any) => r.id);
+      // Live rows only — exhausted rows are already terminal and use "Clear" instead.
+      const ids = visible.filter((r: any) => r.status !== 'exhausted' && r.status !== 'cancelled').map((r: any) => r.id);
       if (!ids.length) return 0;
       const { error } = await supabase
         .from('communication_retry_queue')
@@ -125,7 +126,39 @@ export function RetryQueuePanel() {
       return ids.length;
     },
     onSuccess: (n) => {
-      toast.success(`Stopped ${n} message${n === 1 ? '' : 's'}`);
+      if (n === 0) toast.info('Nothing to stop in this view');
+      else toast.success(`Stopped ${n} message${n === 1 ? '' : 's'}`);
+      qc.invalidateQueries({ queryKey: ['retry-queue'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed'),
+  });
+
+  const clearExhausted = useMutation({
+    mutationFn: async () => {
+      const ids = visible.filter((r: any) => r.status === 'exhausted').map((r: any) => r.id);
+      if (!ids.length) return 0;
+      const { error } = await supabase
+        .from('communication_retry_queue')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (n) => {
+      if (n === 0) toast.info('Nothing to clear');
+      else toast.success(`Cleared ${n} exhausted message${n === 1 ? '' : 's'}`);
+      qc.invalidateQueries({ queryKey: ['retry-queue'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed'),
+  });
+
+  const clearOne = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('communication_retry_queue').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Removed');
       qc.invalidateQueries({ queryKey: ['retry-queue'] });
     },
     onError: (e: any) => toast.error(e.message || 'Failed'),
