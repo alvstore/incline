@@ -27,9 +27,10 @@ import {
 } from '@/components/ui/select';
 import {
   Activity, RefreshCw, Send, Wallet, Webhook, Copy, CheckCircle2, XCircle,
-  Loader2, MessageSquare, FileText, Radio, Image as ImageIcon, BarChart3, Eye,
+  Loader2, MessageSquare, FileText, Radio, Image as ImageIcon, BarChart3, Eye, UploadCloud,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PushTemplatesDrawer } from './PushTemplatesDrawer';
 
 const FN_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 const WEBHOOK_URLS = {
@@ -331,6 +332,7 @@ function KpiCard({ label, value, icon, tone = 'slate' }: { label: string; value:
 /* ─────────────────────────────────────────── Templates ────────────────── */
 function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { branchId: string | null; isAdmin: boolean; providerLabel?: string }) {
   const qc = useQueryClient();
+  const [pushOpen, setPushOpen] = useState(false);
   const { data: templates, isLoading } = useQuery({
     queryKey: ['rcs-templates', branchId],
     queryFn: async () => {
@@ -357,17 +359,23 @@ function TemplatesPanel({ branchId, isAdmin, providerLabel = 'Provider' }: { bra
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-slate-600">
           {templates?.length ?? 0} approved template{templates?.length === 1 ? '' : 's'} mirrored from {providerLabel}.
         </p>
         {isAdmin && (
-          <Button size="sm" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>
-            {syncMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Sync from {providerLabel}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setPushOpen(true)}>
+              <UploadCloud className="h-4 w-4 mr-2" />Push to {providerLabel}
+            </Button>
+            <Button size="sm" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>
+              {syncMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Sync from {providerLabel}
+            </Button>
+          </div>
         )}
       </div>
+      <PushTemplatesDrawer open={pushOpen} onOpenChange={setPushOpen} branchId={branchId} providerLabel={providerLabel} />
       {isLoading ? <Skeleton className="h-40 w-full rounded-2xl" /> :
         templates && templates.length > 0 ? (
           <>
