@@ -326,14 +326,24 @@ export function RetryQueuePanel() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isExhausted ? (
-                        <Button
-                          size="sm" variant="outline"
-                          className="rounded-lg h-8 gap-1"
-                          onClick={() => restart.mutate(r.id)}
-                          aria-label="Restart"
-                        >
-                          <Play className="h-3 w-3" />Restart
-                        </Button>
+                        <>
+                          <Button
+                            size="sm" variant="outline"
+                            className="rounded-lg h-8 gap-1"
+                            onClick={() => restart.mutate(r.id)}
+                            aria-label="Restart"
+                          >
+                            <Play className="h-3 w-3" />Restart
+                          </Button>
+                          <Button
+                            size="sm" variant="outline"
+                            className="rounded-lg h-8 gap-1 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => clearOne.mutate(r.id)}
+                            aria-label="Clear"
+                          >
+                            <Trash2 className="h-3 w-3" />Clear
+                          </Button>
+                        </>
                       ) : (
                         <>
                           <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => retryNow.mutate(r.id)}>
