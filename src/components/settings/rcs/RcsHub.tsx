@@ -200,7 +200,7 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
-                <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet && providerExposesWallet} providerLabel={providerLabel} />
+                <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet && providerExposesWallet} />
               </TabsContent>
               <TabsContent value="templates" className="mt-4">
                 <TemplatesPanel branchId={branchId} isAdmin={isAdmin} providerLabel={providerLabel} />
