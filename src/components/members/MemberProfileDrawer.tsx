@@ -656,6 +656,24 @@ export function MemberProfileDrawer({
     enabled: !!member?.id && open,
   });
 
+  // Onboarding waiver (only present for self-registered members)
+  const { data: onboardingSig } = useQuery({
+    queryKey: ['member-onboarding-sig', member?.id],
+    queryFn: async () => {
+      if (!member?.id) return null;
+      const { data } = await supabase
+        .from('member_onboarding_signatures')
+        .select('signed_at, waiver_pdf_path, signature_path, par_q, consents, signer_ip')
+        .eq('member_id', member.id)
+        .order('signed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!member?.id && open,
+  });
+
+
   // Fetch referrer name from profile
   const referrerUserId = (memberDetails?.referrer as any)?.user_id;
   const { data: referrerProfile } = useQuery({
