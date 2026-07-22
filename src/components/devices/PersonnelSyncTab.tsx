@@ -194,13 +194,18 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     }
   };
 
+  const [serverOnlyBulk, setServerOnlyBulk] = useState(true);
+
   const bulkSyncMutation = useMutation({
     mutationFn: async (targets: SyncPerson[]) => {
       if (targets.length === 0) return { total: 0, success: 0 };
       let successCount = 0;
       for (const person of targets) {
         try {
-          const result = await syncPersonToMIPS(person.type, person.id, branchId);
+          // Server-only sync uploads to MIPS once and lets the
+          // mips-reconcile-devices cron fan out to every device — much faster
+          // for bulk operations and avoids per-device round-trips.
+          const result = await syncPersonToMIPS(person.type, person.id, branchId, !serverOnlyBulk);
           if (result.success) successCount++;
         } catch (e) {
           console.warn(`Failed to sync ${person.name}:`, e);
@@ -210,7 +215,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     },
     onSuccess: ({ total, success }) => {
       if (total === 0) toast.info("No personnel to sync");
-      else toast.success(`Bulk sync: ${success}/${total} synced`);
+      else if (serverOnlyBulk) toast.success(`Bulk sync: ${success}/${total} uploaded to MIPS server — devices will receive within 15 min (or click Reconcile Devices to push now)`);
+      else toast.success(`Bulk sync: ${success}/${total} synced to devices`);
       queryClient.invalidateQueries({ queryKey: ["personnel-sync"] });
       setVerificationMap({});
     },
@@ -218,6 +224,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       toast.error(`Bulk sync failed: ${error.message}`);
     },
   });
+
 
   const handlePhotoUpload = async (file: File, person: SyncPerson) => {
     setUploadingIds((prev) => new Set(prev).add(person.id));
