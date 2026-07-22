@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
+import { signMemberDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';
@@ -655,6 +656,24 @@ export function MemberProfileDrawer({
     },
     enabled: !!member?.id && open,
   });
+
+  // Onboarding waiver (only present for self-registered members)
+  const { data: onboardingSig } = useQuery({
+    queryKey: ['member-onboarding-sig', member?.id],
+    queryFn: async () => {
+      if (!member?.id) return null;
+      const { data } = await supabase
+        .from('member_onboarding_signatures')
+        .select('signed_at, waiver_pdf_path, signature_path, par_q, consents, signer_ip')
+        .eq('member_id', member.id)
+        .order('signed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!member?.id && open,
+  });
+
 
   // Fetch referrer name from profile
   const referrerUserId = (memberDetails?.referrer as any)?.user_id;
@@ -1330,11 +1349,28 @@ export function MemberProfileDrawer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Source:</span>
-                      <span className="ml-2 capitalize">{member.source || 'Walk-in'}</span>
+                      <span className="ml-2">{
+                        (() => {
+                          const src = (memberDetails as any)?.source ?? (member as any).source;
+                          if (!src) return 'Walk-in';
+                          const map: Record<string, string> = {
+                            self_register: 'Self-registered (online)',
+                            self_registration: 'Self-registered (online)',
+                            walk_in: 'Walk-in',
+                            lead_conversion: 'Converted from lead',
+                            referral: 'Referral',
+                            import: 'Imported',
+                          };
+                          return map[src] || String(src).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        })()
+                      }</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Created by:</span>
-                      <span className="ml-2">{(memberDetails?.created_by_profile as any)?.full_name || 'System'}</span>
+                      <span className="ml-2">{
+                        (memberDetails?.created_by_profile as any)?.full_name
+                        || ((memberDetails as any)?.source?.startsWith('self') ? 'Member (self-registered)' : 'System')
+                      }</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1396,6 +1432,58 @@ export function MemberProfileDrawer({
                   </CardContent>
                 </Card>
               )}
+
+              {/* Onboarding Waiver (self-registration signed record) */}
+              {onboardingSig && (
+                <Card className="border-emerald-200 bg-emerald-50/40">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-emerald-600" />
+                      Onboarding & Waiver
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="font-medium text-slate-900">Signed digitally</p>
+                        <p className="text-xs text-muted-foreground">
+                          {onboardingSig.signed_at ? format(new Date(onboardingSig.signed_at), 'dd MMM yyyy, HH:mm') : '—'}
+                          {onboardingSig.signer_ip ? ` · IP ${onboardingSig.signer_ip}` : ''}
+                        </p>
+                      </div>
+                      {onboardingSig.waiver_pdf_path && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const url = await signMemberDocument(onboardingSig.waiver_pdf_path!, 60);
+                              window.open(url, '_blank');
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Could not open waiver');
+                            }
+                          }}
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />View Waiver PDF
+                        </Button>
+                      )}
+                    </div>
+                    {onboardingSig.par_q && typeof onboardingSig.par_q === 'object' && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">PAR-Q answers</summary>
+                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.par_q, null, 2)}</pre>
+                      </details>
+                    )}
+                    {onboardingSig.consents && typeof onboardingSig.consents === 'object' && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">Consents</summary>
+                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.consents, null, 2)}</pre>
+                      </details>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
 
               {/* Health & Goals — uses fully-loaded memberDetails so new fields show */}
               {(() => {
