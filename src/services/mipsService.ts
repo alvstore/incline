@@ -152,17 +152,22 @@ export async function fetchMIPSEmployees(page = 1, size = 50, branchId?: string)
 }
 
 // Sync a person to MIPS
+// deployToDevices=false uploads the person to the MIPS server only; the
+// mips-reconcile-devices cron (every 15 min) will fan them out. Use for bulk
+// imports where per-device push would be too chatty.
 export async function syncPersonToMIPS(
   personType: "member" | "employee" | "trainer",
   personId: string,
-  branchId?: string
+  branchId?: string,
+  deployToDevices: boolean = true
 ): Promise<{ success: boolean; mips_person_id?: number; error?: string; action?: string; photo_result?: any; mips_response?: unknown }> {
   const { data, error } = await supabase.functions.invoke("sync-to-mips", {
-    body: { person_type: personType, person_id: personId, branch_id: branchId },
+    body: { person_type: personType, person_id: personId, branch_id: branchId, deploy_to_devices: deployToDevices },
   });
   if (error) throw new Error(error.message || "Sync failed");
   return data;
 }
+
 
 // Remote open door
 export async function remoteOpenDoor(deviceId: number, branchId?: string): Promise<{ success: boolean; message: string }> {

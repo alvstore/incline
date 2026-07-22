@@ -135,6 +135,28 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
     }
   };
 
+  const [reconciling, setReconciling] = useState(false);
+  const handleReconcile = async () => {
+    setReconciling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mips-reconcile-devices", {
+        body: { branch_id: branchId },
+      });
+      if (error) throw error;
+      const branches = (data as any)?.branches || [];
+      const totals = branches.reduce(
+        (a: any, b: any) => ({ ok: a.ok + (b.ok || 0), failed: a.failed + (b.failed || 0), persons: a.persons + (b.persons || 0) }),
+        { ok: 0, failed: 0, persons: 0 }
+      );
+      toast.success(`Reconciled ${totals.persons} persons across ${branches.length} branch(es) — ${totals.ok} ok / ${totals.failed} failed`);
+    } catch (e: any) {
+      toast.error(e.message || "Reconcile failed");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+
   const mipsOnline = mipsDevices.filter((d) => (d.onlineFlag === 1 || d.status === 1)).length;
   const mipsTotal = mipsDevices.length;
   const mipsFaces = mipsDevices.reduce((sum, d) => sum + (d.faceCount || 0), 0);
@@ -199,6 +221,18 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
                 <Zap className={`h-3.5 w-3.5 ${syncingFleet ? "animate-pulse" : ""}`} />
                 {syncingFleet ? "Syncing..." : "Force Sync Fleet"}
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-card/10 gap-1.5 text-xs"
+                onClick={handleReconcile}
+                disabled={reconciling}
+                title="Re-push all synced persons to every mapped device (catches devices that missed a sync while offline)"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
+                {reconciling ? "Reconciling..." : "Reconcile Devices"}
+              </Button>
+
               <Button
                 variant="ghost"
                 size="sm"

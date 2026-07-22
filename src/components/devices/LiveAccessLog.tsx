@@ -122,6 +122,7 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
     setLiveEvents(initialEvents);
   }, [initialEvents]);
 
+  const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
     const channel = supabase
       .channel("access-logs-realtime-" + (branchId || "all"))
@@ -137,10 +138,15 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
           queryClient.invalidateQueries({ queryKey: ["access-logs-live", branchId, limit] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRtStatus('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRtStatus('error');
+        else setRtStatus('connecting');
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [branchId, limit, queryClient]);
+
 
   const dedupedEvents = useMemo(() => deduplicateEvents(liveEvents), [liveEvents]);
 
@@ -204,7 +210,26 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Live Access Feed</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base">Live Access Feed</CardTitle>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                rtStatus === 'live'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : rtStatus === 'error'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+              title={`Realtime: ${rtStatus}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                rtStatus === 'live' ? 'bg-emerald-500 animate-pulse'
+                  : rtStatus === 'error' ? 'bg-red-500' : 'bg-slate-400'
+              }`} />
+              {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Offline' : 'Connecting'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-2">
             {branchId && (
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleManualOverride} disabled={openingDoor}>

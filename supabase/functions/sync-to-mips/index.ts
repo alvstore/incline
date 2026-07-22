@@ -243,13 +243,16 @@ async function dispatchToDevices(
   branchId?: string
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
+  //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
+  //    queues syncs for offline devices and delivers them on reconnect —
+  //    filtering by online silently drops second devices that blipped once.
   let deviceIds: number[] = [];
 
   try {
     let query = supabase
       .from("access_devices")
-      .select("mips_device_id, device_name, serial_number")
-      .eq("is_online", true);
+      .select("mips_device_id, device_name, serial_number, is_online")
+      .not("mips_device_id", "is", null);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
 
@@ -257,7 +260,9 @@ async function dispatchToDevices(
       deviceIds = devices
         .map((d: any) => d.mips_device_id)
         .filter((id: any) => id && !isNaN(Number(id)));
+      console.log(`[dispatchToDevices] branch=${branchId || 'all'} mapped_devices=${devices.length} online=${devices.filter((d: any) => d.is_online).length}`);
     }
+
   } catch (e) {
     console.warn("Error fetching access_devices:", e);
   }
@@ -349,13 +354,17 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { person_type, person_id, branch_id, verify_only, person_no } = body as {
+    const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
+
       person_type: "member" | "employee" | "trainer";
       person_id: string;
       branch_id?: string;
       verify_only?: boolean;
       person_no?: string;
+      /** false = upload to MIPS server only, let cron fan out to devices. Default true. */
+      deploy_to_devices?: boolean;
     };
+
 
     // Look up per-branch MIPS connection (fall back to env vars)
     let mipsBaseUrl: string | undefined;
@@ -668,14 +677,20 @@ Deno.serve(async (req) => {
       console.log("No photo URL provided, skipping photo upload");
     }
 
-    // Step 5: Dispatch to ALL active devices (multi-device)
+    // Step 5: Dispatch to ALL mapped devices (multi-device) — unless caller
+    // opted for server-only sync (cron will fan out within 15 min).
     let dispatchResult: any = null;
-    try {
-      dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
-    } catch (e) {
-      console.error("Dispatch error:", e);
-      dispatchResult = { error: String(e) };
+    if (deploy_to_devices === false) {
+      dispatchResult = { skipped: true, reason: "server_only_sync — cron will dispatch" };
+    } else {
+      try {
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
+      } catch (e) {
+        console.error("Dispatch error:", e);
+        dispatchResult = { error: String(e) };
+      }
     }
+
 
     // Step 6: Update CRM database with real personId AND mips_person_sn
     await supabase.from(tableName).update({

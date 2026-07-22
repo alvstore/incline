@@ -8014,6 +8014,7 @@ export type Database = {
           referred_by: string | null
           reward_points: number | null
           source: string | null
+          source_locked: boolean
           status: Database["public"]["Enums"]["member_status"]
           updated_at: string
           user_id: string | null
@@ -8061,6 +8062,7 @@ export type Database = {
           referred_by?: string | null
           reward_points?: number | null
           source?: string | null
+          source_locked?: boolean
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
           user_id?: string | null
@@ -8108,6 +8110,7 @@ export type Database = {
           referred_by?: string | null
           reward_points?: number | null
           source?: string | null
+          source_locked?: boolean
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
           user_id?: string | null

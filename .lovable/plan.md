@@ -1,93 +1,78 @@
 
-# Scope
+## Scope
 
-Fix the concrete "Stop 0 messages" bug, tighten the member → purchase → invoice → payment → reminder RPC chain, close the remaining gaps in RCS and Email delivery, and add a real push-sync control to the RCS Template Manager. No behavior change outside these areas.
-
----
-
-## 1. Retry Queue — real Stop, real Clear
-
-Root cause of "Stopped 0 messages": `stopAll` in `RetryQueuePanel.tsx` filters out `status === 'exhausted'`, but the visible tab is **Exhausted 100**, so nothing matches.
-
-Fix (frontend only):
-- `stopAll` operates on the currently-filtered `visible` list without the `!== 'exhausted'` guard. Exhausted rows are already terminal, so we won't "cancel" them — instead we'll **delete/clear** them.
-- Split the header buttons based on the active tab:
-  - Pending/Retrying/Failed → **Stop all** (sets `status='cancelled'`).
-  - Exhausted → **Clear exhausted** (deletes the rows; confirmation dialog).
-  - All → both actions available.
-- Per-row: add **Clear** on exhausted rows (delete) alongside the existing **Stop** on live rows.
-- Empty toast (`Stopped 0`) is replaced with an "Nothing to stop" info toast when the target list is empty.
+Five items from your last message. Grouped by system.
 
 ---
 
-## 2. Member → Purchase → Invoice → Payment RPC audit
+### 1. MIPS — Server-level personnel sync (parallel to all devices)
 
-Read-only audit of `purchase_membership`, `record_payment`, `reverse_payment`, `settle_payment`, `cancel_membership`, `freeze_membership`, `transition_member_lifecycle`, plus the invoice/PDF and reminder side effects. Concrete fixes we already know are needed:
+**Current behavior (verified in `sync-to-mips/index.ts`):** after upserting a person to the MIPS server, we call `POST /through/device/syncPerson` with an **array** of `deviceIds` for the branch. That IS the MIPS-native "parallel push to all devices" call — the server dispatches to every listed device in one shot.
 
-- **Login provisioning gap**: `provision-member-login` exists but is only wired to the manual convert path. Add a DB trigger on `members` (AFTER INSERT) that enqueues login provisioning for any member with an email, so self-registered and admin-created members both get an auth account without extra clicks.
-- **Payment reminders**: `send-reminders` currently walks `invoices` directly; ensure it uses `reminder_configurations` (branch-scoped) and honors `do_not_contact` via the dispatcher. Add a dedupe key `payment-reminder:<invoice_id>:<stage>` so duplicate sends are suppressed.
-- **Razorpay webhook**: verify `verify-payment` + `payment-webhook` both funnel through `settle_payment` (single source of truth). If either bypasses it, route it through.
-- **Invoice PDF link on reminders**: `{{document_link}}` must resolve via `signMemberDocument` in the dispatcher (already the rule); confirm reminder template events (`payment_reminder_soft`, `payment_reminder_firm`, `payment_reminder_final`) all use `header_type='none'` per project convention.
-- Any missing GRANTs or SECURITY DEFINER `search_path` on the RPCs above are patched in one migration.
+**What's actually wrong:** the person is being created on the server but not appearing on *both* devices because `deviceIds` is being computed from `access_devices` where `mips_device_id IS NOT NULL AND is_online = true`. If the second device was ever offline during import, its `mips_device_id` may be null and it's silently skipped.
 
-Deliverable: one migration + a short audit note in chat listing what was already fine.
+**Fix:**
+- In `sync-to-mips`, replace the "online only" filter with **all mapped devices for the branch** (`mips_device_id IS NOT NULL`), regardless of `is_online` — MIPS server queues syncs for offline devices and delivers them on reconnect. Log per-device dispatch result for observability.
+- Add a "Server-only" mode (`{ deploy_to_devices: false }`) — upserts the person on the MIPS server and lets the existing `mips-reconcile-devices` cron (already runs every 15 min) fan them out to devices. Useful for bulk imports.
+- Toggle in `PersonnelSyncTab.tsx`: **"Sync to server (fan out later)"** vs **"Sync + push to devices now"**.
+
+### 2. MIPS — Dual-device data sync audit
+
+- **`mips-reconcile-devices/index.ts`**: currently only runs when a branch has ≥ 2 `is_online` devices. Change to ≥ 2 **mapped** devices so a briefly-offline device still gets caught up on the next tick.
+- Increase `PER_RUN_CAP` from 100 → 500 with pagination, and log a per-person `ok/failed` breakdown into `mips_sync_attempts` for the Personnel Sync tab to display.
+- Add a "Reconcile now" button on `MIPSDashboard.tsx` that invokes `mips-reconcile-devices` with `{ branch_id }` and shows the summary toast.
+
+### 3. MIPS — Live Access Feed not receiving hits
+
+**Verified:** `LiveAccessLog.tsx` subscribes correctly to `access_logs` INSERTs and invalidates on every event. The realtime channel needs the table to be in `supabase_realtime` publication.
+
+**Fix:**
+- Migration: `ALTER PUBLICATION supabase_realtime ADD TABLE public.access_logs;` (idempotent guard).
+- In `mips-webhook-receiver`, ensure **every** identified hit (member/employee/unknown) writes an `access_logs` row before returning — audit shows the "unknown" branch currently skips the insert on some paths.
+- Add `REPLICA IDENTITY FULL` on `access_logs` so realtime payloads include member_id for filter correctness.
+- Add a small "Realtime: connected/disconnected" pill in the Live Access Feed header driven by the channel state so the operator knows if the stream is live.
+
+### 4. RCS — Smartping endpoint parity
+
+Confirmed Smartping endpoints from the Postman doc — implement what's missing:
+
+| Endpoint | Purpose | Status |
+|---|---|---|
+| `POST /rcs/api/user/authorize` | 24h token | ✅ done |
+| `POST /rcs/api/message/send` (standard/rich/carousel) | Send | ⚠️ standard only — add rich card + carousel payload builders |
+| `POST /rcs/api/template/create` | Push template | ✅ done |
+| `GET /rcs/api/template/list` | Sync templates | ✅ done |
+| `POST /rcs/api/message/report` (delivery report) | DLR polling | ❌ missing → new `reconcile-rcs-pending` provider branch |
+| `POST /rcs/api/campaign/*` | Campaign create/report | ❌ missing → optional, gated behind a "Use Smartping Campaigns" toggle |
+| Webhook samples | Inbound + DLR | ⚠️ `rcs-webhook` handles Telinfy shape — extend to Smartping shape (`customOne=log_id` correlation) |
+
+**Files touched:**
+- `supabase/functions/send-rcs/index.ts` — extend Smartping branch with `richCard` and `carouselCard` component builders driven by `rcs_templates.kind`.
+- `supabase/functions/reconcile-rcs-pending/index.ts` — add Smartping DLR poll path.
+- `supabase/functions/rcs-webhook/index.ts` — accept Smartping webhook payload; write to `communication_delivery_events` via existing `log_id` lookup.
+- `src/pages/RcsHub.tsx` — add Smartping curl snippets for the new endpoints under the Docs tab.
+
+### 5. Self-registered members — preserve form fields
+
+**Verified in `register-member/index.ts`:** the profile upsert writes exactly the form values, but a `handle_new_user` trigger (auth.users → profiles) fires first and can seed blanks that a later admin-panel save overwrites.
+
+**Fix:**
+- Update the trigger to only INSERT if `NEW.raw_user_meta_data->>'source' <> 'self_register'`, OR make it a pure `INSERT ... ON CONFLICT DO NOTHING` so `register-member`'s upsert wins.
+- On `MemberProfileDrawer.tsx` save, diff against original — never PATCH fields the user didn't touch (prevents accidental blank overwrites).
+- Add a `source_locked` flag on `members` so subsequent auto-imports (walk-in bulk, MIPS enroll) can't silently flip `source` from `self_register`.
 
 ---
 
-## 3. Complete RCS + Email delivery
+## Out of scope (this plan)
 
-RCS:
-- Ensure `dispatch-communication` routes `channel:'rcs'` → `send-rcs` for **both** Telinfy and Smartping via the shared adapter (already true; verify).
-- `rcs-webhook` writes DLR events for both providers into `communication_delivery_events` and updates `communication_logs.status` (delivered/read/failed). Add missing Smartping status codes if any.
-- `reconcile-rcs-pending` cron confirms terminal state for logs stuck in `sent` > 15 min.
-- Freeform → SMS fallback path stays intact (dispatcher already does it).
+- Reworking the MIPS transport layer (still HTTP/JSON via `mips-proxy`).
+- Any UI restyling of the Device Center — only the two additions above.
 
-Email:
-- Verify `process-email-queue` cron is present and healthy (call `email_domain--check_email_domain_status`); if the domain isn't configured yet, surface the setup dialog once.
-- Confirm `send-email` handles attachments (`document_link`) and unsubscribe token injection.
-- Add DLR-style event write from `email-webhook` (Resend/SES bounce/complaint/delivered) into `communication_delivery_events` mirroring the WhatsApp/RCS pattern.
+## Deliverables
 
-No client API surface changes — everything flows through `dispatchCommunication()`.
+- 3 edge-function updates (`sync-to-mips`, `mips-reconcile-devices`, `send-rcs`, `reconcile-rcs-pending`, `rcs-webhook`, `mips-webhook-receiver`).
+- 1 migration (realtime publication + trigger guard + `source_locked` column).
+- 3 UI touches (`PersonnelSyncTab`, `MIPSDashboard`, `LiveAccessLog`, `MemberProfileDrawer`, `RcsHub`).
+- No schema breaks, no data migration needed.
 
----
-
-## 4. RCS Template Manager — Push Sync
-
-Today the hub has **Sync from <provider>** (pull). Add **Push to <provider>** on the Templates tab:
-
-- New button next to Sync. Opens a small drawer listing local `rcs_templates` rows where `external_template_id IS NULL` (i.e., not yet on provider) with a per-row **Push** action and a **Push all** bulk action.
-- New edge function `rcs-templates-push` (adapter-based, same shape as `rcs-templates-sync`):
-  - Smartping: `POST /rcs/api/template/create` with template payload.
-  - Telinfy: `POST /rcs/templates` (documented path).
-  - On success, write back `external_template_id`, `provider`, `status='pending_approval'`.
-- Guardrails: template must have `kind`, `body`, and at least one language; media assets must be a public https URL.
-- Provider capability check: block push for kinds the provider doesn't support (e.g., rich cards on basic-only providers) with a clear inline reason.
-
----
-
-## Out of scope (for this plan)
-
-- Non-RCS/email provider swaps.
-- Any UI change outside Retry Queue and RCS Template Manager.
-- Re-designing the reminders configuration screen (only the sending path is touched).
-
----
-
-## Technical notes
-
-- Files touched (edits only, no rewrites):
-  - `src/components/communications/RetryQueuePanel.tsx`
-  - `src/components/settings/rcs/RcsHub.tsx` (+ small drawer component)
-  - `supabase/functions/dispatch-communication/index.ts` (only if audit finds a gap)
-  - `supabase/functions/email-webhook/index.ts`
-  - `supabase/functions/rcs-webhook/index.ts`
-  - `supabase/functions/send-reminders/index.ts`
-- New files:
-  - `supabase/functions/rcs-templates-push/index.ts`
-  - `src/components/settings/rcs/PushTemplatesDrawer.tsx`
-- Migrations:
-  - Trigger `members_after_insert_provision_login`.
-  - `search_path` / GRANT patches for any RPCs the audit flags.
-  - Optional: index on `communication_retry_queue(status)` if EXPLAIN shows scan.
-
-Once approved I'll implement in the order: (1) Retry Queue fix, (2) migration + audit note, (3) RCS/email delivery patches, (4) push-sync feature.
+Approve and I'll implement in that order.
