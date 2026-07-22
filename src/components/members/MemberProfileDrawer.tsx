@@ -1433,6 +1433,58 @@ export function MemberProfileDrawer({
                 </Card>
               )}
 
+              {/* Onboarding Waiver (self-registration signed record) */}
+              {onboardingSig && (
+                <Card className="border-emerald-200 bg-emerald-50/40">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-emerald-600" />
+                      Onboarding & Waiver
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="font-medium text-slate-900">Signed digitally</p>
+                        <p className="text-xs text-muted-foreground">
+                          {onboardingSig.signed_at ? format(new Date(onboardingSig.signed_at), 'dd MMM yyyy, HH:mm') : '—'}
+                          {onboardingSig.signer_ip ? ` · IP ${onboardingSig.signer_ip}` : ''}
+                        </p>
+                      </div>
+                      {onboardingSig.waiver_pdf_path && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const url = await signMemberDocument(onboardingSig.waiver_pdf_path!, 60);
+                              window.open(url, '_blank');
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Could not open waiver');
+                            }
+                          }}
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />View Waiver PDF
+                        </Button>
+                      )}
+                    </div>
+                    {onboardingSig.par_q && typeof onboardingSig.par_q === 'object' && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">PAR-Q answers</summary>
+                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.par_q, null, 2)}</pre>
+                      </details>
+                    )}
+                    {onboardingSig.consents && typeof onboardingSig.consents === 'object' && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">Consents</summary>
+                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.consents, null, 2)}</pre>
+                      </details>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+
               {/* Health & Goals — uses fully-loaded memberDetails so new fields show */}
               {(() => {
                 type FitnessProfileFields = {
