@@ -354,7 +354,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { person_type, person_id, branch_id, verify_only, person_no } = body as {
+    const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
+
       person_type: "member" | "employee" | "trainer";
       person_id: string;
       branch_id?: string;
