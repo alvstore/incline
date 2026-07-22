@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
+import { signMemberDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';
