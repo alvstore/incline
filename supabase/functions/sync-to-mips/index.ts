@@ -243,13 +243,16 @@ async function dispatchToDevices(
   branchId?: string
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
+  //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
+  //    queues syncs for offline devices and delivers them on reconnect —
+  //    filtering by online silently drops second devices that blipped once.
   let deviceIds: number[] = [];
 
   try {
     let query = supabase
       .from("access_devices")
-      .select("mips_device_id, device_name, serial_number")
-      .eq("is_online", true);
+      .select("mips_device_id, device_name, serial_number, is_online")
+      .not("mips_device_id", "is", null);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
 
@@ -257,7 +260,9 @@ async function dispatchToDevices(
       deviceIds = devices
         .map((d: any) => d.mips_device_id)
         .filter((id: any) => id && !isNaN(Number(id)));
+      console.log(`[dispatchToDevices] branch=${branchId || 'all'} mapped_devices=${devices.length} online=${devices.filter((d: any) => d.is_online).length}`);
     }
+
   } catch (e) {
     console.warn("Error fetching access_devices:", e);
   }
