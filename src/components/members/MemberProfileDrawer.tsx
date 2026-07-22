@@ -1330,11 +1330,28 @@ export function MemberProfileDrawer({
                     </div>
                     <div>
                       <span className="text-muted-foreground">Source:</span>
-                      <span className="ml-2 capitalize">{member.source || 'Walk-in'}</span>
+                      <span className="ml-2">{
+                        (() => {
+                          const src = (memberDetails as any)?.source ?? (member as any).source;
+                          if (!src) return 'Walk-in';
+                          const map: Record<string, string> = {
+                            self_register: 'Self-registered (online)',
+                            self_registration: 'Self-registered (online)',
+                            walk_in: 'Walk-in',
+                            lead_conversion: 'Converted from lead',
+                            referral: 'Referral',
+                            import: 'Imported',
+                          };
+                          return map[src] || String(src).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        })()
+                      }</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Created by:</span>
-                      <span className="ml-2">{(memberDetails?.created_by_profile as any)?.full_name || 'System'}</span>
+                      <span className="ml-2">{
+                        (memberDetails?.created_by_profile as any)?.full_name
+                        || ((memberDetails as any)?.source?.startsWith('self') ? 'Member (self-registered)' : 'System')
+                      }</span>
                     </div>
                   </div>
                 </CardContent>
