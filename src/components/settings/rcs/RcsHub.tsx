@@ -108,6 +108,11 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
     !hasCreds ? 'unconfigured' : !isActive ? 'inactive' : 'active';
 
   const providerLabel = activeProvider === 'smartping' ? 'Smartping' : 'Telinfy';
+  const providerExposesWallet = activeProvider === 'telinfy'; // Smartping has no public wallet endpoint
+  // Auto-hop off Wallet tab if the active provider doesn't expose it
+  useEffect(() => {
+    if (!providerExposesWallet && tab === 'wallet') setTab('overview');
+  }, [providerExposesWallet, tab]);
 
   const testMut = useMutation({
     mutationFn: async () => {
