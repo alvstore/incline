@@ -361,7 +361,10 @@ Deno.serve(async (req) => {
       branch_id?: string;
       verify_only?: boolean;
       person_no?: string;
+      /** false = upload to MIPS server only, let cron fan out to devices. Default true. */
+      deploy_to_devices?: boolean;
     };
+
 
     // Look up per-branch MIPS connection (fall back to env vars)
     let mipsBaseUrl: string | undefined;
