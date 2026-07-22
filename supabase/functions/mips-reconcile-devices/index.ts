@@ -23,11 +23,11 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
   try {
-    // 1. Load all online, mapped devices grouped by branch.
+    // 1. Load all MAPPED devices grouped by branch (include offline — MIPS
+    //    server queues syncs for offline devices and delivers on reconnect).
     const { data: devices, error: devErr } = await supabase
       .from("access_devices")
       .select("id, branch_id, mips_device_id, device_name, is_online")
-      .eq("is_online", true)
       .not("mips_device_id", "is", null);
     if (devErr) throw devErr;
 
@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
 
     for (const [branchId, brDevices] of byBranch.entries()) {
       if (brDevices.length < 2) continue; // only multi-device branches
+
 
       const deviceIds = brDevices.map((d) => d.mipsId);
 
