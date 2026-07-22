@@ -63,10 +63,15 @@ Deno.serve(async (req) => {
     .in('delivery_status', ['sent'])
     .is('delivered_at', null)
     .not('provider_record_id', 'is', null)
+    // Smartping DLRs are webhook-only (no documented polling endpoint) —
+    // skip them here so we don't hit the Telinfy record API with a UUID that
+    // will 404.
+    .or('delivery_metadata->>provider.is.null,delivery_metadata->>provider.eq.telinfy')
     .lte('created_at', minAgeIso)
     .gte('created_at', maxAgeIso)
     .order('created_at', { ascending: true })
     .limit(200);
+
 
   if (force_ids.length) {
     query = supabase
