@@ -518,7 +518,20 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         <Button variant="outline" size="sm" onClick={() => bulkSyncMutation.mutate(personnel)} disabled={bulkSyncMutation.isPending}>
           <RefreshCw className="h-4 w-4 mr-1.5" /> Re-sync All
         </Button>
+        <label
+          className="ml-auto flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+          title="When ON: upload to MIPS server only — the reconcile cron (every 15 min) fans out to every device in parallel. Recommended for bulk syncs."
+        >
+          <input
+            type="checkbox"
+            checked={serverOnlyBulk}
+            onChange={(e) => setServerOnlyBulk(e.target.checked)}
+            className="rounded border-input"
+          />
+          Server-only (cron fan-out)
+        </label>
       </div>
+
 
       {/* Tabs: Members | Staff & Trainers */}
       <Tabs value={personnelTab} onValueChange={setPersonnelTab}>
