@@ -122,6 +122,7 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
     setLiveEvents(initialEvents);
   }, [initialEvents]);
 
+  const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
     const channel = supabase
       .channel("access-logs-realtime-" + (branchId || "all"))
@@ -137,10 +138,15 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
           queryClient.invalidateQueries({ queryKey: ["access-logs-live", branchId, limit] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRtStatus('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRtStatus('error');
+        else setRtStatus('connecting');
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [branchId, limit, queryClient]);
+
 
   const dedupedEvents = useMemo(() => deduplicateEvents(liveEvents), [liveEvents]);
 
