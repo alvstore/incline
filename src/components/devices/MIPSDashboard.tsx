@@ -225,6 +225,18 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
                 variant="ghost"
                 size="sm"
                 className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-card/10 gap-1.5 text-xs"
+                onClick={handleReconcile}
+                disabled={reconciling}
+                title="Re-push all synced persons to every mapped device (catches devices that missed a sync while offline)"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${reconciling ? "animate-spin" : ""}`} />
+                {reconciling ? "Reconciling..." : "Reconcile Devices"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-card/10 gap-1.5 text-xs"
                 onClick={handleCheckExpiredAccess}
                 disabled={checkingExpired}
               >
