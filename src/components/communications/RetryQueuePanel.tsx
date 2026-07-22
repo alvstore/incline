@@ -115,18 +115,17 @@ export function RetryQueuePanel() {
 
   const stopAll = useMutation({
     mutationFn: async () => {
-      // Live rows only — exhausted rows are already terminal and use "Clear" instead.
-      const ids = visible.filter((r: any) => r.status !== 'exhausted' && r.status !== 'cancelled').map((r: any) => r.id);
-      if (!ids.length) return 0;
-      const { error } = await supabase
+      // Bulk-cancel EVERY live row in DB (not just the visible 100).
+      const { data, error } = await supabase
         .from('communication_retry_queue')
         .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
-        .in('id', ids);
+        .in('status', ['pending', 'retrying', 'failed'])
+        .select('id');
       if (error) throw error;
-      return ids.length;
+      return (data ?? []).length;
     },
     onSuccess: (n) => {
-      if (n === 0) toast.info('Nothing to stop in this view');
+      if (n === 0) toast.info('Nothing live to stop');
       else toast.success(`Stopped ${n} message${n === 1 ? '' : 's'}`);
       qc.invalidateQueries({ queryKey: ['retry-queue'] });
     },
@@ -135,14 +134,14 @@ export function RetryQueuePanel() {
 
   const clearExhausted = useMutation({
     mutationFn: async () => {
-      const ids = visible.filter((r: any) => r.status === 'exhausted').map((r: any) => r.id);
-      if (!ids.length) return 0;
-      const { error } = await supabase
+      // Bulk-delete EVERY exhausted row in DB (fixes the "keeps coming back after clearing 100" loop).
+      const { data, error } = await supabase
         .from('communication_retry_queue')
         .delete()
-        .in('id', ids);
+        .eq('status', 'exhausted')
+        .select('id');
       if (error) throw error;
-      return ids.length;
+      return (data ?? []).length;
     },
     onSuccess: (n) => {
       if (n === 0) toast.info('Nothing to clear');
