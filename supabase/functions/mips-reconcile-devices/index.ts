@@ -13,7 +13,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const PER_RUN_CAP = 100; // per-branch cap to bound edge-fn runtime
+const PER_RUN_CAP = 500; // per-branch cap to bound edge-fn runtime
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
