@@ -172,16 +172,55 @@ async function smartpingSend(
   if (!token) return { status: 'not_configured', provider: 'smartping', reason: 'Smartping token unavailable (check credentials + IP whitelist)' };
 
   const params = varArray(p.variables);
+
+  // Build components: caller-provided > template.kind-derived > flat messageText fallback.
+  let components: Record<string, unknown> | undefined = p.components as any;
+  if (!components && p.template_id) {
+    try {
+      const { data: tmpl } = await supabase
+        .from('rcs_templates')
+        .select('kind, body_preview, config')
+        .eq('external_template_id', p.template_id)
+        .maybeSingle();
+      const kind = String((tmpl as any)?.kind || 'basic_standard');
+      const cfgRow = ((tmpl as any)?.config || {}) as Record<string, any>;
+      if (kind.startsWith('rich') && !kind.includes('carousel')) {
+        // Rich card: title (messageText) + body (messageDescription) + CTAs
+        const desc = cfgRow.description_params || params;
+        components = {
+          richCard: [
+            { type: 'messageText', parameters: cfgRow.title_params || params },
+            { type: 'messageDescription', parameters: desc },
+            ...(cfgRow.cta_url_params ? [{ type: 'dynamicSuggestionURL', parameters: cfgRow.cta_url_params }] : []),
+            ...(cfgRow.cta_dial_params ? [{ type: 'dialerAction', parameters: cfgRow.cta_dial_params }] : []),
+          ],
+        };
+      } else if (kind.includes('carousel')) {
+        const cards = Array.isArray(cfgRow.cards) ? cfgRow.cards : [];
+        components = {
+          carouselCard: cards.map((c: any) => [
+            { type: 'title', parameters: c.title_params || [] },
+            { type: 'description', parameters: c.description_params || [] },
+            ...(c.cta_url_params ? [{ type: 'dynamicSuggestionURL', parameters: c.cta_url_params }] : []),
+            ...(c.cta_dial_params ? [{ type: 'dialerAction', parameters: c.cta_dial_params }] : []),
+          ]),
+        };
+      }
+    } catch (e) {
+      console.warn('[smartping] template kind lookup failed', e);
+    }
+  }
+  if (!components) components = { standard: [{ type: 'messageText', parameters: params }] };
+
   const body = {
     messages: [{
       templateId: p.template_id, // Smartping requires UUID; if only name given caller must resolve first
       to: digitsOnly(p.recipient),
       customOne: p.log_id || undefined,
-      components: p.components || {
-        standard: [{ type: 'messageText', parameters: params }],
-      },
+      components,
     }],
   };
+
 
   const url = `${cfg.base_url}/rcs/api/message/send`;
   const doSend = async (auth: string) =>
