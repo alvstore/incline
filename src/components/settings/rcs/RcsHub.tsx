@@ -188,17 +188,19 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               </div>
             )}
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid grid-cols-6 w-full">
+              <TabsList className={`grid ${providerExposesWallet ? 'grid-cols-6' : 'grid-cols-5'} w-full`}>
                 <TabsTrigger value="overview"><Activity className="h-3.5 w-3.5 mr-1.5" />Overview</TabsTrigger>
                 <TabsTrigger value="templates"><FileText className="h-3.5 w-3.5 mr-1.5" />Templates</TabsTrigger>
                 <TabsTrigger value="test"><Send className="h-3.5 w-3.5 mr-1.5" />Test Send</TabsTrigger>
-                <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
+                {providerExposesWallet && (
+                  <TabsTrigger value="wallet" disabled={!canSeeWallet}><Wallet className="h-3.5 w-3.5 mr-1.5" />Wallet</TabsTrigger>
+                )}
                 <TabsTrigger value="reports"><BarChart3 className="h-3.5 w-3.5 mr-1.5" />Reports</TabsTrigger>
                 <TabsTrigger value="webhooks"><Webhook className="h-3.5 w-3.5 mr-1.5" />Webhooks</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
-                <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet} />
+                <OverviewPanel branchId={branchId} canSeeWallet={canSeeWallet && providerExposesWallet} providerLabel={providerLabel} />
               </TabsContent>
               <TabsContent value="templates" className="mt-4">
                 <TemplatesPanel branchId={branchId} isAdmin={isAdmin} providerLabel={providerLabel} />
@@ -206,9 +208,11 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
               <TabsContent value="test" className="mt-4">
                 <TestSendPanel branchId={branchId} isAdmin={isAdmin} disabled={state !== 'active'} providerLabel={providerLabel} />
               </TabsContent>
-              <TabsContent value="wallet" className="mt-4">
-                {canSeeWallet ? <WalletPanel branchId={branchId} providerLabel={providerLabel} /> : <div className="text-sm text-muted-foreground">No access.</div>}
-              </TabsContent>
+              {providerExposesWallet && (
+                <TabsContent value="wallet" className="mt-4">
+                  {canSeeWallet ? <WalletPanel branchId={branchId} providerLabel={providerLabel} /> : <div className="text-sm text-muted-foreground">No access.</div>}
+                </TabsContent>
+              )}
               <TabsContent value="reports" className="mt-4">
                 <ReportsPanel branchId={branchId} />
               </TabsContent>
