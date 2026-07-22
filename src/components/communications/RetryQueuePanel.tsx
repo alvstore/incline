@@ -208,19 +208,17 @@ export function RetryQueuePanel() {
                 <Button
                   size="sm" variant="outline"
                   className="h-8 rounded-lg gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                  disabled={
-                    visible.filter((r: any) => r.status !== 'exhausted' && r.status !== 'cancelled').length === 0
-                  }
+                  disabled={(counts.pending + counts.retrying + counts.failed) === 0}
                 >
                   <Ban className="h-3.5 w-3.5" />Stop all
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Stop all queued retries?</AlertDialogTitle>
+                  <AlertDialogTitle>Stop every queued retry?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Cancels every live message currently in the visible list (pending, retrying, failed).
-                    Already-exhausted rows are untouched — use "Clear exhausted" to remove those.
+                    Cancels every live message in the entire queue (pending, retrying, failed) — not just the 100 shown here.
+                    Already-exhausted rows are untouched; use "Clear exhausted" to remove those.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -236,16 +234,16 @@ export function RetryQueuePanel() {
                 <Button
                   size="sm" variant="outline"
                   className="h-8 rounded-lg gap-1.5"
-                  disabled={visible.filter((r: any) => r.status === 'exhausted').length === 0}
+                  disabled={counts.exhausted === 0}
                 >
                   <Trash2 className="h-3.5 w-3.5" />Clear exhausted
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Clear exhausted messages?</AlertDialogTitle>
+                  <AlertDialogTitle>Clear every exhausted message?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Permanently removes every exhausted row from the visible list.
+                    Permanently removes every exhausted row from the queue (not just the 100 shown here).
                     They've already failed their max attempts and won't be retried automatically.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -257,6 +255,7 @@ export function RetryQueuePanel() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
           </div>
         </div>
         {rows.length > 0 && (
