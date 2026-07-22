@@ -677,14 +677,20 @@ Deno.serve(async (req) => {
       console.log("No photo URL provided, skipping photo upload");
     }
 
-    // Step 5: Dispatch to ALL active devices (multi-device)
+    // Step 5: Dispatch to ALL mapped devices (multi-device) — unless caller
+    // opted for server-only sync (cron will fan out within 15 min).
     let dispatchResult: any = null;
-    try {
-      dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
-    } catch (e) {
-      console.error("Dispatch error:", e);
-      dispatchResult = { error: String(e) };
+    if (deploy_to_devices === false) {
+      dispatchResult = { skipped: true, reason: "server_only_sync — cron will dispatch" };
+    } else {
+      try {
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
+      } catch (e) {
+        console.error("Dispatch error:", e);
+        dispatchResult = { error: String(e) };
+      }
     }
+
 
     // Step 6: Update CRM database with real personId AND mips_person_sn
     await supabase.from(tableName).update({
