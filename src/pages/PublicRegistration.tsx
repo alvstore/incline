@@ -130,7 +130,7 @@ export default function PublicRegistration() {
       }
       toast.success(`Welcome to Incline! Your member code: ${data.member_code}`);
       setStep("done");
-      setTimeout(() => nav("/member"), 1500);
+      setTimeout(() => nav("/member-dashboard", { replace: true }), 1500);
     },
     onError: (e: Error) => toast.error(e.message),
   });
