@@ -85,7 +85,7 @@ export function PurchasePTDrawer({ open, onOpenChange, memberId, memberName, bra
         toast.success(`Coupon applied — ${formatINR(res.discount_amount)} off`);
       } else {
         setCouponValidated(null);
-        toast.error(couponReasonLabel(res.reason));
+        toast.error(couponReasonLabel((res as { reason: string }).reason));
       }
     } catch (e: any) {
       toast.error(e?.message || 'Coupon validation failed');
