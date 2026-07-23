@@ -1,78 +1,50 @@
+# Fix five audit items
 
-## Scope
+## 1. Registration redirects to 404
+**Confirmed cause:** `src/pages/PublicRegistration.tsx` line ~134 does `nav("/member")` — that route does not exist.
 
-Five items from your last message. Grouped by system.
+**Fix:** Redirect to `/member-dashboard` (member home). Same effect as `getHomePath(["member"])`.
 
----
+## 2. Send welcome message on self-registration
+`register-member` currently sends only the OTP. After successful `verify_and_register`, dispatch a `member_welcome` communication (WhatsApp → SMS → email fallback via `dispatch-communication`) with the member's name and login link.
 
-### 1. MIPS — Server-level personnel sync (parallel to all devices)
+Also add `member_welcome` to `src/lib/templates/systemEvents.ts` so it shows up in Templates Hub for admins to author.
 
-**Current behavior (verified in `sync-to-mips/index.ts`):** after upserting a person to the MIPS server, we call `POST /through/device/syncPerson` with an **array** of `deviceIds` for the branch. That IS the MIPS-native "parallel push to all devices" call — the server dispatches to every listed device in one shot.
+## 3. Sidebar / dashboard logo not visible for members
+**Confirmed cause:** `organization_settings` SELECT policy only allows roles `owner/admin/manager/staff` — members are blocked, so `useOrgBranding()` returns `null` and BrandLogo falls back to the Dumbbell icon.
 
-**What's actually wrong:** the person is being created on the server but not appearing on *both* devices because `deviceIds` is being computed from `access_devices` where `mips_device_id IS NOT NULL AND is_online = true`. If the second device was ever offline during import, its `mips_device_id` may be null and it's silently skipped.
+**Fix migration:** Add a second SELECT policy that lets any authenticated user read `logo_url` + `name` only. Since RLS is row-level (not column-level), the safest route is to allow authenticated SELECT on the row (logo/name are already public branding — not sensitive). Existing admin-write policy stays intact.
 
-**Fix:**
-- In `sync-to-mips`, replace the "online only" filter with **all mapped devices for the branch** (`mips_device_id IS NOT NULL`), regardless of `is_online` — MIPS server queues syncs for offline devices and delivers them on reconnect. Log per-device dispatch result for observability.
-- Add a "Server-only" mode (`{ deploy_to_devices: false }`) — upserts the person on the MIPS server and lets the existing `mips-reconcile-devices` cron (already runs every 15 min) fan them out to devices. Useful for bulk imports.
-- Toggle in `PersonnelSyncTab.tsx`: **"Sync to server (fan out later)"** vs **"Sync + push to devices now"**.
-
-### 2. MIPS — Dual-device data sync audit
-
-- **`mips-reconcile-devices/index.ts`**: currently only runs when a branch has ≥ 2 `is_online` devices. Change to ≥ 2 **mapped** devices so a briefly-offline device still gets caught up on the next tick.
-- Increase `PER_RUN_CAP` from 100 → 500 with pagination, and log a per-person `ok/failed` breakdown into `mips_sync_attempts` for the Personnel Sync tab to display.
-- Add a "Reconcile now" button on `MIPSDashboard.tsx` that invokes `mips-reconcile-devices` with `{ branch_id }` and shows the summary toast.
-
-### 3. MIPS — Live Access Feed not receiving hits
-
-**Verified:** `LiveAccessLog.tsx` subscribes correctly to `access_logs` INSERTs and invalidates on every event. The realtime channel needs the table to be in `supabase_realtime` publication.
+## 4. Avatar not showing / not syncing to MIPS
+**Confirmed:** `sync-to-mips` reads photo from `members.biometric_photo_url → profiles.avatar_url → leads.avatar_url`. But when a member's avatar is uploaded via profile edit, it lands only in `profiles.avatar_url` and there is no re-enqueue into `biometric_sync_queue`, so the hardware never picks up the change.
 
 **Fix:**
-- Migration: `ALTER PUBLICATION supabase_realtime ADD TABLE public.access_logs;` (idempotent guard).
-- In `mips-webhook-receiver`, ensure **every** identified hit (member/employee/unknown) writes an `access_logs` row before returning — audit shows the "unknown" branch currently skips the insert on some paths.
-- Add `REPLICA IDENTITY FULL` on `access_logs` so realtime payloads include member_id for filter correctness.
-- Add a small "Realtime: connected/disconnected" pill in the Live Access Feed header driven by the channel state so the operator knows if the stream is live.
+- Add a database trigger on `profiles.avatar_url` update: for each `members` row where `user_id = NEW.id`, enqueue a `biometric_sync_queue` row (op = `upsert`) so the existing MIPS cron pushes the new face photo.
+- Also mirror `profiles.avatar_url` → `members.biometric_photo_url` when the member has no explicit biometric photo yet, so device-side face templates use it.
 
-### 4. RCS — Smartping endpoint parity
-
-Confirmed Smartping endpoints from the Postman doc — implement what's missing:
-
-| Endpoint | Purpose | Status |
-|---|---|---|
-| `POST /rcs/api/user/authorize` | 24h token | ✅ done |
-| `POST /rcs/api/message/send` (standard/rich/carousel) | Send | ⚠️ standard only — add rich card + carousel payload builders |
-| `POST /rcs/api/template/create` | Push template | ✅ done |
-| `GET /rcs/api/template/list` | Sync templates | ✅ done |
-| `POST /rcs/api/message/report` (delivery report) | DLR polling | ❌ missing → new `reconcile-rcs-pending` provider branch |
-| `POST /rcs/api/campaign/*` | Campaign create/report | ❌ missing → optional, gated behind a "Use Smartping Campaigns" toggle |
-| Webhook samples | Inbound + DLR | ⚠️ `rcs-webhook` handles Telinfy shape — extend to Smartping shape (`customOne=log_id` correlation) |
-
-**Files touched:**
-- `supabase/functions/send-rcs/index.ts` — extend Smartping branch with `richCard` and `carouselCard` component builders driven by `rcs_templates.kind`.
-- `supabase/functions/reconcile-rcs-pending/index.ts` — add Smartping DLR poll path.
-- `supabase/functions/rcs-webhook/index.ts` — accept Smartping webhook payload; write to `communication_delivery_events` via existing `log_id` lookup.
-- `src/pages/RcsHub.tsx` — add Smartping curl snippets for the new endpoints under the Docs tab.
-
-### 5. Self-registered members — preserve form fields
-
-**Verified in `register-member/index.ts`:** the profile upsert writes exactly the form values, but a `handle_new_user` trigger (auth.users → profiles) fires first and can seed blanks that a later admin-panel save overwrites.
+## 5. PT purchase drawer needs discount + payment method
+Current `PurchasePTDrawer` only picks package + trainer, then calls `purchase_pt_package` RPC at list price. Staff cannot apply a discount or record the payment method — everything shows as unpaid invoice afterward.
 
 **Fix:**
-- Update the trigger to only INSERT if `NEW.raw_user_meta_data->>'source' <> 'self_register'`, OR make it a pure `INSERT ... ON CONFLICT DO NOTHING` so `register-member`'s upsert wins.
-- On `MemberProfileDrawer.tsx` save, diff against original — never PATCH fields the user didn't touch (prevents accidental blank overwrites).
-- Add a `source_locked` flag on `members` so subsequent auto-imports (walk-in bulk, MIPS enroll) can't silently flip `source` from `self_register`.
+- Add fields: `discount_type` (none / percent / fixed / coupon code), `discount_value`, `payment_method` (cash/card/upi/bank/pending), `amount_paid`.
+- Coupon path calls existing `redeemCoupon()` (`src/services/couponService.ts`).
+- After the existing `purchase_pt_package` RPC creates the invoice, if `amount_paid > 0`, call the atomic `record_payment` RPC (memory: "single source of truth for all transactions") against the returned invoice id.
+- Show computed breakdown using the existing `computePtCheckout` helper for GST split.
 
----
+## Files to change
 
-## Out of scope (this plan)
+```text
+src/pages/PublicRegistration.tsx           # /member → /member-dashboard
+src/lib/templates/systemEvents.ts          # add member_welcome event
+supabase/functions/register-member/index.ts# dispatch member_welcome after register
+supabase/migrations/<new>.sql              # organization_settings SELECT for authenticated
+                                            # + profiles.avatar_url trigger → biometric_sync_queue
+src/components/members/PurchasePTDrawer.tsx# discount + payment fields
+src/services/ptService.ts                  # accept discount/payment, call record_payment
+```
 
-- Reworking the MIPS transport layer (still HTTP/JSON via `mips-proxy`).
-- Any UI restyling of the Device Center — only the two additions above.
+## Out of scope for this turn
+- Item about `posture_type` column: verified no code queries that column; existing schema uses `n`. Nothing to fix here.
+- Broader "audit all RPCs" — separate large task; ask if you want that as a follow-up.
 
-## Deliverables
-
-- 3 edge-function updates (`sync-to-mips`, `mips-reconcile-devices`, `send-rcs`, `reconcile-rcs-pending`, `rcs-webhook`, `mips-webhook-receiver`).
-- 1 migration (realtime publication + trigger guard + `source_locked` column).
-- 3 UI touches (`PersonnelSyncTab`, `MIPSDashboard`, `LiveAccessLog`, `MemberProfileDrawer`, `RcsHub`).
-- No schema breaks, no data migration needed.
-
-Approve and I'll implement in that order.
+Reply "go" to implement, or edit any point.
