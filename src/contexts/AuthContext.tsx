@@ -247,6 +247,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Realtime profile refresh — pick up avatar / name changes made elsewhere
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`profile-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          const next = payload.new as Partial<UserProfile>;
+          setProfile((prev) => (prev ? { ...prev, ...next } as UserProfile : prev));
+        },
+      )
+      .subscribe();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProfile(user.id).then((p) => p && setProfile(p));
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.id]);
+
   const signInWithOtp = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ email });
     return { error: error as Error | null };

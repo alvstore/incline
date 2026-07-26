@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,8 +33,37 @@ interface InvoiceViewDrawerProps {
 export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayment, onSendPaymentLink }: InvoiceViewDrawerProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [correctOpen, setCorrectOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const qc = useQueryClient();
   const { roles } = useAuth() as any;
   const canCorrect = can.approveDiscount(roles);
+
+  const handleVerifyRazorpay = async () => {
+    if (!invoiceId) return;
+    setVerifying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reconcile-razorpay-links', {
+        body: { invoiceId },
+      });
+      if (error) throw error;
+      const settled = (data?.results ?? []).find((r: any) => r?.ok && r?.amount > 0);
+      if (settled) {
+        toast.success(`Payment reconciled: ₹${Number(settled.amount).toLocaleString()}`);
+      } else {
+        const info = (data?.results ?? [])[0];
+        toast.info(info?.plink_status ? `Razorpay status: ${info.plink_status}` : 'No pending Razorpay link for this invoice.');
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['invoice-details', invoiceId] }),
+        qc.invalidateQueries({ queryKey: ['invoice-payments', invoiceId] }),
+        qc.invalidateQueries({ queryKey: ['invoices'] }),
+      ]);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to verify with Razorpay');
+    } finally {
+      setVerifying(false);
+    }
+  };
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice-details', invoiceId],
     queryFn: async () => {
@@ -346,6 +378,15 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               <Button variant="outline" className="w-full" onClick={() => { onOpenChange(false); onSendPaymentLink?.(); }}>
                 <Link2 className="h-4 w-4 mr-2" />
                 Send Payment Link
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
+                onClick={handleVerifyRazorpay}
+                disabled={verifying}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${verifying ? 'animate-spin' : ''}`} />
+                {verifying ? 'Verifying with Razorpay…' : 'Verify Razorpay payment'}
               </Button>
             </div>
           )}
