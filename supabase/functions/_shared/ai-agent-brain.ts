@@ -1937,22 +1937,20 @@ function enforceNoRepeatNameAsk(input: {
 
 
 
-// ─── Founder's Phase plain-text sanitizer (v3.5.0) ─────────────────────────
-// We DO allow the words monthly/quarterly/half-yearly/annual/Founding/plan/goal
-// because we now capture plan_interest as free text. We block only price
-// mentions, fee mentions, PT package names, and "send the details" promises.
-const FORBIDDEN_PLAN_TEXT_RE =
-  /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
-const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
-const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
-// v6.0.0 — opening-date disclosure is now ALLOWED. The redactor is a
-// pass-through so the LLM (and knowledge base) can freely mention
-// "Sunday, 26 July 2026". Signature preserved for callers.
-function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
-  return { redacted: text, hit: false };
+// ─── Post-launch plain-text sanitizer (v7.0.0) ──────────────────────────────
+// Post-launch: prices, PT packages, plan names are all ALLOWED. This sanitizer
+// now only guards against a very small set of hallucinations we still don't
+// want the LLM to emit (hallucinated callback promises are handled separately
+// by stripHallucinatedActions). Kept as a permissive pass-through so old call
+// sites keep working; if a pricing turn from the model is missing the tour
+// CTA, we append it here for lead/unknown contacts.
+const FORBIDDEN_PLAN_TEXT_RE = /a^/; // never matches (kept for compat)
+const FORBIDDEN_PRICE_TEXT_RE = /a^/; // never matches (kept for compat)
+const SEND_DETAILS_RE = /a^/; // never matches (kept for compat)
+function redactOpeningDate(_text: string): { redacted: string; hit: boolean } {
+  return { redacted: _text, hit: false };
 }
-const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
-
+const OPENING_DATE_NEUTRAL = pricingReplyEN();
 
 // v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
 // like "I've notified our team", "created a task", "booked your slot",
@@ -1970,9 +1968,12 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
   if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
   console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
-  return "Got it — noting your interest. We open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
-
+  return `Got it — noting your interest. ${tourCtaLine()}`;
 }
+
+// Detects an outbound pricing reply so we can enforce the tour CTA.
+const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite)\s+(?:plan|membership|founder)?)/i;
+const TOUR_CTA_PRESENT_RE = /\b(vip\s+(?:gym\s+)?tour|schedule\s+a\s+.{0,20}tour|which\s+day\s+works\s+best)\b/i;
 
 function sanitizeFoundersPhaseText(input: {
   replyText: string;
@@ -1980,36 +1981,32 @@ function sanitizeFoundersPhaseText(input: {
   leadCaptureEnabled: boolean;
 }): string {
   const { replyText, memory, leadCaptureEnabled } = input;
-  if (!leadCaptureEnabled) return replyText;
   const text = String(replyText || "");
+  if (!text) return replyText;
   // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
 
-  // 0a. Non-Latin script scrubber — Gemini occasionally leaks CJK
-  //     ("withすべて everything"). Strip any Han/Hiragana/Katakana/Hangul chars.
+  // Non-Latin script scrubber — Gemini occasionally leaks CJK.
   const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
-  const workText = cjkStripped || text;
+  let out = cjkStripped || text;
 
-  // 0. Opening-date guard — runs before plan/price checks. Applies to ALL
-  //    outbound text regardless of capture state.
-  const dateScan = redactOpeningDate(workText);
-  if (dateScan.hit) {
-    console.log("[AI:guards] redacted opening-date leak");
-    // If date was the only issue, return neutral line; otherwise continue
-    // sanitization on the redacted text.
-    const redacted = dateScan.redacted;
-    if (!FORBIDDEN_PLAN_TEXT_RE.test(redacted) && !FORBIDDEN_PRICE_TEXT_RE.test(redacted) && !SEND_DETAILS_RE.test(redacted)) {
-      return OPENING_DATE_NEUTRAL;
-    }
+  // If the reply mentions pricing/plans to a lead but omits the tour CTA,
+  // append it. Members are opted out via leadCaptureEnabled=false at the
+  // caller — we keep that contract here.
+  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out) && !TOUR_CTA_PRESENT_RE.test(out)) {
+    const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+    const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+    const firstName = realName ? realName.split(/\s+/)[0] : "";
+    console.log("[AI:guards] appending missing tour CTA to pricing reply");
+    out = `${out.trimEnd()}\n\n${tourCtaLine(firstName)}`;
   }
+  return out;
+}
 
-  const scrubbed = dateScan.hit ? dateScan.redacted : text;
-  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(scrubbed);
-  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(scrubbed);
-  const hasSendDetails = SEND_DETAILS_RE.test(scrubbed);
-
-  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return dateScan.hit ? scrubbed : replyText;
-
+// Deterministic fallback when the model returns no text. Mirrors the
+// onboarding sequence (Name → Email → Goal → Plan) so a missing field always
+// gets re-asked instead of leaving the user with silence.
+function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string | null {
   const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
   const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
   const firstName = realName ? realName.split(/\s+/)[0] : "";
@@ -2018,41 +2015,28 @@ function sanitizeFoundersPhaseText(input: {
   const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
   const knownPlan = !!memory?.facts?.plan_interest;
 
-  console.log(`[AI:guards] sanitizing founder's-phase leak (pt/pack=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
-
-  if (!knownName) return "Sure — may I have your name first? ✨";
-  if (!knownEmail) {
-    return firstName
-      ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-      : "Could you share your email for your Founding Member invite? ✨";
+  if (leadCaptureEnabled) {
+    if (!knownName) return "Sure — may I have your name first? ✨";
+    if (!knownEmail) {
+      return firstName
+        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
+        : "Could you share your email so we can send your tour details? ✨";
+    }
+    if (!knownGoal) {
+      return firstName
+        ? `Got it, ${firstName} — what's your main fitness goal? ✨`
+        : "What's your main fitness goal? ✨";
+    }
+    if (!knownPlan) {
+      return firstName
+        ? `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`
+        : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
+    }
   }
-  if (!knownGoal) {
-    return JSON.stringify({
-      type: "interactive_list",
-      body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
-      button: "Choose goal",
-      sections: [{ title: "Fitness Goal", rows: [
-        { id: "weight_loss", title: "Weight Loss" },
-        { id: "muscle_gain", title: "Muscle Gain" },
-        { id: "endurance", title: "Endurance" },
-        { id: "general", title: "Flexibility / General" },
-      ] }],
-    });
-  }
-  if (!knownPlan) {
-    return JSON.stringify({
-      type: "interactive_list",
-      body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
-      button: "Choose duration",
-      sections: [{ title: "Membership Duration", rows: [
-        { id: "monthly", title: "Monthly" },
-        { id: "quarterly", title: "Quarterly" },
-        { id: "half_yearly", title: "Half-Yearly" },
-        { id: "annual", title: "Annual — Founding Member" },
-      ] }],
-    });
-  }
-  return embargoPivotLine(firstName);
+  // Default: acknowledge + tour CTA.
+  return firstName
+    ? `Noted, ${firstName} ✨ ${tourCtaLine(firstName)}`
+    : `Noted ✨ ${tourCtaLine()}`;
 }
 
 // Deterministic fallback when the model returns no text. Mirrors the
