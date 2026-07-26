@@ -1005,8 +1005,8 @@ export async function runUnifiedAgent(
     if (handoff.ok) {
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're on the Founding Members list, ${fn} ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`
-        : `You're on the Founding Members list ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`;
+        ? `Noted, ${fn} ✨ Our front desk will help you finalise a plan and schedule a VIP tour. Which day works best for you?`
+        : `Noted ✨ Our front desk will help you finalise a plan and schedule a VIP tour. Which day works best for you?`;
       return {
         replyText: reply,
         leadCaptured: false,
