@@ -147,25 +147,61 @@ import {
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
-// ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
-// v6.0.0 (Shubham audit): the opening date IS disclosed with a warm welcome.
-// Pricing / PT packages / plan tiers remain embargoed until opening day.
-// No callback commitments before opening day.
-export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
-export const LAUNCH_DATE_INTERNAL = "2026-07-26";
-export const EMBARGO_PIVOT_LINE_EN =
-  `We open on Sunday, 26 July 2026 — you're most welcome to visit us then! ` +
-  `Want me to add your name to the Founding Members list so you get the full details first?`;
-export const EMBARGO_PIVOT_LINE_HI =
-  `Hum Sunday, 26 July 2026 ko open kar rahe hain — aap zaroor visit kijiye! ` +
-  `Naam Founding Members list mein add kar doon?`;
-/** Personalized variant of the embargo pivot line — call with the user's first name. */
-export function embargoPivotLine(firstName?: string | null): string {
+// ─── Post-launch Pricing Matrix — SINGLE SOURCE OF TRUTH ───────────────────
+// v7.0.0 (post-launch): Incline is OPEN. Pricing may be shared with leads
+// (with a mandatory in-person tour CTA). Members are never pitched.
+// All plan prices are subject to 5% GST.
+export const PRICING_MATRIX = {
+  annual_base_founder:    { label: "Annual — Base Founder",    price: 25000, mrp: 28900, includes: "Gym + Steam (Ice Bath & Infrared Sauna NOT included)" },
+  annual_elite_founder:   { label: "Annual — Elite Founder",   price: 30000, mrp: 36900, includes: "Gym + Steam + 6× Ice Bath + 6× Infrared Sauna + 6× 3D BMI scans (usable anytime in the year)" },
+  monthly:                { label: "1 Month",                  price: 5000,  mrp: null,  includes: "Gym + Steam" },
+  quarterly:              { label: "3 Months",                 price: 15000, mrp: null,  includes: "Gym + Steam" },
+  half_yearly:            { label: "6 Months",                 price: 19990, mrp: null,  includes: "Gym + Steam" },
+} as const;
+
+/** Mandatory CTA appended to every price share for non-members. */
+export function tourCtaLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
   return fn
-    ? `${fn}, ${EMBARGO_PIVOT_LINE_EN.charAt(0).toLowerCase()}${EMBARGO_PIVOT_LINE_EN.slice(1)}`
-    : EMBARGO_PIVOT_LINE_EN;
+    ? `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk, ${fn}. Which day works best for you? ✨`
+    : `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you? ✨`;
 }
+
+/** Concise English pricing reply (used by deterministic fallbacks). */
+export function pricingReplyEN(firstName?: string | null): string {
+  const fn = (firstName || "").trim();
+  const hi = fn ? `Sure, ${fn} — ` : "Sure — ";
+  return (
+    `${hi}here are our current plans (all + 5% GST):\n` +
+    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
+    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
+    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    tourCtaLine(firstName)
+  );
+}
+
+/** Concise Hinglish pricing reply. */
+export function pricingReplyHI(firstName?: string | null): string {
+  const fn = (firstName || "").trim();
+  const hi = fn ? `Ji ${fn}, ` : "Ji, ";
+  return (
+    `${hi}humare current plans (sab + 5% GST):\n` +
+    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
+    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
+    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    tourCtaLine(firstName)
+  );
+}
+
+/** Deprecated alias — kept for backward compatibility with old call sites.
+ *  Post-launch, this returns the pricing reply + tour CTA (no embargo). */
+export function embargoPivotLine(firstName?: string | null): string {
+  return pricingReplyEN(firstName);
+}
+export const EMBARGO_PIVOT_LINE_EN = pricingReplyEN();
+export const EMBARGO_PIVOT_LINE_HI = pricingReplyHI();
+export const LAUNCH_DATE_LABEL = "now open";
+export const LAUNCH_DATE_INTERNAL = "2026-07-26";
 
 
 
