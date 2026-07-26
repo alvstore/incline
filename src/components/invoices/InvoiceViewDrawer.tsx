@@ -8,13 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail } from 'lucide-react';
+import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail, PencilLine } from 'lucide-react';
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
+import { CorrectInvoiceDrawer } from './CorrectInvoiceDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
 import { generateInvoicePdfBlob } from '@/utils/invoicePdf';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 
 interface InvoiceViewDrawerProps {
   open: boolean;
