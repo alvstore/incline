@@ -1043,8 +1043,8 @@ export async function runUnifiedAgent(
         null;
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're all set, ${fn} ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`
-        : `You're all set ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`;
+        ? `You're all set, ${fn} ✨ We'll see you at the club — drop by anytime, we're open 24×7.`
+        : `You're all set ✨ We'll see you at the club — drop by anytime, we're open 24×7.`;
       return {
         replyText: reply,
         leadCaptured: false,
