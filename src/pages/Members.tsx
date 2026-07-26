@@ -174,8 +174,11 @@ export default function MembersPage() {
           });
           const frozenMembership = m.memberships?.find((ms: any) => ms.status === 'frozen');
           let memberStatus = 'inactive';
-          if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
-          else if (activeMembership) memberStatus = 'active';
+          // Active plan wins over any stale lifecycle flag — the DB clears
+          // lifecycle_state via trigger, but this keeps the UI correct during
+          // the brief window before that fires.
+          if (activeMembership) memberStatus = 'active';
+          else if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
           else if (scheduledMembership) memberStatus = 'scheduled';
           else if (frozenMembership) memberStatus = 'frozen';
           // Fall back to lead PII when the member has no linked profile yet
