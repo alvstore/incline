@@ -15,6 +15,7 @@ interface UserProfile {
   must_set_password: boolean;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  updated_at?: string | null;
 }
 
 interface UserRoleInfo {
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, full_name, avatar_url, phone, must_set_password, emergency_contact_name, emergency_contact_phone')
+      .select('id, email, full_name, avatar_url, phone, must_set_password, emergency_contact_name, emergency_contact_phone, updated_at')
       .eq('id', userId)
       .single();
 
@@ -246,6 +247,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(safetyTimeout);
     };
   }, []);
+
+  // Realtime profile refresh — pick up avatar / name changes made elsewhere
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`profile-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          const next = payload.new as Partial<UserProfile>;
+          setProfile((prev) => (prev ? { ...prev, ...next } as UserProfile : prev));
+        },
+      )
+      .subscribe();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProfile(user.id).then((p) => p && setProfile(p));
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.id]);
 
   const signInWithOtp = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ email });

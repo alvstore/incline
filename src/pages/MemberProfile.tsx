@@ -173,7 +173,7 @@ export default function MemberProfile() {
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <Avatar className="h-24 w-24">
-                <AvatarImage src={profile?.avatar_url || undefined} />
+                <AvatarImage src={profile?.avatar_url ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(String((profile as any).updated_at ?? Date.now()))}` : undefined} />
                 <AvatarFallback className="text-2xl bg-accent/10 text-accent">
                   {getInitials(profile?.full_name)}
                 </AvatarFallback>
