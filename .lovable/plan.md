@@ -1,73 +1,82 @@
 
-## Diagnosis (from live DB)
+## What's actually wrong (verified against live data)
 
-**1. "Pending Plan" on paid members (opening day)**
-- Server time is `2026-07-26` UTC, but IST it's already **27 Jul 2026 01:58 AM** — today's opening.
-- 11 memberships have `status = 'pending'` with `start_date = 2026-07-27` and paid invoices. Sandeep Chouhan (INC-26-0014, `start_date=2026-12-01`) is legitimately future — will stay pending.
-- Root cause: the `activate_scheduled_memberships` cron uses `current_date` (UTC). At `18:35 UTC` (00:05 IST 27 Jul), UTC is still 26 Jul, so `start_date=2026-07-27 <= current_date` is false and rows never flip.
-- Fix: compare against IST (`(now() AT TIME ZONE 'Asia/Kolkata')::date`) and backfill immediately.
+I queried the 9 members from your screenshot. The database is correct — **all of them are already `status='active'` on both `members` and `memberships`** (only Sandeep is legitimately pending, plan starts 01 Dec 2026). The UI is wrong.
 
-**2. Razorpay Payment Link paid but not reconciled**
-- `payment_transactions` has one `plink_TI8pRvRNIcprMz` for ₹30,000 on invoice `333d6242…` stuck at `status='created'` with `gateway_payment_id=null`. Meaning Razorpay never delivered a webhook (URL not registered in Razorpay dashboard) or the webhook was rejected.
-- `payment-webhook` edge fn exists but there's **no cron reconciler** for pending Razorpay payment links and **no manual "Verify now" button** in the invoice UI.
+Root cause: `src/pages/Members.tsx` line 177 forces the badge to "Pending Plan" whenever `members.lifecycle_state = 'pending_plan'`, regardless of the membership status. When yesterday's `activate_scheduled_memberships` cron flipped `memberships.status` from `pending` → `active`, it never cleared the parent member's `lifecycle_state`. So the row is active in every table, but the sticky lifecycle flag keeps painting it amber.
 
-**3. Kaushay Jain (INC-26-0007) photo not visible to member**
-- DB is correct: `members.biometric_photo_url` and `profiles.avatar_url` both point to the same public URL. The mirror trigger (profiles → members) works but there is **no reverse trigger** (members → profiles) for future uploads, and `AuthContext` fetches the profile only at login — no realtime subscription — so a member logged-in before the admin uploaded the photo keeps the stale (null) avatar until they hard-refresh.
+Verified rows (excerpt):
 
----
+```
+INC-26-0007 KAUSHAY JAIN   member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
+INC-26-0016 Syed Nida Ali  member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
+INC-26-0018 Bhavesh D.     member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
+```
 
-## Plan
+Second issue you raised: uploading a member photo currently updates `members.biometric_photo_url` (and now, after last turn, mirrors it to `profiles.avatar_url`), but **nothing calls `sync-to-mips` automatically** — so the face never reaches the turnstile until someone clicks "Sync" manually in the Device Center.
 
-### Part A — Backfill (immediate)
+## Fix plan (opening-day safe)
 
-1. **Activate all pending memberships whose `start_date <= today IST`** via `supabase--insert`:
-   ```
-   UPDATE public.memberships
-      SET status = 'active', updated_at = now()
-    WHERE status = 'pending'
-      AND start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date
-      AND end_date  >= (now() AT TIME ZONE 'Asia/Kolkata')::date;
-   ```
-   Sandeep (start_date = 1 Dec 2026) stays pending — correct.
+### 1. Clear the sticky `pending_plan` flag (immediate + permanent)
 
-2. **Reconcile the stuck Razorpay payment** for invoice `333d6242…`:
-   - Call `create-razorpay-link`'s companion Razorpay Payment-Link status API (via a new one-off edge call) to fetch the real state.
-   - If paid: insert a `payments` row (₹30,000, method=razorpay, status=completed), update `payment_transactions` to `captured` with `gateway_payment_id`, mark invoice `paid`.
+**Backfill (runs once, opens the gym):**
 
-### Part B — Permanent fixes (migration + edge fn + UI)
+```sql
+UPDATE public.members mem
+   SET lifecycle_state = 'active', updated_at = now()
+ WHERE lifecycle_state = 'pending_plan'
+   AND EXISTS (
+     SELECT 1 FROM public.memberships m
+      WHERE m.member_id = mem.id
+        AND m.status = 'active'
+        AND m.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date
+   );
+```
 
-3. **Timezone-aware activation cron** — migration:
-   - Rewrite `activate_scheduled_memberships()` to use IST `current date`.
-   - Re-schedule the cron to `05 19 * * *` UTC = **00:35 IST daily** (safety margin past midnight).
-   - Add a second helper `expire_ended_memberships()` (same IST clock) so nothing else drifts.
+**Permanent — patch `activate_scheduled_memberships`** so every future IST-midnight activation also lifts the member out of `pending_plan` in the same transaction:
 
-4. **Razorpay auto-reconciliation** — new edge fn `reconcile-razorpay-links`:
-   - Every 5 min, select `payment_transactions` rows where `gateway='razorpay'`, `status='created'`, `gateway_order_id LIKE 'plink_%'`, and `created_at > now() - interval '7 days'`.
-   - Call `GET https://api.razorpay.com/v1/payment_links/{plink_id}` with existing `RAZORPAY_KEY_ID/SECRET`.
-   - If `status='paid'`: reuse the same logic as `payment-webhook` (insert payment row, update invoice, mark tx `captured`).
-   - Cron entry via `pg_cron` (system-call header).
-   - Also add a **"Verify Razorpay payment" button** in `InvoiceViewDrawer` (visible to owner/admin/manager) that invokes the same fn for a single invoice on demand.
+```sql
+UPDATE public.members
+   SET lifecycle_state = 'active', updated_at = now()
+ WHERE id = v_row.member_id
+   AND lifecycle_state IN ('pending_plan','pending');
+```
 
-5. **Member photo live-refresh**:
-   - Migration: add trigger `tg_mirror_member_photo_to_profile` on `members` — when `biometric_photo_url` changes, mirror to `profiles.avatar_url` for that `user_id` (defensive, complements existing reverse trigger).
-   - `src/contexts/AuthContext.tsx`: add a Supabase Realtime subscription on `profiles` filtered by `id=eq.{user.id}` to update `profile.avatar_url` (and other whitelisted fields) live. Also call `refreshProfile()` on `visibilitychange → visible` so a returning tab re-hydrates without logout.
-   - Cache-bust `<AvatarImage>` in `AppHeader.tsx` and `MemberProfile.tsx` by appending `?v={updated_at}` when the URL is present.
+Plus a small DB trigger `tg_clear_pending_plan_on_membership_active` on `memberships` UPDATE: whenever a row transitions to `status='active'`, clear the parent member's `pending_plan` state — so manual activations, membership transfers, and edge-function activations all self-heal.
 
-### Part C — Verification
-- Re-query the 12 affected members; confirm 11 flip to `active`, Sandeep stays `pending`.
-- Trigger `reconcile-razorpay-links` once manually; confirm the ₹30,000 invoice is settled and appears in Payments.
-- Log in as Kaushay in an incognito tab; confirm avatar shows without cache clear.
+### 2. Auto-sync face to MIPS on photo upload
 
----
+Add a lightweight DB trigger on `public.members` (AFTER UPDATE OF `biometric_photo_url`) that uses `pg_net` to POST to the existing `sync-to-mips` edge function with `{ personType: 'member', personId: NEW.id, action: 'upsert' }`. Same trigger pattern on `public.employees` and `public.trainers` so trainers/staff faces are pushed the moment a photo lands.
 
-## Files to be created / edited
+Guardrails:
+- Fires only when `biometric_photo_url IS DISTINCT FROM OLD.biometric_photo_url` and the new value is not null.
+- Also skips fire if `hardware_access_enabled = false` (respects the existing opt-out).
+- Records the request_id on `biometric_sync_queue` so the Device Center's "Personnel Sync" tab shows a live "Syncing…" row.
 
-**New**
-- `supabase/migrations/20260727_ist_activation_photo_mirror.sql` — new `activate_scheduled_memberships()` (IST), reschedule cron, add `tg_mirror_member_photo_to_profile` trigger.
-- `supabase/functions/reconcile-razorpay-links/index.ts` — poll + settle payment links.
-- `supabase/functions/reconcile-razorpay-links/cron` entry (added inside the migration).
+### 3. UI belt-and-braces
 
-**Edited**
-- `src/contexts/AuthContext.tsx` — realtime subscription on own `profiles` row + `visibilitychange` refetch.
-- `src/components/layout/AppHeader.tsx`, `src/pages/MemberProfile.tsx` — cache-bust avatar URL.
-- `src/components/invoices/InvoiceViewDrawer.tsx` — "Verify Razorpay payment" button (owner/admin/manager only, only when a `payment_transactions` row exists for the invoice with `status='created'`).
+In `src/pages/Members.tsx` the derivation is changed so an active membership wins over a stale `pending_plan` flag:
+
+```ts
+if (activeMembership) memberStatus = 'active';
+else if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
+else if (scheduledMembership) memberStatus = 'scheduled';
+```
+
+This makes the list correct even if the DB flag is momentarily stale (e.g. during the couple-second gap between purchase RPC and lifecycle trigger).
+
+### 4. Verification before you open the doors
+
+After the migration runs I'll re-query all 9 members and confirm:
+- Every row shows `lifecycle_state='active'`, `member_status='active'`, `plan_status='active'`.
+- `days_left` still matches (179d / 364d as in your screenshot).
+- Sandeep remains legitimately `scheduled` with "Starts 01 Dec 2026".
+
+Then I'll pick one member with a photo (e.g. Kaushay), toggle a re-upload, and confirm a fresh row lands on `biometric_sync_queue` with `status='queued'` → `synced` within seconds.
+
+## Files touched
+
+- **DB migration** — `activate_scheduled_memberships` patch, backfill UPDATE, `tg_clear_pending_plan_on_membership_active` trigger, `tg_push_photo_to_mips` trigger (members/employees/trainers).
+- `src/pages/Members.tsx` — reorder the status derivation so active plans win.
+
+Nothing else changes. `sync-to-mips` edge fn already accepts the payload we're sending — no code change there.
