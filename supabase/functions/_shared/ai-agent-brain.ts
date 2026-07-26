@@ -2039,42 +2039,6 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
     : `Noted ✨ ${tourCtaLine()}`;
 }
 
-// Deterministic fallback when the model returns no text. Mirrors the
-// onboarding sequence (Name → Email → Goal → Plan) so a missing field always
-// gets re-asked instead of leaving the user with silence.
-function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string | null {
-  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
-  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
-  const firstName = realName ? realName.split(/\s+/)[0] : "";
-  const knownName = !!realName;
-  const knownEmail = !!memory?.profile?.email;
-  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-  const knownPlan = !!memory?.facts?.plan_interest;
-
-  if (leadCaptureEnabled) {
-    if (!knownName) return "Sure — may I have your name first? ✨";
-    if (!knownEmail) {
-      return firstName
-        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-        : "Could you share your email for your Founding Member invite? ✨";
-    }
-    if (!knownGoal) {
-      return firstName
-        ? `Got it, ${firstName} — what's your main fitness goal? ✨`
-        : "What's your main fitness goal? ✨";
-    }
-    if (!knownPlan) {
-      return firstName
-        ? `Perfect, ${firstName} — which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?`
-        : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
-    }
-  }
-  // No-callback policy before opening day: welcome them on 26 July 2026.
-  return firstName
-    ? `Noted, ${firstName} — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨`
-    : "Noted — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
-
-}
 
 
 
