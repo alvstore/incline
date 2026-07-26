@@ -13801,6 +13801,19 @@ export type Database = {
         }
         Returns: Json
       }
+      correct_invoice: {
+        Args: {
+          p_invoice_id: string
+          p_line_description?: string
+          p_new_discount: number
+          p_new_subtotal: number
+          p_new_tax: number
+          p_new_total: number
+          p_reason: string
+          p_settlement?: string
+        }
+        Returns: Json
+      }
       create_ai_lead: {
         Args: {
           p_branch_id: string
@@ -14133,6 +14146,16 @@ export type Database = {
           last_seen_at: string
           roles: string[]
           user_id: string
+        }[]
+      }
+      get_org_branding: {
+        Args: { _branch_id?: string }
+        Returns: {
+          branch_id: string
+          id: string
+          logo_url: string
+          name: string
+          website_theme: Json
         }[]
       }
       get_payment_webhook_payload: {
