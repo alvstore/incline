@@ -228,12 +228,17 @@ export function lastBotOfferedCallback(
 // commitments in addition to the original "notified team" hallucinations.
 // v3.0.0 (Shubham audit) — narrowed to strip only callback/call-before-opening
 // promises. Warm "I'll share details / see you on opening day" phrasing now
-// survives so the bot can welcome visitors to the Sunday, 26 July 2026 opening.
+// survives so the bot can welcome visitors to the club.
+// v4.0.0 (post-launch) — Incline is OPEN. VIP tour booking is now the
+// PRIMARY sales CTA (from ai_knowledge "Post-Launch Sales Protocol"), so we
+// no longer strip "book a tour" / "schedule a tour" phrasing. We still strip
+// specific-time callback promises ("team will call you back in 30 minutes")
+// because we don't guarantee individual callbacks.
 export const HALLUCINATED_CALLBACK_RE =
-  /((?:our\s+)?(?:team|founders?|founding\s+team|teammate|team\s+member|founder|someone|human)\s+will\s+(?:call|be\s+in\s+touch|contact\s+you|get\s+back|revert)(?:\s+(?:you\s+)?(?:back|within|in\s+the\s+next|shortly|soon|in\s+\d+))?|(?:will\s+)?(?:personally\s+)?call\s+you\s+(?:back|within|in\s+the\s+next|shortly|soon)|callback\s+(?:within|in|shortly)|within\s+the\s+next\s+\d+\s*(?:hour|hr|min)|i['’]?ll\s+call\s+you|book\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|schedule\s+(?:a\s+)?(?:tour|visit|walk[-\s]?through)|want\s+(?:our|the)\s+team\s+to\s+call)/i;
+  /((?:our\s+)?(?:team|founders?|founding\s+team|teammate|team\s+member|founder|someone|human)\s+will\s+(?:call|be\s+in\s+touch|contact\s+you|get\s+back|revert)(?:\s+(?:you\s+)?(?:back|within|in\s+the\s+next|shortly|soon|in\s+\d+))?|(?:will\s+)?(?:personally\s+)?call\s+you\s+(?:back|within|in\s+the\s+next|shortly|soon)|callback\s+(?:within|in|shortly)|within\s+the\s+next\s+\d+\s*(?:hour|hr|min)|i['’]?ll\s+call\s+you|want\s+(?:our|the)\s+team\s+to\s+call)/i;
 
 const SAFE_RESERVATION_OFFER =
-  "Want me to add your name to the Founding Members list? We open on Sunday, 26 July 2026 — you're most welcome to visit us then ✨";
+  "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you? ✨";
 
 // Sanitizes an LLM-generated reply when no real reservation was
 // triggered this turn. If the reply promises a callback/tour/pricing or

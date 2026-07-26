@@ -147,25 +147,61 @@ import {
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
-// ─── Launch & Pricing Embargo — SINGLE SOURCE OF TRUTH ─────────────────────
-// v6.0.0 (Shubham audit): the opening date IS disclosed with a warm welcome.
-// Pricing / PT packages / plan tiers remain embargoed until opening day.
-// No callback commitments before opening day.
-export const LAUNCH_DATE_LABEL = "Sunday, 26 July 2026";
-export const LAUNCH_DATE_INTERNAL = "2026-07-26";
-export const EMBARGO_PIVOT_LINE_EN =
-  `We open on Sunday, 26 July 2026 — you're most welcome to visit us then! ` +
-  `Want me to add your name to the Founding Members list so you get the full details first?`;
-export const EMBARGO_PIVOT_LINE_HI =
-  `Hum Sunday, 26 July 2026 ko open kar rahe hain — aap zaroor visit kijiye! ` +
-  `Naam Founding Members list mein add kar doon?`;
-/** Personalized variant of the embargo pivot line — call with the user's first name. */
-export function embargoPivotLine(firstName?: string | null): string {
+// ─── Post-launch Pricing Matrix — SINGLE SOURCE OF TRUTH ───────────────────
+// v7.0.0 (post-launch): Incline is OPEN. Pricing may be shared with leads
+// (with a mandatory in-person tour CTA). Members are never pitched.
+// All plan prices are subject to 5% GST.
+export const PRICING_MATRIX = {
+  annual_base_founder:    { label: "Annual — Base Founder",    price: 25000, mrp: 28900, includes: "Gym + Steam (Ice Bath & Infrared Sauna NOT included)" },
+  annual_elite_founder:   { label: "Annual — Elite Founder",   price: 30000, mrp: 36900, includes: "Gym + Steam + 6× Ice Bath + 6× Infrared Sauna + 6× 3D BMI scans (usable anytime in the year)" },
+  monthly:                { label: "1 Month",                  price: 5000,  mrp: null,  includes: "Gym + Steam" },
+  quarterly:              { label: "3 Months",                 price: 15000, mrp: null,  includes: "Gym + Steam" },
+  half_yearly:            { label: "6 Months",                 price: 19990, mrp: null,  includes: "Gym + Steam" },
+} as const;
+
+/** Mandatory CTA appended to every price share for non-members. */
+export function tourCtaLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
   return fn
-    ? `${fn}, ${EMBARGO_PIVOT_LINE_EN.charAt(0).toLowerCase()}${EMBARGO_PIVOT_LINE_EN.slice(1)}`
-    : EMBARGO_PIVOT_LINE_EN;
+    ? `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk, ${fn}. Which day works best for you? ✨`
+    : `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you? ✨`;
 }
+
+/** Concise English pricing reply (used by deterministic fallbacks). */
+export function pricingReplyEN(firstName?: string | null): string {
+  const fn = (firstName || "").trim();
+  const hi = fn ? `Sure, ${fn} — ` : "Sure — ";
+  return (
+    `${hi}here are our current plans (all + 5% GST):\n` +
+    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
+    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
+    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    tourCtaLine(firstName)
+  );
+}
+
+/** Concise Hinglish pricing reply. */
+export function pricingReplyHI(firstName?: string | null): string {
+  const fn = (firstName || "").trim();
+  const hi = fn ? `Ji ${fn}, ` : "Ji, ";
+  return (
+    `${hi}humare current plans (sab + 5% GST):\n` +
+    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
+    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
+    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    tourCtaLine(firstName)
+  );
+}
+
+/** Deprecated alias — kept for backward compatibility with old call sites.
+ *  Post-launch, this returns the pricing reply + tour CTA (no embargo). */
+export function embargoPivotLine(firstName?: string | null): string {
+  return pricingReplyEN(firstName);
+}
+export const EMBARGO_PIVOT_LINE_EN = pricingReplyEN();
+export const EMBARGO_PIVOT_LINE_HI = pricingReplyHI();
+export const LAUNCH_DATE_LABEL = "now open";
+export const LAUNCH_DATE_INTERNAL = "2026-07-26";
 
 
 
@@ -301,13 +337,12 @@ export const INCLINE_SOCIALS = {
   instagram_url: "https://www.instagram.com/inclineudaipur/",
 } as const;
 
-// Canned regex-fallback answers. Pricing + timeline both collapse to the
-// unified EMBARGO_PIVOT_LINE_EN — the LLM path (via ai_knowledge) returns
-// byte-identical wording so the user experience is consistent.
+// Canned regex-fallback answers. Post-launch: pricing returns the full
+// matrix + tour CTA; timeline points at 24×7 operating hours.
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   location: `We're at ${INCLINE_LOCATION.address} ✨\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`,
-  pricing: EMBARGO_PIVOT_LINE_EN,
-  timeline: EMBARGO_PIVOT_LINE_EN,
+  pricing: pricingReplyEN(),
+  timeline: `We're OPEN now — 24×7 at ${INCLINE_LOCATION.address} ✨\n📍 ${INCLINE_LOCATION.maps_url}\n\n${tourCtaLine()}`,
 };
 
 // v4.6.0 — sanitize curated correction_instruction. Admin rows often start
@@ -970,8 +1005,8 @@ export async function runUnifiedAgent(
     if (handoff.ok) {
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're on the Founding Members list, ${fn} ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`
-        : `You're on the Founding Members list ✨ We open on Sunday, 26 July 2026 — you're most welcome to visit us then! I'll share the full details with you before opening day.`;
+        ? `Noted, ${fn} ✨ Our front desk will help you finalise a plan and schedule a VIP tour. Which day works best for you?`
+        : `Noted ✨ Our front desk will help you finalise a plan and schedule a VIP tour. Which day works best for you?`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -1008,8 +1043,8 @@ export async function runUnifiedAgent(
         null;
       const fn = displayName ? displayName.split(/\s+/)[0] : "";
       const reply = fn
-        ? `You're all set, ${fn} ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`
-        : `You're all set ✨ See you on Sunday, 26 July 2026 — we can't wait to welcome you!`;
+        ? `You're all set, ${fn} ✨ We'll see you at the club — drop by anytime, we're open 24×7.`
+        : `You're all set ✨ We'll see you at the club — drop by anytime, we're open 24×7.`;
       return {
         replyText: reply,
         leadCaptured: false,
@@ -1184,7 +1219,7 @@ GENERAL RULES:
       } else if (askTurns === 1) {
         body = "…and may I have your name so I can help better? ✨";
       } else if (askTurns === 2) {
-        body = "No problem — whenever you'd like to share your name, I'll line up your Founding Member invite. Meanwhile, anything specific I can help with? ✨";
+        body = "No problem — whenever you'd like to share your name, I can line up a VIP tour of the club. Meanwhile, anything specific I can help with? ✨";
       } else {
         // Turn 4+: stop pushing for the name. Let the pivot answer carry the
         // reply; if there's no pivot, send a neutral assist line.
@@ -1208,8 +1243,8 @@ GENERAL RULES:
     if (hasName && !hasEmail) {
       return {
         replyText: _fn
-          ? `${_pivot}Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
-          : `${_pivot}Could you share your email for your Founding Member invite? ✨`,
+          ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
+          : `${_pivot}Could you share your email so we can send your tour details? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
@@ -1286,14 +1321,12 @@ HARD RULES:
 - DO NOT emit any {"status":"lead_captured"...} JSON — the lead already exists.
 - DO NOT run the Turn 1 → Turn 5 onboarding sequence.
 - Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
-- If they ask about Founding Member / membership / pricing / opening date / timeline: refer VERBATIM to the "Launch & Pricing Embargo" rule in <knowledge_base>. Do not paraphrase or invent alternative wording.
-- If their stored plan_interest is monthly/quarterly/half_yearly: do NOT hard-push annual. Acknowledge and offer to add them to the Founding Members list.
-- VELVET ROPE still applies: NEVER mention ₹, Rs., prices, fees, PT package names, session counts, trainer names, or class schedules.
-- OPENING DATE: You MAY (and should) tell users we open on Sunday, 26 July 2026 and warmly welcome them to visit us on/after that date. Encourage them to come by!
-- NO CALLBACK POLICY: NEVER promise a callback, tour, or that a founder / team / teammate / human will call, contact, reach out, or revert BEFORE opening day. NEVER say "within X hours". After opening day (26 July 2026), the team will welcome them in person.
-- If the user asks to speak to a person: reply "I'll note this for our team — you're most welcome to meet us at the club on/after Sunday, 26 July 2026, ${fn} ✨" and DO NOT commit to a call before then.
+- OPERATIONAL STATUS: Incline is OPEN. Open 24×7 at Sector 14, Udaipur. NEVER say we haven't launched, never reference an opening / launch date.
+- PRICING: If they ask about pricing / plans / fees, quote from the "Pricing Matrix (Post-Launch)" rule in <knowledge_base> (all prices + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" NEVER end a pricing turn without asking for a preferred visit day.
+- If their stored plan_interest matches a plan, quote that plan first and mention alternatives briefly.
+- If the user asks to speak to a person or wants a tour: acknowledge and ask which day/time suits them; a teammate at the front desk will confirm. Do NOT invent a specific staff name or exact call time.
 - If they hit two errors or explicitly request escalation past that: call transfer_to_human.
-- Keep replies under 25 words, one question max, at most 1 emoji.`;
+- Keep replies under 45 words, one question max, at most 1 emoji.`;
 
   }
 
@@ -1314,7 +1347,7 @@ HARD RULES:
     const targetFields = leadCaptureConfig!.target_fields || [];
     const fieldNames = targetFields.map((f: string) => fieldLabels[f] || f).join(", ");
     systemPrompt += `\n\n[LEAD CAPTURE PROTOCOL — wire contract]
-Follow the "Founder's Phase Onboarding Sequence", "Pricing Embargo", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
+Follow the "Founder's Phase Onboarding Sequence", "Pricing Matrix (Post-Launch)", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
 
 Target fields to collect (in this order): ${fieldNames}.
 
@@ -1727,8 +1760,8 @@ function enforceOutboundInteractiveGuards(input: {
     const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
-        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-        : "Could you share your email so our team can send your Founding Member invite?";
+        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
+        : "Could you share your email so we can send your tour details?";
     }
     const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
     if (!knownGoal) return goalListJson(firstName);
@@ -1891,7 +1924,7 @@ function enforceNoRepeatNameAsk(input: {
   );
 
   if (!knownEmail) {
-    return `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`;
+    return `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`;
   }
   if (!knownGoal) {
     return `Got it, ${firstName} — what's your main fitness goal? ✨`;
@@ -1904,22 +1937,20 @@ function enforceNoRepeatNameAsk(input: {
 
 
 
-// ─── Founder's Phase plain-text sanitizer (v3.5.0) ─────────────────────────
-// We DO allow the words monthly/quarterly/half-yearly/annual/Founding/plan/goal
-// because we now capture plan_interest as free text. We block only price
-// mentions, fee mentions, PT package names, and "send the details" promises.
-const FORBIDDEN_PLAN_TEXT_RE =
-  /\b(pt\s+package|personal\s+training\s+package|session\s+pack|day\s*pass)\b/i;
-const FORBIDDEN_PRICE_TEXT_RE = /(₹|\bRs\.?\b|\/-|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\bamount\b)/i;
-const SEND_DETAILS_RE = /\bsend\s+(?:you\s+)?the\s+(?:price|fee|cost|charges?)\s*(?:details|info)?/i;
-// v6.0.0 — opening-date disclosure is now ALLOWED. The redactor is a
-// pass-through so the LLM (and knowledge base) can freely mention
-// "Sunday, 26 July 2026". Signature preserved for callers.
-function redactOpeningDate(text: string): { redacted: string; hit: boolean } {
-  return { redacted: text, hit: false };
+// ─── Post-launch plain-text sanitizer (v7.0.0) ──────────────────────────────
+// Post-launch: prices, PT packages, plan names are all ALLOWED. This sanitizer
+// now only guards against a very small set of hallucinations we still don't
+// want the LLM to emit (hallucinated callback promises are handled separately
+// by stripHallucinatedActions). Kept as a permissive pass-through so old call
+// sites keep working; if a pricing turn from the model is missing the tour
+// CTA, we append it here for lead/unknown contacts.
+const FORBIDDEN_PLAN_TEXT_RE = /a^/; // never matches (kept for compat)
+const FORBIDDEN_PRICE_TEXT_RE = /a^/; // never matches (kept for compat)
+const SEND_DETAILS_RE = /a^/; // never matches (kept for compat)
+function redactOpeningDate(_text: string): { redacted: string; hit: boolean } {
+  return { redacted: _text, hit: false };
 }
-const OPENING_DATE_NEUTRAL = EMBARGO_PIVOT_LINE_EN;
-
+const OPENING_DATE_NEUTRAL = pricingReplyEN();
 
 // v4.8.0 — Hallucinated-action guard. The LLM sometimes invents past actions
 // like "I've notified our team", "created a task", "booked your slot",
@@ -1937,9 +1968,12 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
   if (!HALLUCINATED_ACTION_RE.test(text)) return replyText;
   console.log("[AI:guards] stripped hallucinated action claim — substituting safe copy");
-  return "Got it — noting your interest. We open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
-
+  return `Got it — noting your interest. ${tourCtaLine()}`;
 }
+
+// Detects an outbound pricing reply so we can enforce the tour CTA.
+const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite)\s+(?:plan|membership|founder)?)/i;
+const TOUR_CTA_PRESENT_RE = /\b(vip\s+(?:gym\s+)?tour|schedule\s+a\s+.{0,20}tour|which\s+day\s+works\s+best)\b/i;
 
 function sanitizeFoundersPhaseText(input: {
   replyText: string;
@@ -1947,79 +1981,26 @@ function sanitizeFoundersPhaseText(input: {
   leadCaptureEnabled: boolean;
 }): string {
   const { replyText, memory, leadCaptureEnabled } = input;
-  if (!leadCaptureEnabled) return replyText;
   const text = String(replyText || "");
+  if (!text) return replyText;
   // Skip JSON-only payloads — handled by enforceOutboundInteractiveGuards.
   if (/^\s*\{[\s\S]*"type"\s*:\s*"interactive/i.test(text.trim())) return replyText;
 
-  // 0a. Non-Latin script scrubber — Gemini occasionally leaks CJK
-  //     ("withすべて everything"). Strip any Han/Hiragana/Katakana/Hangul chars.
+  // Non-Latin script scrubber — Gemini occasionally leaks CJK.
   const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
-  const workText = cjkStripped || text;
+  let out = cjkStripped || text;
 
-  // 0. Opening-date guard — runs before plan/price checks. Applies to ALL
-  //    outbound text regardless of capture state.
-  const dateScan = redactOpeningDate(workText);
-  if (dateScan.hit) {
-    console.log("[AI:guards] redacted opening-date leak");
-    // If date was the only issue, return neutral line; otherwise continue
-    // sanitization on the redacted text.
-    const redacted = dateScan.redacted;
-    if (!FORBIDDEN_PLAN_TEXT_RE.test(redacted) && !FORBIDDEN_PRICE_TEXT_RE.test(redacted) && !SEND_DETAILS_RE.test(redacted)) {
-      return OPENING_DATE_NEUTRAL;
-    }
+  // If the reply mentions pricing/plans to a lead but omits the tour CTA,
+  // append it. Members are opted out via leadCaptureEnabled=false at the
+  // caller — we keep that contract here.
+  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out) && !TOUR_CTA_PRESENT_RE.test(out)) {
+    const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+    const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+    const firstName = realName ? realName.split(/\s+/)[0] : "";
+    console.log("[AI:guards] appending missing tour CTA to pricing reply");
+    out = `${out.trimEnd()}\n\n${tourCtaLine(firstName)}`;
   }
-
-  const scrubbed = dateScan.hit ? dateScan.redacted : text;
-  const hasForbiddenPlan = FORBIDDEN_PLAN_TEXT_RE.test(scrubbed);
-  const hasForbiddenPrice = FORBIDDEN_PRICE_TEXT_RE.test(scrubbed);
-  const hasSendDetails = SEND_DETAILS_RE.test(scrubbed);
-
-  if (!hasForbiddenPlan && !hasForbiddenPrice && !hasSendDetails) return dateScan.hit ? scrubbed : replyText;
-
-  const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
-  const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
-  const firstName = realName ? realName.split(/\s+/)[0] : "";
-  const knownName = !!realName;
-  const knownEmail = !!memory?.profile?.email;
-  const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
-  const knownPlan = !!memory?.facts?.plan_interest;
-
-  console.log(`[AI:guards] sanitizing founder's-phase leak (pt/pack=${hasForbiddenPlan}, price=${hasForbiddenPrice}, sendDetails=${hasSendDetails})`);
-
-  if (!knownName) return "Sure — may I have your name first? ✨";
-  if (!knownEmail) {
-    return firstName
-      ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-      : "Could you share your email for your Founding Member invite? ✨";
-  }
-  if (!knownGoal) {
-    return JSON.stringify({
-      type: "interactive_list",
-      body: { text: firstName ? `Got it, ${firstName} — what's your main fitness goal? ✨` : "What's your main fitness goal? ✨" },
-      button: "Choose goal",
-      sections: [{ title: "Fitness Goal", rows: [
-        { id: "weight_loss", title: "Weight Loss" },
-        { id: "muscle_gain", title: "Muscle Gain" },
-        { id: "endurance", title: "Endurance" },
-        { id: "general", title: "Flexibility / General" },
-      ] }],
-    });
-  }
-  if (!knownPlan) {
-    return JSON.stringify({
-      type: "interactive_list",
-      body: { text: firstName ? `Perfect, ${firstName} — which membership duration are you thinking about?` : "Which membership duration are you thinking about?" },
-      button: "Choose duration",
-      sections: [{ title: "Membership Duration", rows: [
-        { id: "monthly", title: "Monthly" },
-        { id: "quarterly", title: "Quarterly" },
-        { id: "half_yearly", title: "Half-Yearly" },
-        { id: "annual", title: "Annual — Founding Member" },
-      ] }],
-    });
-  }
-  return embargoPivotLine(firstName);
+  return out;
 }
 
 // Deterministic fallback when the model returns no text. Mirrors the
@@ -2038,8 +2019,8 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
     if (!knownName) return "Sure — may I have your name first? ✨";
     if (!knownEmail) {
       return firstName
-        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-        : "Could you share your email for your Founding Member invite? ✨";
+        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
+        : "Could you share your email so we can send your tour details? ✨";
     }
     if (!knownGoal) {
       return firstName
@@ -2052,12 +2033,12 @@ function buildNoReplyFallback(memory: any, leadCaptureEnabled: boolean): string 
         : "Which membership duration are you thinking about (monthly, quarterly, half-yearly, or annual)?";
     }
   }
-  // No-callback policy before opening day: welcome them on 26 July 2026.
+  // Default: acknowledge + tour CTA.
   return firstName
-    ? `Noted, ${firstName} — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨`
-    : "Noted — we open on Sunday, 26 July 2026 and you're most welcome to visit us then ✨";
-
+    ? `Noted, ${firstName} ✨ ${tourCtaLine(firstName)}`
+    : `Noted ✨ ${tourCtaLine()}`;
 }
+
 
 
 
@@ -2962,9 +2943,9 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? We open on Sunday, 26 July 2026 — you're most welcome to visit us then and I'll share the full details before opening day." NEVER promise a callback from the team BEFORE opening day. NEVER quote prices, fees, or session counts.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly, then quote the annual options from the "Pricing Matrix (Post-Launch)" (Base Founder ₹25,000 / Elite Founder ₹30,000, both + 5% GST) and IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?"`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared before opening day (Sunday, 26 July 2026) and you're most welcome to visit us then. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback from the team before opening day. NEVER quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Acknowledge and quote the matching plan from the "Pricing Matrix (Post-Launch)" (1M ₹5,000 / 3M ₹15,000 / 6M ₹19,990, all + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" You may also mention the annual Founder plans as an upgrade option.`);
     }
   }
 
