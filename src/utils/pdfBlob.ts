@@ -65,11 +65,13 @@ export async function resolveBrandAsync(branchId?: string | null, branchName?: s
     if (data) branch = { id: data.id, name: data.name, code: (data as any).code ?? null, address: data.address ?? null, phone: data.phone ?? null, email: data.email ?? null, gstin: (data as any).gstin ?? null };
   }
   let logoUrl: string | null = null;
-  const { data: globalRow } = await supabase.from('organization_settings').select('logo_url').is('branch_id', null).limit(1).maybeSingle();
-  if (globalRow?.logo_url) logoUrl = globalRow.logo_url;
+  const { data: globalRows } = await supabase.rpc('get_org_branding', { _branch_id: null });
+  const globalRow = Array.isArray(globalRows) ? globalRows[0] : null;
+  if ((globalRow as any)?.logo_url) logoUrl = (globalRow as any).logo_url;
   if (branchId) {
-    const { data: branchRow } = await supabase.from('organization_settings').select('logo_url').eq('branch_id', branchId).limit(1).maybeSingle();
-    if (branchRow?.logo_url) logoUrl = branchRow.logo_url;
+    const { data: branchRows } = await supabase.rpc('get_org_branding', { _branch_id: branchId });
+    const branchRow = Array.isArray(branchRows) ? branchRows[0] : null;
+    if ((branchRow as any)?.logo_url) logoUrl = (branchRow as any).logo_url;
   }
   // Fallback to bundled brand asset so PDFs are never wordmark-only.
   if (!logoUrl) logoUrl = inclineLogoAsset;
