@@ -1219,7 +1219,7 @@ GENERAL RULES:
       } else if (askTurns === 1) {
         body = "…and may I have your name so I can help better? ✨";
       } else if (askTurns === 2) {
-        body = "No problem — whenever you'd like to share your name, I'll line up your Founding Member invite. Meanwhile, anything specific I can help with? ✨";
+        body = "No problem — whenever you'd like to share your name, I can line up a VIP tour of the club. Meanwhile, anything specific I can help with? ✨";
       } else {
         // Turn 4+: stop pushing for the name. Let the pivot answer carry the
         // reply; if there's no pivot, send a neutral assist line.
@@ -1243,8 +1243,8 @@ GENERAL RULES:
     if (hasName && !hasEmail) {
       return {
         replyText: _fn
-          ? `${_pivot}Thanks, ${_fn} — what's the best email for your Founding Member invite? ✨`
-          : `${_pivot}Could you share your email for your Founding Member invite? ✨`,
+          ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
+          : `${_pivot}Could you share your email so we can send your tour details? ✨`,
         leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false,
       };
     }
@@ -1760,8 +1760,8 @@ function enforceOutboundInteractiveGuards(input: {
     const firstName = realName.split(/\s+/)[0];
     if (!knownEmail) {
       return firstName
-        ? `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`
-        : "Could you share your email so our team can send your Founding Member invite?";
+        ? `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`
+        : "Could you share your email so we can send your tour details?";
     }
     const knownGoal = !!(memory?.facts?.fitness_goal || memory?.facts?.goal);
     if (!knownGoal) return goalListJson(firstName);
@@ -1924,7 +1924,7 @@ function enforceNoRepeatNameAsk(input: {
   );
 
   if (!knownEmail) {
-    return `Thanks, ${firstName} — what's the best email for your Founding Member invite? ✨`;
+    return `Thanks, ${firstName} — what's the best email to send your tour details to? ✨`;
   }
   if (!knownGoal) {
     return `Got it, ${firstName} — what's your main fitness goal? ✨`;
@@ -2943,9 +2943,9 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly and offer to reserve their Founding Member spot: "Want me to add your name to the Founding Members list? We open on Sunday, 26 July 2026 — you're most welcome to visit us then and I'll share the full details before opening day." NEVER promise a callback from the team BEFORE opening day. NEVER quote prices, fees, or session counts.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly, then quote the annual options from the "Pricing Matrix (Post-Launch)" (Base Founder ₹25,000 / Elite Founder ₹30,000, both + 5% GST) and IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?"`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse, NEVER push. Acknowledge softly: "Noted — I've logged your interest in ${memory.facts.plan_interest}. Full plan options will be shared before opening day (Sunday, 26 July 2026) and you're most welcome to visit us then. The only active reservation right now is Founding Member (Annual) — happy to add you to that list if you're open." NEVER promise a callback from the team before opening day. NEVER quote prices.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Acknowledge and quote the matching plan from the "Pricing Matrix (Post-Launch)" (1M ₹5,000 / 3M ₹15,000 / 6M ₹19,990, all + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" You may also mention the annual Founder plans as an upgrade option.`);
     }
   }
 
