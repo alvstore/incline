@@ -337,13 +337,12 @@ export const INCLINE_SOCIALS = {
   instagram_url: "https://www.instagram.com/inclineudaipur/",
 } as const;
 
-// Canned regex-fallback answers. Pricing + timeline both collapse to the
-// unified EMBARGO_PIVOT_LINE_EN — the LLM path (via ai_knowledge) returns
-// byte-identical wording so the user experience is consistent.
+// Canned regex-fallback answers. Post-launch: pricing returns the full
+// matrix + tour CTA; timeline points at 24×7 operating hours.
 const INTENT_ANSWERS: Record<Exclude<HinglishIntent, null>, string> = {
   location: `We're at ${INCLINE_LOCATION.address} ✨\n📍 Google Maps: ${INCLINE_LOCATION.maps_url}`,
-  pricing: EMBARGO_PIVOT_LINE_EN,
-  timeline: EMBARGO_PIVOT_LINE_EN,
+  pricing: pricingReplyEN(),
+  timeline: `We're OPEN now — 24×7 at ${INCLINE_LOCATION.address} ✨\n📍 ${INCLINE_LOCATION.maps_url}\n\n${tourCtaLine()}`,
 };
 
 // v4.6.0 — sanitize curated correction_instruction. Admin rows often start
