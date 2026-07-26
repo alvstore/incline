@@ -56,25 +56,17 @@ export function useBrandContext(branchId?: string | null) {
         }
       }
 
-      // Resolve logo + name: branch override > global org > default
-      const { data: globalRow } = await supabase
-        .from('organization_settings')
-        .select('logo_url, name')
-        .is('branch_id', null)
-        .limit(1)
-        .maybeSingle();
-
-      let logoUrl: string | null = globalRow?.logo_url ?? DEFAULT_BRAND.logoUrl ?? null;
-      const companyName = globalRow?.name || DEFAULT_BRAND.companyName;
+      // Resolve logo + name via safe RPC (returns only branding columns —
+      // no webhook_slug / alert_config leak to non-staff roles).
+      const { data: globalRows } = await supabase.rpc('get_org_branding', { _branch_id: null });
+      const globalRow = Array.isArray(globalRows) ? globalRows[0] : null;
+      let logoUrl: string | null = (globalRow as any)?.logo_url ?? DEFAULT_BRAND.logoUrl ?? null;
+      const companyName = (globalRow as any)?.name || DEFAULT_BRAND.companyName;
 
       if (branchId) {
-        const { data: branchRow } = await supabase
-          .from('organization_settings')
-          .select('logo_url')
-          .eq('branch_id', branchId)
-          .limit(1)
-          .maybeSingle();
-        if (branchRow?.logo_url) logoUrl = branchRow.logo_url;
+        const { data: branchRows } = await supabase.rpc('get_org_branding', { _branch_id: branchId });
+        const branchRow = Array.isArray(branchRows) ? branchRows[0] : null;
+        if ((branchRow as any)?.logo_url) logoUrl = (branchRow as any).logo_url;
       }
 
       return { ...DEFAULT_BRAND, companyName, logoUrl, branch };
