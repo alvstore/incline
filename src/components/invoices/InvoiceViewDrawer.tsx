@@ -29,6 +29,9 @@ interface InvoiceViewDrawerProps {
 
 export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayment, onSendPaymentLink }: InvoiceViewDrawerProps) {
   const [shareOpen, setShareOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const { roles } = useAuth() as any;
+  const canCorrect = can.approveDiscount(roles);
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice-details', invoiceId],
     queryFn: async () => {
@@ -351,12 +354,24 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
             <Mail className="h-4 w-4 mr-2" />
             Share Invoice
           </Button>
+
+          {canCorrect && invoice.status !== 'cancelled' && (
+            <Button variant="ghost" className="w-full text-amber-700 hover:text-amber-800 hover:bg-amber-50" onClick={() => setCorrectOpen(true)}>
+              <PencilLine className="h-4 w-4 mr-2" />
+              Correct invoice amount
+            </Button>
+          )}
         </div>
 
         <InvoiceShareDrawer
           open={shareOpen}
           onOpenChange={setShareOpen}
           invoice={invoice}
+        />
+        <CorrectInvoiceDrawer
+          open={correctOpen}
+          onOpenChange={setCorrectOpen}
+          invoice={invoice as any}
         />
       </SheetContent>
     </Sheet>
