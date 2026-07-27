@@ -2942,9 +2942,9 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly, then quote the annual options from the "Pricing Matrix (Post-Launch)" (Base Founder ₹25,000 / Elite Founder ₹30,000, both + 5% GST) and IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?"`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Warmly acknowledge their annual interest, then apply the "Pricing Blackout & VIP Tour Protocol": DO NOT quote prices, GST, MRP, plan tiers, or session counts. Say memberships are tailored to individual goals and offer a VIP gym tour or a front-desk call. End by asking which day works best for their visit.`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Acknowledge and quote the matching plan from the "Pricing Matrix (Post-Launch)" (1M ₹5,000 / 3M ₹15,000 / 6M ₹19,990, all + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" You may also mention the annual Founder plans as an upgrade option.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Warmly acknowledge their interest, then apply the "Pricing Blackout & VIP Tour Protocol": DO NOT quote prices, GST, MRP, plan tiers, durations, or session counts. Say memberships are tailored to individual goals and offer a VIP gym tour or a front-desk call. End by asking which day works best for their visit.`);
     }
   }
 
