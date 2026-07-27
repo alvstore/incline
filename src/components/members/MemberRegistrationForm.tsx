@@ -115,11 +115,6 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     setHealthOther(parsed.other);
   }, [open, data.memberId, data.governmentIdType, data.governmentIdNumber, data.fitnessGoals, data.medicalConditions]);
 
-  // Load PAR-Q from member_onboarding_signatures (if member registered via /register)
-  useEffect(() => {
-    if (!open || !data.memberId) return;
-    let cancelled = false;
-    (async () => {
   // Load latest signature/waiver + PAR-Q + custom_terms from member_onboarding_signatures.
   // This hydrates the backend form with everything the member entered during
   // /register (public self-onboarding) so staff don't re-collect signatures.
