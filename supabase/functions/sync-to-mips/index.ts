@@ -543,7 +543,7 @@ Deno.serve(async (req) => {
       deptId = 101;
       const { data: emp, error } = await supabase
         .from("employees")
-        .select("*, profiles:user_id(full_name, phone, avatar_url, email)")
+        .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth)")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Employee query error: ${error.message}`);
@@ -555,8 +555,9 @@ Deno.serve(async (req) => {
       phone = pick(profile?.phone, (emp as any).personal_phone, (emp as any).phone) || "";
       email = pick(profile?.email, (emp as any).personal_email, (emp as any).email) || "";
       photoUrl = pick(emp.biometric_photo_url, profile?.avatar_url) || "";
-      gender = normGender((emp as any).gender);
-      birthday = fmtDob((emp as any).date_of_birth);
+      gender = normGender((emp as any).gender ?? profile?.gender);
+      birthday = fmtDob((emp as any).date_of_birth ?? profile?.date_of_birth);
+
       deptName = (emp as any).department || "Staff";
       remarkExtra = [ (emp as any).department, (emp as any).position ].filter(Boolean).join(" · ");
       effectiveBranchId = effectiveBranchId || emp.branch_id;
