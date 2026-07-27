@@ -25,13 +25,14 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [assignMonths, setAssignMonths] = useState(1);
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [memberHasFreeLocker, setMemberHasFreeLocker] = useState(false);
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [isChargeable, setIsChargeable] = useState(false);
   const [rentalFee, setRentalFee] = useState(500);
-  const [syncWithMembership, setSyncWithMembership] = useState(false);
+  const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
 
   const handleMemberSearch = async () => {
