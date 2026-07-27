@@ -520,9 +520,18 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     await captureEdgeError("register-member", e, { route: "notify_staff" });
   }
 
-  // 12) Fire-and-forget welcome (WhatsApp → SMS → Email via dispatcher).
-  // Uses the canonical `member_created` template if authored; otherwise the
-  // dispatcher falls back to a plain body.
+  // 12) Fire-and-forget welcome. The dispatcher handles ONE channel per call,
+  // so we dispatch WhatsApp/SMS AND Email as two independent invocations to
+  // guarantee the member gets a welcome email even if the WhatsApp template
+  // isn't authored yet.
+  const welcomeVars = {
+    name: reg.full_name,
+    member_name: reg.full_name,
+    member_code: member.member_code ?? "",
+    branch_name: branch.name,
+  };
+  const welcomeFallback = `Hi ${reg.full_name}, welcome to The Incline Life by Incline! Your member code is ${member.member_code ?? ""}. Visit reception to activate your plan.`;
+
   try {
     await admin.functions.invoke("dispatch-communication", {
       body: {
@@ -530,19 +539,37 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
         member_id: member.id,
         branch_id: reg.branch_id,
         recipient: phone,
-        email: reg.email,
-        dedupe_key: `member_created:${member.id}`,
-        variables: {
-          name: reg.full_name,
-          member_name: reg.full_name,
-          member_code: member.member_code ?? "",
-          branch_name: branch.name,
-        },
-        fallback_body: `Hi ${reg.full_name}, welcome to The Incline Life by Incline! Your member code is ${member.member_code ?? ""}. Visit reception to activate your plan.`,
+        dedupe_key: `member_created:${member.id}:wa`,
+        variables: welcomeVars,
+        fallback_body: welcomeFallback,
       },
     });
   } catch (e) {
-    await captureEdgeError("register-member", e, { route: "welcome_dispatch" });
+    await captureEdgeError("register-member", e, { route: "welcome_dispatch_wa" });
+  }
+
+  if (reg.email) {
+    try {
+      await admin.functions.invoke("dispatch-communication", {
+        body: {
+          event: "member_created",
+          channel: "email",
+          member_id: member.id,
+          branch_id: reg.branch_id,
+          recipient: reg.email,
+          dedupe_key: `member_created:${member.id}:email`,
+          variables: welcomeVars,
+          payload: {
+            subject: `Welcome to The Incline Life, ${reg.full_name}!`,
+            body: welcomeFallback,
+            use_branded_template: true,
+          },
+          fallback_body: welcomeFallback,
+        },
+      });
+    } catch (e) {
+      await captureEdgeError("register-member", e, { route: "welcome_dispatch_email" });
+    }
   }
 
   return json(200, {
