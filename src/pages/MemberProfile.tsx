@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AvatarUpload } from '@/components/auth/AvatarUpload';
 import { useMemberData } from '@/hooks/useMemberData';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse } from 'lucide-react';
@@ -172,12 +173,8 @@ export default function MemberProfile() {
         <Card className="border-border/50">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row items-center gap-6">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={profile?.avatar_url ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(String((profile as any).updated_at ?? Date.now()))}` : undefined} />
-                <AvatarFallback className="text-2xl bg-accent/10 text-accent">
-                  {getInitials(profile?.full_name)}
-                </AvatarFallback>
-              </Avatar>
+              <AvatarUpload />
+
               <div className="text-center sm:text-left">
                 <h2 className="text-2xl font-bold">{profile?.full_name}</h2>
                 <p className="text-muted-foreground">Member ID: {member.member_code}</p>

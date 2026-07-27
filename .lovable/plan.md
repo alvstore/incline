@@ -1,52 +1,55 @@
 ## Root cause audit
 
-**Issue 1 — Only one device receives syncs**
-`access_devices` currently has 2 rows:
-- `Gate 1` (SN `D114…B1C2`) → `mips_device_id = 13`, online ✓
-- `Entry 2` (SN `F06D…62CF`) → `mips_device_id = NULL`, offline
+### Bug 1 — admin uploads land at the wrong storage path (avatar 404 / not visible)
+`src/components/members/MemberAvatarUpload.tsx` builds the object name as:
 
-`sync-to-mips` → `dispatchToDevices()` builds `deviceIds` from `access_devices` filtered by `mips_device_id IS NOT NULL`. `Entry 2` is silently dropped, so every personSync goes to Gate 1 only. The MIPS fallback path (querying `/through/device/list`) never fires because at least one row exists. Even `mips-reconcile-devices` skips this branch because it requires `≥ 2` mapped devices.
+```
+filePath = `avatars/${userId || Date.now()}-${Date.now()}.jpg`
+supabase.storage.from('avatars').upload(filePath, ...)
+```
 
-**Issue 2 — Gender syncs as "U" (Unknown)**
-`sync-to-mips` reads gender from:
-- Members: `leads.gender` only (members table has no gender column, `profiles.gender` is ignored).
-- Employees / Trainers: `employees.gender` / not read at all for trainer, `profiles.gender` never consulted.
+The bucket is already `avatars`, so the object name becomes `avatars/<uid>-<ts>.jpg`. The only INSERT policy on the `avatars` bucket is:
 
-`profiles` DOES have `gender` and `date_of_birth` columns. Result: any member converted without lead metadata, and every trainer, syncs as `gender=U`, and MIPS device UI shows "Unknown" avatar with no gender chip.
+```
+(bucket_id = 'avatars') AND (auth.uid()::text = storage.foldername(name)[1])
+```
 
-## Fix plan (2 focused patches, no business-logic changes)
+For that name, `foldername(name)[1] = 'avatars'`, never the uid — so uploads either fail RLS outright, or (for owners with elevated grants) land at `avatars/avatars/<uid>-<ts>.jpg`, which the returned `getPublicUrl` and every consumer expects at `<uid>/…`. Net effect matches the report: "uploading successfully but not visible."
 
-### 1. Auto-map missing MIPS devices before every dispatch
-Edit `supabase/functions/sync-to-mips/index.ts` → `dispatchToDevices()`:
+The sibling component `src/components/auth/AvatarUpload.tsx` already uses the correct shape `${user.id}/avatar.${ext}` — that's why the owner's own header photo works but admin-uploaded member photos don't.
 
-1. Fetch `access_devices` for the branch (as today) → local set.
-2. Always call `GET /through/device/list` once, build `serial → mipsDeviceId` map.
-3. For every local device where `mips_device_id IS NULL` **but** `serial_number` matches a server row, `UPDATE access_devices SET mips_device_id = …, is_online = …, last_reconcile_at = now()`.
-4. Recompute `deviceIds` from the (now enriched) local set.
-5. Dispatch `syncPerson` with the full array.
+### Bug 2 — member has no upload UI on their dashboard
+`src/pages/MemberProfile.tsx` renders a static `<Avatar>` at line 175 with no camera / file input. `AvatarUpload` (which does work) is only mounted on the staff-facing `/profile` route, not on the member portal. So a member literally has no control to upload from `/member/profile`.
 
-This makes both devices auto-heal on the next sync attempt without a manual "Import all" click, and it stays branch-scoped.
+Related contributing gaps (found while auditing, small):
+- In `MemberAvatarUpload`, the `profiles.avatar_url` write is skipped whenever the member row has no linked `user_id` — the avatar is stored only on `members.biometric_photo_url`, which the member's `AuthContext.profile` never reads, so even a "successful" admin upload can't render in the member portal.
+- Member-portal `AuthContext` already has realtime subscription on `profiles`, so once `profiles.avatar_url` is written, the member sees it live — no extra plumbing needed.
 
-### 2. Enrich gender / DOB fallback chain
-In `sync-to-mips` person-resolution block:
+## Fix plan
 
-- **Member**: change join to also select `profiles(gender, date_of_birth)`; set
-  `gender = normGender(profile?.gender ?? lead?.gender)` and
-  `birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth)`.
-- **Employee**: `gender = normGender(emp.gender ?? profile?.gender)`, `birthday = fmtDob(emp.date_of_birth ?? profile?.date_of_birth)`.
-- **Trainer**: extend the `profiles` select to include `gender, date_of_birth` and use the same fallback (currently trainer gender is never sent → always `U`).
+### 1. `src/components/members/MemberAvatarUpload.tsx`
+- Change the object path to match the `avatars` bucket RLS shape:
+  - `const fileName = \`avatar-${Date.now()}.jpg\``
+  - `const filePath = \`${userId}/${fileName}\``  (require `userId` — early-return with a toast if missing).
+- Keep `upsert: true`. Continue calling `getPublicUrl(filePath)` — it will now return the real object URL.
+- Cache-bust the returned URL (`?v=${Date.now()}`) before calling `onAvatarChange` and before the `profiles.update`, so `<AvatarImage>` reloads immediately.
+- Leave the private `member-photos` biometric upload (`uploadBiometricPhoto`) and MIPS queue as-is — that path is already correct.
 
-Also include `deptName` fallback for trainers: keep current logic but never send empty string.
+### 2. Member self-serve upload on `/member/profile`
+- In `src/pages/MemberProfile.tsx`, replace the static `<Avatar>` block (lines 174–180) with the existing `<AvatarUpload />` component when `profile?.id` matches the signed-in user. Fall back to the static avatar for view-only cases.
+- No new component needed — `src/components/auth/AvatarUpload.tsx` already writes to `avatars/<uid>/avatar.<ext>` and updates `profiles.avatar_url`, both of which satisfy the RLS policies checked above (`Users can upload their own avatar`, `Users can update their own avatar`).
 
-### Verification after build
+### 3. Ensure admin uploads reach the member's profile
+- In `MemberAvatarUpload`, if `userId` is missing but `memberId` is present, look up `members.user_id` before uploading; if still null, surface a toast telling the operator to provision a login first (using the existing `provision-member-login` edge function). This prevents the silent "uploaded but member can't see it" case.
+- No schema changes; no new policies.
 
-1. Backfill run: invoke `sync-to-mips` for Muskan Joshi, Love Kumar Paliwal (INC-26-0004), and one trainer → confirm:
-   - `access_devices` now has `mips_device_id` populated for `Entry 2`.
-   - Edge log shows `Dispatching personId=… to devices: [13, <entry2_id>]`.
-   - MIPS `/personInfo/person` GET returns `gender ∈ {M,F}` when profile has it.
-2. Check `MIPSDevicesTab` UI shows both devices online with recent `last_reconcile_at`.
+### 4. Verification steps (done post-implementation)
+- As an admin, upload a photo from the member drawer → confirm `profiles.avatar_url` for that user contains `avatars/<uid>/avatar-*.jpg`, image opens in a new tab, and it appears in `/members` and in the drawer header.
+- Sign in as that member → `/member/profile` shows the same photo immediately; clicking the camera on the member's own avatar uploads a new photo and it becomes visible without reload.
+- Confirm biometric flow untouched: `members.biometric_photo_path` still populates and `sync-to-mips` fires (queue row + trigger).
 
-### Out of scope (deliberate)
-- No schema changes (no new column on `members`; `profiles.gender` is the source of truth).
-- No changes to enrollment, RLS, or the reconcile cron cadence.
-- No UI copy changes.
+## Files touched
+- `src/components/members/MemberAvatarUpload.tsx` — fix upload path, tighten guards, cache-bust.
+- `src/pages/MemberProfile.tsx` — mount `AvatarUpload` for the signed-in member.
+
+No migrations, no bucket/policy changes.
