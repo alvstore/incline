@@ -14988,6 +14988,10 @@ export type Database = {
           }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      staff_can_write_avatar: {
+        Args: { _path: string; _user_id: string }
+        Returns: boolean
+      }
       staff_check_in:
         | {
             Args: { p_branch_id: string; p_notes?: string; p_user_id: string }

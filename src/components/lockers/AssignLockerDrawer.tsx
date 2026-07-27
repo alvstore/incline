@@ -25,13 +25,14 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [assignMonths, setAssignMonths] = useState(1);
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [memberHasFreeLocker, setMemberHasFreeLocker] = useState(false);
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [isChargeable, setIsChargeable] = useState(false);
   const [rentalFee, setRentalFee] = useState(500);
-  const [syncWithMembership, setSyncWithMembership] = useState(false);
+  const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
 
   const handleMemberSearch = async () => {
@@ -144,27 +145,20 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
 
   const handleAssignLocker = async () => {
     if (!selectedMember || !locker || !branchId) return;
-    
+
     setIsAssigning(true);
     try {
       const startDate = new Date().toISOString().split('T')[0];
       let endDate: string;
-      
+
       if (syncWithMembership && membershipEndDate) {
         endDate = membershipEndDate;
       } else {
         endDate = new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       }
-      
-      const perMonthFee = memberHasFreeLocker ? 0 : (isChargeable ? rentalFee : 0);
-      
-      // Calculate months for billing
-      let billingMonths = assignMonths;
-      if (syncWithMembership && membershipEndDate) {
-        const diffDays = Math.ceil((new Date(membershipEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        billingMonths = Math.max(1, Math.ceil(diffDays / 30));
-      }
-      const feeAmount = perMonthFee * billingMonths;
+
+      // Flat fee for the whole assignment period (no monthly multiplication).
+      const feeAmount = memberHasFreeLocker ? 0 : (isChargeable ? rentalFee : 0);
 
       const result = await lockerService.assignLocker({
         locker_id: locker.id,
@@ -172,7 +166,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
         start_date: startDate,
         end_date: endDate,
         fee_amount: feeAmount,
-        billing_months: billingMonths,
+        billing_months: 1,
         chargeable: feeAmount > 0,
         assign_source: memberHasFreeLocker ? 'plan' : 'addon',
       });
@@ -204,17 +198,17 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     setMemberHasFreeLocker(false);
     setIsChargeable(false);
     setRentalFee(500);
-    setSyncWithMembership(false);
+    setSyncWithMembership(true);
     setMembershipEndDate(null);
   };
 
   if (!locker) return null;
 
   const effectivelyFree = memberHasFreeLocker || !isChargeable;
-  const billingMonths = syncWithMembership && membershipEndDate 
-    ? Math.max(1, Math.ceil((new Date(membershipEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30)))
-    : assignMonths;
-  const totalAmount = effectivelyFree ? 0 : rentalFee * billingMonths;
+  const effectiveEndDate = syncWithMembership && membershipEndDate
+    ? membershipEndDate
+    : new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const totalAmount = effectivelyFree ? 0 : rentalFee;
 
   return (
     <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
@@ -331,8 +325,8 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           {!memberHasFreeLocker && (
             <div className="flex flex-row items-center justify-between rounded-lg border p-4">
               <div className="space-y-0.5">
-                <Label className="text-base">Charge Monthly Rental?</Label>
-                <p className="text-sm text-muted-foreground">Enable rental fee for this assignment</p>
+                <Label className="text-base">Charge Rental Fee?</Label>
+                <p className="text-sm text-muted-foreground">Charged once for the entire assignment period</p>
               </div>
               <Switch checked={isChargeable} onCheckedChange={setIsChargeable} />
             </div>
@@ -341,13 +335,18 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           {/* Rental Fee Input */}
           {isChargeable && !memberHasFreeLocker && (
             <div className="space-y-2">
-              <Label>Rental Fee (₹ per month)</Label>
+              <Label>Rental Fee (₹)</Label>
               <Input
                 type="number"
                 value={rentalFee}
                 onChange={(e) => setRentalFee(Number(e.target.value))}
                 min={0}
               />
+              <p className="text-xs text-muted-foreground">
+                Flat fee covering {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {' – '}
+                {new Date(effectiveEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
             </div>
           )}
 
@@ -367,7 +366,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           ) : (
             <div className="p-4 rounded-lg bg-muted">
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total ({billingMonths} month{billingMonths > 1 ? 's' : ''}):</span>
+                <span className="text-muted-foreground">Total:</span>
                 <span className="text-xl font-bold">₹{totalAmount.toLocaleString()}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -377,6 +376,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
             </div>
           )}
         </div>
+
 
         <SheetFooter className="pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
