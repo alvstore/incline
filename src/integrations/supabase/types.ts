@@ -14386,6 +14386,7 @@ export type Database = {
           template_id: string
         }[]
       }
+      member_branch_id: { Args: { _member_id: string }; Returns: string }
       member_check_in: {
         Args: { _branch_id: string; _member_id: string; _method?: string }
         Returns: Json
