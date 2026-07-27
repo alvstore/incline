@@ -90,17 +90,14 @@ export async function sendInvoicePdfToMember(
     if (phone) {
       try {
         const wa = await dispatchCommunication({
-          event: 'invoice_paid',
           branch_id: inv.branch_id,
           channel: 'whatsapp',
           category: 'payment_receipt',
           member_id: inv.member_id ?? null,
           recipient: phone,
-          variables,
-          payload: { body: fallback },
+          payload: { body: fallback, variables },
           attachment: { url, filename, content_type: 'application/pdf', kind: 'document' },
           dedupe_key: buildDedupeKey(['invoice', inv.id, 'wa', dedupeSalt]),
-          fallback_body: fallback,
           force: true,
         });
         results.whatsapp = { status: wa.status, reason: wa.reason };
@@ -112,21 +109,19 @@ export async function sendInvoicePdfToMember(
     if (email) {
       try {
         const em = await dispatchCommunication({
-          event: 'invoice_paid',
           branch_id: inv.branch_id,
           channel: 'email',
           category: 'payment_receipt',
           member_id: inv.member_id ?? null,
           recipient: email,
-          variables,
           payload: {
             subject: `Your invoice ${inv.invoice_number} — ${branchName}`,
             body: `<p>Hi ${name},</p><p>Thank you for your payment. Your invoice <strong>${inv.invoice_number}</strong> for <strong>₹${Number(inv.total_amount).toLocaleString('en-IN')}</strong> is attached and available at the link below.</p><p><a href="${url}">Download invoice PDF</a></p><p>— Team ${branchName}</p>`,
             use_branded_template: true,
+            variables,
           },
           attachment: { url, filename, content_type: 'application/pdf', kind: 'document' },
           dedupe_key: buildDedupeKey(['invoice', inv.id, 'email', dedupeSalt]),
-          fallback_body: fallback,
           force: true,
         });
         results.email = { status: em.status, reason: em.reason };
