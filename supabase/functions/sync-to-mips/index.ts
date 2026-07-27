@@ -247,51 +247,91 @@ async function dispatchToDevices(
   //    queues syncs for offline devices and delivers them on reconnect —
   //    filtering by online silently drops second devices that blipped once.
   let deviceIds: number[] = [];
+  let localDevices: any[] = [];
 
   try {
     let query = supabase
       .from("access_devices")
-      .select("mips_device_id, device_name, serial_number, is_online")
-      .not("mips_device_id", "is", null);
+      .select("id, mips_device_id, device_name, serial_number, is_online")
+      .not("serial_number", "is", null);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
-
-    if (devices && devices.length > 0) {
-      deviceIds = devices
-        .map((d: any) => d.mips_device_id)
-        .filter((id: any) => id && !isNaN(Number(id)));
-      console.log(`[dispatchToDevices] branch=${branchId || 'all'} mapped_devices=${devices.length} online=${devices.filter((d: any) => d.is_online).length}`);
-    }
-
+    localDevices = devices || [];
   } catch (e) {
     console.warn("Error fetching access_devices:", e);
   }
 
-  // 2. Fallback: fetch from MIPS device list
-  if (deviceIds.length === 0) {
-    try {
-      const res = await fetch(`${baseUrl}/through/device/list`, {
-        method: "GET",
-        headers: authHeaders(token),
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      const rows = json?.rows || json?.data;
-      if (Array.isArray(rows)) {
-        deviceIds = rows
-          .filter((d: any) => d.onlineFlag === 1 || d.status === 1)
-          .map((d: any) => d.id)
-          .filter((id: any) => !isNaN(Number(id)));
+  // Always pull server device list so we can auto-heal missing mips_device_id
+  // mappings (fixes second/third devices that were added on the MIPS server
+  // but never mapped in access_devices).
+  let serverBySerial = new Map<string, { id: number; online: boolean }>();
+  try {
+    const res = await fetch(`${baseUrl}/through/device/list`, {
+      method: "GET",
+      headers: authHeaders(token),
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    const rows = json?.rows || json?.data;
+    if (Array.isArray(rows)) {
+      for (const d of rows) {
+        const sn = String(d.deviceKey || d.sn || d.serialNumber || "").trim();
+        const mid = Number(d.id ?? d.deviceId);
+        if (sn && !isNaN(mid)) {
+          serverBySerial.set(sn.toUpperCase(), {
+            id: mid,
+            online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
+          });
+        }
       }
-    } catch (e) {
-      console.warn("Error fetching MIPS device list:", e);
+    }
+  } catch (e) {
+    console.warn("Error fetching MIPS device list:", e);
+  }
+
+  // Auto-heal: backfill mips_device_id / is_online for local devices matched by SN
+  for (const local of localDevices) {
+    const sn = String(local.serial_number || "").trim().toUpperCase();
+    if (!sn) continue;
+    const match = serverBySerial.get(sn);
+    if (!match) continue;
+
+    const needsMap = !local.mips_device_id || Number(local.mips_device_id) !== match.id;
+    if (needsMap) {
+      await supabase
+        .from("access_devices")
+        .update({
+          mips_device_id: match.id,
+          is_online: match.online,
+          last_reconcile_at: new Date().toISOString(),
+          ...(match.online ? { last_heartbeat: new Date().toISOString() } : {}),
+        })
+        .eq("id", local.id);
+      local.mips_device_id = match.id;
+      local.is_online = match.online;
+      console.log(`[dispatchToDevices] auto-mapped ${local.device_name} SN=${sn} → mips_device_id=${match.id}`);
     }
   }
+
+  deviceIds = localDevices
+    .map((d: any) => d.mips_device_id)
+    .filter((id: any) => id && !isNaN(Number(id)))
+    .map((id: any) => Number(id));
+
+  // Final fallback: if we still have nothing locally, dispatch to all online server devices
+  if (deviceIds.length === 0) {
+    for (const [, v] of serverBySerial) {
+      if (v.online) deviceIds.push(v.id);
+    }
+  }
+
+  console.log(`[dispatchToDevices] branch=${branchId || 'all'} local=${localDevices.length} server=${serverBySerial.size} dispatch_ids=[${deviceIds.join(",")}]`);
 
   if (deviceIds.length === 0) {
     console.warn("No devices found for dispatch");
     return { results: [], deviceIds: [] };
   }
+
 
   // 3. Dispatch to all devices in a single call (API supports deviceIds array)
   console.log(`Dispatching personId=${personId} to devices: [${deviceIds.join(",")}]`);
@@ -450,7 +490,7 @@ Deno.serve(async (req) => {
       deptName = "Members";
       const { data: member, error } = await supabase
         .from("members")
-        .select("*, profiles:user_id(full_name, phone, avatar_url, email), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
+        .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Member query error: ${error.message}`);
@@ -464,8 +504,9 @@ Deno.serve(async (req) => {
       phone = pick(profile?.phone, lead?.phone) || "";
       email = pick(profile?.email, lead?.email) || "";
       photoUrl = pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url) || "";
-      gender = normGender(lead?.gender);
-      birthday = fmtDob(lead?.date_of_birth);
+      gender = normGender(profile?.gender ?? lead?.gender);
+      birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth);
+
       effectiveBranchId = effectiveBranchId || member.branch_id;
 
       // Membership validity — pick newest membership regardless of status so
@@ -502,7 +543,7 @@ Deno.serve(async (req) => {
       deptId = 101;
       const { data: emp, error } = await supabase
         .from("employees")
-        .select("*, profiles:user_id(full_name, phone, avatar_url, email)")
+        .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth)")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Employee query error: ${error.message}`);
@@ -514,8 +555,9 @@ Deno.serve(async (req) => {
       phone = pick(profile?.phone, (emp as any).personal_phone, (emp as any).phone) || "";
       email = pick(profile?.email, (emp as any).personal_email, (emp as any).email) || "";
       photoUrl = pick(emp.biometric_photo_url, profile?.avatar_url) || "";
-      gender = normGender((emp as any).gender);
-      birthday = fmtDob((emp as any).date_of_birth);
+      gender = normGender((emp as any).gender ?? profile?.gender);
+      birthday = fmtDob((emp as any).date_of_birth ?? profile?.date_of_birth);
+
       deptName = (emp as any).department || "Staff";
       remarkExtra = [ (emp as any).department, (emp as any).position ].filter(Boolean).join(" · ");
       effectiveBranchId = effectiveBranchId || emp.branch_id;
@@ -538,7 +580,7 @@ Deno.serve(async (req) => {
       if (trainer.user_id) {
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("full_name, phone, avatar_url, email")
+          .select("full_name, phone, avatar_url, email, gender, date_of_birth")
           .eq("id", trainer.user_id)
           .maybeSingle();
         profile = profileData;
@@ -548,9 +590,12 @@ Deno.serve(async (req) => {
       phone = profile?.phone || "";
       email = profile?.email || "";
       photoUrl = (trainer as any).biometric_photo_url || profile?.avatar_url || "";
+      gender = normGender(profile?.gender);
+      birthday = fmtDob(profile?.date_of_birth);
       const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
       deptName = specs.length > 0 ? `Trainer · ${specs[0]}` : "Trainer";
       remarkExtra = specs.join(", ");
+
       effectiveBranchId = effectiveBranchId || trainer.branch_id;
       shouldRevokeInstead = trainer.is_active === false || !!(trainer as any).exit_date;
       revokeReason = (trainer as any).exit_type ? `Trainer offboarded: ${(trainer as any).exit_type}` : revokeReason;
