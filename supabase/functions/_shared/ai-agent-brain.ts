@@ -1337,7 +1337,7 @@ HARD RULES:
     const targetFields = leadCaptureConfig!.target_fields || [];
     const fieldNames = targetFields.map((f: string) => fieldLabels[f] || f).join(", ");
     systemPrompt += `\n\n[LEAD CAPTURE PROTOCOL — wire contract]
-Follow the "Founder's Phase Onboarding Sequence", "Pricing Matrix (Post-Launch)", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
+Follow the "Founder's Phase Onboarding Sequence", "Pricing Blackout & VIP Tour Protocol", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
 
 Target fields to collect (in this order): ${fieldNames}.
 
