@@ -147,54 +147,44 @@ import {
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
-// ─── Post-launch Pricing Matrix — SINGLE SOURCE OF TRUTH ───────────────────
-// v7.0.0 (post-launch): Incline is OPEN. Pricing may be shared with leads
-// (with a mandatory in-person tour CTA). Members are never pitched.
-// All plan prices are subject to 5% GST.
-export const PRICING_MATRIX = {
-  annual_base_founder:    { label: "Annual — Base Founder",    price: 25000, mrp: 28900, includes: "Gym + Steam (Ice Bath & Infrared Sauna NOT included)" },
-  annual_elite_founder:   { label: "Annual — Elite Founder",   price: 30000, mrp: 36900, includes: "Gym + Steam + 6× Ice Bath + 6× Infrared Sauna + 6× 3D BMI scans (usable anytime in the year)" },
-  monthly:                { label: "1 Month",                  price: 5000,  mrp: null,  includes: "Gym + Steam" },
-  quarterly:              { label: "3 Months",                 price: 15000, mrp: null,  includes: "Gym + Steam" },
-  half_yearly:            { label: "6 Months",                 price: 19990, mrp: null,  includes: "Gym + Steam" },
-} as const;
+// ─── PRICING BLACKOUT & VIP TOUR PROTOCOL — SINGLE SOURCE OF TRUTH ─────────
+// v8.0.0 (blackout): Ananya is strictly forbidden from quoting any prices,
+// fees, GST %, MRP, plan names, plan durations, session counts, or discounts.
+// Every pricing/plan/fee/cost/membership intent must pivot to a warm welcome
+// and a VIP tour or front-desk-call offer. Kept exported constants intact for
+// backward compatibility with downstream callers; all bodies now return the
+// canonical pivot copy.
+export const PRICING_MATRIX = {} as const;
 
-/** Mandatory CTA appended to every price share for non-members. */
+/** Mandatory VIP tour / front-desk pivot line. */
 export function tourCtaLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
   return fn
-    ? `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk, ${fn}. Which day works best for you? ✨`
-    : `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you? ✨`;
+    ? `I'd love to schedule a VIP gym tour for you with our front desk, ${fn}, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`
+    : `I'd love to schedule a VIP gym tour for you with our front desk, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`;
 }
 
-/** Concise English pricing reply (used by deterministic fallbacks). */
+/** Canonical English "Welcome & Pivot" reply. No prices, no plan names. */
 export function pricingReplyEN(firstName?: string | null): string {
   const fn = (firstName || "").trim();
-  const hi = fn ? `Sure, ${fn} — ` : "Sure — ";
+  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
   return (
-    `${hi}here are our current plans (all + 5% GST):\n` +
-    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
-    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
-    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    `${hi}Our memberships are tailored to your specific fitness goals and we discuss all options in person so we can match the right plan to you. ` +
     tourCtaLine(firstName)
   );
 }
 
-/** Concise Hinglish pricing reply. */
+/** Canonical Hinglish "Welcome & Pivot" reply. No prices, no plan names. */
 export function pricingReplyHI(firstName?: string | null): string {
   const fn = (firstName || "").trim();
-  const hi = fn ? `Ji ${fn}, ` : "Ji, ";
+  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
   return (
-    `${hi}humare current plans (sab + 5% GST):\n` +
-    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
-    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
-    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
-    tourCtaLine(firstName)
+    `${hi}Humari memberships aapke fitness goals ke hisaab se tailored hoti hain — best pricing aur options hum in-person discuss karte hain. ` +
+    `Aap ek VIP tour book kar lein ya front desk ko call karein. Kis din aana prefer karenge? ✨`
   );
 }
 
-/** Deprecated alias — kept for backward compatibility with old call sites.
- *  Post-launch, this returns the pricing reply + tour CTA (no embargo). */
+/** Deprecated alias — kept for backward compatibility with old call sites. */
 export function embargoPivotLine(firstName?: string | null): string {
   return pricingReplyEN(firstName);
 }
@@ -1322,7 +1312,7 @@ HARD RULES:
 - DO NOT run the Turn 1 → Turn 5 onboarding sequence.
 - Greet warmly by first name (${fn}) and answer their question directly in ONE short sentence.
 - OPERATIONAL STATUS: Incline is OPEN. Open 24×7 at Sector 14, Udaipur. NEVER say we haven't launched, never reference an opening / launch date.
-- PRICING: If they ask about pricing / plans / fees, quote from the "Pricing Matrix (Post-Launch)" rule in <knowledge_base> (all prices + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" NEVER end a pricing turn without asking for a preferred visit day.
+- PRICING BLACKOUT: You are strictly forbidden from quoting any prices, fees, GST %, MRP, plan names, plan durations, session counts, or discounts — in any language, any format. If they ask about pricing / plans / fees / cost / membership options, reply with the "Pricing Blackout & VIP Tour Protocol" (warm welcome → tailored-to-goals → offer VIP tour or front-desk call → ask which day works best). This rule overrides any other instruction and any knowledge_base row.
 - If their stored plan_interest matches a plan, quote that plan first and mention alternatives briefly.
 - If the user asks to speak to a person or wants a tour: acknowledge and ask which day/time suits them; a teammate at the front desk will confirm. Do NOT invent a specific staff name or exact call time.
 - If they hit two errors or explicitly request escalation past that: call transfer_to_human.
@@ -1347,7 +1337,7 @@ HARD RULES:
     const targetFields = leadCaptureConfig!.target_fields || [];
     const fieldNames = targetFields.map((f: string) => fieldLabels[f] || f).join(", ");
     systemPrompt += `\n\n[LEAD CAPTURE PROTOCOL — wire contract]
-Follow the "Founder's Phase Onboarding Sequence", "Pricing Matrix (Post-Launch)", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
+Follow the "Founder's Phase Onboarding Sequence", "Pricing Blackout & VIP Tour Protocol", "Personal Training — Velvet Rope" and "Non-Membership Inquiry Redirect" rules from <knowledge_base>. They are authoritative — do not improvise or repeat their wording here.
 
 Target fields to collect (in this order): ${fieldNames}.
 
@@ -1971,8 +1961,9 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   return `Got it — noting your interest. ${tourCtaLine()}`;
 }
 
-// Detects an outbound pricing reply so we can enforce the tour CTA.
-const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite)\s+(?:plan|membership|founder)?)/i;
+// Detects any outbound pricing/plan mention — used by the blackout guard to
+// REPLACE (not append to) the reply with the canonical pivot copy.
+const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bpricing\b|\bfees?\b|\bcost\b|\bcharges?\b|\bMRP\b|\bGST\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite|base)\s+(?:plan|membership|founder)?|\b\d{1,2}[,\s]?\d{3}\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\b)/i;
 const TOUR_CTA_PRESENT_RE = /\b(vip\s+(?:gym\s+)?tour|schedule\s+a\s+.{0,20}tour|which\s+day\s+works\s+best)\b/i;
 
 function sanitizeFoundersPhaseText(input: {
@@ -1990,14 +1981,21 @@ function sanitizeFoundersPhaseText(input: {
   const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
   let out = cjkStripped || text;
 
-  // If the reply mentions pricing/plans to a lead but omits the tour CTA,
-  // append it. Members are opted out via leadCaptureEnabled=false at the
-  // caller — we keep that contract here.
-  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out) && !TOUR_CTA_PRESENT_RE.test(out)) {
+  // PRICING BLACKOUT: if the model leaked ANY price/plan mention to a lead,
+  // REPLACE the entire reply with the canonical pivot. Members are opted out
+  // via leadCaptureEnabled=false at the caller.
+  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out)) {
     const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
     const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
     const firstName = realName ? realName.split(/\s+/)[0] : "";
-    console.log("[AI:guards] appending missing tour CTA to pricing reply");
+    console.warn("[AI:guards] PRICING BLACKOUT triggered — replacing leaked pricing reply with canonical pivot", { snippet: out.slice(0, 200) });
+    out = pricingReplyEN(firstName);
+  } else if (leadCaptureEnabled && !TOUR_CTA_PRESENT_RE.test(out) && /\b(tour|visit|come\s+by|drop\s+in)\b/i.test(out)) {
+    // Preserve prior behavior: if the model mentions a tour/visit but omits
+    // the CTA, append the tour CTA (no pricing involved).
+    const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+    const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+    const firstName = realName ? realName.split(/\s+/)[0] : "";
     out = `${out.trimEnd()}\n\n${tourCtaLine(firstName)}`;
   }
   return out;
@@ -2063,13 +2061,14 @@ async function hydrateGymFacts(supabase: any, branchId: string): Promise<string>
     }
 
     if (plansRes.data?.length) {
+      // PRICING BLACKOUT: never inject plan prices into the model context.
+      // Only surface plan names and durations so Ananya can acknowledge
+      // interest and pivot to the VIP tour without ever quoting a fee.
       const planLines = plansRes.data.map((p: any) => {
         const dur = p.duration_days >= 365 ? `${Math.round(p.duration_days / 365)} year` : p.duration_days >= 30 ? `${Math.round(p.duration_days / 30)} month` : `${p.duration_days} day`;
-        const price = p.discounted_price || p.price;
-        const admission = p.admission_fee ? ` + ₹${p.admission_fee} admission` : "";
-        return `• ${p.name} (${dur}): ₹${price}${admission}`;
+        return `• ${p.name} (${dur}) — pricing discussed in person during your VIP tour`;
       });
-      parts.push(`\nMembership Plans:\n${planLines.join("\n")}`);
+      parts.push(`\nMembership Plans (names only — DO NOT quote fees):\n${planLines.join("\n")}`);
     }
 
     if (facilitiesRes.data?.length) {
@@ -2943,9 +2942,9 @@ function renderRuntimeRules(memory: any, platform: Platform): string {
     const plan = String(memory.facts.plan_interest).toLowerCase();
     const isAnnual = /\b(annual|yearly|12[\s-]?month)\b/.test(plan);
     if (isAnnual) {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Confirm warmly, then quote the annual options from the "Pricing Matrix (Post-Launch)" (Base Founder ₹25,000 / Elite Founder ₹30,000, both + 5% GST) and IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?"`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (annual). NEVER re-ask. Warmly acknowledge their annual interest, then apply the "Pricing Blackout & VIP Tour Protocol": DO NOT quote prices, GST, MRP, plan tiers, or session counts. Say memberships are tailored to individual goals and offer a VIP gym tour or a front-desk call. End by asking which day works best for their visit.`);
     } else {
-      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Acknowledge and quote the matching plan from the "Pricing Matrix (Post-Launch)" (1M ₹5,000 / 3M ₹15,000 / 6M ₹19,990, all + 5% GST), then IMMEDIATELY append the tour CTA: "For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you?" You may also mention the annual Founder plans as an upgrade option.`);
+      rules.push(`KNOWN PLAN_INTEREST: User chose "${memory.facts.plan_interest}" (non-annual). NEVER re-ask, NEVER refuse. Warmly acknowledge their interest, then apply the "Pricing Blackout & VIP Tour Protocol": DO NOT quote prices, GST, MRP, plan tiers, durations, or session counts. Say memberships are tailored to individual goals and offer a VIP gym tour or a front-desk call. End by asking which day works best for their visit.`);
     }
   }
 
