@@ -1961,8 +1961,9 @@ function stripHallucinatedActions(replyText: string, handoffActuallyHappened: bo
   return `Got it — noting your interest. ${tourCtaLine()}`;
 }
 
-// Detects an outbound pricing reply so we can enforce the tour CTA.
-const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bfees?\b|\bcost\b|\bcharges?\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite)\s+(?:plan|membership|founder)?)/i;
+// Detects any outbound pricing/plan mention — used by the blackout guard to
+// REPLACE (not append to) the reply with the canonical pivot copy.
+const PRICING_MENTION_RE = /(₹|\bRs\.?\b|\bINR\b|\brupees?\b|\bprice\b|\bpricing\b|\bfees?\b|\bcost\b|\bcharges?\b|\bMRP\b|\bGST\b|\b(?:monthly|quarterly|half[- ]?yearly|annual|founder|elite|base)\s+(?:plan|membership|founder)?|\b\d{1,2}[,\s]?\d{3}\b|\b(?:1|3|6|12)\s*(?:month|months|mo|yr|year)s?\b)/i;
 const TOUR_CTA_PRESENT_RE = /\b(vip\s+(?:gym\s+)?tour|schedule\s+a\s+.{0,20}tour|which\s+day\s+works\s+best)\b/i;
 
 function sanitizeFoundersPhaseText(input: {
@@ -1980,14 +1981,21 @@ function sanitizeFoundersPhaseText(input: {
   const cjkStripped = text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff65-\uff9f]+/g, "").replace(/\s{2,}/g, " ").trim();
   let out = cjkStripped || text;
 
-  // If the reply mentions pricing/plans to a lead but omits the tour CTA,
-  // append it. Members are opted out via leadCaptureEnabled=false at the
-  // caller — we keep that contract here.
-  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out) && !TOUR_CTA_PRESENT_RE.test(out)) {
+  // PRICING BLACKOUT: if the model leaked ANY price/plan mention to a lead,
+  // REPLACE the entire reply with the canonical pivot. Members are opted out
+  // via leadCaptureEnabled=false at the caller.
+  if (leadCaptureEnabled && PRICING_MENTION_RE.test(out)) {
     const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
     const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
     const firstName = realName ? realName.split(/\s+/)[0] : "";
-    console.log("[AI:guards] appending missing tour CTA to pricing reply");
+    console.warn("[AI:guards] PRICING BLACKOUT triggered — replacing leaked pricing reply with canonical pivot", { snippet: out.slice(0, 200) });
+    out = pricingReplyEN(firstName);
+  } else if (leadCaptureEnabled && !TOUR_CTA_PRESENT_RE.test(out) && /\b(tour|visit|come\s+by|drop\s+in)\b/i.test(out)) {
+    // Preserve prior behavior: if the model mentions a tour/visit but omits
+    // the CTA, append the tour CTA (no pricing involved).
+    const rawName = memory?.profile?.full_name || memory?.profile?.first_name || memory?.profile?.name || "";
+    const realName = looksLikeRealName(rawName, (memory as any)?.profile?.phone) ? String(rawName) : "";
+    const firstName = realName ? realName.split(/\s+/)[0] : "";
     out = `${out.trimEnd()}\n\n${tourCtaLine(firstName)}`;
   }
   return out;
