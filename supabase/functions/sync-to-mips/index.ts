@@ -247,51 +247,91 @@ async function dispatchToDevices(
   //    queues syncs for offline devices and delivers them on reconnect —
   //    filtering by online silently drops second devices that blipped once.
   let deviceIds: number[] = [];
+  let localDevices: any[] = [];
 
   try {
     let query = supabase
       .from("access_devices")
-      .select("mips_device_id, device_name, serial_number, is_online")
-      .not("mips_device_id", "is", null);
+      .select("id, mips_device_id, device_name, serial_number, is_online")
+      .not("serial_number", "is", null);
     if (branchId) query = query.eq("branch_id", branchId);
     const { data: devices } = await query;
-
-    if (devices && devices.length > 0) {
-      deviceIds = devices
-        .map((d: any) => d.mips_device_id)
-        .filter((id: any) => id && !isNaN(Number(id)));
-      console.log(`[dispatchToDevices] branch=${branchId || 'all'} mapped_devices=${devices.length} online=${devices.filter((d: any) => d.is_online).length}`);
-    }
-
+    localDevices = devices || [];
   } catch (e) {
     console.warn("Error fetching access_devices:", e);
   }
 
-  // 2. Fallback: fetch from MIPS device list
-  if (deviceIds.length === 0) {
-    try {
-      const res = await fetch(`${baseUrl}/through/device/list`, {
-        method: "GET",
-        headers: authHeaders(token),
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      const rows = json?.rows || json?.data;
-      if (Array.isArray(rows)) {
-        deviceIds = rows
-          .filter((d: any) => d.onlineFlag === 1 || d.status === 1)
-          .map((d: any) => d.id)
-          .filter((id: any) => !isNaN(Number(id)));
+  // Always pull server device list so we can auto-heal missing mips_device_id
+  // mappings (fixes second/third devices that were added on the MIPS server
+  // but never mapped in access_devices).
+  let serverBySerial = new Map<string, { id: number; online: boolean }>();
+  try {
+    const res = await fetch(`${baseUrl}/through/device/list`, {
+      method: "GET",
+      headers: authHeaders(token),
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    const rows = json?.rows || json?.data;
+    if (Array.isArray(rows)) {
+      for (const d of rows) {
+        const sn = String(d.deviceKey || d.sn || d.serialNumber || "").trim();
+        const mid = Number(d.id ?? d.deviceId);
+        if (sn && !isNaN(mid)) {
+          serverBySerial.set(sn.toUpperCase(), {
+            id: mid,
+            online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
+          });
+        }
       }
-    } catch (e) {
-      console.warn("Error fetching MIPS device list:", e);
+    }
+  } catch (e) {
+    console.warn("Error fetching MIPS device list:", e);
+  }
+
+  // Auto-heal: backfill mips_device_id / is_online for local devices matched by SN
+  for (const local of localDevices) {
+    const sn = String(local.serial_number || "").trim().toUpperCase();
+    if (!sn) continue;
+    const match = serverBySerial.get(sn);
+    if (!match) continue;
+
+    const needsMap = !local.mips_device_id || Number(local.mips_device_id) !== match.id;
+    if (needsMap) {
+      await supabase
+        .from("access_devices")
+        .update({
+          mips_device_id: match.id,
+          is_online: match.online,
+          last_reconcile_at: new Date().toISOString(),
+          ...(match.online ? { last_heartbeat: new Date().toISOString() } : {}),
+        })
+        .eq("id", local.id);
+      local.mips_device_id = match.id;
+      local.is_online = match.online;
+      console.log(`[dispatchToDevices] auto-mapped ${local.device_name} SN=${sn} → mips_device_id=${match.id}`);
     }
   }
+
+  deviceIds = localDevices
+    .map((d: any) => d.mips_device_id)
+    .filter((id: any) => id && !isNaN(Number(id)))
+    .map((id: any) => Number(id));
+
+  // Final fallback: if we still have nothing locally, dispatch to all online server devices
+  if (deviceIds.length === 0) {
+    for (const [, v] of serverBySerial) {
+      if (v.online) deviceIds.push(v.id);
+    }
+  }
+
+  console.log(`[dispatchToDevices] branch=${branchId || 'all'} local=${localDevices.length} server=${serverBySerial.size} dispatch_ids=[${deviceIds.join(",")}]`);
 
   if (deviceIds.length === 0) {
     console.warn("No devices found for dispatch");
     return { results: [], deviceIds: [] };
   }
+
 
   // 3. Dispatch to all devices in a single call (API supports deviceIds array)
   console.log(`Dispatching personId=${personId} to devices: [${deviceIds.join(",")}]`);
