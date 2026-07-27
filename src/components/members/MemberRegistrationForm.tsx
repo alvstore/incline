@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown } from 'lucide-react';
+import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown, CheckCircle2, Download, Eye, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { signMemberDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
 import { buildRegistrationFormPdf, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
@@ -93,6 +94,14 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
   const [parq, setParq] = useState<Record<string, 'yes' | 'no'>>({});
   const [customTerms, setCustomTerms] = useState('');
   const [saving, setSaving] = useState(false);
+  const [existingSignature, setExistingSignature] = useState<{
+    waiver_pdf_path: string | null;
+    signature_path: string | null;
+    signed_at: string | null;
+    source: string | null;
+  } | null>(null);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Re-sync prefilled values when drawer opens or member changes
   useEffect(() => {
@@ -106,26 +115,50 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
     setHealthOther(parsed.other);
   }, [open, data.memberId, data.governmentIdType, data.governmentIdNumber, data.fitnessGoals, data.medicalConditions]);
 
-  // Load PAR-Q from member_onboarding_signatures (if member registered via /register)
+  // Load latest signature/waiver + PAR-Q + custom_terms from member_onboarding_signatures.
+  // This hydrates the backend form with everything the member entered during
+  // /register (public self-onboarding) so staff don't re-collect signatures.
   useEffect(() => {
     if (!open || !data.memberId) return;
     let cancelled = false;
     (async () => {
       const { data: row } = await supabase
         .from('member_onboarding_signatures')
-        .select('par_q')
+        .select('par_q, custom_terms, waiver_pdf_path, signature_path, signed_at, consents')
         .eq('member_id', data.memberId!)
         .order('signed_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (cancelled || !row?.par_q || typeof row.par_q !== 'object') return;
-      const map: Record<string, 'yes' | 'no'> = {};
-      const src = row.par_q as Record<string, string>;
-      PARQ_QUESTIONS.forEach((q, i) => {
-        const v = src[q] ?? src[`q${i}`];
-        if (v === 'yes' || v === 'no') map[`q${i}`] = v;
-      });
-      setParq(map);
+      if (cancelled) return;
+      if (row?.par_q && typeof row.par_q === 'object') {
+        const map: Record<string, 'yes' | 'no'> = {};
+        const src = row.par_q as Record<string, string>;
+        PARQ_QUESTIONS.forEach((q, i) => {
+          const v = src[q] ?? src[`q${i}`];
+          if (v === 'yes' || v === 'no') map[`q${i}`] = v;
+        });
+        setParq(map);
+      }
+      if (typeof (row as any)?.custom_terms === 'string') {
+        setCustomTerms((row as any).custom_terms);
+      }
+      if (row?.waiver_pdf_path || row?.signature_path) {
+        const source = (row?.consents as any)?.source ?? null;
+        setExistingSignature({
+          waiver_pdf_path: row?.waiver_pdf_path ?? null,
+          signature_path: row?.signature_path ?? null,
+          signed_at: row?.signed_at ?? null,
+          source,
+        });
+        setEditMode(false);
+        if (row?.signature_path) {
+          const url = await signMemberDocument(row.signature_path, 300).catch(() => null);
+          if (!cancelled) setSignatureUrl(url);
+        }
+      } else {
+        setExistingSignature(null);
+        setEditMode(true);
+      }
     })();
     return () => { cancelled = true; };
   }, [open, data.memberId]);
@@ -277,13 +310,14 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
           const { data: m } = await supabase.from('members').select('user_id').eq('id', data.memberId).maybeSingle();
           if (m?.user_id) await (supabase.from('profiles') as any).update(profileUpdates).eq('user_id', m.user_id);
         }
-        // Persist PAR-Q answers (insert a manual snapshot row)
+        // Persist PAR-Q answers + custom terms (staff-authored addendum).
         try {
           await supabase.from('member_onboarding_signatures').insert({
             member_id: data.memberId,
             signature_path: fileName,
             waiver_pdf_path: fileName,
             par_q: parqMap,
+            custom_terms: customTerms || null,
             consents: { waiver: true, source: 'staff_registration_form' },
             signed_at: new Date().toISOString(),
           });
@@ -552,49 +586,104 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           <Separator />
 
-          {/* Digital Signature */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          {/* Digital Signature — hidden when member already signed via /register */}
+          {existingSignature && !editMode ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <FileSignature className="h-4 w-4 text-primary" />
-                <Label className="font-semibold">Digital Signature</Label>
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <Label className="font-semibold text-emerald-800">
+                  Already signed{existingSignature.source === 'self_register' ? ' during self-registration' : ''}
+                </Label>
               </div>
-              <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs">
-                <Eraser className="h-3 w-3 mr-1" /> Clear
-              </Button>
-            </div>
-            <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl bg-muted/30 relative">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-[140px] cursor-crosshair touch-none"
-                onMouseDown={startDraw}
-                onMouseMove={draw}
-                onMouseUp={stopDraw}
-                onMouseLeave={stopDraw}
-                onTouchStart={startDraw}
-                onTouchMove={draw}
-                onTouchEnd={stopDraw}
-              />
-              {!hasSigned && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-muted-foreground/50 text-sm">Sign here ✍️</p>
-                </div>
+              {existingSignature.signed_at && (
+                <p className="text-xs text-emerald-700/80">
+                  Signed on {new Date(existingSignature.signed_at).toLocaleString('en-IN')}
+                </p>
               )}
+              {signatureUrl && (
+                <img
+                  src={signatureUrl}
+                  alt="Member signature"
+                  className="max-h-24 rounded border border-emerald-200 bg-white p-1"
+                />
+              )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {existingSignature.waiver_pdf_path && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const url = await signMemberDocument(existingSignature.waiver_pdf_path!, 300);
+                      if (url) window.open(url, '_blank', 'noopener');
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed waiver
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Re-sign
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Draw your signature above using mouse or touch. This will be saved digitally.
-            </p>
-          </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileSignature className="h-4 w-4 text-primary" />
+                  <Label className="font-semibold">Digital Signature</Label>
+                </div>
+                <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs">
+                  <Eraser className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              </div>
+              <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl bg-muted/30 relative">
+                <canvas
+                  ref={canvasRef}
+                  className="w-full h-[140px] cursor-crosshair touch-none"
+                  onMouseDown={startDraw}
+                  onMouseMove={draw}
+                  onMouseUp={stopDraw}
+                  onMouseLeave={stopDraw}
+                  onTouchStart={startDraw}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDraw}
+                />
+                {!hasSigned && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-muted-foreground/50 text-sm">Sign here ✍️</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Draw your signature above using mouse or touch. This will be saved digitally.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2 pb-4">
             <Button variant="outline" className="flex-1" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-2" /> Print
             </Button>
-            <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned}>
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Digital Copy'}
-            </Button>
+            {existingSignature && !editMode ? (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={async () => {
+                  const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
+                  if (!path) return;
+                  const url = await signMemberDocument(path, 300);
+                  if (url) window.open(url, '_blank', 'noopener');
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" /> Download signed copy
+              </Button>
+            ) : (
+              <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? 'Saving...' : 'Save Digital Copy'}
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>

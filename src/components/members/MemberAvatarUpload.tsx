@@ -77,6 +77,21 @@ export function MemberAvatarUpload({
         .getPublicUrl(filePath);
 
       onAvatarChange(publicUrl);
+
+      // Persist avatar_url directly to profile so it becomes immediately visible
+      // everywhere (AppHeader, MemberProfile, member lists) without relying on
+      // the parent drawer to save. Idempotent, service-role not required.
+      if (userId) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+            .eq('id', userId);
+        } catch (err) {
+          console.warn('profiles.avatar_url update failed:', err);
+        }
+      }
+
       toast.success('Avatar uploaded successfully');
 
       // Biometric photo (private) → `member-photos` bucket via storage path on member.
@@ -89,12 +104,18 @@ export function MemberAvatarUpload({
             memberId,
             compressedFile,
           );
+          // Persist both the storage path AND a public URL mirror on the
+          // members row. The `_url` column feeds the self-heal trigger that
+          // mirrors into profiles.avatar_url as a safety net for legacy paths.
           await supabase
             .from('members')
-            .update({ biometric_photo_path: biometricPath })
+            .update({
+              biometric_photo_path: biometricPath,
+              biometric_photo_url: publicUrl,
+            })
             .eq('id', memberId);
           await queueMemberSync(memberId, signedUrl, name);
-          toast.success('Photo queued for device sync');
+          toast.success('Photo synced to member profile & queued for device');
         } catch (err) {
           console.warn('Biometric upload/queue failed:', err);
         }

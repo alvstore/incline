@@ -7760,6 +7760,7 @@ export type Database = {
         Row: {
           consents: Json
           created_at: string
+          custom_terms: string | null
           id: string
           member_id: string
           par_q: Json
@@ -7772,6 +7773,7 @@ export type Database = {
         Insert: {
           consents?: Json
           created_at?: string
+          custom_terms?: string | null
           id?: string
           member_id: string
           par_q?: Json
@@ -7784,6 +7786,7 @@ export type Database = {
         Update: {
           consents?: Json
           created_at?: string
+          custom_terms?: string | null
           id?: string
           member_id?: string
           par_q?: Json

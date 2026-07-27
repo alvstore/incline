@@ -1,82 +1,75 @@
+## Step 1 — Audit findings (verified in code)
 
-## What's actually wrong (verified against live data)
+**A. Registration flow disconnect** (`MemberRegistrationForm.tsx` vs `PublicRegistration.tsx` + `register-member` fn)
+- Public `/register` writes a signed waiver PDF + PNG signature to bucket `member-onboarding`, and inserts a row in `member_onboarding_signatures` with `signature_path`, `waiver_pdf_path`, `par_q`, `consents`, IP/UA.
+- Backend "Membership Registration Form" drawer already **loads `par_q`** from that table (lines 110–131) but:
+  - Does **not** check whether `signature_path` / `waiver_pdf_path` already exists → always shows an empty signature canvas.
+  - Does **not** hydrate `governmentIdType/Number`, `fitnessGoals`, `medicalConditions`, `customTerms` from the public flow — parent (`MemberProfileDrawer` 2060–2085) only passes `profile.government_id_*` and `member.fitness_goals/health_conditions`. Public flow **doesn't write `government_id_*` to profiles** (only `health_conditions` on members via reg payload), so fields still look empty.
+  - No `custom_terms` column exists on `member_onboarding_signatures` — custom addendums entered on backend are lost after PDF render.
+  - Even when a signature already exists, backend still requires a re-sign to save; also blocks re-save with "Registration form already uploaded" (line 220) instead of offering **View / Download / Print** of the existing waiver.
 
-I queried the 9 members from your screenshot. The database is correct — **all of them are already `status='active'` on both `members` and `memberships`** (only Sandeep is legitimately pending, plan starts 01 Dec 2026). The UI is wrong.
+**B. Welcome email on self-register**
+- `register-member` fires `dispatch-communication` with `event: 'member_created'` and both `recipient` (phone) + `email` (line 527–540). Dispatcher only handles **one channel per call** — so email is silently dropped unless a `member_created` template exists on the WhatsApp channel AND a separate email dispatch is issued. No second call for `channel: 'email'` is made → **members never get a welcome email**.
 
-Root cause: `src/pages/Members.tsx` line 177 forces the badge to "Pending Plan" whenever `members.lifecycle_state = 'pending_plan'`, regardless of the membership status. When yesterday's `activate_scheduled_memberships` cron flipped `memberships.status` from `pending` → `active`, it never cleared the parent member's `lifecycle_state`. So the row is active in every table, but the sticky lifecycle flag keeps painting it amber.
+**C. Invoice PDF not delivered via WhatsApp / Email**
+- `systemEvents.ts` defines `receipt_generated` (document event) but **no `invoice_created` / `invoice_sent` event** is dispatched anywhere in `src/services/billingService.ts`, `paymentService.ts`, or the `record_payment` RPC path — grep shows zero call sites.
+- Dispatcher supports `{{document_link}}` variable injection (line 276) but nothing produces the PDF, uploads it to storage, and passes the signed link. Result: invoice/receipt PDFs never leave the CRM.
 
-Verified rows (excerpt):
+**D. Member photo "uploads OK but not visible" (KAUSHAY INC-26-0007)**
+- `MemberAvatarUpload.tsx` uploads to two buckets:
+  1. Public `avatars` bucket → returns `publicUrl` → hands to parent via `onAvatarChange` (parent must persist to `profiles.avatar_url`).
+  2. Private `member-photos` bucket → writes `members.biometric_photo_path` (NOT `biometric_photo_url`).
+- The self-heal trigger `trg_mirror_member_photo_to_profile` deployed last session mirrors **`members.biometric_photo_url` → `profiles.avatar_url`**. Because the uploader writes `biometric_photo_path` and the parent may not always call `updateProfile({avatar_url})` (e.g. AddMemberDrawer path, or when opened from a context that discards the change), **the profile row stays with `avatar_url = null`** even though storage has the file.
+- Additionally, KAUSHAY was created via lead-conversion (`provision-member-login`) — that path never sets `avatar_url` from an uploaded photo.
 
-```
-INC-26-0007 KAUSHAY JAIN   member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
-INC-26-0016 Syed Nida Ali  member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
-INC-26-0018 Bhavesh D.     member.status=active   lifecycle_state=pending_plan   plan=active  start=2026-07-27
-```
+---
 
-Second issue you raised: uploading a member photo currently updates `members.biometric_photo_url` (and now, after last turn, mirrors it to `profiles.avatar_url`), but **nothing calls `sync-to-mips` automatically** — so the face never reaches the turnstile until someone clicks "Sync" manually in the Device Center.
+## Step 2 — Execution plan
 
-## Fix plan (opening-day safe)
+### Epic 1 — Registration form sync (backend ⇄ public)
+1. **Extend audit prefill.** In `MemberProfileDrawer.tsx` (2060–2085), also fetch the latest `member_onboarding_signatures` row for the member and pass down: `existingSignaturePath`, `existingWaiverPdfPath`, `signedAt`, `customTerms` (see #2), `parQ`, plus existing `health_conditions`, `fitness_goals`.
+2. **Add `custom_terms` column** to `member_onboarding_signatures` (nullable TEXT) via migration + backfill nothing. Public `/register` doesn't collect it, but backend save path (line 282) will now persist it.
+3. **Sync `government_id_*` to public flow.** Add `government_id_type` / `government_id_number` to the `register-member` payload → write to `profiles` in the same tx as member insert.
+4. **Rebuild `MemberRegistrationForm.tsx` UX:**
+   - If `existingWaiverPdfPath` present:
+     - Show a green "Signed on {date}" banner with **Download PDF** + **Print** + **View signature** actions (uses `signMemberDocument` on the private path).
+     - Hide the signature canvas + "Save Digital Copy" button.
+     - Show Government ID and Custom Terms as **read-only** if already captured; allow editing only via a "Correct details" toggle that re-triggers PDF regeneration (new revision row, does not delete old one).
+   - If no signature yet: keep current behavior but drop the hard block on line 219; instead update the existing row.
+5. **Fix TanStack cache.** After save, invalidate `['member-onboarding-signatures', memberId]` and `['member-documents', memberId]` together.
 
-### 1. Clear the sticky `pending_plan` flag (immediate + permanent)
+### Epic 2 — Welcome email fires on self-register
+1. In `register-member` (after step 12), issue a **second** `dispatch-communication` call with `channel: 'email'`, `event: 'member_created'`, `recipient: reg.email`, same dedupe key suffixed with `:email`.
+2. Ensure `member_created` **email template** exists (Templates Hub → Email → seed via `AIGenerateTemplatesDrawer` default catalog).
+3. Add unit sanity: dispatcher must accept `channel: 'email'` + `event` without a `payload.subject` (falls back to template subject).
 
-**Backfill (runs once, opens the gym):**
+### Epic 3 — Invoice / receipt PDF delivery
+1. Add helper `sendInvoicePdfToMember(invoiceId)`:
+   - Generate PDF via existing `utils/invoicePdf.ts`.
+   - Upload to storage bucket `documents` under `invoices/{invoice_id}.pdf`.
+   - Sign a 7-day URL, then call `dispatchCommunication({ event: 'invoice_created', channel: 'whatsapp', variables: { document_link, invoice_no, amount } })` **and** a second call with `channel: 'email'` (attaches same signed link + inline HTML summary).
+2. Wire this helper into: `record_payment` client wrapper (`paymentService.ts`), `MembershipPurchaseDrawer` success, `POSCheckout` completion, and `verify-payment` edge fn (Razorpay success).
+3. Add `invoice_created` and `receipt_generated` events to `systemEvents.ts` if missing; seed WhatsApp Meta template with `header_type='none'` + `{{document_link}}` body var (per memory rule).
+4. Add manual "Resend invoice PDF" button on `InvoiceViewDrawer`.
 
-```sql
-UPDATE public.members mem
-   SET lifecycle_state = 'active', updated_at = now()
- WHERE lifecycle_state = 'pending_plan'
-   AND EXISTS (
-     SELECT 1 FROM public.memberships m
-      WHERE m.member_id = mem.id
-        AND m.status = 'active'
-        AND m.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date
-   );
-```
+### Epic 4 — Member photo visibility fix
+1. **Fix the uploader:** in `MemberAvatarUpload.tsx`, after uploading to `avatars`, also `UPDATE profiles SET avatar_url = publicUrl WHERE user_id = member.user_id` **inside the component** (not relying on parent). This is idempotent and matches AppHeader's cache-busted read.
+2. Also mirror to `members.biometric_photo_url` (not just `_path`) so `trg_mirror_member_photo_to_profile` self-heals older rows.
+3. **Backfill KAUSHAY + any member with photo_path but null avatar_url:** SQL that reads `member-photos` object, signs a URL, writes to `profiles.avatar_url`.
+4. Invalidate queries `['profile', userId]` and `['member', memberId]` after upload.
+5. Add a small "Photo synced ✓" toast that confirms both bucket writes.
 
-**Permanent — patch `activate_scheduled_memberships`** so every future IST-midnight activation also lifts the member out of `pending_plan` in the same transaction:
+---
 
-```sql
-UPDATE public.members
-   SET lifecycle_state = 'active', updated_at = now()
- WHERE id = v_row.member_id
-   AND lifecycle_state IN ('pending_plan','pending');
-```
+## Technical section
+- **Files touched:** `src/components/members/MemberRegistrationForm.tsx`, `MemberProfileDrawer.tsx`, `MemberAvatarUpload.tsx`; `supabase/functions/register-member/index.ts`; `supabase/functions/verify-payment/index.ts`; `src/services/paymentService.ts` (+ helper `src/lib/billing/sendInvoicePdf.ts`); `src/utils/invoicePdf.ts` (export blob helper); `src/lib/templates/systemEvents.ts`.
+- **Migrations:** `add_custom_terms_to_onboarding_signatures`, `backfill_member_avatar_from_biometric_path`, new `documents/invoices/*` upload policy grant for service role.
+- **No RLS regressions.** All new selects go through existing member-scoped policies + `signMemberDocument`.
+- **Dispatcher rules honored** — no direct inserts into `communication_logs`, every send uses `dispatchCommunication` with dedupe keys.
 
-Plus a small DB trigger `tg_clear_pending_plan_on_membership_active` on `memberships` UPDATE: whenever a row transitions to `status='active'`, clear the parent member's `pending_plan` state — so manual activations, membership transfers, and edge-function activations all self-heal.
+---
 
-### 2. Auto-sync face to MIPS on photo upload
-
-Add a lightweight DB trigger on `public.members` (AFTER UPDATE OF `biometric_photo_url`) that uses `pg_net` to POST to the existing `sync-to-mips` edge function with `{ personType: 'member', personId: NEW.id, action: 'upsert' }`. Same trigger pattern on `public.employees` and `public.trainers` so trainers/staff faces are pushed the moment a photo lands.
-
-Guardrails:
-- Fires only when `biometric_photo_url IS DISTINCT FROM OLD.biometric_photo_url` and the new value is not null.
-- Also skips fire if `hardware_access_enabled = false` (respects the existing opt-out).
-- Records the request_id on `biometric_sync_queue` so the Device Center's "Personnel Sync" tab shows a live "Syncing…" row.
-
-### 3. UI belt-and-braces
-
-In `src/pages/Members.tsx` the derivation is changed so an active membership wins over a stale `pending_plan` flag:
-
-```ts
-if (activeMembership) memberStatus = 'active';
-else if (m.lifecycle_state === 'pending_plan') memberStatus = 'pending_plan';
-else if (scheduledMembership) memberStatus = 'scheduled';
-```
-
-This makes the list correct even if the DB flag is momentarily stale (e.g. during the couple-second gap between purchase RPC and lifecycle trigger).
-
-### 4. Verification before you open the doors
-
-After the migration runs I'll re-query all 9 members and confirm:
-- Every row shows `lifecycle_state='active'`, `member_status='active'`, `plan_status='active'`.
-- `days_left` still matches (179d / 364d as in your screenshot).
-- Sandeep remains legitimately `scheduled` with "Starts 01 Dec 2026".
-
-Then I'll pick one member with a photo (e.g. Kaushay), toggle a re-upload, and confirm a fresh row lands on `biometric_sync_queue` with `status='queued'` → `synced` within seconds.
-
-## Files touched
-
-- **DB migration** — `activate_scheduled_memberships` patch, backfill UPDATE, `tg_clear_pending_plan_on_membership_active` trigger, `tg_push_photo_to_mips` trigger (members/employees/trainers).
-- `src/pages/Members.tsx` — reorder the status derivation so active plans win.
-
-Nothing else changes. `sync-to-mips` edge fn already accepts the payload we're sending — no code change there.
+## Out of scope (this sprint)
+- Reworking the printable Registration PDF layout.
+- Migrating public `/register` to collect custom terms (backend-only field for now).
+- Changing MIPS sync payloads (Epic 4 only touches avatar visibility).
