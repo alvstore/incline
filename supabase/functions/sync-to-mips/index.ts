@@ -580,7 +580,7 @@ Deno.serve(async (req) => {
       if (trainer.user_id) {
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("full_name, phone, avatar_url, email")
+          .select("full_name, phone, avatar_url, email, gender, date_of_birth")
           .eq("id", trainer.user_id)
           .maybeSingle();
         profile = profileData;
@@ -590,9 +590,12 @@ Deno.serve(async (req) => {
       phone = profile?.phone || "";
       email = profile?.email || "";
       photoUrl = (trainer as any).biometric_photo_url || profile?.avatar_url || "";
+      gender = normGender(profile?.gender);
+      birthday = fmtDob(profile?.date_of_birth);
       const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
       deptName = specs.length > 0 ? `Trainer · ${specs[0]}` : "Trainer";
       remarkExtra = specs.join(", ");
+
       effectiveBranchId = effectiveBranchId || trainer.branch_id;
       shouldRevokeInstead = trainer.is_active === false || !!(trainer as any).exit_date;
       revokeReason = (trainer as any).exit_type ? `Trainer offboarded: ${(trainer as any).exit_type}` : revokeReason;
