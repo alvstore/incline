@@ -97,27 +97,35 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
     const file = e.target.files?.[0];
     if (!file || !member?.id) return;
 
+    // Avatars bucket RLS requires the object path to start with the owning
+    // user's uid (`foldername(name)[1] = auth.uid()`). Without a linked login
+    // we cannot upload — surface a clear error instead of a 400 from storage.
+    if (!member.user_id) {
+      toast.error('This member has no login yet — provision a member login before uploading a photo.');
+      return;
+    }
+
     setIsUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const ownerKey = member.user_id || member.id;
-      const fileName = `${ownerKey}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileName = `avatar-${Date.now()}.jpg`;
+      const filePath = `${member.user_id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('member-photos')
-        .upload(filePath, file, { upsert: true });
+        .from('avatars')
+        .upload(filePath, file, { upsert: true, contentType: file.type || 'image/jpeg' });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('member-photos')
+        .from('avatars')
         .getPublicUrl(filePath);
 
-      setAvatarUrl(publicUrl);
+      // Cache-bust so <img> reloads immediately.
+      const displayUrl = `${publicUrl}?v=${Date.now()}`;
+      setAvatarUrl(displayUrl);
       toast.success('Avatar uploaded successfully');
     } catch (error: any) {
-      toast.error('Failed to upload avatar');
+      toast.error(error?.message || 'Failed to upload avatar');
       console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
