@@ -147,54 +147,44 @@ import {
 import { buildSystemPrompt } from "./ai-prompt.ts";
 import { loadDynamicMemory, type DynamicMemoryBundle } from "./ai-dynamic-memory.ts";
 
-// ─── Post-launch Pricing Matrix — SINGLE SOURCE OF TRUTH ───────────────────
-// v7.0.0 (post-launch): Incline is OPEN. Pricing may be shared with leads
-// (with a mandatory in-person tour CTA). Members are never pitched.
-// All plan prices are subject to 5% GST.
-export const PRICING_MATRIX = {
-  annual_base_founder:    { label: "Annual — Base Founder",    price: 25000, mrp: 28900, includes: "Gym + Steam (Ice Bath & Infrared Sauna NOT included)" },
-  annual_elite_founder:   { label: "Annual — Elite Founder",   price: 30000, mrp: 36900, includes: "Gym + Steam + 6× Ice Bath + 6× Infrared Sauna + 6× 3D BMI scans (usable anytime in the year)" },
-  monthly:                { label: "1 Month",                  price: 5000,  mrp: null,  includes: "Gym + Steam" },
-  quarterly:              { label: "3 Months",                 price: 15000, mrp: null,  includes: "Gym + Steam" },
-  half_yearly:            { label: "6 Months",                 price: 19990, mrp: null,  includes: "Gym + Steam" },
-} as const;
+// ─── PRICING BLACKOUT & VIP TOUR PROTOCOL — SINGLE SOURCE OF TRUTH ─────────
+// v8.0.0 (blackout): Ananya is strictly forbidden from quoting any prices,
+// fees, GST %, MRP, plan names, plan durations, session counts, or discounts.
+// Every pricing/plan/fee/cost/membership intent must pivot to a warm welcome
+// and a VIP tour or front-desk-call offer. Kept exported constants intact for
+// backward compatibility with downstream callers; all bodies now return the
+// canonical pivot copy.
+export const PRICING_MATRIX = {} as const;
 
-/** Mandatory CTA appended to every price share for non-members. */
+/** Mandatory VIP tour / front-desk pivot line. */
 export function tourCtaLine(firstName?: string | null): string {
   const fn = (firstName || "").trim();
   return fn
-    ? `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk, ${fn}. Which day works best for you? ✨`
-    : `For better pricing options and a detailed breakdown, I'd love to schedule a VIP gym tour for you with our front desk. Which day works best for you? ✨`;
+    ? `I'd love to schedule a VIP gym tour for you with our front desk, ${fn}, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`
+    : `I'd love to schedule a VIP gym tour for you with our front desk, or you can call our front desk directly for a detailed walkthrough. Which day works best for your visit? ✨`;
 }
 
-/** Concise English pricing reply (used by deterministic fallbacks). */
+/** Canonical English "Welcome & Pivot" reply. No prices, no plan names. */
 export function pricingReplyEN(firstName?: string | null): string {
   const fn = (firstName || "").trim();
-  const hi = fn ? `Sure, ${fn} — ` : "Sure — ";
+  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
   return (
-    `${hi}here are our current plans (all + 5% GST):\n` +
-    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
-    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
-    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
+    `${hi}Our memberships are tailored to your specific fitness goals and we discuss all options in person so we can match the right plan to you. ` +
     tourCtaLine(firstName)
   );
 }
 
-/** Concise Hinglish pricing reply. */
+/** Canonical Hinglish "Welcome & Pivot" reply. No prices, no plan names. */
 export function pricingReplyHI(firstName?: string | null): string {
   const fn = (firstName || "").trim();
-  const hi = fn ? `Ji ${fn}, ` : "Ji, ";
+  const hi = fn ? `Welcome to Incline, ${fn}! ✨ ` : "Welcome to Incline! ✨ ";
   return (
-    `${hi}humare current plans (sab + 5% GST):\n` +
-    `• Annual Base Founder — ₹25,000 (MRP ₹28,900): Gym + Steam\n` +
-    `• Annual Elite Founder — ₹30,000 (MRP ₹36,900): Gym + Steam + 6× Ice Bath + 6× Sauna + 6× 3D BMI scans\n` +
-    `• 1 Month — ₹5,000  |  3 Months — ₹15,000  |  6 Months — ₹19,990\n\n` +
-    tourCtaLine(firstName)
+    `${hi}Humari memberships aapke fitness goals ke hisaab se tailored hoti hain — best pricing aur options hum in-person discuss karte hain. ` +
+    `Aap ek VIP tour book kar lein ya front desk ko call karein. Kis din aana prefer karenge? ✨`
   );
 }
 
-/** Deprecated alias — kept for backward compatibility with old call sites.
- *  Post-launch, this returns the pricing reply + tour CTA (no embargo). */
+/** Deprecated alias — kept for backward compatibility with old call sites. */
 export function embargoPivotLine(firstName?: string | null): string {
   return pricingReplyEN(firstName);
 }
