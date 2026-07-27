@@ -490,7 +490,7 @@ Deno.serve(async (req) => {
       deptName = "Members";
       const { data: member, error } = await supabase
         .from("members")
-        .select("*, profiles:user_id(full_name, phone, avatar_url, email), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
+        .select("*, profiles:user_id(full_name, phone, avatar_url, email, gender, date_of_birth), leads:lead_id(full_name, phone, email, gender, date_of_birth, avatar_url)")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Member query error: ${error.message}`);
@@ -504,8 +504,9 @@ Deno.serve(async (req) => {
       phone = pick(profile?.phone, lead?.phone) || "";
       email = pick(profile?.email, lead?.email) || "";
       photoUrl = pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url) || "";
-      gender = normGender(lead?.gender);
-      birthday = fmtDob(lead?.date_of_birth);
+      gender = normGender(profile?.gender ?? lead?.gender);
+      birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth);
+
       effectiveBranchId = effectiveBranchId || member.branch_id;
 
       // Membership validity — pick newest membership regardless of status so
