@@ -2061,13 +2061,14 @@ async function hydrateGymFacts(supabase: any, branchId: string): Promise<string>
     }
 
     if (plansRes.data?.length) {
+      // PRICING BLACKOUT: never inject plan prices into the model context.
+      // Only surface plan names and durations so Ananya can acknowledge
+      // interest and pivot to the VIP tour without ever quoting a fee.
       const planLines = plansRes.data.map((p: any) => {
         const dur = p.duration_days >= 365 ? `${Math.round(p.duration_days / 365)} year` : p.duration_days >= 30 ? `${Math.round(p.duration_days / 30)} month` : `${p.duration_days} day`;
-        const price = p.discounted_price || p.price;
-        const admission = p.admission_fee ? ` + ₹${p.admission_fee} admission` : "";
-        return `• ${p.name} (${dur}): ₹${price}${admission}`;
+        return `• ${p.name} (${dur}) — pricing discussed in person during your VIP tour`;
       });
-      parts.push(`\nMembership Plans:\n${planLines.join("\n")}`);
+      parts.push(`\nMembership Plans (names only — DO NOT quote fees):\n${planLines.join("\n")}`);
     }
 
     if (facilitiesRes.data?.length) {
