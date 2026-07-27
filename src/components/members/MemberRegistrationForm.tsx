@@ -94,6 +94,14 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
   const [parq, setParq] = useState<Record<string, 'yes' | 'no'>>({});
   const [customTerms, setCustomTerms] = useState('');
   const [saving, setSaving] = useState(false);
+  const [existingSignature, setExistingSignature] = useState<{
+    waiver_pdf_path: string | null;
+    signature_path: string | null;
+    signed_at: string | null;
+    source: string | null;
+  } | null>(null);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Re-sync prefilled values when drawer opens or member changes
   useEffect(() => {
