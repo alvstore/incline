@@ -586,49 +586,104 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
 
           <Separator />
 
-          {/* Digital Signature */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          {/* Digital Signature — hidden when member already signed via /register */}
+          {existingSignature && !editMode ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <FileSignature className="h-4 w-4 text-primary" />
-                <Label className="font-semibold">Digital Signature</Label>
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <Label className="font-semibold text-emerald-800">
+                  Already signed{existingSignature.source === 'self_register' ? ' during self-registration' : ''}
+                </Label>
               </div>
-              <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs">
-                <Eraser className="h-3 w-3 mr-1" /> Clear
-              </Button>
-            </div>
-            <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl bg-muted/30 relative">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-[140px] cursor-crosshair touch-none"
-                onMouseDown={startDraw}
-                onMouseMove={draw}
-                onMouseUp={stopDraw}
-                onMouseLeave={stopDraw}
-                onTouchStart={startDraw}
-                onTouchMove={draw}
-                onTouchEnd={stopDraw}
-              />
-              {!hasSigned && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-muted-foreground/50 text-sm">Sign here ✍️</p>
-                </div>
+              {existingSignature.signed_at && (
+                <p className="text-xs text-emerald-700/80">
+                  Signed on {new Date(existingSignature.signed_at).toLocaleString('en-IN')}
+                </p>
               )}
+              {signatureUrl && (
+                <img
+                  src={signatureUrl}
+                  alt="Member signature"
+                  className="max-h-24 rounded border border-emerald-200 bg-white p-1"
+                />
+              )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {existingSignature.waiver_pdf_path && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const url = await signMemberDocument(existingSignature.waiver_pdf_path!, 300);
+                      if (url) window.open(url, '_blank', 'noopener');
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View signed waiver
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Re-sign
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Draw your signature above using mouse or touch. This will be saved digitally.
-            </p>
-          </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileSignature className="h-4 w-4 text-primary" />
+                  <Label className="font-semibold">Digital Signature</Label>
+                </div>
+                <Button variant="ghost" size="sm" onClick={clearSignature} className="text-xs">
+                  <Eraser className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              </div>
+              <div className="border-2 border-dashed border-muted-foreground/30 rounded-xl bg-muted/30 relative">
+                <canvas
+                  ref={canvasRef}
+                  className="w-full h-[140px] cursor-crosshair touch-none"
+                  onMouseDown={startDraw}
+                  onMouseMove={draw}
+                  onMouseUp={stopDraw}
+                  onMouseLeave={stopDraw}
+                  onTouchStart={startDraw}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDraw}
+                />
+                {!hasSigned && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-muted-foreground/50 text-sm">Sign here ✍️</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Draw your signature above using mouse or touch. This will be saved digitally.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2 pb-4">
             <Button variant="outline" className="flex-1" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-2" /> Print
             </Button>
-            <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned}>
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Digital Copy'}
-            </Button>
+            {existingSignature && !editMode ? (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={async () => {
+                  const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
+                  if (!path) return;
+                  const url = await signMemberDocument(path, 300);
+                  if (url) window.open(url, '_blank', 'noopener');
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" /> Download signed copy
+              </Button>
+            ) : (
+              <Button className="flex-1" onClick={handleSaveDigital} disabled={saving || !hasSigned}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? 'Saving...' : 'Save Digital Copy'}
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>
