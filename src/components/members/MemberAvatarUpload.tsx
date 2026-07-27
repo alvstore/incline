@@ -62,13 +62,36 @@ export function MemberAvatarUpload({
       // Compress image for device compatibility (max 640x640, under 200KB)
       const compressedFile = await compressImageFile(file);
 
-      // Public avatar (display) → kept in `avatars` bucket
-      const fileName = `${userId || Date.now()}-${Date.now()}.jpg`;
-      const filePath = `avatars/${fileName}`;
+      // Resolve owning user id — required for avatars bucket RLS
+      // (`auth.uid()::text = storage.foldername(name)[1]`). If the member row
+      // has no linked login yet, look it up. If still missing, tell the caller
+      // to provision a login instead of silently uploading to nowhere.
+      let ownerUserId = userId || null;
+      if (!ownerUserId && memberId) {
+        const { data: m } = await supabase
+          .from('members')
+          .select('user_id')
+          .eq('id', memberId)
+          .maybeSingle();
+        ownerUserId = (m?.user_id as string | null) || null;
+      }
+
+      if (!ownerUserId) {
+        toast.error('This member has no login yet — provision a member login before uploading a photo.');
+        setPreviewUrl(null);
+        setUploading(false);
+        return;
+      }
+
+      // Public avatar (display) → `avatars` bucket. Object name MUST start
+      // with the user's uid so the "Users can upload their own avatar" RLS
+      // policy passes (`foldername(name)[1] = auth.uid()`).
+      const fileName = `avatar-${Date.now()}.jpg`;
+      const filePath = `${ownerUserId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, compressedFile, { upsert: true });
+        .upload(filePath, compressedFile, { upsert: true, contentType: 'image/jpeg' });
 
       if (uploadError) throw uploadError;
 
@@ -76,20 +99,20 @@ export function MemberAvatarUpload({
         .from('avatars')
         .getPublicUrl(filePath);
 
-      onAvatarChange(publicUrl);
+      // Cache-bust so <img> reloads immediately instead of holding the prior URL.
+      const displayUrl = `${publicUrl}?v=${Date.now()}`;
+      onAvatarChange(displayUrl);
 
       // Persist avatar_url directly to profile so it becomes immediately visible
       // everywhere (AppHeader, MemberProfile, member lists) without relying on
-      // the parent drawer to save. Idempotent, service-role not required.
-      if (userId) {
-        try {
-          await supabase
-            .from('profiles')
-            .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-            .eq('id', userId);
-        } catch (err) {
-          console.warn('profiles.avatar_url update failed:', err);
-        }
+      // the parent drawer to save.
+      try {
+        await supabase
+          .from('profiles')
+          .update({ avatar_url: displayUrl, updated_at: new Date().toISOString() })
+          .eq('id', ownerUserId);
+      } catch (err) {
+        console.warn('profiles.avatar_url update failed:', err);
       }
 
       toast.success('Avatar uploaded successfully');
@@ -104,14 +127,11 @@ export function MemberAvatarUpload({
             memberId,
             compressedFile,
           );
-          // Persist both the storage path AND a public URL mirror on the
-          // members row. The `_url` column feeds the self-heal trigger that
-          // mirrors into profiles.avatar_url as a safety net for legacy paths.
           await supabase
             .from('members')
             .update({
               biometric_photo_path: biometricPath,
-              biometric_photo_url: publicUrl,
+              biometric_photo_url: displayUrl,
             })
             .eq('id', memberId);
           await queueMemberSync(memberId, signedUrl, name);
@@ -119,16 +139,15 @@ export function MemberAvatarUpload({
         } catch (err) {
           console.warn('Biometric upload/queue failed:', err);
         }
-      } else if (userId) {
-        // No memberId yet (e.g. legacy callers) — keep avatar→biometric URL fallback.
+      } else {
         try {
-          await syncAvatarToBiometric(userId, publicUrl);
+          await syncAvatarToBiometric(ownerUserId, displayUrl);
         } catch (err) {
           console.warn('Avatar-to-biometric sync failed:', err);
         }
       }
     } catch (error: any) {
-      toast.error('Failed to upload avatar');
+      toast.error(error?.message || 'Failed to upload avatar');
       console.error('Upload error:', error);
       setPreviewUrl(null);
     } finally {
