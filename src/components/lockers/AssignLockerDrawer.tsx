@@ -145,27 +145,20 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
 
   const handleAssignLocker = async () => {
     if (!selectedMember || !locker || !branchId) return;
-    
+
     setIsAssigning(true);
     try {
       const startDate = new Date().toISOString().split('T')[0];
       let endDate: string;
-      
+
       if (syncWithMembership && membershipEndDate) {
         endDate = membershipEndDate;
       } else {
         endDate = new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       }
-      
-      const perMonthFee = memberHasFreeLocker ? 0 : (isChargeable ? rentalFee : 0);
-      
-      // Calculate months for billing
-      let billingMonths = assignMonths;
-      if (syncWithMembership && membershipEndDate) {
-        const diffDays = Math.ceil((new Date(membershipEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        billingMonths = Math.max(1, Math.ceil(diffDays / 30));
-      }
-      const feeAmount = perMonthFee * billingMonths;
+
+      // Flat fee for the whole assignment period (no monthly multiplication).
+      const feeAmount = memberHasFreeLocker ? 0 : (isChargeable ? rentalFee : 0);
 
       const result = await lockerService.assignLocker({
         locker_id: locker.id,
@@ -173,7 +166,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
         start_date: startDate,
         end_date: endDate,
         fee_amount: feeAmount,
-        billing_months: billingMonths,
+        billing_months: 1,
         chargeable: feeAmount > 0,
         assign_source: memberHasFreeLocker ? 'plan' : 'addon',
       });
@@ -205,17 +198,17 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     setMemberHasFreeLocker(false);
     setIsChargeable(false);
     setRentalFee(500);
-    setSyncWithMembership(false);
+    setSyncWithMembership(true);
     setMembershipEndDate(null);
   };
 
   if (!locker) return null;
 
   const effectivelyFree = memberHasFreeLocker || !isChargeable;
-  const billingMonths = syncWithMembership && membershipEndDate 
-    ? Math.max(1, Math.ceil((new Date(membershipEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30)))
-    : assignMonths;
-  const totalAmount = effectivelyFree ? 0 : rentalFee * billingMonths;
+  const effectiveEndDate = syncWithMembership && membershipEndDate
+    ? membershipEndDate
+    : new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const totalAmount = effectivelyFree ? 0 : rentalFee;
 
   return (
     <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
