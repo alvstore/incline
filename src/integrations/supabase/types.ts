@@ -15006,6 +15006,10 @@ export type Database = {
         | { Args: { p_user_id: string }; Returns: Json }
         | { Args: { p_notes?: string; p_user_id: string }; Returns: string }
       touch_presence: { Args: never; Returns: undefined }
+      trainer_can_view_member: {
+        Args: { _member_id: string; _user_id: string }
+        Returns: boolean
+      }
       transition_member_lifecycle: {
         Args: { p_member_id: string; p_reason?: string; p_to_state: string }
         Returns: Json
