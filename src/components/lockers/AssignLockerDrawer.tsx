@@ -325,8 +325,8 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           {!memberHasFreeLocker && (
             <div className="flex flex-row items-center justify-between rounded-lg border p-4">
               <div className="space-y-0.5">
-                <Label className="text-base">Charge Monthly Rental?</Label>
-                <p className="text-sm text-muted-foreground">Enable rental fee for this assignment</p>
+                <Label className="text-base">Charge Rental Fee?</Label>
+                <p className="text-sm text-muted-foreground">Charged once for the entire assignment period</p>
               </div>
               <Switch checked={isChargeable} onCheckedChange={setIsChargeable} />
             </div>
@@ -335,13 +335,18 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           {/* Rental Fee Input */}
           {isChargeable && !memberHasFreeLocker && (
             <div className="space-y-2">
-              <Label>Rental Fee (₹ per month)</Label>
+              <Label>Rental Fee (₹)</Label>
               <Input
                 type="number"
                 value={rentalFee}
                 onChange={(e) => setRentalFee(Number(e.target.value))}
                 min={0}
               />
+              <p className="text-xs text-muted-foreground">
+                Flat fee covering {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {' – '}
+                {new Date(effectiveEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
             </div>
           )}
 
@@ -361,7 +366,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
           ) : (
             <div className="p-4 rounded-lg bg-muted">
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total ({billingMonths} month{billingMonths > 1 ? 's' : ''}):</span>
+                <span className="text-muted-foreground">Total:</span>
                 <span className="text-xl font-bold">₹{totalAmount.toLocaleString()}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -371,6 +376,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
             </div>
           )}
         </div>
+
 
         <SheetFooter className="pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
