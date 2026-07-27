@@ -134,6 +134,15 @@ export async function recordPayment(payment: {
     throw new Error(result?.error || 'Payment recording failed');
   }
 
+  // Fire-and-forget: when the payment closes the invoice, auto-send the branded
+  // PDF receipt to the member over WhatsApp + Email via the dispatcher. Never
+  // blocks the caller and never throws — dispatcher owns retry + preferences.
+  if (result?.new_status === 'paid') {
+    import('@/lib/invoices/sendInvoicePdf')
+      .then((m) => m.sendInvoicePdfToMember(payment.invoiceId, { paidOnly: true }))
+      .catch((e) => console.warn('[recordPayment] auto-send receipt failed', e));
+  }
+
   return result;
 }
 
