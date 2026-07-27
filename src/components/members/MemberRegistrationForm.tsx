@@ -310,13 +310,14 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
           const { data: m } = await supabase.from('members').select('user_id').eq('id', data.memberId).maybeSingle();
           if (m?.user_id) await (supabase.from('profiles') as any).update(profileUpdates).eq('user_id', m.user_id);
         }
-        // Persist PAR-Q answers (insert a manual snapshot row)
+        // Persist PAR-Q answers + custom terms (staff-authored addendum).
         try {
           await supabase.from('member_onboarding_signatures').insert({
             member_id: data.memberId,
             signature_path: fileName,
             waiver_pdf_path: fileName,
             par_q: parqMap,
+            custom_terms: customTerms || null,
             consents: { waiver: true, source: 'staff_registration_form' },
             signed_at: new Date().toISOString(),
           });
