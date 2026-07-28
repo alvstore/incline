@@ -519,13 +519,13 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             <p className="text-xl font-bold text-success">{stats.syncedMembers + stats.syncedStaff}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl">
+        <Card className="rounded-xl" title="Personnel with a photo on file but not yet registered on the MIPS server.">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-xl font-bold text-warning">{personnel.length - stats.syncedMembers - stats.syncedStaff}</p>
+            <p className="text-xl font-bold text-warning">{stats.pendingSyncable}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl">
+        <Card className="rounded-xl" title="Personnel with no photo (biometric path, biometric URL, or profile avatar). Upload a photo before syncing.">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">No Photo</p>
             <p className="text-xl font-bold text-warning">{stats.noPhoto}</p>
