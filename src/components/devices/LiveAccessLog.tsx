@@ -147,15 +147,19 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
   // Direct poll of the MIPS server's own pass records. This makes the feed work
   // even when the webhook to Supabase is misconfigured, and lets ops see the
   // hardware truth alongside our recorded events.
+  // Poll MIPS regardless of branch selection — mips-proxy falls back to the
+  // default active connection when branch_id is undefined, so "All Branches"
+  // (Dashboard widget or unscoped Device Command Center) still shows scans.
   const { data: mipsEvents = [], isError: mipsError } = useQuery({
     queryKey: ["mips-pass-records", branchId, limit],
     queryFn: async () => {
-      const records = await fetchRecentMIPSPassRecords(branchId, limit);
+      // Request a wider window when unscoped so dedupe still yields `limit` rows.
+      const fetchLimit = branchId ? limit : limit * 2;
+      const records = await fetchRecentMIPSPassRecords(branchId, fetchLimit);
       return records.map(mipsRecordToEntry);
     },
-    enabled: Boolean(branchId),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    refetchInterval: 10_000,
+    staleTime: 8_000,
     retry: 1,
   });
 
