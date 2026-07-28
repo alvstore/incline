@@ -1,33 +1,42 @@
-# Live Access Feed — Fix Missing Turnstile Records
+## Live Access Feed Recovery Plan
 
-## What we confirmed
-- `access_logs` table is **empty** right now — the MIPS webhook to `mips-webhook-receiver` is not landing (device is still configured with the old URL / missing `?token=`).
-- The Live Feed's fallback path (direct poll of the MIPS server's `/through/record/list`) is wired in `LiveAccessLog.tsx`, but it's disabled when no single branch is selected:
-  ```ts
-  enabled: Boolean(branchId), // line 156
-  ```
-  On the Dashboard widget (`<LazyLiveAccessLog />`, no props) and on Device Command Center with "All Branches", `branchId` is empty, so the poll never runs and the feed appears empty even though Gate 1 / Gate 2 recorded Tejas & Aryan on the MIPS server.
-- Dedupe key includes `message`, so once the poll runs, both webhook and MIPS rows survive correctly.
+### Confirmed current state
+- `access_logs` is empty: `0` rows, so the CRM has no persisted turnstile events to show.
+- MIPS connection exists and is active for the main branch.
+- Today’s member attendance table has rows, but the live access log table has none, which means attendance and access-feed persistence are currently split.
+- `mips-proxy` has recently called `/through/record/list`, but a direct unauthenticated curl returns `401`, so testing/import needs to run through authenticated app/function context.
+- `mips-webhook-receiver` has no recent logs, so the hardware webhook URL is not currently landing in the receiver.
 
-## Root cause
-The direct MIPS-server poll is treated as branch-scoped, but the MIPS server itself is a single tenant with one active connection (`mips_connections` has one row for the main branch). So "no branch selected" should still poll the default MIPS connection, not skip.
+### Implementation
+1. **Create a backend reconciliation function for MIPS records**
+   - Add/update an edge function such as `reconcile-mips-pass-records`.
+   - It will authenticate to the configured MIPS server, fetch `/through/record/list`, normalize each pass record, resolve the person by MIPS SN / person ID / member or employee code, and insert missing rows into `access_logs`.
+   - It will also call the existing member/staff attendance RPC logic where safe, so access events automatically become attendance records.
+   - Use idempotent dedupe so repeated polling never creates duplicates.
 
-## Fix (frontend-only, no schema changes)
+2. **Make Live Access Feed database-backed first**
+   - Update `LiveAccessLog.tsx` so refresh triggers the reconciliation function before reloading `access_logs`.
+   - Keep direct MIPS polling as a visible fallback, but persist fetched MIPS records into `access_logs` instead of only displaying volatile client-side rows.
+   - Replace the misleading `LiveMIPS · 0` empty state with an actionable status: last import time, imported count, skipped count, and error message when MIPS cannot be reached.
 
-### 1. `src/components/devices/LiveAccessLog.tsx`
-- Remove `enabled: Boolean(branchId)` from the `mips-pass-records` query so polling runs whether or not a branch is selected. `fetchRecentMIPSPassRecords` already tolerates `undefined` branchId (mips-proxy falls back to the default active connection).
-- Bump `refetchInterval` from 15s → 10s for the live feed (still light — one paged call).
-- When `branchId` is undefined, request `limit * 2` from MIPS so the merged/sliced view still yields `limit` rows after dedupe.
-- Surface poll failures inline: if `mipsError` and `initialEvents` is empty, render a small amber banner "MIPS server unreachable — showing webhook events only" (already have `mipsError`, just need the UI hook).
-- Add a manual "Refresh" button in the card header that invalidates both queries — helps ops verify a scan appeared without waiting 10s.
+3. **Add automatic background sync**
+   - Add a scheduled automation/cron path to run the reconciliation every 1–5 minutes.
+   - This ensures turnstile scans are captured even when the dashboard page is closed.
 
-### 2. `src/pages/Dashboard.tsx`
-- Pass the currently selected branch (or `undefined`) to `<LazyLiveAccessLog />` so branch scoping stays consistent with the rest of the dashboard. Not strictly required after fix #1, but keeps the widget's counts aligned with the branch selector.
+4. **Repair hardware webhook path separately, without relying on it**
+   - Keep `mips-webhook-receiver` as the instant path when the device callback works.
+   - Use the MIPS record reconciliation as the mandatory fallback/source of truth so attendance is still recorded even if the Recognition Record Upload URL is misconfigured or blocked.
 
-## Out of scope (already covered previously, only mention if user asks)
-- Reconfiguring the physical device to point Recognition URL at `mips-webhook-receiver?token=…` — that's the persistent fix so `access_logs` starts filling again. The plan above ensures the UI works **now** even while that reconfiguration is pending.
+5. **Improve observability**
+   - Log import attempts into existing diagnostics/error logging.
+   - Show the latest imported MIPS record timestamp and the latest database access log timestamp in the Device Command Center.
 
-## Verification
-- Open Device Command Center → Live Feed with "All Branches" selected → within ~10s Tejas Latta (Gate 2) and Aryan Fanat (Gate 1) appear with the "MIPS" source chip.
-- Switch to a specific branch → same rows still appear.
-- Trigger a new scan on the turnstile → new row appears within one poll cycle.
+### Verification
+- Curl the backend reconciliation function and confirm it fetches records from MIPS.
+- Confirm recent MIPS pass records are inserted into `access_logs`.
+- Confirm the Live Access Feed changes from `MIPS · 0` to the latest turnstile rows.
+- Confirm repeat runs do not duplicate rows.
+- Confirm attendance tables are updated for recognized members/staff.
+
+### Scope guard
+- I will not change unrelated MIPS personnel sync, RCS, payments, or member profile flows in this fix.
