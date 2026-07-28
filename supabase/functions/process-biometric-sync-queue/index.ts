@@ -14,8 +14,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 10;
 const PER_RUN_CAP = 50;
+// Exponential backoff (minutes) applied against queued_at + processed_at.
+// retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
+const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -25,17 +28,29 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
   try {
+    // Pick up pending rows AND failed rows that are ready for another attempt
+    // (retry_count still below MAX_RETRIES and backoff window elapsed).
     const { data: rows, error } = await supabase
       .from("biometric_sync_queue")
-      .select("id, member_id, staff_id, device_id, sync_type, retry_count")
-      .eq("status", "pending")
+      .select("id, member_id, staff_id, device_id, sync_type, retry_count, queued_at, processed_at, status")
+      .in("status", ["pending", "failed"])
       .lt("retry_count", MAX_RETRIES)
       .order("queued_at", { ascending: true })
       .limit(PER_RUN_CAP);
     if (error) throw error;
 
+    const now = Date.now();
+    const dueRows = (rows || []).filter((r: any) => {
+      if (r.status === "pending" && (r.retry_count || 0) === 0) return true;
+      const waitMin = BACKOFF_MIN[Math.min(r.retry_count || 0, BACKOFF_MIN.length - 1)];
+      const anchorTs = new Date(r.processed_at || r.queued_at).getTime();
+      return anchorTs + waitMin * 60_000 <= now;
+    });
+
+    console.log(`[process-biometric-sync-queue] picked=${rows?.length || 0} due=${dueRows.length}`);
+
     let ok = 0, failed = 0, skipped = 0;
-    for (const row of rows || []) {
+    for (const row of dueRows) {
       const personId = (row as any).member_id || (row as any).staff_id;
       if (!personId) {
         await supabase
@@ -52,13 +67,25 @@ Deno.serve(async (req) => {
       const personType = (row as any).member_id ? "member" : "employee";
 
       try {
-        const { data, error: invErr } = await supabase.functions.invoke("sync-to-mips", {
-          body: {
+        // Call sync-to-mips as service_role — the queue drainer has no user JWT,
+        // so the default anon bearer would be rejected by sync-to-mips' auth gate.
+        const invokeRes = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SERVICE_KEY}`,
+            "apikey": SERVICE_KEY,
+          },
+          body: JSON.stringify({
             person_type: personType,
             person_id: personId,
             server_only: true,
-          },
+          }),
         });
+        const invText = await invokeRes.text();
+        let data: any = null;
+        try { data = JSON.parse(invText); } catch { data = { raw: invText }; }
+        const invErr = invokeRes.ok ? null : { message: `HTTP ${invokeRes.status}: ${invText.slice(0, 200)}` };
         const success = !invErr && (data as any)?.success !== false;
         if (success) {
           await supabase
@@ -97,7 +124,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed: rows?.length || 0, ok, failed, skipped }),
+      JSON.stringify({ success: true, processed: dueRows.length, picked: rows?.length || 0, ok, failed, skipped }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e: any) {
