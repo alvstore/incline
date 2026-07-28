@@ -8,9 +8,34 @@ const corsHeaders = {
 const PERMANENT_END = "2099-12-31 23:59:59";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
+const BIOMETRIC_BUCKET = "member-photos";
+const AVATAR_PATH_PREFIX = "avatars/";
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+
+/**
+ * Prefer the private biometric bucket path (real face capture) over any
+ * `_url` column, which frequently points at the low-res avatar bucket and
+ * fails face-recognition on device.
+ */
+async function resolveBiometricPhoto(
+  supabase: any,
+  path: string | null | undefined,
+  fallbackUrl: string | null | undefined,
+): Promise<{ url: string; source: "biometric" | "avatar" | "" }> {
+  if (path && typeof path === "string" && path.trim().length > 0) {
+    const { data } = await supabase.storage
+      .from(BIOMETRIC_BUCKET)
+      .createSignedUrl(path, 60 * 10);
+    if (data?.signedUrl) return { url: data.signedUrl, source: "biometric" };
+  }
+  if (fallbackUrl && String(fallbackUrl).trim().length > 0) {
+    const isAvatar = String(fallbackUrl).includes(AVATAR_PATH_PREFIX);
+    return { url: String(fallbackUrl), source: isAvatar ? "avatar" : "biometric" };
+  }
+  return { url: "", source: "" };
+}
 
 function getBaseUrl(overrideUrl?: string): string {
   return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
