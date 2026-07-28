@@ -47,6 +47,35 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetPerson, setUploadTargetPerson] = useState<SyncPerson | null>(null);
   const [personnelTab, setPersonnelTab] = useState("members");
+  const [healing, setHealing] = useState(false);
+
+  const { data: queueBacklog = 0 } = useQuery({
+    queryKey: ["biometric-queue-backlog", branchId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("biometric_sync_queue")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const handleHealQueue = async () => {
+    setHealing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("process-biometric-sync-queue", {});
+      if (error) throw error;
+      const r = data as any;
+      toast.success(`Processed ${r?.processed ?? 0} — ${r?.ok ?? 0} ok · ${r?.failed ?? 0} failed`);
+      queryClient.invalidateQueries({ queryKey: ["biometric-queue-backlog"] });
+      queryClient.invalidateQueries({ queryKey: ["personnel-sync"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Heal failed");
+    } finally {
+      setHealing(false);
+    }
+  };
 
   const { data: personnel = [], isLoading } = useQuery({
     queryKey: ["personnel-sync", branchId],
@@ -494,6 +523,11 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">No Photo</p>
             <p className="text-xl font-bold text-warning">{stats.noPhoto}</p>
+            {queueBacklog > 0 && (
+              <p className="text-[10px] text-warning mt-0.5">
+                Queue backlog: {queueBacklog}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -517,6 +551,16 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         </Button>
         <Button variant="outline" size="sm" onClick={() => bulkSyncMutation.mutate(personnel)} disabled={bulkSyncMutation.isPending}>
           <RefreshCw className="h-4 w-4 mr-1.5" /> Re-sync All
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleHealQueue}
+          disabled={healing}
+          title="Drain the biometric_sync_queue now — retries every stuck photo_upload / add row"
+        >
+          <RotateCw className={`h-4 w-4 mr-1.5 ${healing ? "animate-spin" : ""}`} />
+          {healing ? "Healing..." : `Heal Queue${queueBacklog > 0 ? ` (${queueBacklog})` : ""}`}
         </Button>
         <label
           className="ml-auto flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"

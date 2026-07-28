@@ -159,8 +159,15 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
 
   const mipsOnline = mipsDevices.filter((d) => (d.onlineFlag === 1 || d.status === 1)).length;
   const mipsTotal = mipsDevices.length;
-  const mipsFaces = mipsDevices.reduce((sum, d) => sum + (d.faceCount || 0), 0);
-  const mipsPersons = mipsDevices.reduce((sum, d) => sum + (d.personCount || 0), 0);
+  // A person exists once on the MIPS server regardless of how many devices mirror it.
+  // Summing per-device counts double-counts every shared enrolment across terminals —
+  // use the MAX so the dashboard shows unique persons/faces, not the fleet-wide sum.
+  const mipsFaces = mipsDevices.reduce((max, d) => Math.max(max, d.faceCount || 0), 0);
+  const mipsPersons = mipsDevices.reduce((max, d) => Math.max(max, d.personCount || 0), 0);
+  const mipsFacesTotalPerDevice = mipsDevices.reduce((sum, d) => sum + (d.faceCount || 0), 0);
+  const mipsPersonsTotalPerDevice = mipsDevices.reduce((sum, d) => sum + (d.personCount || 0), 0);
+  // Drift = at least one device is missing a person the leader has.
+  const mipsDrift = mipsTotal > 1 && (mipsPersons * mipsTotal !== mipsPersonsTotalPerDevice);
 
   return (
     <div className="space-y-6">
@@ -297,12 +304,17 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
               <div>
                 <p className="text-xs text-muted-foreground">Faces Enrolled</p>
                 <p className="text-2xl font-bold">{mipsFaces}</p>
+                {mipsTotal > 1 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    on {mipsDevices.filter((d) => (d.faceCount || 0) >= mipsFaces).length}/{mipsTotal} devices
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
+        <Card className={`rounded-2xl shadow-lg shadow-muted/20 ${mipsDrift ? "border-warning/40" : ""}`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-full bg-warning/10">
@@ -311,6 +323,12 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
               <div>
                 <p className="text-xs text-muted-foreground">Persons Registered</p>
                 <p className="text-2xl font-bold">{mipsPersons}</p>
+                {mipsTotal > 1 && (
+                  <p className={`text-[10px] ${mipsDrift ? "text-warning" : "text-muted-foreground"}`}>
+                    on {mipsDevices.filter((d) => (d.personCount || 0) >= mipsPersons).length}/{mipsTotal} devices
+                    {mipsDrift ? " · drift" : ""}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

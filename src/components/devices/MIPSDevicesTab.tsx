@@ -125,7 +125,7 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
           </div>
           <div className="rounded-lg bg-muted/50 p-2 text-center">
             <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
-              <Globe className="h-2.5 w-2.5" /> Public IP
+              <Globe className="h-2.5 w-2.5" /> {publicIp ? "Public IP" : "Device IP"}
             </p>
             <p className="text-[10px] font-mono font-medium truncate">{publicIp || device.ip || "—"}</p>
           </div>

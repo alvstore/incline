@@ -8,9 +8,34 @@ const corsHeaders = {
 const PERMANENT_END = "2099-12-31 23:59:59";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
+const BIOMETRIC_BUCKET = "member-photos";
+const AVATAR_PATH_PREFIX = "avatars/";
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+
+/**
+ * Prefer the private biometric bucket path (real face capture) over any
+ * `_url` column, which frequently points at the low-res avatar bucket and
+ * fails face-recognition on device.
+ */
+async function resolveBiometricPhoto(
+  supabase: any,
+  path: string | null | undefined,
+  fallbackUrl: string | null | undefined,
+): Promise<{ url: string; source: "biometric" | "avatar" | "" }> {
+  if (path && typeof path === "string" && path.trim().length > 0) {
+    const { data } = await supabase.storage
+      .from(BIOMETRIC_BUCKET)
+      .createSignedUrl(path, 60 * 10);
+    if (data?.signedUrl) return { url: data.signedUrl, source: "biometric" };
+  }
+  if (fallbackUrl && String(fallbackUrl).trim().length > 0) {
+    const isAvatar = String(fallbackUrl).includes(AVATAR_PATH_PREFIX);
+    return { url: String(fallbackUrl), source: isAvatar ? "avatar" : "biometric" };
+  }
+  return { url: "", source: "" };
+}
 
 function getBaseUrl(overrideUrl?: string): string {
   return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
@@ -503,7 +528,12 @@ Deno.serve(async (req) => {
       personNo = member.member_code || person_id.substring(0, 8);
       phone = pick(profile?.phone, lead?.phone) || "";
       email = pick(profile?.email, lead?.email) || "";
-      photoUrl = pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url) || "";
+      const resolved = await resolveBiometricPhoto(
+        supabase,
+        (member as any).biometric_photo_path,
+        pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url),
+      );
+      photoUrl = resolved.url;
       gender = normGender(profile?.gender ?? lead?.gender);
       birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth);
 
@@ -554,7 +584,12 @@ Deno.serve(async (req) => {
       personNo = emp.employee_code || person_id.substring(0, 8);
       phone = pick(profile?.phone, (emp as any).personal_phone, (emp as any).phone) || "";
       email = pick(profile?.email, (emp as any).personal_email, (emp as any).email) || "";
-      photoUrl = pick(emp.biometric_photo_url, profile?.avatar_url) || "";
+      const resolved = await resolveBiometricPhoto(
+        supabase,
+        (emp as any).biometric_photo_path,
+        pick(emp.biometric_photo_url, profile?.avatar_url),
+      );
+      photoUrl = resolved.url;
       gender = normGender((emp as any).gender ?? profile?.gender);
       birthday = fmtDob((emp as any).date_of_birth ?? profile?.date_of_birth);
 
@@ -569,7 +604,7 @@ Deno.serve(async (req) => {
       deptId = 102;
       const { data: trainer, error } = await supabase
         .from("trainers")
-        .select("id, branch_id, biometric_photo_url, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type, specializations")
+        .select("id, branch_id, biometric_photo_url, biometric_photo_path, is_active, user_id, mips_sync_status, mips_person_id, exit_date, exit_type, specializations")
         .eq("id", person_id)
         .maybeSingle();
       if (error) throw new Error(`Trainer query error: ${error.message}`);
@@ -589,7 +624,12 @@ Deno.serve(async (req) => {
       name = profile?.full_name || "Unknown";
       phone = profile?.phone || "";
       email = profile?.email || "";
-      photoUrl = (trainer as any).biometric_photo_url || profile?.avatar_url || "";
+      const resolvedTrainer = await resolveBiometricPhoto(
+        supabase,
+        (trainer as any).biometric_photo_path,
+        (trainer as any).biometric_photo_url || profile?.avatar_url,
+      );
+      photoUrl = resolvedTrainer.url;
       gender = normGender(profile?.gender);
       birthday = fmtDob(profile?.date_of_birth);
       const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
