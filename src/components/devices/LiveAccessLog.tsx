@@ -426,7 +426,7 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground gap-1"
-                                onClick={() => checkOutMutation.mutate(event.member_id!)}
+                                onClick={() => event.member_id ? checkOutMutation.mutate(event.member_id) : undefined}
                                 disabled={checkOutMutation.isPending}
                               >
                                 <LogOut className="h-3 w-3" />
@@ -438,7 +438,7 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground gap-1"
-                                onClick={() => staffCheckOutMutation.mutate(event.profile_id!)}
+                                onClick={() => event.profile_id ? staffCheckOutMutation.mutate(event.profile_id) : undefined}
                                 disabled={staffCheckOutMutation.isPending}
                               >
                                 <LogOut className="h-3 w-3" />
