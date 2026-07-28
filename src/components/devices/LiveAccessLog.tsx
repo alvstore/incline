@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, User, Shield, AlertTriangle, RefreshCw, Eye, DoorOpen, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, differenceInDays } from "date-fns";
-import { remoteOpenDoorByBranch, fetchRecentMIPSPassRecords, type MIPSPassRecord } from "@/services/mipsService";
+import { remoteOpenDoorByBranch } from "@/services/mipsService";
 import { toast } from "sonner";
 import {
   Collapsible,
@@ -47,30 +47,16 @@ interface LiveAccessLogProps {
   limit?: number;
 }
 
-/** Map a raw MIPS pass record → AccessLogEntry shape used by the timeline. */
-function mipsRecordToEntry(r: MIPSPassRecord): AccessLogEntry {
-  const pt = String(r.passPersonType || '').toLowerCase();
-  const result =
-    pt.includes('member') ? 'member'
-    : pt.includes('staff') || pt.includes('employee') || pt.includes('trainer') ? 'staff'
-    : pt.includes('stranger') || pt.includes('unknown') ? 'stranger'
-    : 'accepted';
-  const iso = r.createTime ? new Date(r.createTime.replace(' ', 'T')).toISOString() : new Date().toISOString();
-  return {
-    id: `mips:${r.id}`,
-    device_sn: r.deviceName || '',
-    event_type: 'face_scan',
-    result,
-    message: r.personName ? `${r.personName}${r.personNo ? ` · ${r.personNo}` : ''}` : (r.personNo || 'Face scan'),
-    member_id: null,
-    profile_id: null,
-    branch_id: null,
-    payload: r as unknown as Record<string, unknown>,
-    captured_at: iso,
-    created_at: iso,
-    source: 'mips',
-  };
-}
+type ReconcileResult = {
+  success: boolean;
+  fetched: number;
+  imported: number;
+  skipped: number;
+  unmatched: number;
+  attendance_updated: number;
+  latest_record_at: string | null;
+  error?: string;
+};
 
 const resultConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
   member: { color: "bg-success", icon: <User className="h-3 w-3" />, label: "Member" },
@@ -127,6 +113,39 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
   const [liveEvents, setLiveEvents] = useState<AccessLogEntry[]>([]);
   const [expandedPayload, setExpandedPayload] = useState<string | null>(null);
   const [openingDoor, setOpeningDoor] = useState(false);
+  const [lastReconcile, setLastReconcile] = useState<ReconcileResult | null>(null);
+
+  const reconcileMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke<ReconcileResult>("reconcile-mips-pass-records", {
+        body: {
+          branch_id: branchId,
+          limit: Math.max(limit * 2, 50),
+        },
+      });
+      if (error) throw error;
+      if (!data) throw new Error("MIPS reconciliation returned no response");
+      if (!data.success && data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      setLastReconcile(data);
+      queryClient.invalidateQueries({ queryKey: ["access-logs-live"] });
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "MIPS reconciliation failed";
+      setLastReconcile((current) => current ?? {
+        success: false,
+        fetched: 0,
+        imported: 0,
+        skipped: 0,
+        unmatched: 0,
+        attendance_updated: 0,
+        latest_record_at: null,
+        error: message,
+      });
+    },
+  });
 
   const { data: initialEvents = [], isLoading } = useQuery({
     queryKey: ["access-logs-live", branchId, limit],
@@ -140,46 +159,28 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
       if (branchId) query = query.eq("branch_id", branchId);
       const { data, error } = await query;
       if (error) throw error;
-      return ((data || []) as unknown as AccessLogEntry[]).map((e) => ({ ...e, source: 'webhook' as const }));
+      return ((data || []) as unknown as AccessLogEntry[]).map((e) => ({
+        ...e,
+        source: e.payload?.source === "mips_record_reconcile" ? 'mips' as const : 'webhook' as const,
+      }));
     },
-  });
-
-  // Direct poll of the MIPS server's own pass records. This makes the feed work
-  // even when the webhook to Supabase is misconfigured, and lets ops see the
-  // hardware truth alongside our recorded events.
-  // Poll MIPS regardless of branch selection — mips-proxy falls back to the
-  // default active connection when branch_id is undefined, so "All Branches"
-  // (Dashboard widget or unscoped Device Command Center) still shows scans.
-  const { data: mipsEvents = [], isError: mipsError } = useQuery({
-    queryKey: ["mips-pass-records", branchId, limit],
-    queryFn: async () => {
-      // Request a wider window when unscoped so dedupe still yields `limit` rows.
-      const fetchLimit = branchId ? limit : limit * 2;
-      const records = await fetchRecentMIPSPassRecords(branchId, fetchLimit);
-      return records.map(mipsRecordToEntry);
-    },
-    refetchInterval: 10_000,
-    staleTime: 8_000,
-    retry: 1,
   });
 
   useEffect(() => {
-    // Merge webhook + MIPS-server rows; dedupe by (device_sn + minute-truncated
-    // timestamp), preferring the webhook row when both exist because it carries
-    // resolved member metadata for the timeline.
-    const bucket = new Map<string, AccessLogEntry>();
-    const key = (e: AccessLogEntry) => {
-      const t = e.captured_at || e.created_at;
-      const minute = t ? new Date(t).toISOString().slice(0, 16) : '';
-      return `${e.device_sn || ''}|${minute}|${e.result || ''}|${e.message || ''}`;
-    };
-    for (const e of initialEvents) bucket.set(key(e), e);
-    for (const e of mipsEvents) if (!bucket.has(key(e))) bucket.set(key(e), e);
-    const merged = Array.from(bucket.values())
+    const merged = [...initialEvents]
       .sort((a, b) => new Date(b.captured_at || b.created_at).getTime() - new Date(a.captured_at || a.created_at).getTime())
       .slice(0, limit);
     setLiveEvents(merged);
-  }, [initialEvents, mipsEvents, limit]);
+  }, [initialEvents, limit]);
+
+  useEffect(() => {
+    reconcileMutation.mutate();
+    const interval = window.setInterval(() => {
+      if (!reconcileMutation.isPending) reconcileMutation.mutate();
+    }, 15_000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, limit]);
 
   const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
@@ -208,6 +209,12 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
 
 
   const dedupedEvents = useMemo(() => deduplicateEvents(liveEvents), [liveEvents]);
+  const mipsError = reconcileMutation.isError || lastReconcile?.success === false;
+  const mipsStatusText = reconcileMutation.isPending
+    ? "MIPS syncing"
+    : mipsError
+      ? "MIPS unreachable"
+      : `MIPS · ${lastReconcile?.fetched ?? 0}`;
 
   const handleManualOverride = async () => {
     if (!branchId) { toast.error("No branch selected"); return; }
@@ -291,9 +298,9 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                 mipsError ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
               }`}
-              title={mipsError ? 'MIPS server unreachable — showing webhook events only' : `Polling MIPS server every 10s (${mipsEvents.length} rows)`}
+              title={mipsError ? (lastReconcile?.error || 'MIPS server unreachable — showing stored events only') : `Backend imports MIPS server records every 15s; imported ${lastReconcile?.imported ?? 0}, skipped ${lastReconcile?.skipped ?? 0}`}
             >
-              {mipsError ? 'MIPS unreachable' : `MIPS · ${mipsEvents.length}`}
+              {mipsStatusText}
             </span>
           </div>
 
@@ -309,11 +316,13 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
               size="icon"
               className="h-8 w-8"
               onClick={() => {
+                reconcileMutation.mutate();
                 queryClient.invalidateQueries({ queryKey: ["access-logs-live"] });
-                queryClient.invalidateQueries({ queryKey: ["mips-pass-records"] });
               }}
+              disabled={reconcileMutation.isPending}
+              aria-label="Refresh live access feed"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${reconcileMutation.isPending ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
