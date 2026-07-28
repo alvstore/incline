@@ -140,13 +140,42 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
       if (branchId) query = query.eq("branch_id", branchId);
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as unknown as AccessLogEntry[];
+      return ((data || []) as unknown as AccessLogEntry[]).map((e) => ({ ...e, source: 'webhook' as const }));
     },
   });
 
+  // Direct poll of the MIPS server's own pass records. This makes the feed work
+  // even when the webhook to Supabase is misconfigured, and lets ops see the
+  // hardware truth alongside our recorded events.
+  const { data: mipsEvents = [], isError: mipsError } = useQuery({
+    queryKey: ["mips-pass-records", branchId, limit],
+    queryFn: async () => {
+      const records = await fetchRecentMIPSPassRecords(branchId, limit);
+      return records.map(mipsRecordToEntry);
+    },
+    enabled: Boolean(branchId),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+    retry: 1,
+  });
+
   useEffect(() => {
-    setLiveEvents(initialEvents);
-  }, [initialEvents]);
+    // Merge webhook + MIPS-server rows; dedupe by (device_sn + minute-truncated
+    // timestamp), preferring the webhook row when both exist because it carries
+    // resolved member metadata for the timeline.
+    const bucket = new Map<string, AccessLogEntry>();
+    const key = (e: AccessLogEntry) => {
+      const t = e.captured_at || e.created_at;
+      const minute = t ? new Date(t).toISOString().slice(0, 16) : '';
+      return `${e.device_sn || ''}|${minute}|${e.result || ''}|${e.message || ''}`;
+    };
+    for (const e of initialEvents) bucket.set(key(e), e);
+    for (const e of mipsEvents) if (!bucket.has(key(e))) bucket.set(key(e), e);
+    const merged = Array.from(bucket.values())
+      .sort((a, b) => new Date(b.captured_at || b.created_at).getTime() - new Date(a.captured_at || a.created_at).getTime())
+      .slice(0, limit);
+    setLiveEvents(merged);
+  }, [initialEvents, mipsEvents, limit]);
 
   const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
