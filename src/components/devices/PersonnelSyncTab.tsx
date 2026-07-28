@@ -307,12 +307,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const registeredStaff = filterList(staff.filter((p) => p.mipsSyncStatus === "synced"));
   const unregisteredStaff = filterList(staff.filter((p) => p.mipsSyncStatus !== "synced"));
 
+  const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
   const stats = {
     totalMembers: members.length,
     syncedMembers: members.filter((p) => p.mipsSyncStatus === "synced").length,
     totalStaff: staff.length,
     syncedStaff: staff.filter((p) => p.mipsSyncStatus === "synced").length,
     noPhoto: personnel.filter((p) => !p.hasPhoto).length,
+    // Pending = has a photo but not yet synced (i.e. actionable sync backlog).
+    pendingSyncable: personnel.filter((p) => p.mipsSyncStatus !== "synced" && p.hasPhoto).length,
   };
 
   const renderPersonCard = (person: SyncPerson) => {
