@@ -777,7 +777,7 @@ Deno.serve(async (req) => {
     let photoResult = { success: false, message: "No photo available" } as any;
     if (photoUrl) {
       try {
-        photoResult = await uploadPhoto(baseUrl, token, mipsPersonSn, photoUrl);
+        photoResult = await uploadPhoto(baseUrl, token, mipsPersonSn, photoUrl, supabase);
         console.log(`Photo upload: ${photoResult.success ? "✓" : "✗"} ${photoResult.message}`);
       } catch (photoErr) {
         console.warn("Photo upload failed (non-fatal):", photoErr);

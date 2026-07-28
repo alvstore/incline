@@ -14,8 +14,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 10;
 const PER_RUN_CAP = 50;
+// Exponential backoff (minutes) applied against queued_at + processed_at.
+// retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
+const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
