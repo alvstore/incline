@@ -28,6 +28,7 @@ interface AccessLogEntry {
   payload: Record<string, unknown> | null;
   captured_at: string | null;
   created_at: string;
+  source?: 'webhook' | 'mips';
   members?: {
     id: string;
     member_code: string;
@@ -44,6 +45,31 @@ interface DedupedEntry extends AccessLogEntry {
 interface LiveAccessLogProps {
   branchId?: string;
   limit?: number;
+}
+
+/** Map a raw MIPS pass record → AccessLogEntry shape used by the timeline. */
+function mipsRecordToEntry(r: MIPSPassRecord): AccessLogEntry {
+  const pt = String(r.passPersonType || '').toLowerCase();
+  const result =
+    pt.includes('member') ? 'member'
+    : pt.includes('staff') || pt.includes('employee') || pt.includes('trainer') ? 'staff'
+    : pt.includes('stranger') || pt.includes('unknown') ? 'stranger'
+    : 'accepted';
+  const iso = r.createTime ? new Date(r.createTime.replace(' ', 'T')).toISOString() : new Date().toISOString();
+  return {
+    id: `mips:${r.id}`,
+    device_sn: r.deviceName || '',
+    event_type: 'face_scan',
+    result,
+    message: r.personName ? `${r.personName}${r.personNo ? ` · ${r.personNo}` : ''}` : (r.personNo || 'Face scan'),
+    member_id: null,
+    profile_id: null,
+    branch_id: null,
+    payload: r as unknown as Record<string, unknown>,
+    captured_at: iso,
+    created_at: iso,
+    source: 'mips',
+  };
 }
 
 const resultConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
