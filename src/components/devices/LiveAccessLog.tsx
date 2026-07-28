@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, User, Shield, AlertTriangle, RefreshCw, Eye, DoorOpen, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, differenceInDays } from "date-fns";
-import { remoteOpenDoorByBranch } from "@/services/mipsService";
+import { remoteOpenDoorByBranch, fetchRecentMIPSPassRecords, type MIPSPassRecord } from "@/services/mipsService";
 import { toast } from "sonner";
 import {
   Collapsible,
