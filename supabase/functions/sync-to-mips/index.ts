@@ -528,7 +528,12 @@ Deno.serve(async (req) => {
       personNo = member.member_code || person_id.substring(0, 8);
       phone = pick(profile?.phone, lead?.phone) || "";
       email = pick(profile?.email, lead?.email) || "";
-      photoUrl = pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url) || "";
+      const resolved = await resolveBiometricPhoto(
+        supabase,
+        (member as any).biometric_photo_path,
+        pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url),
+      );
+      photoUrl = resolved.url;
       gender = normGender(profile?.gender ?? lead?.gender);
       birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth);
 
