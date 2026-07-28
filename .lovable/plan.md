@@ -1,85 +1,59 @@
-## Root causes (verified)
+## Goal
 
-**A. Live attendance broken** — `mips-webhook-receiver` logs (every 10s, last hour) show:
-```
-ERROR mips-webhook-receiver: MIPS_WEBHOOK_SECRET is not configured — refusing all requests
-```
-The v2.0.0 receiver requires `MIPS_WEBHOOK_SECRET`. It is not set, so every callback from the MIPS server (recognition records, heartbeat, register-person) is refused with 401 → no attendance rows, no live feed.
+Two fixes in the Device Command Center:
 
-**B. Wrong URLs pointed at us in Device Configuration** (your screenshot)
-The MIPS server exposes 5 "server configuration" URLs. Only ONE is meant to hit our Supabase edge function:
+1. **Live Access Feed** — poll MIPS server directly for face-scan records (via `/through/record/list`) so attendance shows even when the webhook to Supabase is misconfigured or blocked. Merge with existing `access_logs` for a single unified feed.
+2. **Personnel Sync KPIs** — correct the counters. Current tiles show wrong numbers because:
+   - **"No Photo 20"** — the `hasPhoto` check only looks at `biometric_photo_url` and `profiles.avatar_url`. It ignores the newer private-bucket field `biometric_photo_path`, which is where recent uploads land. Result: members who *do* have photos are counted as "No Photo".
+   - **"Staff & Trainers 6/8"** — the mismatch is real (2 not synced), but there is no visibility on *why* (missing photo? failed? unmapped?), and revoked/offboarded people are silently excluded from the denominator making the fraction hard to reason about.
 
-| Field | Correct value | You set it to |
-|---|---|---|
-| Recognition Record Upload URL | `…/functions/v1/mips-webhook-receiver` ✅ | ours ✅ |
-| Device Heartbeat Upload URL | MIPS internal (`http://<mips>/api/callback/heartbeat`) | MIPS internal ✅ |
-| **Register Person Data Upload URL** | **MIPS internal (`http://<mips>/through/api/person/reg`)** | **ours ❌** |
-| Register Fingerprint Data Upload URL | MIPS internal | MIPS internal ✅ |
-| Alarm Data Upload URL | MIPS internal | MIPS internal ✅ |
-
-The "Register Person Data Upload URL" is the endpoint the *device* posts to when a person is enrolled on-device — it must stay inside MIPS. Pointing it at our webhook breaks MIPS's own person/photo registration pipeline (which is why Kirti INC-26-0015 got a person ID `82` but no face record on the device, and Rehan/Mohit are missing entirely from the device even though our DB says `mips_sync_status=synced`).
-
-**C. Photo queue is stuck at 16 failed / 0 pending**
-- All three members (`Rehan`, `Mohit`, `Kirti`) have `photo_upload` queue rows with `retry_count=5`, `status='failed'`, error = `Edge Function returned a non-2xx status code`.
-- `process-biometric-sync-queue` filters `retry_count < 5`, so failed rows are never retried automatically.
-- Their `biometric_photo_url` in the DB still points at a **public `avatars/…` URL** (not the private `member-photos` bucket). `sync-to-mips` `uploadPhoto()` fetches this URL server-side; the 400s we've been seeing on `/avatars/` uploads suggest the fetch or the >400KB size check is failing → non-2xx bubble up.
-
-**D. Consequence chain confirmed**
-- Kirti has `biometric_photo_path=biometric/members/8bbaf3e9…jpg` set, but `biometric_photo_url` still holds the OLD public avatar URL → mirror trigger isn't updating it, so `sync-to-mips` uses the wrong URL.
-- Rehan has no `biometric_photo_path` at all — only the public avatar URL.
+Both are frontend/service changes only — no schema, no policy work.
 
 ---
 
-## Fix plan
+## Changes
 
-### 1. Restore correct MIPS device URLs (manual — on the MIPS admin UI at `http://212.38.94.228:9000`)
-Set exactly these 5 URLs on **every** device (`Device Management → Configure → Server Configuration`):
-```
-Recognition Record Upload URL   → https://iyqqpbvnszyrrgerniog.supabase.co/functions/v1/mips-webhook-receiver
-Device Heartbeat Upload URL     → http://212.38.94.228:9000/api/callback/heartbeat
-Register Person Data Upload URL → http://212.38.94.228:9000/through/api/person/reg
-Register Fingerprint Data URL   → http://212.38.94.228:9000/through/api/finger/reg
-Alarm Data Upload URL           → http://212.38.94.228:9000/through/api/alarm/reg
-```
-Only the first one goes to us. Everything else stays inside MIPS.
+### 1. `src/services/mipsService.ts` — expand pass-record fetch
 
-### 2. Configure the webhook secret (backend)
-- Provision `MIPS_WEBHOOK_SECRET` (random 32-byte token) via `secrets` tool.
-- Add it to the MIPS server callback header (in MIPS custom-header config) so the receiver accepts inbound calls.
-- Verify: hit `mips-webhook-receiver` with `curl` — with the header should return `{result:1,code:"000"}`, without it should 401.
+- Extend `fetchMIPSPassRecords()` to accept optional filters (`beginTime`, `endTime`, `personName`, `deviceId`) and always pass `branchId`.
+- Add `fetchRecentMIPSPassRecords(branchId, limit=30)` — thin helper that pulls the latest N records across all devices for a branch.
 
-### 3. Heal the biometric photo pipeline
-a. **Backfill `biometric_photo_url` from `biometric_photo_path`** for all members where `biometric_photo_path IS NOT NULL` — write it as a signed URL (or store just the path and let `sync-to-mips` sign it, which it already does via `resolveBiometricPhoto`). Fix the mirror trigger so it stops overwriting `biometric_photo_url` with the public avatar URL.
+### 2. `src/components/devices/LiveAccessLog.tsx` — hybrid feed
 
-b. **Reset the 16 `failed` queue rows** back to `pending` with `retry_count=0`.
+- Add a second TanStack Query alongside the existing `access_logs` query:
+  - `queryKey: ['mips-pass-records', branchId]`
+  - Calls `fetchRecentMIPSPassRecords(branchId, limit)` every 15 s (polling), disabled if no `branchId`.
+  - Maps each MIPS row `{ personNo, personName, deviceName, createTime, imgUri, passType }` into the same `AccessLogEntry` shape (synthetic `id = 'mips:'+record.id`, `result` derived from `passPersonType` → `member` / `staff` / `stranger`).
+- Merge both streams (dedupe by `personNo + createTime` within 60 s, prefer the DB row when both exist), then sort by timestamp desc, keep top `limit`.
+- Add a small provenance chip next to each row: **"Live from MIPS"** vs **"Webhook"** so ops can see which pipe delivered the event.
+- Keep the realtime `postgres_changes` subscription for instant webhook events.
+- If the MIPS poll fails, silently fall back to `access_logs` only and switch the header chip to a subdued "MIPS unreachable" tooltip (does not break the feed).
 
-c. **Change `process-biometric-sync-queue`**:
-   - Include `status='failed'` rows older than 15 min in the drain, up to a hard-cap (e.g. 10 retries) with exponential backoff.
-   - Log every invocation result (currently silent — no logs at all).
+### 3. `src/components/devices/PersonnelSyncTab.tsx` — correct the tiles
 
-d. **`sync-to-mips` `uploadPhoto()`**: when the resolved photo URL is a Supabase public URL and fetch fails, fall through to `avatar_storage_path`/`biometric_photo_path` signed URLs instead of failing.
+- In the personnel query, also select `biometric_photo_path` for members, employees, trainers.
+- Update the `hasPhoto` calculation:
+  ```
+  hasPhoto = !!(biometric_photo_path || biometric_photo_url || avatar || lead.avatar_url)
+  ```
+  (path is authoritative for the private bucket; URL fields are the legacy public fallback.)
+- Recompute the KPI tiles from the corrected data:
+  - **Members**: `synced / total`
+  - **Staff & Trainers**: `synced / total` (unchanged formula, only accurate once `hasPhoto` is fixed)
+  - **Total Synced**: unchanged
+  - **Pending**: people with `mipsSyncStatus !== 'synced'` AND `hasPhoto === true` (i.e. actually syncable)
+  - **No Photo**: `!hasPhoto` only — this number will drop dramatically once the path field is included
+- Add a tiny helper tooltip on each tile explaining what it counts (so "2 pending" vs "20 no photo" is self-explanatory).
 
-### 4. Reset the three members and re-sync (curl-tested)
-For Rehan, Mohit, Kirti:
-- Ensure `biometric_photo_path` is populated (upload from admin avatar if missing).
-- Invoke `sync-to-mips` with `{person_type:'member', person_id, server_only:true}` and confirm `photo_result.success=true` in the response.
-- Then invoke `mips-reconcile-devices` to fan out to both terminals.
+### 4. Verification
 
-### 5. Add operator UI safeguards
-- On **Personnel Sync** tab: add a "Reset failed" bulk action next to "Heal Queue" that flips `failed → pending, retry_count=0`.
-- On **MIPS Dashboard**: surface a red banner when `mips-webhook-receiver` is refusing calls (poll `error_logs` for `source='mips_webhook'` with the "secret not configured" fingerprint).
+- `curl` the MIPS `/through/record/list` via the `mips-proxy` edge function with the current branch to confirm we get rows back and that `personNo` matches the `member_code`-stripped format we already use for lookup.
+- Load `/devices` in a headless browser, screenshot the Personnel Sync tab, and confirm "No Photo" drops to the real count and the Live Feed shows a "Live from MIPS" entry.
 
 ---
 
-## Technical notes
+## Out of scope
 
-- Files to touch (build phase):
-  - `supabase/functions/process-biometric-sync-queue/index.ts` (backoff + failed retry + logs)
-  - `supabase/functions/sync-to-mips/index.ts` (`uploadPhoto` fallback chain)
-  - `src/components/devices/PersonnelSyncTab.tsx` (Reset failed button)
-  - `src/components/devices/MIPSDashboard.tsx` (webhook-refusal banner)
-- Migration: reset failed queue rows + one-shot backfill of `biometric_photo_url` from `biometric_photo_path` for the three members (and any others with the same drift).
-- Secret: `MIPS_WEBHOOK_SECRET` via secrets tool. Do **not** commit it.
-- No RLS or table shape changes.
-
-I've verified everything above via `edge_function_logs`, `read_query` on `members` + `biometric_sync_queue`, and code reads of the three edge functions. Ready to implement on approval.
+- No changes to `mips-webhook-receiver`, `sync-to-mips`, `process-biometric-sync-queue`, database schema, or RLS.
+- No new edge functions — MIPS polling reuses the existing `mips-proxy`.
+- Device configuration (Recognition/Register URLs on the MIPS panel) is unchanged; this plan makes the app resilient to a misconfigured webhook, it does not replace the webhook path.
