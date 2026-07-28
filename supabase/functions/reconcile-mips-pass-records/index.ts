@@ -393,7 +393,7 @@ Deno.serve(async (req) => {
 
       const { error: insertError } = await supabase.from("access_logs").insert({
         device_sn: deviceSn,
-        branch_id: matchedPerson?.branch_id ?? resolvedConnection.branch_id || null,
+        branch_id: (matchedPerson?.branch_id ?? resolvedConnection.branch_id) || null,
         member_id: matchedPerson?.type === "member" ? matchedPerson.id : null,
         profile_id: matchedPerson?.user_id ?? null,
         event_type: mapEventType(record),
