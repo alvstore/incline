@@ -67,13 +67,25 @@ Deno.serve(async (req) => {
       const personType = (row as any).member_id ? "member" : "employee";
 
       try {
-        const { data, error: invErr } = await supabase.functions.invoke("sync-to-mips", {
-          body: {
+        // Call sync-to-mips as service_role — the queue drainer has no user JWT,
+        // so the default anon bearer would be rejected by sync-to-mips' auth gate.
+        const invokeRes = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SERVICE_KEY}`,
+            "apikey": SERVICE_KEY,
+          },
+          body: JSON.stringify({
             person_type: personType,
             person_id: personId,
             server_only: true,
-          },
+          }),
         });
+        const invText = await invokeRes.text();
+        let data: any = null;
+        try { data = JSON.parse(invText); } catch { data = { raw: invText }; }
+        const invErr = invokeRes.ok ? null : { message: `HTTP ${invokeRes.status}: ${invText.slice(0, 200)}` };
         const success = !invErr && (data as any)?.success !== false;
         if (success) {
           await supabase
