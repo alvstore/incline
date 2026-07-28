@@ -390,10 +390,15 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  // v2.1.0 — Also accept `?token=<secret>` query param so the MIPS device UI
+  // (which typically only lets you paste a URL, no custom headers) can pass
+  // the shared secret via the URL. Header/Bearer still supported.
   const headerToken = req.headers.get("x-mips-token") || "";
   const authHeader = req.headers.get("authorization") || "";
   const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  if (headerToken !== webhookSecret && bearer !== webhookSecret) {
+  let queryToken = "";
+  try { queryToken = new URL(req.url).searchParams.get("token") || ""; } catch { /* ignore */ }
+  if (headerToken !== webhookSecret && bearer !== webhookSecret && queryToken !== webhookSecret) {
     console.warn("mips-webhook-receiver: unauthorized request (missing/invalid token)");
     return new Response(JSON.stringify({ result: 0, code: "401" }), {
       status: 401,

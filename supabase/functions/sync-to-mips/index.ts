@@ -160,7 +160,8 @@ async function uploadPhoto(
   baseUrl: string,
   token: string,
   personSn: string,
-  photoUrl: string
+  photoUrl: string,
+  supabase?: any,
 ): Promise<{ success: boolean; message: string; fileName?: string }> {
   if (!photoUrl) return { success: false, message: "No photo URL" };
 
@@ -172,9 +173,33 @@ async function uploadPhoto(
     }
 
     console.log(`Fetching photo from: ${url}`);
-    const photoRes = await fetch(url);
+    let photoRes = await fetch(url);
+
+    // Fallback — if the public URL is broken (bucket flipped private, ACL
+    // change, avatar deleted), try to re-sign the same path via service role
+    // against the private `member-photos` bucket.
+    if (!photoRes.ok && supabase) {
+      const m = url.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+?)(?:\?.*)?$/);
+      if (m) {
+        const bucket = m[1];
+        const path = decodeURIComponent(m[2]);
+        console.warn(`Public fetch failed (${photoRes.status}); trying signed URL bucket=${bucket} path=${path}`);
+        const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
+        if (signed?.signedUrl) {
+          photoRes = await fetch(signed.signedUrl);
+        }
+        // Second fallback — try the biometric bucket at the same path (avatar → biometric drift).
+        if (!photoRes.ok && bucket !== BIOMETRIC_BUCKET) {
+          const { data: bioSigned } = await supabase.storage.from(BIOMETRIC_BUCKET).createSignedUrl(path, 300);
+          if (bioSigned?.signedUrl) {
+            console.warn(`Trying biometric bucket fallback for path=${path}`);
+            photoRes = await fetch(bioSigned.signedUrl);
+          }
+        }
+      }
+    }
     if (!photoRes.ok) {
-      return { success: false, message: `Photo fetch failed: ${photoRes.status}` };
+      return { success: false, message: `Photo fetch failed: ${photoRes.status} at ${url}` };
     }
 
     const photoBytes = new Uint8Array(await photoRes.arrayBuffer());
