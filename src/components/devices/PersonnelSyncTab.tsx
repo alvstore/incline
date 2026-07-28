@@ -84,7 +84,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let memberQuery = supabase
         .from("members")
-        .select("id, member_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url), leads:lead_id(full_name, avatar_url)")
+        .select("id, member_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url), leads:lead_id(full_name, avatar_url)")
         .order("created_at", { ascending: false });
       if (branchId) memberQuery = memberQuery.eq("branch_id", branchId);
       const { data: members } = await memberQuery;
@@ -94,12 +94,13 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           const lead = (m as any).leads as any;
           const name = profile?.full_name || lead?.full_name || `Member ${m.member_code || ""}`.trim() || "Unknown";
           const avatar = profile?.avatar_url || lead?.avatar_url || null;
+          const bioPath = (m as any).biometric_photo_path as string | null;
           people.push({
             id: m.id,
             name,
             code: m.member_code || "",
             type: "member",
-            hasPhoto: !!(m.biometric_photo_url || avatar),
+            hasPhoto: !!(bioPath || m.biometric_photo_url || avatar),
             avatarUrl: avatar,
             mipsSyncStatus: (m as any).mips_sync_status || "pending",
             mipsPersonId: (m as any).mips_person_id || null,
@@ -110,7 +111,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let empQuery = supabase
         .from("employees")
-        .select("id, employee_code, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, employee_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -119,12 +120,13 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       if (employees) {
         for (const e of employees) {
           const profile = e.profiles as any;
+          const bioPath = (e as any).biometric_photo_path as string | null;
           people.push({
             id: e.id,
             name: profile?.full_name || `Staff ${e.employee_code || ""}`.trim() || "Unknown",
             code: e.employee_code || "",
             type: "employee",
-            hasPhoto: !!(e.biometric_photo_url || profile?.avatar_url),
+            hasPhoto: !!(bioPath || e.biometric_photo_url || profile?.avatar_url),
             avatarUrl: profile?.avatar_url || null,
             mipsSyncStatus: (e as any).mips_sync_status || "pending",
             mipsPersonId: (e as any).mips_person_id || null,
@@ -135,7 +137,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let trainerQuery = supabase
         .from("trainers")
-        .select("id, biometric_photo_url, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -144,12 +146,13 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       if (trainers) {
         for (const t of trainers) {
           const profile = (t as any).profiles as any;
+          const bioPath = (t as any).biometric_photo_path as string | null;
           people.push({
             id: t.id,
             name: profile?.full_name || `Trainer ${t.id.substring(0, 4).toUpperCase()}`,
             code: `TRN-${t.id.substring(0, 4).toUpperCase()}`,
             type: "trainer",
-            hasPhoto: !!(t.biometric_photo_url || profile?.avatar_url),
+            hasPhoto: !!(bioPath || t.biometric_photo_url || profile?.avatar_url),
             avatarUrl: profile?.avatar_url || null,
             mipsSyncStatus: t.mips_sync_status || "pending",
             mipsPersonId: t.mips_person_id || null,
@@ -304,12 +307,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const registeredStaff = filterList(staff.filter((p) => p.mipsSyncStatus === "synced"));
   const unregisteredStaff = filterList(staff.filter((p) => p.mipsSyncStatus !== "synced"));
 
+  const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
   const stats = {
     totalMembers: members.length,
     syncedMembers: members.filter((p) => p.mipsSyncStatus === "synced").length,
     totalStaff: staff.length,
     syncedStaff: staff.filter((p) => p.mipsSyncStatus === "synced").length,
     noPhoto: personnel.filter((p) => !p.hasPhoto).length,
+    // Pending = has a photo but not yet synced (i.e. actionable sync backlog).
+    pendingSyncable: personnel.filter((p) => p.mipsSyncStatus !== "synced" && p.hasPhoto).length,
   };
 
   const renderPersonCard = (person: SyncPerson) => {
@@ -513,13 +519,13 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             <p className="text-xl font-bold text-success">{stats.syncedMembers + stats.syncedStaff}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl">
+        <Card className="rounded-xl" title="Personnel with a photo on file but not yet registered on the MIPS server.">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-xl font-bold text-warning">{personnel.length - stats.syncedMembers - stats.syncedStaff}</p>
+            <p className="text-xl font-bold text-warning">{stats.pendingSyncable}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl">
+        <Card className="rounded-xl" title="Personnel with no photo (biometric path, biometric URL, or profile avatar). Upload a photo before syncing.">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">No Photo</p>
             <p className="text-xl font-bold text-warning">{stats.noPhoto}</p>

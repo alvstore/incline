@@ -124,17 +124,33 @@ export async function fetchMIPSDevices(branchId?: string): Promise<MIPSDevice[]>
 }
 
 // Fetch pass records from MIPS
-export async function fetchMIPSPassRecords(page = 1, size = 20, branchId?: string): Promise<{
+export async function fetchMIPSPassRecords(
+  page = 1,
+  size = 20,
+  branchId?: string,
+  filters?: { beginTime?: string; endTime?: string; personName?: string; deviceId?: number | string }
+): Promise<{
   records: MIPSPassRecord[];
   total: number;
 }> {
-  const result = await callMIPSProxy("/through/record/list", "GET", {
+  const params: Record<string, string> = {
     pageNum: String(page),
     pageSize: String(size),
-  }, undefined, branchId);
+  };
+  if (filters?.beginTime) params.beginTime = filters.beginTime;
+  if (filters?.endTime) params.endTime = filters.endTime;
+  if (filters?.personName) params.personName = filters.personName;
+  if (filters?.deviceId !== undefined && filters?.deviceId !== null) params.deviceId = String(filters.deviceId);
+  const result = await callMIPSProxy("/through/record/list", "GET", params, undefined, branchId);
   const rows = result.data?.rows || result.data?.data;
   const total = (result.data?.total as number) || 0;
   return { records: Array.isArray(rows) ? rows as MIPSPassRecord[] : [], total };
+}
+
+// Convenience helper — latest N pass records across all devices for a branch.
+export async function fetchRecentMIPSPassRecords(branchId?: string, limit = 30): Promise<MIPSPassRecord[]> {
+  const { records } = await fetchMIPSPassRecords(1, limit, branchId);
+  return records;
 }
 
 // Fetch persons from MIPS

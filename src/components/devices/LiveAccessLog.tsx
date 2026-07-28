@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, User, Shield, AlertTriangle, RefreshCw, Eye, DoorOpen, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, differenceInDays } from "date-fns";
-import { remoteOpenDoorByBranch } from "@/services/mipsService";
+import { remoteOpenDoorByBranch, fetchRecentMIPSPassRecords, type MIPSPassRecord } from "@/services/mipsService";
 import { toast } from "sonner";
 import {
   Collapsible,
@@ -28,6 +28,7 @@ interface AccessLogEntry {
   payload: Record<string, unknown> | null;
   captured_at: string | null;
   created_at: string;
+  source?: 'webhook' | 'mips';
   members?: {
     id: string;
     member_code: string;
@@ -44,6 +45,31 @@ interface DedupedEntry extends AccessLogEntry {
 interface LiveAccessLogProps {
   branchId?: string;
   limit?: number;
+}
+
+/** Map a raw MIPS pass record → AccessLogEntry shape used by the timeline. */
+function mipsRecordToEntry(r: MIPSPassRecord): AccessLogEntry {
+  const pt = String(r.passPersonType || '').toLowerCase();
+  const result =
+    pt.includes('member') ? 'member'
+    : pt.includes('staff') || pt.includes('employee') || pt.includes('trainer') ? 'staff'
+    : pt.includes('stranger') || pt.includes('unknown') ? 'stranger'
+    : 'accepted';
+  const iso = r.createTime ? new Date(r.createTime.replace(' ', 'T')).toISOString() : new Date().toISOString();
+  return {
+    id: `mips:${r.id}`,
+    device_sn: r.deviceName || '',
+    event_type: 'face_scan',
+    result,
+    message: r.personName ? `${r.personName}${r.personNo ? ` · ${r.personNo}` : ''}` : (r.personNo || 'Face scan'),
+    member_id: null,
+    profile_id: null,
+    branch_id: null,
+    payload: r as unknown as Record<string, unknown>,
+    captured_at: iso,
+    created_at: iso,
+    source: 'mips',
+  };
 }
 
 const resultConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
@@ -114,13 +140,42 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
       if (branchId) query = query.eq("branch_id", branchId);
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as unknown as AccessLogEntry[];
+      return ((data || []) as unknown as AccessLogEntry[]).map((e) => ({ ...e, source: 'webhook' as const }));
     },
   });
 
+  // Direct poll of the MIPS server's own pass records. This makes the feed work
+  // even when the webhook to Supabase is misconfigured, and lets ops see the
+  // hardware truth alongside our recorded events.
+  const { data: mipsEvents = [], isError: mipsError } = useQuery({
+    queryKey: ["mips-pass-records", branchId, limit],
+    queryFn: async () => {
+      const records = await fetchRecentMIPSPassRecords(branchId, limit);
+      return records.map(mipsRecordToEntry);
+    },
+    enabled: Boolean(branchId),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+    retry: 1,
+  });
+
   useEffect(() => {
-    setLiveEvents(initialEvents);
-  }, [initialEvents]);
+    // Merge webhook + MIPS-server rows; dedupe by (device_sn + minute-truncated
+    // timestamp), preferring the webhook row when both exist because it carries
+    // resolved member metadata for the timeline.
+    const bucket = new Map<string, AccessLogEntry>();
+    const key = (e: AccessLogEntry) => {
+      const t = e.captured_at || e.created_at;
+      const minute = t ? new Date(t).toISOString().slice(0, 16) : '';
+      return `${e.device_sn || ''}|${minute}|${e.result || ''}|${e.message || ''}`;
+    };
+    for (const e of initialEvents) bucket.set(key(e), e);
+    for (const e of mipsEvents) if (!bucket.has(key(e))) bucket.set(key(e), e);
+    const merged = Array.from(bucket.values())
+      .sort((a, b) => new Date(b.captured_at || b.created_at).getTime() - new Date(a.captured_at || a.created_at).getTime())
+      .slice(0, limit);
+    setLiveEvents(merged);
+  }, [initialEvents, mipsEvents, limit]);
 
   const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
@@ -228,6 +283,16 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
               }`} />
               {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Offline' : 'Connecting'}
             </span>
+            {branchId && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  mipsError ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+                }`}
+                title={mipsError ? 'MIPS server unreachable — showing webhook events only' : `Polling MIPS server every 15s (${mipsEvents.length} rows)`}
+              >
+                {mipsError ? 'MIPS unreachable' : `MIPS · ${mipsEvents.length}`}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -308,6 +373,16 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                             {billingBadge}
                             <span className="text-[10px] text-muted-foreground font-mono">
                               {event.device_sn}
+                            </span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                                event.source === 'mips'
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                              title={event.source === 'mips' ? 'Fetched directly from MIPS server' : 'Received via webhook'}
+                            >
+                              {event.source === 'mips' ? 'MIPS' : 'Webhook'}
                             </span>
                           </div>
                           <p className="text-xs mt-0.5 truncate">{event.message || "—"}</p>
