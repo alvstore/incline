@@ -188,36 +188,62 @@ async function getRuoYiToken(baseUrl: string, username: string, password: string
   return token;
 }
 
+function extractRows(json: Record<string, unknown>): MipsPassRecord[] {
+  const data = typeof json.data === "object" && json.data !== null ? json.data as Record<string, unknown> : {};
+  const candidates = [
+    json.rows,
+    json.data,
+    json.list,
+    json.records,
+    data.rows,
+    data.list,
+    data.records,
+    data.data,
+  ];
+  const rows = candidates.find(Array.isArray) as unknown[] | undefined;
+  return (rows ?? []).filter((row): row is MipsPassRecord => typeof row === "object" && row !== null);
+}
+
 async function fetchPassRecords(connection: MipsConnection, limit: number): Promise<MipsPassRecord[]> {
   const baseUrl = getBaseUrl(connection.server_url);
   const token = await getRuoYiToken(baseUrl, connection.username, connection.password);
-  const url = `${baseUrl}/through/record/list?pageNum=1&pageSize=${encodeURIComponent(String(limit))}`;
-  console.log(`[reconcile-mips-pass-records] GET ${url}`);
+  const endpoints = [
+    { path: "/through/record/list", params: { pageNum: "1", pageSize: String(limit) } },
+    { path: "/interface/exterior/getCheckRecordList", params: { pageNum: "1", pageSize: String(limit) } },
+    { path: "/interface/exterior/getCheckRecordList", params: { pageNo: "1", pageSize: String(limit) } },
+  ];
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "TENANT-ID": "1",
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
-  });
-  const text = await res.text();
-  let json: Record<string, unknown>;
-  try {
-    json = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    throw new Error(`MIPS records returned non-JSON: ${text.slice(0, 240)}`);
+  const errors: string[] = [];
+  for (const endpoint of endpoints) {
+    const searchParams = new URLSearchParams(endpoint.params);
+    const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
+    console.log(`[reconcile-mips-pass-records] GET ${url}`);
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "TENANT-ID": "1",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+    const text = await res.text();
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      errors.push(`${endpoint.path}: non-JSON ${text.slice(0, 160)}`);
+      continue;
+    }
+
+    const rows = extractRows(json);
+    const code = Number(json.code);
+    if (res.ok && (code === 200 || code === 0 || rows.length > 0)) return rows;
+    errors.push(`${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}`);
   }
 
-  const code = Number(json.code);
-  if (!res.ok || (code !== 200 && code !== 0 && !Array.isArray(json.rows) && !Array.isArray(json.data))) {
-    throw new Error(`MIPS records failed: ${getString(json.msg ?? json.message) || text.slice(0, 240)}`);
-  }
-
-  const rows = Array.isArray(json.rows) ? json.rows : Array.isArray(json.data) ? json.data : [];
-  return rows.filter((row): row is MipsPassRecord => typeof row === "object" && row !== null);
+  throw new Error(`MIPS records failed: ${errors.join(" | ")}`.slice(0, 500));
 }
 
 async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string): Promise<PersonMatch | null> {
