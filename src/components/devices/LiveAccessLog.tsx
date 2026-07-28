@@ -364,6 +364,16 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                             <span className="text-[10px] text-muted-foreground font-mono">
                               {event.device_sn}
                             </span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                                event.source === 'mips'
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                              title={event.source === 'mips' ? 'Fetched directly from MIPS server' : 'Received via webhook'}
+                            >
+                              {event.source === 'mips' ? 'MIPS' : 'Webhook'}
+                            </span>
                           </div>
                           <p className="text-xs mt-0.5 truncate">{event.message || "—"}</p>
 
