@@ -147,15 +147,19 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
   // Direct poll of the MIPS server's own pass records. This makes the feed work
   // even when the webhook to Supabase is misconfigured, and lets ops see the
   // hardware truth alongside our recorded events.
+  // Poll MIPS regardless of branch selection — mips-proxy falls back to the
+  // default active connection when branch_id is undefined, so "All Branches"
+  // (Dashboard widget or unscoped Device Command Center) still shows scans.
   const { data: mipsEvents = [], isError: mipsError } = useQuery({
     queryKey: ["mips-pass-records", branchId, limit],
     queryFn: async () => {
-      const records = await fetchRecentMIPSPassRecords(branchId, limit);
+      // Request a wider window when unscoped so dedupe still yields `limit` rows.
+      const fetchLimit = branchId ? limit : limit * 2;
+      const records = await fetchRecentMIPSPassRecords(branchId, fetchLimit);
       return records.map(mipsRecordToEntry);
     },
-    enabled: Boolean(branchId),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    refetchInterval: 10_000,
+    staleTime: 8_000,
     retry: 1,
   });
 
@@ -283,16 +287,14 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
               }`} />
               {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Offline' : 'Connecting'}
             </span>
-            {branchId && (
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  mipsError ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
-                }`}
-                title={mipsError ? 'MIPS server unreachable — showing webhook events only' : `Polling MIPS server every 15s (${mipsEvents.length} rows)`}
-              >
-                {mipsError ? 'MIPS unreachable' : `MIPS · ${mipsEvents.length}`}
-              </span>
-            )}
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                mipsError ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+              }`}
+              title={mipsError ? 'MIPS server unreachable — showing webhook events only' : `Polling MIPS server every 10s (${mipsEvents.length} rows)`}
+            >
+              {mipsError ? 'MIPS unreachable' : `MIPS · ${mipsEvents.length}`}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -302,11 +304,20 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
                 {openingDoor ? "Opening..." : "Override"}
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => queryClient.invalidateQueries({ queryKey: ["access-logs-live"] })}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ["access-logs-live"] });
+                queryClient.invalidateQueries({ queryKey: ["mips-pass-records"] });
+              }}
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[420px] pr-2">

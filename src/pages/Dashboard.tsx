@@ -435,7 +435,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <Suspense fallback={<ChartSkeleton />}>
-                    <LazyLiveAccessLog />
+                    <LazyLiveAccessLog branchId={branchFilter || undefined} />
                   </Suspense>
                 </CardContent>
               </Card>
