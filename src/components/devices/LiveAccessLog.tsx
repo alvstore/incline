@@ -283,6 +283,16 @@ const LiveAccessLog = ({ branchId, limit = 20 }: LiveAccessLogProps) => {
               }`} />
               {rtStatus === 'live' ? 'Live' : rtStatus === 'error' ? 'Offline' : 'Connecting'}
             </span>
+            {branchId && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  mipsError ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+                }`}
+                title={mipsError ? 'MIPS server unreachable — showing webhook events only' : `Polling MIPS server every 15s (${mipsEvents.length} rows)`}
+              >
+                {mipsError ? 'MIPS unreachable' : `MIPS · ${mipsEvents.length}`}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
