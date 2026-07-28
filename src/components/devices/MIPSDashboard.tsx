@@ -295,21 +295,20 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-info/10">
-                <Fingerprint className="h-5 w-5 text-info" />
-              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Faces Enrolled</p>
                 <p className="text-2xl font-bold">{mipsFaces}</p>
+                {mipsTotal > 1 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    on {mipsDevices.filter((d) => (d.faceCount || 0) >= mipsFaces).length}/{mipsTotal} devices
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
+        <Card className={`rounded-2xl shadow-lg shadow-muted/20 ${mipsDrift ? "border-warning/40" : ""}`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-full bg-warning/10">
@@ -318,6 +317,12 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
               <div>
                 <p className="text-xs text-muted-foreground">Persons Registered</p>
                 <p className="text-2xl font-bold">{mipsPersons}</p>
+                {mipsTotal > 1 && (
+                  <p className={`text-[10px] ${mipsDrift ? "text-warning" : "text-muted-foreground"}`}>
+                    on {mipsDevices.filter((d) => (d.personCount || 0) >= mipsPersons).length}/{mipsTotal} devices
+                    {mipsDrift ? " · drift" : ""}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
