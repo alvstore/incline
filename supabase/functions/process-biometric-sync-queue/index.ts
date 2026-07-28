@@ -28,17 +28,29 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
   try {
+    // Pick up pending rows AND failed rows that are ready for another attempt
+    // (retry_count still below MAX_RETRIES and backoff window elapsed).
     const { data: rows, error } = await supabase
       .from("biometric_sync_queue")
-      .select("id, member_id, staff_id, device_id, sync_type, retry_count")
-      .eq("status", "pending")
+      .select("id, member_id, staff_id, device_id, sync_type, retry_count, queued_at, processed_at, status")
+      .in("status", ["pending", "failed"])
       .lt("retry_count", MAX_RETRIES)
       .order("queued_at", { ascending: true })
       .limit(PER_RUN_CAP);
     if (error) throw error;
 
+    const now = Date.now();
+    const dueRows = (rows || []).filter((r: any) => {
+      if (r.status === "pending" && (r.retry_count || 0) === 0) return true;
+      const waitMin = BACKOFF_MIN[Math.min(r.retry_count || 0, BACKOFF_MIN.length - 1)];
+      const anchorTs = new Date(r.processed_at || r.queued_at).getTime();
+      return anchorTs + waitMin * 60_000 <= now;
+    });
+
+    console.log(`[process-biometric-sync-queue] picked=${rows?.length || 0} due=${dueRows.length}`);
+
     let ok = 0, failed = 0, skipped = 0;
-    for (const row of rows || []) {
+    for (const row of dueRows) {
       const personId = (row as any).member_id || (row as any).staff_id;
       if (!personId) {
         await supabase
