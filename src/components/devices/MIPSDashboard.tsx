@@ -159,8 +159,15 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
 
   const mipsOnline = mipsDevices.filter((d) => (d.onlineFlag === 1 || d.status === 1)).length;
   const mipsTotal = mipsDevices.length;
-  const mipsFaces = mipsDevices.reduce((sum, d) => sum + (d.faceCount || 0), 0);
-  const mipsPersons = mipsDevices.reduce((sum, d) => sum + (d.personCount || 0), 0);
+  // A person exists once on the MIPS server regardless of how many devices mirror it.
+  // Summing per-device counts double-counts every shared enrolment across terminals —
+  // use the MAX so the dashboard shows unique persons/faces, not the fleet-wide sum.
+  const mipsFaces = mipsDevices.reduce((max, d) => Math.max(max, d.faceCount || 0), 0);
+  const mipsPersons = mipsDevices.reduce((max, d) => Math.max(max, d.personCount || 0), 0);
+  const mipsFacesTotalPerDevice = mipsDevices.reduce((sum, d) => sum + (d.faceCount || 0), 0);
+  const mipsPersonsTotalPerDevice = mipsDevices.reduce((sum, d) => sum + (d.personCount || 0), 0);
+  // Drift = at least one device is missing a person the leader has.
+  const mipsDrift = mipsTotal > 1 && (mipsPersons * mipsTotal !== mipsPersonsTotalPerDevice);
 
   return (
     <div className="space-y-6">
