@@ -34,10 +34,12 @@ interface InvoiceViewDrawerProps {
 export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayment, onSendPaymentLink }: InvoiceViewDrawerProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [correctOpen, setCorrectOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const qc = useQueryClient();
   const { roles } = useAuth() as any;
   const canCorrect = can.approveDiscount(roles);
+  const canCancel = can.cancelInvoice(roles);
 
   const handleVerifyRazorpay = async () => {
     if (!invoiceId) return;
