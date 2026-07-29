@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail, PencilLine } from 'lucide-react';
+import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail, PencilLine, XCircle } from 'lucide-react';
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { CorrectInvoiceDrawer } from './CorrectInvoiceDrawer';
+import { CancelInvoiceDrawer } from './CancelInvoiceDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
@@ -33,10 +34,12 @@ interface InvoiceViewDrawerProps {
 export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayment, onSendPaymentLink }: InvoiceViewDrawerProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [correctOpen, setCorrectOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const qc = useQueryClient();
   const { roles } = useAuth() as any;
   const canCorrect = can.approveDiscount(roles);
+  const canCancel = can.cancelInvoice(roles);
 
   const handleVerifyRazorpay = async () => {
     if (!invoiceId) return;
@@ -402,6 +405,13 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               Correct invoice amount
             </Button>
           )}
+
+          {canCancel && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
+            <Button variant="ghost" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancel invoice
+            </Button>
+          )}
         </div>
 
         <InvoiceShareDrawer
@@ -413,6 +423,12 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
           open={correctOpen}
           onOpenChange={setCorrectOpen}
           invoice={invoice as any}
+        />
+        <CancelInvoiceDrawer
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          invoice={invoice as any}
+          onCancelled={() => onOpenChange(false)}
         />
       </SheetContent>
     </Sheet>

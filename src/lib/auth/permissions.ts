@@ -18,6 +18,7 @@ export type Capability =
   | 'cross_branch_view'
   | 'manage_settings'
   | 'cancel_membership'
+  | 'cancel_invoice'
   | 'freeze_membership'
   | 'credit_member'
   | 'manage_devices'
@@ -36,6 +37,7 @@ const MATRIX: Record<Capability, AppRole[]> = {
   cross_branch_view:   ['owner', 'admin'],
   manage_settings:     ['owner', 'admin'],
   cancel_membership:   ['owner', 'admin', 'manager'],
+  cancel_invoice:      ['owner', 'admin', 'manager'],
   freeze_membership:   ['owner', 'admin', 'manager'],
   credit_member:       ['owner', 'admin', 'manager'],
   manage_devices:      ['owner', 'admin', 'manager'],
@@ -61,6 +63,7 @@ export const can = {
   crossBranchView:   (r?: string[]) => hasCapability(r, 'cross_branch_view'),
   manageSettings:    (r?: string[]) => hasCapability(r, 'manage_settings'),
   cancelMembership:  (r?: string[]) => hasCapability(r, 'cancel_membership'),
+  cancelInvoice:     (r?: string[]) => hasCapability(r, 'cancel_invoice'),
   freezeMembership:  (r?: string[]) => hasCapability(r, 'freeze_membership'),
   creditMember:      (r?: string[]) => hasCapability(r, 'credit_member'),
   manageDevices:     (r?: string[]) => hasCapability(r, 'manage_devices'),

@@ -32,10 +32,14 @@ export function useMemberPTPackages(memberId: string) {
   });
 }
 
-export function useActiveMemberPackages(branchId?: string) {
+export function useActiveMemberPackages(
+  branchId?: string,
+  opts?: { statuses?: Array<Database["public"]["Enums"]["pt_package_status"]> },
+) {
+  const statusKey = (opts?.statuses ?? ["active"]).join(",");
   return useQuery({
-    queryKey: ["active-member-packages", branchId ?? "all"],
-    queryFn: () => fetchActiveMemberPackages(branchId),
+    queryKey: ["active-member-packages", branchId ?? "all", statusKey],
+    queryFn: () => fetchActiveMemberPackages(branchId, opts),
   });
 }
 
