@@ -13,10 +13,13 @@ import { RecordPaymentDrawer } from '@/components/invoices/RecordPaymentDrawer';
 import { SendPaymentLinkDrawer } from '@/components/invoices/SendPaymentLinkDrawer';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { InvoiceShareDrawer } from '@/components/invoices/InvoiceShareDrawer';
-import { 
+import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
-  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2
+  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
