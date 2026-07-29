@@ -874,6 +874,11 @@ export default function PTSessionsPage() {
         </Tabs>
       </div>
       </TooltipProvider>
+      <CancelInvoiceDrawer
+        open={!!cancelInvoiceTarget}
+        onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
+        invoice={cancelInvoiceTarget}
+      />
     </AppLayout>
   );
 }
