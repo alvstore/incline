@@ -662,6 +662,65 @@ export default function PTSessionsPage() {
               </SheetContent>
             </Sheet>
 
+            {pendingPackages && pendingPackages.length > 0 && (
+              <Card className="rounded-2xl border-0 bg-amber-50/70 ring-1 ring-amber-200 shadow-md">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-amber-900 text-base">
+                    <AlertCircle className="h-4 w-4" />
+                    Pending payment ({pendingPackages.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-xs text-amber-800/80 mb-3">
+                    These packages were sold but their invoice hasn't been fully paid yet. Collect payment to activate, or cancel the invoice to reverse the sale and free up trainer commissions.
+                  </p>
+                  <div className="rounded-xl overflow-hidden border border-amber-200 bg-card">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-amber-100/60 hover:bg-amber-100/60">
+                          <TableHead>Member</TableHead>
+                          <TableHead>Package</TableHead>
+                          <TableHead>Trainer</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingPackages.map((pkg: any) => (
+                          <TableRow key={pkg.id} className="hover:bg-amber-50/60">
+                            <TableCell className="font-medium">{pkg.member_name || pkg.member_code || '—'}</TableCell>
+                            <TableCell>{pkg.package_name}</TableCell>
+                            <TableCell>{pkg.trainer_name || '—'}</TableCell>
+                            <TableCell className="text-right">₹{Number(pkg.price_paid || 0).toLocaleString('en-IN')}</TableCell>
+                            <TableCell className="text-right">
+                              {canCancelInvoice && pkg.invoice_id ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                  onClick={() => setCancelInvoiceTarget({
+                                    id: pkg.invoice_id,
+                                    invoice_number: pkg.invoice_number ?? null,
+                                    total_amount: pkg.price_paid,
+                                    amount_paid: 0,
+                                    status: 'pending',
+                                  })}
+                                >
+                                  <XCircle className="h-4 w-4 mr-1" /> Cancel
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Awaiting payment</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {activePackages?.length === 0 ? (
               <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
                 <CardContent className="py-16 flex flex-col items-center text-center">
