@@ -13374,6 +13374,21 @@ export type Database = {
         Args: { p_booking_id: string; p_event: string }
         Returns: undefined
       }
+      _purchase_pt_package_impl: {
+        Args: {
+          _branch_id: string
+          _gst_rate?: number
+          _idempotency_key?: string
+          _member_id: string
+          _package_id: string
+          _payment_method?: string
+          _payment_source?: string
+          _price_paid: number
+          _received_by?: string
+          _trainer_id: string
+        }
+        Returns: Json
+      }
       _resolve_audit_target_name: {
         Args: { p_row: Json; p_table: string }
         Returns: string
