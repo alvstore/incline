@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
-import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail, PencilLine } from 'lucide-react';
+import { FileText, Printer, Download, IndianRupee, CreditCard, Link2, Receipt, Mail, PencilLine, XCircle } from 'lucide-react';
 import { InvoiceShareDrawer } from './InvoiceShareDrawer';
 import { CorrectInvoiceDrawer } from './CorrectInvoiceDrawer';
+import { CancelInvoiceDrawer } from './CancelInvoiceDrawer';
 import { PaymentLinkTimeline } from './PaymentLinkTimeline';
 import { buildThermalReceiptPdf, downloadBlob, printBlob } from '@/utils/pdfBlob';
 import { toInvoicePdfInput } from '@/utils/invoicePdfInput';
