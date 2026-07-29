@@ -575,6 +575,12 @@ export default function InvoicesPage() {
         onOpenChange={(open) => !open && setShareInvoice(null)}
         invoice={shareInvoice}
       />
+
+      <CancelInvoiceDrawer
+        open={!!cancelInvoice}
+        onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
+        invoice={cancelInvoice}
+      />
     </AppLayout>
   );
 }
