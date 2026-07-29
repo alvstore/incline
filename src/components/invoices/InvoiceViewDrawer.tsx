@@ -405,6 +405,13 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
               Correct invoice amount
             </Button>
           )}
+
+          {canCancel && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
+            <Button variant="ghost" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancel invoice
+            </Button>
+          )}
         </div>
 
         <InvoiceShareDrawer
@@ -416,6 +423,12 @@ export function InvoiceViewDrawer({ open, onOpenChange, invoiceId, onRecordPayme
           open={correctOpen}
           onOpenChange={setCorrectOpen}
           invoice={invoice as any}
+        />
+        <CancelInvoiceDrawer
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          invoice={invoice as any}
+          onCancelled={() => onOpenChange(false)}
         />
       </SheetContent>
     </Sheet>
