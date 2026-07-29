@@ -104,6 +104,8 @@ export default function PTSessionsPage() {
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [selectedPackageForSession, setSelectedPackageForSession] = useState<string>("");
   const [showInactive, setShowInactive] = useState(false);
+  const [cancelInvoiceTarget, setCancelInvoiceTarget] = useState<any>(null);
+  const canCancelInvoice = can.cancelInvoice(roles);
   const [newSession, setNewSession] = useState({
     scheduled_at: "",
     duration_minutes: 60,
