@@ -14992,23 +14992,16 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
-      staff_check_in:
-        | {
-            Args: { p_branch_id: string; p_notes?: string; p_user_id: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_branch_id: string
-              p_notes?: string
-              p_source?: string
-              p_user_id: string
-            }
-            Returns: string
-          }
-      staff_check_out:
-        | { Args: { p_user_id: string }; Returns: Json }
-        | { Args: { p_notes?: string; p_user_id: string }; Returns: string }
+      staff_check_in: {
+        Args: {
+          p_branch_id: string
+          p_notes?: string
+          p_source?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      staff_check_out: { Args: { p_user_id: string }; Returns: Json }
       touch_presence: { Args: never; Returns: undefined }
       trainer_can_view_member: {
         Args: { _member_id: string; _user_id: string }
