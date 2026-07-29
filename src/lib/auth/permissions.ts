@@ -63,6 +63,7 @@ export const can = {
   crossBranchView:   (r?: string[]) => hasCapability(r, 'cross_branch_view'),
   manageSettings:    (r?: string[]) => hasCapability(r, 'manage_settings'),
   cancelMembership:  (r?: string[]) => hasCapability(r, 'cancel_membership'),
+  cancelInvoice:     (r?: string[]) => hasCapability(r, 'cancel_invoice'),
   freezeMembership:  (r?: string[]) => hasCapability(r, 'freeze_membership'),
   creditMember:      (r?: string[]) => hasCapability(r, 'credit_member'),
   manageDevices:     (r?: string[]) => hasCapability(r, 'manage_devices'),
