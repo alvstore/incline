@@ -37,6 +37,7 @@ const MATRIX: Record<Capability, AppRole[]> = {
   cross_branch_view:   ['owner', 'admin'],
   manage_settings:     ['owner', 'admin'],
   cancel_membership:   ['owner', 'admin', 'manager'],
+  cancel_invoice:      ['owner', 'admin', 'manager'],
   freeze_membership:   ['owner', 'admin', 'manager'],
   credit_member:       ['owner', 'admin', 'manager'],
   manage_devices:      ['owner', 'admin', 'manager'],
