@@ -170,10 +170,14 @@ export async function fetchMemberPTPackages(
   }));
 }
 
-// Fetch active PT packages for a branch (optional branchId = all branches)
+// Fetch member packages by status for a branch (default: active).
+// Pass `statuses: ['active', 'pending_payment']` to include unpaid packages
+// so admins can complete or cancel them from the PT dashboard.
 export async function fetchActiveMemberPackages(
-  branchId?: string
+  branchId?: string,
+  opts?: { statuses?: Array<Database['public']['Enums']['pt_package_status']> },
 ): Promise<MemberPTPackageWithDetails[]> {
+  const statuses = opts?.statuses ?? ['active'];
   let query = supabase
     .from("member_pt_packages")
     .select(`
@@ -182,7 +186,7 @@ export async function fetchActiveMemberPackages(
       trainer:trainers(user_id),
       member:members(member_code, user_id)
     `)
-    .eq("status", "active")
+    .in("status", statuses as any)
     .order("created_at", { ascending: false });
 
   if (branchId) {
