@@ -19,6 +19,8 @@ const NOISE_PATTERNS: RegExp[] = [
   /ResizeObserver loop/i,
   /^not_found$/i,
   /Non-Error promise rejection captured/i,
+  // Opaque cross-origin script errors (browser strips details for CORS-less scripts).
+  /^Script error\.?$/i,
 ];
 
 function isNoise(message: string): boolean {
@@ -91,6 +93,10 @@ export function installGlobalErrorReporter() {
   installed = true;
 
   window.addEventListener('error', (e) => {
+    // Opaque cross-origin errors: browser masks details for CORS-less scripts.
+    // Drop them — they can't be actioned and flood System Health.
+    const isOpaque = (!e.message || /^Script error\.?$/i.test(e.message)) && !e.filename && !e.lineno && !e.colno;
+    if (isOpaque) return;
     reportError(e.message || 'window.onerror', {
       severity: 'error',
       stack: e.error?.stack || null,

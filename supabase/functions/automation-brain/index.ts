@@ -257,9 +257,12 @@ async function processRule(rule: any) {
 
   if ((status === "error" || status === "warning") && errorMsg) {
     try {
+      // Cold-start 502/503/504 are transient gateway warmups (already retried 3x with backoff).
+      // Log as `info` so SystemHealth stops flagging them as actionable warnings.
+      const severity = gatewayColdStart ? "info" : status === "warning" ? "warning" : "error";
       await admin.rpc("log_error_event", {
         p_source: "automation_brain",
-        p_severity: status === "warning" ? "warning" : "error",
+        p_severity: severity,
         p_message: `Automation rule "${rule.key}" ${gatewayColdStart ? "cold-start gateway 5xx" : "failed"}: ${errorMsg}`.slice(0, 1000),
         p_context: { rule_id: rule.id, rule_key: rule.key, worker: rule.worker, branch_id: rule.branch_id, gateway_cold_start: gatewayColdStart },
       });
