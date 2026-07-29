@@ -459,6 +459,15 @@ export default function InvoicesPage() {
                                     <Mail className="mr-2 h-4 w-4" />
                                     Share Invoice
                                   </DropdownMenuItem>
+                                  {canCancel && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
+                                    <DropdownMenuItem
+                                      onClick={() => setCancelInvoiceTarget(invoice)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <XCircle className="mr-2 h-4 w-4" />
+                                      Cancel Invoice
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
