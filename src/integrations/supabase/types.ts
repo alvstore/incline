@@ -13636,6 +13636,10 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_invoice: {
+        Args: { _invoice_id: string; _reason?: string }
+        Returns: Json
+      }
       cancel_membership: {
         Args: {
           p_idempotency_key?: string
