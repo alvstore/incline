@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, Calendar, Check, X, Edit, TrendingUp, Users, Dumbbell,
   Eye, EyeOff, Crown, IndianRupee, Download, Sparkles, CalendarDays, Clock,
-  Utensils, Heart, Moon, Activity, Target, Zap,
+  Utensils, Heart, Moon, Activity, Target, Zap, AlertCircle, XCircle,
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
@@ -26,9 +26,11 @@ import {
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { AddPTPackageDrawer } from "@/components/pt/AddPTPackageDrawer";
 import { EditPTPackageDrawer } from "@/components/pt/EditPTPackageDrawer";
+import { CancelInvoiceDrawer } from "@/components/invoices/CancelInvoiceDrawer";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
 
