@@ -18,6 +18,7 @@ export type Capability =
   | 'cross_branch_view'
   | 'manage_settings'
   | 'cancel_membership'
+  | 'cancel_invoice'
   | 'freeze_membership'
   | 'credit_member'
   | 'manage_devices'
