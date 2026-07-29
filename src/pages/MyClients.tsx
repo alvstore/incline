@@ -207,7 +207,7 @@ export default function MyClients() {
             )}
           </TabsContent>
 
-          {/* PT Clients */}
+          {/* PT Clients — TanStack-style progress table */}
           <TabsContent value="pt" className="mt-4">
             {ptClients.length === 0 ? (
               <Card>
@@ -217,103 +217,106 @@ export default function MyClients() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {ptClients.map((client: any) => {
-                  const daysLeft = Math.ceil((new Date(client.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                  const stats = sessionStats[client.member_id] || { completed: 0, total: 0 };
-                  const clientName = client.member?.profile?.full_name || client.member?.member_code || 'Unknown';
+              <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted/60 backdrop-blur text-xs uppercase tracking-wider text-muted-foreground">
+                      <tr>
+                        <th className="text-left font-semibold px-4 py-3">Member</th>
+                        <th className="text-left font-semibold px-4 py-3">Plan</th>
+                        <th className="text-left font-semibold px-4 py-3 min-w-[220px]">Progress</th>
+                        <th className="text-right font-semibold px-4 py-3">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {ptClients.map((client: any) => {
+                        const clientName = client.member?.profile?.full_name || client.member?.member_code || 'Unknown';
+                        const pkgType = (client.package_type ?? client.package?.package_type ?? 'session_based') as 'session_based' | 'monthly';
+                        const stats = sessionStats[client.member_id] || { completed: 0, total: 0 };
+                        const remaining = typeof client.sessions_remaining === 'number' ? client.sessions_remaining : null;
+                        const total = client.sessions_total ?? null;
+                        const used = remaining !== null && total !== null ? Math.max(0, total - remaining) : stats.completed;
+                        const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0;
+                        const daysLeft = client.expiry_date
+                          ? Math.ceil((new Date(client.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                          : null;
 
-                  return (
-                    <Card key={client.id} className="border-border/50">
-                      <CardContent className="pt-6">
-                        <div className="flex items-start gap-4">
-                          <Avatar className="h-14 w-14">
-                            <AvatarImage src={client.member?.profile?.avatar_url} />
-                            <AvatarFallback>{clientName.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="font-semibold">{clientName}</h3>
-                                <p className="text-sm text-muted-foreground">{client.member?.member_code}</p>
+                        return (
+                          <tr key={client.id} className="hover:bg-muted/40 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-9 w-9 shrink-0">
+                                  <AvatarImage src={client.member?.profile?.avatar_url} />
+                                  <AvatarFallback>{clientName.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate">{clientName}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{client.member?.member_code}</p>
+                                </div>
                               </div>
-                              <Badge variant={daysLeft <= 7 ? 'destructive' : 'secondary'}>
-                                {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
-                              </Badge>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Package</p>
-                                <p className="font-medium">{client.package?.name}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col">
+                                <span className="font-medium truncate max-w-[180px]">{client.package?.name}</span>
+                                <Badge variant="outline" className="text-[10px] mt-1 w-fit">
+                                  {pkgType === 'monthly' ? 'Monthly' : 'Sessions'}
+                                </Badge>
                               </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Sessions</p>
-                                <p className="font-medium">{client.sessions_remaining} of {client.sessions_total}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              {pkgType === 'session_based' && total ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="font-medium">{used} / {total} sessions</span>
+                                    <span className="text-muted-foreground">{remaining ?? 0} left</span>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all duration-300"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-xs">
+                                    Expires {client.expiry_date ? format(new Date(client.expiry_date), 'dd MMM yyyy') : '—'}
+                                  </span>
+                                  {daysLeft !== null && (
+                                    <Badge variant={daysLeft <= 7 ? 'destructive' : 'secondary'} className="text-[10px]">
+                                      {daysLeft > 0 ? `${daysLeft}d left` : 'Expired'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <MarkPtStatusMenu
+                                  memberPackageId={client.id}
+                                  trainerId={trainer!.id}
+                                  memberName={clientName}
+                                />
+                                <Button variant="ghost" size="sm" asChild>
+                                  <Link to={`/pt-sessions?member=${client.member_id}`}>
+                                    <Eye className="h-4 w-4" />
+                                  </Link>
+                                </Button>
                               </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Completed</p>
-                                <p className="font-medium">{stats.completed} sessions</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Expires</p>
-                                <p className="font-medium">{format(new Date(client.expiry_date), 'dd MMM yyyy')}</p>
-                              </div>
-                            </div>
-
-                            {client.member?.profile?.phone && (
-                              <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
-                                <Phone className="h-4 w-4" />
-                                <span>{client.member.profile.phone}</span>
-                              </div>
-                            )}
-
-                            <div className="flex flex-wrap gap-2 mt-4">
-                              <MarkPtStatusMenu
-                                memberPackageId={client.id}
-                                trainerId={trainer!.id}
-                                memberName={clientName}
-                              />
-                              <Button variant="outline" size="sm" asChild>
-                                <Link to={`/pt-sessions?member=${client.member_id}`}>
-                                  <Calendar className="h-4 w-4 mr-1" />
-                                  Sessions
-                                </Link>
-                              </Button>
-                              <Button variant="outline" size="sm" asChild>
-                                <Link to="/trainer-plan-builder">
-                                  <Dumbbell className="h-4 w-4 mr-1" />
-                                  Create Plan
-                                </Link>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setMeasurementDrawer({ open: true, memberId: client.member_id, memberName: clientName })}
-                              >
-                                <Ruler className="h-4 w-4 mr-1" />
-                                Record Progress
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setProgressDrawer({ open: true, memberId: client.member_id, memberName: clientName })}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View Progress
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
             )}
           </TabsContent>
         </Tabs>
       </div>
+
 
       {/* Record Measurement Drawer */}
       <RecordMeasurementDrawer
