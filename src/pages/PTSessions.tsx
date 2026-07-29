@@ -122,6 +122,7 @@ export default function PTSessionsPage() {
   const { data: packages, isLoading: packagesLoading } = usePTPackages(queryBranchId, showInactive);
   const { data: trainers } = useTrainers(queryBranchId || branchId);
   const { data: activePackages } = useActiveMemberPackages(queryBranchId);
+  const { data: pendingPackages } = useActiveMemberPackages(queryBranchId, { statuses: ['pending_payment'] });
   const scheduleSession = useSchedulePTSession();
   const completeSession = useCompletePTSession();
   const cancelSession = useCancelPTSession();
