@@ -36,9 +36,50 @@ export function MarkPtStatusMenu({
   const [pending, setPending] = useState<PtSessionStatusInput | null>(null);
   const [notes, setNotes] = useState('');
 
+  const CACHE_KEYS: readonly (readonly unknown[])[] = [
+    ['my-pt-clients'],
+    ['trainer-pt-clients'],
+    ['member-pt-packages'],
+    ['active-member-packages'],
+    ['client-session-stats'],
+    ['pt-attendance-roster'],
+    ...invalidateKeys,
+  ];
+
+  const consumesSession = (s: PtSessionStatusInput) =>
+    s === 'present' || s === 'late' || s === 'absent';
+  const countsAsCompleted = (s: PtSessionStatusInput) =>
+    s === 'present' || s === 'late';
+
+  const patchPtClientRow = (obj: any, status: PtSessionStatusInput) => {
+    if (!obj || obj.id !== memberPackageId) return obj;
+    const isSessionBased =
+      (obj.package_type ?? obj.package?.package_type) === 'session_based';
+    if (!isSessionBased || !consumesSession(status)) return obj;
+    const remaining = typeof obj.sessions_remaining === 'number'
+      ? Math.max(0, obj.sessions_remaining - 1)
+      : obj.sessions_remaining;
+    return { ...obj, sessions_remaining: remaining };
+  };
+
   const mark = useMutation({
     mutationFn: (status: PtSessionStatusInput) =>
       logPtSession({ memberPackageId, trainerId, status, notes: notes.trim() || undefined }),
+    onMutate: async (status) => {
+      // Snapshot + optimistically patch every cache that could hold this row
+      const snapshots: Array<[readonly unknown[], unknown]> = [];
+      for (const key of CACHE_KEYS) {
+        await qc.cancelQueries({ queryKey: key as any });
+        const entries = qc.getQueriesData({ queryKey: key as any });
+        for (const [qk, data] of entries) {
+          snapshots.push([qk, data]);
+          if (Array.isArray(data)) {
+            qc.setQueryData(qk, (data as any[]).map((r) => patchPtClientRow(r, status)));
+          }
+        }
+      }
+      return { snapshots };
+    },
     onSuccess: (res: any) => {
       const s = res?.status as string;
       const left = res?.sessions_remaining;
@@ -53,18 +94,21 @@ export function MarkPtStatusMenu({
       });
       setPending(null);
       setNotes('');
-      [['trainer-pt-clients'], ['client-session-stats'], ['member-pt-packages'], ['pt-attendance-roster'], ...invalidateKeys]
-        .forEach((k) => qc.invalidateQueries({ queryKey: k }));
     },
-    onError: (e: any) => {
+    onError: (e: any, _vars, ctx) => {
+      // Roll back optimistic patches
+      ctx?.snapshots?.forEach(([qk, data]) => qc.setQueryData(qk as any, data));
       const code = e?.message || '';
       toast.error(
-        code.includes('no_sessions_left') ? 'No PT sessions remaining on this pack' :
-        code.includes('package_expired') ? 'This monthly plan has expired' :
+        code.includes('no_sessions_left') || code.includes('Sessions exhausted') ? 'No PT sessions remaining on this pack' :
+        code.includes('package_expired') || code.includes('Package expired') ? 'This monthly plan has expired' :
         code.includes('package_not_active') ? 'Package is not active' :
         code.includes('not_authorized') ? 'You are not allowed to mark this session' :
         code || 'Could not log session'
       );
+    },
+    onSettled: () => {
+      CACHE_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: k as any }));
     },
   });
 
