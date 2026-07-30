@@ -132,8 +132,10 @@ export default function PTSessionsPage() {
   const cancelSession = useCancelPTSession();
   const updatePackage = useUpdatePTPackage();
 
-  const firstTrainerId = trainers?.[0]?.id;
-  const { data: sessions } = useTrainerSessions(firstTrainerId || "", { startDate: new Date() });
+  // Session KPIs must cover every trainer in the branch — reading only the
+  // first trainer made the dashboard show 0 sessions while packages existed.
+  const trainerIds = useMemo(() => (trainers || []).map((t: any) => t.id).filter(Boolean), [trainers]);
+  const { data: sessions } = useTrainerSessions(trainerIds, { startDate: new Date() });
 
   const filteredPackages = (packages || []).filter((pkg: any) =>
     showInactive ? true : pkg.is_active !== false
