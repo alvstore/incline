@@ -155,6 +155,11 @@ function RoutedContent() {
   const [displayLocation, setDisplayLocation] = useState(location);
   const [isTransitionPending, startTransition] = useTransition();
 
+  // App booted successfully — release the one-shot stale-chunk reload guard.
+  useEffect(() => {
+    clearChunkRetryGuard();
+  }, []);
+
   useEffect(() => {
     startTransition(() => {
       setDisplayLocation(location);
