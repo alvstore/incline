@@ -14216,6 +14216,22 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_todays_checkins: {
+        Args: { _branch_id?: string }
+        Returns: {
+          avatar_url: string
+          branch_id: string
+          check_in: string
+          check_out: string
+          days_remaining: number
+          dues: number
+          full_name: string
+          member_code: string
+          person_id: string
+          person_kind: string
+          role_label: string
+        }[]
+      }
       get_trainer_government_id: {
         Args: { _trainer_id: string }
         Returns: {

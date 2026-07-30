@@ -30,6 +30,8 @@ const LazyAIInsightsWidget = lazy(() => import('@/components/dashboard/AIInsight
 const LazyMemberVoiceWidget = lazy(() => import('@/components/dashboard/MemberVoiceWidget').then(m => ({ default: m.MemberVoiceWidget })));
 const LazyMembersCountingChart = lazy(() => import('@/components/dashboard/MembersCountingChart'));
 const LazyBirthdayWidget = lazy(() => import('@/components/dashboard/BirthdayWidget'));
+const LazyTodaysCheckinsCard = lazy(() => import('@/components/dashboard/TodaysCheckinsCard'));
+const LazyGoogleReviewsWidget = lazy(() => import('@/components/dashboard/GoogleReviewsWidget'));
 import { MemberGrowthCards } from '@/components/dashboard/MemberGrowthCards';
 import { JoinedSummaryStrip } from '@/components/dashboard/JoinedSummaryStrip';
 import { DASHBOARD_QUERY_OPTIONS } from '@/hooks/useDashboardData';
@@ -426,6 +428,26 @@ export default function DashboardPage() {
               <Suspense fallback={<ChartSkeleton />}>
                 <LazyBirthdayWidget branchId={branchFilter} />
               </Suspense>
+              <Suspense fallback={<Skeleton className="h-64 rounded-2xl md:col-span-2" />}>
+                <LazyTodaysCheckinsCard branchId={branchFilter || undefined} />
+              </Suspense>
+            </>
+          ) : (
+            <>
+              <ChartSkeleton />
+              <ChartSkeleton />
+              <Skeleton className="h-64 rounded-2xl md:col-span-2" />
+            </>
+          )}
+        </div>
+
+        {/* Google Reviews + Live Access Feed */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {bottomInView ? (
+            <>
+              <Suspense fallback={<ChartSkeleton />}>
+                <LazyGoogleReviewsWidget branchId={branchFilter || undefined} />
+              </Suspense>
               <Card className="shadow-lg rounded-2xl border-0 md:col-span-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -442,7 +464,6 @@ export default function DashboardPage() {
             </>
           ) : (
             <>
-              <ChartSkeleton />
               <ChartSkeleton />
               <Skeleton className="h-64 rounded-2xl md:col-span-2" />
             </>

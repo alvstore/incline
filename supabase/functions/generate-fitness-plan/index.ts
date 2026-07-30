@@ -1,4 +1,4 @@
-// generate-fitness-plan v2.0.0 — SSOT: routes through ai-runtime (purpose='fitness_plan')
+// generate-fitness-plan v2.0.1 — fix: pass supabaseAdmin to ai-runtime (was undefined `supabase`)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { generateOnce } from "../_shared/ai-runtime.ts";
@@ -241,11 +241,11 @@ serve(async (req) => {
     try {
       const r = await generateOnce({
         purpose: "fitness_plan",
-        branchId: memberInfo?.branch_id ?? null,
+        branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
         userMessage: userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt,
         systemOverride: systemPrompt,
         responseFormat: "json",
-        supabase,
+        supabase: supabaseAdmin,
       });
       content = r.content;
     } catch (err) {
