@@ -42,6 +42,8 @@ const detailsSchema = z.object({
   state: z.string().optional(),
   postal_code: z.string().optional(),
   address: z.string().optional(),
+  government_id_type: z.string().optional(),
+  government_id_number: z.string().trim().max(30).optional(),
   emergency_contact_name: z.string().optional(),
   emergency_contact_phone: z.string().optional(),
   fitness_goals: z.string().optional(),
