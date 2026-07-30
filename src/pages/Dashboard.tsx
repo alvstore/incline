@@ -469,13 +469,6 @@ export default function DashboardPage() {
             </>
           )}
         </div>
-            <>
-              <ChartSkeleton />
-              <ChartSkeleton />
-              <Skeleton className="h-64 rounded-2xl md:col-span-2" />
-            </>
-          )}
-        </div>
 
 
         {/* AI Insights + Member Voice — lazy loaded */}
