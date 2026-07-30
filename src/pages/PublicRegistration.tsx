@@ -316,10 +316,35 @@ export default function PublicRegistration() {
               </Field>
 
 
+              <Field label="Address">
+                <Input
+                  className={fieldInputCls}
+                  placeholder="House / street / area"
+                  {...form.register("address")}
+                />
+              </Field>
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="City"><Input className={fieldInputCls} {...form.register("city")} /></Field>
                 <Field label="Pincode"><Input className={fieldInputCls} {...form.register("postal_code")} /></Field>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Government ID type">
+                  <select className={fieldSelectCls} {...form.register("government_id_type")}>
+                    <option value="">Select</option>
+                    <option value="aadhaar">Aadhaar</option>
+                    <option value="pan">PAN</option>
+                    <option value="passport">Passport</option>
+                    <option value="driving_license">Driving licence</option>
+                    <option value="voter_id">Voter ID</option>
+                  </select>
+                </Field>
+                <Field label="ID number" error={form.formState.errors.government_id_number?.message}>
+                  <Input className={fieldInputCls} placeholder="XXXX XXXX XXXX" {...form.register("government_id_number")} />
+                </Field>
+              </div>
+
 
               <Field label="Emergency contact name">
                 <Input className={fieldInputCls} {...form.register("emergency_contact_name")} />
