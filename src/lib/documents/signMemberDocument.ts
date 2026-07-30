@@ -35,3 +35,31 @@ export async function signMemberDocument(
   }
   return data.signedUrl;
 }
+
+/**
+ * Onboarding waiver / signature links.
+ *
+ * Self-registration (`register-member` edge function) writes to the
+ * `member-onboarding` bucket, while the staff-side registration form writes to
+ * `documents`. The stored path alone doesn't say which one, so try both before
+ * failing — this is what made "View Waiver PDF" report "Object not found".
+ */
+export async function signOnboardingDocument(
+  path: string,
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
+): Promise<string> {
+  const buckets: SignableBucket[] = ["member-onboarding", "documents"];
+  let lastError: unknown = null;
+  for (const bucket of buckets) {
+    try {
+      return await signMemberDocument(path, ttlSeconds, bucket);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(
+    `Could not open onboarding document (${path}): ${
+      (lastError as Error)?.message ?? "not found in member-onboarding or documents"
+    }`,
+  );
+}
