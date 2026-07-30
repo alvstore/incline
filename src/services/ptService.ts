@@ -262,16 +262,21 @@ export async function schedulePTSession(
 
 // Fetch PT sessions for a trainer
 export async function fetchTrainerSessions(
-  trainerId: string,
+  // Accepts a single trainer or a list — the PT ops dashboard needs the whole
+  // branch roster, not just the first trainer.
+  trainerId: string | string[],
   options?: { startDate?: Date; endDate?: Date }
 ): Promise<PTSessionWithDetails[]> {
+  const ids = Array.isArray(trainerId) ? trainerId : [trainerId];
+  if (ids.length === 0) return [];
+
   let query = supabase
     .from("pt_sessions")
     .select(`
       *,
       member_package:member_pt_packages(member:members(member_code, user_id))
     `)
-    .eq("trainer_id", trainerId)
+    .in("trainer_id", ids)
     .order("scheduled_at", { ascending: true });
 
   if (options?.startDate) {
