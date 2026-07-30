@@ -1476,14 +1476,49 @@ export function MemberProfileDrawer({
                     </div>
                     {onboardingSig.par_q && typeof onboardingSig.par_q === 'object' && (
                       <details className="text-xs">
-                        <summary className="cursor-pointer text-muted-foreground">PAR-Q answers</summary>
-                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.par_q, null, 2)}</pre>
+                        <summary className="cursor-pointer text-muted-foreground">PAR-Q health screen</summary>
+                        <ul className="mt-2 space-y-1.5">
+                          {Object.entries(onboardingSig.par_q as Record<string, unknown>).map(([q, a]) => {
+                            const yes = String(a).toLowerCase() === 'yes' || a === true;
+                            return (
+                              <li key={q} className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-2.5 py-1.5">
+                                <span className="text-[11px] leading-snug text-slate-600">{q}</span>
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    yes ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                                  }`}
+                                >
+                                  {yes ? 'Yes' : 'No'}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </details>
                     )}
                     {onboardingSig.consents && typeof onboardingSig.consents === 'object' && (
                       <details className="text-xs">
                         <summary className="cursor-pointer text-muted-foreground">Consents</summary>
-                        <pre className="mt-1 whitespace-pre-wrap bg-white/70 rounded p-2 text-[11px]">{JSON.stringify(onboardingSig.consents, null, 2)}</pre>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {Object.entries(onboardingSig.consents as Record<string, unknown>).map(([k, v]) => {
+                            const label = k
+                              .replace(/_/g, ' ')
+                              .replace(/\bdpdp\b/i, 'DPDP')
+                              .replace(/\bwhatsapp\b/i, 'WhatsApp')
+                              .replace(/^\w/, (c) => c.toUpperCase());
+                            const on = v === true || String(v).toLowerCase() === 'true';
+                            return (
+                              <span
+                                key={k}
+                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium ${
+                                  on ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {label}: {on ? 'Granted' : 'Declined'}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </details>
                     )}
                   </CardContent>
