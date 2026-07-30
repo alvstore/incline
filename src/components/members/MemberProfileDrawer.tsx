@@ -1457,7 +1457,14 @@ export function MemberProfileDrawer({
                           variant="outline"
                           onClick={async () => {
                             try {
-                              const url = await signMemberDocument(onboardingSig.waiver_pdf_path!, 60);
+                              // Self-registration waivers live in the
+                              // `member-onboarding` bucket (written by the
+                              // register-member function), not `documents`.
+                              const url = await signMemberDocument(
+                                onboardingSig.waiver_pdf_path!,
+                                60,
+                                'member-onboarding',
+                              );
                               window.open(url, '_blank');
                             } catch (e: any) {
                               toast.error(e?.message || 'Could not open waiver');
