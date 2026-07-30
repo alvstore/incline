@@ -187,10 +187,16 @@ export default function AnalyticsPage() {
   });
 
   // PT Analytics
+  // Revenue/sales must exclude reversed + cancelled packages — otherwise a
+  // cancelled invoice (e.g. INV-INC-26-0054) keeps inflating PT revenue and
+  // the "Top PT Performer" card while /pt-sessions correctly shows nothing.
   const { data: ptStats } = useQuery({
     queryKey: ['analytics-pt-stats', branchFilter],
     queryFn: async () => {
-      let q = supabase.from('member_pt_packages').select('id, price_paid, trainer_id, status, trainers(user_id)');
+      let q = supabase
+        .from('member_pt_packages')
+        .select('id, price_paid, trainer_id, status, trainers(user_id)')
+        .not('status', 'in', '(reversed,cancelled)');
       if (branchFilter) q = q.eq('branch_id', branchFilter);
       const { data } = await q;
       if (!data || data.length === 0) return { totalRevenue: 0, activePackages: 0, totalSold: 0, topTrainer: null, trainerStats: [] };
