@@ -33,8 +33,15 @@ function isNoise(message: string): boolean {
 }
 
 // Handle stale-chunk failures after a deploy: reload the page once.
+// NOTE: Safari/iOS surfaces a failed dynamic `import()` as the bare message
+// "Load failed" (Chrome says "Failed to fetch dynamically imported module"),
+// so both spellings must be treated as a stale chunk rather than an app crash.
 function handleStaleChunk(message: string): boolean {
-  if (!/Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(message)) {
+  if (
+    !/Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError|^Load failed\.?$/i.test(
+      message,
+    )
+  ) {
     return false;
   }
   if (typeof window === 'undefined') return false;

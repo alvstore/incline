@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
+import { lazyWithRetry as lazy, clearChunkRetryGuard } from "@/lib/runtime/lazyWithRetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -153,6 +154,11 @@ function RoutedContent() {
   const location = useLocation();
   const [displayLocation, setDisplayLocation] = useState(location);
   const [isTransitionPending, startTransition] = useTransition();
+
+  // App booted successfully — release the one-shot stale-chunk reload guard.
+  useEffect(() => {
+    clearChunkRetryGuard();
+  }, []);
 
   useEffect(() => {
     startTransition(() => {

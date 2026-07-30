@@ -132,8 +132,10 @@ export default function PTSessionsPage() {
   const cancelSession = useCancelPTSession();
   const updatePackage = useUpdatePTPackage();
 
-  const firstTrainerId = trainers?.[0]?.id;
-  const { data: sessions } = useTrainerSessions(firstTrainerId || "", { startDate: new Date() });
+  // Session KPIs must cover every trainer in the branch — reading only the
+  // first trainer made the dashboard show 0 sessions while packages existed.
+  const trainerIds = useMemo(() => (trainers || []).map((t: any) => t.id).filter(Boolean), [trainers]);
+  const { data: sessions } = useTrainerSessions(trainerIds, { startDate: new Date() });
 
   const filteredPackages = (packages || []).filter((pkg: any) =>
     showInactive ? true : pkg.is_active !== false
@@ -162,11 +164,15 @@ export default function PTSessionsPage() {
   const topRevenue = topThree[0]?.revenue || 0;
 
   const packageTypeSplit = useMemo(() => {
-    const sessionBased = activePackages?.filter((p: any) => p.sessions_total > 0).length || 0;
-    const durationBased = activePackages?.filter((p: any) => p.sessions_total === 0).length || 0;
+    // Prefer the canonical package_type; fall back to session count so legacy
+    // rows without the column still classify correctly.
+    const isMonthly = (p: any) =>
+      p.package_type ? p.package_type === 'monthly' : !(p.sessions_total > 0);
+    const durationBased = activePackages?.filter(isMonthly).length || 0;
+    const sessionBased = (activePackages?.length || 0) - durationBased;
     return [
       { name: 'Session-Based', value: sessionBased, color: 'hsl(var(--primary))' },
-      { name: 'Duration-Based', value: durationBased, color: 'hsl(var(--accent))' },
+      { name: 'Monthly / Duration', value: durationBased, color: 'hsl(var(--accent))' },
     ];
   }, [activePackages]);
 

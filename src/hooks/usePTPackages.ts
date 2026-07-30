@@ -44,13 +44,14 @@ export function useActiveMemberPackages(
 }
 
 export function useTrainerSessions(
-  trainerId: string,
+  trainerId: string | string[],
   options?: { startDate?: Date; endDate?: Date }
 ) {
+  const ids = Array.isArray(trainerId) ? trainerId.filter(Boolean) : [trainerId].filter(Boolean);
   return useQuery({
-    queryKey: ["trainer-sessions", trainerId, options],
-    queryFn: () => fetchTrainerSessions(trainerId, options),
-    enabled: !!trainerId,
+    queryKey: ["trainer-sessions", ids.slice().sort().join(","), options],
+    queryFn: () => fetchTrainerSessions(ids, options),
+    enabled: ids.length > 0,
   });
 }
 

@@ -20,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
-import { signMemberDocument } from '@/lib/documents/signMemberDocument';
+import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
 import { UnfreezeMembershipDrawer } from './UnfreezeMembershipDrawer';
 import { AssignTrainerDrawer } from './AssignTrainerDrawer';
@@ -1457,7 +1457,13 @@ export function MemberProfileDrawer({
                           variant="outline"
                           onClick={async () => {
                             try {
-                              const url = await signMemberDocument(onboardingSig.waiver_pdf_path!, 60);
+                              // Self-registration waivers live in
+                              // `member-onboarding`; staff-form waivers live in
+                              // `documents`. The helper resolves both.
+                              const url = await signOnboardingDocument(
+                                onboardingSig.waiver_pdf_path!,
+                                60,
+                              );
                               window.open(url, '_blank');
                             } catch (e: any) {
                               toast.error(e?.message || 'Could not open waiver');

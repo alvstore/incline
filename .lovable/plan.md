@@ -1,76 +1,62 @@
+## Audit findings (all verified against code + database)
 
-## Goal
+**1. Love Kumar Paliwal (INC-26-0004) — "login is required" on photo upload**
+Confirmed in DB: this member row has `user_id = NULL` (no linked login, no profile). `MemberAvatarUpload` correctly refuses to upload because the `avatars` bucket policy requires the object path to start with the owner's user id. Root cause is upstream: the lead→member conversion did not provision a login. A `provision-member-login` function already exists but was never invoked for this record.
 
-Audit + polish the existing PT module to meet the Epic's intent without breaking the many downstream systems (invoices, commissions, MIPS check-ins, member portal, cancel flow). Nothing is renamed or duplicated.
+**2. PT packages dashboard inconsistency**
+DB shows exactly one PT package ever sold, and it is `status = 'reversed'` (Priyanka Lohar, invoice `INV-INC-26-0054`, `status = 'cancelled'`). Yet:
+- `/pt-sessions` correctly shows "No active packages".
+- `/analytics` shows ₹18,000 PT revenue, 1 package sold, Top PT Performer — because the analytics query (`Analytics.tsx`, `member_pt_packages` select) has **no status filter**, so reversed/cancelled sales still count as revenue.
+Also: session-based vs monthly packages are rendered with the same generic badge, and commissions are not shown/reversed visibly anywhere on the PT dashboard.
 
-## Mapping: Epic → existing stack (no changes needed)
+**3. `/fitness/templates` — "Load failed"**
+6 occurrences in `error_logs`, `severity=error`, `stack_trace = NULL`. This is the browser's message for a failed dynamic `import()` of a lazy route chunk (stale chunk after a redeploy), not a bug inside `Templates.tsx` — the page itself has no failing query path.
 
-| Epic asks for | Already exists as |
-|---|---|
-| `pt_packages` with type/session_count/duration/price | `pt_packages` (`package_type` = `session_based`/`monthly`, `sessions_included`, `duration_days`, `price`) |
-| `pt_subscriptions` | `member_pt_packages` (member_id, trainer_id, package_id, invoice_id, status enum, sessions_total/remaining, start/expiry_date) |
-| `pt_attendance` | `pt_sessions` (session_id, member_pt_package_id, trainer_id, scheduled_at, notes, status) |
-| Sales form → invoice + subscription (5% GST) | `PurchasePTPackageDrawer` + `purchase_pt_package` RPC (atomic: invoice, GST-5% split, subscription, commission, idempotency) |
-| `log_pt_attendance` validation RPC | `log_pt_session` RPC (blocks on inactive/expired/no_sessions_left, auto-completes pack, creates gym check-in) |
-| Cancel/unpaid handling | `cancel_invoice` RPC + Pending-payment section on PT Sessions page |
+**4. Warm follow-up nudges firing for brand-new members**
+`get_inactive_members()` uses `LEFT JOIN LATERAL` on attendance and matches `ma.last_check_in IS NULL`. A member who has **never** checked in (i.e. just registered, gym only opened) qualifies immediately, and `days_absent` comes back NULL, which the alert renders as the literal string "21+". So freshly registered members are flagged as 21+ days absent.
 
-## Gaps this plan fixes
+**5. Waiver PDF download fails**
+`register-member` uploads to bucket **`member-onboarding`** (`{member_id}/onboarding-waiver.pdf`), but `MemberProfileDrawer`/`MemberProfile` call `signMemberDocument(path)` which defaults to the **`documents`** bucket. Hence "Object not found". `member-onboarding` isn't even in the helper's allowed bucket union.
 
-### 1. Trainer Dashboard — TanStack Table with unified Progress column
-**File:** `src/pages/MyClients.tsx` (PT tab only)
+**6. Self-registration missing address + government ID**
+`PublicRegistration.tsx` has `address` in the zod schema but renders **no input** for it, and has no government-ID fields at all. The `register-member` edge function already accepts and persists `address`, `government_id_type`, `government_id_number` — the form simply never sends them, so staff must re-enter address afterwards.
 
-Replace the current 2-column PT card grid with a proper `@tanstack/react-table` (already a dep):
+---
 
-```
-Member | Plan | Progress                         | Action
-Aryan  | 12-Session Pack  | 5 / 12 sessions [bar] | [Mark Session ▾]
-Nida   | Monthly Elite    | Expires 15 Aug (18d)  | [Mark Session ▾]
-```
+## Fix plan
 
-- Sortable columns, sticky header, `rounded-2xl` shell, empty/loading states.
-- "Progress" cell branches on `package_type`: session-based → `used/total` + progress bar; monthly → expiry date + days-left chip (red ≤7d).
-- Keep the existing `MarkPtStatusMenu` as the action cell (unchanged API).
-- General Clients tab stays as cards (out of Epic scope).
+### A. Member login provisioning (item 1)
+- Backfill: provision a login for INC-26-0004 (and any other member rows with `user_id IS NULL`) via the existing `provision-member-login` function, linking `members.user_id` → new `profiles.id`.
+- Add a self-healing path: when lead→member conversion completes without a login, enqueue provisioning automatically.
+- In `MemberAvatarUpload`, replace the dead-end error with an inline **"Create login & continue"** action (owner/admin/manager only) that provisions the login and retries the upload in the same flow.
 
-### 2. True Optimistic UI on Mark Session
-**File:** `src/components/pt/MarkPtStatusMenu.tsx`
+### B. PT dashboard redesign + correctness (item 2)
+- **Data correctness:** filter `member_pt_packages` in `Analytics.tsx` to exclude `reversed`/`cancelled` statuses for revenue, packages-sold, top performer and revenue-by-trainer; source revenue from paid invoice amounts rather than package price.
+- **Unified session/monthly model (UI layer):** one package card/row that switches presentation by `package_type`:
+  - `session_based` → progress bar `used / total sessions` + remaining count.
+  - `monthly` → days-remaining ring + expiry date, red warning ≤7 days.
+- **Commission & payout column:** show commission base (pre-GST subtotal), commission %, accrued amount, and payout state per package/trainer, with reversed sales clearly struck-through and excluded from totals.
+- **Trainer attendance:** surface a per-package "Mark session" action consistent with `MyClients.tsx` optimistic flow, blocked when sessions are exhausted or the monthly window has expired.
+- Vuexy styling: `rounded-2xl`, soft slate shadows, colored status badges, skeleton/empty/error states on every panel.
 
-Currently `onSuccess` invalidates. Upgrade `useMutation` to real optimistic updates:
+### C. `/fitness/templates` chunk load (item 3)
+- Add a global lazy-import retry helper (retry once, then hard-reload with a cache-busting flag) and use it for all `lazy()` routes.
+- Classify `Load failed` / `Failed to fetch dynamically imported module` as transient in `src/lib/errorReporter.ts` so System Health stops treating it as a critical app crash.
 
-- `onMutate`: snapshot every relevant cache (`['member-pt-packages']`, `['active-member-packages', …]`, `['trainer-pt-clients', trainerId]`, `['client-session-stats', trainerId]`), then patch:
-  - `present`/`late`/`absent` on a session pack → decrement `sessions_remaining` by 1, bump `sessionStats.completed` for present/late.
-  - `holiday` → no counter change.
-- `onError`: restore from snapshots + red sonner toast using the existing friendly-error map (adds "Sessions exhausted" / "Package expired" wording).
-- `onSettled`: invalidate the same keys so the server value wins.
-- Add a 250ms green pulse on the row via a shared `data-flash` attribute (Vuexy soft ring).
+### D. Absence nurture correctness (item 4)
+- Change `get_inactive_members` so "never checked in" is measured from the membership start date (or member join date), not treated as infinite absence, and return a real integer `days_absent` instead of NULL.
+- Add a grace window: skip members whose membership started fewer than N days ago (default 7) so newly registered members are never flagged.
+- Update `send-reminders` alert text to use the computed value instead of the "21+" fallback string.
 
-### 3. Enforce strictly 5% GST at the DB
-**Migration** — small safety valve on top of the existing RPC:
+### E. Waiver download (item 5)
+- Add `member-onboarding` to `SignableBucket` and pass it explicitly at both call sites (`MemberProfileDrawer`, `MemberProfile`), or store the bucket alongside the path so the right bucket is always used.
+- Verify RLS/storage policies allow branch-scoped staff and the member themself to sign that object.
 
-- Add a `CHECK (_gst_rate = 5)` isn't possible on function args, so instead add a guard clause inside `purchase_pt_package`: `IF _gst_rate <> 5 THEN RAISE EXCEPTION 'pt_gst_must_be_5';`
-- Backfill guard on `invoice_items` for PT lines: trigger `pt_invoice_items_gst_check` that raises if `item_type='pt_package'` and `gst_percentage <> 5`.
-- No table shape changes; no data migration.
+### F. Registration address + government ID (item 6)
+- Add **Address** (textarea) and **Government ID type + number** fields to the details step of `PublicRegistration.tsx`, wire them into the zod schema and the `register-member` payload.
+- Confirm `register-member` writes them into `profiles` so the staff-side member form shows them pre-filled and no re-entry is needed.
 
-### 4. Trainer table query
-**File:** `src/hooks/useMemberData.ts` (trainer PT clients) — no behaviour change, just add `package_type`, `sessions_total`, `expiry_date` to the select so the table renders both progress modes without a second round-trip. Confirmed already returned; only widen the TS type.
-
-## Explicitly NOT doing (per your "audit + polish" choice)
-
-- No new `pt_subscriptions` / `pt_attendance` / `log_pt_attendance` tables or RPCs — would duplicate live logic and break `cancel_invoice`, trainer commissions, MIPS coupling, member portal, and PT history.
-- No changes to `purchase_pt_package`, `cancel_invoice`, or the Sales drawer beyond the GST guard — they already do exactly what Epic 2 describes.
-- No schema renames.
-
-## Files touched
-
-- `src/pages/MyClients.tsx` — PT tab replaced with TanStack table.
-- `src/components/pt/MarkPtStatusMenu.tsx` — optimistic onMutate/onError/onSettled.
-- `src/hooks/useMemberData.ts` — widen PT client select fields (type only if data already present).
-- One migration: 5% GST guard in `purchase_pt_package` + `invoice_items` trigger for PT lines.
-
-## Verification
-
-- Trigger `Mark Present` on a session pack with 5/12 → counter jumps to 6/12 instantly; toast confirms; refresh keeps 6/12.
-- Force RPC error (mock exhausted pack) → counter snaps back to 5/12; red toast "No PT sessions remaining".
-- `INSERT` into `invoice_items` with `item_type='pt_package', gst_percentage=18` → raises.
-- `purchase_pt_package(_gst_rate=>0)` → raises `pt_gst_must_be_5`.
-
+### Technical notes
+- Database changes: one migration for `get_inactive_members` (grace window + integer days).
+- No schema changes needed for PT — the fix is query filtering and presentation only.
+- Backfill for INC-26-0004 is a one-off function invocation, not a migration.
