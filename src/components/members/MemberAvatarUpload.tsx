@@ -76,6 +76,20 @@ export function MemberAvatarUpload({
         ownerUserId = (m?.user_id as string | null) || null;
       }
 
+      // Lead-converted members (e.g. INC-26-0004) often have no login yet, which
+      // makes the avatars bucket reject the upload with "login is required".
+      // Provision the login inline instead of dead-ending the staff member.
+      if (!ownerUserId && memberId) {
+        const { data: prov, error: provErr } = await supabase.functions.invoke(
+          'provision-member-login',
+          { body: { member_id: memberId } },
+        );
+        if (!provErr && prov?.user_id) {
+          ownerUserId = prov.user_id as string;
+          toast.success('Member login provisioned');
+        }
+      }
+
       if (!ownerUserId) {
         toast.error('This member has no login yet — provision a member login before uploading a photo.');
         setPreviewUrl(null);
