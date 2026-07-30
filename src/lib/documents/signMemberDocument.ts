@@ -10,7 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 const DEFAULT_TTL_SECONDS = 60;
 const MAX_TTL_SECONDS = 300;
 
-export type SignableBucket = "documents" | "member-photos" | "member-media";
+export type SignableBucket =
+  | "documents"
+  | "member-photos"
+  | "member-media"
+  | "member-onboarding";
 
 export async function signMemberDocument(
   path: string,
