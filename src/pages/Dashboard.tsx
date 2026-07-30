@@ -428,6 +428,26 @@ export default function DashboardPage() {
               <Suspense fallback={<ChartSkeleton />}>
                 <LazyBirthdayWidget branchId={branchFilter} />
               </Suspense>
+              <Suspense fallback={<Skeleton className="h-64 rounded-2xl md:col-span-2" />}>
+                <LazyTodaysCheckinsCard branchId={branchFilter || undefined} />
+              </Suspense>
+            </>
+          ) : (
+            <>
+              <ChartSkeleton />
+              <ChartSkeleton />
+              <Skeleton className="h-64 rounded-2xl md:col-span-2" />
+            </>
+          )}
+        </div>
+
+        {/* Google Reviews + Live Access Feed */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {bottomInView ? (
+            <>
+              <Suspense fallback={<ChartSkeleton />}>
+                <LazyGoogleReviewsWidget branchId={branchFilter || undefined} />
+              </Suspense>
               <Card className="shadow-lg rounded-2xl border-0 md:col-span-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -443,6 +463,12 @@ export default function DashboardPage() {
               </Card>
             </>
           ) : (
+            <>
+              <ChartSkeleton />
+              <Skeleton className="h-64 rounded-2xl md:col-span-2" />
+            </>
+          )}
+        </div>
             <>
               <ChartSkeleton />
               <ChartSkeleton />
