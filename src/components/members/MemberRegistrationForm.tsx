@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Printer, Save, FileSignature, Eraser, Dumbbell, Shield, HeartPulse, User, Calendar, MapPin, ChevronDown, CheckCircle2, Download, Eye, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { signMemberDocument } from '@/lib/documents/signMemberDocument';
+import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { format } from 'date-fns';
 import { buildRegistrationFormPdf, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
@@ -152,7 +152,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
         });
         setEditMode(false);
         if (row?.signature_path) {
-          const url = await signMemberDocument(row.signature_path, 300).catch(() => null);
+          const url = await signOnboardingDocument(row.signature_path, 300).catch(() => null);
           if (!cancelled) setSignatureUrl(url);
         }
       } else {
@@ -613,7 +613,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      const url = await signMemberDocument(existingSignature.waiver_pdf_path!, 300);
+                      const url = await signOnboardingDocument(existingSignature.waiver_pdf_path!, 300);
                       if (url) window.open(url, '_blank', 'noopener');
                     }}
                   >
@@ -672,7 +672,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
                 onClick={async () => {
                   const path = existingSignature.waiver_pdf_path || existingSignature.signature_path;
                   if (!path) return;
-                  const url = await signMemberDocument(path, 300);
+                  const url = await signOnboardingDocument(path, 300);
                   if (url) window.open(url, '_blank', 'noopener');
                 }}
               >
