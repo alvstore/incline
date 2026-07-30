@@ -30,6 +30,8 @@ const LazyAIInsightsWidget = lazy(() => import('@/components/dashboard/AIInsight
 const LazyMemberVoiceWidget = lazy(() => import('@/components/dashboard/MemberVoiceWidget').then(m => ({ default: m.MemberVoiceWidget })));
 const LazyMembersCountingChart = lazy(() => import('@/components/dashboard/MembersCountingChart'));
 const LazyBirthdayWidget = lazy(() => import('@/components/dashboard/BirthdayWidget'));
+const LazyTodaysCheckinsCard = lazy(() => import('@/components/dashboard/TodaysCheckinsCard'));
+const LazyGoogleReviewsWidget = lazy(() => import('@/components/dashboard/GoogleReviewsWidget'));
 import { MemberGrowthCards } from '@/components/dashboard/MemberGrowthCards';
 import { JoinedSummaryStrip } from '@/components/dashboard/JoinedSummaryStrip';
 import { DASHBOARD_QUERY_OPTIONS } from '@/hooks/useDashboardData';
