@@ -238,26 +238,32 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   };
 
   const handleBulkVerify = async () => {
-    const synced = personnel.filter((p) => p.mipsSyncStatus === "synced");
-    if (synced.length === 0) { toast.info("No synced personnel to verify"); return; }
-    toast.info(`Verifying ${synced.length} synced personnel against MIPS...`);
+    toast.info("Re-reading the MIPS person list…");
     try {
       const allMIPS = await fetchAllMIPSPersons();
-      const mipsNos = new Set(allMIPS.map((e) => e.personSn));
+      const faceMap = new Map(
+        allMIPS.map((e: any) => [String(e.personSn), !!(e.photoUri || e.havePhoto)])
+      );
       const newMap: Record<string, boolean> = {};
-      let verified = 0, missing = 0;
-      for (const p of synced) {
+      let withFace = 0, noFace = 0, missing = 0;
+      for (const p of personnel) {
         const stripped = p.code.replace(/-/g, "");
-        const found = mipsNos.has(stripped);
-        newMap[p.id] = found;
-        if (found) verified++; else missing++;
+        const has = faceMap.get(stripped);
+        newMap[p.id] = has === true;
+        if (has === true) withFace++;
+        else if (has === false) noFace++;
+        else missing++;
       }
       setVerificationMap((prev) => ({ ...prev, ...newMap }));
-      toast.success(`Verified: ${verified} present, ${missing} missing on MIPS`);
+      await refetchTruth();
+      toast.success(
+        `MIPS server: ${withFace} with face · ${noFace} on server without face · ${missing} not on server`
+      );
     } catch (e) {
       toast.error(`Bulk verify failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+
 
   const [serverOnlyBulk, setServerOnlyBulk] = useState(true);
 
