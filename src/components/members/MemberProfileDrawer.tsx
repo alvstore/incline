@@ -681,7 +681,7 @@ export function MemberProfileDrawer({
   };
 
   // Fetch full member details with all relations
-  const { data: memberDetails } = useQuery({
+  const { data: memberDetails, refetch: refetchMemberDetails } = useQuery({
     queryKey: ['member-details', member?.id],
     queryFn: async () => {
       if (!member?.id) return null;
