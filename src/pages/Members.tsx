@@ -673,13 +673,31 @@ export default function MembersPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30 hover:bg-muted/30">
-                        <TableHead className="font-semibold">Member</TableHead>
-                        <TableHead className="font-semibold">Code</TableHead>
-                        <TableHead className="font-semibold">Branch</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Membership</TableHead>
-                        <TableHead className="font-semibold">Days Left</TableHead>
-                        <TableHead className="font-semibold">Joined</TableHead>
+                        {([
+                          ['name', 'Member'],
+                          ['code', 'Code'],
+                          ['branch', 'Branch'],
+                          ['status', 'Status'],
+                          ['membership', 'Membership'],
+                          ['days_left', 'Days Left'],
+                          ['joined', 'Joined'],
+                        ] as [string, string][]).map(([key, label]) => (
+                          <TableHead key={key} className="font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort(key)}
+                              aria-label={`Sort by ${label}`}
+                              className="inline-flex items-center gap-1 cursor-pointer rounded focus:outline-none focus:ring-2 focus:ring-primary/40 hover:text-foreground transition-colors"
+                            >
+                              {label}
+                              {sortKey === key
+                                ? (sortDir === 'asc'
+                                    ? <ArrowUp className="h-3.5 w-3.5" />
+                                    : <ArrowDown className="h-3.5 w-3.5" />)
+                                : <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />}
+                            </button>
+                          </TableHead>
+                        ))}
                         <TableHead className="font-semibold text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
