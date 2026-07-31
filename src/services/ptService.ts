@@ -387,6 +387,8 @@ export async function generateFitnessPlan(
     }>;
     /** Brief textual summary of the member's previous plan + adherence. */
     previousPlanContext?: string;
+    /** Abort the request from the UI (cancel button / client timeout). */
+    signal?: AbortSignal;
   }
 ): Promise<any> {
   const { data, error } = await supabase.functions.invoke("generate-fitness-plan", {
@@ -401,12 +403,27 @@ export async function generateFitnessPlan(
       availableEquipment: options?.availableEquipment,
       previousPlanContext: options?.previousPlanContext,
     },
+    ...(options?.signal ? { signal: options.signal } : {}),
   });
 
-  if (error) throw error;
+  if (error) {
+    // Edge functions return the JSON body alongside non-2xx statuses — surface
+    // the real server message instead of "Edge Function returned a non-2xx".
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const body = await ctx.json();
+        if (body?.error) throw new Error(body.error);
+      } catch (e) {
+        if (e instanceof Error && e.message && !/json/i.test(e.message)) throw e;
+      }
+    }
+    throw error;
+  }
   if (data.error) throw new Error(data.error);
   return data.plan;
 }
+
 
 // ─── Dual-mode session logging (atomic RPC) ────────────────────────────
 import { dispatchCommunication, buildDedupeKey } from '@/lib/comms/dispatch';
