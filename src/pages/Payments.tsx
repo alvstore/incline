@@ -45,6 +45,7 @@ export default function PaymentsPage() {
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [duesOpen, setDuesOpen] = useState(true);
+  const canEditPayments = can.viewFinancials(roles as any) && (roles as any[])?.some((r: any) => ['owner','admin'].includes(typeof r === 'string' ? r : r?.role));
 
   useRealtimeInvalidate({
     channel: 'page-payments',
@@ -188,7 +189,6 @@ export default function PaymentsPage() {
       toast.success('Payment voided — invoice balance reversed');
       setVoidDialogOpen(false);
       setVoidingPayment(null);
-      setVoidReason('');
     },
     onError: (err: any) => toast.error(err?.message || 'Failed to void payment'),
   });
