@@ -1,3 +1,4 @@
+// v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
 // v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
 // v1.3.0 — Adds masked client_id diagnostic to oauth_start
 // Actions: test_connection | list_accounts | list_locations | fetch_reviews | classify | reply | request_member_review
@@ -23,6 +24,7 @@ type Action =
   | "list_locations"
   | "fetch_reviews"
   | "fetch_reviews_places"
+  | "search_places"
   | "diagnose"
   | "classify"
   | "reply"
@@ -32,6 +34,7 @@ interface Body {
   action: Action;
   branch_id?: string;
   account_id?: string; // for list_locations
+  query?: string; // for search_places
   inbound_id?: string;
   reply_text?: string;
   // for request_member_review (legacy shim)
