@@ -14264,6 +14264,10 @@ export type Database = {
         }
         Returns: Json
       }
+      grant_membership_free_days: {
+        Args: { p_days: number; p_membership_id: string; p_reason: string }
+        Returns: Json
+      }
       has_active_benefit: {
         Args: {
           _benefit: Database["public"]["Enums"]["benefit_type"]
@@ -14725,20 +14729,36 @@ export type Database = {
         Args: { p_member_id: string; p_payload: Json }
         Returns: string
       }
-      record_payment: {
-        Args: {
-          p_amount: number
-          p_branch_id: string
-          p_income_category_id?: string
-          p_invoice_id: string
-          p_member_id: string
-          p_notes?: string
-          p_payment_method: string
-          p_received_by?: string
-          p_transaction_id?: string
-        }
-        Returns: Json
-      }
+      record_payment:
+        | {
+            Args: {
+              p_amount: number
+              p_branch_id: string
+              p_income_category_id?: string
+              p_invoice_id: string
+              p_member_id: string
+              p_notes?: string
+              p_payment_date: string
+              p_payment_method: string
+              p_received_by?: string
+              p_transaction_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_amount: number
+              p_branch_id: string
+              p_income_category_id?: string
+              p_invoice_id: string
+              p_member_id: string
+              p_notes?: string
+              p_payment_method: string
+              p_received_by?: string
+              p_transaction_id?: string
+            }
+            Returns: Json
+          }
       redeem_coupon: {
         Args: {
           p_branch_id: string
@@ -14858,6 +14878,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revoke_membership_free_days: {
+        Args: { p_free_days_id: string }
+        Returns: Json
       }
       search_command_bookings: {
         Args: { p_branch_id?: string; p_limit?: number; search_term: string }
