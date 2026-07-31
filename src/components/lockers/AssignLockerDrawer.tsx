@@ -398,6 +398,47 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
             </div>
           )}
 
+          {/* GST toggle + payment collection */}
+          {isChargeable && !memberHasFreeLocker && (
+            <div className="space-y-4 p-4 rounded-2xl border">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="locker-gst" className="text-base">Charge GST?</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Applies {Number(lockerGstRate ?? 18)}% GST to this rental
+                  </p>
+                </div>
+                <Switch id="locker-gst" checked={chargeGst} onCheckedChange={setChargeGst} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="locker-collect" className="text-base">Collect payment now?</Label>
+                  <p className="text-sm text-muted-foreground">Marks the invoice paid and records the transaction</p>
+                </div>
+                <Switch id="locker-collect" checked={collectNow} onCheckedChange={setCollectNow} />
+              </div>
+
+              {collectNow && (
+                <div className="space-y-2">
+                  <Label htmlFor="locker-pay-method">Payment method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger id="locker-pay-method">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="wallet">Wallet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Total Amount or Free Assignment Message */}
           {effectivelyFree ? (
             <div className="p-4 rounded-lg bg-success/10 dark:bg-success/10 border border-success/25 dark:border-success/20">
