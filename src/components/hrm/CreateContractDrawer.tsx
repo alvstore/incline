@@ -929,7 +929,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
                   return;
                 }
                 const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                const fileName = `branch/${employee.branch_id}/contracts/${employee.id}/${Date.now()}-${safeName}`;
+                const fileName = `branches/${employee.branch_id}/contracts/${employee.id}/${Date.now()}-${safeName}`;
                 const { error } = await (await import('@/integrations/supabase/client')).supabase.storage
                   .from('documents')
                   .upload(fileName, file);
