@@ -11,11 +11,12 @@ import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
+import { can } from '@/lib/auth/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -38,7 +39,6 @@ export default function PaymentsPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidingPayment, setVoidingPayment] = useState<any>(null);
-  const [voidReason, setVoidReason] = useState('');
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
@@ -245,7 +245,6 @@ export default function PaymentsPage() {
 
   const openVoidDialog = (payment: any) => {
     setVoidingPayment(payment);
-    setVoidReason('');
     setVoidDialogOpen(true);
   };
 
@@ -432,8 +431,15 @@ export default function PaymentsPage() {
                         {isAdminOrOwner && (
                           <TableCell>
                             {!isVoided && payment.status !== 'failed' && (
-                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => openVoidDialog(payment)}>
-                                <Ban className="h-4 w-4 mr-1" /> Void
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={canEditPayments ? '' : 'text-destructive hover:text-destructive'}
+                                onClick={() => openVoidDialog(payment)}
+                              >
+                                {canEditPayments
+                                  ? (<><Pencil className="h-4 w-4 mr-1" /> Edit</>)
+                                  : (<><Ban className="h-4 w-4 mr-1" /> Void</>)}
                               </Button>
                             )}
                             {isVoided && payment.void_reason && (
