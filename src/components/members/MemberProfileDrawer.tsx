@@ -13,7 +13,7 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight, Pencil
+  ChevronLeft, ChevronRight, Pencil, KeyRound
 } from 'lucide-react';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -45,6 +45,8 @@ import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
 import { MemberInvoicesDrawer } from './MemberInvoicesDrawer';
+import { CreateMemberLoginDrawer } from './CreateMemberLoginDrawer';
+
 import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
@@ -638,6 +640,8 @@ export function MemberProfileDrawer({
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
   const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
   const [invoicesOpen, setInvoicesOpen] = useState(false);
+  const [createLoginOpen, setCreateLoginOpen] = useState(false);
+
   const [adjustDatesOpen, setAdjustDatesOpen] = useState(false);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [unfreezeOpen, setUnfreezeOpen] = useState(false);
@@ -681,7 +685,7 @@ export function MemberProfileDrawer({
   };
 
   // Fetch full member details with all relations
-  const { data: memberDetails } = useQuery({
+  const { data: memberDetails, refetch: refetchMemberDetails } = useQuery({
     queryKey: ['member-details', member?.id],
     queryFn: async () => {
       if (!member?.id) return null;
@@ -1264,11 +1268,17 @@ export function MemberProfileDrawer({
               {member.status === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
               {member.status === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
+            {isManagerOrAbove && !(memberDetails?.user_id ?? (member as any).user_id) && (
+              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCreateLoginOpen(true)}>
+                <KeyRound className="h-4 w-4 mr-2 shrink-0" /> Create Login
+              </Button>
+            )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setInvoicesOpen(true)}>
                 <Pencil className="h-4 w-4 mr-2 shrink-0" /> Edit Invoice
               </Button>
             )}
+
             {isOwnerOrAdmin && activeMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setAdjustDatesOpen(true)}>
                 <Calendar className="h-4 w-4 mr-2 shrink-0" /> Adjust Dates
@@ -2272,6 +2282,21 @@ export function MemberProfileDrawer({
           memberId={member.id}
           branchId={member.branch_id}
         />
+        <CreateMemberLoginDrawer
+          open={createLoginOpen}
+          onOpenChange={setCreateLoginOpen}
+          member={{
+            id: member.id,
+            member_code: member.member_code ?? null,
+            branch_id: member.branch_id ?? null,
+            full_name: profile?.full_name ?? null,
+            email: profile?.email ?? null,
+            phone: profile?.phone ?? null,
+            source: (member as any).source ?? null,
+          }}
+          onCreated={() => refetchMemberDetails?.()}
+        />
+
         {activeMembership && (
           <AdjustMembershipDatesDrawer
             open={adjustDatesOpen}

@@ -54,9 +54,13 @@ import {
   UserX,
   Eye,
   Building2,
+  KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { CreateMemberLoginDrawer, type MemberWithoutLogin } from '@/components/members/CreateMemberLoginDrawer';
+import { provisionMemberLogin } from '@/services/memberLoginService';
+
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -94,7 +98,73 @@ export default function AdminRoles() {
 
   const canManageRoles = hasAnyRole(['owner', 'admin']);
 
+  // ---- Members without a portal login (lead conversions leave user_id NULL) --
+  const [loginDrawerOpen, setLoginDrawerOpen] = useState(false);
+  const [loginTarget, setLoginTarget] = useState<MemberWithoutLogin & { branch_name?: string | null } | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+
+  const { data: membersWithoutLogin = [], isLoading: loadingNoLogin } = useQuery({
+    queryKey: ['members-without-login'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('members')
+        .select('id, member_code, branch_id, source, lead_id, leads:lead_id(full_name, email, phone), branches:branch_id(name)')
+        .is('user_id', null)
+        .order('member_code');
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        id: m.id,
+        member_code: m.member_code ?? null,
+        branch_id: m.branch_id ?? null,
+        source: m.source ?? null,
+        full_name: m.leads?.full_name ?? null,
+        email: m.leads?.email ?? null,
+        phone: m.leads?.phone ?? null,
+        branch_name: m.branches?.name ?? null,
+      })) as (MemberWithoutLogin & { branch_name: string | null })[];
+    },
+  });
+
+  const filteredNoLogin = membersWithoutLogin.filter((m) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [m.full_name, m.email, m.phone, m.member_code]
+      .some((v) => (v || '').toLowerCase().includes(q));
+  });
+
+  const handleBulkProvision = async () => {
+    const targets = filteredNoLogin.filter((m) => m.email || m.phone);
+    const skipped = filteredNoLogin.length - targets.length;
+    if (targets.length === 0) {
+      toast.error('No members have an email or phone on file');
+      return;
+    }
+    setBulkRunning(true);
+    let ok = 0;
+    const failures: string[] = [];
+    for (const m of targets) {
+      try {
+        await provisionMemberLogin({
+          memberId: m.id,
+          fullName: m.full_name,
+          email: m.email,
+          phone: m.phone,
+        });
+        ok++;
+      } catch (e: any) {
+        failures.push(`${m.member_code || m.full_name}: ${e?.message || 'failed'}`);
+      }
+    }
+    setBulkRunning(false);
+    queryClient.invalidateQueries({ queryKey: ['members-without-login'] });
+    queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
+    if (ok) toast.success(`Created ${ok} login${ok === 1 ? '' : 's'}`);
+    if (skipped) toast.warning(`${skipped} skipped — no email or phone on file`);
+    if (failures.length) toast.error(failures.slice(0, 3).join(' · '));
+  };
+
   const { data: branches = [] } = useQuery({
+
     queryKey: ['branches-for-role-assign'],
     queryFn: async () => {
       const { data } = await supabase.from('branches').select('id, name').order('name');
@@ -273,18 +343,98 @@ export default function AdminRoles() {
                   <TabsTrigger value="admins">Admins</TabsTrigger>
                   <TabsTrigger value="trainers">Trainers</TabsTrigger>
                   <TabsTrigger value="staff">Staff</TabsTrigger>
+                  <TabsTrigger value="logins" className="gap-2">
+                    Members without login
+                    {membersWithoutLogin.length > 0 && (
+                      <Badge variant="secondary" className="rounded-full px-1.5 text-[10px]">
+                        {membersWithoutLogin.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {activeTab === 'logins' ? (
+              loadingNoLogin ? (
+                <div className="space-y-2 py-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/60" />
+                  ))}
+                </div>
+              ) : filteredNoLogin.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <KeyRound className="h-8 w-8 text-muted-foreground" />
+                  <p className="font-medium">Every member has a login</p>
+                  <p className="text-sm text-muted-foreground">
+                    Members converted from leads are provisioned automatically.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {canManageRoles && (
+                    <div className="flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        {filteredNoLogin.length} member{filteredNoLogin.length === 1 ? '' : 's'} cannot sign in or upload a photo.
+                      </p>
+                      <Button size="sm" onClick={handleBulkProvision} disabled={bulkRunning}>
+                        {bulkRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create logins for all
+                      </Button>
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead className="hidden md:table-cell">Email</TableHead>
+                          <TableHead className="hidden md:table-cell">Phone</TableHead>
+                          <TableHead className="hidden md:table-cell">Branch</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredNoLogin.map((m) => (
+                          <TableRow key={m.id} className="hover:bg-muted/50">
+                            <TableCell>
+                              <p className="text-sm font-medium">{m.full_name || 'Unnamed member'}</p>
+                              <p className="font-mono text-xs text-muted-foreground">{m.member_code || '—'}</p>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.email || <span className="text-destructive">missing</span>}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.phone || '—'}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.branch_name || '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setLoginTarget(m); setLoginDrawerOpen(true); }}
+                              >
+                                <KeyRound className="mr-2 h-4 w-4" /> Create login
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredUsers.length === 0 ? (
               <p className="text-muted-foreground text-center py-12">No users found</p>
             ) : (
+
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -371,7 +521,14 @@ export default function AdminRoles() {
           </CardContent>
         </Card>
 
+        <CreateMemberLoginDrawer
+          open={loginDrawerOpen}
+          onOpenChange={setLoginDrawerOpen}
+          member={loginTarget}
+        />
+
         {/* Assign Role Sheet */}
+
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent>
             <SheetHeader>
