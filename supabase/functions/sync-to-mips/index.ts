@@ -460,7 +460,7 @@ async function dispatchToDevices(
     }
 
     if (local?.id && branchId) {
-      await supabase.from("mips_sync_attempts").insert({
+      const { error: auditError } = await supabase.from("mips_sync_attempts").insert({
         branch_id: branchId,
         device_id: local.id,
         entity_type: entityType,
@@ -474,6 +474,7 @@ async function dispatchToDevices(
         response_payload: result,
         completed_at: new Date().toISOString(),
       });
+      if (auditError) console.warn("Device delivery audit insert failed:", auditError.message);
     }
     results.push({ mipsDeviceId, status, responseCode, lastError, response: result });
   }
