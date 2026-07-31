@@ -17,6 +17,12 @@ interface BulkCreateLockersDrawerProps {
   branchId: string;
 }
 
+const ZONE_OPTIONS = [
+  { value: 'male', label: 'Male room' },
+  { value: 'female', label: 'Female room' },
+  { value: 'common', label: 'Common area' },
+];
+
 export function BulkCreateLockersDrawer({ open, onOpenChange, branchId }: BulkCreateLockersDrawerProps) {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
@@ -27,7 +33,10 @@ export function BulkCreateLockersDrawer({ open, onOpenChange, branchId }: BulkCr
     endNumber: 10,
     size: 'medium',
     monthlyFee: 0,
+    area: '',
+    genderZone: 'common',
   });
+
 
   const previewLockers = () => {
     const lockers = [];
@@ -59,6 +68,8 @@ export function BulkCreateLockersDrawer({ open, onOpenChange, branchId }: BulkCr
         locker_number: lockerNumber,
         size: formData.size,
         monthly_fee: fee,
+        location: formData.area.trim() || null,
+        gender_zone: formData.genderZone,
         status: 'available' as const,
       }));
 
@@ -81,7 +92,10 @@ export function BulkCreateLockersDrawer({ open, onOpenChange, branchId }: BulkCr
         endNumber: 10,
         size: 'medium',
         monthlyFee: 0,
+        area: '',
+        genderZone: 'common',
       });
+
       setIsChargeable(false);
     } catch (error: any) {
       console.error('Error creating lockers:', error);
@@ -148,6 +162,34 @@ export function BulkCreateLockersDrawer({ open, onOpenChange, branchId }: BulkCr
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-locker-area">Area / Location (all)</Label>
+            <Input
+              id="bulk-locker-area"
+              value={formData.area}
+              onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+              placeholder="e.g. Men's Changing Room"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Zone (all)</Label>
+            <Select
+              value={formData.genderZone}
+              onValueChange={(value) => setFormData({ ...formData, genderZone: value })}
+            >
+              <SelectTrigger aria-label="Zone">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ZONE_OPTIONS.map((z) => (
+                  <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
 
           {/* Chargeable Toggle */}
           <div className="flex items-center justify-between py-2 px-3 border rounded-lg bg-muted/30">

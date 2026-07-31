@@ -55,8 +55,11 @@ export const lockerService = {
     locker_number: string;
     size?: string;
     monthly_fee?: number;
-    notes?: string;
+    notes?: string | null;
+    location?: string | null;
+    gender_zone?: string;
   }) {
+
     const { data, error } = await supabase
       .from('lockers')
       .insert({

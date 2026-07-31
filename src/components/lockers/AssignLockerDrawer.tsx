@@ -264,8 +264,15 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
         <SheetHeader>
           <SheetTitle>Assign Locker {locker.locker_number}</SheetTitle>
           <SheetDescription>
+            {(locker.location || locker.gender_zone) && (
+              <span className="block text-foreground font-medium">
+                {locker.location ? `${locker.location} · ` : ''}
+                {locker.gender_zone === 'male' ? 'Male room' : locker.gender_zone === 'female' ? 'Female room' : 'Common area'}
+              </span>
+            )}
             Assign this locker to a member. Configure rental charges below.
           </SheetDescription>
+
         </SheetHeader>
 
         <div className="space-y-4 py-4">

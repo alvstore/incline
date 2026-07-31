@@ -45,6 +45,9 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
     state: '',
     postal_code: '',
     country: '',
+    government_id_type: '',
+    government_id_number: '',
+
     emergency_contact_name: '',
     emergency_contact_phone: '',
     fitness_goals: '',
@@ -71,6 +74,9 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
         state: profile?.state || '',
         postal_code: profile?.postal_code || '',
         country: profile?.country || '',
+        government_id_type: profile?.government_id_type || '',
+        government_id_number: profile?.government_id_number || '',
+
         emergency_contact_name: profile?.emergency_contact_name || '',
         emergency_contact_phone: profile?.emergency_contact_phone || '',
         fitness_goals: member?.fitness_goals || '',
@@ -156,6 +162,9 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
             state: formData.state || null,
             postal_code: formData.postal_code || null,
             country: formData.country || null,
+            government_id_type: formData.government_id_type || null,
+            government_id_number: formData.government_id_number || null,
+
             emergency_contact_name: formData.emergency_contact_name,
             emergency_contact_phone: formData.emergency_contact_phone,
             avatar_url: avatarUrl,
@@ -391,6 +400,40 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
                     </div>
                   </div>
                 </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" /> Government ID
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="government_id_type">ID Type</Label>
+                      <Select
+                        value={formData.government_id_type}
+                        onValueChange={(v) => setFormData({ ...formData, government_id_type: v })}
+                      >
+                        <SelectTrigger id="government_id_type"><SelectValue placeholder="Select ID type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="aadhaar">Aadhaar</SelectItem>
+                          <SelectItem value="pan">PAN</SelectItem>
+                          <SelectItem value="passport">Passport</SelectItem>
+                          <SelectItem value="driving_license">Driving Licence</SelectItem>
+                          <SelectItem value="voter_id">Voter ID</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="government_id_number">ID Number</Label>
+                      <Input
+                        id="government_id_number"
+                        value={formData.government_id_number}
+                        onChange={(e) => setFormData({ ...formData, government_id_number: e.target.value })}
+                        placeholder="e.g. 1234 5678 9012"
+                      />
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </>
           )}

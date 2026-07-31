@@ -14,6 +14,8 @@ import { useBenefitBalances, useBenefitUsageHistory } from '@/hooks/useBenefits'
 import { BenefitBalancesGrid } from '@/components/benefits/BenefitBalanceCard';
 import { RecordBenefitUsageDrawer } from '@/components/benefits/RecordBenefitUsageDrawer';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
+import { CompGiftDrawer } from '@/components/members/CompGiftDrawer';
+
 import { benefitTypeLabels, frequencyLabels } from '@/services/benefitService';
 import { format } from 'date-fns';
 import type { Database } from '@/integrations/supabase/types';
@@ -36,6 +38,8 @@ export default function BenefitTracking() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOnOpen, setAddOnOpen] = useState(false);
   const [preselectedBenefit, setPreselectedBenefit] = useState<BenefitType | undefined>();
+  const [giftOpen, setGiftOpen] = useState(false);
+
 
   const { data: selectedMemberMeta } = useQuery({
     queryKey: ['benefit-tracking-member-meta', selectedMember?.id],
@@ -353,15 +357,26 @@ export default function BenefitTracking() {
 
               <TabsContent value="gifts">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Gift className="h-5 w-5 text-warning" />
-                      Gifts & Complimentary Sessions
-                    </CardTitle>
-                    <CardDescription>
-                      Comp sessions granted to this member. These are consumed before plan benefits.
-                    </CardDescription>
+                  <CardHeader className="flex flex-row items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Gift className="h-5 w-5 text-warning" />
+                        Gifts & Complimentary Sessions
+                      </CardTitle>
+                      <CardDescription>
+                        Comp sessions granted to this member. These are consumed before plan benefits.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="cursor-pointer shrink-0"
+                      onClick={() => setGiftOpen(true)}
+                      disabled={!selectedMemberMeta?.branch_id}
+                    >
+                      <Gift className="h-4 w-4 mr-2" /> Grant Gift
+                    </Button>
                   </CardHeader>
+
                   <CardContent>
                     {comps.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
@@ -489,6 +504,18 @@ export default function BenefitTracking() {
                 mode="staff"
               />
             )}
+
+            {selectedMemberMeta?.branch_id && (
+              <CompGiftDrawer
+                open={giftOpen}
+                onOpenChange={setGiftOpen}
+                memberId={selectedMember.id}
+                memberName={selectedMember.profiles?.full_name || selectedMember.member_code}
+                membershipId={membership?.id}
+                branchId={selectedMemberMeta.branch_id}
+              />
+            )}
+
           </>
         )}
       </div>

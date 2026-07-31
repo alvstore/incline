@@ -6671,7 +6671,9 @@ export type Database = {
         Row: {
           branch_id: string
           created_at: string
+          gender_zone: string
           id: string
+          location: string | null
           locker_number: string
           monthly_fee: number | null
           notes: string | null
@@ -6682,7 +6684,9 @@ export type Database = {
         Insert: {
           branch_id: string
           created_at?: string
+          gender_zone?: string
           id?: string
+          location?: string | null
           locker_number: string
           monthly_fee?: number | null
           notes?: string | null
@@ -6693,7 +6697,9 @@ export type Database = {
         Update: {
           branch_id?: string
           created_at?: string
+          gender_zone?: string
           id?: string
+          location?: string | null
           locker_number?: string
           monthly_fee?: number | null
           notes?: string | null
