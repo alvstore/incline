@@ -242,6 +242,7 @@ export default function CreateAIPage() {
             : undefined,
           availableEquipment: type === 'workout' ? branchEquipment.slice(0, 100) : undefined,
           previousPlanContext: mode === 'member' ? buildPreviousPlanContext() : undefined,
+          signal: controller.signal,
         },
       });
 
