@@ -180,13 +180,16 @@ export default function InvoicesPage() {
     return { label: 'Manual', icon: ReceiptText, variant: 'outline' };
   };
 
-  // Client-side search filter (search is lightweight on paginated data)
+  // Search across the wide scan window (invoice number, member name, member code)
   const filteredInvoices = invoices.filter((invoice: any) => {
-    if (!searchTerm) return true;
+    if (!isSearching) return true;
+    const q = searchTerm.trim().toLowerCase();
     const memberName = resolveMemberDisplay(invoice.members, invoice.customer_name).name;
-    return memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase());
+    return memberName.toLowerCase().includes(q) ||
+      (invoice.invoice_number || '').toLowerCase().includes(q) ||
+      (invoice.members?.member_code || '').toLowerCase().includes(q);
   });
+
 
   // Stats from current page (approximate for paginated view)
   const stats = {
