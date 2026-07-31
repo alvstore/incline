@@ -14,6 +14,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchWallet } from '@/services/walletService';
 import { recordPayment } from '@/services/billingService';
 import { supabase } from '@/integrations/supabase/client';
+import { can } from '@/lib/auth/permissions';
+
 
 interface RecordPaymentDrawerProps {
   open: boolean;
@@ -30,9 +32,11 @@ export function RecordPaymentDrawer({
   memberId,
   branchId 
 }: RecordPaymentDrawerProps) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth() as any;
   const queryClient = useQueryClient();
-  
+  const canBackdate = can.approveDiscount(roles);
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const dueAmount = invoice ? (invoice.total_amount - (invoice.amount_paid || 0)) : 0;
   
   const [amount, setAmount] = useState(dueAmount);
@@ -40,8 +44,10 @@ export function RecordPaymentDrawer({
   const [transactionId, setTransactionId] = useState('');
   const [notes, setNotes] = useState('');
   const [incomeCategoryId, setIncomeCategoryId] = useState<string>('');
+  const [paymentDate, setPaymentDate] = useState<string>(todayIso);
 
   const effectiveMemberId = memberId || invoice?.member_id;
+
 
   // Fetch wallet balance when wallet payment method is selected
   const { data: walletData, isLoading: walletLoading } = useQuery({
