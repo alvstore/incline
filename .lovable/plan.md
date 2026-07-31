@@ -1,62 +1,42 @@
 ## Goal
 
-Rebuild `/devices` (Device Command Center) as a single, coherent, premium ops console. All existing data logic (MIPS service calls, queries, mutations, edge functions) stays exactly as-is — this is a structural + visual redesign so the page is easier to read, easier to act on, and consistent with the rest of the app.
-
-## Current problems
-
-- The page is a thin wrapper around 5 tabs with very different visual languages (`MIPSDashboard`, `MIPSDevicesTab`, `PersonnelSyncTab`, `LiveAccessLog`, inline Debug JSX).
-- ~180 lines of Debug/webhook markup live inline in `DeviceManagement.tsx` (396 lines) instead of a component.
-- No single at-a-glance health strip — connection status, device online count, face parity (Gate 1: 41 vs Gate 2: 31) and last webhook event are scattered across tabs.
-- Face-parity gap, unsynced personnel, and offline devices are only discoverable by clicking into tabs; there is no alert surface.
+`/devices` has grown to 10 components / ~3,100 lines with heavy duplication: the health strip, the MIPS dashboard hero and the connection card all report the same 4 numbers, and the debug panel holds raw API testers nobody uses. Collapse it to a lean, dense, 2026-grade console — fewer tabs, no duplicate stats, every button wired to something that actually works.
 
 ## New structure
 
+Five tabs → **three**:
+
 ```text
+Device Command Center            [branch] [Refresh] [Add Device]
 ┌──────────────────────────────────────────────────────────┐
-│ Device Command Center            [Refresh] [Add Device]  │
-│ MIPS middleware · facial recognition & access control    │
-├──────────────────────────────────────────────────────────┤
-│ HEALTH STRIP (4 KPI tiles, always visible above tabs)    │
-│ [MIPS Server] [Devices online] [Faces on device] [Feed]  │
-├──────────────────────────────────────────────────────────┤
-│ ATTENTION BAR (only when something is wrong)             │
-│ e.g. "Gate 2 is 10 faces behind Gate 1"  [Re-sync faces] │
-├──────────────────────────────────────────────────────────┤
-│ Overview │ Devices │ Personnel Sync │ Live Feed │ Setup  │
+│ Health rail: Server · Devices · Faces (parity) · Last hit │
+│ Attention bar (only when something is wrong)              │
 └──────────────────────────────────────────────────────────┘
+[ Fleet ]  [ Personnel Sync ]  [ Live Feed ]      (Setup ⚙ = owner/admin only, moved out of tabs into a drawer)
 ```
 
-Tabs:
-1. **Overview** — connection card + device tiles + recent-events preview (existing `MIPSDashboard`, restyled).
-2. **Devices** — device cards in a responsive grid with consistent status badge, door role selector, and the Open Door / Restart / Re-sync faces actions grouped in a footer action row.
-3. **Personnel Sync** — sub-tabs (Members / Trainers / Staff) with a sticky search + filter row ("Missing photo", "Not synced", "Unverified") and a compact person row.
-4. **Live Feed** — full-width realtime log with granted/denied colour coding.
-5. **Setup & Diagnostics** (owner/admin only) — the webhook callback URLs card + debug tools, extracted from the page into its own component.
+- **Fleet** — merges old Overview + Devices. Device cards (online dot, SN, persons/faces/last-seen, door role, per-device face re-sync, open door, restart, register-in-CRM) plus one compact "fleet actions" row: Fleet Sync, Reconcile, Revoke expired. No hero card, no repeated KPI grid — those live in the health rail.
+- **Personnel Sync** — same data, restyled: single toolbar (search + Members/Staff segmented control + Registered/Unregistered filter chips + Bulk verify / Bulk sync / Heal queue), dense rows instead of fat cards, sticky header, skeletons, empty states.
+- **Live Feed** — realtime access events, unchanged logic, restyled to match; reconcile action kept inline.
+- **Setup & Diagnostics** — no longer a tab. A gear button in the header opens a right-side Sheet (owner/admin) with webhook URLs + tokenized secret URL, and a "Diagnostics" section keeping only the checks that pass today (connection test, webhook simulate, E2E checklist).
 
-## Visual system (project Vuexy rules)
+## Deletions
 
-- Cards: `rounded-2xl`, soft shadow, no hard borders; KPI tiles use a violet/indigo gradient hero for the primary metric.
-- Status: colored badges only — online `emerald`, offline `red`, degraded `amber`, unknown `slate`.
-- Icons: lucide only, 16px inline / 20px card headers.
-- Skeletons for every loading state (KPI tiles, device grid, person rows), plus explicit empty and error states.
-- Responsive: KPI strip 1→2→4 columns, device grid 1→2→3, no horizontal scroll at 375px.
-- All icon-only buttons get `aria-label`; focus rings on all actions.
+- `MIPSDashboard.tsx` — hero + duplicate stats + offline-notification effect folded into Fleet tab / health rail.
+- `MIPSConnectionCard.tsx` — status already in the health rail.
+- `DeviceDebugPanel.tsx` — raw API testers dropped; the 2–3 useful checks move into the Setup sheet.
+- Duplicate face/person aggregation math consolidated into one `useMipsFleet()` hook consumed by the rail, attention bar and Fleet tab (one query, no flicker).
 
 ## Files
 
-Edit:
-- `src/pages/DeviceManagement.tsx` — reduce to header + health strip + attention bar + tabs (target under 120 lines).
-- `src/components/devices/MIPSDashboard.tsx` — restyle to the new card/badge system, keep all queries.
-- `src/components/devices/MIPSDevicesTab.tsx` — grid + unified device card layout, same handlers.
-- `src/components/devices/PersonnelSyncTab.tsx` — sticky toolbar, filters, compact rows, same mutations.
-- `src/components/devices/LiveAccessLog.tsx` — visual pass only.
+- New: `src/components/devices/useMipsFleet.ts`, `DeviceFleetTab.tsx`, `DeviceSetupSheet.tsx`.
+- Rewrite: `MIPSDevicesTab.tsx` (becomes card grid only), `PersonnelSyncTab.tsx` (toolbar + dense rows), `LiveAccessLog.tsx` (styling only), `DeviceHealthStrip.tsx` + `DeviceAttentionBar.tsx` (read from shared hook), `DeviceManagement.tsx` (3 tabs + gear).
+- Delete: `MIPSDashboard.tsx`, `MIPSConnectionCard.tsx`, `DeviceDebugPanel.tsx`, `DeviceSetupPanel.tsx` (replaced by the sheet).
 
-New:
-- `src/components/devices/DeviceHealthStrip.tsx` — the 4 KPI tiles (reuses existing `testMIPSConnection` / `fetchMIPSDevices` / face-parity queries).
-- `src/components/devices/DeviceAttentionBar.tsx` — conditional alerts with inline fix actions.
-- `src/components/devices/DeviceSetupPanel.tsx` — webhook URL config, moved out of the page.
-- `src/components/devices/DeviceDebugPanel.tsx` — debug/test tools, moved out of the page.
+## Design
 
-## Out of scope
+Vuexy: `rounded-2xl`, no borders, soft shadows, slate/indigo tokens, lucide icons only, colored status badges, skeletons on every query, empty states with a CTA, 44px touch targets, aria-labels on icon buttons. Fleet actions and Setup gated by `can.*` role checks.
 
-No changes to `mipsService.ts`, any edge function, database schema, or RLS. The Gate 1 / Gate 2 face gap is surfaced more clearly here but the underlying sync fix stays as already deployed.
+## Not changing
+
+No edge functions, no SQL, no MIPS service calls — all sync/door/face logic stays exactly as-is; this is a presentation-layer rebuild.
