@@ -75,7 +75,7 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
     }
   };
 
-  const registerDevice = async (serial: string, name: string, ip: string | undefined, mipsId: string | number, online: boolean) => {
+  const registerDevice = async (serial: string, name: string, ip: string | undefined, mipsId: string, online: boolean) => {
     if (!branchId) {
       toast.error("Select a branch first to register this device");
       return;
@@ -186,7 +186,7 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
                           device.deviceKey,
                           device.name || device.deviceKey,
                           device.ip,
-                          device.id,
+                          String(device.id),
                           device.onlineFlag === 1 || device.status === 1
                         )
                     : undefined
