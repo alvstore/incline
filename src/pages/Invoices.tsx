@@ -131,8 +131,13 @@ export default function InvoicesPage() {
   const handleStatusChange = (val: string) => { setStatusFilter(val); setPage(0); };
   const handleSearchChange = (val: string) => { setSearchTerm(val); setPage(0); };
 
+  // When a search term is present we bypass pagination and scan a wide window
+  // server-side, so an invoice number on page 3 is still findable.
+  const isSearching = searchTerm.trim().length > 0;
+  const SEARCH_SCAN_LIMIT = 500;
+
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, page],
+    queryKey: ['invoices', branchFilter, statusFilter, isSearching ? 'search' : page],
     queryFn: async () => {
       let query = supabase
         .from('invoices')
@@ -142,7 +147,10 @@ export default function InvoicesPage() {
           invoice_items(description, reference_type)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        .range(
+          isSearching ? 0 : page * PAGE_SIZE,
+          isSearching ? SEARCH_SCAN_LIMIT - 1 : (page + 1) * PAGE_SIZE - 1,
+        );
 
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       if (statusFilter !== 'all') query = query.eq('status', statusFilter as any);
@@ -155,7 +163,8 @@ export default function InvoicesPage() {
 
   const invoices = invoicesResult?.data || [];
   const totalCount = invoicesResult?.count;
-  const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : null;
+  const totalPages = isSearching || !totalCount ? null : Math.ceil(totalCount / PAGE_SIZE);
+
 
   const getInvoiceType = (invoice: any): { label: string; icon: typeof FileText; variant: 'default' | 'secondary' | 'outline' | 'destructive' } => {
     if (invoice.pos_sale_id) return { label: 'POS', icon: ShoppingCart, variant: 'secondary' };
@@ -171,13 +180,16 @@ export default function InvoicesPage() {
     return { label: 'Manual', icon: ReceiptText, variant: 'outline' };
   };
 
-  // Client-side search filter (search is lightweight on paginated data)
+  // Search across the wide scan window (invoice number, member name, member code)
   const filteredInvoices = invoices.filter((invoice: any) => {
-    if (!searchTerm) return true;
+    if (!isSearching) return true;
+    const q = searchTerm.trim().toLowerCase();
     const memberName = resolveMemberDisplay(invoice.members, invoice.customer_name).name;
-    return memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase());
+    return memberName.toLowerCase().includes(q) ||
+      (invoice.invoice_number || '').toLowerCase().includes(q) ||
+      (invoice.members?.member_code || '').toLowerCase().includes(q);
   });
+
 
   // Stats from current page (approximate for paginated view)
   const stats = {
