@@ -55,7 +55,74 @@ const UrlField = ({
   </div>
 );
 
+// Admin helper: fetches the MIPS receiver URL with the shared secret embedded
+// as `?token=` — paste into the device's "Recognition Record Upload URL" field.
+const SecureWebhookUrlCard = () => {
+  const [state, setState] = useState<{
+    loading: boolean;
+    url?: string;
+    note?: string;
+    configured?: boolean;
+    error?: string;
+  }>({ loading: false });
+
+  const load = async () => {
+    setState({ loading: true });
+    try {
+      const { data, error } = await supabase.functions.invoke("mips-webhook-url", {});
+      if (error) throw error;
+      const r = data as { recognition_url?: string; note?: string; configured?: boolean };
+      setState({ loading: false, url: r?.recognition_url, note: r?.note, configured: Boolean(r?.configured) });
+    } catch (e) {
+      setState({ loading: false, error: e instanceof Error ? e.message : "Failed" });
+    }
+  };
+
+  return (
+    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+      <CardContent className="space-y-3 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold">Tokenised Webhook URL</h3>
+            <p className="text-xs text-muted-foreground">
+              Includes the shared secret. Use this exact URL if live attendance stops arriving.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={load} disabled={state.loading} className="rounded-xl">
+            {state.loading ? "Loading…" : state.url ? "Refresh" : "Show URL"}
+          </Button>
+        </div>
+        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+        {state.url && (
+          <div className="space-y-2">
+            {!state.configured && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                <strong>Not configured.</strong> {state.note}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <code className="flex-1 break-all rounded-xl bg-muted px-3 py-2 font-mono text-xs">{state.url}</code>
+              <Button
+                size="sm"
+                className="rounded-xl"
+                onClick={() => {
+                  navigator.clipboard.writeText(state.url!);
+                  toast.success("URL copied");
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{state.note}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 const DeviceSetupPanel = () => {
+
   const { data: mipsUrls } = useMipsCallbackUrls();
   const recognitionUrl = mipsUrls?.receiver || "";
 
