@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Badge } from '@/components/ui/badge';
 import { Wrench, History } from 'lucide-react';
+import { GenerationProgress } from '@/components/fitness/create/GenerationProgress';
 
 export default function CreateAIPage() {
   const navigate = useNavigate();
