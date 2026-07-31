@@ -51,11 +51,32 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
     staleTime: 60_000,
   });
 
+  // True Google aggregate (persisted by the reviews brain), not the mean of the last 5 rows.
+  const { data: aggregate } = useQuery({
+    queryKey: ['dashboard-google-rating', branchId ?? 'all'],
+    queryFn: async () => {
+      let q = (supabase as any)
+        .from('integration_settings')
+        .select('config')
+        .eq('integration_type', 'google_business')
+        .eq('provider', 'google_business');
+      if (branchId) q = q.eq('branch_id', branchId);
+      const { data, error } = await q.limit(1);
+      if (error) throw error;
+      const cfg = (data?.[0]?.config ?? {}) as Record<string, any>;
+      return {
+        rating: cfg.place_rating != null ? Number(cfg.place_rating) : null,
+        count: cfg.place_rating_count != null ? Number(cfg.place_rating_count) : null,
+      };
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const reviews = data ?? [];
+  const rated = reviews.filter((r) => r.rating != null);
   const avg =
-    reviews.length > 0
-      ? reviews.reduce((s, r) => s + (r.rating ?? 0), 0) / reviews.filter((r) => r.rating != null).length
-      : 0;
+    aggregate?.rating ??
+    (rated.length > 0 ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length : 0);
 
   return (
     <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
