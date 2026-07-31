@@ -46,6 +46,9 @@ export default function CreateAIPage() {
   const [fatTarget, setFatTarget] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
   const [progressMsg, setProgressMsg] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
 
   // Audience fields (only used when mode === 'audience')
   const [audAgeMin, setAudAgeMin] = useState<string>('18');
