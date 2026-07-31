@@ -77,6 +77,12 @@ export function RecordPaymentDrawer({
       if (amount <= 0) throw new Error('Amount must be greater than 0');
       if (amount > dueAmount) throw new Error('Amount cannot exceed due amount');
       if (!invoice?.id) throw new Error('Invoice is required');
+      if (paymentDate > todayIso) throw new Error('Payment date cannot be in the future');
+
+      // Backdated dates keep the wall-clock time so same-day entries stay ordered.
+      const backdated = paymentDate !== todayIso
+        ? new Date(`${paymentDate}T12:00:00`).toISOString()
+        : undefined;
 
       // Use unified RPC — handles wallet debit, invoice update, membership activation atomically
       return recordPayment({
@@ -89,8 +95,10 @@ export function RecordPaymentDrawer({
         notes: notes || undefined,
         receivedBy: user?.id,
         incomeCategoryId: incomeCategoryId || undefined,
+        paymentDate: backdated,
       });
     },
+
     onSuccess: () => {
       toast.success(`Payment of ₹${amount.toLocaleString()} recorded`);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
