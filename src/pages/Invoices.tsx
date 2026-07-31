@@ -276,13 +276,14 @@ export default function InvoicesPage() {
   });
 
 
-  // Stats from current page (approximate for paginated view)
-  const stats = {
-    totalClients: new Set(invoices.map((i: any) => i.member_id).filter(Boolean)).size,
-    totalInvoices: totalCount || invoices.length,
-    paidAmount: invoices.filter((i: any) => i.status === 'paid').reduce((sum: number, i: any) => sum + i.total_amount, 0),
-    unpaidAmount: invoices.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled').reduce((sum: number, i: any) => sum + (i.total_amount - (i.amount_paid || 0)), 0),
+  // KPI values come from the range-scoped aggregate query (never the page slice)
+  const stats = rangeStats ?? {
+    totalClients: 0, totalInvoices: 0, billedAmount: 0, paidAmount: 0, unpaidAmount: 0, openCount: 0,
   };
+  const collectionRate = stats.billedAmount > 0
+    ? Math.round((stats.paidAmount / stats.billedAmount) * 100)
+    : 0;
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
