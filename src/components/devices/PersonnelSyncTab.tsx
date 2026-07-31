@@ -167,6 +167,37 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     },
   });
 
+  // ---- Server truth: what the MIPS server actually holds -------------------
+  // The local `mips_sync_status` column only records what *we* attempted.
+  // The only reliable count is the person list on the MIPS server itself, and
+  // whether each person actually carries a face image (photoUri / havePhoto).
+  const { data: serverTruth, isFetching: truthLoading, refetch: refetchTruth } = useQuery({
+    queryKey: ["mips-server-truth"],
+    queryFn: async () => {
+      const rows = await fetchAllMIPSPersons();
+      const map: Record<string, { exists: boolean; hasFace: boolean }> = {};
+      for (const r of rows as any[]) {
+        if (!r?.personSn) continue;
+        map[String(r.personSn)] = {
+          exists: true,
+          hasFace: !!(r.photoUri || r.havePhoto),
+        };
+      }
+      return {
+        map,
+        total: rows.length,
+        withFace: (rows as any[]).filter((r) => r.photoUri || r.havePhoto).length,
+      };
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+
+  const truthFor = (code: string) => serverTruth?.map[code.replace(/-/g, "")];
+
+
+
 
   const syncMutation = useMutation({
     mutationFn: async (person: SyncPerson) => {
