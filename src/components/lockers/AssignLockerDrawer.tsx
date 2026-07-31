@@ -32,6 +32,9 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [isChargeable, setIsChargeable] = useState(false);
   const [rentalFee, setRentalFee] = useState(500);
+  const [chargeGst, setChargeGst] = useState(true);
+  const [collectNow, setCollectNow] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
 
