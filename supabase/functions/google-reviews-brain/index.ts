@@ -304,19 +304,144 @@ async function listLocations(branch_id: string, account_id: string) {
   }).filter((l) => l.location_id);
   return json({ ok: true, items });
 }
+// ─── Places API (New) fallback ───────────────────────────────────────────────
+// The Business Profile v4 reviews endpoint requires an *approved* quota request
+// and the legacy "Google My Business API" enabled on the Cloud project. Until
+// that lands (or whenever it errors), we read the public review snippet Google
+// exposes through Places API (New) — rating, review count and up to 5 recent
+// reviews. Read-only: no replies, no full history, but the dashboard is live.
+const PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+
+function extractPlaceIdFromLink(link?: string | null): string | null {
+  if (!link) return null;
+  const m = link.match(/[?&]place_id=([^&]+)/) ?? link.match(/placeid=([^&]+)/i);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | null> {
+  if (cfg?.place_id) return String(cfg.place_id);
+  const sb = supa();
+  const { data: branch } = await sb
+    .from("branches")
+    .select("name, address, city, google_review_link")
+    .eq("id", branch_id)
+    .maybeSingle();
+  const fromLink = extractPlaceIdFromLink(branch?.google_review_link);
+  if (fromLink) return fromLink;
+  if (!PLACES_KEY || !branch?.name) return null;
+  const query = [branch.name, branch.address, branch.city].filter(Boolean).join(", ");
+  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": PLACES_KEY,
+      "X-Goog-FieldMask": "places.id,places.displayName",
+    },
+    body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
+  });
+  if (!res.ok) {
+    console.error("places searchText failed", res.status, (await res.text()).slice(0, 300));
+    return null;
+  }
+  const j = await res.json();
+  return j?.places?.[0]?.id ?? null;
+}
+
+async function fetchPlacesReviewsForBranch(branch_id: string) {
+  if (!PLACES_KEY) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
+  const sb = supa();
+  const cfg = (await getGoogleConfig(branch_id)) ?? {};
+  const placeId = await resolvePlaceId(branch_id, cfg);
+  if (!placeId) return { branch_id, fetched: 0, source: "places", reason: "place_id_unresolved" };
+
+  const res = await fetch(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
+    {
+      headers: {
+        "X-Goog-Api-Key": PLACES_KEY,
+        "X-Goog-FieldMask": "id,rating,userRatingCount,reviews",
+      },
+    },
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error("places details failed", res.status, txt.slice(0, 300));
+    return { branch_id, fetched: 0, source: "places", reason: `places_${res.status}`, detail: txt.slice(0, 200) };
+  }
+  const j = await res.json();
+  const reviews = (j.reviews ?? []) as any[];
+  let upserted = 0;
+  for (const r of reviews) {
+    const row = {
+      branch_id,
+      google_review_id: String(r.name ?? "").split("/").pop() ?? r.name,
+      author_name: r.authorAttribution?.displayName ?? null,
+      author_photo_url: r.authorAttribution?.photoUri ?? null,
+      rating: typeof r.rating === "number" ? Math.round(r.rating) : null,
+      review_text: r.originalText?.text ?? r.text?.text ?? null,
+      posted_at: r.publishTime ?? null,
+      source: "places",
+      raw: r,
+    };
+    const { error } = await sb
+      .from("google_reviews_inbound")
+      .upsert(row, { onConflict: "google_review_id", ignoreDuplicates: false });
+    if (error) console.error("places upsert error", error.message);
+    else upserted++;
+  }
+  return {
+    branch_id,
+    fetched: upserted,
+    source: "places",
+    rating: j.rating ?? null,
+    total_ratings: j.userRatingCount ?? null,
+    place_id: placeId,
+  };
+}
+
+async function recordFetchError(branch_id: string, reason: string | null) {
+  const sb = supa();
+  const cfg = await getGoogleConfig(branch_id);
+  if (!cfg) return;
+  await sb
+    .from("integration_settings")
+    .update({
+      credentials: googleCredentialsForPersist(cfg, {
+        last_fetch_error: reason,
+        last_fetch_at: new Date().toISOString(),
+      }),
+    })
+    .eq("integration_type", "google_business")
+    .eq("provider", "google_business")
+    .eq("branch_id", branch_id);
+}
+
 async function fetchReviewsForBranch(branch_id: string) {
   const sb = supa();
   const cfg = await getGoogleConfig(branch_id);
-  if (!cfg || !cfg.account_id || !cfg.location_id) return { branch_id, fetched: 0, reason: "not_configured" };
+  if (!cfg || !cfg.account_id || !cfg.location_id) {
+    return await fetchPlacesReviewsForBranch(branch_id);
+  }
   const token = await refreshAccessToken(branch_id, cfg);
   if (!token) return { branch_id, fetched: 0, reason: "no_token" };
 
   const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=50`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    console.error("fetch reviews failed", branch_id, res.status, await res.text());
-    return { branch_id, fetched: 0, reason: `api_${res.status}` };
+  // Pacing + backoff: Google's v4 reviews endpoint is quota-starved by default.
+  let res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
+    await new Promise((r) => setTimeout(r, attempt * 1500 + Math.random() * 500));
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   }
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error("fetch reviews failed", branch_id, res.status, txt.slice(0, 300));
+    await recordFetchError(branch_id, friendlyGoogleError(res.status, txt));
+    // Fall back to the public Places snapshot so the dashboard stays alive.
+    const places = await fetchPlacesReviewsForBranch(branch_id);
+    return { ...places, gbp_reason: `api_${res.status}`, gbp_error: friendlyGoogleError(res.status, txt) };
+  }
+  await recordFetchError(branch_id, null);
+
   const body = await res.json();
   const reviews = (body.reviews ?? []) as any[];
   let inserted = 0;
