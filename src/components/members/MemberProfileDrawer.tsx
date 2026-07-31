@@ -635,6 +635,9 @@ export function MemberProfileDrawer({
   const queryClient = useQueryClient();
   const { hasAnyRole } = useAuth();
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
+  const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
+  const [invoicesOpen, setInvoicesOpen] = useState(false);
+  const [adjustDatesOpen, setAdjustDatesOpen] = useState(false);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [unfreezeOpen, setUnfreezeOpen] = useState(false);
   const [assignTrainerOpen, setAssignTrainerOpen] = useState(false);
