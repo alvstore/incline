@@ -599,9 +599,17 @@ export default function PublicRegistration() {
               </div>
               <h3 className="text-xl font-bold">You're in!</h3>
               <p className="text-sm text-primary-foreground/70">
-                Visit reception to activate your plan. Redirecting to your dashboard…
+                Visit reception to activate your plan. We've sent your welcome message with
+                your member code and login link.
               </p>
+              <a
+                href="/auth"
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground"
+              >
+                Log in to your account
+              </a>
             </div>
+
           )}
         </GlassCard>
 
