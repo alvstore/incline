@@ -177,6 +177,20 @@ const InclineAscent = () => {
         />
       </div>
 
+      {/* Member login — additive, sits above the 3D canvas without touching it. */}
+      <div className="fixed top-6 right-4 md:right-8 z-50">
+        <Link
+          to="/auth"
+          className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-full border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-slate-900/5 backdrop-blur-md transition-all duration-200 hover:bg-white hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-slate-900"
+          aria-label="Member login"
+        >
+          <LogIn className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">Member Login</span>
+          <span className="sm:hidden">Login</span>
+        </Link>
+      </div>
+
+
       {/*
         Static SEO hero — paints instantly for LCP / crawlers.
         The 3D Canvas mounts on top (z-0 + fixed) and visually covers this
