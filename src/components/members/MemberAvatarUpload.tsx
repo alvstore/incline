@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { queueMemberSync, syncAvatarToBiometric } from '@/services/biometricService';
 import { compressImageFile } from '@/utils/imageCompression';
 import { uploadBiometricPhoto } from '@/lib/media/biometricPhotoUrls';
+import { provisionMemberLogin } from '@/services/memberLoginService';
+
 
 interface MemberAvatarUploadProps {
   memberId?: string;
