@@ -334,7 +334,9 @@ async function dispatchToDevices(
   token: string,
   personId: number,
   supabase: any,
-  branchId?: string
+  branchId?: string,
+  entityType?: "member" | "employee" | "trainer",
+  entityId?: string,
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
   //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
@@ -461,8 +463,8 @@ async function dispatchToDevices(
       await supabase.from("mips_sync_attempts").insert({
         branch_id: branchId,
         device_id: local.id,
-        entity_type: null,
-        entity_id: null,
+        entity_type: entityType,
+        entity_id: entityId,
         mips_person_id: personId,
         operation: "device_dispatch",
         status,
@@ -778,7 +780,7 @@ Deno.serve(async (req) => {
         const putJson = await putRes.json().catch(() => ({}));
         const ok = putJson.code === 200 || putJson.code === 0;
         if (!ok) throw new Error(`MIPS revoke failed: ${putJson.msg || JSON.stringify(putJson)}`);
-        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId); } catch (_) { /* non-fatal */ }
+        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, person_type, person_id); } catch (_) { /* non-fatal */ }
       }
 
       await supabase.from(tableName).update({
@@ -896,7 +898,7 @@ Deno.serve(async (req) => {
       dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
-        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id);
       } catch (e) {
         console.error("Dispatch error:", e);
         dispatchResult = { error: String(e) };
