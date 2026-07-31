@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Users, RefreshCw, Upload, Check, X, AlertCircle, Search, Image,
-  ShieldCheck, ShieldX, RotateCw, ImagePlus, UserCheck, UserX,
+  Users, RefreshCw, Upload, Search, Image,
+  ShieldCheck, ShieldX, RotateCw, ImagePlus,
   Dumbbell, Briefcase,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +48,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetPerson, setUploadTargetPerson] = useState<SyncPerson | null>(null);
   const [personnelTab, setPersonnelTab] = useState("members");
+  const [statusFilter, setStatusFilter] = useState<"all" | "registered" | "unregistered">("all");
   const [healing, setHealing] = useState(false);
 
   const { data: queueBacklog = 0 } = useQuery({
@@ -302,10 +304,6 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       p.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  const registeredMembers = filterList(members.filter((p) => p.mipsSyncStatus === "synced"));
-  const unregisteredMembers = filterList(members.filter((p) => p.mipsSyncStatus !== "synced"));
-  const registeredStaff = filterList(staff.filter((p) => p.mipsSyncStatus === "synced"));
-  const unregisteredStaff = filterList(staff.filter((p) => p.mipsSyncStatus !== "synced"));
 
   const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
   const stats = {
@@ -318,172 +316,132 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     pendingSyncable: personnel.filter((p) => p.mipsSyncStatus !== "synced" && p.hasPhoto).length,
   };
 
-  const renderPersonCard = (person: SyncPerson) => {
+  const activeList = personnelTab === "members" ? members : staff;
+  const visible = filterList(
+    statusFilter === "all"
+      ? activeList
+      : statusFilter === "registered"
+        ? activeList.filter((p) => p.mipsSyncStatus === "synced")
+        : activeList.filter((p) => p.mipsSyncStatus !== "synced")
+  );
+
+  const renderRow = (person: SyncPerson) => {
     const strippedCode = person.code.replace(/-/g, "");
     const isSynced = person.mipsSyncStatus === "synced";
     const isFailed = person.mipsSyncStatus === "failed";
     const verifyStatus = verificationMap[person.id];
 
     return (
-      <Card
+      <div
         key={`${person.type}-${person.id}`}
-        className={`rounded-xl transition-all hover:shadow-md ${
-          isSynced
-            ? "border-success/20 shadow-success/20"
-            : isFailed
-              ? "border-destructive/20 shadow-destructive/5"
-              : "border-warning/20 shadow-warning/20"
-        }`}
+        className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-muted/40"
       >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <Avatar className="h-11 w-11 border-2 border-muted">
-              {person.avatarUrl ? <AvatarImage src={person.avatarUrl} /> : null}
-              <AvatarFallback className="text-sm font-bold bg-primary/10 text-primary">
-                {person.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+        <Avatar className="h-9 w-9 shrink-0">
+          {person.avatarUrl ? <AvatarImage src={person.avatarUrl} alt={person.name} /> : null}
+          <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+            {person.name.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold truncate">{person.name}</span>
-                {person.type === "trainer" && (
-                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
-                    <Dumbbell className="h-2.5 w-2.5" /> Trainer
-                  </Badge>
-                )}
-                {person.type === "employee" && (
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 gap-0.5">
-                    <Briefcase className="h-2.5 w-2.5" /> Staff
-                  </Badge>
-                )}
-                {!branchId && mainBranchId && person.branchId === mainBranchId && (
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">Main</Badge>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground font-mono">
-                <span>{person.code}</span>
-                <span className="text-primary">→ {strippedCode}</span>
-                {person.mipsPersonId && (
-                  <span className="text-primary/60">MIPS#{person.mipsPersonId}</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                {isSynced ? (
-                  <Badge variant="default" className="bg-success/10 text-success border border-success/20 text-[10px] gap-0.5">
-                    <Check className="h-3 w-3" /> Registered
-                  </Badge>
-                ) : isFailed ? (
-                  <Badge variant="destructive" className="text-[10px] gap-0.5">
-                    <X className="h-3 w-3" /> Failed
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
-                    <AlertCircle className="h-3 w-3" /> Not Registered
-                  </Badge>
-                )}
-
-                {!person.hasPhoto && (
-                  <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20 gap-0.5">
-                    <Image className="h-3 w-3" /> No Photo
-                  </Badge>
-                )}
-
-                {verifyStatus !== undefined && (
-                  verifyStatus ? (
-                    <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/20 gap-0.5">
-                      <ShieldCheck className="h-3 w-3" /> On Device
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] bg-destructive/10 text-destructive border-destructive/20 gap-0.5">
-                      <ShieldX className="h-3 w-3" /> Missing
-                    </Badge>
-                  )
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={syncingIds.has(person.id)}
-                onClick={() => syncMutation.mutate(person)}
-              >
-                <Upload className={`h-3 w-3 mr-1 ${syncingIds.has(person.id) ? "animate-pulse" : ""}`} />
-                Sync
-              </Button>
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  disabled={verifyingIds.has(person.id)}
-                  onClick={() => handleVerify(person)}
-                  title="Verify on MIPS"
-                >
-                  <ShieldCheck className={`h-3.5 w-3.5 ${verifyingIds.has(person.id) ? "animate-pulse" : ""}`} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  disabled={uploadingIds.has(person.id)}
-                  onClick={() => { setUploadTargetPerson(person); fileInputRef.current?.click(); }}
-                  title="Upload photo"
-                >
-                  <ImagePlus className={`h-3.5 w-3.5 ${uploadingIds.has(person.id) ? "animate-pulse" : ""}`} />
-                </Button>
-              </div>
-            </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="truncate text-sm font-semibold">{person.name}</span>
+            {person.type === "trainer" && (
+              <Badge variant="outline" className="gap-0.5 rounded-full border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+                <Dumbbell className="h-2.5 w-2.5" /> Trainer
+              </Badge>
+            )}
+            {person.type === "employee" && (
+              <Badge variant="outline" className="gap-0.5 rounded-full border-primary/20 bg-primary/10 text-[10px] text-primary">
+                <Briefcase className="h-2.5 w-2.5" /> Staff
+              </Badge>
+            )}
+            {!branchId && mainBranchId && person.branchId === mainBranchId && (
+              <Badge variant="outline" className="rounded-full text-[10px]">Main</Badge>
+            )}
           </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const renderSection = (
-    title: string,
-    icon: React.ReactNode,
-    list: SyncPerson[],
-    accentColor: string
-  ) => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h4 className="text-sm font-semibold">{title}</h4>
-          <Badge variant="outline" className={`text-[10px] ${accentColor}`}>
-            {list.length}
-          </Badge>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
+            <span>{person.code}</span>
+            <span className="text-primary">→ {strippedCode}</span>
+            {person.mipsPersonId && <span className="text-primary/60">MIPS#{person.mipsPersonId}</span>}
+          </div>
         </div>
-        {list.length > 0 && list[0].mipsSyncStatus !== "synced" && (
+
+        <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1.5 sm:flex">
+          {isSynced ? (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Registered</span>
+          ) : isFailed ? (
+            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Failed</span>
+          ) : (
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">Not registered</span>
+          )}
+          {!person.hasPhoto && (
+            <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-muted dark:text-muted-foreground">
+              <Image className="h-3 w-3" /> No photo
+            </span>
+          )}
+          {verifyStatus !== undefined &&
+            (verifyStatus ? (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                <ShieldCheck className="h-3 w-3" /> On device
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                <ShieldX className="h-3 w-3" /> Missing
+              </span>
+            ))}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs"
-            onClick={() => bulkSyncMutation.mutate(list)}
-            disabled={bulkSyncMutation.isPending}
+            className="min-h-[36px] rounded-xl text-xs"
+            disabled={syncingIds.has(person.id)}
+            onClick={() => syncMutation.mutate(person)}
           >
-            <Upload className={`h-3 w-3 mr-1 ${bulkSyncMutation.isPending ? "animate-pulse" : ""}`} />
-            Sync All ({list.length})
+            <Upload className={`mr-1 h-3 w-3 ${syncingIds.has(person.id) ? "animate-pulse" : ""}`} />
+            Sync
           </Button>
-        )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            aria-label={`Verify ${person.name} on MIPS`}
+            disabled={verifyingIds.has(person.id)}
+            onClick={() => handleVerify(person)}
+          >
+            <ShieldCheck className={`h-4 w-4 ${verifyingIds.has(person.id) ? "animate-pulse" : ""}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            aria-label={`Upload photo for ${person.name}`}
+            disabled={uploadingIds.has(person.id)}
+            onClick={() => {
+              setUploadTargetPerson(person);
+              fileInputRef.current?.click();
+            }}
+          >
+            <ImagePlus className={`h-4 w-4 ${uploadingIds.has(person.id) ? "animate-pulse" : ""}`} />
+          </Button>
+        </div>
       </div>
-      {list.length === 0 ? (
-        <div className="text-center py-6 text-muted-foreground text-sm">
-          No personnel in this category
-        </div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {list.map(renderPersonCard)}
-        </div>
-      )}
-    </div>
+    );
+  };
+
+  const StatTile = ({ label, value, tone, hint }: { label: string; value: React.ReactNode; tone?: string; hint?: string }) => (
+    <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+      <CardContent className="p-3.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className={`text-2xl font-bold ${tone ?? ""}`}>{value}</p>
+        {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
   );
+
+  const pendingTargets = personnel.filter((p) => p.mipsSyncStatus !== "synced");
 
   return (
     <div className="space-y-4">
@@ -499,153 +457,159 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         }}
       />
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card className="rounded-xl">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Members</p>
-            <p className="text-xl font-bold">{stats.syncedMembers}<span className="text-sm font-normal text-muted-foreground">/{stats.totalMembers}</span></p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Staff & Trainers</p>
-            <p className="text-xl font-bold">{stats.syncedStaff}<span className="text-sm font-normal text-muted-foreground">/{stats.totalStaff}</span></p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Total Synced</p>
-            <p className="text-xl font-bold text-success">{stats.syncedMembers + stats.syncedStaff}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl" title="Personnel with a photo on file but not yet registered on the MIPS server.">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Pending</p>
-            <p className="text-xl font-bold text-warning">{stats.pendingSyncable}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl" title="Personnel with no photo (biometric path, biometric URL, or profile avatar). Upload a photo before syncing.">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">No Photo</p>
-            <p className="text-xl font-bold text-warning">{stats.noPhoto}</p>
-            {queueBacklog > 0 && (
-              <p className="text-[10px] text-warning mt-0.5">
-                Queue backlog: {queueBacklog}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="Members synced"
+          value={
+            <>
+              {stats.syncedMembers}
+              <span className="text-sm font-normal text-muted-foreground">/{stats.totalMembers}</span>
+            </>
+          }
+        />
+        <StatTile
+          label="Staff & trainers"
+          value={
+            <>
+              {stats.syncedStaff}
+              <span className="text-sm font-normal text-muted-foreground">/{stats.totalStaff}</span>
+            </>
+          }
+        />
+        <StatTile
+          label="Pending sync"
+          value={stats.pendingSyncable}
+          tone={stats.pendingSyncable > 0 ? "text-amber-600" : "text-emerald-600"}
+          hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "Photo on file, not yet on MIPS"}
+        />
+        <StatTile
+          label="No photo"
+          value={stats.noPhoto}
+          tone={stats.noPhoto > 0 ? "text-amber-600" : "text-emerald-600"}
+          hint="Upload a photo before syncing"
+        />
+      </div>
+
+      <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <label htmlFor="personnel-search" className="sr-only">
+                Search personnel
+              </label>
+              <Input
+                id="personnel-search"
+                placeholder="Search by name or code…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="rounded-xl pl-9"
+              />
+            </div>
+            <Button variant="outline" size="sm" className="min-h-[36px] rounded-xl" onClick={handleBulkVerify}>
+              <ShieldCheck className="mr-1.5 h-4 w-4" /> Verify all
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-[36px] rounded-xl"
+              onClick={() => bulkSyncMutation.mutate(pendingTargets)}
+              disabled={bulkSyncMutation.isPending || pendingTargets.length === 0}
+            >
+              <Upload className={`mr-1.5 h-4 w-4 ${bulkSyncMutation.isPending ? "animate-pulse" : ""}`} />
+              Sync pending ({pendingTargets.length})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-[36px] rounded-xl"
+              onClick={() => bulkSyncMutation.mutate(personnel)}
+              disabled={bulkSyncMutation.isPending}
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${bulkSyncMutation.isPending ? "animate-pulse" : ""}`} /> Re-sync all
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-[36px] rounded-xl"
+              onClick={handleHealQueue}
+              disabled={healing}
+              title="Drain the biometric sync queue now — retries every stuck photo upload"
+            >
+              <RotateCw className={`mr-1.5 h-4 w-4 ${healing ? "animate-spin" : ""}`} />
+              {healing ? "Healing…" : `Heal queue${queueBacklog > 0 ? ` (${queueBacklog})` : ""}`}
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs value={personnelTab} onValueChange={setPersonnelTab}>
+              <TabsList className="rounded-xl bg-muted/60">
+                <TabsTrigger value="members" className="gap-1.5 rounded-lg">
+                  <Users className="h-4 w-4" /> Members
+                  <span className="ml-1 text-[10px] text-muted-foreground">{members.length}</span>
+                </TabsTrigger>
+                <TabsTrigger value="staff" className="gap-1.5 rounded-lg">
+                  <Briefcase className="h-4 w-4" /> Staff &amp; trainers
+                  <span className="ml-1 text-[10px] text-muted-foreground">{staff.length}</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <div className="flex items-center gap-1">
+              {(["all", "registered", "unregistered"] as const).map((f) => (
+                <Button
+                  key={f}
+                  size="sm"
+                  variant={statusFilter === f ? "default" : "outline"}
+                  className="min-h-[36px] rounded-full text-xs capitalize"
+                  onClick={() => setStatusFilter(f)}
+                >
+                  {f}
+                </Button>
+              ))}
+            </div>
+
+            <label
+              className="ml-auto flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
+              title="When ON: upload to the MIPS server only — the reconcile cron fans out to every device in parallel."
+            >
+              <input
+                type="checkbox"
+                checked={serverOnlyBulk}
+                onChange={(e) => setServerOnlyBulk(e.target.checked)}
+                className="rounded border-input"
+              />
+              Server-only (cron fan-out)
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+        <CardContent className="p-2">
+          {isLoading ? (
+            <div className="space-y-2 p-2">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" />
+              ))}
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <div className="rounded-full bg-muted p-4">
+                <Users className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold">Nobody matches this view</p>
+              <p className="text-xs text-muted-foreground">
+                Try a different filter or clear the search to see everyone in this branch.
               </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search & Actions */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or code..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Button variant="outline" size="sm" onClick={handleBulkVerify}>
-          <ShieldCheck className="h-4 w-4 mr-1.5" /> Verify All
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => bulkSyncMutation.mutate(personnel.filter(p => p.mipsSyncStatus !== "synced"))} disabled={bulkSyncMutation.isPending}>
-          <Upload className={`h-4 w-4 mr-1.5 ${bulkSyncMutation.isPending ? "animate-pulse" : ""}`} /> Sync All Pending
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => bulkSyncMutation.mutate(personnel)} disabled={bulkSyncMutation.isPending}>
-          <RefreshCw className="h-4 w-4 mr-1.5" /> Re-sync All
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleHealQueue}
-          disabled={healing}
-          title="Drain the biometric_sync_queue now — retries every stuck photo_upload / add row"
-        >
-          <RotateCw className={`h-4 w-4 mr-1.5 ${healing ? "animate-spin" : ""}`} />
-          {healing ? "Healing..." : `Heal Queue${queueBacklog > 0 ? ` (${queueBacklog})` : ""}`}
-        </Button>
-        <label
-          className="ml-auto flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
-          title="When ON: upload to MIPS server only — the reconcile cron (every 15 min) fans out to every device in parallel. Recommended for bulk syncs."
-        >
-          <input
-            type="checkbox"
-            checked={serverOnlyBulk}
-            onChange={(e) => setServerOnlyBulk(e.target.checked)}
-            className="rounded border-input"
-          />
-          Server-only (cron fan-out)
-        </label>
-      </div>
-
-
-      {/* Tabs: Members | Staff & Trainers */}
-      <Tabs value={personnelTab} onValueChange={setPersonnelTab}>
-        <TabsList className="bg-muted/60">
-          <TabsTrigger value="members" className="gap-1.5">
-            <Users className="h-4 w-4" /> Members
-            <Badge variant="outline" className="text-[10px] ml-1">{members.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="staff" className="gap-1.5">
-            <Briefcase className="h-4 w-4" /> Staff & Trainers
-            <Badge variant="outline" className="text-[10px] ml-1">{staff.length}</Badge>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="members">
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <ScrollArea className="h-[550px]">
-              <div className="space-y-6 pr-2">
-                {renderSection(
-                  "Registered on MIPS",
-                  <UserCheck className="h-4 w-4 text-success" />,
-                  registeredMembers,
-                  "bg-success/10 text-success border-success/20"
-                )}
-                {renderSection(
-                  "Not Registered",
-                  <UserX className="h-4 w-4 text-warning" />,
-                  unregisteredMembers,
-                  "bg-warning/10 text-warning border-warning/20"
-                )}
-              </div>
+            <ScrollArea className="h-[560px]">
+              <div className="divide-y divide-border/40 pr-2">{visible.map(renderRow)}</div>
             </ScrollArea>
           )}
-        </TabsContent>
-
-        <TabsContent value="staff">
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <ScrollArea className="h-[550px]">
-              <div className="space-y-6 pr-2">
-                {renderSection(
-                  "Registered on MIPS",
-                  <UserCheck className="h-4 w-4 text-success" />,
-                  registeredStaff,
-                  "bg-success/10 text-success border-success/20"
-                )}
-                {renderSection(
-                  "Not Registered",
-                  <UserX className="h-4 w-4 text-warning" />,
-                  unregisteredStaff,
-                  "bg-warning/10 text-warning border-warning/20"
-                )}
-              </div>
-            </ScrollArea>
-          )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };
