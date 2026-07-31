@@ -48,6 +48,8 @@ export default function MembersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(0);
+  const [sortKey, setSortKey] = useState<string>('default');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const { selectedBranch, setSelectedBranch, effectiveBranchId, branchFilter, branches } = useBranchContext();
 
   // Deep-link actions from Cmd+K command center
