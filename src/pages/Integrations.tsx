@@ -359,11 +359,19 @@ export default function IntegrationsPage() {
           </TabsContent>
         </Tabs>
 
-        <IntegrationConfigSheet
-          {...configSheet}
-          onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
-          branchId={branchFilter}
-        />
+        {configSheet.type === 'google_business' ? (
+          <GoogleBusinessDrawer
+            open={configSheet.open}
+            onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
+            branchId={branchFilter ?? ''}
+          />
+        ) : (
+          <IntegrationConfigSheet
+            {...configSheet}
+            onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
+            branchId={branchFilter}
+          />
+        )}
       </div>
     </AppLayout>
   );
