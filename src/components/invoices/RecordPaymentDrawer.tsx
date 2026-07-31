@@ -123,7 +123,9 @@ export function RecordPaymentDrawer({
     setTransactionId('');
     setNotes('');
     setIncomeCategoryId('');
+    setPaymentDate(todayIso);
   };
+
 
   // Reset amount when invoice changes
   useEffect(() => {
