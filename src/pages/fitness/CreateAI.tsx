@@ -256,6 +256,7 @@ export default function CreateAIPage() {
 
       clearTimeout(slow);
       setProgressMsg(null);
+      abortRef.current = null;
 
       const id = newDraftId();
       saveDraft({
