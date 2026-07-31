@@ -344,80 +344,100 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Clients</p>
-                  <h3 className="text-3xl font-bold mt-1">{stats.totalClients}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                  <Users className="h-6 w-6" />
-                </div>
+        {/* Period scope + KPI strip */}
+        <div className="rounded-2xl border bg-card p-4 shadow-lg shadow-primary/5 space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <CalendarRange className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Showing</p>
+                <p className="font-semibold text-foreground">{range.label}</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={periodFilter} onValueChange={handlePeriodChange}>
+                <SelectTrigger className="w-[190px] rounded-xl" aria-label="Date range">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="last_7">Last 7 days</SelectItem>
+                  <SelectItem value="last_30">Last 30 days</SelectItem>
+                  <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="last_month">Last month</SelectItem>
+                  <SelectItem value="this_quarter">This quarter</SelectItem>
+                  <SelectItem value="last_quarter">Last quarter</SelectItem>
+                  <SelectItem value="this_year">This year</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                </SelectContent>
+              </Select>
+              {periodFilter === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <label className="sr-only" htmlFor="inv-from">From date</label>
+                  <Input
+                    id="inv-from" type="date" value={customFrom}
+                    onChange={(e) => { setCustomFrom(e.target.value); setPage(0); }}
+                    className="w-[150px] rounded-xl"
+                  />
+                  <span className="text-muted-foreground text-sm">to</span>
+                  <label className="sr-only" htmlFor="inv-to">To date</label>
+                  <Input
+                    id="inv-to" type="date" value={customTo}
+                    onChange={(e) => { setCustomTo(e.target.value); setPage(0); }}
+                    className="w-[150px] rounded-xl"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-info to-info/80 text-info-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Invoices</p>
-                  <h3 className="text-3xl font-bold mt-1">{stats.totalInvoices}</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: 'Billed', value: inr(stats.billedAmount), sub: `${stats.totalInvoices} invoices`, icon: FileText, tone: 'text-primary bg-primary/10' },
+              { label: 'Collected', value: inr(stats.paidAmount), sub: `${collectionRate}% of billed`, icon: TrendingUp, tone: 'text-success bg-success/10' },
+              { label: 'Outstanding', value: inr(stats.unpaidAmount), sub: `${stats.openCount} open`, icon: Clock, tone: 'text-warning bg-warning/10' },
+              { label: 'Clients billed', value: String(stats.totalClients), sub: 'unique members', icon: Users, tone: 'text-info bg-info/10' },
+              { label: 'Avg invoice', value: inr(stats.totalInvoices ? stats.billedAmount / stats.totalInvoices : 0), sub: 'per invoice', icon: IndianRupee, tone: 'text-accent bg-accent/10' },
+            ].map((kpi) => (
+              <div
+                key={kpi.label}
+                className="rounded-xl border bg-background p-4 transition-all duration-200 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+                  <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${kpi.tone}`}>
+                    <kpi.icon className="h-3.5 w-3.5" />
+                  </span>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-info-foreground/20 flex items-center justify-center">
-                  <FileText className="h-6 w-6" />
-                </div>
+                {statsLoading ? (
+                  <div className="mt-3 h-7 w-24 animate-pulse rounded bg-muted" />
+                ) : (
+                  <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+                )}
+                <p className="mt-0.5 text-xs text-muted-foreground">{kpi.sub}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-success to-success/80 text-success-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Paid</p>
-                  <h3 className="text-3xl font-bold mt-1">₹{stats.paidAmount.toLocaleString()}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-success-foreground/20 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-warning to-warning/80 text-warning-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Unpaid</p>
-                  <h3 className="text-3xl font-bold mt-1">₹{stats.unpaidAmount.toLocaleString()}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-warning-foreground/20 flex items-center justify-center">
-                  <Clock className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </div>
 
         {/* Filters */}
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by invoice # or member name..."
-                  className="pl-10"
+                  placeholder="Search by invoice #, member name or code..."
+                  className="pl-10 rounded-xl"
                   value={searchTerm}
                   onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
               <Select value={statusFilter} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] rounded-xl" aria-label="Status filter">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -426,8 +446,10 @@ export default function InvoicesPage() {
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="partial">Partial</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+
             </div>
           </CardContent>
         </Card>
