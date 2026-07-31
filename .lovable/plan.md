@@ -1,43 +1,62 @@
-## 1. Lockers: area / location (male room, female room, etc.)
+## Goal
 
-Confirmed: `public.lockers` has only `branch_id, locker_number, size, status, monthly_fee, notes` — there is **no** area/location/zone column, so neither Add Locker nor Bulk Create can capture it.
+Rebuild `/devices` (Device Command Center) as a single, coherent, premium ops console. All existing data logic (MIPS service calls, queries, mutations, edge functions) stays exactly as-is — this is a structural + visual redesign so the page is easier to read, easier to act on, and consistent with the rest of the app.
 
-- Migration: add `lockers.location text` (free text) + `lockers.gender_zone text` constrained to `male | female | common` (default `common`). Backfill existing rows to `common`.
-- `lockerService.createLocker` and the bulk insert accept and write both fields.
-- `BulkCreateLockersDrawer`: add "Area / Location" input + "Zone" select (Male room / Female room / Common), applied to the whole batch; shown in the preview chips.
-- Add Locker form on `/lockers`: same two fields, same labels and options, so both forms are identical.
-- `/lockers` list: show Location/Zone column, add a Zone filter chip, and include both in the CSV export.
-- `AssignLockerDrawer`: display the locker's zone next to the locker number so staff don't assign a female-room locker to a male member (advisory label; no hard block unless you want one — tell me if you want it enforced).
+## Current problems
 
-## 2. Edit Member Profile drawer — field parity with Add / Registration
+- The page is a thin wrapper around 5 tabs with very different visual languages (`MIPSDashboard`, `MIPSDevicesTab`, `PersonnelSyncTab`, `LiveAccessLog`, inline Debug JSX).
+- ~180 lines of Debug/webhook markup live inline in `DeviceManagement.tsx` (396 lines) instead of a component.
+- No single at-a-glance health strip — connection status, device online count, face parity (Gate 1: 41 vs Gate 2: 31) and last webhook event are scattered across tabs.
+- Face-parity gap, unsynced personnel, and offline devices are only discoverable by clicking into tabs; there is no alert surface.
 
-`EditProfileDrawer` currently edits name, phone, email, DOB, gender, address, city, state, postal code, country, emergency contacts, and fitness fields — but **not** `government_id_type` / `government_id_number`, which the Add Member and public registration forms do collect. `MemberProfileDrawer`'s profile query also doesn't select `postal_code`, `country`, or the government ID columns, so the preview tab can't show them.
+## New structure
 
-- Add a "Government ID" section to `EditProfileDrawer` (ID type select: Aadhaar / PAN / Passport / Driving Licence / Voter ID, matching AddMemberDrawer, + ID number input), saved to `profiles`.
-- Extend the `member-details` profile select in `MemberProfileDrawer` to include `postal_code, country, government_id_type, government_id_number, government_id_verified`, and render them in the Personal Info panel (masked Aadhaar, showing last 4).
-- Make the three forms share one field list so create → edit → preview stay in sync, and ensure the edit drawer pre-populates from `profiles` first, then the linked lead record (existing fallback chain kept).
+```text
+┌──────────────────────────────────────────────────────────┐
+│ Device Command Center            [Refresh] [Add Device]  │
+│ MIPS middleware · facial recognition & access control    │
+├──────────────────────────────────────────────────────────┤
+│ HEALTH STRIP (4 KPI tiles, always visible above tabs)    │
+│ [MIPS Server] [Devices online] [Faces on device] [Feed]  │
+├──────────────────────────────────────────────────────────┤
+│ ATTENTION BAR (only when something is wrong)             │
+│ e.g. "Gate 2 is 10 faces behind Gate 1"  [Re-sync faces] │
+├──────────────────────────────────────────────────────────┤
+│ Overview │ Devices │ Personnel Sync │ Live Feed │ Setup  │
+└──────────────────────────────────────────────────────────┘
+```
 
-## 3. Benefit Tracking — "No gifts granted yet"
+Tabs:
+1. **Overview** — connection card + device tiles + recent-events preview (existing `MIPSDashboard`, restyled).
+2. **Devices** — device cards in a responsive grid with consistent status badge, door role selector, and the Open Door / Restart / Re-sync faces actions grouped in a footer action row.
+3. **Personnel Sync** — sub-tabs (Members / Trainers / Staff) with a sticky search + filter row ("Missing photo", "Not synced", "Unverified") and a compact person row.
+4. **Live Feed** — full-width realtime log with granted/denied colour coding.
+5. **Setup & Diagnostics** (owner/admin only) — the webhook callback URLs card + debug tools, extracted from the page into its own component.
 
-The query itself is correct (`member_comps` filtered by `member_id`). The database has 7 comp rows across only 3 members — so for most members the empty state is truthful, but the panel is also a dead end: there is no way to grant, edit, or revoke a gift from this page.
+## Visual system (project Vuexy rules)
 
-- Add a "Grant Gift" button on the Gifts tab that opens the existing `CompGiftDrawer` for the selected member, then invalidates the comps query.
-- Show *all* comps (currently the visible list is filtered to unconsumed ones) with used/total, granted-by, reason, expiry, and a Revoke action for owner/admin.
-- Improve the empty state to say gifts can be granted from here rather than looking like a load failure.
-- If you were looking at a member who *does* have comps and still saw nothing, that's an RLS read gap for your role — I'll confirm the role against the `member_comps` policies during the build and widen the SELECT policy if needed.
+- Cards: `rounded-2xl`, soft shadow, no hard borders; KPI tiles use a violet/indigo gradient hero for the primary metric.
+- Status: colored badges only — online `emerald`, offline `red`, degraded `amber`, unknown `slate`.
+- Icons: lucide only, 16px inline / 20px card headers.
+- Skeletons for every loading state (KPI tiles, device grid, person rows), plus explicit empty and error states.
+- Responsive: KPI strip 1→2→4 columns, device grid 1→2→3, no horizontal scroll at 375px.
+- All icon-only buttons get `aria-label`; focus rings on all actions.
 
-## 4. MIPS face parity (Gate 1 = 41 faces, Gate 2 = 31, both 62 persons)
+## Files
 
-The `mips-face-parity` function exists and re-dispatches every photo-bearing person via `/through/device/syncPerson`. It could not be tested from here (the call returned 401 — no preview session token was available this turn), so the cause is **not yet confirmed**. Likely candidates, in order: the photo-detection field guess (`photoUri || havePhoto || photoUrl`) not matching what the MIPS person list actually returns, `deviceNumType: "4"` not being the right dispatch mode for face data, or the server silently queueing but not delivering to the second device.
+Edit:
+- `src/pages/DeviceManagement.tsx` — reduce to header + health strip + attention bar + tabs (target under 120 lines).
+- `src/components/devices/MIPSDashboard.tsx` — restyle to the new card/badge system, keep all queries.
+- `src/components/devices/MIPSDevicesTab.tsx` — grid + unified device card layout, same handlers.
+- `src/components/devices/PersonnelSyncTab.tsx` — sticky toolbar, filters, compact rows, same mutations.
+- `src/components/devices/LiveAccessLog.tsx` — visual pass only.
 
-Step 1 of the work is verification, not a blind fix:
-- Run `action: "report"` against the live MIPS server and dump one raw person row and one raw device row, so the real field names and counts are known.
-- Compare `server_persons_with_photo` against each gate's face count to find whether the server itself holds 41 or 62 photos.
-- Then fix the field mapping / dispatch payload accordingly, add per-person result logging into `error_logs`, and make the resync report `dispatched / failed` per device instead of a single toast.
-- Add a "Face parity" panel on the Device Command Center showing server photos vs each device's face count with a per-device "Re-sync faces" action and the last resync result.
+New:
+- `src/components/devices/DeviceHealthStrip.tsx` — the 4 KPI tiles (reuses existing `testMIPSConnection` / `fetchMIPSDevices` / face-parity queries).
+- `src/components/devices/DeviceAttentionBar.tsx` — conditional alerts with inline fix actions.
+- `src/components/devices/DeviceSetupPanel.tsx` — webhook URL config, moved out of the page.
+- `src/components/devices/DeviceDebugPanel.tsx` — debug/test tools, moved out of the page.
 
-## Technical notes
+## Out of scope
 
-- New migration adds two columns to `public.lockers`; existing RLS policy already covers them, no new grants needed.
-- No schema change for items 2–4; item 2 uses existing `profiles` columns, item 3 uses existing `member_comps`.
-- All new queries go through TanStack Query with branch scoping; all forms stay in right-side Sheets.
+No changes to `mipsService.ts`, any edge function, database schema, or RLS. The Gate 1 / Gate 2 face gap is surfaced more clearly here but the underlying sync fix stays as already deployed.
