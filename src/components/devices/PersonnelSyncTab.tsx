@@ -336,16 +336,21 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     );
 
 
-  const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
+  const onServer = (p: SyncPerson) => !!truthFor(p.code)?.exists;
+  const hasFaceOnServer = (p: SyncPerson) => !!truthFor(p.code)?.hasFace;
+
   const stats = {
     totalMembers: members.length,
-    syncedMembers: members.filter((p) => p.mipsSyncStatus === "synced").length,
+    syncedMembers: members.filter(onServer).length,
     totalStaff: staff.length,
-    syncedStaff: staff.filter((p) => p.mipsSyncStatus === "synced").length,
+    syncedStaff: staff.filter(onServer).length,
     noPhoto: personnel.filter((p) => !p.hasPhoto).length,
-    // Pending = has a photo but not yet synced (i.e. actionable sync backlog).
-    pendingSyncable: personnel.filter((p) => p.mipsSyncStatus !== "synced" && p.hasPhoto).length,
+    // Has a CRM photo but the server has no face image for them.
+    missingFace: personnel.filter((p) => p.hasPhoto && (!onServer(p) || !hasFaceOnServer(p))).length,
+    serverTotal: serverTruth?.total ?? 0,
+    serverWithFace: serverTruth?.withFace ?? 0,
   };
+
 
   const activeList = personnelTab === "members" ? members : staff;
   const visible = filterList(
