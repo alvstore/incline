@@ -521,7 +521,14 @@ export default function AdminRoles() {
           </CardContent>
         </Card>
 
+        <CreateMemberLoginDrawer
+          open={loginDrawerOpen}
+          onOpenChange={setLoginDrawerOpen}
+          member={loginTarget}
+        />
+
         {/* Assign Role Sheet */}
+
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent>
             <SheetHeader>
