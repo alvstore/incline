@@ -40,6 +40,7 @@ import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
 import { can } from '@/lib/auth/permissions';
 
 import { CompGiftDrawer } from './CompGiftDrawer';
+import { GiftDaysDrawer } from './GiftDaysDrawer';
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
@@ -647,6 +648,7 @@ export function MemberProfileDrawer({
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
+  const [giftDaysOpen, setGiftDaysOpen] = useState(false);
   const [registrationFormOpen, setRegistrationFormOpen] = useState(false);
   const [transferBranchOpen, setTransferBranchOpen] = useState(false);
   const [transferMembershipOpen, setTransferMembershipOpen] = useState(false);
@@ -1272,6 +1274,11 @@ export function MemberProfileDrawer({
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCompGiftOpen(true)}>
                 <Gift className="h-4 w-4 mr-2 shrink-0" /> Comp/Gift
+              </Button>
+            )}
+            {isOwnerOrAdmin && activeMembership && (
+              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setGiftDaysOpen(true)}>
+                <Gift className="h-4 w-4 mr-2 shrink-0" /> Edit Gift Days
               </Button>
             )}
             {isManagerOrAbove && (
@@ -2180,6 +2187,13 @@ export function MemberProfileDrawer({
           member={memberDetails || member}
           profile={profile}
         />
+        <GiftDaysDrawer
+          open={giftDaysOpen}
+          onOpenChange={setGiftDaysOpen}
+          membershipId={activeMembership?.id}
+          memberId={memberId}
+        />
+
         <CompGiftDrawer
           open={compGiftOpen}
           onOpenChange={setCompGiftOpen}
