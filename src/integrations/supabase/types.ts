@@ -1617,6 +1617,7 @@ export type Database = {
           id: string
           member_id: string | null
           person_name: string
+          person_type: string | null
           person_uuid: string
           photo_url: string
           processed_at: string | null
@@ -1632,6 +1633,7 @@ export type Database = {
           id?: string
           member_id?: string | null
           person_name: string
+          person_type?: string | null
           person_uuid: string
           photo_url: string
           processed_at?: string | null
@@ -1647,6 +1649,7 @@ export type Database = {
           id?: string
           member_id?: string | null
           person_name?: string
+          person_type?: string | null
           person_uuid?: string
           photo_url?: string
           processed_at?: string | null
@@ -8583,12 +8586,20 @@ export type Database = {
         Row: {
           attempt_no: number
           branch_id: string
+          completed_at: string | null
           created_at: string
           device_id: string
+          entity_id: string | null
+          entity_type: string | null
           id: string
           last_error: string | null
+          latency_ms: number | null
           member_id: string | null
+          mips_person_id: number | null
           next_retry_at: string | null
+          operation: string
+          response_code: number | null
+          response_payload: Json | null
           staff_id: string | null
           status: string
           updated_at: string
@@ -8596,12 +8607,20 @@ export type Database = {
         Insert: {
           attempt_no?: number
           branch_id: string
+          completed_at?: string | null
           created_at?: string
           device_id: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           last_error?: string | null
+          latency_ms?: number | null
           member_id?: string | null
+          mips_person_id?: number | null
           next_retry_at?: string | null
+          operation?: string
+          response_code?: number | null
+          response_payload?: Json | null
           staff_id?: string | null
           status?: string
           updated_at?: string
@@ -8609,12 +8628,20 @@ export type Database = {
         Update: {
           attempt_no?: number
           branch_id?: string
+          completed_at?: string | null
           created_at?: string
           device_id?: string
+          entity_id?: string | null
+          entity_type?: string | null
           id?: string
           last_error?: string | null
+          latency_ms?: number | null
           member_id?: string | null
+          mips_person_id?: number | null
           next_retry_at?: string | null
+          operation?: string
+          response_code?: number | null
+          response_payload?: Json | null
           staff_id?: string | null
           status?: string
           updated_at?: string
