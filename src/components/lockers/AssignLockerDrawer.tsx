@@ -209,6 +209,10 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     ? membershipEndDate
     : new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const totalAmount = effectivelyFree ? 0 : rentalFee;
+  const gstRate = Number(lockerGstRate ?? 18);
+  const gstAmount = Math.round(totalAmount * (gstRate / 100) * 100) / 100;
+  const grandTotal = Math.round((totalAmount + gstAmount) * 100) / 100;
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
