@@ -78,24 +78,30 @@ export function MemberAvatarUpload({
 
       // Lead-converted members (e.g. INC-26-0004) often have no login yet, which
       // makes the avatars bucket reject the upload with "login is required".
-      // Provision the login inline instead of dead-ending the staff member.
+      // Provision the login inline instead of dead-ending the staff member, and
+      // surface the real reason (missing email/phone, identity clash…) if it fails.
+      let provisionError: string | null = null;
       if (!ownerUserId && memberId) {
-        const { data: prov, error: provErr } = await supabase.functions.invoke(
-          'provision-member-login',
-          { body: { member_id: memberId } },
-        );
-        if (!provErr && prov?.user_id) {
-          ownerUserId = prov.user_id as string;
+        try {
+          const prov = await provisionMemberLogin({ memberId });
+          ownerUserId = prov.user_id;
           toast.success('Member login provisioned');
+        } catch (e: any) {
+          provisionError = e?.message || 'Could not create a login for this member';
         }
       }
 
       if (!ownerUserId) {
-        toast.error('This member has no login yet — provision a member login before uploading a photo.');
+        toast.error(
+          provisionError
+            ? `Login required: ${provisionError}`
+            : 'This member has no login yet — create a member login before uploading a photo.',
+        );
         setPreviewUrl(null);
         setUploading(false);
         return;
       }
+
 
       // Public avatar (display) → `avatars` bucket. Object name MUST start
       // with the user's uid so the "Users can upload their own avatar" RLS
