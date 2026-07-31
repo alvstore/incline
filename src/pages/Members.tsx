@@ -28,6 +28,8 @@ import { exportToCSV } from '@/lib/csvExport';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useState, useMemo, useEffect } from 'react';
 import { differenceInDays, format } from 'date-fns';
+import { daysRemaining } from '@/lib/memberships/duration';
+
 
 const PAGE_SIZE = 20;
 
@@ -374,8 +376,9 @@ export default function MembersPage() {
 
   const getDaysRemaining = (membership: any) => {
     if (!membership) return null;
-    return differenceInDays(new Date(membership.end_date), new Date());
+    return daysRemaining(membership.end_date);
   };
+
 
   // Fetch gifted free days (extensions) for active memberships on this page
   const activeMembershipIds = useMemo(() => {
