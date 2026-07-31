@@ -1268,11 +1268,17 @@ export function MemberProfileDrawer({
               {member.status === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
               {member.status === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
+            {isManagerOrAbove && !(memberDetails?.user_id ?? (member as any).user_id) && (
+              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCreateLoginOpen(true)}>
+                <KeyRound className="h-4 w-4 mr-2 shrink-0" /> Create Login
+              </Button>
+            )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setInvoicesOpen(true)}>
                 <Pencil className="h-4 w-4 mr-2 shrink-0" /> Edit Invoice
               </Button>
             )}
+
             {isOwnerOrAdmin && activeMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setAdjustDatesOpen(true)}>
                 <Calendar className="h-4 w-4 mr-2 shrink-0" /> Adjust Dates
