@@ -44,12 +44,14 @@ export default function InvoicesPage() {
   const [paymentLinkInvoice, setPaymentLinkInvoice] = useState<any>(null);
   const [shareInvoice, setShareInvoice] = useState<any>(null);
   const [cancelInvoice, setCancelInvoiceTarget] = useState<any>(null);
+  const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const { branchFilter, effectiveBranchId } = useBranchContext();
   const { roles } = useAuth() as any;
   const canCancel = can.cancelInvoice(roles);
+  const canCorrect = can.cancelInvoice(roles) || can.approveDiscount(roles);
 
   // Realtime subscription for invoice status updates
   useEffect(() => {
