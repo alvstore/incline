@@ -297,9 +297,21 @@ export default function CreateAIPage() {
     } catch (err: any) {
       clearTimeout(slow);
       setProgressMsg(null);
-      toast.error(err.message || 'Failed to generate plan');
+      abortRef.current = null;
+      const aborted = err?.name === 'AbortError' || /abort/i.test(err?.message || '');
+      const msg = aborted
+        ? 'Generation cancelled or timed out. Try a shorter plan (fewer weeks or no rotation).'
+        : err?.message || 'Failed to generate plan';
+      setGenError(msg);
+      toast.error(msg);
     }
   };
+
+  const cancelGeneration = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
+
 
   return (
     <CreateFlowLayout
