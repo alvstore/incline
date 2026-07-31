@@ -136,6 +136,56 @@ export default function InvoicesPage() {
   // Reset page on filter changes
   const handleStatusChange = (val: string) => { setStatusFilter(val); setPage(0); };
   const handleSearchChange = (val: string) => { setSearchTerm(val); setPage(0); };
+  const handlePeriodChange = (val: string) => { setPeriodFilter(val); setPage(0); };
+
+  // ---- Date range resolution (drives BOTH the list and the KPI cards) ----
+  const now = new Date();
+  const range: { from: Date | null; to: Date | null; label: string } = (() => {
+    switch (periodFilter) {
+      case 'today':
+        return { from: startOfDay(now), to: endOfDay(now), label: 'Today' };
+      case 'last_7':
+        return { from: startOfDay(subDays(now, 6)), to: endOfDay(now), label: 'Last 7 days' };
+      case 'last_30':
+        return { from: startOfDay(subDays(now, 29)), to: endOfDay(now), label: 'Last 30 days' };
+      case 'this_month':
+        return { from: startOfMonth(now), to: endOfMonth(now), label: format(now, 'MMMM yyyy') };
+      case 'last_month': {
+        const d = subMonths(now, 1);
+        return { from: startOfMonth(d), to: endOfMonth(d), label: format(d, 'MMMM yyyy') };
+      }
+      case 'this_quarter':
+        return { from: startOfQuarter(now), to: endOfQuarter(now), label: `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}` };
+      case 'last_quarter': {
+        const d = subQuarters(now, 1);
+        return { from: startOfQuarter(d), to: endOfQuarter(d), label: `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}` };
+      }
+      case 'this_year':
+        return { from: startOfYear(now), to: endOfYear(now), label: format(now, 'yyyy') };
+      case 'custom': {
+        if (!customFrom && !customTo) return { from: null, to: null, label: 'Custom range' };
+        const f = customFrom ? startOfDay(new Date(customFrom)) : null;
+        const t = customTo ? endOfDay(new Date(customTo)) : null;
+        return {
+          from: f,
+          to: t,
+          label: `${f ? format(f, 'd MMM yyyy') : '…'} – ${t ? format(t, 'd MMM yyyy') : '…'}`,
+        };
+      }
+      default:
+        return { from: null, to: null, label: 'All time' };
+    }
+  })();
+
+  const rangeKey = `${range.from?.toISOString() ?? ''}_${range.to?.toISOString() ?? ''}`;
+
+  const applyFilters = (q: any) => {
+    if (branchFilter) q = q.eq('branch_id', branchFilter);
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
+    if (range.from) q = q.gte('created_at', range.from.toISOString());
+    if (range.to) q = q.lte('created_at', range.to.toISOString());
+    return q;
+  };
 
   // When a search term is present we bypass pagination and scan a wide window
   // server-side, so an invoice number on page 3 is still findable.
@@ -143,27 +193,56 @@ export default function InvoicesPage() {
   const SEARCH_SCAN_LIMIT = 500;
 
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, isSearching ? 'search' : page],
+    queryKey: ['invoices', branchFilter, statusFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
-      let query = supabase
-        .from('invoices')
-        .select(`
-          id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
-          members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
-          invoice_items(description, reference_type)
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(
-          isSearching ? 0 : page * PAGE_SIZE,
-          isSearching ? SEARCH_SCAN_LIMIT - 1 : (page + 1) * PAGE_SIZE - 1,
-        );
-
-      if (branchFilter) query = query.eq('branch_id', branchFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter as any);
+      const query = applyFilters(
+        supabase
+          .from('invoices')
+          .select(`
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
+            members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
+            invoice_items(description, reference_type)
+          `, { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(
+            isSearching ? 0 : page * PAGE_SIZE,
+            isSearching ? SEARCH_SCAN_LIMIT - 1 : (page + 1) * PAGE_SIZE - 1,
+          ),
+      );
 
       const { data, error, count } = await query;
       if (error) throw error;
       return { data: data || [], count };
+    },
+  });
+
+  // Range-accurate KPI aggregates — status filter intentionally NOT applied so
+  // paid/unpaid totals stay meaningful, only branch + date range scope them.
+  const { data: rangeStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['invoice-stats', branchFilter, rangeKey],
+    queryFn: async () => {
+      let q = supabase
+        .from('invoices')
+        .select('id, member_id, status, total_amount, amount_paid, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (branchFilter) q = q.eq('branch_id', branchFilter);
+      if (range.from) q = q.gte('created_at', range.from.toISOString());
+      if (range.to) q = q.lte('created_at', range.to.toISOString());
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data || []).filter((r: any) => r.status !== 'cancelled');
+      return {
+        totalClients: new Set(rows.map((r: any) => r.member_id).filter(Boolean)).size,
+        totalInvoices: rows.length,
+        billedAmount: rows.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0),
+        paidAmount: rows.reduce((s: number, r: any) => s + Number(r.amount_paid || 0), 0),
+        unpaidAmount: rows.reduce(
+          (s: number, r: any) => s + Math.max(0, Number(r.total_amount || 0) - Number(r.amount_paid || 0)),
+          0,
+        ),
+        openCount: rows.filter((r: any) => Number(r.total_amount || 0) - Number(r.amount_paid || 0) > 0).length,
+      };
     },
   });
 
