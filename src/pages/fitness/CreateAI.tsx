@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanTemplate } from '@/services/fitnessService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
