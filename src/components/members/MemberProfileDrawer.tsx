@@ -2272,6 +2272,21 @@ export function MemberProfileDrawer({
           memberId={member.id}
           branchId={member.branch_id}
         />
+        <CreateMemberLoginDrawer
+          open={createLoginOpen}
+          onOpenChange={setCreateLoginOpen}
+          member={{
+            id: member.id,
+            member_code: member.member_code ?? null,
+            branch_id: member.branch_id ?? null,
+            full_name: profile?.full_name ?? null,
+            email: profile?.email ?? null,
+            phone: profile?.phone ?? null,
+            source: (member as any).source ?? null,
+          }}
+          onCreated={() => refetchMemberDetails?.()}
+        />
+
         {activeMembership && (
           <AdjustMembershipDatesDrawer
             open={adjustDatesOpen}
