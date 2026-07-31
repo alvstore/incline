@@ -130,7 +130,9 @@ const DeviceSetupPanel = () => {
   const recognitionUrl = mipsUrls?.receiver || "";
 
   return (
+    <div className="space-y-4">
     <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Server className="h-5 w-5 text-primary" />
