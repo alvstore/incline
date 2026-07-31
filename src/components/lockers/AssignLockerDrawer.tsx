@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { lockerService } from '@/services/lockerService';
+import { recordPayment } from '@/services/billingService';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Search, Receipt, Gift, CheckCircle, CreditCard, Link2 } from 'lucide-react';
@@ -32,6 +33,9 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [isChargeable, setIsChargeable] = useState(false);
   const [rentalFee, setRentalFee] = useState(500);
+  const [chargeGst, setChargeGst] = useState(true);
+  const [collectNow, setCollectNow] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
 
@@ -175,6 +179,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
 
       // Flat fee for the whole assignment period (no monthly multiplication).
       const feeAmount = memberHasFreeLocker ? 0 : (isChargeable ? rentalFee : 0);
+      const appliedGstRate = chargeGst ? Number(lockerGstRate ?? 18) : 0;
 
       const result = await lockerService.assignLocker({
         locker_id: locker.id,
@@ -184,11 +189,29 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
         fee_amount: feeAmount,
         billing_months: 1,
         chargeable: feeAmount > 0,
+        gst_rate: appliedGstRate,
         assign_source: memberHasFreeLocker ? 'plan' : 'addon',
       });
 
       if (feeAmount > 0 && result.invoice_id) {
-        toast.success(`Locker assigned and invoice of ₹${feeAmount} created`);
+        const payable = Math.round(feeAmount * (1 + appliedGstRate / 100) * 100) / 100;
+        if (collectNow) {
+          try {
+            await recordPayment({
+              branchId,
+              invoiceId: result.invoice_id,
+              memberId: selectedMember.id,
+              amount: payable,
+              paymentMethod,
+              notes: `Locker ${locker.locker_number} rental`,
+            });
+            toast.success(`Locker assigned · ₹${payable} collected (${paymentMethod})`);
+          } catch (e: any) {
+            toast.error(e?.message || 'Locker assigned but payment could not be recorded');
+          }
+        } else {
+          toast.success(`Locker assigned and invoice of ₹${payable} created`);
+        }
       } else if (memberHasFreeLocker) {
         toast.success('Locker assigned (included in membership plan)');
       } else {
@@ -197,6 +220,8 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
 
       queryClient.invalidateQueries({ queryKey: ['lockers'] });
       queryClient.invalidateQueries({ queryKey: ['locker-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
       onOpenChange(false);
       resetForm();
     } catch (error) {
@@ -214,6 +239,9 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     setMemberHasFreeLocker(false);
     setIsChargeable(false);
     setRentalFee(500);
+    setChargeGst(true);
+    setCollectNow(false);
+    setPaymentMethod('cash');
     setSyncWithMembership(true);
     setMembershipEndDate(null);
   };
@@ -225,7 +253,7 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     ? membershipEndDate
     : new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const totalAmount = effectivelyFree ? 0 : rentalFee;
-  const gstRate = Number(lockerGstRate ?? 18);
+  const gstRate = chargeGst ? Number(lockerGstRate ?? 18) : 0;
   const gstAmount = Math.round(totalAmount * (gstRate / 100) * 100) / 100;
   const grandTotal = Math.round((totalAmount + gstAmount) * 100) / 100;
 
@@ -367,6 +395,47 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
                 {' – '}
                 {new Date(effectiveEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
               </p>
+            </div>
+          )}
+
+          {/* GST toggle + payment collection */}
+          {isChargeable && !memberHasFreeLocker && (
+            <div className="space-y-4 p-4 rounded-2xl border">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="locker-gst" className="text-base">Charge GST?</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Applies {Number(lockerGstRate ?? 18)}% GST to this rental
+                  </p>
+                </div>
+                <Switch id="locker-gst" checked={chargeGst} onCheckedChange={setChargeGst} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="locker-collect" className="text-base">Collect payment now?</Label>
+                  <p className="text-sm text-muted-foreground">Marks the invoice paid and records the transaction</p>
+                </div>
+                <Switch id="locker-collect" checked={collectNow} onCheckedChange={setCollectNow} />
+              </div>
+
+              {collectNow && (
+                <div className="space-y-2">
+                  <Label htmlFor="locker-pay-method">Payment method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger id="locker-pay-method">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="wallet">Wallet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 

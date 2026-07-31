@@ -52,7 +52,7 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invoices')
-        .select('id, invoice_number, subtotal, discount_amount, tax_amount, total_amount, amount_paid, status, due_date, invoice_date, invoice_type, is_gst_invoice, gst_rate')
+        .select('id, invoice_number, subtotal, discount_amount, tax_amount, total_amount, amount_paid, status, due_date, created_at, invoice_type, is_gst_invoice, gst_rate')
         .eq('member_id', memberId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -103,7 +103,7 @@ export function MemberInvoicesDrawer({ open, onOpenChange, memberId, branchId }:
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{inv.invoice_number}</p>
                         <p className="text-xs text-slate-500">
-                          {inv.invoice_date ? format(new Date(inv.invoice_date), 'dd MMM yyyy') : ''}
+                          {inv.created_at ? format(new Date(inv.created_at), 'dd MMM yyyy') : ''}
                           {inv.invoice_type ? ` · ${inv.invoice_type}` : ''}
                         </p>
                       </div>

@@ -18,7 +18,8 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { 
   Search, Plus, Users, UserCheck, UserX, CreditCard, Dumbbell, 
   Eye, Clock, Building2, AlertTriangle, CheckCircle, MoreHorizontal, Snowflake,
-  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock, Wallet
+  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock, Wallet,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +48,8 @@ export default function MembersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(0);
+  const [sortKey, setSortKey] = useState<string>('default');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const { selectedBranch, setSelectedBranch, effectiveBranchId, branchFilter, branches } = useBranchContext();
 
   // Deep-link actions from Cmd+K command center
@@ -313,9 +316,54 @@ export default function MembersPage() {
   });
 
   // Filter by member status
-  const filteredMembers = statusFilter === 'all' 
+  const statusFiltered = statusFilter === 'all' 
     ? membersWithMemberships 
     : membersWithMemberships.filter((m: any) => m.status === statusFilter);
+
+  // Column sorting (applies to the current page of results)
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'joined' || key === 'days_left' ? 'desc' : 'asc');
+    }
+  };
+
+  const filteredMembers = useMemo(() => {
+    if (sortKey === 'default') return statusFiltered;
+    const pickMembership = (m: any) => {
+      const list = m.memberships || [];
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return list.find((x: any) => x.status === 'active' && new Date(x.end_date) >= today)
+        || list.find((x: any) => x.status === 'frozen')
+        || m.scheduledMembership
+        || null;
+    };
+    const value = (m: any): string | number => {
+      switch (sortKey) {
+        case 'name': return (m.profiles?.full_name || '').toLowerCase();
+        case 'code': return (m.member_code || '').toLowerCase();
+        case 'branch': return (m.branches?.name || m.branch?.name || '').toLowerCase();
+        case 'status': return (m.status || '').toLowerCase();
+        case 'membership': return (pickMembership(m)?.membership_plans?.name || '').toLowerCase();
+        case 'days_left': {
+          const ms = pickMembership(m);
+          return ms ? daysRemaining(ms.end_date) : -99999;
+        }
+        case 'joined': return new Date(m.created_at || 0).getTime();
+        default: return 0;
+      }
+    };
+    return [...statusFiltered].sort((a: any, b: any) => {
+      const av = value(a); const bv = value(b);
+      let d = 0;
+      if (typeof av === 'number' && typeof bv === 'number') d = av - bv;
+      else d = String(av).localeCompare(String(bv));
+      return sortDir === 'asc' ? d : -d;
+    });
+  }, [statusFiltered, sortKey, sortDir]);
+
 
   // Stats must reflect EVERY member in scope, not just the current page.
   const { data: statsRows = [] } = useQuery({
@@ -625,13 +673,31 @@ export default function MembersPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30 hover:bg-muted/30">
-                        <TableHead className="font-semibold">Member</TableHead>
-                        <TableHead className="font-semibold">Code</TableHead>
-                        <TableHead className="font-semibold">Branch</TableHead>
-                        <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold">Membership</TableHead>
-                        <TableHead className="font-semibold">Days Left</TableHead>
-                        <TableHead className="font-semibold">Joined</TableHead>
+                        {([
+                          ['name', 'Member'],
+                          ['code', 'Code'],
+                          ['branch', 'Branch'],
+                          ['status', 'Status'],
+                          ['membership', 'Membership'],
+                          ['days_left', 'Days Left'],
+                          ['joined', 'Joined'],
+                        ] as [string, string][]).map(([key, label]) => (
+                          <TableHead key={key} className="font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort(key)}
+                              aria-label={`Sort by ${label}`}
+                              className="inline-flex items-center gap-1 cursor-pointer rounded focus:outline-none focus:ring-2 focus:ring-primary/40 hover:text-foreground transition-colors"
+                            >
+                              {label}
+                              {sortKey === key
+                                ? (sortDir === 'asc'
+                                    ? <ArrowUp className="h-3.5 w-3.5" />
+                                    : <ArrowDown className="h-3.5 w-3.5" />)
+                                : <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />}
+                            </button>
+                          </TableHead>
+                        ))}
                         <TableHead className="font-semibold text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
