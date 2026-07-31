@@ -173,10 +173,12 @@ export default function CreateAIPage() {
       return;
     }
 
-    setProgressMsg(mode === 'audience'
-      ? 'Generating a Common (no-PT) plan for the audience…'
-      : 'Sending member context to the AI…');
-    const slow = setTimeout(() => setProgressMsg('Still generating — building a personalized program 🤔'), 12000);
+    setGenError(null);
+    setProgressMsg('running');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // Hard client-side ceiling so the button can never hang forever.
+    const slow = setTimeout(() => controller.abort(), 90000);
 
     try {
       const memberInfo = mode === 'member' ? {
