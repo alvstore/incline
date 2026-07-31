@@ -43,6 +43,8 @@ import { CompGiftDrawer } from './CompGiftDrawer';
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
+import { MemberInvoicesDrawer } from './MemberInvoicesDrawer';
+import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
