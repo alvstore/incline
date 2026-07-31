@@ -1,4 +1,9 @@
-// dispatch-communication v1.22.0
+// dispatch-communication v1.23.0
+// v1.23.0: FIX — document attachments on body-only approved templates are no
+//          longer silently dropped. Meta templates like `invoice_generated_pdf`
+//          say "attached" but have NO HEADER component, so the PDF URL is now
+//          appended to the last body slot as a fallback. Also strips duplicate
+//          currency symbols on amount-like variables ("₹₹2,000").
 // v1.22.0: Preserve structured Meta/MM API error details from nested Edge
 //          Function failures so Campaign Wizard and logs show actionable
 //          meta_code/provider_route/fbtrace instead of generic "unknown".
