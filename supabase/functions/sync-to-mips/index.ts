@@ -427,23 +427,56 @@ async function dispatchToDevices(
   }
 
 
-  // 3. Dispatch to all devices in a single call (API supports deviceIds array)
-  console.log(`Dispatching personId=${personId} to devices: [${deviceIds.join(",")}]`);
-  const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({
-      personId: personId,
-      deviceIds: deviceIds,
-      deviceNumType: "4",
-    }),
-  });
-  const text = await res.text();
-  console.log(`Dispatch response: ${text.substring(0, 300)}`);
-  let result: any;
-  try { result = JSON.parse(text); } catch { result = { raw: text }; }
+  // Dispatch separately so Gate 1 and Gate 2 have independent delivery truth.
+  // A combined request can return 200 while silently failing one device.
+  const results: any[] = [];
+  const deliveredDeviceIds: number[] = [];
+  for (const mipsDeviceId of [...new Set(deviceIds)]) {
+    const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
+    const started = Date.now();
+    let result: any = null;
+    let responseCode = 0;
+    let status = "failed";
+    let lastError: string | null = null;
+    try {
+      const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
+      });
+      responseCode = res.status;
+      const text = await res.text();
+      try { result = JSON.parse(text); } catch { result = { raw: text }; }
+      const apiCode = Number(result?.code ?? result?.data?.code);
+      const accepted = res.ok && (apiCode === 0 || apiCode === 200);
+      status = accepted ? "success" : "failed";
+      lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
+      if (accepted) deliveredDeviceIds.push(mipsDeviceId);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      result = { error: lastError };
+    }
 
-  return { results: [result], deviceIds };
+    if (local?.id && branchId) {
+      await supabase.from("mips_sync_attempts").insert({
+        branch_id: branchId,
+        device_id: local.id,
+        entity_type: null,
+        entity_id: null,
+        mips_person_id: personId,
+        operation: "device_dispatch",
+        status,
+        last_error: lastError,
+        response_code: responseCode,
+        latency_ms: Date.now() - started,
+        response_payload: result,
+        completed_at: new Date().toISOString(),
+      });
+    }
+    results.push({ mipsDeviceId, status, responseCode, lastError, response: result });
+  }
+
+  return { results, deviceIds: deliveredDeviceIds, requestedDeviceIds: deviceIds };
 }
 
 Deno.serve(async (req) => {
