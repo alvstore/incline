@@ -1,4 +1,4 @@
-// mips-face-parity v1.0.0
+// mips-face-parity v1.1.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
@@ -124,12 +124,25 @@ Deno.serve(async (req) => {
           id: Number(p.id ?? p.personId),
           personSn: String(p.personSn || p.personNo || ""),
           name: p.personName || p.name || "",
-          hasPhoto: Boolean(p.photoUri || p.havePhoto || p.photoUrl),
+          hasPhoto: Boolean(
+            p.photoUri || p.photoUrl || p.photo || p.facePhoto || p.faceUrl ||
+            p.havePhoto === 1 || p.havePhoto === true ||
+            p.photoFlag === 1 || p.faceFlag === 1 || Number(p.faceCount) > 0,
+          ),
+
+
         });
       }
       if (rows.length < 100) break;
     }
-    const withPhoto = persons.filter((p) => p.hasPhoto && !isNaN(p.id));
+    // Fall back to every person when the server does not expose a photo flag —
+    // syncing a photo-less person is a no-op on the device, but skipping a
+    // photo-bearing one is what leaves a gate short of faces.
+    const photoFlagged = persons.filter((p) => p.hasPhoto && !isNaN(p.id));
+    const withPhoto = photoFlagged.length > 0
+      ? photoFlagged
+      : persons.filter((p) => !isNaN(p.id));
+
 
     if (action === "report") {
       const maxFaces = devices.reduce((m, d) => Math.max(m, d.faces), 0);
@@ -151,40 +164,56 @@ Deno.serve(async (req) => {
       .filter((n) => !isNaN(n));
     if (targets.length === 0) return json({ error: "No target devices" }, 400);
 
+    // Dispatch per device (not one bulk deviceIds array): a single bad device id
+    // makes the whole bulk call fail, which is exactly how Gate 2 fell behind.
     let ok = 0;
     let failed = 0;
     const errors: string[] = [];
+    const perDevice: Record<string, { ok: number; failed: number }> = {};
+    for (const t of targets) perDevice[String(t)] = { ok: 0, failed: 0 };
+
     for (const p of withPhoto) {
-      try {
-        const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-          method: "POST",
-          headers: authHeaders(token),
-          body: JSON.stringify({ personId: p.id, deviceIds: targets, deviceNumType: "4" }),
-        });
-        const text = await res.text();
-        let j: any;
-        try { j = JSON.parse(text); } catch { j = { raw: text }; }
-        if (res.ok && (j.code === 200 || j.code === 0 || j.raw)) ok++;
-        else {
-          failed++;
-          if (errors.length < 10) errors.push(`${p.personSn}: ${j.msg || text.slice(0, 120)}`);
+      for (const t of targets) {
+        let success = false;
+        for (let attempt = 0; attempt < 2 && !success; attempt++) {
+          try {
+            const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
+              method: "POST",
+              headers: authHeaders(token),
+              body: JSON.stringify({ personId: p.id, deviceIds: [t], deviceNumType: "4" }),
+            });
+            const text = await res.text();
+            let j: any;
+            try { j = JSON.parse(text); } catch { j = { raw: text }; }
+            if (res.ok && (j.code === 200 || j.code === 0 || j.raw)) success = true;
+            else if (attempt === 1 && errors.length < 15) {
+              errors.push(`dev ${t} / ${p.personSn}: ${j.msg || text.slice(0, 100)}`);
+            }
+          } catch (e) {
+            if (attempt === 1 && errors.length < 15) {
+              errors.push(`dev ${t} / ${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+          if (!success) await new Promise((r) => setTimeout(r, 150));
         }
-      } catch (e) {
-        failed++;
-        if (errors.length < 10) errors.push(`${p.personSn}: ${e instanceof Error ? e.message : String(e)}`);
+        if (success) { ok++; perDevice[String(t)].ok++; }
+        else { failed++; perDevice[String(t)].failed++; }
+        // gentle pacing so the server queue does not drop dispatches
+        await new Promise((r) => setTimeout(r, 40));
       }
-      // gentle pacing so the server queue does not drop dispatches
-      await new Promise((r) => setTimeout(r, 60));
     }
+
 
     return json({
       success: true,
       dispatched: ok,
       failed,
+      per_device: perDevice,
       total_with_photo: withPhoto.length,
       target_device_ids: targets,
       errors,
     });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

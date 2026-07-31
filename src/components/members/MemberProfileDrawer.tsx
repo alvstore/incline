@@ -692,8 +692,11 @@ export function MemberProfileDrawer({
           *,
           profiles:user_id(
             full_name, email, phone, avatar_url, gender, date_of_birth,
-            address, city, state, emergency_contact_name, emergency_contact_phone
+            address, city, state, postal_code, country,
+            government_id_type, government_id_number, government_id_verified,
+            emergency_contact_name, emergency_contact_phone
           ),
+
           lead:lead_id(full_name, email, phone, avatar_url, gender, date_of_birth),
           branch:branch_id(name, code),
           created_by_profile:created_by(full_name, email),
@@ -1401,8 +1404,24 @@ export function MemberProfileDrawer({
                     </div>
                     <div className="col-span-2">
                       <span className="text-muted-foreground">Address:</span>
-                      <span className="ml-2">{profile?.address || 'Not provided'}</span>
+                      <span className="ml-2">
+                        {[profile?.address, profile?.city, profile?.state, profile?.postal_code, profile?.country]
+                          .filter(Boolean)
+                          .join(', ') || 'Not provided'}
+                      </span>
                     </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Government ID:</span>
+                      <span className="ml-2 capitalize">
+                        {profile?.government_id_number
+                          ? `${(profile.government_id_type || 'ID').replace('_', ' ')} •••• ${String(profile.government_id_number).slice(-4)}`
+                          : 'Not provided'}
+                      </span>
+                      {profile?.government_id_verified && (
+                        <Badge className="ml-2 bg-emerald-100 text-emerald-700 rounded-full text-xs">Verified</Badge>
+                      )}
+                    </div>
+
                   </div>
                 </CardContent>
               </Card>

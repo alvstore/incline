@@ -29,8 +29,19 @@ const createLockerSchema = z.object({
   locker_number: z.string().min(1, 'Locker number required'),
   size: z.string().optional(),
   area: z.string().optional(),
+  gender_zone: z.enum(['male', 'female', 'common']).default('common'),
   notes: z.string().optional(),
 });
+
+export const ZONE_OPTIONS = [
+  { value: 'male', label: 'Male room' },
+  { value: 'female', label: 'Female room' },
+  { value: 'common', label: 'Common area' },
+] as const;
+
+export const zoneLabel = (z?: string | null) =>
+  ZONE_OPTIONS.find((o) => o.value === z)?.label ?? 'Common area';
+
 
 type CreateLockerData = z.infer<typeof createLockerSchema>;
 
@@ -43,6 +54,8 @@ export default function LockersPage() {
   const [selectedLocker, setSelectedLocker] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterZone, setFilterZone] = useState<string>('all');
+
   const [searchQuery, setSearchQuery] = useState('');
   
   // Release confirmation state
@@ -92,7 +105,7 @@ export default function LockersPage() {
 
   const form = useForm<CreateLockerData>({
     resolver: zodResolver(createLockerSchema),
-    defaultValues: { locker_number: '', size: 'medium', area: '', notes: '' },
+    defaultValues: { locker_number: '', size: 'medium', area: '', gender_zone: 'common', notes: '' },
   });
 
   const onCreateSubmit = (data: CreateLockerData) => {
@@ -101,11 +114,14 @@ export default function LockersPage() {
       branch_id: branchId,
       locker_number: data.locker_number,
       size: data.size,
-      notes: data.area ? `Area: ${data.area}${data.notes ? ` | ${data.notes}` : ''}` : data.notes,
+      location: data.area || null,
+      gender_zone: data.gender_zone || 'common',
+      notes: data.notes || null,
     });
     setIsCreateOpen(false);
     form.reset();
   };
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -133,6 +149,9 @@ export default function LockersPage() {
     return match ? match[1].trim() : null;
   };
 
+  // Location comes from the dedicated column; legacy rows kept it inside notes
+  const getLockerArea = (l: any) => l?.location || getAreaFromNotes(l?.notes) || null;
+
   const stats = {
     total: lockers.data?.length || 0,
     available: lockers.data?.filter(l => l.status === 'available').length || 0,
@@ -142,15 +161,17 @@ export default function LockersPage() {
 
   const occupancyRate = stats.total > 0 ? Math.round((stats.assigned / stats.total) * 100) : 0;
 
-  const filteredLockers = lockers.data?.filter(l => {
+  const filteredLockers = lockers.data?.filter((l: any) => {
     if (filterStatus !== 'all' && l.status !== filterStatus) return false;
+    if (filterZone !== 'all' && (l.gender_zone || 'common') !== filterZone) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const area = getAreaFromNotes(l.notes);
+      const area = getLockerArea(l);
       return l.locker_number.toLowerCase().includes(q) || (area && area.toLowerCase().includes(q));
     }
     return true;
   }) || [];
+
 
   const openAssignDialog = (locker: any) => {
     if (locker.status === 'available') {
@@ -224,10 +245,13 @@ export default function LockersPage() {
                   return {
                     'Locker #': l.locker_number,
                     Size: l.size || '',
+                    'Area / Location': getLockerArea(l) || '',
+                    Zone: zoneLabel(l.gender_zone),
                     Status: l.status,
                     'Assigned To': member?.full_name || '',
                     'Member Code': member?.member_code || '',
                   };
+
                 });
                 exportToCSV(rows, 'lockers');
               }}>
@@ -311,7 +335,17 @@ export default function LockersPage() {
                 <SelectItem value="reserved">Reserved</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filterZone} onValueChange={setFilterZone}>
+              <SelectTrigger className="w-40 rounded-xl" aria-label="Filter by zone"><SelectValue placeholder="Zone" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Zones</SelectItem>
+                {ZONE_OPTIONS.map((z) => (
+                  <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
           <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
             <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="icon" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('grid')}><Grid3x3 className="h-4 w-4" /></Button>
             <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
@@ -339,7 +373,8 @@ export default function LockersPage() {
                     <div className="grid gap-3 grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
                       {filteredLockers.map((locker) => {
                         const activeAssignment = locker.locker_assignments?.find(a => a.is_active);
-                        const area = getAreaFromNotes(locker.notes);
+                        const area = getLockerArea(locker);
+
                         const memberInfo = activeAssignment ? memberProfiles[activeAssignment.member_id] : null;
                         return (
                           <div
@@ -397,22 +432,28 @@ export default function LockersPage() {
                       <TableRow>
                         <TableHead>Locker</TableHead>
                         <TableHead>Size</TableHead>
-                        <TableHead>Area</TableHead>
+                        <TableHead>Area / Location</TableHead>
+                        <TableHead>Zone</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Assigned To</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredLockers.map((locker) => {
-                        const activeAssignment = locker.locker_assignments?.find(a => a.is_active);
-                        const area = getAreaFromNotes(locker.notes);
+                      {filteredLockers.map((locker: any) => {
+                        const activeAssignment = locker.locker_assignments?.find((a: any) => a.is_active);
+                        const area = getLockerArea(locker);
+
                         const memberInfo = activeAssignment ? memberProfiles[activeAssignment.member_id] : null;
                         return (
                           <TableRow key={locker.id}>
                             <TableCell className="font-bold">{locker.locker_number}</TableCell>
                             <TableCell className="capitalize">{locker.size || 'Medium'}</TableCell>
                             <TableCell>{area || '—'}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="rounded-full text-xs">{zoneLabel(locker.gender_zone)}</Badge>
+                            </TableCell>
+
                             <TableCell>{getStatusBadge(locker.status)}</TableCell>
                             <TableCell>
                               {memberInfo ? (
@@ -538,6 +579,21 @@ export default function LockersPage() {
                 <FormField control={form.control} name="area" render={({ field }) => (
                   <FormItem><FormLabel>Area / Location</FormLabel><FormControl><Input placeholder="e.g. Men's Changing Room" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
+                <FormField control={form.control} name="gender_zone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Zone</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select zone" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {ZONE_OPTIONS.map((z) => (
+                          <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
                 <FormField control={form.control} name="notes" render={({ field }) => (
                   <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Input placeholder="Any notes..." {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
