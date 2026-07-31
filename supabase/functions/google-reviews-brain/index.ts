@@ -242,35 +242,55 @@ async function refreshAccessToken(branch_id: string, cfg: any): Promise<string |
   return newAccess;
 }
 
-// ─── Action: test_connection ───
+// ─── Action: test_connection (lane-aware) ───
+// Lane A = Places API (New): read-only, works without Business Profile quota.
+// Lane B = Business Profile v4: full history + reply posting.
 async function testConnection(branch_id: string) {
   const cfg = await getGoogleConfig(branch_id);
   if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.account_id || !cfg.location_id)
-    return json({ ok: false, reason: "Missing account_id or location_id" }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Check OAuth credentials." }, 200);
-  const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: `Google API ${res.status}: ${txt.slice(0, 200)}` }, 200);
+
+  const lanes: Array<{ lane: string; ok: boolean; reason?: string }> = [];
+
+  // Lane A
+  const placesKey = await resolvePlacesKey(branch_id);
+  if (!placesKey) {
+    lanes.push({ lane: "places", ok: false, reason: "No Places API key saved for this branch." });
+  } else {
+    const p = await fetchPlacesReviewsForBranch(branch_id);
+    lanes.push({
+      lane: "places",
+      ok: !(p as any).reason,
+      reason: (p as any).reason ? String((p as any).reason) : undefined,
+    });
   }
-  return json({ ok: true });
+
+  // Lane B
+  if (!cfg.account_id || !cfg.location_id) {
+    lanes.push({ lane: "business_profile", ok: false, reason: "Account / location not selected yet." });
+  } else {
+    const token = await refreshAccessToken(branch_id, cfg);
+    if (!token) {
+      lanes.push({ lane: "business_profile", ok: false, reason: "Could not obtain access token. Reconnect Google." });
+    } else {
+      const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      lanes.push(
+        res.ok
+          ? { lane: "business_profile", ok: true }
+          : { lane: "business_profile", ok: false, reason: friendlyGoogleError(res.status, await res.text()) },
+      );
+    }
+  }
+
+  const anyOk = lanes.some((l) => l.ok);
+  return json({
+    ok: anyOk,
+    lanes,
+    reason: anyOk ? undefined : lanes.map((l) => `${l.lane}: ${l.reason}`).join(" · "),
+  });
 }
 
-// ─── Action: list_accounts ───
-function friendlyGoogleError(status: number, txt: string): string {
-  if (status === 401) return "Re-connect Google to refresh permissions (token rejected).";
-  if (status === 403) {
-    if (/SERVICE_DISABLED|has not been used|API has not/i.test(txt))
-      return "Enable 'My Business Account Management API' and 'My Business Business Information API' in Google Cloud Console for this project.";
-    return "Permission denied by Google. Confirm this Google account manages the Business Profile.";
-  }
-  if (status === 404) return "No Business Profile accounts found for this Google login.";
-  if (status === 429) return "Google rate limit hit — try again in a minute.";
-  return `Google API ${status}: ${txt.slice(0, 200)}`;
-}
+
 
 async function listAccounts(branch_id: string) {
   const cfg = await getGoogleConfig(branch_id);
