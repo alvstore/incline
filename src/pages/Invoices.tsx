@@ -463,6 +463,18 @@ export default function InvoicesPage() {
                                     <Mail className="mr-2 h-4 w-4" />
                                     Share Invoice
                                   </DropdownMenuItem>
+                                  {balance > 0 && invoice.status !== 'cancelled' && (
+                                    <DropdownMenuItem onClick={() => setPaymentInvoice(invoice)}>
+                                      <IndianRupee className="mr-2 h-4 w-4" />
+                                      Record Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canCorrect && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
+                                    <DropdownMenuItem onClick={() => setCorrectInvoiceTarget(invoice)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Correct Amount
+                                    </DropdownMenuItem>
+                                  )}
                                   {canCancel && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
                                     <DropdownMenuItem
                                       onClick={() => setCancelInvoiceTarget(invoice)}
