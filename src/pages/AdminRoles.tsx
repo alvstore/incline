@@ -98,7 +98,73 @@ export default function AdminRoles() {
 
   const canManageRoles = hasAnyRole(['owner', 'admin']);
 
+  // ---- Members without a portal login (lead conversions leave user_id NULL) --
+  const [loginDrawerOpen, setLoginDrawerOpen] = useState(false);
+  const [loginTarget, setLoginTarget] = useState<MemberWithoutLogin & { branch_name?: string | null } | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+
+  const { data: membersWithoutLogin = [], isLoading: loadingNoLogin } = useQuery({
+    queryKey: ['members-without-login'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('members')
+        .select('id, member_code, branch_id, source, lead_id, leads:lead_id(full_name, email, phone), branches:branch_id(name)')
+        .is('user_id', null)
+        .order('member_code');
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        id: m.id,
+        member_code: m.member_code ?? null,
+        branch_id: m.branch_id ?? null,
+        source: m.source ?? null,
+        full_name: m.leads?.full_name ?? null,
+        email: m.leads?.email ?? null,
+        phone: m.leads?.phone ?? null,
+        branch_name: m.branches?.name ?? null,
+      })) as (MemberWithoutLogin & { branch_name: string | null })[];
+    },
+  });
+
+  const filteredNoLogin = membersWithoutLogin.filter((m) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [m.full_name, m.email, m.phone, m.member_code]
+      .some((v) => (v || '').toLowerCase().includes(q));
+  });
+
+  const handleBulkProvision = async () => {
+    const targets = filteredNoLogin.filter((m) => m.email || m.phone);
+    const skipped = filteredNoLogin.length - targets.length;
+    if (targets.length === 0) {
+      toast.error('No members have an email or phone on file');
+      return;
+    }
+    setBulkRunning(true);
+    let ok = 0;
+    const failures: string[] = [];
+    for (const m of targets) {
+      try {
+        await provisionMemberLogin({
+          memberId: m.id,
+          fullName: m.full_name,
+          email: m.email,
+          phone: m.phone,
+        });
+        ok++;
+      } catch (e: any) {
+        failures.push(`${m.member_code || m.full_name}: ${e?.message || 'failed'}`);
+      }
+    }
+    setBulkRunning(false);
+    queryClient.invalidateQueries({ queryKey: ['members-without-login'] });
+    queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
+    if (ok) toast.success(`Created ${ok} login${ok === 1 ? '' : 's'}`);
+    if (skipped) toast.warning(`${skipped} skipped — no email or phone on file`);
+    if (failures.length) toast.error(failures.slice(0, 3).join(' · '));
+  };
+
   const { data: branches = [] } = useQuery({
+
     queryKey: ['branches-for-role-assign'],
     queryFn: async () => {
       const { data } = await supabase.from('branches').select('id, name').order('name');
