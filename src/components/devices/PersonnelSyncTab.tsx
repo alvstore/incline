@@ -495,13 +495,14 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="Members synced"
+          label="Members on server"
           value={
             <>
               {stats.syncedMembers}
               <span className="text-sm font-normal text-muted-foreground">/{stats.totalMembers}</span>
             </>
           }
+          hint={truthLoading ? "Checking MIPS server…" : "Verified against MIPS person list"}
         />
         <StatTile
           label="Staff & trainers"
@@ -511,20 +512,26 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               <span className="text-sm font-normal text-muted-foreground">/{stats.totalStaff}</span>
             </>
           }
+          hint="Verified against MIPS person list"
         />
         <StatTile
-          label="Pending sync"
-          value={stats.pendingSyncable}
-          tone={stats.pendingSyncable > 0 ? "text-amber-600" : "text-emerald-600"}
-          hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "Photo on file, not yet on MIPS"}
+          label="Missing face"
+          value={stats.missingFace}
+          tone={stats.missingFace > 0 ? "text-amber-600" : "text-emerald-600"}
+          hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "CRM photo on file, no face on MIPS"}
         />
         <StatTile
-          label="No photo"
-          value={stats.noPhoto}
-          tone={stats.noPhoto > 0 ? "text-amber-600" : "text-emerald-600"}
-          hint="Upload a photo before syncing"
+          label="MIPS server total"
+          value={
+            <>
+              {stats.serverWithFace}
+              <span className="text-sm font-normal text-muted-foreground">/{stats.serverTotal}</span>
+            </>
+          }
+          hint={`${stats.noPhoto} people have no photo in CRM`}
         />
       </div>
+
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
         <CardContent className="space-y-3 p-4">
