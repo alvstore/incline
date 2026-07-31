@@ -13,8 +13,9 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Pencil
 } from 'lucide-react';
+
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,10 @@ import { TopUpBenefitDrawer } from '../benefits/TopUpBenefitDrawer';
 import { PurchaseAddOnDrawer } from '../benefits/PurchaseAddOnDrawer';
 import { fetchMemberRewards, claimReward, fetchMemberReferrals } from '@/services/referralService';
 import { RecordPaymentDrawer } from '@/components/invoices/RecordPaymentDrawer';
+import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
+import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import { can } from '@/lib/auth/permissions';
+
 import { CompGiftDrawer } from './CompGiftDrawer';
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
