@@ -874,6 +874,66 @@ Deno.serve(async (req) => {
         return await listLocations(body.branch_id, body.account_id);
       case "fetch_reviews":
         return await fetchReviews(body.branch_id);
+      case "fetch_reviews_places":
+        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
+        return json(await fetchPlacesReviewsForBranch(body.branch_id));
+      case "diagnose": {
+        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
+        const cfg = await getGoogleConfig(body.branch_id);
+        const checks: Array<{ key: string; ok: boolean; label: string; hint?: string }> = [];
+        checks.push({
+          key: "oauth_app",
+          ok: !!(cfg?.client_id && cfg?.client_secret),
+          label: "OAuth client saved",
+          hint: "Add the Google Cloud Web application Client ID and Secret under Settings → Integrations.",
+        });
+        checks.push({
+          key: "connected",
+          ok: !!cfg?.refresh_token,
+          label: "Google account connected",
+          hint: "Click Connect Google and grant access to your Business Profile.",
+        });
+        checks.push({
+          key: "location",
+          ok: !!(cfg?.account_id && cfg?.location_id),
+          label: "Business location selected",
+          hint: "Pick the account and location this branch maps to.",
+        });
+        let gbp: { ok: boolean; status?: number; error?: string } = { ok: false };
+        if (cfg?.account_id && cfg?.location_id) {
+          const token = await refreshAccessToken(body.branch_id, cfg);
+          if (!token) gbp = { ok: false, error: "Could not refresh the Google access token. Reconnect the account." };
+          else {
+            const r = await fetch(
+              `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            gbp = r.ok
+              ? { ok: true, status: r.status }
+              : { ok: false, status: r.status, error: friendlyGoogleError(r.status, await r.text()) };
+          }
+        }
+        checks.push({
+          key: "gbp_api",
+          ok: gbp.ok,
+          label: "Business Profile reviews API reachable",
+          hint: gbp.error,
+        });
+        const places = PLACES_KEY ? await fetchPlacesReviewsForBranch(body.branch_id) : null;
+        checks.push({
+          key: "places_fallback",
+          ok: !!places && (places as any).fetched >= 0 && !(places as any).reason,
+          label: "Places API fallback",
+          hint: PLACES_KEY
+            ? (places as any)?.reason
+              ? `Places fallback unavailable: ${(places as any).reason}`
+              : undefined
+            : "Add a GOOGLE_MAPS_API_KEY secret (Places API New enabled) to show live reviews while Business Profile quota is pending.",
+        });
+        return json({ ok: checks.every((c) => c.ok), checks, gbp, places });
+      }
+      case "request_member_review":
+
       case "classify": {
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
         const r = await classifyOne(body.inbound_id);
