@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { lockerService } from '@/services/lockerService';
+import { recordPayment } from '@/services/billingService';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Search, Receipt, Gift, CheckCircle, CreditCard, Link2 } from 'lucide-react';
