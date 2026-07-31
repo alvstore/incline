@@ -482,7 +482,9 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     </Card>
   );
 
-  const pendingTargets = personnel.filter((p) => p.mipsSyncStatus !== "synced");
+  // Anyone the MIPS server does not hold with a face image is actionable.
+  const pendingTargets = personnel.filter((p) => p.hasPhoto && (!onServer(p) || !hasFaceOnServer(p)));
+
 
   return (
     <div className="space-y-4">
