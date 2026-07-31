@@ -1,44 +1,40 @@
-## What I found in the audit
+## What I verified
 
-**The APIs in code are current, not legacy** — but the connect flow is split across the wrong surfaces.
-
-- `google-reviews-brain` already calls the right endpoints: Account Management v1, Business Information v1 (with `readMask`), My Business v4 for review list/reply, plus a **Places API (New)** fallback (`places:searchText` + place details).
-- The blocker is not code: your Google Cloud project has the Business Profile APIs disabled/unapproved (the "rate limit" you saw is a mislabelled 403), and — per your screenshots — the **Places API has no API key created at all** ("No API keys to display"), so the fallback lane is also dead. The edge function reads a `GOOGLE_MAPS_API_KEY` secret that does not exist yet.
-- The Configure drawer is generic schema-driven (`providerSchemas.ts` → `Integrations.tsx`). It exposes Account ID / Location ID / Client ID / Secret / API Key as flat text boxes, with **no field for `place_id`** even though the brain looks for `cfg.place_id`. There is no status, no step ordering, no error surfacing inside the drawer.
-- Minor code debt: `friendlyGoogleError` is declared twice in the edge function; the drawer's "Test connection" only probes the v4 reviews endpoint, so it always fails while quota is pending even when the Places lane would work.
+- Member **Love kumar paliwal (INC-26-0004)** has `user_id = null` in the database. His lead record does hold full PII (name, `lovekumarpaliwal77737777@gmail.com`, `+919001808487`), so there is enough data to mint a login.
+- He is the **only** member out of 53 with no login — every other member came in through self-registration, which creates the account.
+- Photo upload fails by design: the `avatars` bucket policy keys the file path on `auth.uid()`, so with no linked user there is nowhere valid to write. The drawer already tries to auto-provision by calling the `provision-member-login` edge function, then shows the "no login yet" toast you saw when that call returns nothing.
+- The `provision-member-login` function exists in the codebase but has **zero invocation logs**, which strongly suggests it was never actually deployed (it also has no entry in the function config). This is the most likely reason the inline auto-provision silently does nothing. First step is to deploy it and confirm with a live call.
+- `/admin-roles` today lists only people who already have a profile (i.e. already have a login). There is no surface anywhere in the app to create a login for an existing member — that is the missing UI you described.
 
 ## Plan
 
-### 1. Two clearly separated lanes in the UI
-- **Lane A — Reviews Lite (works today, zero GCP approval):** Places API (New). Read-only, up to 5 recent reviews + rating + total count. Good enough to populate the dashboard and Feedback tab immediately.
-- **Lane B — Full Business Profile (needs Google approval):** OAuth + v4 reviews list and **reply posting**. Kept as-is, unlocked once Google grants the Business Profile API quota.
+### 1. Make provisioning actually work
+- Deploy `provision-member-login` and verify with a real invocation for INC-26-0004.
+- Harden it: resolve PII from the linked lead, fall back to any existing profile match, look up existing auth users by email across all pages (current code only scans the first 200), return explicit error codes (`no_lead_pii_available`, `no_email_or_phone`, `email_taken_by_other_user`) instead of failing quietly.
+- Keep it idempotent: re-running links the existing user rather than erroring, and always upserts the profile, the `member` role, and `members.user_id`.
 
-### 2. Get a working Places key without you touching Google Cloud
-Preferred: link the **Google Maps Platform connector** (Lovable-managed key, Places API New already enabled — no GCP project, no billing, no key creation). Fallback stays: paste your own key into the drawer if you'd rather use your own GCP project.
+### 2. New "Logins" surface in Admin Roles
+Add a tab **"Members without login"** to `/admin-roles` (owner/admin only, matching the existing gate):
+- Table: member name, member code, branch, email, phone, source (lead-converted vs walk-in), joined date.
+- Row action **Create login** → calls the provisioning function, shows a clear success/failure toast, refreshes the list and the user-roles table.
+- Inline editing of email/phone before creating, for members whose lead data is incomplete.
+- Bulk **Create logins for all** action with per-row result summary.
+- Empty state when every member has a login; skeleton loading; counts shown as a summary card alongside the existing role cards.
 
-### 3. Rebuild the Google Business drawer (2026, purpose-built)
-New `GoogleBusinessDrawer.tsx`, replacing the generic schema drawer for this provider only:
-- Sticky header + scrollable body + sticky footer (Cancel/Save), `sm:max-w-xl`.
-- **Status strip** at top: chips for `Places key`, `OAuth`, `Account/Location`, `Last fetch` — each green/amber/red with a one-line reason.
-- **Step 1 · Quick connect (Places):** Place ID field with a **"Find my listing"** search (business name + city → `places:searchText` → pick from results), plus a live preview of the rating/review count once resolved.
-- **Step 2 · Full access (optional):** OAuth Client ID/Secret → Connect Google → Auto-discover Account & Location (existing `GoogleBusinessDiscovery` sheet, embedded inline).
-- **Diagnostics** section: runs the existing `diagnose` action and renders each check as a pass/fail row with the exact remediation (which API to enable, which quota to request), replacing today's wall of yellow help text.
-- Auto-fetch toggle + "Fetch now" moved here.
+### 3. Create login from the member profile
+- Add a **Create login** quick action in the member profile drawer, visible only when the member has no `user_id`. Same function call, same feedback.
+- Update the avatar upload path so a failed provisioning attempt surfaces the real reason (e.g. "no email on file") instead of the generic message, and links the user to the create-login action.
 
-### 4. Backend adjustments (`google-reviews-brain`)
-- Add `place_id` to persisted config and a `search_places` action for the "Find my listing" picker.
-- Read the Places key from the connector env var when present, else the manual key from `integration_settings.credentials`, else the `GOOGLE_MAPS_API_KEY` secret.
-- `test_connection` becomes lane-aware: reports Places OK / GBP pending separately instead of one hard failure.
-- Persist `rating` + `user_rating_count` on fetch so the dashboard widget shows the real average, not the average of 5 rows.
-- Remove the duplicate `friendlyGoogleError`.
+### 4. Welcome communication (optional toggle)
+When a login is created, offer a checkbox "Send welcome message with login link" that routes through the existing communication dispatcher (email/WhatsApp per configuration). Off by default for backfills, on by default for fresh conversions.
 
-### 5. Schema/data
-- `google_reviews_inbound`: mark Places-sourced rows as read-only (no reply button, tooltip explains reply needs Lane B). No new table.
-- `integration_settings.config` gains `place_id`, `place_name`, `review_source_pref`.
+### 5. Backfill and verify
+- Create the login for INC-26-0004, confirm `members.user_id` is populated, upload a photo end-to-end, and confirm the avatar renders in the member list and profile.
+- Re-run the "members without login" query to confirm it returns zero rows.
 
 ## Technical notes
-- Places API (New) returns **max 5 reviews** and cannot post replies — that is a Google limit, not something code can widen. Reply-to-review will stay disabled until the Business Profile API quota is approved.
-- Files touched: `src/components/settings/GoogleBusinessDrawer.tsx` (new), `src/pages/Integrations.tsx` (route this provider to the new drawer), `src/config/providerSchemas.ts` (trim now-unused Google fields), `src/components/settings/GoogleBusinessDiscovery.tsx` (embeddable mode), `src/components/feedback/ExternalReviewsTab.tsx` (source badge + reply gating), `src/components/dashboard/GoogleReviewsWidget.tsx` (real aggregate rating), `supabase/functions/google-reviews-brain/index.ts` (v1.3.0).
 
-## One decision from you
-For the Places key: link the **Lovable-managed Google Maps connector** (one click, nothing to do in Google Cloud), or create your own key in the GCP project from your screenshots and paste it in? I'll build the drawer to accept both either way — this just decides which one we switch on first.
+- Files touched: `supabase/functions/provision-member-login/index.ts`, `src/pages/AdminRoles.tsx`, a new `src/components/members/CreateMemberLoginDrawer.tsx` (side drawer per the no-dialog rule), `src/components/members/MemberProfileDrawer.tsx`, `src/components/members/MemberAvatarUpload.tsx`.
+- The "members without login" list is a TanStack Query against `members` joined to `leads` for PII, filtered by `user_id is null` and scoped to the active branch context.
+- No schema migration is required — `members.user_id`, `profiles`, and `user_roles` already model everything needed.
+- Role assignment continues to go through the existing `assign_user_role` path so the audit trail stays intact.
