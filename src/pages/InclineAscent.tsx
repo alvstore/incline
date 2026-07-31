@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
+import { LogIn } from 'lucide-react';
 import ScrollProgressBar from '@/components/ui/ScrollProgressBar';
 import useSoundEffects from '@/hooks/useSoundEffects';
 import SEO from '@/components/seo/SEO';
