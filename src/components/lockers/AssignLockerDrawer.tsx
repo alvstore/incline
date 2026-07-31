@@ -364,17 +364,28 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-lg bg-muted">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total:</span>
-                <span className="text-xl font-bold">₹{totalAmount.toLocaleString()}</span>
+            <div className="p-4 rounded-2xl bg-muted space-y-2">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Sub-total</span>
+                <span className="font-medium">₹{totalAmount.toLocaleString()}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">GST ({gstRate}%)</span>
+                <span className="font-medium">₹{gstAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center border-t pt-2">
+                <span className="text-muted-foreground">Total payable</span>
+                <span className="text-xl font-bold">
+                  ₹{grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
                 <Receipt className="w-3 h-3 inline mr-1" />
                 An invoice will be generated automatically
               </p>
             </div>
           )}
+
         </div>
 
 
