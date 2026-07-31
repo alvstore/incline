@@ -990,24 +990,59 @@ Deno.serve(async (req) => {
       case "fetch_reviews_places":
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         return json(await fetchPlacesReviewsForBranch(body.branch_id));
+      case "search_places": {
+        if (!body.query || body.query.trim().length < 3)
+          return json({ ok: false, reason: "Type at least 3 characters to search." }, 200);
+        return await searchPlaces(body.branch_id, body.query.trim());
+      }
       case "diagnose": {
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         const cfg = await getGoogleConfig(body.branch_id);
-        const checks: Array<{ key: string; ok: boolean; label: string; hint?: string }> = [];
+        const placesKey = await resolvePlacesKey(body.branch_id);
+        const checks: Array<{ key: string; ok: boolean; lane: "places" | "business_profile"; label: string; hint?: string }> = [];
+
+        // ── Lane A: Places (works without Google approval) ──
+        checks.push({
+          key: "places_key",
+          lane: "places",
+          ok: !!placesKey,
+          label: "Places API key available",
+          hint: placesKey ? undefined : "Paste a Google Places API (New) key in Step 1, or link the Google Maps connector.",
+        });
+        const places = placesKey ? await fetchPlacesReviewsForBranch(body.branch_id) : null;
+        checks.push({
+          key: "place_id",
+          lane: "places",
+          ok: !!(places as any)?.place_id,
+          label: "Google listing matched",
+          hint: (places as any)?.place_id ? undefined : "Use “Find my listing” to pick this branch's Google place.",
+        });
+        checks.push({
+          key: "places_fetch",
+          lane: "places",
+          ok: !!places && !(places as any).reason,
+          label: "Live reviews readable (Places)",
+          hint: (places as any)?.detail ?? ((places as any)?.reason ? `Places unavailable: ${(places as any).reason}` : undefined),
+        });
+
+        // ── Lane B: Business Profile (reply posting, full history) ──
         checks.push({
           key: "oauth_app",
+          lane: "business_profile",
           ok: !!(cfg?.client_id && cfg?.client_secret),
           label: "OAuth client saved",
-          hint: "Add the Google Cloud Web application Client ID and Secret under Settings → Integrations.",
+          hint: "Add the Google Cloud Web application Client ID and Secret in Step 2.",
         });
         checks.push({
           key: "connected",
+          lane: "business_profile",
           ok: !!cfg?.refresh_token,
           label: "Google account connected",
           hint: "Click Connect Google and grant access to your Business Profile.",
         });
         checks.push({
           key: "location",
+          lane: "business_profile",
           ok: !!(cfg?.account_id && cfg?.location_id),
           label: "Business location selected",
           hint: "Pick the account and location this branch maps to.",
@@ -1028,23 +1063,17 @@ Deno.serve(async (req) => {
         }
         checks.push({
           key: "gbp_api",
+          lane: "business_profile",
           ok: gbp.ok,
           label: "Business Profile reviews API reachable",
           hint: gbp.error,
         });
-        const places = PLACES_KEY ? await fetchPlacesReviewsForBranch(body.branch_id) : null;
-        checks.push({
-          key: "places_fallback",
-          ok: !!places && (places as any).fetched >= 0 && !(places as any).reason,
-          label: "Places API fallback",
-          hint: PLACES_KEY
-            ? (places as any)?.reason
-              ? `Places fallback unavailable: ${(places as any).reason}`
-              : undefined
-            : "Add a GOOGLE_MAPS_API_KEY secret (Places API New enabled) to show live reviews while Business Profile quota is pending.",
-        });
-        return json({ ok: checks.every((c) => c.ok), checks, gbp, places });
+
+        const placesOk = checks.filter((c) => c.lane === "places").every((c) => c.ok);
+        const gbpOk = checks.filter((c) => c.lane === "business_profile").every((c) => c.ok);
+        return json({ ok: placesOk || gbpOk, places_ok: placesOk, gbp_ok: gbpOk, checks, gbp, places });
       }
+
       case "request_member_review":
 
       case "classify": {
