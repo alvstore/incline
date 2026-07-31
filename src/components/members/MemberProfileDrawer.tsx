@@ -640,6 +640,8 @@ export function MemberProfileDrawer({
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
   const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
   const [invoicesOpen, setInvoicesOpen] = useState(false);
+  const [createLoginOpen, setCreateLoginOpen] = useState(false);
+
   const [adjustDatesOpen, setAdjustDatesOpen] = useState(false);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [unfreezeOpen, setUnfreezeOpen] = useState(false);
