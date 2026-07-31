@@ -1,5 +1,5 @@
-// v1.7.0 — Server-side photo normalization (never fail on 400KB cap),
-// biometric_photo_path backfill from avatars, explicit photo/dispatch result flags.
+// v1.8.0 — Server-side photo normalization plus independently audited,
+// per-device delivery so one healthy gate cannot hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 

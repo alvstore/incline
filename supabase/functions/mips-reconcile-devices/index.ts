@@ -1,9 +1,7 @@
 // v2.0.0 — Resumable, bounded reconciliation across members, employees and
 // trainers. Each run advances a rotating roster window and delegates the full
-// server + photo + per-device audited delivery to sync-to-mips.
-// online access_devices with a mips_device_id, re-issue syncPerson for each
-// person that has a mips_person_id, so anyone who missed a sync while a
-// device was offline is re-pushed. Idempotent on the MIPS side.
+// server + photo + per-device audited delivery to sync-to-mips. The rotating
+// window bounds runtime while eventually healing the complete branch roster.
 //
 // Invoked by the automation-brain cron every ~15 min (rule
 // `mips_reconcile_devices`).

@@ -924,18 +924,27 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                const fileName = `contracts/${employee?.id || 'unknown'}/${Date.now()}-${file.name}`;
+                if (!employee?.branch_id || !employee?.id) {
+                  (await import('sonner')).toast.error('Employee branch is required before uploading a contract');
+                  return;
+                }
+                const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const fileName = `branch/${employee.branch_id}/contracts/${employee.id}/${Date.now()}-${safeName}`;
                 const { error } = await (await import('@/integrations/supabase/client')).supabase.storage
                   .from('documents')
                   .upload(fileName, file);
                 if (error) {
                   (await import('sonner')).toast.error('Upload failed: ' + error.message);
                 } else {
-                  const { data: urlData } = (await import('@/integrations/supabase/client')).supabase.storage
+                  const { data: urlData, error: signError } = await (await import('@/integrations/supabase/client')).supabase.storage
                     .from('documents')
-                    .getPublicUrl(fileName);
-                  setFormData({ ...formData, documentUrl: urlData.publicUrl });
-                  (await import('sonner')).toast.success('Document uploaded');
+                    .createSignedUrl(fileName, 60 * 30);
+                  if (signError || !urlData?.signedUrl) {
+                    (await import('sonner')).toast.error('Contract uploaded but could not be opened securely');
+                  } else {
+                    setFormData({ ...formData, documentUrl: urlData.signedUrl });
+                    (await import('sonner')).toast.success('Document uploaded');
+                  }
                 }
               }}
             />
