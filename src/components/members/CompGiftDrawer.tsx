@@ -135,26 +135,16 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
       const { data: { user } } = await supabase.auth.getUser();
 
       if (isManagerOrAbove) {
-        // Direct execution for admin/manager/owner
-        const newEndDate = format(addDays(parseISO(currentMembership!.end_date), daysNum), 'yyyy-MM-dd');
-        const { error } = await supabase
-          .from('memberships')
-          .update({ end_date: newEndDate })
-          .eq('id', membershipId);
+        // Atomic server-side extension: extends end_date, writes the free-days
+        // ledger row and the audit entry in one transaction.
+        const { error } = await supabase.rpc('grant_membership_free_days' as never, {
+          p_membership_id: membershipId,
+          p_days: daysNum,
+          p_reason: reason || 'Comp extension',
+        } as never);
         if (error) throw error;
-
-        // Log in audit
-        await supabase.from('audit_logs').insert({
-          action: 'COMP_EXTEND',
-          table_name: 'memberships',
-          record_id: membershipId,
-          user_id: user?.id,
-          branch_id: branchId,
-          actor_name: user?.email || 'Admin',
-          action_description: `Extended membership by ${daysNum} days for ${memberName}. Reason: ${reason || 'Comp extension'}`,
-          new_data: { days: daysNum, new_end_date: newEndDate, reason } as any,
-        });
       } else {
+
         // Staff: submit for approval
         const { error } = await supabase.from('approval_requests').insert({
           approval_type: 'comp_gift' as any,
