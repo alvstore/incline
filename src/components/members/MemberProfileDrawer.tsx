@@ -43,6 +43,8 @@ import { CompGiftDrawer } from './CompGiftDrawer';
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
+import { MemberInvoicesDrawer } from './MemberInvoicesDrawer';
+import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
@@ -633,6 +635,9 @@ export function MemberProfileDrawer({
   const queryClient = useQueryClient();
   const { hasAnyRole } = useAuth();
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
+  const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
+  const [invoicesOpen, setInvoicesOpen] = useState(false);
+  const [adjustDatesOpen, setAdjustDatesOpen] = useState(false);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [unfreezeOpen, setUnfreezeOpen] = useState(false);
   const [assignTrainerOpen, setAssignTrainerOpen] = useState(false);
@@ -1254,6 +1259,16 @@ export function MemberProfileDrawer({
               {member.status === 'active' ? <UserMinus className="h-4 w-4 mr-2 shrink-0" /> : <UserCheck className="h-4 w-4 mr-2 shrink-0" />}
               {member.status === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
+            {isManagerOrAbove && (
+              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setInvoicesOpen(true)}>
+                <Pencil className="h-4 w-4 mr-2 shrink-0" /> Edit Invoice
+              </Button>
+            )}
+            {isOwnerOrAdmin && activeMembership && (
+              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setAdjustDatesOpen(true)}>
+                <Calendar className="h-4 w-4 mr-2 shrink-0" /> Adjust Dates
+              </Button>
+            )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setCompGiftOpen(true)}>
                 <Gift className="h-4 w-4 mr-2 shrink-0" /> Comp/Gift
@@ -2216,6 +2231,19 @@ export function MemberProfileDrawer({
             memberName={profile?.full_name}
             membershipId={activeMembership.id}
             branchId={member.branch_id}
+          />
+        )}
+        <MemberInvoicesDrawer
+          open={invoicesOpen}
+          onOpenChange={setInvoicesOpen}
+          memberId={member.id}
+          branchId={member.branch_id}
+        />
+        {activeMembership && (
+          <AdjustMembershipDatesDrawer
+            open={adjustDatesOpen}
+            onOpenChange={setAdjustDatesOpen}
+            membership={activeMembership}
           />
         )}
       </SheetContent>

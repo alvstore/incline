@@ -13402,6 +13402,15 @@ export type Database = {
         Args: { _class_id: string; _member_id: string }
         Returns: Json
       }
+      adjust_membership_dates: {
+        Args: {
+          p_end_date: string
+          p_membership_id: string
+          p_reason: string
+          p_start_date: string
+        }
+        Returns: Json
+      }
       admin_run_automation_now: {
         Args: { _rule_id: string }
         Returns: undefined
