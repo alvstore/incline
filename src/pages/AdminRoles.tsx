@@ -273,18 +273,98 @@ export default function AdminRoles() {
                   <TabsTrigger value="admins">Admins</TabsTrigger>
                   <TabsTrigger value="trainers">Trainers</TabsTrigger>
                   <TabsTrigger value="staff">Staff</TabsTrigger>
+                  <TabsTrigger value="logins" className="gap-2">
+                    Members without login
+                    {membersWithoutLogin.length > 0 && (
+                      <Badge variant="secondary" className="rounded-full px-1.5 text-[10px]">
+                        {membersWithoutLogin.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {activeTab === 'logins' ? (
+              loadingNoLogin ? (
+                <div className="space-y-2 py-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/60" />
+                  ))}
+                </div>
+              ) : filteredNoLogin.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <KeyRound className="h-8 w-8 text-muted-foreground" />
+                  <p className="font-medium">Every member has a login</p>
+                  <p className="text-sm text-muted-foreground">
+                    Members converted from leads are provisioned automatically.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {canManageRoles && (
+                    <div className="flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        {filteredNoLogin.length} member{filteredNoLogin.length === 1 ? '' : 's'} cannot sign in or upload a photo.
+                      </p>
+                      <Button size="sm" onClick={handleBulkProvision} disabled={bulkRunning}>
+                        {bulkRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create logins for all
+                      </Button>
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead className="hidden md:table-cell">Email</TableHead>
+                          <TableHead className="hidden md:table-cell">Phone</TableHead>
+                          <TableHead className="hidden md:table-cell">Branch</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredNoLogin.map((m) => (
+                          <TableRow key={m.id} className="hover:bg-muted/50">
+                            <TableCell>
+                              <p className="text-sm font-medium">{m.full_name || 'Unnamed member'}</p>
+                              <p className="font-mono text-xs text-muted-foreground">{m.member_code || '—'}</p>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.email || <span className="text-destructive">missing</span>}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.phone || '—'}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                              {m.branch_name || '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setLoginTarget(m); setLoginDrawerOpen(true); }}
+                              >
+                                <KeyRound className="mr-2 h-4 w-4" /> Create login
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredUsers.length === 0 ? (
               <p className="text-muted-foreground text-center py-12">No users found</p>
             ) : (
+
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
