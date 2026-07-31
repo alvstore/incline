@@ -1,4 +1,9 @@
-// dispatch-communication v1.22.0
+// dispatch-communication v1.23.0
+// v1.23.0: FIX — document attachments on body-only approved templates are no
+//          longer silently dropped. Meta templates like `invoice_generated_pdf`
+//          say "attached" but have NO HEADER component, so the PDF URL is now
+//          appended to the last body slot as a fallback. Also strips duplicate
+//          currency symbols on amount-like variables ("₹₹2,000").
 // v1.22.0: Preserve structured Meta/MM API error details from nested Edge
 //          Function failures so Campaign Wizard and logs show actionable
 //          meta_code/provider_route/fbtrace instead of generic "unknown".
@@ -284,13 +289,21 @@ function resolveVarValue(
     }
     tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
   }
+  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total');
   for (const tk of tryKeys) {
     const v = values[tk];
-    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      let out = String(v).trim();
+      // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
+      // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
+      if (isAmountKey) out = out.replace(/^(₹|Rs\.?|INR)\s*/i, '').trim();
+      return out;
+    }
   }
   return '';
 
 }
+
 
 /** Safe visible fallback per variable-key type. Meta rejects whitespace-only
  *  or leading/trailing-space body params on many marketing templates (132018),
@@ -355,14 +368,23 @@ function appendAttachmentLinkForBodyOnlyTemplate(
   if (hasLinkSlot) return values;
 
   const preferredKey = keys.find((key) => /plan_(title|name)|^plan$/i.test(stripBraces(key)))
-    ?? keys.find((key) => /trainer/i.test(stripBraces(key)));
+    ?? keys.find((key) => /trainer/i.test(stripBraces(key)))
+    // Last resort: many APPROVED Meta bodies (invoice_generated_pdf,
+    // payment_receipt_pdf …) claim the file is "attached" but have NO HEADER
+    // component, so the document is never delivered. Rather than dropping the
+    // PDF entirely, append the download link to the final body slot.
+    ?? keys[keys.length - 1];
   if (!preferredKey) return values;
 
   const normalizedKey = stripBraces(preferredKey);
   const current = resolveVarValue(normalizedKey, values, keys.indexOf(preferredKey)).trim();
-  if (!current || current.includes(attachmentUrl)) return values;
-  return { ...values, [normalizedKey]: `${current} — PDF: ${attachmentUrl}` };
+  if (current.includes(attachmentUrl)) return values;
+  return {
+    ...values,
+    [normalizedKey]: current ? `${current} — PDF: ${attachmentUrl}` : attachmentUrl,
+  };
 }
+
 
 function inferTemplateValues(templateContent: string, renderedBody: string, keys: string[]): Record<string, string> {
   if (keys.length === 0) return {};

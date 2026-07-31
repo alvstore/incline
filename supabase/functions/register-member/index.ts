@@ -521,56 +521,57 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   }
 
   // 12) Fire-and-forget welcome. The dispatcher handles ONE channel per call,
-  // so we dispatch WhatsApp/SMS AND Email as two independent invocations to
-  // guarantee the member gets a welcome email even if the WhatsApp template
-  // isn't authored yet.
+  // so we dispatch WhatsApp, SMS and Email as independent invocations to
+  // guarantee the member gets a welcome even if one template isn't authored.
+  // Every message carries the member code AND the portal login link.
+  const LOGIN_URL = "https://theincline.in/auth";
   const welcomeVars = {
     name: reg.full_name,
     member_name: reg.full_name,
     member_code: member.member_code ?? "",
     branch_name: branch.name,
+    login_url: LOGIN_URL,
+    login_link: LOGIN_URL,
   };
-  const welcomeFallback = `Hi ${reg.full_name}, welcome to The Incline Life by Incline! Your member code is ${member.member_code ?? ""}. Visit reception to activate your plan.`;
+  const welcomeFallback =
+    `Hi ${reg.full_name}, welcome to The Incline Life by Incline! ` +
+    `Your member code is ${member.member_code ?? ""}. ` +
+    `Log in to your member portal at ${LOGIN_URL} — use "Forgot password" the first time to set your password. ` +
+    `Visit reception to activate your plan.`;
 
-  try {
-    await admin.functions.invoke("dispatch-communication", {
-      body: {
-        event: "member_created",
-        member_id: member.id,
-        branch_id: reg.branch_id,
-        recipient: phone,
-        dedupe_key: `member_created:${member.id}:wa`,
-        variables: welcomeVars,
-        fallback_body: welcomeFallback,
-      },
-    });
-  } catch (e) {
-    await captureEdgeError("register-member", e, { route: "welcome_dispatch_wa" });
-  }
+  const welcomeChannels: Array<{ channel: "whatsapp" | "sms" | "email"; recipient: string }> = [];
+  if (phone) welcomeChannels.push({ channel: "whatsapp", recipient: phone });
+  if (phone) welcomeChannels.push({ channel: "sms", recipient: phone });
+  if (reg.email) welcomeChannels.push({ channel: "email", recipient: reg.email });
 
-  if (reg.email) {
+  for (const c of welcomeChannels) {
     try {
       await admin.functions.invoke("dispatch-communication", {
         body: {
           event: "member_created",
-          channel: "email",
+          channel: c.channel,
           member_id: member.id,
           branch_id: reg.branch_id,
-          recipient: reg.email,
-          dedupe_key: `member_created:${member.id}:email`,
+          recipient: c.recipient,
+          dedupe_key: `member_created:${member.id}:${c.channel}`,
           variables: welcomeVars,
-          payload: {
-            subject: `Welcome to The Incline Life, ${reg.full_name}!`,
-            body: welcomeFallback,
-            use_branded_template: true,
-          },
+          ...(c.channel === "email"
+            ? {
+                payload: {
+                  subject: `Welcome to The Incline Life, ${reg.full_name}!`,
+                  body: welcomeFallback,
+                  use_branded_template: true,
+                },
+              }
+            : {}),
           fallback_body: welcomeFallback,
         },
       });
     } catch (e) {
-      await captureEdgeError("register-member", e, { route: "welcome_dispatch_email" });
+      await captureEdgeError("register-member", e, { route: `welcome_dispatch_${c.channel}` });
     }
   }
+
 
   return json(200, {
     status: "ok",

@@ -75,15 +75,27 @@ export async function sendInvoicePdfToMember(
       contentType: 'application/pdf',
     });
 
+    const amountPlain = Number(inv.total_amount).toLocaleString('en-IN');
+    // NOTE: approved Meta bodies already print "₹" before the amount slot, so
+    // these values must stay symbol-free. Aliases cover every approved
+    // invoice/receipt template variant (amount_due, item_description, due_date).
     const variables = {
       name,
       member_name: name,
       invoice_number: inv.invoice_number,
-      amount: `₹${Number(inv.total_amount).toLocaleString('en-IN')}`,
+      amount: amountPlain,
+      amount_due: amountPlain,
+      amount_paid: amountPlain,
+      total_amount: amountPlain,
+      item_description: `invoice ${inv.invoice_number}`,
+      payment_for: `invoice ${inv.invoice_number}`,
+      due_date: 'today',
+      payment_date: new Date().toLocaleDateString('en-IN'),
       branch_name: branchName,
       document_link: url,
     };
-    const fallback = `Hi ${name}, your invoice ${inv.invoice_number} for ₹${Number(inv.total_amount).toLocaleString('en-IN')} is ready. Download: ${url}`;
+    const fallback = `Hi ${name}, your invoice ${inv.invoice_number} for ₹${amountPlain} is ready. Download: ${url}`;
+
 
     const results: SendInvoicePdfResult = { ok: true };
 

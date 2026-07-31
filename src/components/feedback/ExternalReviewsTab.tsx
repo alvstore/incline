@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatCard } from '@/components/ui/stat-card';
-import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2 } from 'lucide-react';
+import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2, Stethoscope, CheckCircle2, XCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -114,7 +114,26 @@ export default function ExternalReviewsTab() {
     return { week: recent.length, avg, fakes, pending };
   }, [rows]);
 
+  const [diagnosis, setDiagnosis] = useState<any>(null);
+  const diagnose = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'diagnose', branch_id: branchId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (d) => {
+      setDiagnosis(d);
+      if ((d as any)?.ok) toast.success('Google connection is healthy');
+      else toast.warning('Found issues with the Google connection');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Diagnostics failed'),
+  });
+
   const fetchNow = useMutation({
+
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
         body: { action: 'fetch_reviews', branch_id: branchId },
@@ -215,11 +234,54 @@ export default function ExternalReviewsTab() {
             {[5,4,3,2,1].map(n => <SelectItem key={n} value={String(n)}>{n} ★</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={() => fetchNow.mutate()} disabled={fetchNow.isPending}>
+        <Button variant="outline" size="sm" onClick={() => fetchNow.mutate()} disabled={fetchNow.isPending} className="cursor-pointer">
           <RefreshCw className={`h-4 w-4 mr-1.5 ${fetchNow.isPending ? 'animate-spin' : ''}`} />
           Fetch now
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => diagnose.mutate()}
+          disabled={diagnose.isPending}
+          className="cursor-pointer"
+        >
+          <Stethoscope className={`h-4 w-4 mr-1.5 ${diagnose.isPending ? 'animate-pulse' : ''}`} />
+          Diagnose
+        </Button>
       </div>
+
+      {/* Diagnostics */}
+      {diagnosis && (
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Google connection diagnostics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(diagnosis.checks ?? []).map((c: any) => (
+              <div key={c.key} className="flex items-start gap-2.5 rounded-xl px-2.5 py-2 hover:bg-muted/50">
+                {c.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                ) : (
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{c.label}</p>
+                  {!c.ok && c.hint && (
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{c.hint}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {diagnosis.places?.rating != null && (
+              <p className="pt-1 text-xs text-muted-foreground">
+                Public Google rating: <strong>{diagnosis.places.rating}</strong> from{' '}
+                {diagnosis.places.total_ratings ?? 0} ratings (Places fallback).
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
 
       {/* Reviews list */}
       {isLoading ? (

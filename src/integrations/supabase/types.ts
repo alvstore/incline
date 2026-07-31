@@ -4819,6 +4819,7 @@ export type Database = {
           reply_text: string | null
           reported_to_google_at: string | null
           review_text: string | null
+          source: string
           updated_at: string
         }
         Insert: {
@@ -4849,6 +4850,7 @@ export type Database = {
           reply_text?: string | null
           reported_to_google_at?: string | null
           review_text?: string | null
+          source?: string
           updated_at?: string
         }
         Update: {
@@ -4879,6 +4881,7 @@ export type Database = {
           reply_text?: string | null
           reported_to_google_at?: string | null
           review_text?: string | null
+          source?: string
           updated_at?: string
         }
         Relationships: [
