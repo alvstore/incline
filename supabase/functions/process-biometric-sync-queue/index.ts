@@ -1,6 +1,6 @@
-// v1.0.0 — Drain biometric_sync_queue: retries stuck photo_upload and add
-// rows by re-invoking sync-to-mips (server-only). Marks rows succeeded /
-// failed with retry_count + error_message so operators can see progress
+// v1.1.0 — Drain biometric_sync_queue: re-invokes sync-to-mips WITH device
+// dispatch, and only marks a row succeeded when the face photo uploaded and
+// at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
 //
 // Invoked by the automation-brain cron every ~5 min under rule
@@ -79,14 +79,28 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             person_type: personType,
             person_id: personId,
-            server_only: true,
+            // Always fan out to devices from the queue — the previous
+            // "server_only" hand-off had no owner and left people registered
+            // on the MIPS server but absent from Gate 1 / Gate 2.
+            deploy_to_devices: true,
           }),
         });
         const invText = await invokeRes.text();
         let data: any = null;
         try { data = JSON.parse(invText); } catch { data = { raw: invText }; }
         const invErr = invokeRes.ok ? null : { message: `HTTP ${invokeRes.status}: ${invText.slice(0, 200)}` };
-        const success = !invErr && (data as any)?.success !== false;
+        // A row only counts as done when the person landed, the face photo
+        // uploaded AND at least one device received the dispatch.
+        const dispatched = Array.isArray(data?.dispatched_device_ids) ? data.dispatched_device_ids : [];
+        const photoOk = data?.photo_uploaded === true;
+        const revoked = data?.action === "revoked_instead_of_synced";
+        const success = !invErr && data?.success !== false && (revoked || (photoOk && dispatched.length > 0));
+        const partialReason = invErr?.message
+          || data?.error
+          || (!photoOk ? `photo not uploaded: ${data?.photo_result?.message || "unknown"}` : "")
+          || (dispatched.length === 0 ? "no devices received the dispatch" : "")
+          || "sync-to-mips returned failure";
+
         if (success) {
           await supabase
             .from("biometric_sync_queue")
@@ -103,9 +117,11 @@ Deno.serve(async (req) => {
             .from("biometric_sync_queue")
             .update({
               status: nextRetry >= MAX_RETRIES ? "failed" : "pending",
-              error_message: invErr?.message || (data as any)?.error || "sync-to-mips returned failure",
+              error_message: partialReason,
               retry_count: nextRetry,
+              processed_at: new Date().toISOString(),
             })
+
             .eq("id", (row as any).id);
           failed++;
         }

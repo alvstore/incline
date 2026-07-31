@@ -6,9 +6,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { queueStaffSync } from '@/services/biometricService';
 import { compressImageFile } from '@/utils/imageCompression';
+import { uploadAndSyncPersonPhoto, type PersonEntity } from '@/lib/media/syncPersonPhoto';
 
 interface StaffAvatarUploadProps {
   staffId?: string;
+  /** Auth user id of the staff/trainer — enables the full biometric pipeline. */
+  userId?: string;
+  /** Which table `staffId` belongs to. */
+  entityType?: PersonEntity;
   avatarUrl?: string;
   name: string;
   onAvatarChange: (url: string) => void;
@@ -21,11 +26,14 @@ export function StaffAvatarUpload({
   avatarUrl,
   name,
   staffId,
+  userId,
+  entityType = 'employees',
   onAvatarChange,
   size = 'md',
   disabled = false,
   bucket = 'avatars',
-}: StaffAvatarUploadProps & { staffId?: string }) {
+}: StaffAvatarUploadProps) {
+
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,14 +70,28 @@ export function StaffAvatarUpload({
     // Upload to storage
     setUploading(true);
     try {
-      // Compress image for device compatibility (max 640x640, under 200KB)
+      // Preferred path: full pipeline (avatar + private biometric copy +
+      // device sync queue) whenever we know the owning auth user.
+      if (userId) {
+        const res = await uploadAndSyncPersonPhoto({
+          file,
+          userId,
+          personName: name,
+          person: staffId ? { entityType, entityId: staffId } : null,
+        });
+        onAvatarChange(res.avatarUrl);
+        toast.success(res.queued ? 'Photo uploaded — queued for device sync' : 'Photo uploaded successfully');
+        return;
+      }
+
+      // Fallback (record not linked to a login yet): plain avatar upload.
       const compressedFile = await compressImageFile(file);
       const fileName = `staff-${Date.now()}.jpg`;
       const filePath = `staff/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(filePath, compressedFile, { upsert: true });
+        .upload(filePath, compressedFile, { upsert: true, contentType: 'image/jpeg' });
 
       if (uploadError) throw uploadError;
 
@@ -80,7 +102,6 @@ export function StaffAvatarUpload({
       onAvatarChange(publicUrl);
       toast.success('Photo uploaded successfully');
 
-      // Auto-queue biometric sync if staffId is available
       if (staffId) {
         try {
           await queueStaffSync(staffId, publicUrl, name);
@@ -97,6 +118,7 @@ export function StaffAvatarUpload({
       setUploading(false);
     }
   };
+
 
   const clearAvatar = () => {
     setPreviewUrl(null);

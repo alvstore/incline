@@ -1,40 +1,34 @@
-## What I verified
+## What I verified (not guesses)
 
-- Member **Love kumar paliwal (INC-26-0004)** has `user_id = null` in the database. His lead record does hold full PII (name, `lovekumarpaliwal77737777@gmail.com`, `+919001808487`), so there is enough data to mint a login.
-- He is the **only** member out of 53 with no login — every other member came in through self-registration, which creates the account.
-- Photo upload fails by design: the `avatars` bucket policy keys the file path on `auth.uid()`, so with no linked user there is nowhere valid to write. The drawer already tries to auto-provision by calling the `provision-member-login` edge function, then shows the "no login yet" toast you saw when that call returns nothing.
-- The `provision-member-login` function exists in the codebase but has **zero invocation logs**, which strongly suggests it was never actually deployed (it also has no entry in the function config). This is the most likely reason the inline auto-provision silently does nothing. First step is to deploy it and confirm with a live call.
-- `/admin-roles` today lists only people who already have a profile (i.e. already have a login). There is no surface anywhere in the app to create a login for an existing member — that is the missing UI you described.
+- **Love kumar paliwal (INC-26-0004)**: `biometric_photo_path` is **NULL** — only a public `avatars/...` URL exists. The 14:20 sync log says: `Photo upload: ✗ Photo too large: 448KB (max 400KB)` → the person record was created/updated in MIPS (personId 132), but **no face image** was pushed.
+- **Akansha budhraj (INC-26-0038)**: has a proper `biometric/members/....jpg` path and personId 140, so she reached the MIPS *employee* list too.
+- **Queue rows for both are `status = succeeded`** even though the photo never uploaded — the sync reports success when only the person record lands.
+- **`process-biometric-sync-queue` calls `sync-to-mips` with `server_only: true`**, and `sync-to-mips` then does: `dispatchResult = { skipped: true, reason: "server_only_sync — cron will dispatch" }`. The cron that was supposed to dispatch (`mips_personnel_delta_sync`) is **`is_active = false` and has never run** (`last_run_at` NULL). So nothing ever pushes the person to Gate 1 / Gate 2 — exactly the symptom: present in MIPS employees, absent on devices.
+- Upload paths differ: `MemberAvatarUpload` / `StaffBiometricsTab` / `PersonnelSyncTab` write a compressed biometric path, but plain profile-avatar uploads (`AvatarUpload.tsx`, `Profile.tsx`, `EditProfileDrawer`, `StaffAvatarUpload`) upload the **raw file to `avatars/`** with no compression and no `biometric_photo_path` — those are the ones that end up 448KB and get rejected.
 
-## Plan
+## Fix plan
 
-### 1. Make provisioning actually work
-- Deploy `provision-member-login` and verify with a real invocation for INC-26-0004.
-- Harden it: resolve PII from the linked lead, fall back to any existing profile match, look up existing auth users by email across all pages (current code only scans the first 200), return explicit error codes (`no_lead_pii_available`, `no_email_or_phone`, `email_taken_by_other_user`) instead of failing quietly.
-- Keep it idempotent: re-running links the existing user rather than erroring, and always upserts the profile, the `member` role, and `members.user_id`.
+### 1. Stop the silent "server_only" dead end (root cause of "not on devices")
+- In `process-biometric-sync-queue`, drop `server_only: true` so every drained row performs a real `dispatchToDevices` to all active devices of the person's branch.
+- In `sync-to-mips`, treat "person upserted but dispatch skipped/zero devices" as **not fully successful**: return `dispatched_device_ids` and `photo_uploaded` in the response.
+- Queue drainer marks a row `succeeded` only when the person upsert **and** photo upload **and** at least one device dispatch succeeded; otherwise it stays `pending` with a readable `error_message` so the Personnel Sync tab shows real drift.
 
-### 2. New "Logins" surface in Admin Roles
-Add a tab **"Members without login"** to `/admin-roles` (owner/admin only, matching the existing gate):
-- Table: member name, member code, branch, email, phone, source (lead-converted vs walk-in), joined date.
-- Row action **Create login** → calls the provisioning function, shows a clear success/failure toast, refreshes the list and the user-roles table.
-- Inline editing of email/phone before creating, for members whose lead data is incomplete.
-- Bulk **Create logins for all** action with per-row result summary.
-- Empty state when every member has a login; skeleton loading; counts shown as a summary card alongside the existing role cards.
+### 2. Server-side photo normalisation (root cause of "photo too large")
+- In `sync-to-mips`, before pushing the face image: if the resolved image is over ~380KB, re-encode it server-side (downscale to max 640×640, iterative JPEG quality) instead of aborting. No upload should ever fail purely on size again.
+- When the source was an avatar (not a biometric path), also persist the normalised image to `member-photos` at `biometric/{members|employees|trainers}/{id}.jpg` and backfill `biometric_photo_path`, so future syncs use the private high-quality path.
 
-### 3. Create login from the member profile
-- Add a **Create login** quick action in the member profile drawer, visible only when the member has no `user_id`. Same function call, same feedback.
-- Update the avatar upload path so a failed provisioning attempt surfaces the real reason (e.g. "no email on file") instead of the generic message, and links the user to the create-login action.
+### 3. Make *every* photo upload auto-queue (no manual trigger anywhere)
+- Add a shared client helper used by all avatar uploaders: compress → upload avatar → upload biometric copy → write `biometric_photo_path` → enqueue sync.
+- Wire it into `AvatarUpload.tsx`, `Profile.tsx`, `StaffAvatarUpload.tsx` and `EditEmployeeDrawer` (member/trainer/employee/admin/owner paths), matching what `MemberAvatarUpload` already does.
+- Keep the DB trigger `tg_push_photo_to_mips` as the safety net for any server-side photo change.
 
-### 4. Welcome communication (optional toggle)
-When a login is created, offer a checkbox "Send welcome message with login link" that routes through the existing communication dispatcher (email/WhatsApp per configuration). Off by default for backfills, on by default for fresh conversions.
+### 4. Cron & backfill
+- Keep `process_biometric_sync_queue` at every 5 min (already active and healthy) as the single dispatcher; leave the dormant `mips_personnel_delta_sync` rule removed/disabled so there is one owner of dispatch.
+- One-off backfill: re-enqueue Love kumar paliwal and Akansha budhraj (and any member/staff whose `mips_person_id` exists but has no successful device dispatch), then verify on-device presence via the existing `mips-face-parity` check.
 
-### 5. Backfill and verify
-- Create the login for INC-26-0004, confirm `members.user_id` is populated, upload a photo end-to-end, and confirm the avatar renders in the member list and profile.
-- Re-run the "members without login" query to confirm it returns zero rows.
+### 5. Verification
+- Curl `sync-to-mips` for both people and confirm the response reports `photo_uploaded: true` and non-empty `dispatched_device_ids` for Gate 1 and Gate 2.
+- Re-run `mips-face-parity` and confirm both gates report the same face count.
 
 ## Technical notes
-
-- Files touched: `supabase/functions/provision-member-login/index.ts`, `src/pages/AdminRoles.tsx`, a new `src/components/members/CreateMemberLoginDrawer.tsx` (side drawer per the no-dialog rule), `src/components/members/MemberProfileDrawer.tsx`, `src/components/members/MemberAvatarUpload.tsx`.
-- The "members without login" list is a TanStack Query against `members` joined to `leads` for PII, filtered by `user_id is null` and scoped to the active branch context.
-- No schema migration is required — `members.user_id`, `profiles`, and `user_roles` already model everything needed.
-- Role assignment continues to go through the existing `assign_user_role` path so the audit trail stays intact.
+Files touched: `supabase/functions/sync-to-mips/index.ts`, `supabase/functions/process-biometric-sync-queue/index.ts`, `src/utils/imageCompression.ts` (reuse), a new `src/lib/media/syncPersonPhoto.ts`, plus the four upload components above. One small migration only if the backfill/enqueue is done in SQL.
