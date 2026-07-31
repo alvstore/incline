@@ -2191,7 +2191,7 @@ export function MemberProfileDrawer({
           open={giftDaysOpen}
           onOpenChange={setGiftDaysOpen}
           membershipId={activeMembership?.id}
-          memberId={memberId}
+          memberId={member.id}
         />
 
         <CompGiftDrawer
