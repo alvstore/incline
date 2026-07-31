@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
-  Monitor, DoorOpen, RotateCcw, Globe, Plus, Download,
+  Monitor, DoorOpen, RotateCcw, Globe, Plus, Download, ScanFace,
 } from "lucide-react";
 import { fetchMIPSDevices, remoteOpenDoor, restartDevice, type MIPSDevice } from "@/services/mipsService";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,7 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
   const [isOpening, setIsOpening] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
+  const [syncingFaces, setSyncingFaces] = useState(false);
 
   const handleOpenDoor = async () => {
     setIsOpening(true);
@@ -54,6 +55,26 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
       setIsRestarting(false);
+    }
+  };
+
+  const handleFaceResync = async () => {
+    setSyncingFaces(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mips-face-parity", {
+        body: { action: "resync", branch_id: branchId, device_ids: [device.id] },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const d = data as any;
+      toast.success(`Pushed ${d.dispatched}/${d.total_with_photo} faces to ${device.name || device.deviceKey}`, {
+        description: d.failed ? `${d.failed} failed — ${(d.errors || []).slice(0, 2).join("; ")}` : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["mips-devices"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Face re-sync failed");
+    } finally {
+      setSyncingFaces(false);
     }
   };
 
@@ -151,6 +172,18 @@ const MIPSDeviceCard = ({ device, branchName, branchId, publicIp, localDeviceId,
             <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
           </Button>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full min-h-[36px]"
+          onClick={handleFaceResync}
+          disabled={syncingFaces}
+          aria-label={`Re-push all enrolled faces to ${device.name || device.deviceKey}`}
+        >
+          <ScanFace className={`h-3.5 w-3.5 mr-1.5 ${syncingFaces ? "animate-pulse" : ""}`} />
+          {syncingFaces ? "Pushing faces…" : "Re-sync faces to this device"}
+        </Button>
 
         {localDeviceId && (
           <div className="flex items-center gap-2 pt-2 border-t border-border/50">
