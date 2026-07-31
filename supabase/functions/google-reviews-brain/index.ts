@@ -1,3 +1,4 @@
+// v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
 // v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
 // v1.3.0 — Adds masked client_id diagnostic to oauth_start
 // Actions: test_connection | list_accounts | list_locations | fetch_reviews | classify | reply | request_member_review
@@ -23,6 +24,7 @@ type Action =
   | "list_locations"
   | "fetch_reviews"
   | "fetch_reviews_places"
+  | "search_places"
   | "diagnose"
   | "classify"
   | "reply"
@@ -32,6 +34,7 @@ interface Body {
   action: Action;
   branch_id?: string;
   account_id?: string; // for list_locations
+  query?: string; // for search_places
   inbound_id?: string;
   reply_text?: string;
   // for request_member_review (legacy shim)
@@ -72,19 +75,40 @@ async function getGoogleConfig(branch_id: string) {
   return {
     account_id: cfg.account_id,
     location_id: cfg.location_id,
+    place_id: cfg.place_id,
+    place_name: cfg.place_name,
     auto_fetch: cfg.auto_fetch_reviews === "true",
     client_id: cred.client_id,
     client_secret: cred.client_secret,
     api_key: cred.api_key,
+    places_api_key: cred.places_api_key || cred.api_key,
     access_token: cred.access_token,
     refresh_token: cred.refresh_token,
     token_expires_at: cred.token_expires_at,
+    _config: cfg,
   };
+}
+
+/** Merge patch into integration_settings.config for a branch. */
+async function patchGoogleConfig(branch_id: string, patch: Record<string, unknown>) {
+  const sb = supa();
+  const { data } = await sb
+    .from("integration_settings")
+    .select("id, config")
+    .eq("integration_type", "google_business")
+    .eq("provider", "google_business")
+    .eq("branch_id", branch_id)
+    .maybeSingle();
+  if (!data) return;
+  await sb
+    .from("integration_settings")
+    .update({ config: { ...((data.config as any) ?? {}), ...patch } })
+    .eq("id", data.id);
 }
 
 function googleCredentialsForPersist(cfg: any, updates: Record<string, unknown>) {
   const base: Record<string, unknown> = {};
-  for (const key of ["client_id", "client_secret", "api_key", "access_token", "refresh_token", "token_expires_at", "scope"]) {
+  for (const key of ["client_id", "client_secret", "api_key", "places_api_key", "access_token", "refresh_token", "token_expires_at", "scope"]) {
     if (cfg?.[key] !== undefined) base[key] = cfg[key];
   }
   return { ...base, ...updates };
@@ -221,35 +245,55 @@ async function refreshAccessToken(branch_id: string, cfg: any): Promise<string |
   return newAccess;
 }
 
-// ─── Action: test_connection ───
+// ─── Action: test_connection (lane-aware) ───
+// Lane A = Places API (New): read-only, works without Business Profile quota.
+// Lane B = Business Profile v4: full history + reply posting.
 async function testConnection(branch_id: string) {
   const cfg = await getGoogleConfig(branch_id);
   if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.account_id || !cfg.location_id)
-    return json({ ok: false, reason: "Missing account_id or location_id" }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Check OAuth credentials." }, 200);
-  const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: `Google API ${res.status}: ${txt.slice(0, 200)}` }, 200);
+
+  const lanes: Array<{ lane: string; ok: boolean; reason?: string }> = [];
+
+  // Lane A
+  const placesKey = await resolvePlacesKey(branch_id);
+  if (!placesKey) {
+    lanes.push({ lane: "places", ok: false, reason: "No Places API key saved for this branch." });
+  } else {
+    const p = await fetchPlacesReviewsForBranch(branch_id);
+    lanes.push({
+      lane: "places",
+      ok: !(p as any).reason,
+      reason: (p as any).reason ? String((p as any).reason) : undefined,
+    });
   }
-  return json({ ok: true });
+
+  // Lane B
+  if (!cfg.account_id || !cfg.location_id) {
+    lanes.push({ lane: "business_profile", ok: false, reason: "Account / location not selected yet." });
+  } else {
+    const token = await refreshAccessToken(branch_id, cfg);
+    if (!token) {
+      lanes.push({ lane: "business_profile", ok: false, reason: "Could not obtain access token. Reconnect Google." });
+    } else {
+      const url = `https://mybusiness.googleapis.com/v4/accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews?pageSize=1`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      lanes.push(
+        res.ok
+          ? { lane: "business_profile", ok: true }
+          : { lane: "business_profile", ok: false, reason: friendlyGoogleError(res.status, await res.text()) },
+      );
+    }
+  }
+
+  const anyOk = lanes.some((l) => l.ok);
+  return json({
+    ok: anyOk,
+    lanes,
+    reason: anyOk ? undefined : lanes.map((l) => `${l.lane}: ${l.reason}`).join(" · "),
+  });
 }
 
-// ─── Action: list_accounts ───
-function friendlyGoogleError(status: number, txt: string): string {
-  if (status === 401) return "Re-connect Google to refresh permissions (token rejected).";
-  if (status === 403) {
-    if (/SERVICE_DISABLED|has not been used|API has not/i.test(txt))
-      return "Enable 'My Business Account Management API' and 'My Business Business Information API' in Google Cloud Console for this project.";
-    return "Permission denied by Google. Confirm this Google account manages the Business Profile.";
-  }
-  if (status === 404) return "No Business Profile accounts found for this Google login.";
-  if (status === 429) return "Google rate limit hit — try again in a minute.";
-  return `Google API ${status}: ${txt.slice(0, 200)}`;
-}
+
 
 async function listAccounts(branch_id: string) {
   const cfg = await getGoogleConfig(branch_id);
@@ -312,7 +356,20 @@ async function listLocations(branch_id: string, account_id: string) {
 // that lands (or whenever it errors), we read the public review snippet Google
 // exposes through Places API (New) — rating, review count and up to 5 recent
 // reviews. Read-only: no replies, no full history, but the dashboard is live.
-const PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+const ENV_PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+
+/**
+ * Places key resolution order:
+ *   1. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`)
+ *   2. platform secret / Google Maps connector key `GOOGLE_MAPS_API_KEY`
+ */
+async function resolvePlacesKey(branch_id?: string): Promise<string> {
+  if (branch_id) {
+    const cfg = await getGoogleConfig(branch_id);
+    if (cfg?.places_api_key) return String(cfg.places_api_key);
+  }
+  return ENV_PLACES_KEY;
+}
 
 /** Turn a raw Google error body into something an owner can act on. */
 function friendlyGoogleError(status: number, body: string): string {
@@ -336,9 +393,49 @@ function extractPlaceIdFromLink(link?: string | null): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+/** Free-text place search used by the "Find my listing" picker. */
+async function searchPlaces(branch_id: string | undefined, query: string) {
+  const key = await resolvePlacesKey(branch_id);
+  if (!key) return json({ ok: false, reason: "No Places API key saved. Add one in Step 1 of the Google drawer." }, 200);
+  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
+    },
+    body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error("places searchText failed", res.status, txt.slice(0, 300));
+    return json({ ok: false, reason: friendlyPlacesError(res.status, txt) }, 200);
+  }
+  const j = await res.json();
+  const items = ((j.places ?? []) as any[]).map((p) => ({
+    place_id: p.id,
+    name: p.displayName?.text ?? p.id,
+    address: p.formattedAddress ?? "",
+    rating: p.rating ?? null,
+    total_ratings: p.userRatingCount ?? null,
+  }));
+  return json({ ok: true, items });
+}
+
+function friendlyPlacesError(status: number, body: string): string {
+  const b = body || "";
+  if (/API key not valid|API_KEY_INVALID/i.test(b)) return "That Places API key is not valid. Copy it again from Google Cloud → Credentials.";
+  if (/REQUEST_DENIED|referer|referrer/i.test(b)) return "Google rejected the key — remove HTTP-referrer restrictions (server-side calls send no referer) or restrict by IP instead.";
+  if (/has not been used in project|SERVICE_DISABLED/i.test(b)) return "Enable 'Places API (New)' in Google Cloud for this project, then retry.";
+  if (status === 429) return "Places API rate limit hit — try again in a minute.";
+  return `Places API ${status}: ${b.slice(0, 160)}`;
+}
+
 async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | null> {
   if (cfg?.place_id) return String(cfg.place_id);
   const sb = supa();
+  const key = await resolvePlacesKey(branch_id);
   const { data: branch } = await sb
     .from("branches")
     .select("name, address, city, google_review_link")
@@ -346,13 +443,13 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
     .maybeSingle();
   const fromLink = extractPlaceIdFromLink(branch?.google_review_link);
   if (fromLink) return fromLink;
-  if (!PLACES_KEY || !branch?.name) return null;
+  if (!key || !branch?.name) return null;
   const query = [branch.name, branch.address, branch.city].filter(Boolean).join(", ");
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Goog-Api-Key": PLACES_KEY,
+      "X-Goog-Api-Key": key,
       "X-Goog-FieldMask": "places.id,places.displayName",
     },
     body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
@@ -366,7 +463,8 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
 }
 
 async function fetchPlacesReviewsForBranch(branch_id: string) {
-  if (!PLACES_KEY) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
+  const key = await resolvePlacesKey(branch_id);
+  if (!key) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
   const sb = supa();
   const cfg = (await getGoogleConfig(branch_id)) ?? {};
   const placeId = await resolvePlaceId(branch_id, cfg);
@@ -376,15 +474,21 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
     {
       headers: {
-        "X-Goog-Api-Key": PLACES_KEY,
-        "X-Goog-FieldMask": "id,rating,userRatingCount,reviews",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,reviews",
       },
     },
   );
   if (!res.ok) {
     const txt = await res.text();
     console.error("places details failed", res.status, txt.slice(0, 300));
-    return { branch_id, fetched: 0, source: "places", reason: `places_${res.status}`, detail: txt.slice(0, 200) };
+    return {
+      branch_id,
+      fetched: 0,
+      source: "places",
+      reason: `places_${res.status}`,
+      detail: friendlyPlacesError(res.status, txt),
+    };
   }
   const j = await res.json();
   const reviews = (j.reviews ?? []) as any[];
@@ -407,6 +511,16 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     if (error) console.error("places upsert error", error.message);
     else upserted++;
   }
+
+  // Persist the aggregate so dashboards show the true rating, not the mean of 5 rows.
+  await patchGoogleConfig(branch_id, {
+    place_id: placeId,
+    place_name: j.displayName?.text ?? (cfg as any)?.place_name ?? null,
+    place_rating: j.rating ?? null,
+    place_rating_count: j.userRatingCount ?? null,
+    last_places_sync: new Date().toISOString(),
+  });
+
   return {
     branch_id,
     fetched: upserted,
@@ -879,24 +993,59 @@ Deno.serve(async (req) => {
       case "fetch_reviews_places":
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         return json(await fetchPlacesReviewsForBranch(body.branch_id));
+      case "search_places": {
+        if (!body.query || body.query.trim().length < 3)
+          return json({ ok: false, reason: "Type at least 3 characters to search." }, 200);
+        return await searchPlaces(body.branch_id, body.query.trim());
+      }
       case "diagnose": {
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         const cfg = await getGoogleConfig(body.branch_id);
-        const checks: Array<{ key: string; ok: boolean; label: string; hint?: string }> = [];
+        const placesKey = await resolvePlacesKey(body.branch_id);
+        const checks: Array<{ key: string; ok: boolean; lane: "places" | "business_profile"; label: string; hint?: string }> = [];
+
+        // ── Lane A: Places (works without Google approval) ──
+        checks.push({
+          key: "places_key",
+          lane: "places",
+          ok: !!placesKey,
+          label: "Places API key available",
+          hint: placesKey ? undefined : "Paste a Google Places API (New) key in Step 1, or link the Google Maps connector.",
+        });
+        const places = placesKey ? await fetchPlacesReviewsForBranch(body.branch_id) : null;
+        checks.push({
+          key: "place_id",
+          lane: "places",
+          ok: !!(places as any)?.place_id,
+          label: "Google listing matched",
+          hint: (places as any)?.place_id ? undefined : "Use “Find my listing” to pick this branch's Google place.",
+        });
+        checks.push({
+          key: "places_fetch",
+          lane: "places",
+          ok: !!places && !(places as any).reason,
+          label: "Live reviews readable (Places)",
+          hint: (places as any)?.detail ?? ((places as any)?.reason ? `Places unavailable: ${(places as any).reason}` : undefined),
+        });
+
+        // ── Lane B: Business Profile (reply posting, full history) ──
         checks.push({
           key: "oauth_app",
+          lane: "business_profile",
           ok: !!(cfg?.client_id && cfg?.client_secret),
           label: "OAuth client saved",
-          hint: "Add the Google Cloud Web application Client ID and Secret under Settings → Integrations.",
+          hint: "Add the Google Cloud Web application Client ID and Secret in Step 2.",
         });
         checks.push({
           key: "connected",
+          lane: "business_profile",
           ok: !!cfg?.refresh_token,
           label: "Google account connected",
           hint: "Click Connect Google and grant access to your Business Profile.",
         });
         checks.push({
           key: "location",
+          lane: "business_profile",
           ok: !!(cfg?.account_id && cfg?.location_id),
           label: "Business location selected",
           hint: "Pick the account and location this branch maps to.",
@@ -917,23 +1066,17 @@ Deno.serve(async (req) => {
         }
         checks.push({
           key: "gbp_api",
+          lane: "business_profile",
           ok: gbp.ok,
           label: "Business Profile reviews API reachable",
           hint: gbp.error,
         });
-        const places = PLACES_KEY ? await fetchPlacesReviewsForBranch(body.branch_id) : null;
-        checks.push({
-          key: "places_fallback",
-          ok: !!places && (places as any).fetched >= 0 && !(places as any).reason,
-          label: "Places API fallback",
-          hint: PLACES_KEY
-            ? (places as any)?.reason
-              ? `Places fallback unavailable: ${(places as any).reason}`
-              : undefined
-            : "Add a GOOGLE_MAPS_API_KEY secret (Places API New enabled) to show live reviews while Business Profile quota is pending.",
-        });
-        return json({ ok: checks.every((c) => c.ok), checks, gbp, places });
+
+        const placesOk = checks.filter((c) => c.lane === "places").every((c) => c.ok);
+        const gbpOk = checks.filter((c) => c.lane === "business_profile").every((c) => c.ok);
+        return json({ ok: placesOk || gbpOk, places_ok: placesOk, gbp_ok: gbpOk, checks, gbp, places });
       }
+
       case "request_member_review":
 
       case "classify": {

@@ -47,6 +47,7 @@ interface InboundRow {
   reply_text: string | null;
   google_reply_text: string | null;
   replied_at: string | null;
+  source?: string | null;
 }
 
 export default function ExternalReviewsTab() {
@@ -316,6 +317,9 @@ export default function ExternalReviewsTab() {
                     <div className="flex items-center gap-2">
                       <Badge className={cb.cls}><Icon className="h-3 w-3 mr-1" />{cb.label}</Badge>
                       <Badge className={rb.cls}>{rb.label}</Badge>
+                      {r.source === 'places' && (
+                        <Badge className="bg-slate-100 text-slate-600">Places · read-only</Badge>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -358,7 +362,8 @@ export default function ExternalReviewsTab() {
                         <Button
                           size="sm"
                           onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                          disabled={!draftValue.trim() || sendReply.isPending || notConfigured}
+                          disabled={!draftValue.trim() || sendReply.isPending || notConfigured || r.source === 'places'}
+                          title={r.source === 'places' ? 'Replying needs Business Profile access (Step 2 in the Google drawer)' : undefined}
                         >
                           <Send className="h-3.5 w-3.5 mr-1.5" />Post reply to Google
                         </Button>

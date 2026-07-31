@@ -21,6 +21,7 @@ import {
   Settings, CheckCircle, XCircle, Globe, Instagram, Facebook, MessageCircle, Activity
 } from 'lucide-react';
 import { WebhookActivityPanel, GatewayLastReceivedBadge } from '@/components/integrations/WebhookActivityPanel';
+import GoogleBusinessDrawer from '@/components/settings/GoogleBusinessDrawer';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger';
 
@@ -359,11 +360,19 @@ export default function IntegrationsPage() {
           </TabsContent>
         </Tabs>
 
-        <IntegrationConfigSheet
-          {...configSheet}
-          onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
-          branchId={branchFilter}
-        />
+        {configSheet.type === 'google_business' ? (
+          <GoogleBusinessDrawer
+            open={configSheet.open}
+            onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
+            branchId={branchFilter ?? ''}
+          />
+        ) : (
+          <IntegrationConfigSheet
+            {...configSheet}
+            onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
+            branchId={branchFilter}
+          />
+        )}
       </div>
     </AppLayout>
   );
