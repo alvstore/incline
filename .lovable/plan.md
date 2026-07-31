@@ -1,34 +1,59 @@
-## What I verified (not guesses)
+# Payment + MIPS reliability repair
 
-- **Love kumar paliwal (INC-26-0004)**: `biometric_photo_path` is **NULL** — only a public `avatars/...` URL exists. The 14:20 sync log says: `Photo upload: ✗ Photo too large: 448KB (max 400KB)` → the person record was created/updated in MIPS (personId 132), but **no face image** was pushed.
-- **Akansha budhraj (INC-26-0038)**: has a proper `biometric/members/....jpg` path and personId 140, so she reached the MIPS *employee* list too.
-- **Queue rows for both are `status = succeeded`** even though the photo never uploaded — the sync reports success when only the person record lands.
-- **`process-biometric-sync-queue` calls `sync-to-mips` with `server_only: true`**, and `sync-to-mips` then does: `dispatchResult = { skipped: true, reason: "server_only_sync — cron will dispatch" }`. The cron that was supposed to dispatch (`mips_personnel_delta_sync`) is **`is_active = false` and has never run** (`last_run_at` NULL). So nothing ever pushes the person to Gate 1 / Gate 2 — exactly the symptom: present in MIPS employees, absent on devices.
-- Upload paths differ: `MemberAvatarUpload` / `StaffBiometricsTab` / `PersonnelSyncTab` write a compressed biometric path, but plain profile-avatar uploads (`AvatarUpload.tsx`, `Profile.tsx`, `EditProfileDrawer`, `StaffAvatarUpload`) upload the **raw file to `avatars/`** with no compression and no `biometric_photo_path` — those are the ones that end up 448KB and get rejected.
+## Confirmed findings
+- `edit_payment` calls a 10-argument `record_payment` using `payment_method`, but the deployed 10-argument overload accepts `text`; PostgreSQL therefore cannot resolve the function.
+- The backend currently has **46 people with photos** and **45 photo-bearing, MIPS-linked people** eligible for synchronization.
+- The current device reconciler only includes members and employees: **55 linked people**. Adding trainers raises the roster to **61**, so 6 linked trainers are currently omitted.
+- The reconciler invokes a full-person/full-device loop synchronously, but its caller marks the automation run successful after dispatch. The underlying request repeatedly reaches the **55-second timeout**, so “success” does not prove the roster reached either gate.
+- Two devices are registered, but both have `last_sync = null`; today there are no `mips_sync_attempts` or `mips_sync_failures` audit rows. The existing process therefore cannot prove person-by-person/device-by-device delivery.
+- Five old biometric queue failures contain `person_uuid` but no `member_id`/`staff_id`; the queue processor cannot resolve them.
 
-## Fix plan
+## Implementation
 
-### 1. Stop the silent "server_only" dead end (root cause of "not on devices")
-- In `process-biometric-sync-queue`, drop `server_only: true` so every drained row performs a real `dispatchToDevices` to all active devices of the person's branch.
-- In `sync-to-mips`, treat "person upserted but dispatch skipped/zero devices" as **not fully successful**: return `dispatched_device_ids` and `photo_uploaded` in the response.
-- Queue drainer marks a row `succeeded` only when the person upsert **and** photo upload **and** at least one device dispatch succeeded; otherwise it stays `pending` with a readable `error_message` so the Personnel Sync tab shows real drift.
+### 1. Repair payment editing atomically
+- Replace `edit_payment` with a corrected function that calls the canonical 10-argument `record_payment` overload using `text` for the normalized payment method.
+- Preserve the existing atomic workflow: void old payment, create replacement payment, respect historical payment date, and return the replacement result.
+- Keep role/capability validation and branch isolation server-side.
+- Add a database regression assertion that resolves and executes the exact signature used by `PaymentEditDrawer`.
 
-### 2. Server-side photo normalisation (root cause of "photo too large")
-- In `sync-to-mips`, before pushing the face image: if the resolved image is over ~380KB, re-encode it server-side (downscale to max 640×640, iterative JPEG quality) instead of aborting. No upload should ever fail purely on size again.
-- When the source was an avatar (not a biometric path), also persist the normalised image to `member-photos` at `biometric/{members|employees|trainers}/{id}.jpg` and backfill `biometric_photo_path`, so future syncs use the private high-quality path.
+### 2. Make the biometric queue person-aware
+- Normalize queue rows around `person_type + person_uuid` and resolve legacy member/staff/trainer IDs during processing.
+- Update photo-upload trigger enqueue logic so new rows always contain the appropriate entity reference.
+- Backfill/requeue the five failed legacy rows instead of leaving them permanently skipped.
+- Include trainers as a first-class path throughout queue processing and device reconciliation.
 
-### 3. Make *every* photo upload auto-queue (no manual trigger anywhere)
-- Add a shared client helper used by all avatar uploaders: compress → upload avatar → upload biometric copy → write `biometric_photo_path` → enqueue sync.
-- Wire it into `AvatarUpload.tsx`, `Profile.tsx`, `StaffAvatarUpload.tsx` and `EditEmployeeDrawer` (member/trainer/employee/admin/owner paths), matching what `MemberAvatarUpload` already does.
-- Keep the DB trigger `tg_push_photo_to_mips` as the safety net for any server-side photo change.
+### 3. Replace monolithic MIPS pushes with resumable batches
+- Change reconciliation from one synchronous 61-person × 2-device operation into small, bounded batches.
+- For every eligible person:
+  1. upsert/enrich the employee on the MIPS server;
+  2. validate/normalize the face image;
+  3. enqueue one delivery job per active device;
+  4. process jobs with retry/backoff and a short execution budget;
+  5. resume unfinished work on the next automation run.
+- Do not mark a person/device pair complete until MIPS returns a successful response.
+- Ensure one slow or offline gate does not block the other gate.
 
-### 4. Cron & backfill
-- Keep `process_biometric_sync_queue` at every 5 min (already active and healthy) as the single dispatcher; leave the dormant `mips_personnel_delta_sync` rule removed/disabled so there is one owner of dispatch.
-- One-off backfill: re-enqueue Love kumar paliwal and Akansha budhraj (and any member/staff whose `mips_person_id` exists but has no successful device dispatch), then verify on-device presence via the existing `mips-face-parity` check.
+### 4. Add real delivery truth and auditability
+- Record each attempt with person, role, MIPS person ID, device serial, operation, HTTP/result code, duration, attempt number, and sanitized error.
+- Update each device’s `last_sync` only after a completed batch reaches it.
+- Make automation runs report queued/succeeded/failed/pending counts rather than only “dispatched: 1”.
+- Treat upstream 401/timeout/546-style failures as retryable or terminal according to category; never report them as successful delivery.
 
-### 5. Verification
-- Curl `sync-to-mips` for both people and confirm the response reports `photo_uploaded: true` and non-empty `dispatched_device_ids` for Gate 1 and Gate 2.
-- Re-run `mips-face-parity` and confirm both gates report the same face count.
+### 5. Correct the Device Command Center
+- Separate these metrics clearly:
+  - People in MIPS Server
+  - People with face on MIPS Server
+  - Face delivered to Gate 1
+  - Face delivered to Gate 2
+  - Pending/failed per gate
+- Include members, employees, trainers, managers, admins, and owners using the canonical personnel identity mapping.
+- Show person-level per-device status and last verified time.
+- Make “Sync pending” enqueue only missing/stale person-device pairs; make “Verify all” read device truth without blindly rewriting all records.
 
-## Technical notes
-Files touched: `supabase/functions/sync-to-mips/index.ts`, `supabase/functions/process-biometric-sync-queue/index.ts`, `src/utils/imageCompression.ts` (reuse), a new `src/lib/media/syncPersonPhoto.ts`, plus the four upload components above. One small migration only if the backfill/enqueue is done in SQL.
+## Verification
+- Execute an edited-payment regression with a dated payment and confirm the invoice balance/status and audit history remain correct.
+- Requeue the five malformed biometric jobs and verify none are skipped for missing entity IDs.
+- Run reconciliation through multiple bounded batches until pending reaches zero or explicit terminal failures remain.
+- Compare all **45 currently eligible photo-bearing people** against both registered devices, including the 6 linked trainers.
+- Verify Love Kumar Paliwal and Akansha individually on the MIPS server and on each gate, with recorded delivery evidence.
+- Confirm automation history, attempt logs, and `/devices` show the same per-device counts.
