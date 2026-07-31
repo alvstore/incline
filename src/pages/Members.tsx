@@ -18,7 +18,8 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { 
   Search, Plus, Users, UserCheck, UserX, CreditCard, Dumbbell, 
   Eye, Clock, Building2, AlertTriangle, CheckCircle, MoreHorizontal, Snowflake,
-  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock, Wallet
+  ChevronLeft, ChevronRight, Download, UsersRound, Gift, CalendarClock, Wallet,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
