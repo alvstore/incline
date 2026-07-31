@@ -25,7 +25,10 @@ import { can } from '@/lib/auth/permissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
-import { format } from 'date-fns';
+import {
+  format, startOfMonth, endOfMonth, subMonths, startOfQuarter, endOfQuarter,
+  subQuarters, startOfYear, endOfYear, subDays, startOfDay, endOfDay,
+} from 'date-fns';
 import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
