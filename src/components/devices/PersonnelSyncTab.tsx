@@ -357,15 +357,17 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     statusFilter === "all"
       ? activeList
       : statusFilter === "registered"
-        ? activeList.filter((p) => p.mipsSyncStatus === "synced")
-        : activeList.filter((p) => p.mipsSyncStatus !== "synced")
+        ? activeList.filter((p) => onServer(p) && hasFaceOnServer(p))
+        : activeList.filter((p) => !onServer(p) || !hasFaceOnServer(p))
   );
 
   const renderRow = (person: SyncPerson) => {
     const strippedCode = person.code.replace(/-/g, "");
-    const isSynced = person.mipsSyncStatus === "synced";
-    const isFailed = person.mipsSyncStatus === "failed";
+    const truth = truthFor(person.code);
+    const isSynced = !!truth?.exists && !!truth?.hasFace;
+    const isFailed = person.mipsSyncStatus === "failed" && !truth?.exists;
     const verifyStatus = verificationMap[person.id];
+
 
     return (
       <div
