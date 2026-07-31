@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { lockerService } from '@/services/lockerService';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Search, Receipt, Gift, CheckCircle, CreditCard, Link2 } from 'lucide-react';
 
 interface AssignLockerDrawerProps {
@@ -34,6 +34,22 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [rentalFee, setRentalFee] = useState(500);
   const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
+
+  // Resolved GST rate for locker rentals (branch override → org default).
+  const { data: lockerGstRate } = useQuery({
+    queryKey: ['locker-gst-rate', locker?.id, branchId],
+    enabled: open && !!locker?.id && !!branchId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('resolve_gst_rate' as never, {
+        p_item_type: 'locker',
+        p_item_id: locker.id,
+        p_branch_id: branchId,
+      } as never);
+      if (error) throw error;
+      return Number(data ?? 18);
+    },
+  });
+
 
   const handleMemberSearch = async () => {
     if (!memberSearch.trim() || !branchId) return;
