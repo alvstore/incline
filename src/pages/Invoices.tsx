@@ -18,14 +18,17 @@ import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
   ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
-  IndianRupee, Pencil
+  IndianRupee, Pencil, CalendarRange
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
-import { format } from 'date-fns';
+import {
+  format, startOfMonth, endOfMonth, subMonths, startOfQuarter, endOfQuarter,
+  subQuarters, startOfYear, endOfYear, subDays, startOfDay, endOfDay,
+} from 'date-fns';
 import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -46,6 +49,9 @@ export default function InvoicesPage() {
   const [cancelInvoice, setCancelInvoiceTarget] = useState<any>(null);
   const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [periodFilter, setPeriodFilter] = useState<string>('this_month');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const { branchFilter, effectiveBranchId } = useBranchContext();
@@ -130,6 +136,56 @@ export default function InvoicesPage() {
   // Reset page on filter changes
   const handleStatusChange = (val: string) => { setStatusFilter(val); setPage(0); };
   const handleSearchChange = (val: string) => { setSearchTerm(val); setPage(0); };
+  const handlePeriodChange = (val: string) => { setPeriodFilter(val); setPage(0); };
+
+  // ---- Date range resolution (drives BOTH the list and the KPI cards) ----
+  const now = new Date();
+  const range: { from: Date | null; to: Date | null; label: string } = (() => {
+    switch (periodFilter) {
+      case 'today':
+        return { from: startOfDay(now), to: endOfDay(now), label: 'Today' };
+      case 'last_7':
+        return { from: startOfDay(subDays(now, 6)), to: endOfDay(now), label: 'Last 7 days' };
+      case 'last_30':
+        return { from: startOfDay(subDays(now, 29)), to: endOfDay(now), label: 'Last 30 days' };
+      case 'this_month':
+        return { from: startOfMonth(now), to: endOfMonth(now), label: format(now, 'MMMM yyyy') };
+      case 'last_month': {
+        const d = subMonths(now, 1);
+        return { from: startOfMonth(d), to: endOfMonth(d), label: format(d, 'MMMM yyyy') };
+      }
+      case 'this_quarter':
+        return { from: startOfQuarter(now), to: endOfQuarter(now), label: `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}` };
+      case 'last_quarter': {
+        const d = subQuarters(now, 1);
+        return { from: startOfQuarter(d), to: endOfQuarter(d), label: `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}` };
+      }
+      case 'this_year':
+        return { from: startOfYear(now), to: endOfYear(now), label: format(now, 'yyyy') };
+      case 'custom': {
+        if (!customFrom && !customTo) return { from: null, to: null, label: 'Custom range' };
+        const f = customFrom ? startOfDay(new Date(customFrom)) : null;
+        const t = customTo ? endOfDay(new Date(customTo)) : null;
+        return {
+          from: f,
+          to: t,
+          label: `${f ? format(f, 'd MMM yyyy') : '…'} – ${t ? format(t, 'd MMM yyyy') : '…'}`,
+        };
+      }
+      default:
+        return { from: null, to: null, label: 'All time' };
+    }
+  })();
+
+  const rangeKey = `${range.from?.toISOString() ?? ''}_${range.to?.toISOString() ?? ''}`;
+
+  const applyFilters = (q: any) => {
+    if (branchFilter) q = q.eq('branch_id', branchFilter);
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter as any);
+    if (range.from) q = q.gte('created_at', range.from.toISOString());
+    if (range.to) q = q.lte('created_at', range.to.toISOString());
+    return q;
+  };
 
   // When a search term is present we bypass pagination and scan a wide window
   // server-side, so an invoice number on page 3 is still findable.
@@ -137,27 +193,56 @@ export default function InvoicesPage() {
   const SEARCH_SCAN_LIMIT = 500;
 
   const { data: invoicesResult, isLoading } = useQuery({
-    queryKey: ['invoices', branchFilter, statusFilter, isSearching ? 'search' : page],
+    queryKey: ['invoices', branchFilter, statusFilter, rangeKey, isSearching ? 'search' : page],
     queryFn: async () => {
-      let query = supabase
-        .from('invoices')
-        .select(`
-          id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
-          members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
-          invoice_items(description, reference_type)
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(
-          isSearching ? 0 : page * PAGE_SIZE,
-          isSearching ? SEARCH_SCAN_LIMIT - 1 : (page + 1) * PAGE_SIZE - 1,
-        );
-
-      if (branchFilter) query = query.eq('branch_id', branchFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter as any);
+      const query = applyFilters(
+        supabase
+          .from('invoices')
+          .select(`
+            id, invoice_number, status, total_amount, amount_paid, due_date, created_at, member_id, pos_sale_id, branch_id,
+            members(member_code, profiles:user_id(full_name, email, phone, avatar_url), lead:lead_id(full_name, email, phone, avatar_url)),
+            invoice_items(description, reference_type)
+          `, { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(
+            isSearching ? 0 : page * PAGE_SIZE,
+            isSearching ? SEARCH_SCAN_LIMIT - 1 : (page + 1) * PAGE_SIZE - 1,
+          ),
+      );
 
       const { data, error, count } = await query;
       if (error) throw error;
       return { data: data || [], count };
+    },
+  });
+
+  // Range-accurate KPI aggregates — status filter intentionally NOT applied so
+  // paid/unpaid totals stay meaningful, only branch + date range scope them.
+  const { data: rangeStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['invoice-stats', branchFilter, rangeKey],
+    queryFn: async () => {
+      let q = supabase
+        .from('invoices')
+        .select('id, member_id, status, total_amount, amount_paid, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (branchFilter) q = q.eq('branch_id', branchFilter);
+      if (range.from) q = q.gte('created_at', range.from.toISOString());
+      if (range.to) q = q.lte('created_at', range.to.toISOString());
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data || []).filter((r: any) => r.status !== 'cancelled');
+      return {
+        totalClients: new Set(rows.map((r: any) => r.member_id).filter(Boolean)).size,
+        totalInvoices: rows.length,
+        billedAmount: rows.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0),
+        paidAmount: rows.reduce((s: number, r: any) => s + Number(r.amount_paid || 0), 0),
+        unpaidAmount: rows.reduce(
+          (s: number, r: any) => s + Math.max(0, Number(r.total_amount || 0) - Number(r.amount_paid || 0)),
+          0,
+        ),
+        openCount: rows.filter((r: any) => Number(r.total_amount || 0) - Number(r.amount_paid || 0) > 0).length,
+      };
     },
   });
 
@@ -191,13 +276,14 @@ export default function InvoicesPage() {
   });
 
 
-  // Stats from current page (approximate for paginated view)
-  const stats = {
-    totalClients: new Set(invoices.map((i: any) => i.member_id).filter(Boolean)).size,
-    totalInvoices: totalCount || invoices.length,
-    paidAmount: invoices.filter((i: any) => i.status === 'paid').reduce((sum: number, i: any) => sum + i.total_amount, 0),
-    unpaidAmount: invoices.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled').reduce((sum: number, i: any) => sum + (i.total_amount - (i.amount_paid || 0)), 0),
+  // KPI values come from the range-scoped aggregate query (never the page slice)
+  const stats = rangeStats ?? {
+    totalClients: 0, totalInvoices: 0, billedAmount: 0, paidAmount: 0, unpaidAmount: 0, openCount: 0,
   };
+  const collectionRate = stats.billedAmount > 0
+    ? Math.round((stats.paidAmount / stats.billedAmount) * 100)
+    : 0;
+  const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -258,80 +344,100 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Clients</p>
-                  <h3 className="text-3xl font-bold mt-1">{stats.totalClients}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                  <Users className="h-6 w-6" />
-                </div>
+        {/* Period scope + KPI strip */}
+        <div className="rounded-2xl border bg-card p-4 shadow-lg shadow-primary/5 space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <CalendarRange className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Showing</p>
+                <p className="font-semibold text-foreground">{range.label}</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={periodFilter} onValueChange={handlePeriodChange}>
+                <SelectTrigger className="w-[190px] rounded-xl" aria-label="Date range">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="last_7">Last 7 days</SelectItem>
+                  <SelectItem value="last_30">Last 30 days</SelectItem>
+                  <SelectItem value="this_month">This month</SelectItem>
+                  <SelectItem value="last_month">Last month</SelectItem>
+                  <SelectItem value="this_quarter">This quarter</SelectItem>
+                  <SelectItem value="last_quarter">Last quarter</SelectItem>
+                  <SelectItem value="this_year">This year</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                </SelectContent>
+              </Select>
+              {periodFilter === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <label className="sr-only" htmlFor="inv-from">From date</label>
+                  <Input
+                    id="inv-from" type="date" value={customFrom}
+                    onChange={(e) => { setCustomFrom(e.target.value); setPage(0); }}
+                    className="w-[150px] rounded-xl"
+                  />
+                  <span className="text-muted-foreground text-sm">to</span>
+                  <label className="sr-only" htmlFor="inv-to">To date</label>
+                  <Input
+                    id="inv-to" type="date" value={customTo}
+                    onChange={(e) => { setCustomTo(e.target.value); setPage(0); }}
+                    className="w-[150px] rounded-xl"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-info to-info/80 text-info-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Invoices</p>
-                  <h3 className="text-3xl font-bold mt-1">{stats.totalInvoices}</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: 'Billed', value: inr(stats.billedAmount), sub: `${stats.totalInvoices} invoices`, icon: FileText, tone: 'text-primary bg-primary/10' },
+              { label: 'Collected', value: inr(stats.paidAmount), sub: `${collectionRate}% of billed`, icon: TrendingUp, tone: 'text-success bg-success/10' },
+              { label: 'Outstanding', value: inr(stats.unpaidAmount), sub: `${stats.openCount} open`, icon: Clock, tone: 'text-warning bg-warning/10' },
+              { label: 'Clients billed', value: String(stats.totalClients), sub: 'unique members', icon: Users, tone: 'text-info bg-info/10' },
+              { label: 'Avg invoice', value: inr(stats.totalInvoices ? stats.billedAmount / stats.totalInvoices : 0), sub: 'per invoice', icon: IndianRupee, tone: 'text-accent bg-accent/10' },
+            ].map((kpi) => (
+              <div
+                key={kpi.label}
+                className="rounded-xl border bg-background p-4 transition-all duration-200 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+                  <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${kpi.tone}`}>
+                    <kpi.icon className="h-3.5 w-3.5" />
+                  </span>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-info-foreground/20 flex items-center justify-center">
-                  <FileText className="h-6 w-6" />
-                </div>
+                {statsLoading ? (
+                  <div className="mt-3 h-7 w-24 animate-pulse rounded bg-muted" />
+                ) : (
+                  <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+                )}
+                <p className="mt-0.5 text-xs text-muted-foreground">{kpi.sub}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-success to-success/80 text-success-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Paid</p>
-                  <h3 className="text-3xl font-bold mt-1">₹{stats.paidAmount.toLocaleString()}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-success-foreground/20 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-warning to-warning/80 text-warning-foreground">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-80">Unpaid</p>
-                  <h3 className="text-3xl font-bold mt-1">₹{stats.unpaidAmount.toLocaleString()}</h3>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-warning-foreground/20 flex items-center justify-center">
-                  <Clock className="h-6 w-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </div>
 
         {/* Filters */}
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by invoice # or member name..."
-                  className="pl-10"
+                  placeholder="Search by invoice #, member name or code..."
+                  className="pl-10 rounded-xl"
                   value={searchTerm}
                   onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
               <Select value={statusFilter} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] rounded-xl" aria-label="Status filter">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -340,8 +446,10 @@ export default function InvoicesPage() {
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="partial">Partial</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+
             </div>
           </CardContent>
         </Card>
