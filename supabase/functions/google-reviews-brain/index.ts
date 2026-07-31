@@ -22,6 +22,8 @@ type Action =
   | "list_accounts"
   | "list_locations"
   | "fetch_reviews"
+  | "fetch_reviews_places"
+  | "diagnose"
   | "classify"
   | "reply"
   | "request_member_review";
