@@ -312,6 +312,22 @@ async function listLocations(branch_id: string, account_id: string) {
 // reviews. Read-only: no replies, no full history, but the dashboard is live.
 const PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 
+/** Turn a raw Google error body into something an owner can act on. */
+function friendlyGoogleError(status: number, body: string): string {
+  const b = body || "";
+  if (/has not been used in project|is disabled/i.test(b)) {
+    return "Google says the Business Profile APIs are disabled for your Google Cloud project. Enable 'My Business Account Management API', 'My Business Business Information API' and 'Google My Business API', then retry.";
+  }
+  if (status === 403 && /quota|rate/i.test(b)) {
+    return "Google has not granted review-API quota to your Cloud project yet. Submit the Business Profile API quota request form — approval usually takes a few days.";
+  }
+  if (status === 403) return "Google returned 403 Forbidden. The connected Google account may not manage this location, or the APIs are not enabled.";
+  if (status === 429) return "Google rate-limited the request. Reviews will retry automatically on the next sync.";
+  if (status === 401) return "Google rejected the access token. Reconnect the Google account.";
+  return `Google returned HTTP ${status}.`;
+}
+
+
 function extractPlaceIdFromLink(link?: string | null): string | null {
   if (!link) return null;
   const m = link.match(/[?&]place_id=([^&]+)/) ?? link.match(/placeid=([^&]+)/i);
