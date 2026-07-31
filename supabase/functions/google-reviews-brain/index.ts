@@ -390,9 +390,49 @@ function extractPlaceIdFromLink(link?: string | null): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+/** Free-text place search used by the "Find my listing" picker. */
+async function searchPlaces(branch_id: string | undefined, query: string) {
+  const key = await resolvePlacesKey(branch_id);
+  if (!key) return json({ ok: false, reason: "No Places API key saved. Add one in Step 1 of the Google drawer." }, 200);
+  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
+    },
+    body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error("places searchText failed", res.status, txt.slice(0, 300));
+    return json({ ok: false, reason: friendlyPlacesError(res.status, txt) }, 200);
+  }
+  const j = await res.json();
+  const items = ((j.places ?? []) as any[]).map((p) => ({
+    place_id: p.id,
+    name: p.displayName?.text ?? p.id,
+    address: p.formattedAddress ?? "",
+    rating: p.rating ?? null,
+    total_ratings: p.userRatingCount ?? null,
+  }));
+  return json({ ok: true, items });
+}
+
+function friendlyPlacesError(status: number, body: string): string {
+  const b = body || "";
+  if (/API key not valid|API_KEY_INVALID/i.test(b)) return "That Places API key is not valid. Copy it again from Google Cloud → Credentials.";
+  if (/REQUEST_DENIED|referer|referrer/i.test(b)) return "Google rejected the key — remove HTTP-referrer restrictions (server-side calls send no referer) or restrict by IP instead.";
+  if (/has not been used in project|SERVICE_DISABLED/i.test(b)) return "Enable 'Places API (New)' in Google Cloud for this project, then retry.";
+  if (status === 429) return "Places API rate limit hit — try again in a minute.";
+  return `Places API ${status}: ${b.slice(0, 160)}`;
+}
+
 async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | null> {
   if (cfg?.place_id) return String(cfg.place_id);
   const sb = supa();
+  const key = await resolvePlacesKey(branch_id);
   const { data: branch } = await sb
     .from("branches")
     .select("name, address, city, google_review_link")
@@ -400,13 +440,13 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
     .maybeSingle();
   const fromLink = extractPlaceIdFromLink(branch?.google_review_link);
   if (fromLink) return fromLink;
-  if (!PLACES_KEY || !branch?.name) return null;
+  if (!key || !branch?.name) return null;
   const query = [branch.name, branch.address, branch.city].filter(Boolean).join(", ");
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Goog-Api-Key": PLACES_KEY,
+      "X-Goog-Api-Key": key,
       "X-Goog-FieldMask": "places.id,places.displayName",
     },
     body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
@@ -420,7 +460,8 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
 }
 
 async function fetchPlacesReviewsForBranch(branch_id: string) {
-  if (!PLACES_KEY) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
+  const key = await resolvePlacesKey(branch_id);
+  if (!key) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
   const sb = supa();
   const cfg = (await getGoogleConfig(branch_id)) ?? {};
   const placeId = await resolvePlaceId(branch_id, cfg);
@@ -430,15 +471,21 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
     {
       headers: {
-        "X-Goog-Api-Key": PLACES_KEY,
-        "X-Goog-FieldMask": "id,rating,userRatingCount,reviews",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,reviews",
       },
     },
   );
   if (!res.ok) {
     const txt = await res.text();
     console.error("places details failed", res.status, txt.slice(0, 300));
-    return { branch_id, fetched: 0, source: "places", reason: `places_${res.status}`, detail: txt.slice(0, 200) };
+    return {
+      branch_id,
+      fetched: 0,
+      source: "places",
+      reason: `places_${res.status}`,
+      detail: friendlyPlacesError(res.status, txt),
+    };
   }
   const j = await res.json();
   const reviews = (j.reviews ?? []) as any[];
@@ -461,6 +508,16 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     if (error) console.error("places upsert error", error.message);
     else upserted++;
   }
+
+  // Persist the aggregate so dashboards show the true rating, not the mean of 5 rows.
+  await patchGoogleConfig(branch_id, {
+    place_id: placeId,
+    place_name: j.displayName?.text ?? (cfg as any)?.place_name ?? null,
+    place_rating: j.rating ?? null,
+    place_rating_count: j.userRatingCount ?? null,
+    last_places_sync: new Date().toISOString(),
+  });
+
   return {
     branch_id,
     fetched: upserted,
