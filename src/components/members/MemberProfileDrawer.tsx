@@ -13,8 +13,9 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Pencil
 } from 'lucide-react';
+
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,10 @@ import { TopUpBenefitDrawer } from '../benefits/TopUpBenefitDrawer';
 import { PurchaseAddOnDrawer } from '../benefits/PurchaseAddOnDrawer';
 import { fetchMemberRewards, claimReward, fetchMemberReferrals } from '@/services/referralService';
 import { RecordPaymentDrawer } from '@/components/invoices/RecordPaymentDrawer';
+import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
+import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import { can } from '@/lib/auth/permissions';
+
 import { CompGiftDrawer } from './CompGiftDrawer';
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
@@ -45,15 +50,19 @@ import { invalidateMembersData } from '@/lib/memberInvalidation';
 // ─── Pending Invoices Section ───
 function PendingInvoicesSection({ memberId, branchId }: { memberId: string; branchId: string }) {
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const queryClient = useQueryClient();
+  const { roles } = useAuth();
+  const canAmend = can.cancelInvoice(roles.map((r) => r.role));
 
   const { data: pendingInvoices = [] } = useQuery({
     queryKey: ['member-pending-invoices', memberId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, amount_paid, status, due_date, invoice_type')
+        .select('id, invoice_number, subtotal, discount_amount, tax_amount, total_amount, amount_paid, status, due_date, invoice_type, is_gst_invoice, gst_rate')
         .eq('member_id', memberId)
         .in('status', ['pending', 'partial', 'overdue'])
         .order('due_date', { ascending: true });
@@ -62,6 +71,11 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
     },
     enabled: !!memberId,
   });
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['member-pending-invoices', memberId] });
+    queryClient.invalidateQueries({ queryKey: ['member-payments', memberId] });
+  };
 
   if (pendingInvoices.length === 0) return null;
 
@@ -78,7 +92,7 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
           {pendingInvoices.map((inv: any) => {
             const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
             return (
-              <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-background border">
+              <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-background border">
                 <div>
                   <p className="text-sm font-medium">{inv.invoice_number}</p>
                   <p className="text-xs text-muted-foreground">
@@ -93,6 +107,7 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
                   <Button
                     size="sm"
                     variant="outline"
+                    className="cursor-pointer"
                     onClick={() => {
                       setSelectedInvoice(inv);
                       setPaymentDrawerOpen(true);
@@ -100,6 +115,32 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
                   >
                     <IndianRupee className="h-3 w-3 mr-1" />Pay
                   </Button>
+                  {canAmend && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setSelectedInvoice(inv);
+                          setCorrectOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />Correct
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="cursor-pointer text-destructive hover:text-destructive"
+                        onClick={() => {
+                          setSelectedInvoice(inv);
+                          setCancelOpen(true);
+                        }}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />Cancel
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -112,18 +153,30 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
           open={paymentDrawerOpen}
           onOpenChange={(open) => {
             setPaymentDrawerOpen(open);
-            if (!open) {
-              queryClient.invalidateQueries({ queryKey: ['member-pending-invoices', memberId] });
-              queryClient.invalidateQueries({ queryKey: ['member-payments', memberId] });
-            }
+            if (!open) refresh();
           }}
           invoice={selectedInvoice}
           branchId={branchId}
         />
       )}
+
+      <CorrectInvoiceDrawer
+        open={correctOpen}
+        onOpenChange={setCorrectOpen}
+        invoice={selectedInvoice}
+        onCorrected={refresh}
+      />
+
+      <CancelInvoiceDrawer
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        invoice={selectedInvoice}
+        onCancelled={refresh}
+      />
     </>
   );
 }
+
 
 // ─── Benefits & Usage Tab ───
 function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }: { memberId: string; activeMembership: any; branchId: string; memberGender?: string | null }) {

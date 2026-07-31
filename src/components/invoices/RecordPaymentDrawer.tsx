@@ -14,6 +14,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchWallet } from '@/services/walletService';
 import { recordPayment } from '@/services/billingService';
 import { supabase } from '@/integrations/supabase/client';
+import { can } from '@/lib/auth/permissions';
+
 
 interface RecordPaymentDrawerProps {
   open: boolean;
@@ -30,9 +32,11 @@ export function RecordPaymentDrawer({
   memberId,
   branchId 
 }: RecordPaymentDrawerProps) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth() as any;
   const queryClient = useQueryClient();
-  
+  const canBackdate = can.approveDiscount(roles);
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const dueAmount = invoice ? (invoice.total_amount - (invoice.amount_paid || 0)) : 0;
   
   const [amount, setAmount] = useState(dueAmount);
@@ -40,8 +44,10 @@ export function RecordPaymentDrawer({
   const [transactionId, setTransactionId] = useState('');
   const [notes, setNotes] = useState('');
   const [incomeCategoryId, setIncomeCategoryId] = useState<string>('');
+  const [paymentDate, setPaymentDate] = useState<string>(todayIso);
 
   const effectiveMemberId = memberId || invoice?.member_id;
+
 
   // Fetch wallet balance when wallet payment method is selected
   const { data: walletData, isLoading: walletLoading } = useQuery({
@@ -71,6 +77,12 @@ export function RecordPaymentDrawer({
       if (amount <= 0) throw new Error('Amount must be greater than 0');
       if (amount > dueAmount) throw new Error('Amount cannot exceed due amount');
       if (!invoice?.id) throw new Error('Invoice is required');
+      if (paymentDate > todayIso) throw new Error('Payment date cannot be in the future');
+
+      // Backdated dates keep the wall-clock time so same-day entries stay ordered.
+      const backdated = paymentDate !== todayIso
+        ? new Date(`${paymentDate}T12:00:00`).toISOString()
+        : undefined;
 
       // Use unified RPC — handles wallet debit, invoice update, membership activation atomically
       return recordPayment({
@@ -83,8 +95,10 @@ export function RecordPaymentDrawer({
         notes: notes || undefined,
         receivedBy: user?.id,
         incomeCategoryId: incomeCategoryId || undefined,
+        paymentDate: backdated,
       });
     },
+
     onSuccess: () => {
       toast.success(`Payment of ₹${amount.toLocaleString()} recorded`);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -109,7 +123,9 @@ export function RecordPaymentDrawer({
     setTransactionId('');
     setNotes('');
     setIncomeCategoryId('');
+    setPaymentDate(todayIso);
   };
+
 
   // Reset amount when invoice changes
   useEffect(() => {
@@ -181,6 +197,28 @@ export function RecordPaymentDrawer({
               </Button>
             </div>
           </div>
+
+          {/* Payment date — backdating is restricted to senior roles */}
+          {canBackdate && (
+            <div className="space-y-2">
+              <Label htmlFor="payment-date">Payment Date *</Label>
+              <Input
+                id="payment-date"
+                type="date"
+                value={paymentDate}
+                max={todayIso}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="cursor-pointer"
+              />
+              {paymentDate !== todayIso && (
+                <p className="text-xs text-amber-600 font-medium">
+                  This payment will be recorded against {paymentDate}, not today.
+                </p>
+              )}
+            </div>
+          )}
+
+
 
           {/* Payment Method */}
           <div className="space-y-2">

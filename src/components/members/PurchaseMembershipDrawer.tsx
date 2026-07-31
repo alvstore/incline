@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, addDays, differenceInDays } from 'date-fns';
+import { membershipEndDateISO } from '@/lib/memberships/duration';
+
 import { usePlans } from '@/hooks/usePlans';
 import { CreditCard, IndianRupee, Calendar, User, Gift, AlertTriangle, CheckCircle, Lock, Wallet } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
@@ -191,8 +193,9 @@ export function PurchaseMembershipDrawer({
 
   const calculateEndDate = () => {
     if (!selectedPlan) return '';
-    return format(addDays(new Date(startDate), selectedPlan.duration_days), 'yyyy-MM-dd');
+    return membershipEndDateISO(startDate, selectedPlan.duration_days);
   };
+
 
   const remainingAmount = calculateTotal() - amountPaying;
 

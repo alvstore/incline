@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { lockerService } from '@/services/lockerService';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Search, Receipt, Gift, CheckCircle, CreditCard, Link2 } from 'lucide-react';
 
 interface AssignLockerDrawerProps {
@@ -34,6 +34,22 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
   const [rentalFee, setRentalFee] = useState(500);
   const [syncWithMembership, setSyncWithMembership] = useState(true);
   const [membershipEndDate, setMembershipEndDate] = useState<string | null>(null);
+
+  // Resolved GST rate for locker rentals (branch override → org default).
+  const { data: lockerGstRate } = useQuery({
+    queryKey: ['locker-gst-rate', locker?.id, branchId],
+    enabled: open && !!locker?.id && !!branchId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('resolve_gst_rate' as never, {
+        p_item_type: 'locker',
+        p_item_id: locker.id,
+        p_branch_id: branchId,
+      } as never);
+      if (error) throw error;
+      return Number(data ?? 18);
+    },
+  });
+
 
   const handleMemberSearch = async () => {
     if (!memberSearch.trim() || !branchId) return;
@@ -209,6 +225,10 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
     ? membershipEndDate
     : new Date(Date.now() + assignMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const totalAmount = effectivelyFree ? 0 : rentalFee;
+  const gstRate = Number(lockerGstRate ?? 18);
+  const gstAmount = Math.round(totalAmount * (gstRate / 100) * 100) / 100;
+  const grandTotal = Math.round((totalAmount + gstAmount) * 100) / 100;
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetForm(); }}>
@@ -364,17 +384,28 @@ export function AssignLockerDrawer({ open, onOpenChange, locker, branchId }: Ass
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-lg bg-muted">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total:</span>
-                <span className="text-xl font-bold">₹{totalAmount.toLocaleString()}</span>
+            <div className="p-4 rounded-2xl bg-muted space-y-2">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Sub-total</span>
+                <span className="font-medium">₹{totalAmount.toLocaleString()}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">GST ({gstRate}%)</span>
+                <span className="font-medium">₹{gstAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center border-t pt-2">
+                <span className="text-muted-foreground">Total payable</span>
+                <span className="text-xl font-bold">
+                  ₹{grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
                 <Receipt className="w-3 h-3 inline mr-1" />
                 An invoice will be generated automatically
               </p>
             </div>
           )}
+
         </div>
 
 

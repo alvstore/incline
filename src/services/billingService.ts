@@ -114,8 +114,10 @@ export async function recordPayment(payment: {
   notes?: string;
   receivedBy?: string;
   incomeCategoryId?: string;
+  /** Optional backdated payment date (ISO). Defaults to now on the server. */
+  paymentDate?: string;
 }): Promise<{ success: boolean; payment_id?: string; new_amount_paid?: number; new_status?: string; error?: string }> {
-  const { data, error } = await supabase.rpc('record_payment', {
+  const baseArgs = {
     p_branch_id: payment.branchId,
     p_invoice_id: payment.invoiceId,
     p_member_id: payment.memberId || null,
@@ -125,7 +127,15 @@ export async function recordPayment(payment: {
     p_notes: payment.notes || null,
     p_received_by: payment.receivedBy || null,
     p_income_category_id: payment.incomeCategoryId || null,
-  });
+  };
+
+  const { data, error } = payment.paymentDate
+    ? await supabase.rpc('record_payment' as never, {
+        ...baseArgs,
+        p_payment_date: new Date(payment.paymentDate).toISOString(),
+      } as never)
+    : await supabase.rpc('record_payment', baseArgs);
+
 
   if (error) throw error;
 
