@@ -289,13 +289,21 @@ function resolveVarValue(
     }
     tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
   }
+  const isAmountKey = k.includes('amount') || k.includes('price') || k.includes('total');
   for (const tk of tryKeys) {
     const v = values[tk];
-    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      let out = String(v).trim();
+      // Approved Meta bodies already print the currency symbol ("₹{{3}}"),
+      // so a value of "₹2,000" renders as "₹₹2,000". Strip it once.
+      if (isAmountKey) out = out.replace(/^(₹|Rs\.?|INR)\s*/i, '').trim();
+      return out;
+    }
   }
   return '';
 
 }
+
 
 /** Safe visible fallback per variable-key type. Meta rejects whitespace-only
  *  or leading/trailing-space body params on many marketing templates (132018),
