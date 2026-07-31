@@ -257,6 +257,7 @@ serve(async (req) => {
            },
            "notes": "General advice and precautions"
          }
+         CRITICAL: "weeks" must contain EXACTLY ONE entry (week 1) — a single template week covering all 7 calendar days. The system expands it into the full program with progressive overload afterwards. Never emit week 2+.
          IMPORTANT: Only include the "rotation" key if the user explicitly requested rotation. Otherwise omit it entirely.`
       : `OUTPUT CONTRACT — For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
          Return a JSON object with the following structure (no prose, no markdown):
