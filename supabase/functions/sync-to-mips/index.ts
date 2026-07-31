@@ -1,5 +1,5 @@
-// v1.7.0 — Server-side photo normalization (never fail on 400KB cap),
-// biometric_photo_path backfill from avatars, explicit photo/dispatch result flags.
+// v1.8.0 — Server-side photo normalization plus independently audited,
+// per-device delivery so one healthy gate cannot hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
@@ -334,7 +334,9 @@ async function dispatchToDevices(
   token: string,
   personId: number,
   supabase: any,
-  branchId?: string
+  branchId?: string,
+  entityType?: "member" | "employee" | "trainer",
+  entityId?: string,
 ): Promise<{ results: any[]; deviceIds: number[] }> {
   // 1. Try to get device IDs from access_devices table
   //    IMPORTANT: include ALL mapped devices, not just is_online. MIPS server
@@ -427,23 +429,57 @@ async function dispatchToDevices(
   }
 
 
-  // 3. Dispatch to all devices in a single call (API supports deviceIds array)
-  console.log(`Dispatching personId=${personId} to devices: [${deviceIds.join(",")}]`);
-  const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({
-      personId: personId,
-      deviceIds: deviceIds,
-      deviceNumType: "4",
-    }),
-  });
-  const text = await res.text();
-  console.log(`Dispatch response: ${text.substring(0, 300)}`);
-  let result: any;
-  try { result = JSON.parse(text); } catch { result = { raw: text }; }
+  // Dispatch separately so Gate 1 and Gate 2 have independent delivery truth.
+  // A combined request can return 200 while silently failing one device.
+  const results: any[] = [];
+  const deliveredDeviceIds: number[] = [];
+  for (const mipsDeviceId of [...new Set(deviceIds)]) {
+    const local = localDevices.find((d: any) => Number(d.mips_device_id) === mipsDeviceId);
+    const started = Date.now();
+    let result: any = null;
+    let responseCode = 0;
+    let status = "failed";
+    let lastError: string | null = null;
+    try {
+      const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
+      });
+      responseCode = res.status;
+      const text = await res.text();
+      try { result = JSON.parse(text); } catch { result = { raw: text }; }
+      const apiCode = Number(result?.code ?? result?.data?.code);
+      const accepted = res.ok && (apiCode === 0 || apiCode === 200);
+      status = accepted ? "success" : "failed";
+      lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
+      if (accepted) deliveredDeviceIds.push(mipsDeviceId);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      result = { error: lastError };
+    }
 
-  return { results: [result], deviceIds };
+    if (local?.id && branchId) {
+      const { error: auditError } = await supabase.from("mips_sync_attempts").insert({
+        branch_id: branchId,
+        device_id: local.id,
+        entity_type: entityType,
+        entity_id: entityId,
+        mips_person_id: personId,
+        operation: "device_dispatch",
+        status,
+        last_error: lastError,
+        response_code: responseCode,
+        latency_ms: Date.now() - started,
+        response_payload: result,
+        completed_at: new Date().toISOString(),
+      });
+      if (auditError) console.warn("Device delivery audit insert failed:", auditError.message);
+    }
+    results.push({ mipsDeviceId, status, responseCode, lastError, response: result });
+  }
+
+  return { results, deviceIds: deliveredDeviceIds, requestedDeviceIds: deviceIds };
 }
 
 Deno.serve(async (req) => {
@@ -745,7 +781,7 @@ Deno.serve(async (req) => {
         const putJson = await putRes.json().catch(() => ({}));
         const ok = putJson.code === 200 || putJson.code === 0;
         if (!ok) throw new Error(`MIPS revoke failed: ${putJson.msg || JSON.stringify(putJson)}`);
-        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId); } catch (_) { /* non-fatal */ }
+        try { await dispatchToDevices(baseUrl, token, existing.personId, supabase, effectiveBranchId, person_type, person_id); } catch (_) { /* non-fatal */ }
       }
 
       await supabase.from(tableName).update({
@@ -863,7 +899,7 @@ Deno.serve(async (req) => {
       dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
-        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
+        dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId, person_type, person_id);
       } catch (e) {
         console.error("Dispatch error:", e);
         dispatchResult = { error: String(e) };

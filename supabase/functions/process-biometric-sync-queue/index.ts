@@ -1,4 +1,4 @@
-// v1.1.0 — Drain biometric_sync_queue: re-invokes sync-to-mips WITH device
+// v1.2.0 — Drain biometric_sync_queue: re-invokes sync-to-mips WITH device
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     // (retry_count still below MAX_RETRIES and backoff window elapsed).
     const { data: rows, error } = await supabase
       .from("biometric_sync_queue")
-      .select("id, member_id, staff_id, device_id, sync_type, retry_count, queued_at, processed_at, status")
+      .select("id, member_id, staff_id, person_uuid, person_type, device_id, sync_type, retry_count, queued_at, processed_at, status")
       .in("status", ["pending", "failed"])
       .lt("retry_count", MAX_RETRIES)
       .order("queued_at", { ascending: true })
@@ -51,21 +51,21 @@ Deno.serve(async (req) => {
 
     let ok = 0, failed = 0, skipped = 0;
     for (const row of dueRows) {
-      const personId = (row as any).member_id || (row as any).staff_id;
-      if (!personId) {
+      const personId = (row as any).person_uuid || (row as any).member_id || (row as any).staff_id;
+      const personType = (row as any).person_type
+        || ((row as any).member_id ? "member" : (row as any).staff_id ? "employee" : null);
+      if (!personId || !personType) {
         await supabase
           .from("biometric_sync_queue")
           .update({
             status: "failed",
-            error_message: "no member_id/staff_id on queue row",
+            error_message: "queue row has no resolvable person identity",
             retry_count: ((row as any).retry_count || 0) + 1,
           })
           .eq("id", (row as any).id);
         skipped++;
         continue;
       }
-      const personType = (row as any).member_id ? "member" : "employee";
-
       try {
         // Call sync-to-mips as service_role — the queue drainer has no user JWT,
         // so the default anon bearer would be rejected by sync-to-mips' auth gate.

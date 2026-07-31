@@ -1,7 +1,7 @@
-// v1.0.0 — Reconcile MIPS device membership: for every branch that has ≥2
-// online access_devices with a mips_device_id, re-issue syncPerson for each
-// person that has a mips_person_id, so anyone who missed a sync while a
-// device was offline is re-pushed. Idempotent on the MIPS side.
+// v2.0.0 — Resumable, bounded reconciliation across members, employees and
+// trainers. Each run advances a rotating roster window and delegates the full
+// server + photo + per-device audited delivery to sync-to-mips. The rotating
+// window bounds runtime while eventually healing the complete branch roster.
 //
 // Invoked by the automation-brain cron every ~15 min (rule
 // `mips_reconcile_devices`).
@@ -13,7 +13,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const PER_RUN_CAP = 500; // per-branch cap to bound edge-fn runtime
+const PER_RUN_CAP = 10;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -46,39 +46,49 @@ Deno.serve(async (req) => {
 
       const deviceIds = brDevices.map((d) => d.mipsId);
 
-      // 2. Pull all synced members + employees for this branch.
-      const [{ data: members }, { data: employees }] = await Promise.all([
+      // 2. Build the complete branch roster, including trainers.
+      const [{ data: members }, { data: employees }, { data: trainers }] = await Promise.all([
         supabase
           .from("members")
           .select("id, mips_person_id")
           .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null)
-          .limit(PER_RUN_CAP),
+          .not("mips_person_id", "is", null),
         supabase
           .from("employees")
           .select("id, mips_person_id")
           .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null)
-          .limit(PER_RUN_CAP),
+          .not("mips_person_id", "is", null),
+        supabase
+          .from("trainers")
+          .select("id, mips_person_id")
+          .eq("branch_id", branchId)
+          .eq("is_active", true)
+          .not("mips_person_id", "is", null),
       ]);
 
-      const persons = [
-        ...((members || []).map((m: any) => ({ type: "member", personId: Number(m.mips_person_id) }))),
-        ...((employees || []).map((e: any) => ({ type: "employee", personId: Number(e.mips_person_id) }))),
-      ].filter((p) => !isNaN(p.personId));
+      const roster = [
+        ...((members || []).map((m: any) => ({ type: "member", id: m.id }))),
+        ...((employees || []).map((e: any) => ({ type: "employee", id: e.id }))),
+        ...((trainers || []).map((t: any) => ({ type: "trainer", id: t.id }))),
+      ];
+      const windowNo = Math.floor(Date.now() / (15 * 60_000));
+      const start = roster.length > 0 ? (windowNo * PER_RUN_CAP) % roster.length : 0;
+      const persons = Array.from(
+        { length: Math.min(PER_RUN_CAP, roster.length) },
+        (_, index) => roster[(start + index) % roster.length],
+      );
 
       let ok = 0, failed = 0;
       for (const p of persons) {
         try {
-          const { data, error } = await supabase.functions.invoke("mips-proxy", {
-            body: {
-              endpoint: "/through/device/syncPerson",
-              method: "POST",
-              data: { personId: p.personId, deviceIds, deviceNumType: "4" },
-              branch_id: branchId,
-            },
+          const res = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY },
+            body: JSON.stringify({ person_type: p.type, person_id: p.id, branch_id: branchId, deploy_to_devices: true }),
           });
-          const isOk = !error && (data as any)?.success && ((data as any)?.data?.code === 200 || (data as any)?.data?.code === 0);
+          const data = await res.json().catch(() => ({}));
+          const isOk = res.ok && data?.success === true && Array.isArray(data?.dispatched_device_ids)
+            && data.dispatched_device_ids.length === deviceIds.length;
           if (isOk) ok++; else failed++;
         } catch {
           failed++;
@@ -91,7 +101,7 @@ Deno.serve(async (req) => {
         .update({ last_reconcile_at: new Date().toISOString() })
         .in("id", brDevices.map((d) => d.localId));
 
-      summary.push({ branch_id: branchId, devices: deviceIds.length, persons: persons.length, ok, failed });
+      summary.push({ branch_id: branchId, devices: deviceIds.length, roster: roster.length, offset: start, processed: persons.length, ok, failed });
     }
 
     return new Response(JSON.stringify({ success: true, branches: summary }), {
