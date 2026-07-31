@@ -49,10 +49,22 @@ const MATRIX: Record<Capability, AppRole[]> = {
   rcs_wallet_view:     ['owner', 'admin'],
 };
 
-export function hasCapability(roles: AppRole[] | string[] | undefined, cap: Capability): boolean {
-  if (!roles || roles.length === 0) return false;
+/** Accepts `['owner']` OR `[{ role: 'owner' }]` (AuthContext shape) — normalizing
+ *  here keeps every `can.*` call site working regardless of which shape it holds. */
+export type RoleLike = string | { role?: string | null } | null | undefined;
+
+export function roleNames(roles?: RoleLike[] | null): string[] {
+  if (!roles) return [];
+  return roles
+    .map((r) => (typeof r === 'string' ? r : r?.role ?? ''))
+    .filter((r): r is string => Boolean(r));
+}
+
+export function hasCapability(roles: RoleLike[] | undefined, cap: Capability): boolean {
+  const names = roleNames(roles);
+  if (names.length === 0) return false;
   const allowed = MATRIX[cap];
-  return roles.some((r) => allowed.includes(r as AppRole));
+  return names.some((r) => allowed.includes(r as AppRole));
 }
 
 export const can = {
