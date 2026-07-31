@@ -591,11 +591,26 @@ export default function CreateAIPage() {
                 )}
               </Button>
 
-              {progressMsg && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
-                  {progressMsg}
+              {progressMsg && generate.isPending && (
+                <GenerationProgress type={type} onCancel={cancelGeneration} />
+              )}
+
+              {genError && !generate.isPending && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                  <p className="text-sm text-destructive">{genError}</p>
+                  {durationWeeks > 2 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setDurationWeeks(2); setGenError(null); }}
+                    >
+                      Try a 2-week plan instead
+                    </Button>
+                  )}
                 </div>
               )}
+
 
               {type === 'diet' && !dietRequirementsMet && member && (
                 <p className="text-xs text-warning">
