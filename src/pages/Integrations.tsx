@@ -21,6 +21,7 @@ import {
   Settings, CheckCircle, XCircle, Globe, Instagram, Facebook, MessageCircle, Activity
 } from 'lucide-react';
 import { WebhookActivityPanel, GatewayLastReceivedBadge } from '@/components/integrations/WebhookActivityPanel';
+import GoogleBusinessDrawer from '@/components/settings/GoogleBusinessDrawer';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger';
 
