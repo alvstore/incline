@@ -255,57 +255,19 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
+      {/* Per-device enrolment breakdown (fleet totals live in the health strip above) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-primary/10">
-                <Monitor className="h-5 w-5 text-primary" />
+              <div className="p-2.5 rounded-full bg-indigo-50 text-indigo-600">
+                <Fingerprint className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Devices</p>
-                <p className="text-2xl font-bold">{mipsTotal}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg shadow-muted/20 relative overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-success/10 relative">
-                {mipsOnline > 0 ? (
-                  <>
-                    <Wifi className="h-5 w-5 text-success" />
-                    <span className="absolute inset-0 rounded-full border-2 border-success animate-ping opacity-30" />
-                  </>
-                ) : (
-                  <WifiOff className="h-5 w-5 text-destructive" />
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Online</p>
-                <p className="text-2xl font-bold text-success">
-                  {mipsOnline}
-                  <span className="text-sm font-normal text-muted-foreground">/{mipsTotal}</span>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-info/10">
-                <Fingerprint className="h-5 w-5 text-info" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Faces Enrolled</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Faces Enrolled</p>
                 <p className="text-2xl font-bold">{mipsFaces}</p>
                 {mipsTotal > 1 && (
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     on {mipsDevices.filter((d) => (d.faceCount || 0) >= mipsFaces).length}/{mipsTotal} devices
                   </p>
                 )}
@@ -314,17 +276,17 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card className={`rounded-2xl shadow-lg shadow-muted/20 ${mipsDrift ? "border-warning/40" : ""}`}>
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-warning/10">
-                <Users className="h-5 w-5 text-warning" />
+              <div className={`p-2.5 rounded-full ${mipsDrift ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
+                <Users className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Persons Registered</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Persons Registered</p>
                 <p className="text-2xl font-bold">{mipsPersons}</p>
                 {mipsTotal > 1 && (
-                  <p className={`text-[10px] ${mipsDrift ? "text-warning" : "text-muted-foreground"}`}>
+                  <p className={`text-[11px] ${mipsDrift ? "text-amber-600" : "text-muted-foreground"}`}>
                     on {mipsDevices.filter((d) => (d.personCount || 0) >= mipsPersons).length}/{mipsTotal} devices
                     {mipsDrift ? " · drift" : ""}
                   </p>
@@ -336,10 +298,10 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
       </div>
 
       <MIPSConnectionCard branchId={branchId} branchName={branchName} />
-      <MipsWebhookUrlCard />
     </div>
   );
 };
+
 
 // ---------------------------------------------------------------------------
 // Admin helper: fetches the MIPS receiver URL (with the shared secret embedded
