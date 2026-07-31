@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Users, RefreshCw, Upload, Check, X, AlertCircle, Search, Image,
-  ShieldCheck, ShieldX, RotateCw, ImagePlus, UserCheck, UserX,
+  Users, RefreshCw, Upload, Search, Image,
+  ShieldCheck, ShieldX, RotateCw, ImagePlus,
   Dumbbell, Briefcase,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +48,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetPerson, setUploadTargetPerson] = useState<SyncPerson | null>(null);
   const [personnelTab, setPersonnelTab] = useState("members");
+  const [statusFilter, setStatusFilter] = useState<"all" | "registered" | "unregistered">("all");
   const [healing, setHealing] = useState(false);
 
   const { data: queueBacklog = 0 } = useQuery({
@@ -302,10 +304,6 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       p.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-  const registeredMembers = filterList(members.filter((p) => p.mipsSyncStatus === "synced"));
-  const unregisteredMembers = filterList(members.filter((p) => p.mipsSyncStatus !== "synced"));
-  const registeredStaff = filterList(staff.filter((p) => p.mipsSyncStatus === "synced"));
-  const unregisteredStaff = filterList(staff.filter((p) => p.mipsSyncStatus !== "synced"));
 
   const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
   const stats = {
