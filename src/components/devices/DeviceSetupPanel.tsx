@@ -192,7 +192,10 @@ const DeviceSetupPanel = () => {
         </div>
       </CardContent>
     </Card>
+    <SecureWebhookUrlCard />
+    </div>
   );
+
 };
 
 export default DeviceSetupPanel;
