@@ -1694,6 +1694,28 @@ export function MemberProfileDrawer({
                       <div>Paid: ₹{activeMembership.price_paid}</div>
                       <div>By: N/A</div>
                     </div>
+
+                    {freeDaysTotal > 0 && (
+                      <div className="rounded-xl bg-warning/10 border border-warning/30 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-warning font-medium">
+                          <Gift className="h-4 w-4" />
+                          {freeDaysTotal} complimentary day{freeDaysTotal === 1 ? '' : 's'} added
+                        </div>
+                        <ul className="space-y-1">
+                          {(freeDaysList as any[]).map((row) => (
+                            <li key={row.id} className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+                              <span>
+                                <span className="font-semibold text-foreground">+{row.days_added}d</span>{' '}
+                                — {row.reason || 'No reason recorded'}
+                              </span>
+                              <span className="whitespace-nowrap">
+                                {row.created_at ? format(new Date(row.created_at), 'dd MMM yyyy') : ''}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (

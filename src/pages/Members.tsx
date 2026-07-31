@@ -306,25 +306,49 @@ export default function MembersPage() {
     ? membersWithMemberships 
     : membersWithMemberships.filter((m: any) => m.status === statusFilter);
 
-  // Count frozen memberships
-  const frozenCount = membersWithMemberships.filter((m: any) => {
-    const frozenMembership = m.memberships?.find((ms: any) => ms.status === 'frozen');
-    return frozenMembership;
-  }).length;
+  // Stats must reflect EVERY member in scope, not just the current page.
+  const { data: statsRows = [] } = useQuery({
+    queryKey: ['members-stats', branchFilter],
+    queryFn: async () => {
+      let q = supabase
+        .from('members')
+        .select('id, lifecycle_state, memberships(status, start_date, end_date)');
+      if (branchFilter) q = q.eq('branch_id', branchFilter);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
-  const stats = {
-    total: totalCount ?? membersWithMemberships.length,
-    active: membersWithMemberships.filter((m: any) => m.status === 'active').length,
-    scheduled: membersWithMemberships.filter((m: any) => m.status === 'scheduled').length,
-    inactive: membersWithMemberships.filter((m: any) => m.status === 'inactive').length,
-    frozen: frozenCount,
-    expiringSoon: membersWithMemberships.filter((m: any) => {
-      const activeMembership = m.memberships?.find((ms: any) => ms.status === 'active');
-      if (!activeMembership) return false;
-      const daysLeft = differenceInDays(new Date(activeMembership.end_date), new Date());
-      return daysLeft > 0 && daysLeft <= 7;
-    }).length,
-  };
+  const stats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const counts = { total: 0, active: 0, scheduled: 0, inactive: 0, frozen: 0, expiringSoon: 0, pendingPlan: 0 };
+    for (const m of statsRows as any[]) {
+      counts.total += 1;
+      const ms = m.memberships || [];
+      const active = ms.find((x: any) => {
+        const end = new Date(x.end_date); end.setHours(0, 0, 0, 0);
+        return x.status === 'active' && end >= today;
+      });
+      const scheduled = ms.find((x: any) => {
+        if (x.status !== 'pending') return false;
+        const start = new Date(x.start_date); start.setHours(0, 0, 0, 0);
+        return start > today;
+      });
+      const frozen = ms.find((x: any) => x.status === 'frozen');
+      if (active) {
+        counts.active += 1;
+        const daysLeft = differenceInDays(new Date(active.end_date), today);
+        if (daysLeft >= 0 && daysLeft <= 7) counts.expiringSoon += 1;
+      } else if (m.lifecycle_state === 'pending_plan') counts.pendingPlan += 1;
+      else if (scheduled) counts.scheduled += 1;
+      else if (frozen) counts.frozen += 1;
+      else counts.inactive += 1;
+    }
+    return counts;
+  }, [statsRows]);
+
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {

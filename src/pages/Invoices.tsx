@@ -14,9 +14,11 @@ import { SendPaymentLinkDrawer } from '@/components/invoices/SendPaymentLinkDraw
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { InvoiceShareDrawer } from '@/components/invoices/InvoiceShareDrawer';
 import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
-  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle
+  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
+  IndianRupee, Pencil
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
@@ -42,12 +44,14 @@ export default function InvoicesPage() {
   const [paymentLinkInvoice, setPaymentLinkInvoice] = useState<any>(null);
   const [shareInvoice, setShareInvoice] = useState<any>(null);
   const [cancelInvoice, setCancelInvoiceTarget] = useState<any>(null);
+  const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const { branchFilter, effectiveBranchId } = useBranchContext();
   const { roles } = useAuth() as any;
   const canCancel = can.cancelInvoice(roles);
+  const canCorrect = can.cancelInvoice(roles) || can.approveDiscount(roles);
 
   // Realtime subscription for invoice status updates
   useEffect(() => {
@@ -459,6 +463,18 @@ export default function InvoicesPage() {
                                     <Mail className="mr-2 h-4 w-4" />
                                     Share Invoice
                                   </DropdownMenuItem>
+                                  {balance > 0 && invoice.status !== 'cancelled' && (
+                                    <DropdownMenuItem onClick={() => setPaymentInvoice(invoice)}>
+                                      <IndianRupee className="mr-2 h-4 w-4" />
+                                      Record Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canCorrect && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
+                                    <DropdownMenuItem onClick={() => setCorrectInvoiceTarget(invoice)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Correct Amount
+                                    </DropdownMenuItem>
+                                  )}
                                   {canCancel && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
                                     <DropdownMenuItem
                                       onClick={() => setCancelInvoiceTarget(invoice)}
@@ -580,6 +596,13 @@ export default function InvoicesPage() {
         open={!!cancelInvoice}
         onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
         invoice={cancelInvoice}
+      />
+
+      <CorrectInvoiceDrawer
+        open={!!correctInvoice}
+        onOpenChange={(open) => !open && setCorrectInvoiceTarget(null)}
+        invoice={correctInvoice}
+        onCorrected={() => queryClient.invalidateQueries({ queryKey: ['invoices'] })}
       />
     </AppLayout>
   );
