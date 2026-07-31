@@ -368,14 +368,23 @@ function appendAttachmentLinkForBodyOnlyTemplate(
   if (hasLinkSlot) return values;
 
   const preferredKey = keys.find((key) => /plan_(title|name)|^plan$/i.test(stripBraces(key)))
-    ?? keys.find((key) => /trainer/i.test(stripBraces(key)));
+    ?? keys.find((key) => /trainer/i.test(stripBraces(key)))
+    // Last resort: many APPROVED Meta bodies (invoice_generated_pdf,
+    // payment_receipt_pdf …) claim the file is "attached" but have NO HEADER
+    // component, so the document is never delivered. Rather than dropping the
+    // PDF entirely, append the download link to the final body slot.
+    ?? keys[keys.length - 1];
   if (!preferredKey) return values;
 
   const normalizedKey = stripBraces(preferredKey);
   const current = resolveVarValue(normalizedKey, values, keys.indexOf(preferredKey)).trim();
-  if (!current || current.includes(attachmentUrl)) return values;
-  return { ...values, [normalizedKey]: `${current} — PDF: ${attachmentUrl}` };
+  if (current.includes(attachmentUrl)) return values;
+  return {
+    ...values,
+    [normalizedKey]: current ? `${current} — PDF: ${attachmentUrl}` : attachmentUrl,
+  };
 }
+
 
 function inferTemplateValues(templateContent: string, renderedBody: string, keys: string[]): Record<string, string> {
   if (keys.length === 0) return {};
