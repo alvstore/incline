@@ -167,6 +167,37 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     },
   });
 
+  // ---- Server truth: what the MIPS server actually holds -------------------
+  // The local `mips_sync_status` column only records what *we* attempted.
+  // The only reliable count is the person list on the MIPS server itself, and
+  // whether each person actually carries a face image (photoUri / havePhoto).
+  const { data: serverTruth, isFetching: truthLoading, refetch: refetchTruth } = useQuery({
+    queryKey: ["mips-server-truth"],
+    queryFn: async () => {
+      const rows = await fetchAllMIPSPersons();
+      const map: Record<string, { exists: boolean; hasFace: boolean }> = {};
+      for (const r of rows as any[]) {
+        if (!r?.personSn) continue;
+        map[String(r.personSn)] = {
+          exists: true,
+          hasFace: !!(r.photoUri || r.havePhoto),
+        };
+      }
+      return {
+        map,
+        total: rows.length,
+        withFace: (rows as any[]).filter((r) => r.photoUri || r.havePhoto).length,
+      };
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+
+  const truthFor = (code: string) => serverTruth?.map[code.replace(/-/g, "")];
+
+
+
 
   const syncMutation = useMutation({
     mutationFn: async (person: SyncPerson) => {
@@ -207,26 +238,32 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   };
 
   const handleBulkVerify = async () => {
-    const synced = personnel.filter((p) => p.mipsSyncStatus === "synced");
-    if (synced.length === 0) { toast.info("No synced personnel to verify"); return; }
-    toast.info(`Verifying ${synced.length} synced personnel against MIPS...`);
+    toast.info("Re-reading the MIPS person list…");
     try {
       const allMIPS = await fetchAllMIPSPersons();
-      const mipsNos = new Set(allMIPS.map((e) => e.personSn));
+      const faceMap = new Map(
+        allMIPS.map((e: any) => [String(e.personSn), !!(e.photoUri || e.havePhoto)])
+      );
       const newMap: Record<string, boolean> = {};
-      let verified = 0, missing = 0;
-      for (const p of synced) {
+      let withFace = 0, noFace = 0, missing = 0;
+      for (const p of personnel) {
         const stripped = p.code.replace(/-/g, "");
-        const found = mipsNos.has(stripped);
-        newMap[p.id] = found;
-        if (found) verified++; else missing++;
+        const has = faceMap.get(stripped);
+        newMap[p.id] = has === true;
+        if (has === true) withFace++;
+        else if (has === false) noFace++;
+        else missing++;
       }
       setVerificationMap((prev) => ({ ...prev, ...newMap }));
-      toast.success(`Verified: ${verified} present, ${missing} missing on MIPS`);
+      await refetchTruth();
+      toast.success(
+        `MIPS server: ${withFace} with face · ${noFace} on server without face · ${missing} not on server`
+      );
     } catch (e) {
       toast.error(`Bulk verify failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
+
 
   const [serverOnlyBulk, setServerOnlyBulk] = useState(true);
 
@@ -305,31 +342,38 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     );
 
 
-  const syncedCount = personnel.filter((p) => p.mipsSyncStatus === "synced").length;
+  const onServer = (p: SyncPerson) => !!truthFor(p.code)?.exists;
+  const hasFaceOnServer = (p: SyncPerson) => !!truthFor(p.code)?.hasFace;
+
   const stats = {
     totalMembers: members.length,
-    syncedMembers: members.filter((p) => p.mipsSyncStatus === "synced").length,
+    syncedMembers: members.filter(onServer).length,
     totalStaff: staff.length,
-    syncedStaff: staff.filter((p) => p.mipsSyncStatus === "synced").length,
+    syncedStaff: staff.filter(onServer).length,
     noPhoto: personnel.filter((p) => !p.hasPhoto).length,
-    // Pending = has a photo but not yet synced (i.e. actionable sync backlog).
-    pendingSyncable: personnel.filter((p) => p.mipsSyncStatus !== "synced" && p.hasPhoto).length,
+    // Has a CRM photo but the server has no face image for them.
+    missingFace: personnel.filter((p) => p.hasPhoto && (!onServer(p) || !hasFaceOnServer(p))).length,
+    serverTotal: serverTruth?.total ?? 0,
+    serverWithFace: serverTruth?.withFace ?? 0,
   };
+
 
   const activeList = personnelTab === "members" ? members : staff;
   const visible = filterList(
     statusFilter === "all"
       ? activeList
       : statusFilter === "registered"
-        ? activeList.filter((p) => p.mipsSyncStatus === "synced")
-        : activeList.filter((p) => p.mipsSyncStatus !== "synced")
+        ? activeList.filter((p) => onServer(p) && hasFaceOnServer(p))
+        : activeList.filter((p) => !onServer(p) || !hasFaceOnServer(p))
   );
 
   const renderRow = (person: SyncPerson) => {
     const strippedCode = person.code.replace(/-/g, "");
-    const isSynced = person.mipsSyncStatus === "synced";
-    const isFailed = person.mipsSyncStatus === "failed";
+    const truth = truthFor(person.code);
+    const isSynced = !!truth?.exists && !!truth?.hasFace;
+    const isFailed = person.mipsSyncStatus === "failed" && !truth?.exists;
     const verifyStatus = verificationMap[person.id];
+
 
     return (
       <div
@@ -369,12 +413,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
         <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1.5 sm:flex">
           {isSynced ? (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Registered</span>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Face on server</span>
+          ) : truth?.exists ? (
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">On server · no face</span>
           ) : isFailed ? (
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Failed</span>
           ) : (
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">Not registered</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">Not on server</span>
           )}
+
           {!person.hasPhoto && (
             <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-muted dark:text-muted-foreground">
               <Image className="h-3 w-3" /> No photo
@@ -441,7 +488,9 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     </Card>
   );
 
-  const pendingTargets = personnel.filter((p) => p.mipsSyncStatus !== "synced");
+  // Anyone the MIPS server does not hold with a face image is actionable.
+  const pendingTargets = personnel.filter((p) => p.hasPhoto && (!onServer(p) || !hasFaceOnServer(p)));
+
 
   return (
     <div className="space-y-4">
@@ -459,13 +508,14 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="Members synced"
+          label="Members on server"
           value={
             <>
               {stats.syncedMembers}
               <span className="text-sm font-normal text-muted-foreground">/{stats.totalMembers}</span>
             </>
           }
+          hint={truthLoading ? "Checking MIPS server…" : "Verified against MIPS person list"}
         />
         <StatTile
           label="Staff & trainers"
@@ -475,20 +525,26 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               <span className="text-sm font-normal text-muted-foreground">/{stats.totalStaff}</span>
             </>
           }
+          hint="Verified against MIPS person list"
         />
         <StatTile
-          label="Pending sync"
-          value={stats.pendingSyncable}
-          tone={stats.pendingSyncable > 0 ? "text-amber-600" : "text-emerald-600"}
-          hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "Photo on file, not yet on MIPS"}
+          label="Missing face"
+          value={stats.missingFace}
+          tone={stats.missingFace > 0 ? "text-amber-600" : "text-emerald-600"}
+          hint={queueBacklog > 0 ? `Queue backlog: ${queueBacklog}` : "CRM photo on file, no face on MIPS"}
         />
         <StatTile
-          label="No photo"
-          value={stats.noPhoto}
-          tone={stats.noPhoto > 0 ? "text-amber-600" : "text-emerald-600"}
-          hint="Upload a photo before syncing"
+          label="MIPS server total"
+          value={
+            <>
+              {stats.serverWithFace}
+              <span className="text-sm font-normal text-muted-foreground">/{stats.serverTotal}</span>
+            </>
+          }
+          hint={`${stats.noPhoto} people have no photo in CRM`}
         />
       </div>
+
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
         <CardContent className="space-y-3 p-4">
