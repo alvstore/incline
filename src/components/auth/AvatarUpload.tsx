@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { Loader2, Camera, User } from 'lucide-react';
+import { uploadAndSyncPersonPhoto } from '@/lib/media/syncPersonPhoto';
+
 
 export function AvatarUpload() {
   const { user, profile, refreshProfile } = useAuth();
@@ -41,31 +43,20 @@ export function AvatarUpload() {
     setIsUploading(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/avatar.${fileExt}`;
-
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: `${urlData.publicUrl}?t=${Date.now()}` })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
+      // Single pipeline: compress → avatars → profile → biometric copy →
+      // device sync queue (cron pushes to MIPS + gates within 5 min).
+      const res = await uploadAndSyncPersonPhoto({
+        file,
+        userId: user.id,
+        personName: profile?.full_name || 'User',
+      });
 
       await refreshProfile();
-      toast.success('Avatar updated successfully');
+      toast.success(
+        res.queued
+          ? 'Photo updated — queued for device sync'
+          : 'Avatar updated successfully',
+      );
     } catch (error: any) {
       console.error('Upload error:', error);
       toast.error(error.message || 'Failed to upload avatar');
@@ -76,6 +67,7 @@ export function AvatarUpload() {
       }
     }
   };
+
 
   return (
     <div className="flex flex-col items-center gap-4">

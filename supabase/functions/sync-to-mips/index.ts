@@ -1,4 +1,8 @@
+// v1.7.0 — Server-side photo normalization (never fail on 400KB cap),
+// biometric_photo_path backfill from avatars, explicit photo/dispatch result flags.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,11 +154,41 @@ async function upsertPerson(
 }
 
 /**
+ * Re-encode an oversized image so it fits MIPS' 400KB face-photo cap.
+ * Downscales to max 640px on the long edge, then walks JPEG quality down
+ * until the payload fits. Returns null when the image can't be decoded.
+ */
+async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    const decoded = await decodeImage(bytes);
+    // GIF (Frame collections) are not supported for face enrollment.
+    if (!decoded || typeof (decoded as any).encodeJPEG !== "function") return null;
+    let img: any = decoded;
+    const maxEdge = Math.max(img.width, img.height);
+    if (maxEdge > 640) {
+      const scale = 640 / maxEdge;
+      img = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
+    }
+    for (const quality of [80, 65, 50, 40, 30]) {
+      const out = new Uint8Array(await img.encodeJPEG(quality));
+      if (out.length <= MAX_PHOTO_BYTES) return out;
+    }
+    // Last resort — halve dimensions once more.
+    img = img.resize(Math.round(img.width / 2), Math.round(img.height / 2));
+    const out = new Uint8Array(await img.encodeJPEG(40));
+    return out.length <= MAX_PHOTO_BYTES ? out : null;
+  } catch (e) {
+    console.warn("normalizePhotoBytes failed:", e);
+    return null;
+  }
+}
+
+/**
  * Two-step photo upload:
  * 1. POST /common/uploadHeadPhoto (multipart) → get fileName
  * 2. PUT /personInfo/person with full person object + photoUri = fileName
  * 
- * MIPS rules: JPG only, max 400KB
+ * MIPS rules: JPG only, max 400KB (oversized images are re-encoded here)
  */
 async function uploadPhoto(
   baseUrl: string,
@@ -162,7 +196,8 @@ async function uploadPhoto(
   personSn: string,
   photoUrl: string,
   supabase?: any,
-): Promise<{ success: boolean; message: string; fileName?: string }> {
+): Promise<{ success: boolean; message: string; fileName?: string; bytes?: Uint8Array }> {
+
   if (!photoUrl) return { success: false, message: "No photo URL" };
 
   try {
@@ -202,14 +237,23 @@ async function uploadPhoto(
       return { success: false, message: `Photo fetch failed: ${photoRes.status} at ${url}` };
     }
 
-    const photoBytes = new Uint8Array(await photoRes.arrayBuffer());
-    const sizeKB = Math.round(photoBytes.length / 1024);
+    let photoBytes = new Uint8Array(await photoRes.arrayBuffer());
+    let sizeKB = Math.round(photoBytes.length / 1024);
 
+    // Never fail on size — MIPS caps face photos at 400KB, so re-encode
+    // server-side (downscale + iterative JPEG quality) instead of aborting.
     if (photoBytes.length > MAX_PHOTO_BYTES) {
-      return { success: false, message: `Photo too large: ${sizeKB}KB (max 400KB). Please compress before uploading.` };
+      const normalized = await normalizePhotoBytes(photoBytes);
+      if (!normalized) {
+        return { success: false, message: `Photo too large: ${sizeKB}KB and could not be re-encoded` };
+      }
+      console.log(`Photo normalized: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
+      photoBytes = normalized;
+      sizeKB = Math.round(photoBytes.length / 1024);
     }
 
     console.log(`Photo fetched: ${sizeKB}KB`);
+
 
     // Step 1: Upload to /common/uploadHeadPhoto — always as JPG
     const boundary = `----FormBoundary${Date.now()}`;
@@ -274,7 +318,7 @@ async function uploadPhoto(
       console.log(`Photo PUT response: ${putText.substring(0, 200)}`);
     }
 
-    return { success: true, message: "Photo uploaded and assigned", fileName: filePath };
+    return { success: true, message: "Photo uploaded and assigned", fileName: filePath, bytes: photoBytes };
   } catch (e) {
     console.warn("Photo upload error:", e);
     return { success: false, message: e instanceof Error ? e.message : String(e) };
@@ -506,6 +550,8 @@ Deno.serve(async (req) => {
     let phone = "";
     let email = "";
     let photoUrl = "";
+    let photoSource: "biometric" | "avatar" | "" = "";
+
     let gender: "M" | "F" | "U" = "U";
     let birthday: string | null = null;                     // YYYY-MM-DD
     let deptId = 100;
@@ -559,6 +605,8 @@ Deno.serve(async (req) => {
         pick(member.biometric_photo_url, profile?.avatar_url, lead?.avatar_url),
       );
       photoUrl = resolved.url;
+      photoSource = resolved.source;
+
       gender = normGender(profile?.gender ?? lead?.gender);
       birthday = fmtDob(profile?.date_of_birth ?? lead?.date_of_birth);
 
@@ -615,6 +663,8 @@ Deno.serve(async (req) => {
         pick(emp.biometric_photo_url, profile?.avatar_url),
       );
       photoUrl = resolved.url;
+      photoSource = resolved.source;
+
       gender = normGender((emp as any).gender ?? profile?.gender);
       birthday = fmtDob((emp as any).date_of_birth ?? profile?.date_of_birth);
 
@@ -655,6 +705,8 @@ Deno.serve(async (req) => {
         (trainer as any).biometric_photo_url || profile?.avatar_url,
       );
       photoUrl = resolvedTrainer.url;
+      photoSource = resolvedTrainer.source;
+
       gender = normGender(profile?.gender);
       birthday = fmtDob(profile?.date_of_birth);
       const specs = Array.isArray((trainer as any).specializations) ? (trainer as any).specializations : [];
@@ -787,11 +839,28 @@ Deno.serve(async (req) => {
       console.log("No photo URL provided, skipping photo upload");
     }
 
+    // Step 4b: If the face image came from the public avatar bucket, persist the
+    // normalized (device-ready) copy into the private biometric bucket and
+    // backfill biometric_photo_path so future syncs use the high-quality path.
+    if (photoResult?.success && photoSource === "avatar" && photoResult.bytes) {
+      try {
+        const bioPath = `biometric/${tableName}/${person_id}.jpg`;
+        const { error: upErr } = await supabase.storage
+          .from(BIOMETRIC_BUCKET)
+          .upload(bioPath, photoResult.bytes, { upsert: true, contentType: "image/jpeg" });
+        if (upErr) throw upErr;
+        await supabase.from(tableName).update({ biometric_photo_path: bioPath }).eq("id", person_id);
+        console.log(`Biometric path backfilled: ${bioPath}`);
+      } catch (e) {
+        console.warn("Biometric backfill failed (non-fatal):", e);
+      }
+    }
+
     // Step 5: Dispatch to ALL mapped devices (multi-device) — unless caller
-    // opted for server-only sync (cron will fan out within 15 min).
+    // explicitly opted out (verification-only flows).
     let dispatchResult: any = null;
     if (deploy_to_devices === false) {
-      dispatchResult = { skipped: true, reason: "server_only_sync — cron will dispatch" };
+      dispatchResult = { skipped: true, reason: "deploy_to_devices=false" };
     } else {
       try {
         dispatchResult = await dispatchToDevices(baseUrl, token, personId, supabase, effectiveBranchId);
@@ -801,6 +870,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    const dispatchedDeviceIds: number[] = Array.isArray(dispatchResult?.deviceIds)
+      ? dispatchResult.deviceIds
+      : [];
+    const photoUploaded = Boolean(photoResult?.success);
 
     // Step 6: Update CRM database with real personId AND mips_person_sn
     await supabase.from(tableName).update({
@@ -814,13 +887,19 @@ Deno.serve(async (req) => {
       success: true,
       mips_person_id: personId,
       action: existing ? "updated" : "created",
-      photo_result: photoResult,
-      dispatch_result: dispatchResult,
+      photo_uploaded: photoUploaded,
+      photo_source: photoSource || null,
+      dispatched_device_ids: dispatchedDeviceIds,
+      photo_result: { success: photoResult?.success ?? false, message: photoResult?.message },
+      dispatch_result: dispatchResult && typeof dispatchResult === "object"
+        ? { ...dispatchResult, results: undefined, deviceIds: dispatchedDeviceIds }
+        : dispatchResult,
       validity: { validTimeBegin, validTimeEnd },
       person: { name, personSn: mipsPersonSn, originalCode: personNo },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("sync-to-mips error:", message);
