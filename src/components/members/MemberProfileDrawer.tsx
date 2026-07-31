@@ -2233,6 +2233,19 @@ export function MemberProfileDrawer({
             branchId={member.branch_id}
           />
         )}
+        <MemberInvoicesDrawer
+          open={invoicesOpen}
+          onOpenChange={setInvoicesOpen}
+          memberId={member.id}
+          branchId={member.branch_id}
+        />
+        {activeMembership && (
+          <AdjustMembershipDatesDrawer
+            open={adjustDatesOpen}
+            onOpenChange={setAdjustDatesOpen}
+            membership={activeMembership}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );
