@@ -13,7 +13,7 @@ import {
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
-  ChevronLeft, ChevronRight, Pencil
+  ChevronLeft, ChevronRight, Pencil, KeyRound
 } from 'lucide-react';
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
