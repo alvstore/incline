@@ -15,8 +15,10 @@ export interface HowbodyReportRow {
   pbf?: number | null;
   smm?: number | null;
   // posture
-  posture_type?: string | null;
-  body_shape_profile?: string | null;
+  score?: number | null;
+  head_forward?: number | null;
+  high_low_shoulder?: number | null;
+  pelvis_forward?: number | null;
   body_slope?: number | null;
 }
 
@@ -34,7 +36,7 @@ export function useHowbodyReports(memberId?: string, limit = 12) {
           .limit(limit),
         supabase
           .from('howbody_posture_reports')
-          .select('id, member_id, data_key, test_time, created_at, posture_type, body_shape_profile, body_slope')
+          .select('id, member_id, data_key, test_time, created_at, score, head_forward, high_low_shoulder, pelvis_forward, body_slope')
           .eq('member_id', memberId!)
           .order('created_at', { ascending: false })
           .limit(limit),
