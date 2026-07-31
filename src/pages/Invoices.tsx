@@ -49,6 +49,9 @@ export default function InvoicesPage() {
   const [cancelInvoice, setCancelInvoiceTarget] = useState<any>(null);
   const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [periodFilter, setPeriodFilter] = useState<string>('this_month');
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const { branchFilter, effectiveBranchId } = useBranchContext();
