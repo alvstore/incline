@@ -49,30 +49,42 @@ const MATRIX: Record<Capability, AppRole[]> = {
   rcs_wallet_view:     ['owner', 'admin'],
 };
 
-export function hasCapability(roles: AppRole[] | string[] | undefined, cap: Capability): boolean {
-  if (!roles || roles.length === 0) return false;
+/** Accepts `['owner']` OR `[{ role: 'owner' }]` (AuthContext shape) — normalizing
+ *  here keeps every `can.*` call site working regardless of which shape it holds. */
+export type RoleLike = string | { role?: string | null } | null | undefined;
+
+export function roleNames(roles?: RoleLike[] | null): string[] {
+  if (!roles) return [];
+  return roles
+    .map((r) => (typeof r === 'string' ? r : r?.role ?? ''))
+    .filter((r): r is string => Boolean(r));
+}
+
+export function hasCapability(roles: RoleLike[] | undefined, cap: Capability): boolean {
+  const names = roleNames(roles);
+  if (names.length === 0) return false;
   const allowed = MATRIX[cap];
-  return roles.some((r) => allowed.includes(r as AppRole));
+  return names.some((r) => allowed.includes(r as AppRole));
 }
 
 export const can = {
-  viewFinancials:    (r?: string[]) => hasCapability(r, 'view_financials'),
-  manageStaff:       (r?: string[]) => hasCapability(r, 'manage_staff'),
-  recordPayment:     (r?: string[]) => hasCapability(r, 'record_payment'),
-  approveDiscount:   (r?: string[]) => hasCapability(r, 'approve_discount'),
-  crossBranchView:   (r?: string[]) => hasCapability(r, 'cross_branch_view'),
-  manageSettings:    (r?: string[]) => hasCapability(r, 'manage_settings'),
-  cancelMembership:  (r?: string[]) => hasCapability(r, 'cancel_membership'),
-  cancelInvoice:     (r?: string[]) => hasCapability(r, 'cancel_invoice'),
-  freezeMembership:  (r?: string[]) => hasCapability(r, 'freeze_membership'),
-  creditMember:      (r?: string[]) => hasCapability(r, 'credit_member'),
-  manageDevices:     (r?: string[]) => hasCapability(r, 'manage_devices'),
-  manageAutomations: (r?: string[]) => hasCapability(r, 'manage_automations'),
-  viewReconciliation:(r?: string[]) => hasCapability(r, 'view_reconciliation'),
-  bookFacility:      (r?: string[]) => hasCapability(r, 'book_facility'),
-  deleteTask:        (r?: string[]) => hasCapability(r, 'delete_task'),
-  rcsAdmin:          (r?: string[]) => hasCapability(r, 'rcs_admin'),
-  rcsWalletView:     (r?: string[]) => hasCapability(r, 'rcs_wallet_view'),
+  viewFinancials:    (r?: RoleLike[]) => hasCapability(r, 'view_financials'),
+  manageStaff:       (r?: RoleLike[]) => hasCapability(r, 'manage_staff'),
+  recordPayment:     (r?: RoleLike[]) => hasCapability(r, 'record_payment'),
+  approveDiscount:   (r?: RoleLike[]) => hasCapability(r, 'approve_discount'),
+  crossBranchView:   (r?: RoleLike[]) => hasCapability(r, 'cross_branch_view'),
+  manageSettings:    (r?: RoleLike[]) => hasCapability(r, 'manage_settings'),
+  cancelMembership:  (r?: RoleLike[]) => hasCapability(r, 'cancel_membership'),
+  cancelInvoice:     (r?: RoleLike[]) => hasCapability(r, 'cancel_invoice'),
+  freezeMembership:  (r?: RoleLike[]) => hasCapability(r, 'freeze_membership'),
+  creditMember:      (r?: RoleLike[]) => hasCapability(r, 'credit_member'),
+  manageDevices:     (r?: RoleLike[]) => hasCapability(r, 'manage_devices'),
+  manageAutomations: (r?: RoleLike[]) => hasCapability(r, 'manage_automations'),
+  viewReconciliation:(r?: RoleLike[]) => hasCapability(r, 'view_reconciliation'),
+  bookFacility:      (r?: RoleLike[]) => hasCapability(r, 'book_facility'),
+  deleteTask:        (r?: RoleLike[]) => hasCapability(r, 'delete_task'),
+  rcsAdmin:          (r?: RoleLike[]) => hasCapability(r, 'rcs_admin'),
+  rcsWalletView:     (r?: RoleLike[]) => hasCapability(r, 'rcs_wallet_view'),
 };
 
 /**
@@ -84,19 +96,19 @@ export const can = {
  *
  * Server-side guard: trigger `tg_block_manager_self_edit` mirrors this on the DB.
  */
-export function canEditAnyRoster(roles?: string[]): boolean {
-  if (!roles) return false;
-  return roles.some((r) => r === 'owner' || r === 'admin' || r === 'manager');
+export function canEditAnyRoster(roles?: RoleLike[]): boolean {
+  return roleNames(roles).some((r) => r === 'owner' || r === 'admin' || r === 'manager');
 }
 
 export function canEditRosterRow(
-  roles: string[] | undefined,
+  roles: RoleLike[] | undefined,
   targetUserId: string | null | undefined,
   currentUserId: string | null | undefined,
 ): boolean {
-  if (!roles || !targetUserId) return false;
-  if (roles.some((r) => r === 'owner' || r === 'admin')) return true;
-  if (roles.includes('manager')) return targetUserId !== currentUserId;
+  const names = roleNames(roles);
+  if (names.length === 0 || !targetUserId) return false;
+  if (names.some((r) => r === 'owner' || r === 'admin')) return true;
+  if (names.includes('manager')) return targetUserId !== currentUserId;
   return false;
 }
 
@@ -107,19 +119,19 @@ export function canEditRosterRow(
  * employees, contracts, trainers, payroll_items, payroll_run_lines.
  */
 export function canManageHrRow(
-  roles: string[] | undefined,
+  roles: RoleLike[] | undefined,
   targetUserId: string | null | undefined,
   currentUserId: string | null | undefined,
 ): boolean {
-  if (!roles || !targetUserId) return false;
-  if (roles.some((r) => r === 'owner' || r === 'admin')) return true;
-  if (roles.includes('manager')) return targetUserId !== currentUserId;
+  const names = roleNames(roles);
+  if (names.length === 0 || !targetUserId) return false;
+  if (names.some((r) => r === 'owner' || r === 'admin')) return true;
+  if (names.includes('manager')) return targetUserId !== currentUserId;
   return false;
 }
 
-export function canExportRoster(roles?: string[]): boolean {
-  if (!roles) return false;
-  return roles.some((r) => r === 'owner' || r === 'admin' || r === 'manager' || r === 'staff');
+export function canExportRoster(roles?: RoleLike[]): boolean {
+  return roleNames(roles).some((r) => r === 'owner' || r === 'admin' || r === 'manager' || r === 'staff');
 }
 
 /**
@@ -148,8 +160,9 @@ const RANK: Record<string, number> = {
   member: 1,
 };
 
-function topRole(roles: string[] | undefined): string | null {
-  if (!roles || roles.length === 0) return null;
+function topRole(rolesInput: RoleLike[] | undefined): string | null {
+  const roles = roleNames(rolesInput);
+  if (roles.length === 0) return null;
   return roles.reduce<string | null>((best, r) => {
     if (!best) return r;
     return (RANK[r] ?? 0) > (RANK[best] ?? 0) ? r : best;
@@ -157,8 +170,8 @@ function topRole(roles: string[] | undefined): string | null {
 }
 
 export function canRecordAttendanceFor(
-  actorRoles: string[] | undefined,
-  targetRoles: string[] | undefined,
+  actorRoles: RoleLike[] | undefined,
+  targetRoles: RoleLike[] | undefined,
   isSelf: boolean,
 ): AttendanceDecision {
   if (isSelf) {

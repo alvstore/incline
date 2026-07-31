@@ -66,7 +66,7 @@ export function HowbodyReportsCard({ memberId }: Props) {
                 const main =
                   r.type === 'body'
                     ? `${r.weight ?? '-'} kg · ${r.pbf ?? '-'}% BF${r.health_score ? ` · Score ${r.health_score}` : ''}`
-                    : `${r.posture_type ?? 'Posture'}${r.body_shape_profile ? ` · ${r.body_shape_profile}` : ''}`;
+                    : `Score ${r.score ?? '-'}${r.body_slope != null ? ` · Slope ${r.body_slope}` : ''}`;
                 return (
                   <div key={`${r.type}-${r.id}`} className="flex items-center gap-3 py-3">
                     <div className="rounded-full bg-primary/10 p-2 text-primary">

@@ -101,8 +101,10 @@ function PostureMetrics({ r }: { r: any }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Posture Type" value={r.posture_type} />
-        <Stat label="Body Shape" value={r.body_shape_profile} />
+        <Stat label="Posture Score" value={r.score} />
+        <Stat label="Head Forward" value={r.head_forward} />
+        <Stat label="Shoulder Balance" value={r.high_low_shoulder} />
+        <Stat label="Pelvis Forward" value={r.pelvis_forward} />
         <Stat label="Body Slope" value={r.body_slope} />
       </div>
       {r.full_payload && (

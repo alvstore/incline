@@ -195,11 +195,22 @@ export default function MembersPage() {
           return { ...m, profiles, status: memberStatus, scheduledMembership, joined_at: m.created_at };
         });
 
-        // Pin pending_plan to the very top so reception sees fresh self-registrations.
+        // Ordering: pending self-registrations first (reception action queue),
+        // then members with real cover (active → scheduled → frozen), and only
+        // then members without any membership. Recency breaks ties.
+        const rank = (s: string) => {
+          switch (s) {
+            case 'pending_plan': return 0;
+            case 'active': return 1;
+            case 'scheduled': return 2;
+            case 'frozen': return 3;
+            default: return 4;
+          }
+        };
         mapped.sort((a: any, b: any) => {
-          if (a.status === 'pending_plan' && b.status !== 'pending_plan') return -1;
-          if (b.status === 'pending_plan' && a.status !== 'pending_plan') return 1;
-          return 0;
+          const d = rank(a.status) - rank(b.status);
+          if (d !== 0) return d;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
 
         return { data: mapped, count };

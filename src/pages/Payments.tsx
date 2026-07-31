@@ -11,11 +11,12 @@ import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
+import { can } from '@/lib/auth/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -38,13 +39,13 @@ export default function PaymentsPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidingPayment, setVoidingPayment] = useState<any>(null);
-  const [voidReason, setVoidReason] = useState('');
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [duesOpen, setDuesOpen] = useState(true);
+  const canEditPayments = can.viewFinancials(roles as any) && (roles as any[])?.some((r: any) => ['owner','admin'].includes(typeof r === 'string' ? r : r?.role));
 
   useRealtimeInvalidate({
     channel: 'page-payments',
@@ -188,7 +189,6 @@ export default function PaymentsPage() {
       toast.success('Payment voided — invoice balance reversed');
       setVoidDialogOpen(false);
       setVoidingPayment(null);
-      setVoidReason('');
     },
     onError: (err: any) => toast.error(err?.message || 'Failed to void payment'),
   });
@@ -245,7 +245,6 @@ export default function PaymentsPage() {
 
   const openVoidDialog = (payment: any) => {
     setVoidingPayment(payment);
-    setVoidReason('');
     setVoidDialogOpen(true);
   };
 
@@ -432,8 +431,15 @@ export default function PaymentsPage() {
                         {isAdminOrOwner && (
                           <TableCell>
                             {!isVoided && payment.status !== 'failed' && (
-                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => openVoidDialog(payment)}>
-                                <Ban className="h-4 w-4 mr-1" /> Void
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={canEditPayments ? '' : 'text-destructive hover:text-destructive'}
+                                onClick={() => openVoidDialog(payment)}
+                              >
+                                {canEditPayments
+                                  ? (<><Pencil className="h-4 w-4 mr-1" /> Edit</>)
+                                  : (<><Ban className="h-4 w-4 mr-1" /> Void</>)}
                               </Button>
                             )}
                             {isVoided && payment.void_reason && (
@@ -471,73 +477,13 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      {/* Void Payment Confirmation */}
-      <AlertDialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-destructive" />
-              Void Payment
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The original record will be preserved for audit purposes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {voidingPayment && (
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardContent className="pt-4 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Amount:</span>
-                  <span className="font-semibold">₹{voidingPayment.amount?.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Member:</span>
-                  <span>{resolveMemberDisplay(voidingPayment.members).name}</span>
-                </div>
-                {voidingPayment.invoices?.invoice_number && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Invoice:</span>
-                    <span className="font-mono">{voidingPayment.invoices.invoice_number}</span>
-                  </div>
-                )}
-                <div className="flex justify-between pt-1.5 border-t border-destructive/10">
-                  <span className="text-muted-foreground">Impact:</span>
-                  <span className="text-destructive font-medium">
-                    {voidingPayment.invoices?.invoice_number
-                      ? `₹${voidingPayment.amount?.toLocaleString()} reverted on invoice`
-                      : 'Payment marked as voided'}
-                  </span>
-                </div>
-                {voidingPayment.payment_method === 'wallet' && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Wallet:</span>
-                    <span className="text-success font-medium">₹{voidingPayment.amount?.toLocaleString()} refunded</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-          <div className="space-y-3 py-2">
-            <Label>Reason for voiding <span className="text-destructive">*</span></Label>
-            <Textarea
-              placeholder="Enter the reason for voiding this payment (e.g., duplicate entry, incorrect amount)"
-              value={voidReason}
-              onChange={(e) => setVoidReason(e.target.value)}
-              className="min-h-[80px]"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={!voidReason.trim() || voidPaymentMutation.isPending}
-              onClick={() => voidPaymentMutation.mutate({ paymentId: voidingPayment?.id, reason: voidReason })}
-            >
-              <Ban className="h-4 w-4 mr-1" /> Void Payment
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Edit / Void Payment — side drawer (no center dialogs for forms) */}
+      <PaymentEditDrawer
+        open={voidDialogOpen}
+        onOpenChange={(o) => { setVoidDialogOpen(o); if (!o) setVoidingPayment(null); }}
+        payment={voidingPayment}
+        canEdit={canEditPayments}
+      />
 
       {/* Record Payment Drawer */}
       <Sheet open={recordPaymentOpen} onOpenChange={(open) => {

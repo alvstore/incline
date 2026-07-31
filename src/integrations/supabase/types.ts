@@ -13411,6 +13411,15 @@ export type Database = {
         }
         Returns: Json
       }
+      adjust_membership_free_days: {
+        Args: {
+          _delete?: boolean
+          _free_day_id: string
+          _new_days?: number
+          _reason?: string
+        }
+        Returns: Json
+      }
       admin_run_automation_now: {
         Args: { _rule_id: string }
         Returns: undefined
@@ -13488,36 +13497,21 @@ export type Database = {
         Args: { _field: string; _max: number; _min: number; _value: number }
         Returns: number
       }
-      assign_locker_with_billing:
-        | {
-            Args: {
-              p_billing_months?: number
-              p_chargeable?: boolean
-              p_end_date: string
-              p_fee_amount: number
-              p_gst_rate?: number
-              p_locker_id: string
-              p_member_id: string
-              p_received_by?: string
-              p_start_date: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_assign_source?: string
-              p_billing_months?: number
-              p_chargeable?: boolean
-              p_end_date: string
-              p_fee_amount: number
-              p_gst_rate?: number
-              p_locker_id: string
-              p_member_id: string
-              p_received_by?: string
-              p_start_date: string
-            }
-            Returns: Json
-          }
+      assign_locker_with_billing: {
+        Args: {
+          p_assign_source?: string
+          p_billing_months?: number
+          p_chargeable?: boolean
+          p_end_date: string
+          p_fee_amount: number
+          p_gst_rate?: number
+          p_locker_id: string
+          p_member_id: string
+          p_received_by?: string
+          p_start_date: string
+        }
+        Returns: Json
+      }
       assign_user_role: {
         Args: {
           p_branch_id: string
@@ -13970,6 +13964,18 @@ export type Database = {
           row_count: number
           table_name: string
         }[]
+      }
+      edit_payment: {
+        Args: {
+          p_amount: number
+          p_notes?: string
+          p_payment_date?: string
+          p_payment_id: string
+          p_payment_method: string
+          p_reason?: string
+          p_transaction_id?: string
+        }
+        Returns: Json
       }
       enforce_branch_match: {
         Args: { p_branch_id: string }
