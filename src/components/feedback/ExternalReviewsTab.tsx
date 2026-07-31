@@ -114,7 +114,26 @@ export default function ExternalReviewsTab() {
     return { week: recent.length, avg, fakes, pending };
   }, [rows]);
 
+  const [diagnosis, setDiagnosis] = useState<any>(null);
+  const diagnose = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'diagnose', branch_id: branchId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (d) => {
+      setDiagnosis(d);
+      if ((d as any)?.ok) toast.success('Google connection is healthy');
+      else toast.warning('Found issues with the Google connection');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Diagnostics failed'),
+  });
+
   const fetchNow = useMutation({
+
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
         body: { action: 'fetch_reviews', branch_id: branchId },
