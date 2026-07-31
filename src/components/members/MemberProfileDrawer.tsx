@@ -55,7 +55,7 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const queryClient = useQueryClient();
   const { roles } = useAuth();
-  const canAmend = can.cancelInvoice(roles);
+  const canAmend = can.cancelInvoice(roles.map((r) => r.role));
 
   const { data: pendingInvoices = [] } = useQuery({
     queryKey: ['member-pending-invoices', memberId],
