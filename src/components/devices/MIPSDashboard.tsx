@@ -6,8 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Monitor, Wifi, WifiOff, Users, Fingerprint, RefreshCw, Server, Heart, ShieldAlert, Zap,
+  Users, Fingerprint, RefreshCw, Server, Heart, ShieldAlert, Zap,
 } from "lucide-react";
+
 import { testMIPSConnection, fetchMIPSDevices, type MIPSDevice } from "@/services/mipsService";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
@@ -255,57 +256,19 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
+      {/* Per-device enrolment breakdown (fleet totals live in the health strip above) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-primary/10">
-                <Monitor className="h-5 w-5 text-primary" />
+              <div className="p-2.5 rounded-full bg-indigo-50 text-indigo-600">
+                <Fingerprint className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Devices</p>
-                <p className="text-2xl font-bold">{mipsTotal}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg shadow-muted/20 relative overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-success/10 relative">
-                {mipsOnline > 0 ? (
-                  <>
-                    <Wifi className="h-5 w-5 text-success" />
-                    <span className="absolute inset-0 rounded-full border-2 border-success animate-ping opacity-30" />
-                  </>
-                ) : (
-                  <WifiOff className="h-5 w-5 text-destructive" />
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Online</p>
-                <p className="text-2xl font-bold text-success">
-                  {mipsOnline}
-                  <span className="text-sm font-normal text-muted-foreground">/{mipsTotal}</span>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg shadow-muted/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-info/10">
-                <Fingerprint className="h-5 w-5 text-info" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Faces Enrolled</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Faces Enrolled</p>
                 <p className="text-2xl font-bold">{mipsFaces}</p>
                 {mipsTotal > 1 && (
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     on {mipsDevices.filter((d) => (d.faceCount || 0) >= mipsFaces).length}/{mipsTotal} devices
                   </p>
                 )}
@@ -314,17 +277,17 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card className={`rounded-2xl shadow-lg shadow-muted/20 ${mipsDrift ? "border-warning/40" : ""}`}>
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full bg-warning/10">
-                <Users className="h-5 w-5 text-warning" />
+              <div className={`p-2.5 rounded-full ${mipsDrift ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
+                <Users className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Persons Registered</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Persons Registered</p>
                 <p className="text-2xl font-bold">{mipsPersons}</p>
                 {mipsTotal > 1 && (
-                  <p className={`text-[10px] ${mipsDrift ? "text-warning" : "text-muted-foreground"}`}>
+                  <p className={`text-[11px] ${mipsDrift ? "text-amber-600" : "text-muted-foreground"}`}>
                     on {mipsDevices.filter((d) => (d.personCount || 0) >= mipsPersons).length}/{mipsTotal} devices
                     {mipsDrift ? " · drift" : ""}
                   </p>
@@ -336,62 +299,11 @@ const MIPSDashboard = ({ branchId, branchName }: MIPSDashboardProps) => {
       </div>
 
       <MIPSConnectionCard branchId={branchId} branchName={branchName} />
-      <MipsWebhookUrlCard />
     </div>
   );
 };
 
-// ---------------------------------------------------------------------------
-// Admin helper: fetches the MIPS receiver URL (with the shared secret embedded
-// as `?token=`) and offers Copy-to-clipboard. Users paste this URL into the
-// MIPS device's "Recognition Record Upload URL" field to restore live attendance.
-// ---------------------------------------------------------------------------
-function MipsWebhookUrlCard() {
-  const [state, setState] = useState<{ loading: boolean; url?: string; note?: string; configured?: boolean; error?: string }>({ loading: false });
 
-  const load = async () => {
-    setState({ loading: true });
-    try {
-      const { data, error } = await supabase.functions.invoke("mips-webhook-url", {});
-      if (error) throw error;
-      const r = data as any;
-      setState({ loading: false, url: r?.recognition_url, note: r?.note, configured: Boolean(r?.configured) });
-    } catch (e: any) {
-      setState({ loading: false, error: e?.message || "Failed" });
-    }
-  };
-
-  return (
-    <Card className="rounded-2xl shadow-lg shadow-slate-200/50 border-none">
-      <CardContent className="p-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">MIPS Device Webhook URL</h3>
-            <p className="text-xs text-slate-500">Live attendance callback — paste into "Recognition Record Upload URL" on the device.</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={load} disabled={state.loading} className="rounded-xl">
-            {state.loading ? "Loading…" : state.url ? "Refresh" : "Show URL"}
-          </Button>
-        </div>
-        {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-        {state.url && (
-          <div className="space-y-2">
-            {!state.configured && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                <strong>Not configured.</strong> {state.note}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-mono break-all text-slate-800">{state.url}</code>
-              <Button size="sm" onClick={() => { navigator.clipboard.writeText(state.url!); toast.success("URL copied"); }} className="rounded-xl">Copy</Button>
-            </div>
-            <p className="text-xs text-slate-500">{state.note}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 
 export default MIPSDashboard;
