@@ -336,17 +336,29 @@ serve(async (req) => {
 
     console.log(`Generating ${type} plan for member:`, memberInfo.name, `with ${availableMeals.length} catalog meals, ${availableEquipment.length} equipment items, prevPlan=${!!previousPlanContext}`);
 
-    let content: string | undefined;
-    try {
+    // Dynamic token budget: one template week (+ rotation variants) or 7 diet days.
+    // Base 4k, +1.2k per rotation variant, capped at 16k so we never inherit the
+    // old 2,500-token default that truncated the JSON mid-object.
+    const maxTokens = Math.min(16000, 4000 + variantCount * 1200 + (type === "diet" ? 2000 : 0));
+
+    const baseMessage = userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt;
+
+    const runAi = async (systemExtra = "") => {
       const r = await generateOnce({
         purpose: "fitness_plan",
         branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
-        userMessage: userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt,
-        systemOverride: systemPrompt,
+        userMessage: baseMessage,
+        systemOverride: systemPrompt + systemExtra,
         responseFormat: "json",
+        maxTokens,
         supabase: supabaseAdmin,
       });
-      content = r.content;
+      return r.content;
+    };
+
+    let content: string | undefined;
+    try {
+      content = await runAi();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI gateway error";
       if (/429|rate/i.test(msg)) {
@@ -368,13 +380,36 @@ serve(async (req) => {
       throw new Error("No content in AI response");
     }
 
-    let plan;
-    try {
-      plan = JSON.parse(content);
-    } catch (e) {
-      console.error("Failed to parse AI response:", content);
-      throw new Error("Failed to parse AI response");
+    let plan = parsePlanJson(content);
+    let shapeError = plan ? validatePlanShape(type, plan) : "AI response was truncated";
+
+    if (shapeError) {
+      console.warn(`[generate-fitness-plan] retrying — ${shapeError}`);
+      try {
+        const retry = await runAi(
+          "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed."
+        );
+        const retryPlan = parsePlanJson(retry || "");
+        const retryError = retryPlan ? validatePlanShape(type, retryPlan) : "AI response was truncated";
+        if (!retryError) { plan = retryPlan; shapeError = null; }
+        else shapeError = retryError;
+      } catch (e) {
+        console.error("[generate-fitness-plan] retry failed", (e as Error).message);
+      }
     }
+
+    if (shapeError || !plan) {
+      return new Response(
+        JSON.stringify({
+          error: `${shapeError || "AI response could not be parsed"}. Try a shorter plan (fewer weeks or no rotation) and generate again.`,
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Expand the AI's single template week into the full program server-side.
+    if (type === "workout") expandWeeks(plan, durationWeeks);
+
 
     // Post-process: for diet plans, attempt to map each AI-suggested meal back
     // to a catalog row by name (case-insensitive substring match). Stamps the
