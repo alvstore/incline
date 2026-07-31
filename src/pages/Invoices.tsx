@@ -597,6 +597,13 @@ export default function InvoicesPage() {
         onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
         invoice={cancelInvoice}
       />
+
+      <CorrectInvoiceDrawer
+        open={!!correctInvoice}
+        onOpenChange={(open) => !open && setCorrectInvoiceTarget(null)}
+        invoice={correctInvoice}
+        onCorrected={() => queryClient.invalidateQueries({ queryKey: ['invoices'] })}
+      />
     </AppLayout>
   );
 }
