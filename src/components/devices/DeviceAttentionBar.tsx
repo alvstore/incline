@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ScanFace, WifiOff, Download } from "lucide-react";
 import { toast } from "sonner";
-import { fetchMIPSDevices, type MIPSDevice } from "@/services/mipsService";
 import { supabase } from "@/integrations/supabase/client";
+import { useMipsFleet } from "./useMipsFleet";
 
 interface DeviceAttentionBarProps {
   branchId?: string;
@@ -24,11 +24,7 @@ const AlertRow = ({ tone, icon, message, action }: AlertRowProps) => (
     }`}
   >
     <div className="flex items-start gap-3">
-      <div
-        className={`rounded-full p-1.5 ${
-          tone === "danger" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"
-        }`}
-      >
+      <div className={`rounded-full p-1.5 ${tone === "danger" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"}`}>
         {icon}
       </div>
       <p className="text-sm leading-relaxed">{message}</p>
@@ -41,36 +37,7 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
   const qc = useQueryClient();
   const [resyncing, setResyncing] = useState(false);
   const [importing, setImporting] = useState(false);
-
-  const { data: devices = [] as MIPSDevice[] } = useQuery<MIPSDevice[]>({
-    queryKey: ["mips-devices", branchId || "all"],
-    queryFn: () => fetchMIPSDevices(branchId),
-    staleTime: 10_000,
-    retry: 1,
-    placeholderData: keepPreviousData,
-  });
-
-  const { data: localDevices = [] } = useQuery({
-    queryKey: ["access-devices-sns", branchId],
-    queryFn: async () => {
-      let query = supabase.from("access_devices").select("id, serial_number, branch_id, public_ip, door_role");
-      if (branchId) query = query.eq("branch_id", branchId);
-      const { data } = await query;
-      return data || [];
-    },
-  });
-
-  const knownSns = new Set(
-    (localDevices as Array<{ serial_number: string | null }>)
-      .map((d) => (d.serial_number || "").toUpperCase())
-      .filter(Boolean)
-  );
-
-  const offline = devices.filter((d) => !(d.onlineFlag === 1 || d.status === 1));
-  const unmapped = devices.filter((d) => !knownSns.has((d.deviceKey || "").toUpperCase()));
-  const faceCounts = devices.map((d) => d.faceCount || 0);
-  const maxFaces = faceCounts.length ? Math.max(...faceCounts) : 0;
-  const laggingDevices = devices.length > 1 ? devices.filter((d) => (d.faceCount || 0) < maxFaces) : [];
+  const { devices, offline, unmapped, laggingDevices, maxFaces } = useMipsFleet(branchId);
 
   const handleResync = async () => {
     setResyncing(true);
@@ -138,14 +105,11 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
           message={
             <>
               Face parity gap:{" "}
-              {laggingDevices
-                .map((d) => `${d.name || d.deviceKey} is ${maxFaces - (d.faceCount || 0)} behind`)
-                .join(" · ")}
-              .
+              {laggingDevices.map((d) => `${d.name || d.deviceKey} is ${maxFaces - (d.faceCount || 0)} behind`).join(" · ")}.
             </>
           }
           action={
-            <Button size="sm" onClick={handleResync} disabled={resyncing} className="rounded-xl">
+            <Button size="sm" onClick={handleResync} disabled={resyncing} className="min-h-[36px] rounded-xl">
               <ScanFace className={`mr-1.5 h-3.5 w-3.5 ${resyncing ? "animate-pulse" : ""}`} />
               {resyncing ? "Pushing faces…" : "Re-sync faces"}
             </Button>
@@ -168,7 +132,7 @@ const DeviceAttentionBar = ({ branchId }: DeviceAttentionBarProps) => {
               variant="outline"
               onClick={handleImport}
               disabled={importing || !branchId}
-              className="rounded-xl"
+              className="min-h-[36px] rounded-xl"
             >
               <Download className={`mr-1.5 h-3.5 w-3.5 ${importing ? "animate-pulse" : ""}`} />
               {importing ? "Importing…" : "Import all"}
