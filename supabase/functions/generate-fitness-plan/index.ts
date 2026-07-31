@@ -283,7 +283,7 @@ serve(async (req) => {
          }`;
 
     const userPrompt = type === "workout"
-      ? `Create a ${durationWeeks}-week workout plan for:
+      ? `Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
          - Gender: ${memberInfo.gender || "Not specified"}
