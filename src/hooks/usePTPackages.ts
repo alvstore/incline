@@ -188,6 +188,7 @@ export function useGenerateFitnessPlan() {
           model?: string | null;
         }>;
         previousPlanContext?: string;
+        signal?: AbortSignal;
       };
     }) => generateFitnessPlan(type, memberInfo, options),
   });

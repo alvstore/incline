@@ -1,4 +1,5 @@
-// generate-fitness-plan v2.0.1 — fix: pass supabaseAdmin to ai-runtime (was undefined `supabase`)
+// generate-fitness-plan v3.0.0 — single-week generation + server-side week expansion,
+// dynamic token budget, resilient JSON parsing/repair and shape validation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { generateOnce } from "../_shared/ai-runtime.ts";
@@ -10,6 +11,103 @@ const corsHeaders = {
 };
 
 const ALLOWED_AI_ROLES = ["owner", "admin", "manager"] as const;
+
+/** Strip markdown fences and repair a truncated JSON object by closing
+ * any still-open strings/arrays/objects. Returns null when unrecoverable. */
+function parsePlanJson(raw: string): any | null {
+  if (!raw) return null;
+  let s = raw.trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const start = s.indexOf("{");
+  if (start > 0) s = s.slice(start);
+  try { return JSON.parse(s); } catch { /* attempt repair */ }
+
+  // Bracket-balanced repair for truncated output.
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  let lastSafe = -1;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (c === "\\") { esc = true; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
+    else if (c === "}" || c === "]") { stack.pop(); lastSafe = i; }
+    else if (c === "," && stack.length) lastSafe = Math.max(lastSafe, i - 1);
+  }
+  if (lastSafe < 0) return null;
+  let candidate = s.slice(0, lastSafe + 1);
+  // Recompute the open stack for the truncated candidate.
+  const stack2: string[] = [];
+  inStr = false; esc = false;
+  for (let i = 0; i < candidate.length; i++) {
+    const c = candidate[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (c === "\\") { esc = true; continue; }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") stack2.push(c === "{" ? "}" : "]");
+    else if (c === "}" || c === "]") stack2.pop();
+  }
+  if (inStr) candidate += '"';
+  while (stack2.length) candidate += stack2.pop();
+  try { return JSON.parse(candidate); } catch { return null; }
+}
+
+/** Returns an error string when the plan is structurally unusable. */
+function validatePlanShape(type: "workout" | "diet", plan: any): string | null {
+  if (!plan || typeof plan !== "object") return "AI returned no plan object";
+  if (type === "workout") {
+    const weeks = Array.isArray(plan.weeks) ? plan.weeks : [];
+    const days = weeks[0]?.days;
+    if (!Array.isArray(days) || days.length === 0) return "AI returned no training days";
+    const hasExercises = days.some((d: any) => Array.isArray(d?.exercises) && d.exercises.length > 0);
+    if (!hasExercises) return "AI returned days without any exercises";
+  } else {
+    const meals = Array.isArray(plan.meals) ? plan.meals : [];
+    if (meals.length === 0) return "AI returned no meal days";
+    const hasSlots = meals.some((d: any) =>
+      ["breakfast", "lunch", "dinner", "snack1", "snack2"].some((k) => d?.[k])
+    );
+    if (!hasSlots) return "AI returned meal days without any meals";
+  }
+  return null;
+}
+
+/** Deep-clone week 1 into weeks 2..N with a progressive-overload note so we
+ * never ask the model to re-emit the entire program (4x fewer tokens). */
+function expandWeeks(plan: any, durationWeeks: number) {
+  const base = plan?.weeks?.[0];
+  if (!base || durationWeeks <= 1) return;
+  const out = [{ ...base, week: 1 }];
+  for (let w = 2; w <= durationWeeks; w++) {
+    const cloned = JSON.parse(JSON.stringify(base));
+    cloned.week = w;
+    cloned.progression =
+      w <= 2 ? "Repeat week 1 loads, focus on technique."
+      : w <= 4 ? "Add 2.5–5% load or 1 rep per set vs. week 1."
+      : w % 4 === 0 ? "Deload: reduce load ~40% and volume by one set."
+      : "Add 5–10% load or 1–2 reps per set vs. the previous week.";
+    (cloned.days || []).forEach((d: any) => {
+      (d.exercises || []).forEach((ex: any) => {
+        ex.notes = [ex.notes, cloned.progression].filter(Boolean).join(" • ");
+      });
+    });
+    out.push(cloned);
+  }
+  plan.weeks = out;
+}
+
 
 interface CatalogMeal {
   id: string;
@@ -159,6 +257,7 @@ serve(async (req) => {
            },
            "notes": "General advice and precautions"
          }
+         CRITICAL: "weeks" must contain EXACTLY ONE entry (week 1) — a single template week covering all 7 calendar days. The system expands it into the full program with progressive overload afterwards. Never emit week 2+.
          IMPORTANT: Only include the "rotation" key if the user explicitly requested rotation. Otherwise omit it entirely.`
       : `OUTPUT CONTRACT — For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
          Return a JSON object with the following structure (no prose, no markdown):
@@ -184,7 +283,7 @@ serve(async (req) => {
          }`;
 
     const userPrompt = type === "workout"
-      ? `Create a ${durationWeeks}-week workout plan for:
+      ? `Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
          - Gender: ${memberInfo.gender || "Not specified"}
@@ -197,7 +296,7 @@ serve(async (req) => {
          - Preferences: ${memberInfo.preferences || "None"}
          ${variantCount > 0 ? `\n         ROTATION REQUIRED — produce a "rotation" object with intervalDays=${rotationIntervalDays} and exactly ${variantCount} variants (Block A, Block B${variantCount >= 3 ? ", Block C" : ""}${variantCount >= 4 ? ", Block D" : ""}). Each variant must cover the SAME muscle groups / movement patterns as the base "weeks[0]" but SWAP the exercises (e.g. Barbell Bench → Dumbbell Press, Back Squat → Goblet Squat, Lat Pulldown → Seated Row). The dashboard will rotate variants every ${rotationIntervalDays} days so members never repeat the identical session back-to-back.` : ""}
 
-         Create a progressive, balanced workout plan suitable for their level.`
+         Return ONLY week 1 (all 7 calendar days) — the system builds weeks 2–${durationWeeks} with progressive overload. Keep it balanced and suitable for their level.`
       : `Create a weekly meal plan for:
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
@@ -237,17 +336,29 @@ serve(async (req) => {
 
     console.log(`Generating ${type} plan for member:`, memberInfo.name, `with ${availableMeals.length} catalog meals, ${availableEquipment.length} equipment items, prevPlan=${!!previousPlanContext}`);
 
-    let content: string | undefined;
-    try {
+    // Dynamic token budget: one template week (+ rotation variants) or 7 diet days.
+    // Base 4k, +1.2k per rotation variant, capped at 16k so we never inherit the
+    // old 2,500-token default that truncated the JSON mid-object.
+    const maxTokens = Math.min(16000, 4000 + variantCount * 1200 + (type === "diet" ? 2000 : 0));
+
+    const baseMessage = userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt;
+
+    const runAi = async (systemExtra = "") => {
       const r = await generateOnce({
         purpose: "fitness_plan",
         branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
-        userMessage: userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt,
-        systemOverride: systemPrompt,
+        userMessage: baseMessage,
+        systemOverride: systemPrompt + systemExtra,
         responseFormat: "json",
+        maxTokens,
         supabase: supabaseAdmin,
       });
-      content = r.content;
+      return r.content;
+    };
+
+    let content: string | undefined;
+    try {
+      content = await runAi();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI gateway error";
       if (/429|rate/i.test(msg)) {
@@ -269,13 +380,36 @@ serve(async (req) => {
       throw new Error("No content in AI response");
     }
 
-    let plan;
-    try {
-      plan = JSON.parse(content);
-    } catch (e) {
-      console.error("Failed to parse AI response:", content);
-      throw new Error("Failed to parse AI response");
+    let plan = parsePlanJson(content);
+    let shapeError = plan ? validatePlanShape(type, plan) : "AI response was truncated";
+
+    if (shapeError) {
+      console.warn(`[generate-fitness-plan] retrying — ${shapeError}`);
+      try {
+        const retry = await runAi(
+          "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed."
+        );
+        const retryPlan = parsePlanJson(retry || "");
+        const retryError = retryPlan ? validatePlanShape(type, retryPlan) : "AI response was truncated";
+        if (!retryError) { plan = retryPlan; shapeError = null; }
+        else shapeError = retryError;
+      } catch (e) {
+        console.error("[generate-fitness-plan] retry failed", (e as Error).message);
+      }
     }
+
+    if (shapeError || !plan) {
+      return new Response(
+        JSON.stringify({
+          error: `${shapeError || "AI response could not be parsed"}. Try a shorter plan (fewer weeks or no rotation) and generate again.`,
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Expand the AI's single template week into the full program server-side.
+    if (type === "workout") expandWeeks(plan, durationWeeks);
+
 
     // Post-process: for diet plans, attempt to map each AI-suggested meal back
     // to a catalog row by name (case-insensitive substring match). Stamps the

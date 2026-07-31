@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanTemplate } from '@/services/fitnessService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Badge } from '@/components/ui/badge';
 import { Wrench, History } from 'lucide-react';
+import { GenerationProgress } from '@/components/fitness/create/GenerationProgress';
 
 export default function CreateAIPage() {
   const navigate = useNavigate();
@@ -45,6 +46,9 @@ export default function CreateAIPage() {
   const [fatTarget, setFatTarget] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
   const [progressMsg, setProgressMsg] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
 
   // Audience fields (only used when mode === 'audience')
   const [audAgeMin, setAudAgeMin] = useState<string>('18');
@@ -169,10 +173,12 @@ export default function CreateAIPage() {
       return;
     }
 
-    setProgressMsg(mode === 'audience'
-      ? 'Generating a Common (no-PT) plan for the audience…'
-      : 'Sending member context to the AI…');
-    const slow = setTimeout(() => setProgressMsg('Still generating — building a personalized program 🤔'), 12000);
+    setGenError(null);
+    setProgressMsg('running');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // Hard client-side ceiling so the button can never hang forever.
+    const slow = setTimeout(() => controller.abort(), 90000);
 
     try {
       const memberInfo = mode === 'member' ? {
@@ -236,6 +242,7 @@ export default function CreateAIPage() {
             : undefined,
           availableEquipment: type === 'workout' ? branchEquipment.slice(0, 100) : undefined,
           previousPlanContext: mode === 'member' ? buildPreviousPlanContext() : undefined,
+          signal: controller.signal,
         },
       });
 
@@ -249,6 +256,7 @@ export default function CreateAIPage() {
 
       clearTimeout(slow);
       setProgressMsg(null);
+      abortRef.current = null;
 
       const id = newDraftId();
       saveDraft({
@@ -290,9 +298,21 @@ export default function CreateAIPage() {
     } catch (err: any) {
       clearTimeout(slow);
       setProgressMsg(null);
-      toast.error(err.message || 'Failed to generate plan');
+      abortRef.current = null;
+      const aborted = err?.name === 'AbortError' || /abort/i.test(err?.message || '');
+      const msg = aborted
+        ? 'Generation cancelled or timed out. Try a shorter plan (fewer weeks or no rotation).'
+        : err?.message || 'Failed to generate plan';
+      setGenError(msg);
+      toast.error(msg);
     }
   };
+
+  const cancelGeneration = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
+
 
   return (
     <CreateFlowLayout
@@ -571,11 +591,26 @@ export default function CreateAIPage() {
                 )}
               </Button>
 
-              {progressMsg && (
-                <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
-                  {progressMsg}
+              {progressMsg && generate.isPending && (
+                <GenerationProgress type={type} onCancel={cancelGeneration} />
+              )}
+
+              {genError && !generate.isPending && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                  <p className="text-sm text-destructive">{genError}</p>
+                  {durationWeeks > 2 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setDurationWeeks(2); setGenError(null); }}
+                    >
+                      Try a 2-week plan instead
+                    </Button>
+                  )}
                 </div>
               )}
+
 
               {type === 'diet' && !dietRequirementsMet && member && (
                 <p className="text-xs text-warning">
