@@ -316,9 +316,54 @@ export default function MembersPage() {
   });
 
   // Filter by member status
-  const filteredMembers = statusFilter === 'all' 
+  const statusFiltered = statusFilter === 'all' 
     ? membersWithMemberships 
     : membersWithMemberships.filter((m: any) => m.status === statusFilter);
+
+  // Column sorting (applies to the current page of results)
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'joined' || key === 'days_left' ? 'desc' : 'asc');
+    }
+  };
+
+  const filteredMembers = useMemo(() => {
+    if (sortKey === 'default') return statusFiltered;
+    const pickMembership = (m: any) => {
+      const list = m.memberships || [];
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return list.find((x: any) => x.status === 'active' && new Date(x.end_date) >= today)
+        || list.find((x: any) => x.status === 'frozen')
+        || m.scheduledMembership
+        || null;
+    };
+    const value = (m: any): string | number => {
+      switch (sortKey) {
+        case 'name': return (m.profiles?.full_name || '').toLowerCase();
+        case 'code': return (m.member_code || '').toLowerCase();
+        case 'branch': return (m.branches?.name || m.branch?.name || '').toLowerCase();
+        case 'status': return (m.status || '').toLowerCase();
+        case 'membership': return (pickMembership(m)?.membership_plans?.name || '').toLowerCase();
+        case 'days_left': {
+          const ms = pickMembership(m);
+          return ms ? daysRemaining(ms.end_date) : -99999;
+        }
+        case 'joined': return new Date(m.created_at || 0).getTime();
+        default: return 0;
+      }
+    };
+    return [...statusFiltered].sort((a: any, b: any) => {
+      const av = value(a); const bv = value(b);
+      let d = 0;
+      if (typeof av === 'number' && typeof bv === 'number') d = av - bv;
+      else d = String(av).localeCompare(String(bv));
+      return sortDir === 'asc' ? d : -d;
+    });
+  }, [statusFiltered, sortKey, sortDir]);
+
 
   // Stats must reflect EVERY member in scope, not just the current page.
   const { data: statsRows = [] } = useQuery({
