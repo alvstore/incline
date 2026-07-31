@@ -45,6 +45,8 @@ import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
 import { MemberInvoicesDrawer } from './MemberInvoicesDrawer';
+import { CreateMemberLoginDrawer } from './CreateMemberLoginDrawer';
+
 import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
