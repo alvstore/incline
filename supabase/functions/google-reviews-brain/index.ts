@@ -72,19 +72,40 @@ async function getGoogleConfig(branch_id: string) {
   return {
     account_id: cfg.account_id,
     location_id: cfg.location_id,
+    place_id: cfg.place_id,
+    place_name: cfg.place_name,
     auto_fetch: cfg.auto_fetch_reviews === "true",
     client_id: cred.client_id,
     client_secret: cred.client_secret,
     api_key: cred.api_key,
+    places_api_key: cred.places_api_key || cred.api_key,
     access_token: cred.access_token,
     refresh_token: cred.refresh_token,
     token_expires_at: cred.token_expires_at,
+    _config: cfg,
   };
+}
+
+/** Merge patch into integration_settings.config for a branch. */
+async function patchGoogleConfig(branch_id: string, patch: Record<string, unknown>) {
+  const sb = supa();
+  const { data } = await sb
+    .from("integration_settings")
+    .select("id, config")
+    .eq("integration_type", "google_business")
+    .eq("provider", "google_business")
+    .eq("branch_id", branch_id)
+    .maybeSingle();
+  if (!data) return;
+  await sb
+    .from("integration_settings")
+    .update({ config: { ...((data.config as any) ?? {}), ...patch } })
+    .eq("id", data.id);
 }
 
 function googleCredentialsForPersist(cfg: any, updates: Record<string, unknown>) {
   const base: Record<string, unknown> = {};
-  for (const key of ["client_id", "client_secret", "api_key", "access_token", "refresh_token", "token_expires_at", "scope"]) {
+  for (const key of ["client_id", "client_secret", "api_key", "places_api_key", "access_token", "refresh_token", "token_expires_at", "scope"]) {
     if (cfg?.[key] !== undefined) base[key] = cfg[key];
   }
   return { ...base, ...updates };
