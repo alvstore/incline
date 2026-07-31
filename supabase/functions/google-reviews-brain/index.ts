@@ -353,7 +353,20 @@ async function listLocations(branch_id: string, account_id: string) {
 // that lands (or whenever it errors), we read the public review snippet Google
 // exposes through Places API (New) — rating, review count and up to 5 recent
 // reviews. Read-only: no replies, no full history, but the dashboard is live.
-const PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+const ENV_PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+
+/**
+ * Places key resolution order:
+ *   1. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`)
+ *   2. platform secret / Google Maps connector key `GOOGLE_MAPS_API_KEY`
+ */
+async function resolvePlacesKey(branch_id?: string): Promise<string> {
+  if (branch_id) {
+    const cfg = await getGoogleConfig(branch_id);
+    if (cfg?.places_api_key) return String(cfg.places_api_key);
+  }
+  return ENV_PLACES_KEY;
+}
 
 /** Turn a raw Google error body into something an owner can act on. */
 function friendlyGoogleError(status: number, body: string): string {
