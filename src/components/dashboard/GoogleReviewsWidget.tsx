@@ -85,7 +85,12 @@ export default function GoogleReviewsWidget({ branchId }: Props) {
           <Star className="h-5 w-5 text-amber-500" aria-hidden />
           Google Reviews
           {reviews.length > 0 && (
-            <span className="ml-auto text-sm font-bold text-slate-900">{avg.toFixed(1)}</span>
+            <span className="ml-auto flex items-baseline gap-1">
+              <span className="text-sm font-bold text-slate-900">{avg.toFixed(1)}</span>
+              {aggregate?.count != null && (
+                <span className="text-[11px] font-normal text-slate-400">({aggregate.count})</span>
+              )}
+            </span>
           )}
         </CardTitle>
       </CardHeader>
