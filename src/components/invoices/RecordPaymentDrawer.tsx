@@ -198,6 +198,28 @@ export function RecordPaymentDrawer({
             </div>
           </div>
 
+          {/* Payment date — backdating is restricted to senior roles */}
+          {canBackdate && (
+            <div className="space-y-2">
+              <Label htmlFor="payment-date">Payment Date *</Label>
+              <Input
+                id="payment-date"
+                type="date"
+                value={paymentDate}
+                max={todayIso}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="cursor-pointer"
+              />
+              {paymentDate !== todayIso && (
+                <p className="text-xs text-amber-600 font-medium">
+                  This payment will be recorded against {paymentDate}, not today.
+                </p>
+              )}
+            </div>
+          )}
+
+
+
           {/* Payment Method */}
           <div className="space-y-2">
             <Label>Payment Method *</Label>
