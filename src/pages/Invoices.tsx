@@ -14,9 +14,11 @@ import { SendPaymentLinkDrawer } from '@/components/invoices/SendPaymentLinkDraw
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { InvoiceShareDrawer } from '@/components/invoices/InvoiceShareDrawer';
 import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
+import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
-  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle
+  ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
+  IndianRupee, Pencil
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
