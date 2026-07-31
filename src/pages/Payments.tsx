@@ -477,73 +477,13 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      {/* Void Payment Confirmation */}
-      <AlertDialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-destructive" />
-              Void Payment
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The original record will be preserved for audit purposes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {voidingPayment && (
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardContent className="pt-4 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Amount:</span>
-                  <span className="font-semibold">₹{voidingPayment.amount?.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Member:</span>
-                  <span>{resolveMemberDisplay(voidingPayment.members).name}</span>
-                </div>
-                {voidingPayment.invoices?.invoice_number && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Invoice:</span>
-                    <span className="font-mono">{voidingPayment.invoices.invoice_number}</span>
-                  </div>
-                )}
-                <div className="flex justify-between pt-1.5 border-t border-destructive/10">
-                  <span className="text-muted-foreground">Impact:</span>
-                  <span className="text-destructive font-medium">
-                    {voidingPayment.invoices?.invoice_number
-                      ? `₹${voidingPayment.amount?.toLocaleString()} reverted on invoice`
-                      : 'Payment marked as voided'}
-                  </span>
-                </div>
-                {voidingPayment.payment_method === 'wallet' && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Wallet:</span>
-                    <span className="text-success font-medium">₹{voidingPayment.amount?.toLocaleString()} refunded</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-          <div className="space-y-3 py-2">
-            <Label>Reason for voiding <span className="text-destructive">*</span></Label>
-            <Textarea
-              placeholder="Enter the reason for voiding this payment (e.g., duplicate entry, incorrect amount)"
-              value={voidReason}
-              onChange={(e) => setVoidReason(e.target.value)}
-              className="min-h-[80px]"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={!voidReason.trim() || voidPaymentMutation.isPending}
-              onClick={() => voidPaymentMutation.mutate({ paymentId: voidingPayment?.id, reason: voidReason })}
-            >
-              <Ban className="h-4 w-4 mr-1" /> Void Payment
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Edit / Void Payment — side drawer (no center dialogs for forms) */}
+      <PaymentEditDrawer
+        open={voidDialogOpen}
+        onOpenChange={(o) => { setVoidDialogOpen(o); if (!o) setVoidingPayment(null); }}
+        payment={voidingPayment}
+        canEdit={canEditPayments}
+      />
 
       {/* Record Payment Drawer */}
       <Sheet open={recordPaymentOpen} onOpenChange={(open) => {
