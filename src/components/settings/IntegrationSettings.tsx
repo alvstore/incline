@@ -1397,7 +1397,7 @@ function IntegrationConfigSheet({
   const schema = getProviderSchema(type, provider);
   const configFields = schema.filter(f => f.section === 'config');
   const credentialFields = schema.filter(f => f.section === 'credentials');
-  const webhookInfo = getWebhookInfoForProvider(type, provider);
+  const webhookInfo = getWebhookInfoForProvider(type, provider, branchId);
   const displayName = getProviderDisplayName(type, provider);
   const isMetaProvider = type === 'whatsapp' || type === 'instagram';
 

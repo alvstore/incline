@@ -453,7 +453,7 @@ function IntegrationConfigSheet({ open, onOpenChange, type, provider, existing, 
   const schema = getProviderSchema(type, provider);
   const configFields = schema.filter(f => f.section === 'config');
   const credentialFields = schema.filter(f => f.section === 'credentials');
-  const webhookInfo = getWebhookInfoForProvider(type, provider);
+  const webhookInfo = getWebhookInfoForProvider(type, provider, branchId);
   const displayName = getProviderDisplayName(type, provider);
 
   const renderField = (field: ProviderFieldDef, values: Record<string, string>, setter: (v: Record<string, string>) => void) => {
