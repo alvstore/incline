@@ -41,6 +41,8 @@ import { can } from '@/lib/auth/permissions';
 
 import { CompGiftDrawer } from './CompGiftDrawer';
 import { GiftDaysDrawer } from './GiftDaysDrawer';
+import { UpgradeMembershipDrawer } from './UpgradeMembershipDrawer';
+
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
