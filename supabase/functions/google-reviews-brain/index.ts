@@ -494,15 +494,12 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   const placeId = await resolvePlaceId(branch_id, cfg);
   if (!placeId) return { branch_id, fetched: 0, source: "places", reason: "place_id_unresolved" };
 
-  const res = await fetch(
-    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
-    {
-      headers: {
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,reviews",
-      },
-    },
+  const res = await placesFetch(
+    key,
+    `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
+    { fieldMask: "id,displayName,rating,userRatingCount,reviews" },
   );
+
   if (!res.ok) {
     const txt = await res.text();
     console.error("places details failed", res.status, txt.slice(0, 300));
