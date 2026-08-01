@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { ArrowUpCircle, IndianRupee, Loader2, Calendar, Info } from 'lucide-react';
@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 
+import { supabase } from '@/integrations/supabase/client';
 import { usePlans } from '@/hooks/usePlans';
 import { useGstRates } from '@/hooks/useGstRates';
 import { upgradeMembership } from '@/services/membershipActionsService';
@@ -30,8 +31,6 @@ interface UpgradeMembershipDrawerProps {
   memberId: string;
   memberName?: string;
   branchId: string;
-  /** Amount already paid on the running membership's invoice — the upgrade credit. */
-  creditPaid: number;
 }
 
 const inr = (n: number) =>
@@ -44,7 +43,6 @@ export function UpgradeMembershipDrawer({
   memberId,
   memberName,
   branchId,
-  creditPaid,
 }: UpgradeMembershipDrawerProps) {
   const queryClient = useQueryClient();
   const { data: plans = [] } = usePlans(branchId);
@@ -58,9 +56,41 @@ export function UpgradeMembershipDrawer({
   const [payNow, setPayNow] = useState(true);
   const [amountPaying, setAmountPaying] = useState(0);
 
+  // Mirrors the server: the invoice that carries this membership + its gifted days.
+  const { data: ledger } = useQuery({
+    queryKey: ['membership-upgrade-ledger', membership?.id],
+    enabled: open && !!membership?.id,
+    queryFn: async () => {
+      const [{ data: items, error: itemsErr }, { data: gifts, error: giftsErr }] = await Promise.all([
+        supabase
+          .from('invoice_items')
+          .select('invoice_id, invoices!inner(id, invoice_number, amount_paid, total_amount, status, created_at)')
+          .eq('reference_id', membership!.id)
+          .in('reference_type', ['membership', 'admission_fee']),
+        supabase
+          .from('membership_free_days')
+          .select('days_added')
+          .eq('membership_id', membership!.id),
+      ]);
+      if (itemsErr) throw itemsErr;
+      if (giftsErr) throw giftsErr;
+
+      const invoices = (items || [])
+        .map((r: any) => r.invoices)
+        .filter((i: any) => i && i.status !== 'cancelled')
+        .sort((a: any, b: any) => (a.created_at < b.created_at ? 1 : -1));
+
+      return {
+        invoice: invoices[0] || null,
+        giftDays: (gifts || []).reduce((s: number, g: any) => s + Number(g.days_added || 0), 0),
+      };
+    },
+  });
+
   const currentPlan = membership?.membership_plans;
   const currentPrice = Number(membership?.price_paid ?? 0);
-  const credit = Math.max(Number(creditPaid ?? 0), 0);
+  const credit = Math.max(Number(ledger?.invoice?.amount_paid ?? 0), 0);
+
 
   // Only plans worth more than the credit already paid can be upgraded into.
   const upgradablePlans = useMemo(
