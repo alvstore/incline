@@ -1,3 +1,5 @@
+// v4.1.0 — Author matching without FK aliases + token-aware name scoring; AI
+// classification accepts tool-call OR JSON body, with a JSON-mode retry.
 // v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
 // v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
 // v1.3.0 — Adds masked client_id diagnostic to oauth_start
@@ -700,23 +702,39 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   if (!author_name) return { match_type: "none", evidence: {} };
   const sb = supa();
 
-  // Members: members.user_id -> profiles.full_name (branch-scoped)
+  // Members: fetch rows, then resolve names via a separate profiles read.
+  // (Never rely on auto-generated FK aliases — a bad hint silently returns null.)
   const { data: branchMembers } = await sb
     .from("members")
-    .select("id, user_id, joined_at, status, lifecycle_state, profiles!members_user_id_fkey(full_name)")
+    .select("id, user_id, joined_at, status, lifecycle_state, member_code")
     .eq("branch_id", branch_id)
     .limit(2000);
+
+  const userIds = (branchMembers ?? [])
+    .map((m: any) => m.user_id)
+    .filter(Boolean);
+  const nameById = new Map<string, string>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const slice = userIds.slice(i, i + 200);
+    const { data: profs } = await sb
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", slice);
+    for (const p of (profs ?? []) as any[]) {
+      if (p.full_name) nameById.set(p.id, p.full_name);
+    }
+  }
 
   let bestMember: any = null;
   let bestScore = 0;
   const target = author_name.toLowerCase().trim();
   for (const m of (branchMembers ?? []) as any[]) {
-    const name = (m.profiles?.full_name ?? "").toLowerCase().trim();
-    if (!name) continue;
-    const score = similarity(target, name);
+    const full = m.user_id ? nameById.get(m.user_id) ?? "" : "";
+    if (!full) continue;
+    const score = nameScore(target, full);
     if (score > bestScore) {
       bestScore = score;
-      bestMember = { ...m, _name: m.profiles?.full_name };
+      bestMember = { ...m, _name: full };
     }
   }
   if (bestScore >= 0.7 && bestMember) {
@@ -726,6 +744,7 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
       match_confidence: bestScore,
       evidence: {
         name: bestMember._name,
+        member_code: bestMember.member_code,
         joined_at: bestMember.joined_at,
         status: bestMember.status,
         lifecycle_state: bestMember.lifecycle_state,
@@ -742,9 +761,9 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   let bestLead: any = null;
   let bestLeadScore = 0;
   for (const l of (leads ?? []) as any[]) {
-    const name = (l.full_name ?? "").toLowerCase().trim();
+    const name = (l.full_name ?? "").trim();
     if (!name) continue;
-    const score = similarity(target, name);
+    const score = nameScore(target, name);
     if (score > bestLeadScore) {
       bestLeadScore = score;
       bestLead = l;
@@ -765,6 +784,35 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   }
   return { match_type: "none", evidence: {} };
 }
+
+/**
+ * Name similarity tuned for Google display names, which are frequently longer
+ * or shorter than the CRM record ("Aamil" vs "Aamil Khan"). Combines bigram
+ * similarity with token overlap so partial names still match.
+ */
+function nameScore(a: string, b: string): number {
+  const norm = (s: string) =>
+    s.replace(/[^a-z\s]/gi, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const A = norm(a);
+  const B = norm(b);
+  if (!A || !B) return 0;
+  if (A === B) return 1;
+
+  const setA = new Set(A.split(" ").filter((t) => t.length > 1));
+  const setB = new Set(B.split(" ").filter((t) => t.length > 1));
+  let shared = 0;
+  for (const t of setA) if (setB.has(t)) shared++;
+
+  const minTokens = Math.min(setA.size, setB.size);
+  const tokenScore = minTokens > 0 ? shared / minTokens : 0;
+  // Every token of the shorter name present in the longer one → strong match.
+  if (tokenScore === 1 && minTokens >= 1) {
+    return setA.size === setB.size ? 0.98 : 0.9;
+  }
+
+  return Math.max(similarity(A, B), tokenScore * 0.8);
+}
+
 
 // Simple Dice-coefficient bigram similarity
 function similarity(a: string, b: string): number {
@@ -800,31 +848,57 @@ async function classifyOne(inbound_id: string) {
   const match = await findAuthorMatch(row.branch_id, row.author_name);
 
   let classification = "genuine";
-  let reasoning = "Default heuristic — no AI key.";
+  let reasoning = "";
   let draft = "";
-  if (true) {
-    // Use AI to classify + draft reply
+  {
+    // v3 — persona ("you are a customer-service AI…") comes from
+    // ai_purposes.review_reply.system_prompt (Settings → AI Brain). Only
+    // the output-contract for this call lives here.
+    const sysOverride =
+      "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
+      "Then draft a polite, professional reply (≤500 chars). " +
+      "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}. " +
+      "Never accuse the reviewer of being a competitor.";
+    const userPrompt = JSON.stringify({
+      branch_name: (row.branches as any)?.name ?? "our gym",
+      rating: row.rating,
+      review_text: row.review_text,
+      author_name: row.author_name,
+      match_type: match.match_type,
+      match_evidence: match.evidence,
+    });
+
+    const extractJson = (text: string | undefined | null): any => {
+      if (!text) return null;
+      const cleaned = String(text).replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+      try { return JSON.parse(cleaned); } catch { /* try substring */ }
+      const s = cleaned.indexOf("{");
+      const e = cleaned.lastIndexOf("}");
+      if (s >= 0 && e > s) {
+        try { return JSON.parse(cleaned.slice(s, e + 1)); } catch { /* noop */ }
+      }
+      return null;
+    };
+
+    const apply = (parsed: any): boolean => {
+      if (!parsed || typeof parsed !== "object") return false;
+      if (!parsed.classification && !parsed.draft_reply && !parsed.reasoning) return false;
+      classification = parsed.classification ?? classification;
+      reasoning = parsed.reasoning ?? reasoning;
+      draft = parsed.draft_reply ?? draft;
+      return true;
+    };
+
+    let lastError = "";
     try {
-      // v2 — persona ("you are a customer-service AI…") comes from
-      // ai_purposes.review_reply.system_prompt (Settings → AI Brain). Only
-      // the output-contract for this call lives here.
-      const sysOverride =
-        "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
-        "Then draft a polite, professional reply (≤500 chars). Use the 'classify_review' tool. " +
-        "Never accuse the reviewer of being a competitor.";
-      const userPrompt = JSON.stringify({
-        branch_name: (row.branches as any)?.name ?? "our gym",
-        rating: row.rating,
-        review_text: row.review_text,
-        author_name: row.author_name,
-        match_type: match.match_type,
-        match_evidence: match.evidence,
-      });
+      // Attempt 1 — tool call (models that support it return structured args).
       const r = await generateOnce({
         purpose: "review_reply",
         branchId: row.branch_id ?? null,
         userMessage: userPrompt,
         systemOverride: sysOverride,
+        maxTokens: 1500,
+
         tools: [{
           type: "function",
           function: {
@@ -844,16 +918,44 @@ async function classifyOne(inbound_id: string) {
         }],
         toolChoice: { type: "function", function: { name: "classify_review" } },
       });
-      const parsed = r.toolCallArgs;
-      if (parsed) {
-        classification = parsed.classification ?? classification;
-        reasoning = parsed.reasoning ?? reasoning;
-        draft = parsed.draft_reply ?? "";
+      // Some providers (Gemini via OpenAI-compat) answer in the message body
+      // instead of a tool call — accept either shape.
+      if (!apply(r.toolCallArgs) && !apply(extractJson(r.content))) {
+        lastError = "model returned no structured output";
       }
     } catch (e) {
-      console.error("AI classify error", e);
+      lastError = e instanceof Error ? e.message : String(e);
+      console.error("AI classify error (tool mode)", e);
+    }
+
+    if (!reasoning) {
+      // Attempt 2 — plain JSON mode, no tools.
+      try {
+        const r2 = await generateOnce({
+          purpose: "review_reply",
+          branchId: row.branch_id ?? null,
+          userMessage: userPrompt,
+          systemOverride: sysOverride,
+          responseFormat: "json",
+          // Reasoning models spend part of the budget on internal thinking;
+          // a small cap returns an EMPTY content string. Give it headroom.
+          maxTokens: 1500,
+        });
+        if (!apply((r2 as any).json) && !apply(extractJson(r2.content))) {
+          lastError = lastError || "model returned unparseable JSON";
+        }
+
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+        console.error("AI classify error (json mode)", e);
+      }
+    }
+
+    if (!reasoning) {
+      reasoning = `AI unavailable — ${lastError || "unknown error"}. Classification defaulted to heuristic.`;
     }
   }
+
 
   await sb
     .from("google_reviews_inbound")
