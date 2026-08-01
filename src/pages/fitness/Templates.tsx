@@ -216,14 +216,21 @@ export default function FitnessTemplatesPage() {
                 <FileText className="h-3 w-3" /> PDF
               </Badge>
             )}
-            <Badge
-              variant="outline"
-              className="text-xs gap-1"
-              title={`Assigned to ${usage} member${usage === 1 ? "" : "s"}`}
+            <button
+              type="button"
+              onClick={() => setAssignmentsTemplate(template)}
+              aria-label={`View ${usage} member${usage === 1 ? "" : "s"} assigned to ${template.name}`}
+              title={`View the ${usage} member${usage === 1 ? "" : "s"} assigned this plan`}
+              className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
             >
-              <Users className="h-3 w-3" />
-              {usage} {usage === 1 ? "use" : "uses"}
-            </Badge>
+              <Badge
+                variant="outline"
+                className="text-xs gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+              >
+                <Users className="h-3 w-3" />
+                {usage} {usage === 1 ? "use" : "uses"}
+              </Badge>
+            </button>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => handleAssignTemplate(template)}>
