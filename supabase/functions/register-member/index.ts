@@ -397,6 +397,9 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
 
   const par_q = (body.par_q && typeof body.par_q === "object" ? body.par_q : {}) as Record<string, string>;
   const consents = (body.consents && typeof body.consents === "object" ? body.consents : {}) as Record<string, boolean>;
+  // Optional branch/campaign-specific terms shown on /register — printed on the
+  // contract and persisted so staff reprints match exactly.
+  const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
   if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
     return json(400, { error: "required_consents_missing" });
   }
