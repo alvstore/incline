@@ -237,44 +237,14 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
             </div>
           )}
 
-          <div className="space-y-3 p-4 rounded-xl border bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-semibold">Charge GST</Label>
-                <p className="text-xs text-muted-foreground">PT is GST-exempt by default. Turn on only if you collect tax for this pack.</p>
-              </div>
-              <Switch
-                checked={formData.gst_enabled}
-                onCheckedChange={(v) => setFormData({ ...formData, gst_enabled: v })}
-              />
-            </div>
-
-            {formData.gst_enabled && (
-              <div className="grid grid-cols-2 gap-4 pt-1">
-                <div className="space-y-2">
-                  <Label>GST Rate</Label>
-                  <Select
-                    value={String(formData.gst_percentage)}
-                    onValueChange={(v) => setFormData({ ...formData, gst_percentage: parseFloat(v) })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {gstRates.map((r) => (
-                        <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3 pt-6">
-                  <Switch
-                    checked={formData.gst_inclusive}
-                    onCheckedChange={(v) => setFormData({ ...formData, gst_inclusive: v })}
-                  />
-                  <Label>Price includes GST</Label>
-                </div>
-              </div>
-            )}
+          <div className="space-y-1 p-4 rounded-xl border bg-muted/30">
+            <Label className="text-sm font-semibold">GST — 5% (inclusive)</Label>
+            <p className="text-xs text-muted-foreground">
+              Personal training is billed at a fixed 5% GST included in the price shown.
+              The invoice engine enforces this rate on every PT sale.
+            </p>
           </div>
+
 
           {formData.price > 0 && (
             <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
