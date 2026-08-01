@@ -24,6 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   searchMembersForAssignment,
   assignPlanToMembers,
+  loadMemberContacts,
   BulkAssignResult,
   NotificationChannel,
 } from '@/services/fitnessService';
