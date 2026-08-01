@@ -2239,7 +2239,18 @@ export function MemberProfileDrawer({
           member={memberDetails || member}
           profile={profile}
         />
+        {activeMembership && (
+          <UpgradeMembershipDrawer
+            open={upgradeOpen}
+            onOpenChange={setUpgradeOpen}
+            membership={activeMembership}
+            memberId={member.id}
+            memberName={profile?.full_name}
+            branchId={member.branch_id}
+          />
+        )}
         <GiftDaysDrawer
+
           open={giftDaysOpen}
           onOpenChange={setGiftDaysOpen}
           membershipId={activeMembership?.id}
