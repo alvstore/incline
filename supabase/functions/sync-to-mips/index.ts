@@ -1,4 +1,4 @@
-// v1.8.0 — Server-side photo normalization plus independently audited,
+// v1.9.0 — bounded photo handling plus retryable, independently audited,
 // per-device delivery so one healthy gate cannot hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
@@ -207,8 +207,8 @@ async function uploadPhoto(
       url = `${supabaseUrl}/storage/v1/object/public/${url}`;
     }
 
-    console.log(`Fetching photo from: ${url}`);
-    let photoRes = await fetch(url);
+    console.log(`Fetching biometric photo for ${personSn}`);
+    let photoRes = await fetch(url, { signal: AbortSignal.timeout(8_000) });
 
     // Fallback — if the public URL is broken (bucket flipped private, ACL
     // change, avatar deleted), try to re-sign the same path via service role
@@ -221,14 +221,14 @@ async function uploadPhoto(
         console.warn(`Public fetch failed (${photoRes.status}); trying signed URL bucket=${bucket} path=${path}`);
         const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
         if (signed?.signedUrl) {
-          photoRes = await fetch(signed.signedUrl);
+          photoRes = await fetch(signed.signedUrl, { signal: AbortSignal.timeout(8_000) });
         }
         // Second fallback — try the biometric bucket at the same path (avatar → biometric drift).
         if (!photoRes.ok && bucket !== BIOMETRIC_BUCKET) {
           const { data: bioSigned } = await supabase.storage.from(BIOMETRIC_BUCKET).createSignedUrl(path, 300);
           if (bioSigned?.signedUrl) {
             console.warn(`Trying biometric bucket fallback for path=${path}`);
-            photoRes = await fetch(bioSigned.signedUrl);
+            photoRes = await fetch(bioSigned.signedUrl, { signal: AbortSignal.timeout(8_000) });
           }
         }
       }
@@ -284,6 +284,7 @@ async function uploadPhoto(
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
       },
       body: body,
+      signal: AbortSignal.timeout(8_000),
     });
 
     const uploadText = await uploadRes.text();
@@ -441,19 +442,30 @@ async function dispatchToDevices(
     let status = "failed";
     let lastError: string | null = null;
     try {
-      const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
-        method: "POST",
-        headers: authHeaders(token),
-        body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
-      });
-      responseCode = res.status;
-      const text = await res.text();
-      try { result = JSON.parse(text); } catch { result = { raw: text }; }
-      const apiCode = Number(result?.code ?? result?.data?.code);
-      const accepted = res.ok && (apiCode === 0 || apiCode === 200);
-      status = accepted ? "success" : "failed";
-      lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
-      if (accepted) deliveredDeviceIds.push(mipsDeviceId);
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
+          method: "POST",
+          headers: authHeaders(token),
+          body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
+          signal: AbortSignal.timeout(8_000),
+        });
+        responseCode = res.status;
+        const text = await res.text();
+        try { result = JSON.parse(text); } catch { result = { raw: text }; }
+        const apiCode = Number(result?.code ?? result?.data?.code);
+        const accepted = res.ok && (apiCode === 0 || apiCode === 200);
+        status = accepted ? "success" : "failed";
+        lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
+        if (accepted) {
+          deliveredDeviceIds.push(mipsDeviceId);
+          break;
+        }
+        if (attempt < 2 && lastError.includes("请选择在线设备")) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        } else {
+          break;
+        }
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       result = { error: lastError };
@@ -910,22 +922,28 @@ Deno.serve(async (req) => {
       ? dispatchResult.deviceIds
       : [];
     const photoUploaded = Boolean(photoResult?.success);
+    const requestedDeviceIds: number[] = Array.isArray(dispatchResult?.requestedDeviceIds)
+      ? dispatchResult.requestedDeviceIds
+      : [];
+    const allDevicesDelivered = deploy_to_devices === false
+      || (requestedDeviceIds.length > 0 && dispatchedDeviceIds.length === requestedDeviceIds.length);
 
     // Step 6: Update CRM database with real personId AND mips_person_sn
     await supabase.from(tableName).update({
-      mips_sync_status: "synced",
+      mips_sync_status: photoUploaded && allDevicesDelivered ? "synced" : "failed",
       mips_person_id: String(personId),
       mips_person_sn: mipsPersonSn,
     }).eq("id", person_id);
     console.log(`CRM updated: mips_person_id=${personId}, mips_person_sn=${mipsPersonSn}`);
 
     return new Response(JSON.stringify({
-      success: true,
+      success: photoUploaded && allDevicesDelivered,
       mips_person_id: personId,
       action: existing ? "updated" : "created",
       photo_uploaded: photoUploaded,
       photo_source: photoSource || null,
       dispatched_device_ids: dispatchedDeviceIds,
+      requested_device_ids: requestedDeviceIds,
       photo_result: { success: photoResult?.success ?? false, message: photoResult?.message },
       dispatch_result: dispatchResult && typeof dispatchResult === "object"
         ? { ...dispatchResult, results: undefined, deviceIds: dispatchedDeviceIds }

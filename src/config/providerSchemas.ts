@@ -15,12 +15,14 @@ export interface ProviderWebhookInfo {
 
 const SUPABASE_FUNCTION_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 
-export const getWebhookInfoForProvider = (type: string, provider: string): ProviderWebhookInfo | null => {
+export const getWebhookInfoForProvider = (type: string, provider: string, branchId?: string | null): ProviderWebhookInfo | null => {
   if (type === 'payment_gateway') {
     return {
       label: 'Payment Webhook URL',
-      url: `${SUPABASE_FUNCTION_BASE}/payment-webhook`,
-      description: 'Paste this URL in your payment gateway\'s webhook settings to receive real-time payment confirmations.',
+      url: `${SUPABASE_FUNCTION_BASE}/payment-webhook?gateway=${encodeURIComponent(provider)}${branchId && branchId !== 'all' ? `&branch_id=${encodeURIComponent(branchId)}` : ''}`,
+      description: branchId && branchId !== 'all'
+        ? 'Paste this exact branch-aware URL in your payment gateway webhook settings.'
+        : 'Select a branch to generate the required branch-aware payment webhook URL.',
     };
   }
   if (type === 'whatsapp' && provider === 'meta_cloud') {
