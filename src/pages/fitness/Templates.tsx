@@ -69,6 +69,7 @@ function getDifficultyColor(difficulty: string | null) {
 
 export default function FitnessTemplatesPage() {
   const { hasAnyRole } = useAuth();
+  const { effectiveBranchId } = useBranchContext();
   const canCreate = hasAnyRole(["owner", "admin", "manager"]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
