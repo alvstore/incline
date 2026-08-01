@@ -180,14 +180,23 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
         </div>
       </div>
       <div>
+        <Label className="text-xs">Equipment / Machine</Label>
+        <Input
+          value={ex.equipment}
+          onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
+          placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
+        />
+      </div>
+      <div>
         <Label className="text-xs">Form Tips</Label>
         <Textarea
           rows={2}
           value={ex.form_tips}
           onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
-          placeholder="Cues for proper form, breathing, tempo…"
+          placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
         />
       </div>
+
       <VideoAttachmentControl
         folder="exercises"
         label="Demo video (URL or upload)"
