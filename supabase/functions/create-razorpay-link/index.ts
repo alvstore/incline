@@ -182,6 +182,7 @@ serve(async (req: Request) => {
       gateway_order_id: rzpResult.id,
       amount: amount,
       status: "created",
+      source: "order",
       webhook_data: { short_url: rzpResult.short_url, plink_id: rzpResult.id },
     });
 

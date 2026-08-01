@@ -1,3 +1,4 @@
+// v2.0.0 — canonical, idempotent settlement for every captured gateway event.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
@@ -191,14 +192,18 @@ serve(async (req: Request) => {
     catch { return reply({ error: "Invalid JSON payload" }, 400, "Invalid JSON payload"); }
     outcome.payload = payload;
 
-    const { data: integration } = await supabase
+    const { data: integrations, error: integrationError } = await supabase
       .from("integration_settings")
-      .select("credentials")
-      .eq("branch_id", branchId)
+      .select("credentials, branch_id")
       .eq("integration_type", "payment_gateway")
       .eq("provider", gateway)
       .eq("is_active", true)
-      .maybeSingle();
+      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .order("branch_id", { ascending: true, nullsFirst: false })
+      .limit(1);
+
+    if (integrationError) throw integrationError;
+    const integration = integrations?.[0];
 
     if (!integration) {
       return reply({ error: "Integration not configured" }, 400, "Integration not configured for branch");
@@ -254,7 +259,16 @@ serve(async (req: Request) => {
           const { data: invoice } = await supabase
             .from("invoices").select("id, member_id, branch_id").eq("id", referenceId).maybeSingle();
           if (invoice) {
-            const { data: payResult } = await supabase.rpc("record_payment", {
+            const { data: canonicalTx } = await supabase
+              .from("payment_transactions")
+              .select("id")
+              .eq("branch_id", invoice.branch_id)
+              .eq("gateway", "razorpay")
+              .eq("gateway_order_id", plinkEntity?.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const { data: payResult, error: payError } = await supabase.rpc("settle_payment", {
               p_branch_id: invoice.branch_id,
               p_invoice_id: invoice.id,
               p_member_id: invoice.member_id,
@@ -262,8 +276,18 @@ serve(async (req: Request) => {
               p_payment_method: "online",
               p_transaction_id: paymentId,
               p_notes: "Auto-recorded via Razorpay Payment Link",
+              p_received_by: null,
+              p_income_category_id: null,
+              p_payment_source: "razorpay",
+              p_idempotency_key: `webhook:razorpay:${paymentId || plinkEntity?.id}`,
+              p_gateway_payment_id: paymentId,
+              p_payment_transaction_id: canonicalTx?.id ?? null,
+              p_metadata: { gateway: "razorpay", source: "payment-webhook", event },
             });
-            console.log("record_payment result:", JSON.stringify(payResult));
+            if (payError || (payResult && payResult.success === false)) {
+              const message = payError?.message || payResult?.error || "Payment Link settlement failed";
+              return reply({ error: message }, 500, message);
+            }
 
             const { data: membershipItems } = await supabase
               .from("invoice_items").select("reference_id")
@@ -373,7 +397,16 @@ serve(async (req: Request) => {
         const { data: invoice } = await supabase
           .from("invoices").select("id, member_id, branch_id").eq("id", referenceId).maybeSingle();
         if (invoice) {
-          const { data: payResult } = await supabase.rpc("record_payment", {
+          const { data: canonicalTx } = await supabase
+            .from("payment_transactions")
+            .select("id")
+            .eq("branch_id", invoice.branch_id)
+            .eq("gateway", "payu")
+            .eq("gateway_order_id", txnId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const { data: payResult, error: payError } = await supabase.rpc("settle_payment", {
             p_branch_id: invoice.branch_id,
             p_invoice_id: invoice.id,
             p_member_id: invoice.member_id,
@@ -381,8 +414,18 @@ serve(async (req: Request) => {
             p_payment_method: "online",
             p_transaction_id: payuTxnId,
             p_notes: "Auto-recorded via PayU",
+            p_received_by: null,
+            p_income_category_id: null,
+            p_payment_source: "payu",
+            p_idempotency_key: `webhook:payu:${payuTxnId || txnId}`,
+            p_gateway_payment_id: payuTxnId,
+            p_payment_transaction_id: canonicalTx?.id ?? null,
+            p_metadata: { gateway: "payu", source: "payment-webhook", status: payuStatus },
           });
-          console.log("PayU record_payment:", JSON.stringify(payResult));
+          if (payError || (payResult && payResult.success === false)) {
+            const message = payError?.message || payResult?.error || "PayU settlement failed";
+            return reply({ error: message }, 500, message);
+          }
 
           const { data: membershipItems } = await supabase
             .from("invoice_items").select("reference_id")
@@ -480,9 +523,11 @@ serve(async (req: Request) => {
           if (settleError) {
             console.error("[payment-webhook] settle_payment RPC failed:", settleError);
             outcome.errorMessage = `settle_payment failed: ${settleError.message}`;
+            return reply({ error: "Settlement failed" }, 500, outcome.errorMessage);
           } else if (settleResult && (settleResult as any).success === false) {
             console.error("[payment-webhook] settle_payment returned error:", settleResult);
             outcome.errorMessage = `settle_payment error: ${(settleResult as any).error}`;
+            return reply({ error: "Settlement failed" }, 500, outcome.errorMessage);
           }
         }
       }

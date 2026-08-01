@@ -1,4 +1,4 @@
-// v1.2.0 — Drain biometric_sync_queue: re-invokes sync-to-mips WITH device
+// v1.3.0 — Drain biometric_sync_queue: require delivery to every mapped gate.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
@@ -15,7 +15,7 @@ const corsHeaders = {
 };
 
 const MAX_RETRIES = 10;
-const PER_RUN_CAP = 50;
+const PER_RUN_CAP = 2;
 // Exponential backoff (minutes) applied against queued_at + processed_at.
 // retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
 const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
@@ -84,6 +84,7 @@ Deno.serve(async (req) => {
             // on the MIPS server but absent from Gate 1 / Gate 2.
             deploy_to_devices: true,
           }),
+          signal: AbortSignal.timeout(20_000),
         });
         const invText = await invokeRes.text();
         let data: any = null;
@@ -94,11 +95,13 @@ Deno.serve(async (req) => {
         const dispatched = Array.isArray(data?.dispatched_device_ids) ? data.dispatched_device_ids : [];
         const photoOk = data?.photo_uploaded === true;
         const revoked = data?.action === "revoked_instead_of_synced";
-        const success = !invErr && data?.success !== false && (revoked || (photoOk && dispatched.length > 0));
+        const requested = Array.isArray(data?.requested_device_ids) ? data.requested_device_ids : [];
+        const allDevicesDelivered = requested.length > 0 && dispatched.length === requested.length;
+        const success = !invErr && data?.success !== false && (revoked || (photoOk && allDevicesDelivered));
         const partialReason = invErr?.message
           || data?.error
           || (!photoOk ? `photo not uploaded: ${data?.photo_result?.message || "unknown"}` : "")
-          || (dispatched.length === 0 ? "no devices received the dispatch" : "")
+          || (!allDevicesDelivered ? `device delivery incomplete: ${dispatched.length}/${requested.length}` : "")
           || "sync-to-mips returned failure";
 
         if (success) {

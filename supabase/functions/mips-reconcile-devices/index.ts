@@ -1,4 +1,4 @@
-// v2.0.0 — Resumable, bounded reconciliation across members, employees and
+// v2.1.0 — Resumable, bounded reconciliation across members, employees and
 // trainers. Each run advances a rotating roster window and delegates the full
 // server + photo + per-device audited delivery to sync-to-mips. The rotating
 // window bounds runtime while eventually healing the complete branch roster.
@@ -13,7 +13,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const PER_RUN_CAP = 10;
+const PER_RUN_CAP = 2;
+const INVOCATION_BUDGET_MS = 45_000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -23,6 +24,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPA_URL, SERVICE_KEY);
 
   try {
+    const runStartedAt = Date.now();
     // 1. Load all MAPPED devices grouped by branch (include offline — MIPS
     //    server queues syncs for offline devices and delivers on reconnect).
     const { data: devices, error: devErr } = await supabase
@@ -80,11 +82,13 @@ Deno.serve(async (req) => {
 
       let ok = 0, failed = 0;
       for (const p of persons) {
+        if (Date.now() - runStartedAt >= INVOCATION_BUDGET_MS) break;
         try {
           const res = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY },
             body: JSON.stringify({ person_type: p.type, person_id: p.id, branch_id: branchId, deploy_to_devices: true }),
+            signal: AbortSignal.timeout(20_000),
           });
           const data = await res.json().catch(() => ({}));
           const isOk = res.ok && data?.success === true && Array.isArray(data?.dispatched_device_ids)
@@ -101,7 +105,7 @@ Deno.serve(async (req) => {
         .update({ last_reconcile_at: new Date().toISOString() })
         .in("id", brDevices.map((d) => d.localId));
 
-      summary.push({ branch_id: branchId, devices: deviceIds.length, roster: roster.length, offset: start, processed: persons.length, ok, failed });
+      summary.push({ branch_id: branchId, devices: deviceIds.length, roster: roster.length, offset: start, processed: ok + failed, ok, failed });
     }
 
     return new Response(JSON.stringify({ success: true, branches: summary }), {
