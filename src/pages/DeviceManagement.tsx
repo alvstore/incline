@@ -13,6 +13,8 @@ import DeviceFleetTab from "@/components/devices/DeviceFleetTab";
 import PersonnelSyncTab from "@/components/devices/PersonnelSyncTab";
 import DeviceHealthStrip from "@/components/devices/DeviceHealthStrip";
 import DeviceAttentionBar from "@/components/devices/DeviceAttentionBar";
+import MipsServerStatusBanner from "@/components/devices/MipsServerStatusBanner";
+
 import DeviceSetupSheet from "@/components/devices/DeviceSetupSheet";
 
 const DeviceManagement = () => {
