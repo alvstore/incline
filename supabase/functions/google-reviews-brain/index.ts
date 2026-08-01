@@ -897,6 +897,8 @@ async function classifyOne(inbound_id: string) {
         branchId: row.branch_id ?? null,
         userMessage: userPrompt,
         systemOverride: sysOverride,
+        maxTokens: 1500,
+
         tools: [{
           type: "function",
           function: {
