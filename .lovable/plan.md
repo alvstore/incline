@@ -1,66 +1,57 @@
-# Razorpay Reconciliation, Webhook Activity & MIPS Face Parity Repair
+# System Health cluster fix + unified registration → contract fields
 
-## Verified findings
-- Kritesh Mali’s ₹13,000 record stores `payment_method = upi` and `payment_source = razorpay`; current screens show only the instrument, hiding the gateway.
-- The reconciler recorded the payment on 1 Aug because `settle_payment` does not accept the Razorpay capture timestamp. Razorpay’s 29 Jul timestamp is available but discarded.
-- Gateway fee/tax/net settlement are not represented as first-class payment fields, so the UI cannot show the Razorpay deduction.
-- The webhook screen only reads `payment_transactions.source = webhook`. The successful recovery was `source = order`, so it is excluded.
-- The prominent webhook URL in settings omits required gateway/branch parameters. Deliveries using it are rejected before they can be stored, which explains the empty activity screen.
-- MIPS accepted recent dispatches for 59 distinct people per gate, but the hardware still reports 41 photos. The current code treats MIPS’s asynchronous “downloading personnel information” response as final success; that is acceptance, not verified device installation. Recent Gate 1 attempts also intermittently return “select an online device.”
-- Local photo inventory is 44 members + 1 employee + 6 trainers. The server/device counters therefore mix total personnel with face-enrolled personnel and are not reliable delivery proof.
-- Admin member profiles already have a basic payment list, but it hides gateway/source, gateway IDs, deductions, and complete invoice context. The member-facing invoices page has no payment-history ledger.
+## Cluster-by-cluster audit
 
-## Implementation plan
+### Clusters 1 & 6 — same root cause: `sync-to-mips` runs out of memory
+Both are "Function failed due to not having enough compute resources" on `sync-to-mips`.
+Confirmed cause: the function downloads the raw member/staff photo and decodes it fully in memory with `imagescript` (`normalizePhotoBytes`), then holds the decoded bitmap, the resized copy, the re-encoded JPEG and the multipart body at once. Large phone photos (several MB) blow the edge worker memory limit.
 
-### 1. Make gateway settlements accounting-correct
-- Extend the canonical `settle_payment` RPC with optional gateway capture date, fee, tax, and net-settlement inputs while preserving existing callers.
-- Persist both dimensions explicitly:
-  - instrument: UPI/card/net banking
-  - source: Razorpay/manual/PayU/etc.
-- Store gross amount, gateway fee, gateway tax, and expected net settlement as typed auditable fields rather than deriving them in the browser.
-- Update Razorpay webhook and reconciliation handlers to pass the payment’s real `created_at`, `fee`, `tax`, order ID, payment ID, and captured status.
-- Keep `settle_payment` idempotent so webhook, checkout callback, and reconciler cannot create duplicates.
-- Backfill Kritesh Mali’s payment to 29 Jul 2026, retain `upi` as the instrument, label the source as Razorpay, and populate deductions/net from the verified Razorpay API response.
+Fix in `supabase/functions/sync-to-mips/index.ts`:
+- Skip decoding entirely when the fetched photo is already small enough for MIPS (under ~200 KB) — upload as-is.
+- Hard-reject sources over ~6 MB (log and mark the sync attempt failed with a clear reason instead of crashing the worker).
+- Do a single-pass resize/encode, release intermediate references before building the multipart body, and wrap normalization so a decode failure falls back to the original bytes rather than killing the invocation.
 
-### 2. Correct all payment displays
-- Show payments as, for example, **Razorpay · UPI**, not only “UPI.”
-- Show **Paid on**, **Recorded on**, gross, gateway deduction, and expected net settlement where applicable.
-- Apply the same formatter to dashboard recent payments, Payments/Finance, invoice details, admin member profile, and member-facing invoices/payment history.
-- Add invoice number, gateway payment/order IDs, status, and receipt context without exposing secrets.
-- Preserve manual payments as Cash/UPI/Card with a clear Manual source.
+### Cluster 4 — `Missing person_id or person_type` (400 on sync-to-mips)
+`src/components/devices/DeviceFleetTab.tsx` "Fleet sync" invokes `sync-to-mips` with `{ sync_type: "fleet", branch_id }`, but that function only accepts a single person. Fleet-wide healing is `mips-reconcile-devices`.
 
-### 3. Make webhook activity observable and useful
-- Replace the misleading generic webhook URL with the canonical branch-aware Razorpay URL generated from one shared helper.
-- Record rejected webhook attempts, including missing branch, invalid signature, malformed payload, duplicate, settlement failure, and successful processing; never discard them silently.
-- Expand Webhook Activity to include webhook deliveries and reconciler recoveries with source badges, event type, signature status, HTTP outcome, invoice/payment match, timestamps, filters, and a detail drawer.
-- Add a configuration-health state that verifies whether the active URL is branch-aware and whether a recent signed event has been observed.
-- Keep `/integrations/webhooks` as the dedicated operational page, but make the integration button open it intentionally and label it “Webhook Activity” rather than appearing like an unexpected redirect.
+Fix: point the fleet button at `mips-reconcile-devices` (branch-scoped) and keep the toast wording. No backend change needed.
 
-### 4. Replace MIPS “accepted” status with verified delivery states
-- Model delivery as: `queued → server_face_ready → device_accepted → device_verified` (or `failed`).
-- Do not mark a queue item fully synced merely because `/through/device/syncPerson` returns “downloading personnel information.”
-- After dispatch, poll/re-query MIPS device/person state within a bounded background job; only mark success when the person/photo is verifiably present on every mapped gate.
-- Maintain independent Gate 1/Gate 2 delivery rows, retry only the missing gate, and use exponential backoff for the intermittent online-device race.
-- Keep each worker invocation small and resumable to avoid edge memory/time limits.
-- Reconcile the complete face-eligible roster across members, employees, trainers, admins, managers, and owners using the canonical person identity and photo path.
+### Cluster 3 — 403 inserting into `tasks` from `/my-requests`
+`src/pages/MemberRequests.tsx` inserts a task row so a trainer picks up a plan request. Current policies on `tasks` are only "Staff manage tasks" (owner/admin/manager/staff) and a SELECT policy — a member has no INSERT path, so PostgREST returns 403.
 
-### 5. Add a real Face Parity control surface
-- In Device Command Center, show three separate truths:
-  - CRM people with valid photos
-  - MIPS server people with valid photos
-  - verified photo presence per device
-- List every mismatch with person name/code, role, server photo state, Gate 1 state, Gate 2 state, latest error, and next retry.
-- Provide scoped actions: retry missing device, retry selected people, and run bounded parity repair.
-- Never display a healthy/synced badge from aggregate counts or asynchronous acceptance alone.
+Fix (migration): add a narrow member INSERT policy — `assigned_by = auth.uid()`, `linked_entity_type = 'member'`, and `linked_entity_id` must be the caller's own member row — plus the matching `GRANT INSERT ... TO authenticated` check. Members still cannot read or edit other tasks.
 
-### 6. Test and validate end to end
-- Curl/test the Razorpay reconciliation path using the known payment and confirm one ledger entry, 29 Jul paid date, Razorpay + UPI labeling, and accurate fee/net values.
-- Send a safe signed webhook test and verify it appears in Webhook Activity with signature/outcome data.
-- Query invoice, payment, transaction, and member history records to confirm they agree.
-- Run bounded MIPS sync tests against both mapped gates, then compare server/device results after the async download window rather than trusting the initial 200 response.
-- Verify desktop and mobile payment history, webhook activity, and device parity views.
+### Cluster 5 — `howbody_posture_reports.posture_type does not exist`
+The table genuinely has no `posture_type` / `body_shape_profile` columns (verified against the live schema); those columns live on `member_measurements`. Current source in `useHowbodyReports.ts`, `useLatestHowbodyScan.ts` and `MyScanReport.tsx` no longer selects them, so the failing request is coming from an older published bundle still running on the member's phone.
 
-## Security and reliability constraints
-- The pasted webhook secret will not be written to source or displayed; implementation will use the secure configured backend secret.
-- All schema changes will use migrations, preserve RLS/branch isolation, and grant only the required roles.
-- Gateway credentials, internal URLs, and sensitive payload fields will be masked in logs and UI.
+Fix: no query change needed. Add the two nullable text columns to `howbody_posture_reports` so cached clients stop 400-ing, and publish so the member app picks up the corrected bundle.
+
+### Cluster 2 — `Script error.` on `/member-dashboard` (iOS Safari)
+Opaque cross-origin script error with no file/line — it carries no actionable stack. The reporter already has a `Script error` ignore pattern but only drops it when `filename`, `lineno` and `colno` are all empty; this one slipped through.
+
+Fix in `src/lib/errorReporter.ts`: treat any message matching `/^Script error\.?$/i` as noise regardless of the other fields, and add `crossorigin="anonymous"` to the app script tag in `index.html` so future cross-origin errors report real stacks.
+
+---
+
+## Part 2 — Unified registration fields on the printed contract
+
+Audit result:
+- Public `/register` (`PublicRegistration.tsx` → `register-member`) collects goal, health conditions, government ID, emergency contact, address, PAR-Q and consents, and stores them on `members` / `profiles` / `member_onboarding_signatures`.
+- But the PDF that `register-member` generates is a minimal waiver: name, code, phone, email, branch, release text, PAR-Q, consents, signature. Government ID, address, gender/DOB, emergency contact, fitness goal, health conditions and custom terms are **not** printed.
+- The staff-side PDF (`buildRegistrationFormPdf` in `src/utils/pdfBlob.ts`) already prints all of those sections. So self-registered members get a poorer document than staff-registered ones.
+- The staff drawer re-asks Health & Fitness because it seeds from `data.fitnessGoals` / `data.medicalConditions` passed by `MemberProfileDrawer`; when those are populated from `/register` the chips do prefill — the gap is that goal/health/gov-ID are not visible on the self-register PDF, so it looks unsynced.
+
+Fix:
+1. Extend the PDF builder in `supabase/functions/register-member/index.ts` to print the same section set as the staff PDF: Member Information (incl. gender, DOB, address, city/state), Government ID, Emergency Contact, Health & Fitness (goal + conditions), PAR-Q, Terms/custom terms, Declaration, Signature.
+2. Pass the full registration payload into that builder (currently only name/code/phone/email/branch are forwarded).
+3. Persist `custom_terms` from the public flow into `member_onboarding_signatures` so the staff drawer and any reprint show identical text.
+4. In `MemberProfileDrawer.tsx`, ensure `governmentIdType`, `governmentIdNumber`, `fitnessGoals`, `medicalConditions`, address and emergency contact are always sourced from `members` + `profiles` before opening the registration drawer, so staff see read-only prefilled values instead of blank chips.
+5. Keep `src/lib/registration/healthQuestions.ts` as the single source for goals, health chips and PAR-Q — both flows already import it; no forking.
+
+## Files to change
+- `supabase/functions/sync-to-mips/index.ts` — photo memory guards
+- `supabase/functions/register-member/index.ts` — full registration PDF
+- `src/components/devices/DeviceFleetTab.tsx` — fleet sync target
+- `src/components/members/MemberProfileDrawer.tsx` — prefill parity
+- `src/lib/errorReporter.ts`, `index.html` — opaque script-error noise
+- One migration: member INSERT policy on `tasks`; nullable `posture_type` / `body_shape_profile` on `howbody_posture_reports`
