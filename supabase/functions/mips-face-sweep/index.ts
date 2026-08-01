@@ -290,7 +290,16 @@ Deno.serve(async (req) => {
         }
       }
 
-      const after = await readDeviceCounts(baseUrl, token);
+      // The verification read must never fail the whole sweep — if the server
+      // slipped away mid-batch, report what we know and let the breaker handle it.
+      let after = before;
+      try {
+        after = await readDeviceCounts(baseUrl, token);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (e instanceof MipsTransportError) await recordTransportFailure(supabase, branchId, msg);
+      }
+
       const deviceReport = after.map((d) => {
         const prev = before.find((p) => p.id === d.id);
         return {
