@@ -52,27 +52,25 @@ function json(body: unknown, status = 200) {
 }
 
 async function login(baseUrl: string, username: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/login`, {
+  const { text } = await mipsFetch(`${baseUrl}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username, password }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const text = await res.text();
+  }, 10_000);
   let j: any;
-  try { j = JSON.parse(text); } catch { throw new Error(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
+  // A booting Tomcat answers with an HTML error page — that is a transport
+  // condition, not bad credentials.
+  try { j = JSON.parse(text); } catch { throw new MipsTransportError(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
   const token = j.token || j.data?.token;
   if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
   return token;
 }
 
 async function readDeviceCounts(baseUrl: string, token: string) {
-  const res = await fetch(`${baseUrl}/through/device/list`, {
+  const { text } = await mipsFetch(`${baseUrl}/through/device/list`, {
     method: "GET",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "TENANT-ID": "1" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  const text = await res.text();
+  }, 10_000);
   let j: any;
   try { j = JSON.parse(text); } catch { j = {}; }
   const rows: any[] = j?.rows || j?.data || [];
@@ -87,6 +85,7 @@ async function readDeviceCounts(baseUrl: string, token: string) {
     }))
     .filter((d) => !isNaN(d.id));
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
