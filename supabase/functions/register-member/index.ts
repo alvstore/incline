@@ -563,6 +563,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     waiver_pdf_path: pdfPath,
     par_q,
     consents,
+    custom_terms: customTerms,
     signer_ip: ip,
     signer_user_agent: ua,
     signed_at: signedAt,
