@@ -5183,6 +5183,7 @@ export type Database = {
       howbody_posture_reports: {
         Row: {
           back_img: string | null
+          body_shape_profile: string | null
           body_slope: number | null
           bust: number | null
           calf_left: number | null
@@ -5206,6 +5207,7 @@ export type Database = {
           member_id: string | null
           model_url: string | null
           pelvis_forward: number | null
+          posture_type: string | null
           right_img: string | null
           right_thigh: number | null
           scan_id: string | null
@@ -5220,6 +5222,7 @@ export type Database = {
         }
         Insert: {
           back_img?: string | null
+          body_shape_profile?: string | null
           body_slope?: number | null
           bust?: number | null
           calf_left?: number | null
@@ -5243,6 +5246,7 @@ export type Database = {
           member_id?: string | null
           model_url?: string | null
           pelvis_forward?: number | null
+          posture_type?: string | null
           right_img?: string | null
           right_thigh?: number | null
           scan_id?: string | null
@@ -5257,6 +5261,7 @@ export type Database = {
         }
         Update: {
           back_img?: string | null
+          body_shape_profile?: string | null
           body_slope?: number | null
           bust?: number | null
           calf_left?: number | null
@@ -5280,6 +5285,7 @@ export type Database = {
           member_id?: string | null
           model_url?: string | null
           pelvis_forward?: number | null
+          posture_type?: string | null
           right_img?: string | null
           right_thigh?: number | null
           scan_id?: string | null
