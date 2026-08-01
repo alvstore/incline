@@ -1149,10 +1149,8 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   const footerLeft = [
     input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
-    input.trainer_name ? `Prepared by ${input.trainer_name}` : null,
   ].filter(Boolean).join('  •  ');
-  const footerCenter = [resolvedBrand.legalName || 'The Incline Life by Incline', resolvedBrand.website]
-    .filter(Boolean).join('  •  ');
+  const footerRight = [resolvedBrand.website, `Page ${'{n}'} of ${pageCount}`].filter(Boolean).join('  •  ');
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     const fy = doc.internal.pageSize.height - 5;
@@ -1161,12 +1159,11 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     doc.line(14, fy - 4, 196, fy - 4);
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 90 });
-    if (footerCenter) doc.text(footerCenter, 105, fy, { align: 'center' });
-    doc.setFontSize(7);
-    doc.text(`Page ${i} of ${pageCount}`, 196, fy, { align: 'right' });
+    doc.setFontSize(6.8);
+    if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 110 });
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy, { align: 'right' });
   }
+
 
 
   return doc.output('blob');
