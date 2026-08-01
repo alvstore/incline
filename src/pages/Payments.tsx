@@ -25,6 +25,7 @@ import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPayment } from '@/services/billingService';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
+import { gatewayDeduction, paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -410,7 +411,7 @@ export default function PaymentsPage() {
           <CardContent>
             {isLoading ? (<TableSkeleton rows={8} columns={isAdminOrOwner ? 7 : 6} />) : (
               <Table>
-                <TableHeader><TableRow><TableHead>Member</TableHead><TableHead>Amount</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead><TableHead>Invoice</TableHead><TableHead>Date</TableHead>{isAdminOrOwner && <TableHead>Actions</TableHead>}</TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Member</TableHead><TableHead>Gross</TableHead><TableHead>Channel</TableHead><TableHead>Settlement</TableHead><TableHead>Status</TableHead><TableHead>Invoice</TableHead><TableHead>Paid on</TableHead>{isAdminOrOwner && <TableHead>Actions</TableHead>}</TableRow></TableHeader>
                 <TableBody>
                   {filteredPayments.map((payment: any) => {
                     const isVoided = payment.status === 'voided';
@@ -424,7 +425,12 @@ export default function PaymentsPage() {
                           </div>
                         </TableCell>
                         <TableCell className={`font-medium ${isVoided ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
-                        <TableCell><Badge className={getMethodColor(payment.payment_method)}>{payment.payment_method}</Badge></TableCell>
+                        <TableCell><Badge className={getMethodColor(payment.payment_method)}>{paymentChannelLabel(payment)}</Badge></TableCell>
+                        <TableCell className="text-xs">
+                          {payment.payment_source === 'razorpay' ? (
+                            <div><p>Net ₹{Number(payment.net_settlement_amount ?? payment.amount).toLocaleString('en-IN')}</p><p className="text-muted-foreground">Fee + tax ₹{gatewayDeduction(payment).toLocaleString('en-IN')}</p></div>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
                         <TableCell><Badge className={getStatusColor(payment.status)}>{payment.status}</Badge></TableCell>
                         <TableCell className="font-mono text-sm">{payment.invoices?.invoice_number || '-'}</TableCell>
                         <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy HH:mm')}</TableCell>
@@ -452,7 +458,7 @@ export default function PaymentsPage() {
                   })}
                   {filteredPayments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={isAdminOrOwner ? 7 : 6} className="text-center py-16 text-muted-foreground">
+                      <TableCell colSpan={isAdminOrOwner ? 8 : 7} className="text-center py-16 text-muted-foreground">
                         <div className="flex flex-col items-center gap-3">
                           <div className="h-16 w-16 rounded-full bg-muted/80 flex items-center justify-center">
                             <CreditCard className="h-8 w-8 opacity-40" />

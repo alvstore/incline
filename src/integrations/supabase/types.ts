@@ -8588,6 +8588,7 @@ export type Database = {
           branch_id: string
           completed_at: string | null
           created_at: string
+          delivery_stage: string
           device_id: string
           entity_id: string | null
           entity_type: string | null
@@ -8603,12 +8604,15 @@ export type Database = {
           staff_id: string | null
           status: string
           updated_at: string
+          verification_payload: Json
+          verified_at: string | null
         }
         Insert: {
           attempt_no?: number
           branch_id: string
           completed_at?: string | null
           created_at?: string
+          delivery_stage?: string
           device_id: string
           entity_id?: string | null
           entity_type?: string | null
@@ -8624,12 +8628,15 @@ export type Database = {
           staff_id?: string | null
           status?: string
           updated_at?: string
+          verification_payload?: Json
+          verified_at?: string | null
         }
         Update: {
           attempt_no?: number
           branch_id?: string
           completed_at?: string | null
           created_at?: string
+          delivery_stage?: string
           device_id?: string
           entity_id?: string | null
           entity_type?: string | null
@@ -8645,6 +8652,8 @@ export type Database = {
           staff_id?: string | null
           status?: string
           updated_at?: string
+          verification_payload?: Json
+          verified_at?: string | null
         }
         Relationships: [
           {
@@ -9212,6 +9221,9 @@ export type Database = {
           amount: number
           branch_id: string
           created_at: string
+          gateway_fee: number | null
+          gateway_order_id: string | null
+          gateway_tax: number | null
           id: string
           idempotency_key: string | null
           income_category_id: string | null
@@ -9219,6 +9231,7 @@ export type Database = {
           lifecycle_metadata: Json
           lifecycle_status: Database["public"]["Enums"]["payment_transaction_status"]
           member_id: string | null
+          net_settlement_amount: number | null
           notes: string | null
           original_payment_id: string | null
           payment_date: string
@@ -9238,6 +9251,9 @@ export type Database = {
           amount: number
           branch_id: string
           created_at?: string
+          gateway_fee?: number | null
+          gateway_order_id?: string | null
+          gateway_tax?: number | null
           id?: string
           idempotency_key?: string | null
           income_category_id?: string | null
@@ -9245,6 +9261,7 @@ export type Database = {
           lifecycle_metadata?: Json
           lifecycle_status?: Database["public"]["Enums"]["payment_transaction_status"]
           member_id?: string | null
+          net_settlement_amount?: number | null
           notes?: string | null
           original_payment_id?: string | null
           payment_date?: string
@@ -9264,6 +9281,9 @@ export type Database = {
           amount?: number
           branch_id?: string
           created_at?: string
+          gateway_fee?: number | null
+          gateway_order_id?: string | null
+          gateway_tax?: number | null
           id?: string
           idempotency_key?: string | null
           income_category_id?: string | null
@@ -9271,6 +9291,7 @@ export type Database = {
           lifecycle_metadata?: Json
           lifecycle_status?: Database["public"]["Enums"]["payment_transaction_status"]
           member_id?: string | null
+          net_settlement_amount?: number | null
           notes?: string | null
           original_payment_id?: string | null
           payment_date?: string

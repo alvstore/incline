@@ -22,6 +22,7 @@ import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { GstReportTab } from '@/components/finance/GstReportTab';
 import { SalesReportTab } from '@/components/finance/SalesReportTab';
 import { toast } from 'sonner';
+import { paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 
 export default function FinancePage() {
   const queryClient = useQueryClient();
@@ -563,7 +564,7 @@ export default function FinancePage() {
                             <TableCell>{payment.member?.member_code || '-'}</TableCell>
                             <TableCell>{payment.invoice?.invoice_number || '-'}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">{payment.payment_method?.replace('_', ' ')}</Badge>
+                              <Badge variant="outline">{paymentChannelLabel(payment)}</Badge>
                             </TableCell>
                             <TableCell className="text-right font-medium text-success">
                               +{formatCurrency(payment.amount)}

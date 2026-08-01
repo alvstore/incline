@@ -265,7 +265,9 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   };
 
 
-  const [serverOnlyBulk, setServerOnlyBulk] = useState(true);
+  // Direct-to-gates is the safe default. Server-only is an explicit deferred
+  // mode for very large imports, never the default for day-to-day repairs.
+  const [serverOnlyBulk, setServerOnlyBulk] = useState(false);
 
   const bulkSyncMutation = useMutation({
     mutationFn: async (targets: SyncPerson[]) => {
@@ -430,7 +432,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           {verifyStatus !== undefined &&
             (verifyStatus ? (
               <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                <ShieldCheck className="h-3 w-3" /> On device
+               <ShieldCheck className="h-3 w-3" /> On MIPS server
               </span>
             ) : (
               <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
@@ -627,7 +629,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
             <label
               className="ml-auto flex cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
-              title="When ON: upload to the MIPS server only — the reconcile cron fans out to every device in parallel."
+               title="When OFF (recommended): upload and dispatch directly to every mapped gate. Turn on only for deferred bulk imports."
             >
               <input
                 type="checkbox"
@@ -635,7 +637,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
                 onChange={(e) => setServerOnlyBulk(e.target.checked)}
                 className="rounded border-input"
               />
-              Server-only (cron fan-out)
+               Defer gate delivery to background worker
             </label>
           </div>
         </CardContent>

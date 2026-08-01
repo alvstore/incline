@@ -1,4 +1,4 @@
-// v2.0.0 — canonical, idempotent settlement for every captured gateway event.
+// v2.1.0 — canonical settlement with capture time, fees and rejected-delivery audit.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
@@ -23,6 +23,9 @@ interface RazorpayPaymentEntity {
   method: string;
   captured: boolean;
   notes: Record<string, string>;
+  created_at?: number;
+  fee?: number;
+  tax?: number;
 }
 
 interface PhonePeWebhookPayload {
@@ -61,16 +64,15 @@ interface Outcome {
 }
 
 async function persistOutcome(supabase: any, o: Outcome, httpStatus: number, responseBody?: unknown) {
-  // POLICY: webhook deliveries with a missing/invalid branch_id are NOT persisted in
-  // payment_transactions because that table's branch_id is NOT NULL with a FK to
-  // branches(id). Such deliveries are inherently malformed (the branch_id query
-  // param is part of the webhook URL we hand to the gateway, so a missing value
-  // means someone hit the endpoint manually or the URL was misconfigured).
-  // We log them to the function's console and return a 4xx so the gateway will
-  // retry, but they don't pollute the activity feed. Future enhancement: a separate
-  // branch-agnostic webhook_errors sink — tracked as a follow-up.
   if (!o.branchId || !isValidUUID(o.branchId)) {
-    console.warn(`[payment-webhook] Skipping persistence — invalid branch_id (status=${httpStatus}, error=${o.errorMessage})`);
+    await supabase.from('webhook_failures').insert({
+      source: o.gateway || 'payment-webhook',
+      object_type: o.eventType || 'delivery',
+      reason: o.errorMessage || `HTTP ${httpStatus}`,
+      signature_present: o.signatureVerified !== null,
+      branch_id: null,
+      metadata: { http_status: httpStatus, gateway_order_id: o.gatewayOrderId, gateway_payment_id: o.gatewayPaymentId },
+    });
     return;
   }
   try {
@@ -249,6 +251,9 @@ serve(async (req: Request) => {
         const referenceId = plinkEntity?.reference_id;
         const rzpAmount = (paymentEntity?.amount || plinkEntity?.amount || 0) / 100;
         const paymentId = paymentEntity?.id || plinkEntity?.id;
+        const capturedAt = paymentEntity?.created_at ? new Date(paymentEntity.created_at * 1000).toISOString() : new Date().toISOString();
+        const gatewayFee = Number(paymentEntity?.fee ?? 0) / 100;
+        const gatewayTax = Number(paymentEntity?.tax ?? 0) / 100;
 
         outcome.gatewayOrderId = plinkEntity?.id || null;
         outcome.gatewayPaymentId = paymentId || null;
@@ -273,7 +278,7 @@ serve(async (req: Request) => {
               p_invoice_id: invoice.id,
               p_member_id: invoice.member_id,
               p_amount: rzpAmount,
-              p_payment_method: "online",
+              p_payment_method: paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card',
               p_transaction_id: paymentId,
               p_notes: "Auto-recorded via Razorpay Payment Link",
               p_received_by: null,
@@ -282,7 +287,14 @@ serve(async (req: Request) => {
               p_idempotency_key: `webhook:razorpay:${paymentId || plinkEntity?.id}`,
               p_gateway_payment_id: paymentId,
               p_payment_transaction_id: canonicalTx?.id ?? null,
-              p_metadata: { gateway: "razorpay", source: "payment-webhook", event },
+              p_metadata: {
+                gateway: "razorpay", source: "payment-webhook", event,
+                gateway_order_id: plinkEntity?.id,
+                gateway_captured_at: capturedAt,
+                gateway_fee: gatewayFee,
+                gateway_tax: gatewayTax,
+                net_settlement_amount: Math.max(0, rzpAmount - gatewayFee - gatewayTax),
+              },
             });
             if (payError || (payResult && payResult.success === false)) {
               const message = payError?.message || payResult?.error || "Payment Link settlement failed";
@@ -411,7 +423,7 @@ serve(async (req: Request) => {
             p_invoice_id: invoice.id,
             p_member_id: invoice.member_id,
             p_amount: payuAmount,
-            p_payment_method: "online",
+            p_payment_method: "other",
             p_transaction_id: payuTxnId,
             p_notes: "Auto-recorded via PayU",
             p_received_by: null,
@@ -508,7 +520,9 @@ serve(async (req: Request) => {
             p_invoice_id: existingTxn.invoice_id,
             p_member_id: invoice.member_id,
             p_amount: transactionData.amount,
-            p_payment_method: "online",
+            p_payment_method: gateway === 'razorpay'
+              ? (paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card')
+              : 'other',
             p_transaction_id: transactionData.gateway_payment_id,
             p_notes: `Online payment via ${gateway}`,
             p_received_by: null,
@@ -517,7 +531,18 @@ serve(async (req: Request) => {
             p_idempotency_key: idemKey,
             p_gateway_payment_id: transactionData.gateway_payment_id,
             p_payment_transaction_id: existingTxn.id,
-            p_metadata: { gateway, source: "payment-webhook" },
+            p_metadata: {
+              gateway, source: "payment-webhook",
+              gateway_order_id: transactionData.gateway_order_id,
+              gateway_captured_at: gateway === 'razorpay' && paymentEntity?.created_at
+                ? new Date(paymentEntity.created_at * 1000).toISOString()
+                : new Date().toISOString(),
+              gateway_fee: gateway === 'razorpay' ? Number(paymentEntity?.fee ?? 0) / 100 : 0,
+              gateway_tax: gateway === 'razorpay' ? Number(paymentEntity?.tax ?? 0) / 100 : 0,
+              net_settlement_amount: gateway === 'razorpay'
+                ? Math.max(0, transactionData.amount - Number(paymentEntity?.fee ?? 0) / 100 - Number(paymentEntity?.tax ?? 0) / 100)
+                : transactionData.amount,
+            },
           });
 
           if (settleError) {

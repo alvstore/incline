@@ -51,6 +51,7 @@ import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
+import { gatewayDeduction, paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 
 // ─── Pending Invoices Section ───
 function PendingInvoicesSection({ memberId, branchId }: { memberId: string; branchId: string }) {
@@ -1874,8 +1875,13 @@ export function MemberProfileDrawer({
                           </div>
                           <div className="text-right">
                             <Badge variant="outline" className="capitalize text-xs">
-                              {payment.payment_method?.replace('_', ' ')}
+                              {paymentChannelLabel(payment)}
                             </Badge>
+                            {payment.payment_source === 'razorpay' && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Net ₹{Number(payment.net_settlement_amount ?? payment.amount).toLocaleString('en-IN')} · Deduction ₹{gatewayDeduction(payment).toLocaleString('en-IN')}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                               {format(new Date(payment.payment_date), 'dd MMM yyyy')}
                             </p>

@@ -11,6 +11,7 @@ import { useMemberData } from '@/hooks/useMemberData';
 import { InvoiceDetailDrawer } from '@/components/members/InvoiceDetailDrawer';
 import { FileText, AlertCircle, Loader2, CheckCircle, Eye, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
+import { paymentChannelLabel } from '@/lib/payments/paymentDisplay';
 
 export default function MyInvoices() {
   const navigate = useNavigate();
@@ -32,6 +33,20 @@ export default function MyInvoices() {
         .eq('member_id', member!.id)
         .order('created_at', { ascending: false });
 
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: payments = [] } = useQuery({
+    queryKey: ['my-payment-history', member?.id],
+    enabled: !!member?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, payment_method, payment_source, payment_date, status, transaction_id, invoices(invoice_number)')
+        .eq('member_id', member?.id)
+        .order('payment_date', { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -198,6 +213,26 @@ export default function MyInvoices() {
                     );
                   })}
                 </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
+          <CardContent>
+            {payments.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet</p> : (
+              <Table>
+                <TableHeader><TableRow><TableHead>Paid on</TableHead><TableHead>Invoice</TableHead><TableHead>Channel</TableHead><TableHead>Reference</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                <TableBody>{payments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy')}</TableCell>
+                    <TableCell>{payment.invoices?.invoice_number || '—'}</TableCell>
+                    <TableCell><Badge variant="outline">{paymentChannelLabel(payment)}</Badge></TableCell>
+                    <TableCell className="font-mono text-xs">{payment.transaction_id || '—'}</TableCell>
+                    <TableCell className="text-right font-medium">₹{Number(payment.amount).toLocaleString('en-IN')}</TableCell>
+                  </TableRow>
+                ))}</TableBody>
               </Table>
             )}
           </CardContent>
