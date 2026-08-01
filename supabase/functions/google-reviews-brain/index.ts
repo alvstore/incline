@@ -935,10 +935,14 @@ async function classifyOne(inbound_id: string) {
           userMessage: userPrompt,
           systemOverride: sysOverride,
           responseFormat: "json",
+          // Reasoning models spend part of the budget on internal thinking;
+          // a small cap returns an EMPTY content string. Give it headroom.
+          maxTokens: 1500,
         });
-        if (!apply((r2 as any).parsedJson) && !apply(extractJson(r2.content))) {
+        if (!apply((r2 as any).json) && !apply(extractJson(r2.content))) {
           lastError = lastError || "model returned unparseable JSON";
         }
+
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
         console.error("AI classify error (json mode)", e);
