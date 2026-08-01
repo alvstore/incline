@@ -484,6 +484,8 @@ export interface LogPtSessionInput {
   trainerId: string;
   notes?: string | null;
   status?: PtSessionStatusInput;
+  /** Finish an already-scheduled pt_sessions row instead of creating a new one. */
+  existingSessionId?: string | null;
 }
 
 export interface LogPtSessionResult {
@@ -503,6 +505,7 @@ const PT_LOG_ERROR_MAP: Record<string, string> = {
   package_not_active: 'This PT package is not active.',
   no_sessions_left: 'No sessions left on this pack — please renew first.',
   package_expired: 'This monthly plan has expired — please renew first.',
+  session_not_scheduled: 'That session is no longer in a scheduled state.',
 };
 
 export async function logPtSession(
@@ -513,11 +516,13 @@ export async function logPtSession(
     p_trainer_id: input.trainerId,
     p_status: input.status ?? 'completed',
     p_notes: input.notes ?? null,
+    p_session_id: input.existingSessionId ?? null,
   });
   if (error) {
     const friendly = PT_LOG_ERROR_MAP[error.message] ?? error.message;
     throw new Error(friendly);
   }
+
   const result = data as unknown as LogPtSessionResult;
   // Only fire member receipts for actual attended sessions
   if (result.status === 'completed' || result.status === 'late') {
