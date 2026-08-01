@@ -73,10 +73,12 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
       const payload: any = {
         id: pkg.id,
         ...formData,
-        gst_percentage: formData.gst_enabled ? formData.gst_percentage : 0,
-        gst_inclusive: formData.gst_enabled ? formData.gst_inclusive : false,
+        // PT billing is standardised: 5% GST, price-inclusive.
+        gst_percentage: 5,
+        gst_inclusive: true,
       };
       delete payload.gst_enabled;
+
       if (isDurationBased) {
         payload.total_sessions = 0;
         payload.validity_days = formData.duration_months * 30;
