@@ -71,11 +71,14 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { action = "report", branch_id, device_ids } = body as {
-      action?: "report" | "resync";
+    const { action = "report", branch_id, device_ids, person_type, person_id } = body as {
+      action?: "report" | "resync" | "diagnose";
       branch_id?: string;
       device_ids?: number[];
+      person_type?: "member" | "employee" | "trainer";
+      person_id?: string;
     };
+
 
     // Resolve MIPS connection (branch-scoped, env fallback)
     let serverUrl = Deno.env.get("MIPS_SERVER_URL") || "";
@@ -109,6 +112,60 @@ Deno.serve(async (req) => {
       faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
       online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
     })).filter((d) => !isNaN(d.id));
+
+    // Diagnostic: prove whether the terminal rejects the face image or whether
+    // the dispatch itself was lost. Re-push one person, then re-read each
+    // gate's photoCount — the only device-side truth this firmware exposes.
+    if (action === "diagnose") {
+      if (!person_type || !person_id) return json({ error: "person_type and person_id are required" }, 400);
+      const before = devices.map((d) => ({ id: d.id, name: d.name, faces: d.faces, persons: d.persons }));
+
+      const syncRes = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          apikey: SERVICE_KEY,
+        },
+        body: JSON.stringify({ person_type, person_id, branch_id, deploy_to_devices: true }),
+        signal: AbortSignal.timeout(40_000),
+      });
+      const syncData = await syncRes.json().catch(() => ({}));
+
+      // Give the terminal time to pull and enrol the face template.
+      await new Promise((r) => setTimeout(r, 8000));
+      const afterJson = await getJson(`${baseUrl}/through/device/list`, token);
+      const afterRows: any[] = afterJson?.rows || afterJson?.data || [];
+      const after = afterRows.map((d) => ({
+        id: Number(d.id ?? d.deviceId),
+        name: d.deviceName || d.name || "",
+        faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
+        persons: Number(d.personCount ?? d.personNum ?? 0),
+      })).filter((d) => !isNaN(d.id));
+
+      const deltas = after.map((a) => {
+        const b = before.find((x) => x.id === a.id);
+        return { device: a.name, faces_before: b?.faces ?? null, faces_after: a.faces, delta: b ? a.faces - b.faces : null };
+      });
+      const anyIncrease = deltas.some((d) => (d.delta ?? 0) > 0);
+
+      return json({
+        success: true,
+        verdict: anyIncrease
+          ? "face_enrolled — dispatch path is healthy for this person"
+          : "no_face_increase — server accepted it but no gate enrolled the face (image quality or a lost dispatch)",
+        sync: {
+          ok: syncData?.success ?? false,
+          photo_uploaded: syncData?.photo_uploaded ?? null,
+          photo_result: syncData?.photo_result ?? null,
+          dispatched_device_ids: syncData?.dispatched_device_ids ?? [],
+          requested_device_ids: syncData?.requested_device_ids ?? [],
+          error: syncData?.error ?? null,
+        },
+        deltas,
+      });
+    }
+
 
     // 2. All persons on the server, keeping only those that carry a photo
     const persons: Array<{ id: number; personSn: string; name: string; hasPhoto: boolean }> = [];
