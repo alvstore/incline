@@ -371,7 +371,7 @@ export function UpgradeMembershipDrawer({
             </Button>
             <Button
               className="flex-1 min-h-[44px]"
-              disabled={!newPlanId || upgrade.isPending}
+              disabled={!newPlanId || !ledger?.invoice || upgrade.isPending}
               onClick={() => upgrade.mutate()}
             >
               {upgrade.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
