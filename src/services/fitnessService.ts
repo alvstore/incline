@@ -479,6 +479,23 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
   const channels = params.channels ?? [];
   const contacts = await loadMemberContacts(params.member_ids);
 
+  const validFrom = params.valid_from || new Date().toISOString().split('T')[0];
+  // Guard against a collapsed validity window (valid_until <= valid_from),
+  // which would make the assignment instantly "expired" and invisible in the
+  // Member Plans "Active" filter. Default to +4 weeks.
+  let validUntil = params.valid_until || null;
+  if (!validUntil || validUntil <= validFrom) {
+    const d = new Date(validFrom);
+    d.setDate(d.getDate() + 28);
+    validUntil = d.toISOString().split('T')[0];
+  }
+
+  /** Branch resolution: explicit branch → member's own branch. Never null,
+   *  otherwise the row disappears from the branch-scoped Member Plans list and
+   *  WhatsApp/Email dispatch fails with "No branch context". */
+  const branchFor = (member_id: string) =>
+    params.branch_id || contacts.get(member_id)?.branch_id || null;
+
   const rows = params.member_ids.map((member_id) => ({
     member_id,
     plan_name: params.plan_name,
@@ -487,9 +504,9 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
     plan_data: toJsonContent(params.plan_data),
     is_custom: params.is_custom ?? true,
     is_public: false,
-    valid_from: params.valid_from || new Date().toISOString().split('T')[0],
-    valid_until: params.valid_until,
-    branch_id: params.branch_id,
+    valid_from: validFrom,
+    valid_until: validUntil,
+    branch_id: branchFor(member_id),
     created_by: user?.id,
     template_id: params.template_id ?? null,
     is_common: params.is_common ?? false,
@@ -519,7 +536,7 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
         ? await sendOneNotification(ch, contact, {
             plan_name: params.plan_name,
             plan_type: params.plan_type,
-            branch_id: params.branch_id,
+            branch_id: branchFor(member_id) || undefined,
           })
         : { sent: false, error: 'Member contact not found' };
     }
