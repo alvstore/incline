@@ -75,8 +75,10 @@ const DeviceManagement = () => {
           </div>
         </div>
 
+        <MipsServerStatusBanner branchId={branchFilter || undefined} />
         <DeviceHealthStrip branchId={branchFilter || undefined} />
         <DeviceAttentionBar branchId={branchFilter || undefined} />
+
 
         <Tabs defaultValue="fleet" className="space-y-4">
           <TabsList className="flex w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/60 p-1">
