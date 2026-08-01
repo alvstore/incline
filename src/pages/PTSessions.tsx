@@ -801,7 +801,19 @@ export default function PTSessionsPage() {
                             {pkg.status}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg cursor-pointer"
+                            disabled={renewPackage.isPending}
+                            onClick={() => handleRenewPackage(pkg)}
+                          >
+                            {renewPackage.isPending && renewingId === pkg.id ? 'Renewing…' : 'Renew'}
+                          </Button>
+                        </TableCell>
                       </TableRow>
+
                     ))}
                   </TableBody>
                 </Table>
