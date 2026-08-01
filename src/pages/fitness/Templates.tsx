@@ -49,6 +49,7 @@ import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
 import { PlanViewerSheet } from "@/components/fitness/PlanViewerSheet";
 import { UploadPdfTemplateDrawer } from "@/components/fitness/UploadPdfTemplateDrawer";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
 
 type CommonFilter = "all" | "common" | "pt_only";

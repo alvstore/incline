@@ -29,7 +29,7 @@ import {
   NotificationChannel,
 } from '@/services/fitnessService';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
-import { supabase } from '@/integrations/supabase/client';
+
 import { toast } from 'sonner';
 import { format, addWeeks } from 'date-fns';
 
