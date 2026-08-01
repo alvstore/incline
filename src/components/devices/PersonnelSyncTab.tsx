@@ -196,6 +196,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
   const truthFor = (code: string) => serverTruth?.map[code.replace(/-/g, "")];
 
+  // ---- Gate truth: faces actually enrolled on each turnstile ---------------
+  const { data: gateTruth } = useQuery({
+    queryKey: ["mips-gate-truth", branchId || "all"],
+    queryFn: () => fetchMIPSDevices(branchId),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+
 
 
 
