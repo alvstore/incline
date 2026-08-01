@@ -139,16 +139,43 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const baseUrl = serverUrl.replace(/\/+$/, "");
-      let token: string;
-      try {
-        token = await login(baseUrl, username, password);
-      } catch (e) {
-        summary.push({ branch_id: branchId, error: e instanceof Error ? e.message : String(e) });
+      // Circuit breaker: while the server is known-unreachable, skip instead of
+      // hammering it. The cooldown expiring makes the next tick the probe.
+      const breaker = await readBreaker(supabase, branchId);
+      if (isTripped(breaker) && !(body as any)?.force) {
+        summary.push({
+          branch_id: branchId,
+          paused: true,
+          reason: "MIPS server unreachable — sync paused, auto-resuming",
+          resumes_at: breaker.open_until,
+          last_error: breaker.last_error,
+        });
         continue;
       }
 
-      const before = await readDeviceCounts(baseUrl, token);
+      const baseUrl = serverUrl.replace(/\/+$/, "");
+      let token: string;
+      let before: Awaited<ReturnType<typeof readDeviceCounts>>;
+      try {
+        token = await login(baseUrl, username, password);
+        before = await readDeviceCounts(baseUrl, token);
+        await recordSuccess(supabase, branchId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (e instanceof MipsTransportError || classifyFailure({ message: msg }) === "transport") {
+          const state = await recordTransportFailure(supabase, branchId, msg);
+          summary.push({
+            branch_id: branchId,
+            transport_error: msg,
+            breaker_open: state.open,
+            resumes_at: state.open_until,
+          });
+        } else {
+          summary.push({ branch_id: branchId, error: msg });
+        }
+        continue;
+      }
+
 
       // Expected face population = CRM people with a photo AND a MIPS identity.
       const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
