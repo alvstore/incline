@@ -511,6 +511,29 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                 />
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Warm-up</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
+                    value={days[activeIdx].warmup}
+                    onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Cool-down</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
+                    value={days[activeIdx].cooldown}
+                    onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
+                  />
+                </div>
+              </div>
+
+
+
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
