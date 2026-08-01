@@ -428,16 +428,12 @@ function extractPlaceIdFromLink(link?: string | null): string | null {
 async function searchPlaces(branch_id: string | undefined, query: string) {
   const key = await resolvePlacesKey(branch_id);
   if (!key) return json({ ok: false, reason: "No Places API key saved. Add one in Step 1 of the Google drawer." }, 200);
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const res = await placesFetch(key, "/v1/places:searchText", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
-    },
-    body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
+    fieldMask: "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
+    body: { textQuery: query, maxResultCount: 8 },
   });
+
   if (!res.ok) {
     const txt = await res.text();
     console.error("places searchText failed", res.status, txt.slice(0, 300));
