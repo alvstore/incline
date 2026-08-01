@@ -103,11 +103,12 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
   const resetForm = () => {
     setFormData({
       name: '', description: '', total_sessions: 10, sessions_per_month: 8,
-      price: 0, validity_days: 90, session_type: 'per_session',
-      auto_renew: false, gst_enabled: false, gst_inclusive: false, gst_percentage: 18,
-      package_type: 'session_based' as 'session_based' | 'monthly', duration_months: 3,
+      price: 0, validity_days: 90, session_type: 'monthly',
+      auto_renew: false, gst_enabled: true, gst_inclusive: true, gst_percentage: 5,
+      package_type: 'monthly' as 'session_based' | 'monthly', duration_months: 1,
     });
   };
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
