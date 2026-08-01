@@ -1,4 +1,4 @@
-// mips-face-sweep v1.0.0
+// mips-face-sweep v1.1.0
 // Self-healing face enrollment worker.
 //
 // The MIPS server accepts photos that the turnstiles then silently discard, so
@@ -11,9 +11,24 @@
 //      sync-to-mips (photo upload + per-device dispatch),
 //   4. re-reads photoCount and reports the before → after delta.
 //
+// v1.1.0 adds graceful degradation: transport failures (server rebooting,
+// Tomcat restarting, VPS unreachable) trip a shared circuit breaker instead of
+// hammering a starting server, and the sweep resumes automatically once a probe
+// succeeds.
+//
 // Run by the Automation Brain every 5 minutes (rule `mips_face_enrollment_sweep`).
 // Also callable on demand from the Device Command Center.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyFailure,
+  isTripped,
+  mipsFetch,
+  MipsTransportError,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,27 +52,25 @@ function json(body: unknown, status = 200) {
 }
 
 async function login(baseUrl: string, username: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/login`, {
+  const { text } = await mipsFetch(`${baseUrl}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username, password }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const text = await res.text();
+  }, 10_000);
   let j: any;
-  try { j = JSON.parse(text); } catch { throw new Error(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
+  // A booting Tomcat answers with an HTML error page — that is a transport
+  // condition, not bad credentials.
+  try { j = JSON.parse(text); } catch { throw new MipsTransportError(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
   const token = j.token || j.data?.token;
   if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
   return token;
 }
 
 async function readDeviceCounts(baseUrl: string, token: string) {
-  const res = await fetch(`${baseUrl}/through/device/list`, {
+  const { text } = await mipsFetch(`${baseUrl}/through/device/list`, {
     method: "GET",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "TENANT-ID": "1" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  const text = await res.text();
+  }, 10_000);
   let j: any;
   try { j = JSON.parse(text); } catch { j = {}; }
   const rows: any[] = j?.rows || j?.data || [];
@@ -72,6 +85,7 @@ async function readDeviceCounts(baseUrl: string, token: string) {
     }))
     .filter((d) => !isNaN(d.id));
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -125,16 +139,43 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const baseUrl = serverUrl.replace(/\/+$/, "");
-      let token: string;
-      try {
-        token = await login(baseUrl, username, password);
-      } catch (e) {
-        summary.push({ branch_id: branchId, error: e instanceof Error ? e.message : String(e) });
+      // Circuit breaker: while the server is known-unreachable, skip instead of
+      // hammering it. The cooldown expiring makes the next tick the probe.
+      const breaker = await readBreaker(supabase, branchId);
+      if (isTripped(breaker) && !(body as any)?.force) {
+        summary.push({
+          branch_id: branchId,
+          paused: true,
+          reason: "MIPS server unreachable — sync paused, auto-resuming",
+          resumes_at: breaker.open_until,
+          last_error: breaker.last_error,
+        });
         continue;
       }
 
-      const before = await readDeviceCounts(baseUrl, token);
+      const baseUrl = serverUrl.replace(/\/+$/, "");
+      let token: string;
+      let before: Awaited<ReturnType<typeof readDeviceCounts>>;
+      try {
+        token = await login(baseUrl, username, password);
+        before = await readDeviceCounts(baseUrl, token);
+        await recordSuccess(supabase, branchId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (e instanceof MipsTransportError || classifyFailure({ message: msg }) === "transport") {
+          const state = await recordTransportFailure(supabase, branchId, msg);
+          summary.push({
+            branch_id: branchId,
+            transport_error: msg,
+            breaker_open: state.open,
+            resumes_at: state.open_until,
+          });
+        } else {
+          summary.push({ branch_id: branchId, error: msg });
+        }
+        continue;
+      }
+
 
       // Expected face population = CRM people with a photo AND a MIPS identity.
       const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
@@ -249,7 +290,16 @@ Deno.serve(async (req) => {
         }
       }
 
-      const after = await readDeviceCounts(baseUrl, token);
+      // The verification read must never fail the whole sweep — if the server
+      // slipped away mid-batch, report what we know and let the breaker handle it.
+      let after = before;
+      try {
+        after = await readDeviceCounts(baseUrl, token);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (e instanceof MipsTransportError) await recordTransportFailure(supabase, branchId, msg);
+      }
+
       const deviceReport = after.map((d) => {
         const prev = before.find((p) => p.id === d.id);
         return {

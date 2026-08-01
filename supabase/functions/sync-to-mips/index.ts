@@ -1,4 +1,5 @@
-// v2.0.0 — face-safe photo normalization (never degrades a face below the
+// v2.1.0 — bounded timeouts on every MIPS call (no invocation can hang on a
+// rebooting server). Face-safe photo normalization (never degrades a face below the
 // terminal's detection threshold), per-stage audit rows for photo upload and
 // photo assign, and retryable per-device delivery so one healthy gate cannot
 // hide another gate's failure.
@@ -80,6 +81,8 @@ async function getRuoYiToken(baseUrl?: string, username?: string, password?: str
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username: user, password: pass }),
+    // Bounded: a booting MIPS server must never hang the invocation.
+    signal: AbortSignal.timeout(10_000),
   });
   const text = await res.text();
   let json: any;
@@ -107,7 +110,7 @@ function authHeaders(token: string): Record<string, string> {
 async function lookupPerson(baseUrl: string, token: string, personSn: string): Promise<any | null> {
   const res = await fetch(
     `${baseUrl}/personInfo/person/list?personSn=${personSn}&pageNum=1&pageSize=5`,
-    { method: "GET", headers: authHeaders(token) }
+    { method: "GET", headers: authHeaders(token), signal: AbortSignal.timeout(10_000) }
   );
   const text = await res.text();
   let json: any;
@@ -142,6 +145,7 @@ async function upsertPerson(
     method,
     headers: authHeaders(token),
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   });
 
   const text = await res.text();
@@ -404,6 +408,7 @@ async function dispatchToDevices(
     const res = await fetch(`${baseUrl}/through/device/list`, {
       method: "GET",
       headers: authHeaders(token),
+      signal: AbortSignal.timeout(10_000),
     });
     const text = await res.text();
     const json = JSON.parse(text);
@@ -838,6 +843,7 @@ Deno.serve(async (req) => {
           method: "PUT",
           headers: authHeaders(token),
           body: JSON.stringify(updatedPerson),
+          signal: AbortSignal.timeout(15_000),
         });
         const putJson = await putRes.json().catch(() => ({}));
         const ok = putJson.code === 200 || putJson.code === 0;

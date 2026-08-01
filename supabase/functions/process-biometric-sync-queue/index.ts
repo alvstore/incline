@@ -1,12 +1,24 @@
-// v1.4.0 — Drain biometric_sync_queue in bounded batches of five.
+// v1.5.0 — Drain biometric_sync_queue in bounded batches of five.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
+//
+// v1.5.0 separates transport failures (MIPS server rebooting / unreachable)
+// from data failures. Transport failures reschedule the row WITHOUT consuming
+// its retry budget and trip the shared circuit breaker, so a server outage can
+// no longer exhaust the queue and permanently fail everyone in it.
 //
 // Invoked by the automation-brain cron every ~5 min under rule
 // `process_biometric_sync_queue`, and on-demand from the "Heal drift" button
 // on the Device Command Center dashboard.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyFailure,
+  isTripped,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +31,7 @@ const PER_RUN_CAP = 5;
 // Exponential backoff (minutes) applied against queued_at + processed_at.
 // retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
 const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -49,7 +62,39 @@ Deno.serve(async (req) => {
 
     console.log(`[process-biometric-sync-queue] picked=${rows?.length || 0} due=${dueRows.length}`);
 
-    let ok = 0, failed = 0, skipped = 0;
+    // Queue rows carry no branch, so honour any open breaker: if MIPS is known
+    // unreachable, leave the rows untouched rather than burning their retries.
+    const { data: breakerRows } = await supabase
+      .from("settings")
+      .select("branch_id, value")
+      .eq("key", "mips_breaker");
+    const openBreaker = (breakerRows || []).find((b: any) =>
+      isTripped({
+        open: Boolean(b?.value?.open),
+        open_until: b?.value?.open_until ?? null,
+        consecutive_failures: 0,
+        opens: 0,
+        last_error: b?.value?.last_error ?? null,
+        last_failure_at: null,
+        last_success_at: null,
+      })
+    );
+    if (openBreaker && dueRows.length > 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          paused: true,
+          reason: "MIPS server unreachable — queue paused, auto-resuming",
+          resumes_at: (openBreaker as any).value?.open_until ?? null,
+          last_error: (openBreaker as any).value?.last_error ?? null,
+          waiting: dueRows.length,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let ok = 0, failed = 0, skipped = 0, deferred = 0;
+
     for (const row of dueRows) {
       const personId = (row as any).person_uuid || (row as any).member_id || (row as any).staff_id;
       const personType = (row as any).person_type
@@ -113,7 +158,20 @@ Deno.serve(async (req) => {
               processed_at: new Date().toISOString(),
             })
             .eq("id", (row as any).id);
+          await recordSuccess(supabase, null);
           ok++;
+        } else if (classifyFailure({ status: invokeRes.status, message: partialReason }) === "transport") {
+          // Server-side outage: reschedule without consuming the retry budget.
+          await recordTransportFailure(supabase, null, partialReason);
+          await supabase
+            .from("biometric_sync_queue")
+            .update({
+              status: "pending",
+              error_message: `deferred (MIPS unreachable): ${partialReason}`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", (row as any).id);
+          deferred++;
         } else {
           const nextRetry = ((row as any).retry_count || 0) + 1;
           await supabase
@@ -129,12 +187,26 @@ Deno.serve(async (req) => {
           failed++;
         }
       } catch (e: any) {
+        const msg = e?.message || String(e);
+        if (classifyFailure({ message: msg }) === "transport") {
+          await recordTransportFailure(supabase, null, msg);
+          await supabase
+            .from("biometric_sync_queue")
+            .update({
+              status: "pending",
+              error_message: `deferred (MIPS unreachable): ${msg}`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", (row as any).id);
+          deferred++;
+          continue;
+        }
         const nextRetry = ((row as any).retry_count || 0) + 1;
         await supabase
           .from("biometric_sync_queue")
           .update({
             status: nextRetry >= MAX_RETRIES ? "failed" : "pending",
-            error_message: e?.message || String(e),
+            error_message: msg,
             retry_count: nextRetry,
           })
           .eq("id", (row as any).id);
@@ -143,9 +215,10 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed: dueRows.length, picked: rows?.length || 0, ok, failed, skipped }),
+      JSON.stringify({ success: true, processed: dueRows.length, picked: rows?.length || 0, ok, failed, skipped, deferred }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e: any) {
     console.error("[process-biometric-sync-queue] fatal:", e);
     return new Response(JSON.stringify({ error: e?.message || String(e) }), {
