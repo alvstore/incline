@@ -8601,7 +8601,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           delivery_stage: string
-          device_id: string
+          device_id: string | null
           entity_id: string | null
           entity_type: string | null
           id: string
@@ -8625,7 +8625,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           delivery_stage?: string
-          device_id: string
+          device_id?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -8649,7 +8649,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           delivery_stage?: string
-          device_id?: string
+          device_id?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
