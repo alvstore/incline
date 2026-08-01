@@ -3878,6 +3878,7 @@ export type Database = {
           is_active: boolean | null
           marital_status: string | null
           medical_fitness_declared_at: string | null
+          mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
           mips_sync_status: string | null
@@ -3927,6 +3928,7 @@ export type Database = {
           is_active?: boolean | null
           marital_status?: string | null
           medical_fitness_declared_at?: string | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
@@ -3976,6 +3978,7 @@ export type Database = {
           is_active?: boolean | null
           marital_status?: string | null
           medical_fitness_declared_at?: string | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
@@ -8028,6 +8031,7 @@ export type Database = {
           lead_id: string | null
           lifecycle_state: string
           member_code: string | null
+          mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
           mips_sync_status: string | null
@@ -8076,6 +8080,7 @@ export type Database = {
           lead_id?: string | null
           lifecycle_state?: string
           member_code?: string | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
@@ -8124,6 +8129,7 @@ export type Database = {
           lead_id?: string | null
           lifecycle_state?: string
           member_code?: string | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
@@ -8595,7 +8601,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           delivery_stage: string
-          device_id: string
+          device_id: string | null
           entity_id: string | null
           entity_type: string | null
           id: string
@@ -8619,7 +8625,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           delivery_stage?: string
-          device_id: string
+          device_id?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -8643,7 +8649,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           delivery_stage?: string
-          device_id?: string
+          device_id?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -12213,6 +12219,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           max_clients: number | null
+          mips_face_verified_at: string | null
           mips_person_id: string | null
           mips_person_sn: string | null
           mips_sync_status: string | null
@@ -12245,6 +12252,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_clients?: number | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null
@@ -12277,6 +12285,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_clients?: number | null
+          mips_face_verified_at?: string | null
           mips_person_id?: string | null
           mips_person_sn?: string | null
           mips_sync_status?: string | null

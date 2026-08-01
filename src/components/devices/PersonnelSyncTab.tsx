@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  syncPersonToMIPS, fetchAllMIPSPersons, verifyPersonOnMIPS,
+  syncPersonToMIPS, fetchAllMIPSPersons, verifyPersonOnMIPS, fetchMIPSDevices,
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
@@ -195,6 +195,15 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   });
 
   const truthFor = (code: string) => serverTruth?.map[code.replace(/-/g, "")];
+
+  // ---- Gate truth: faces actually enrolled on each turnstile ---------------
+  const { data: gateTruth } = useQuery({
+    queryKey: ["mips-gate-truth", branchId || "all"],
+    queryFn: () => fetchMIPSDevices(branchId),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: 1,
+  });
 
 
 
@@ -546,6 +555,35 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
           hint={`${stats.noPhoto} people have no photo in CRM`}
         />
       </div>
+
+      {(gateTruth?.length ?? 0) > 0 && (
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+          <CardContent className="flex flex-wrap items-center gap-4 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Faces on gates
+            </span>
+            {gateTruth!.map((d) => (
+              <div key={d.id} className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-foreground">{d.deviceName || d.name}</span>
+                <Badge
+                  className={
+                    d.faceCount >= stats.serverWithFace
+                      ? "rounded-full bg-emerald-100 text-emerald-700"
+                      : "rounded-full bg-amber-100 text-amber-700"
+                  }
+                >
+                  {d.faceCount} faces · {d.personCount} people
+                </Badge>
+              </div>
+            ))}
+            <span className="text-xs text-muted-foreground">
+              MIPS server holds {stats.serverWithFace} face photos — gates below this number are still catching up.
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+
 
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">

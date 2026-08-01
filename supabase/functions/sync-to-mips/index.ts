@@ -1,5 +1,7 @@
-// v1.9.0 — bounded photo handling plus retryable, independently audited,
-// per-device delivery so one healthy gate cannot hide another gate's failure.
+// v2.0.0 — face-safe photo normalization (never degrades a face below the
+// terminal's detection threshold), per-stage audit rows for photo upload and
+// photo assign, and retryable per-device delivery so one healthy gate cannot
+// hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
@@ -15,8 +17,15 @@ const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Above this the raw source is never decoded — decoding multi-MB photos in an
 // edge worker exhausts memory and the invocation is killed by the platform.
 const MAX_SOURCE_BYTES = 6 * 1024 * 1024;
+// Face-safety floors: the terminal runs its own face detection on the image we
+// push. Anything smaller / more compressed than this is accepted by the MIPS
+// server but silently discarded by the gate, which is exactly how the fleet
+// ended up with 41 faces for 57 server photos.
+const MIN_FACE_EDGE = 720;
+const MIN_FACE_QUALITY = 60;
 const BIOMETRIC_BUCKET = "member-photos";
 const AVATAR_PATH_PREFIX = "avatars/";
+
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
@@ -157,13 +166,18 @@ async function upsertPerson(
 }
 
 /**
- * Re-encode an oversized image so it fits MIPS' 400KB face-photo cap.
+ * Re-encode an oversized image so it fits MIPS' 400KB face-photo cap WITHOUT
+ * destroying the face.
  *
- * Memory discipline (edge worker OOM guard):
- *  - sources above MAX_SOURCE_BYTES are never decoded — a 12MP phone JPEG
- *    expands to >50MB RGBA and kills the worker ("not enough compute resources")
- *  - one decode, one resize pass to <=640px, then quality steps on the same
- *    small bitmap; intermediate references are dropped as we go
+ * Face safety:
+ *  - never resized below MIN_FACE_EDGE (720px) on the long edge
+ *  - never encoded below MIN_FACE_QUALITY (60)
+ *  - if 400KB is unreachable within those floors we return null so the caller
+ *    reports `needs_better_source` instead of pushing an image the terminal
+ *    will accept and then silently discard.
+ *
+ * Memory discipline (edge worker OOM guard): sources above MAX_SOURCE_BYTES are
+ * never decoded — a 12MP phone JPEG expands to >50MB RGBA and kills the worker.
  */
 async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
   if (bytes.length > MAX_SOURCE_BYTES) {
@@ -176,27 +190,33 @@ async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null
     if (!decoded || typeof (decoded as any).encodeJPEG !== "function") return null;
     let img: any = decoded;
     const maxEdge = Math.max(img.width, img.height);
-    if (maxEdge > 640) {
-      const scale = 640 / maxEdge;
+    if (maxEdge > 1080) {
+      const scale = 1080 / maxEdge;
       img = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
     }
-    for (const quality of [70, 55, 40, 30]) {
+    for (const quality of [85, 75, 65, MIN_FACE_QUALITY]) {
       const out = new Uint8Array(await img.encodeJPEG(quality));
-      if (out.length <= MAX_PHOTO_BYTES) {
-        img = null;
-        return out;
+      if (out.length <= MAX_PHOTO_BYTES) return out;
+    }
+    // Still too big: step the long edge down, never past MIN_FACE_EDGE.
+    let edge = Math.max(img.width, img.height);
+    while (edge > MIN_FACE_EDGE) {
+      edge = Math.max(MIN_FACE_EDGE, Math.round(edge * 0.8));
+      const scale = edge / Math.max(img.width, img.height);
+      const small = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
+      for (const quality of [75, MIN_FACE_QUALITY]) {
+        const out = new Uint8Array(await small.encodeJPEG(quality));
+        if (out.length <= MAX_PHOTO_BYTES) return out;
       }
     }
-    // Last resort — halve dimensions once more.
-    const small = img.resize(Math.round(img.width / 2), Math.round(img.height / 2));
-    img = null;
-    const out = new Uint8Array(await small.encodeJPEG(40));
-    return out.length <= MAX_PHOTO_BYTES ? out : null;
+    console.warn("normalizePhotoBytes: cannot reach 400KB without dropping below face-safety floors");
+    return null;
   } catch (e) {
     console.warn("normalizePhotoBytes failed:", e);
     return null;
   }
 }
+
 
 /**
  * Two-step photo upload:
@@ -260,7 +280,10 @@ async function uploadPhoto(
     if (photoBytes.length > MAX_PHOTO_BYTES) {
       const normalized = await normalizePhotoBytes(photoBytes);
       if (!normalized) {
-        return { success: false, message: `Photo too large: ${sizeKB}KB and could not be re-encoded` };
+        return {
+          success: false,
+          message: `needs_better_source: ${sizeKB}KB photo cannot fit 400KB without dropping below ${MIN_FACE_EDGE}px / q${MIN_FACE_QUALITY} face-safety floors`,
+        };
       }
       console.log(`Photo normalized: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
       photoBytes = normalized;
@@ -457,7 +480,11 @@ async function dispatchToDevices(
     let status = "failed";
     let lastError: string | null = null;
     try {
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      // "请选择在线设备" ("please select an online device") is a transient
+      // window on the MIPS side, not a permanent failure — back off and retry
+      // instead of losing the dispatch.
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
           method: "POST",
           headers: authHeaders(token),
@@ -475,12 +502,14 @@ async function dispatchToDevices(
           deliveredDeviceIds.push(mipsDeviceId);
           break;
         }
-        if (attempt < 2 && lastError.includes("请选择在线设备")) {
-          await new Promise((resolve) => setTimeout(resolve, 250));
+        const retryable = lastError.includes("请选择在线设备") || res.status >= 500;
+        if (attempt < MAX_ATTEMPTS && retryable) {
+          await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
         } else {
           break;
         }
       }
+
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       result = { error: lastError };
@@ -893,9 +922,12 @@ Deno.serve(async (req) => {
     console.log(`MIPS person ${existing ? "updated" : "created"}: personId=${personId}`);
 
     // Step 4: Upload photo (two-step: upload file → PUT photoUri on person)
-    // Photo upload is non-blocking — sync succeeds even if photo fails
+    // Photo upload is non-blocking for the person record, but its true result
+    // IS audited — an unaudited photo stage is why the queue read 100% success
+    // while 16 faces were missing from the gates.
     let photoResult = { success: false, message: "No photo available" } as any;
     if (photoUrl) {
+      const photoStarted = Date.now();
       try {
         photoResult = await uploadPhoto(baseUrl, token, mipsPersonSn, photoUrl, supabase);
         console.log(`Photo upload: ${photoResult.success ? "✓" : "✗"} ${photoResult.message}`);
@@ -903,7 +935,29 @@ Deno.serve(async (req) => {
         console.warn("Photo upload failed (non-fatal):", photoErr);
         photoResult = { success: false, message: `Photo upload error: ${photoErr instanceof Error ? photoErr.message : String(photoErr)}` };
       }
+      if (effectiveBranchId) {
+        const { error: photoAuditErr } = await supabase.from("mips_sync_attempts").insert({
+          branch_id: effectiveBranchId,
+          entity_type: person_type,
+          entity_id: person_id,
+          mips_person_id: personId,
+          operation: "photo_upload",
+          status: photoResult?.success ? "success" : "failed",
+          delivery_stage: photoResult?.success ? "server_face_ready" : "failed",
+          last_error: photoResult?.success ? null : String(photoResult?.message || "photo upload failed"),
+          latency_ms: Date.now() - photoStarted,
+          response_payload: {
+            message: photoResult?.message ?? null,
+            file_name: photoResult?.fileName ?? null,
+            bytes: photoResult?.bytes?.length ?? null,
+            photo_source: photoSource || null,
+          },
+          completed_at: new Date().toISOString(),
+        });
+        if (photoAuditErr) console.warn("Photo stage audit insert failed:", photoAuditErr.message);
+      }
     } else {
+
       console.log("No photo URL provided, skipping photo upload");
     }
 

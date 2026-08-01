@@ -1,12 +1,17 @@
 /**
- * Client-side image compression utility for device sync.
- * Resizes to max 640x640, compresses to JPEG under 200KB.
+ * Client-side image compression for avatars AND biometric/device sync.
+ *
+ * Face safety: MIPS terminals run their own face detection on the image we
+ * push. Over-compressed sources are accepted by the MIPS server and then
+ * silently discarded by the gate, so we keep a 720px long edge and a 0.6
+ * quality floor and target ~350KB (server cap is 400KB).
  */
 
-const MAX_DIMENSION = 640;
-const MAX_SIZE_BYTES = 200 * 1024; // 200KB
-const INITIAL_QUALITY = 0.85;
-const MIN_QUALITY = 0.3;
+const MAX_DIMENSION = 720;
+const MAX_SIZE_BYTES = 350 * 1024; // stay under the MIPS 400KB face-photo cap
+const INITIAL_QUALITY = 0.9;
+const MIN_QUALITY = 0.6;
+
 
 export async function compressImageForDevice(file: File): Promise<{
   blob: Blob;
@@ -34,16 +39,9 @@ export async function compressImageForDevice(file: File): Promise<{
     quality -= 0.1;
   } while (quality >= MIN_QUALITY);
 
-  // If still too large, reduce dimensions further
-  if (blob.size > MAX_SIZE_BYTES) {
-    const scale = Math.sqrt(MAX_SIZE_BYTES / blob.size);
-    const newW = Math.round(width * scale);
-    const newH = Math.round(height * scale);
-    canvas.width = newW;
-    canvas.height = newH;
-    ctx.drawImage(img, 0, 0, newW, newH);
-    blob = await canvasToBlob(canvas, 'image/jpeg', MIN_QUALITY);
-  }
+  // Never shrink below the face-safety floor to hit the byte target — the edge
+  // function re-encodes if needed and will flag a source it cannot fit safely.
+
 
   const base64 = await blobToBase64(blob);
 
