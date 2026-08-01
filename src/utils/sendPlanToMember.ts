@@ -38,11 +38,13 @@ export interface PlanSendInput {
   channels: PlanSendChannel[];
 }
 
+export type WhatsAppSendMode = 'template_document' | 'native_document' | 'link';
+
 export interface PlanSendResult {
   pdfUrl?: string;
   pdfBlob?: Blob;
   channels: Partial<
-    Record<PlanSendChannel, { sent: boolean; error?: string }>
+    Record<PlanSendChannel, { sent: boolean; error?: string; mode?: WhatsAppSendMode }>
   >;
 }
 
