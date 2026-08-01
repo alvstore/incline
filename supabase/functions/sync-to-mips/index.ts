@@ -480,11 +480,16 @@ async function dispatchToDevices(
         mips_person_id: personId,
         operation: "device_dispatch",
         status,
+        delivery_stage: status === "success" ? "device_accepted" : "failed",
         last_error: lastError,
         response_code: responseCode,
         latency_ms: Date.now() - started,
         response_payload: result,
         completed_at: new Date().toISOString(),
+        verification_payload: {
+          accepted_only: status === "success",
+          message: result?.msg || result?.message || null,
+        },
       });
       if (auditError) console.warn("Device delivery audit insert failed:", auditError.message);
     }

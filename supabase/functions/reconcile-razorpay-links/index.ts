@@ -1,4 +1,4 @@
-// v2.0.0 — Razorpay Payment Link + Standard Checkout reconciler.
+// v2.1.0 — preserves capture time and Razorpay settlement deductions.
 //
 // Fetches the current status of pending Razorpay Payment Links via the
 // Razorpay REST API and, if paid, records the payment locally so invoices
@@ -73,6 +73,12 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
     : paidPayment?.method === "netbanking"
       ? "bank_transfer"
       : "card";
+  const capturedAt = Number.isFinite(Number(paidPayment?.created_at))
+    ? new Date(Number(paidPayment.created_at) * 1000).toISOString()
+    : new Date().toISOString();
+  const gatewayFee = Number(paidPayment?.fee ?? 0) / 100;
+  const gatewayTax = Number(paidPayment?.tax ?? 0) / 100;
+  const netSettlement = Math.max(0, paidAmount - gatewayFee - gatewayTax);
 
   // 1. Invoice snapshot (for member_id / branch_id / totals)
   const { data: inv } = await supabase
@@ -96,7 +102,15 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
     p_idempotency_key: `reconcile:razorpay:${gatewayPaymentId}`,
     p_gateway_payment_id: gatewayPaymentId,
     p_payment_transaction_id: tx.id,
-    p_metadata: { gateway: "razorpay", source: "reconcile-razorpay-links", order_id: tx.gateway_order_id },
+    p_metadata: {
+      gateway: "razorpay",
+      source: "reconcile-razorpay-links",
+      gateway_order_id: tx.gateway_order_id,
+      gateway_captured_at: capturedAt,
+      gateway_fee: gatewayFee,
+      gateway_tax: gatewayTax,
+      net_settlement_amount: netSettlement,
+    },
   });
   if (settleError) throw settleError;
   if (settled?.success === false) throw new Error(settled.error || "settle_payment failed");
@@ -107,7 +121,9 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       status: "captured",
       gateway_payment_id: gatewayPaymentId,
       event_type: "reconciled.captured",
-      webhook_data: { ...(tx.webhook_data || {}), reconciled_at: new Date().toISOString(), reconciler_version: "2.0.0" },
+      received_at: capturedAt,
+      source: "reconciler",
+      webhook_data: { ...(tx.webhook_data || {}), reconciled_at: new Date().toISOString(), reconciler_version: "2.1.0", gateway_fee: gatewayFee, gateway_tax: gatewayTax },
     })
     .eq("id", tx.id);
 

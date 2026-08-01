@@ -97,7 +97,6 @@ const MESSENGER_PROVIDERS = [
 ];
 
 const SUPABASE_FUNCTION_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
-const PAYMENT_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/payment-webhook`;
 const WHATSAPP_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/whatsapp-webhook`;
 const RCS_WEBHOOK_URL = `${SUPABASE_FUNCTION_BASE}/rcs-webhook`;
 
@@ -113,6 +112,7 @@ export function IntegrationSettings() {
   const [diagnosing, setDiagnosing] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState<{ branchId: string; branchName?: string; accountId?: string; locationId?: string } | null>(null);
   const queryClient = useQueryClient();
+  const razorpayWebhookInfo = getWebhookInfoForProvider('payment_gateway', 'razorpay', branchFilter);
 
   const runMetaDiagnostics = async () => {
     const igInteg = (integrations as any[]).find(
@@ -258,10 +258,14 @@ export function IntegrationSettings() {
                 <p className="text-xs text-muted-foreground">Paste this URL in your payment gateway's webhook settings to receive real-time payment confirmations.</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
-                    {PAYMENT_WEBHOOK_URL}
+                    {razorpayWebhookInfo?.url || 'Select a branch to generate the webhook URL'}
                   </code>
                   <Button variant="outline" size="sm" onClick={() => {
-                    navigator.clipboard.writeText(PAYMENT_WEBHOOK_URL);
+                    if (!razorpayWebhookInfo?.url || !branchFilter) {
+                      toast.error('Select a branch before copying the webhook URL');
+                      return;
+                    }
+                    navigator.clipboard.writeText(razorpayWebhookInfo.url);
                     toast.success('Webhook URL copied!');
                   }}>
                     <Copy className="h-3.5 w-3.5" />
