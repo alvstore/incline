@@ -154,7 +154,7 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
           <Label className="text-xs">Exercise *</Label>
           <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
         </div>
-        <div className="col-span-12 sm:col-span-2 hidden sm:block" />
+        
 
 
         <div className="col-span-3 sm:col-span-1">
