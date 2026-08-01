@@ -753,6 +753,8 @@ export default function PTSessionsPage() {
                       <TableHead>Progress</TableHead>
                       <TableHead>Expires</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+
                     </TableRow>
                   </TableHeader>
                   <TableBody>
