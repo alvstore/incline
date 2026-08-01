@@ -357,11 +357,13 @@ async function listLocations(branch_id: string, account_id: string) {
 // exposes through Places API (New) — rating, review count and up to 5 recent
 // reviews. Read-only: no replies, no full history, but the dashboard is live.
 const ENV_PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const GATEWAY_PLACES = "https://connector-gateway.lovable.dev/google_maps/places";
 
 /**
  * Places key resolution order:
  *   1. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`)
- *   2. platform secret / Google Maps connector key `GOOGLE_MAPS_API_KEY`
+ *   2. Google Maps connector key `GOOGLE_MAPS_API_KEY` (routed via the Lovable gateway)
  */
 async function resolvePlacesKey(branch_id?: string): Promise<string> {
   if (branch_id) {
@@ -370,6 +372,35 @@ async function resolvePlacesKey(branch_id?: string): Promise<string> {
   }
   return ENV_PLACES_KEY;
 }
+
+/**
+ * The connector key is a *gateway connection key*, not a Google API key — calling
+ * places.googleapis.com with it directly always 403s. Route those calls through the
+ * Lovable connector gateway; use direct Google calls only for a branch-pasted key.
+ */
+async function placesFetch(
+  key: string,
+  path: string, // e.g. "/v1/places:searchText"
+  init: { method?: string; fieldMask: string; body?: unknown },
+): Promise<Response> {
+  const viaGateway = key === ENV_PLACES_KEY && !!ENV_PLACES_KEY && !!LOVABLE_API_KEY;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Goog-FieldMask": init.fieldMask,
+  };
+  if (viaGateway) {
+    headers["Authorization"] = `Bearer ${LOVABLE_API_KEY}`;
+    headers["X-Connection-Api-Key"] = key;
+  } else {
+    headers["X-Goog-Api-Key"] = key;
+  }
+  return await fetch(`${viaGateway ? GATEWAY_PLACES : "https://places.googleapis.com"}${path}`, {
+    method: init.method ?? "GET",
+    headers,
+    body: init.body ? JSON.stringify(init.body) : undefined,
+  });
+}
+
 
 /** Turn a raw Google error body into something an owner can act on. */
 function friendlyGoogleError(status: number, body: string): string {
