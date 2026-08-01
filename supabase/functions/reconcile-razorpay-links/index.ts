@@ -115,6 +115,34 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
   if (settleError) throw settleError;
   if (settled?.success === false) throw new Error(settled.error || "settle_payment failed");
 
+  // Idempotent settlement can return an already-recorded payment. Enrich that
+  // ledger row as well so historical reconciliations gain the true capture
+  // date and the provider deduction breakdown.
+  await supabase
+    .from("payments")
+    .update({
+      payment_date: capturedAt,
+      settled_at: capturedAt,
+      payment_method: paymentMethod,
+      payment_source: "razorpay",
+      gateway_order_id: tx.gateway_order_id,
+      gateway_fee: gatewayFee,
+      gateway_tax: gatewayTax,
+      net_settlement_amount: netSettlement,
+      lifecycle_metadata: {
+        gateway: "razorpay",
+        source: "reconcile-razorpay-links",
+        gateway_payment_id: gatewayPaymentId,
+        gateway_order_id: tx.gateway_order_id,
+        gateway_captured_at: capturedAt,
+        gateway_fee: gatewayFee,
+        gateway_tax: gatewayTax,
+        net_settlement_amount: netSettlement,
+      },
+    })
+    .eq("transaction_id", gatewayPaymentId)
+    .eq("invoice_id", inv.id);
+
   // 4. Mark payment_transactions row
   await supabase.from("payment_transactions")
     .update({
@@ -143,12 +171,12 @@ serve(async (req: Request) => {
       .select("id, invoice_id, gateway_order_id, status, amount, branch_id, webhook_data")
       .eq("gateway", "razorpay")
       .eq("source", "order")
-      .in("status", ["created", "pending", "authorized"])
       .gte("created_at", new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
       .order("created_at", { ascending: false })
       .limit(50);
 
     if (invoiceId) q = q.eq("invoice_id", invoiceId);
+    else q = q.in("status", ["created", "pending", "authorized"]);
 
     const { data: txs, error } = await q;
     if (error) throw error;
