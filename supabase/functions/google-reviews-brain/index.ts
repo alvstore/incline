@@ -1,3 +1,5 @@
+// v4.1.0 — Author matching without FK aliases + token-aware name scoring; AI
+// classification accepts tool-call OR JSON body, with a JSON-mode retry.
 // v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
 // v2.0.0 — SSOT: classification/draft routed via ai-runtime (purpose='review_reply')
 // v1.3.0 — Adds masked client_id diagnostic to oauth_start
