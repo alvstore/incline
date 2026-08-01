@@ -472,15 +472,12 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
   if (fromLink) return fromLink;
   if (!key || !branch?.name) return null;
   const query = [branch.name, branch.address, branch.city].filter(Boolean).join(", ");
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const res = await placesFetch(key, "/v1/places:searchText", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": "places.id,places.displayName",
-    },
-    body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
+    fieldMask: "places.id,places.displayName",
+    body: { textQuery: query, maxResultCount: 1 },
   });
+
   if (!res.ok) {
     console.error("places searchText failed", res.status, (await res.text()).slice(0, 300));
     return null;
