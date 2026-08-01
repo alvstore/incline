@@ -531,6 +531,8 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
       email: reg.email,
       phone,
       branch_name: branch.name,
+      registration: reg,
+      custom_terms: customTerms,
       par_q,
       consents,
       ip,
