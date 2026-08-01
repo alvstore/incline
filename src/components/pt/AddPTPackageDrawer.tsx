@@ -34,14 +34,16 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     sessions_per_month: 8,
     price: 0,
     validity_days: 90,
-    session_type: 'per_session',
+    session_type: 'monthly',
     auto_renew: false,
-    gst_enabled: false,           // PT is GST-exempt by default
-    gst_inclusive: false,
-    gst_percentage: 18,
-    package_type: 'session_based' as 'session_based' | 'monthly',
-    duration_months: 3,
+    // PT billing is standardised at 5% GST, price-inclusive.
+    gst_enabled: true,
+    gst_inclusive: true,
+    gst_percentage: 5,
+    package_type: 'monthly' as 'session_based' | 'monthly',
+    duration_months: 1,
   });
+
 
   const effectiveGstPct = formData.gst_enabled ? formData.gst_percentage : 0;
 
