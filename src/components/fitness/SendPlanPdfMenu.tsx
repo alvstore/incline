@@ -51,13 +51,14 @@ export function SendPlanPdfMenu({
       });
       const ch = res.channels[channel];
       if (ch?.sent) {
-        toast.success(
-          channel === 'download'
-            ? 'PDF downloaded'
-            : channel === 'whatsapp'
-              ? 'WhatsApp document queued'
-              : 'Email sent',
-        );
+        if (channel === 'download') toast.success('PDF downloaded');
+        else if (channel === 'whatsapp') {
+          toast.success(
+            ch.mode === 'link'
+              ? 'WhatsApp sent as a download link (no approved document template)'
+              : 'WhatsApp PDF sent as an attachment',
+          );
+        } else toast.success('Email sent');
       } else {
         toast.error(ch?.error || `${channel} send failed`);
       }
