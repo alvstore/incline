@@ -114,7 +114,8 @@ serve(async (req) => {
       p_invoice_id: invoice.id,
       p_member_id: invoice.member_id,
       p_amount: amount,
-      p_payment_method: "online",
+      // "online" is NOT a member of the payment_method enum — use "other".
+      p_payment_method: "other",
       p_transaction_id: razorpay_payment_id,
       p_notes: "Online payment via Razorpay Standard Checkout",
       p_received_by: null,
