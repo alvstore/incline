@@ -168,18 +168,15 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
       if (sendPdf && pdfChannels.length > 0) {
         const memberIds = data.filter((r) => r.success).map((r) => r.member_id);
         if (memberIds.length > 0) {
-          const { data: members } = await supabase
-            .from('members')
-            .select('id, full_name, phone, email')
-            .in('id', memberIds);
-          const memberMap = new Map((members || []).map((m: any) => [m.id, m]));
+          // Contact details live on `profiles`, not on `members`.
+          const contacts = await loadMemberContacts(memberIds);
           let pdfFailures = 0;
           for (const r of data) {
             if (!r.success) continue;
-            const m = memberMap.get(r.member_id);
+            const m = contacts.get(r.member_id);
             if (!m) continue;
             try {
-              await sendPlanToMember({
+              const res = await sendPlanToMember({
                 member: { id: m.id, full_name: m.full_name, phone: m.phone, email: m.email },
                 plan: {
                   name: plan!.name,
@@ -188,9 +185,10 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   data: plan!.content,
                   valid_until: validUntil,
                 },
-                branchId,
+                branchId: branchId || m.branch_id || undefined,
                 channels: pdfChannels,
               });
+              if (pdfChannels.some((c) => res.channels[c]?.sent === false)) pdfFailures++;
             } catch (e) {
               pdfFailures++;
             }
