@@ -313,21 +313,26 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     weeks: [{
       week: 1,
       days: days
-        .filter(d => d.exercises.length > 0)
+        .filter(d => d.exercises.length > 0 || d.warmup.trim() || d.cooldown.trim())
         .map(d => ({
           day: d.day,
           focus: d.focus,
+          warmup: d.warmup.trim() || undefined,
+          cooldown: d.cooldown.trim() || undefined,
           exercises: d.exercises.map(ex => ({
             name: ex.name,
+            equipment: ex.equipment || undefined,
             sets: ex.sets,
             reps: ex.reps,
             rest: `${ex.rest_seconds}s`,
             weight: ex.weight || undefined,
+            form_tips: ex.form_tips || undefined,
             notes: ex.form_tips || undefined,
             video_url: ex.video_url || undefined,
             video_file_path: ex.video_file_path || undefined,
           })),
         })),
+
     }],
   });
 
