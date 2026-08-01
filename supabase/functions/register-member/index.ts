@@ -226,6 +226,8 @@ async function generateWaiverPdf(input: {
   email: string;
   phone: string;
   branch_name: string;
+  registration: RegistrationPayload;
+  custom_terms?: string | null;
   par_q: Record<string, string>;
   consents: Record<string, boolean>;
   ip: string | null;
@@ -237,13 +239,23 @@ async function generateWaiverPdf(input: {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const page = pdf.addPage([595, 842]); // A4
-  let y = 800;
   const margin = 50;
-  const draw = (text: string, opts: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb> } = {}) => {
+  const pageW = 595, pageH = 842; // A4
+  let page = pdf.addPage([pageW, pageH]);
+  let y = pageH - 42;
+
+  const ensure = (needed: number) => {
+    if (y - needed < 60) {
+      page = pdf.addPage([pageW, pageH]);
+      y = pageH - 42;
+    }
+  };
+
+  const draw = (text: string, opts: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; indent?: number } = {}) => {
     const size = opts.size ?? 10;
+    ensure(size + 6);
     page.drawText(text, {
-      x: margin,
+      x: margin + (opts.indent ?? 0),
       y,
       size,
       font: opts.bold ? fontBold : font,
@@ -252,15 +264,63 @@ async function generateWaiverPdf(input: {
     y -= size + 4;
   };
 
-  draw("THE INCLINE LIFE BY INCLINE", { size: 14, bold: true });
-  draw("Member Onboarding Waiver & Consent", { size: 12, bold: true });
-  y -= 6;
-  draw(`Member: ${input.full_name}   |   Code: ${input.member_code}`);
-  draw(`Phone: ${input.phone}   |   Email: ${input.email}`);
-  draw(`Branch: ${input.branch_name}`);
-  y -= 6;
+  // Word-wrap helper so long addresses / custom terms never overflow the page.
+  const drawWrapped = (text: string, opts: { size?: number; bold?: boolean; indent?: number } = {}) => {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    const maxW = pageW - margin * 2 - (opts.indent ?? 0);
+    const words = String(text).split(/\s+/).filter(Boolean);
+    let line = "";
+    for (const w of words) {
+      const candidate = line ? `${line} ${w}` : w;
+      if (f.widthOfTextAtSize(candidate, size) > maxW) {
+        if (line) draw(line, { ...opts, size });
+        line = w;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line) draw(line, { ...opts, size });
+  };
 
-  draw("ASSUMPTION OF RISK & RELEASE", { size: 11, bold: true });
+  const section = (title: string) => {
+    ensure(26);
+    y -= 6;
+    draw(title.toUpperCase(), { size: 11, bold: true, color: rgb(0.28, 0.24, 0.72) });
+  };
+
+  const field = (label: string, value?: string | null) => {
+    drawWrapped(`${label}: ${value && String(value).trim() ? value : "—"}`, { size: 9 });
+  };
+
+  const reg = input.registration;
+
+  draw("THE INCLINE LIFE BY INCLINE", { size: 14, bold: true });
+  draw("Membership Registration, Waiver & Consent", { size: 12, bold: true });
+  draw(`Branch: ${input.branch_name}   |   Document: REG-${input.member_code}`, { size: 9 });
+
+  section("Member Information");
+  field("Full Name", input.full_name);
+  field("Member Code", input.member_code);
+  field("Email", input.email);
+  field("Phone", input.phone);
+  field("Gender", reg.gender);
+  field("Date of Birth", reg.date_of_birth);
+  field("Address", [reg.address, reg.city, reg.state, reg.postal_code].filter(Boolean).join(", "));
+
+  section("Government ID");
+  field("ID Type", reg.government_id_type ? reg.government_id_type.toUpperCase() : null);
+  field("ID Number", reg.government_id_number);
+
+  section("Emergency Contact");
+  field("Name", reg.emergency_contact_name);
+  field("Phone", reg.emergency_contact_phone);
+
+  section("Health & Fitness");
+  field("Primary Fitness Goal", reg.fitness_goals);
+  field("Health Conditions / Injuries", reg.health_conditions || "None declared");
+
+  section("Assumption of Risk & Release");
   const waiverLines = [
     "I acknowledge that physical exercise and use of gym facilities involve",
     "inherent risk of injury. I voluntarily assume all such risks and agree to",
@@ -270,26 +330,35 @@ async function generateWaiverPdf(input: {
     "except in cases of gross negligence.",
   ];
   for (const l of waiverLines) draw(l);
-  y -= 6;
 
-  draw("PAR-Q HEALTH DECLARATION", { size: 11, bold: true });
+  section("PAR-Q Health Declaration");
+  let qi = 1;
   for (const [q, a] of Object.entries(input.par_q)) {
-    draw(`• ${q}: ${a}`, { size: 9 });
+    drawWrapped(`${qi}. ${q} — ${String(a).toUpperCase()}`, { size: 9 });
+    qi++;
   }
-  y -= 6;
 
-  draw("CONSENTS (DPDP Act 2023)", { size: 11, bold: true });
+  if (input.custom_terms && input.custom_terms.trim()) {
+    section("Additional Terms");
+    drawWrapped(input.custom_terms.trim(), { size: 9 });
+  }
+
+  section("Consents (DPDP Act 2023)");
   for (const [k, v] of Object.entries(input.consents)) {
     draw(`• ${k}: ${v ? "GRANTED" : "DECLINED"}`, { size: 9 });
   }
-  y -= 6;
 
-  draw("SIGNATURE", { size: 11, bold: true });
+  section("Declaration & Signature");
+  drawWrapped(
+    "I confirm that the information provided above is true and complete to the best of my knowledge, and that I have read and accepted the waiver, terms and consents recorded in this document.",
+    { size: 9 },
+  );
   try {
     const sigImg = await pdf.embedPng(input.signature_png_bytes);
     const sigDims = sigImg.scale(0.4);
     const sigW = Math.min(sigDims.width, 240);
     const sigH = (sigW / sigDims.width) * sigDims.height;
+    ensure(sigH + 30);
     y -= sigH;
     page.drawImage(sigImg, { x: margin, y, width: sigW, height: sigH });
     y -= 8;
