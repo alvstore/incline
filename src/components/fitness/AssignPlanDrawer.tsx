@@ -80,8 +80,10 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const planWeeks = getPlanDurationWeeks(plan);
   const [validUntil, setValidUntil] = useState(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
   const [validityOverridden, setValidityOverridden] = useState(false);
-  const [channels, setChannels] = useState<NotificationChannel[]>(['in_app']);
-  const [sendPdf, setSendPdf] = useState(false);
+  // Deliver everywhere by default — members should get the plan instantly on
+  // in-app, WhatsApp and Email (with the PDF attached).
+  const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
+  const [sendPdf, setSendPdf] = useState(true);
   const [isCommon, setIsCommon] = useState(false);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
