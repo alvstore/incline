@@ -182,46 +182,21 @@ export function EditPTPackageDrawer({ open, onOpenChange, package: pkg }: EditPT
             </div>
           )}
 
-          <div className="space-y-3 p-4 rounded-xl border bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-semibold">Charge GST</Label>
-                <p className="text-xs text-muted-foreground">PT is GST-exempt by default.</p>
-              </div>
-              <Switch checked={formData.gst_enabled}
-                onCheckedChange={(v) => setFormData({ ...formData, gst_enabled: v })} />
-            </div>
-            {formData.gst_enabled && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>GST %</Label>
-                  <Input type="number" value={formData.gst_percentage}
-                    onChange={(e) => setFormData({ ...formData, gst_percentage: parseFloat(e.target.value) || 18 })} />
-                </div>
-                <div className="flex items-center gap-3 pt-6">
-                  <Switch checked={formData.gst_inclusive} onCheckedChange={(v) => setFormData({ ...formData, gst_inclusive: v })} />
-                  <Label>GST Inclusive</Label>
-                </div>
-              </div>
-            )}
+          <div className="space-y-1 p-4 rounded-xl border bg-muted/30">
+            <Label className="text-sm font-semibold">GST — 5% (inclusive)</Label>
+            <p className="text-xs text-muted-foreground">
+              Personal training is billed at a fixed 5% GST included in the price shown.
+            </p>
           </div>
 
-          {formData.price > 0 && formData.gst_enabled && (
+          {formData.price > 0 && (
             <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
-              <p><strong>Base Price:</strong> ₹{formData.gst_inclusive
-                ? (formData.price - calculateGSTAmount(formData.price, formData.gst_percentage, true)).toFixed(2)
-                : formData.price}</p>
-              <p><strong>GST ({formData.gst_percentage}%):</strong> ₹{calculateGSTAmount(formData.price, formData.gst_percentage, formData.gst_inclusive).toFixed(2)}</p>
-              <p className="font-bold"><strong>Total:</strong> ₹{formData.gst_inclusive
-                ? formData.price
-                : (formData.price + calculateGSTAmount(formData.price, formData.gst_percentage, false)).toFixed(2)}</p>
+              <p><strong>Taxable value:</strong> ₹{(formData.price - calculateGSTAmount(formData.price, 5, true)).toFixed(2)}</p>
+              <p><strong>GST (5%):</strong> ₹{calculateGSTAmount(formData.price, 5, true).toFixed(2)}</p>
+              <p className="font-bold"><strong>Member pays:</strong> ₹{formData.price.toFixed(2)}</p>
             </div>
           )}
-          {formData.price > 0 && !formData.gst_enabled && (
-            <div className="p-3 rounded-lg bg-muted text-sm">
-              <p className="font-bold">Total: ₹{formData.price} <span className="font-normal text-muted-foreground">(GST not applied)</span></p>
-            </div>
-          )}
+
 
           <div className="space-y-2">
             <Label>Description</Label>
