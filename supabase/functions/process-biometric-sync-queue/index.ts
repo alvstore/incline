@@ -1,12 +1,24 @@
-// v1.4.0 — Drain biometric_sync_queue in bounded batches of five.
+// v1.5.0 — Drain biometric_sync_queue in bounded batches of five.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
+//
+// v1.5.0 separates transport failures (MIPS server rebooting / unreachable)
+// from data failures. Transport failures reschedule the row WITHOUT consuming
+// its retry budget and trip the shared circuit breaker, so a server outage can
+// no longer exhaust the queue and permanently fail everyone in it.
 //
 // Invoked by the automation-brain cron every ~5 min under rule
 // `process_biometric_sync_queue`, and on-demand from the "Heal drift" button
 // on the Device Command Center dashboard.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyFailure,
+  isTripped,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +31,7 @@ const PER_RUN_CAP = 5;
 // Exponential backoff (minutes) applied against queued_at + processed_at.
 // retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
 const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
