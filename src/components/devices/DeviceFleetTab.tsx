@@ -23,8 +23,10 @@ const DeviceFleetTab = ({ branchId, canRunFleetActions = false }: DeviceFleetTab
   const handleFleetSync = async () => {
     setBusy("sync");
     try {
-      const { error } = await supabase.functions.invoke("sync-to-mips", {
-        body: { sync_type: "fleet", branch_id: branchId },
+      // Fleet-wide healing is owned by mips-reconcile-devices; sync-to-mips only
+      // accepts a single person and 400s on a fleet payload.
+      const { error } = await supabase.functions.invoke("mips-reconcile-devices", {
+        body: { branch_id: branchId },
       });
       if (error) throw error;
       toast.success("Fleet sync started — personnel are being pushed to the MIPS server");
