@@ -388,19 +388,22 @@ export interface BulkAssignParams {
   pdf_size_bytes?: number | null;
 }
 
-interface MemberContact {
+export interface MemberContact {
   id: string;
   full_name: string;
   email: string | null;
   phone: string | null;
   user_id: string | null;
+  branch_id: string | null;
 }
 
-async function loadMemberContacts(memberIds: string[]): Promise<Map<string, MemberContact>> {
+/** Contact details for members. Name/phone/email live on `profiles`,
+ *  NOT on `members` — never select them from `members` directly. */
+export async function loadMemberContacts(memberIds: string[]): Promise<Map<string, MemberContact>> {
   if (memberIds.length === 0) return new Map();
   const { data, error } = await supabase
     .from('members')
-    .select('id, user_id, profiles:user_id(full_name, email, phone)')
+    .select('id, user_id, branch_id, profiles:user_id(full_name, email, phone)')
     .in('id', memberIds);
   if (error) throw error;
   const map = new Map<string, MemberContact>();
@@ -412,6 +415,7 @@ async function loadMemberContacts(memberIds: string[]): Promise<Map<string, Memb
       full_name: p?.full_name || 'Member',
       email: p?.email || null,
       phone: p?.phone || null,
+      branch_id: (row as any).branch_id ?? null,
     });
   }
   return map;
