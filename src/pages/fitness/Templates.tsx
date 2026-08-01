@@ -443,6 +443,15 @@ export default function FitnessTemplatesPage() {
         defaultType={planType}
       />
 
+      <TemplateAssignmentsSheet
+        open={!!assignmentsTemplate}
+        onOpenChange={(o) => !o && setAssignmentsTemplate(null)}
+        template={assignmentsTemplate ? { id: assignmentsTemplate.id, name: assignmentsTemplate.name } : null}
+        branchId={effectiveBranchId || undefined}
+      />
+
+
+
       <EditTemplateTargetingDrawer
         open={!!targetingTemplate}
         onOpenChange={(o) => !o && setTargetingTemplate(null)}
