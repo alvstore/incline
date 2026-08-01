@@ -262,29 +262,9 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
         const content: any = tpl.content || {};
         const tplDays: any[] = content?.weeks?.[0]?.days || [];
         if (tplDays.length) {
-          setDays(tplDays.map((d: any) => ({
-            day: d.day || '',
-            focus: d.focus || '',
-            exercises: (d.exercises || []).map((ex: any) => {
-              const restRaw = ex.rest;
-              const restNum = typeof restRaw === 'number'
-                ? restRaw
-                : typeof restRaw === 'string'
-                  ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
-                  : 60;
-              return {
-                name: ex.name || '',
-                sets: ex.sets ?? 3,
-                reps: String(ex.reps ?? '12'),
-                rest_seconds: restNum,
-                weight: ex.weight || '',
-                form_tips: ex.notes || '',
-                video_url: ex.video_url,
-                video_file_path: ex.video_file_path,
-              };
-            }),
-          })));
+          setDays(tplDays.map(toEditorDay));
         }
+
         toast.success(`Loaded template: ${tpl.name}`);
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load template');
