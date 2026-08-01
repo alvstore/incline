@@ -157,11 +157,16 @@ Deno.serve(async (req) => {
       const [dncChats, dncLeads, dncMembers] = await Promise.all([
         adminClient.from("whatsapp_chat_settings").select("phone_number").eq("branch_id", branch_id).eq("do_not_contact", true),
         adminClient.from("leads").select("phone").eq("branch_id", branch_id).eq("do_not_contact", true),
-        adminClient.from("members").select("phone_number").eq("branch_id", branch_id).eq("do_not_contact", true),
+        // `members` has no phone column — phones live on the linked profile.
+        adminClient.from("members").select("user_id").eq("branch_id", branch_id).eq("do_not_contact", true),
       ]);
       for (const r of (dncChats.data || [])) dncDigits.add(digits((r as any).phone_number));
       for (const r of (dncLeads.data || [])) dncDigits.add(digits((r as any).phone));
-      for (const r of (dncMembers.data || [])) dncDigits.add(digits((r as any).phone_number));
+      const dncUserIds = (dncMembers.data || []).map((r: any) => r.user_id).filter(Boolean);
+      if (dncUserIds.length > 0) {
+        const { data: dncProfiles } = await adminClient.from("profiles").select("phone").in("id", dncUserIds);
+        for (const r of (dncProfiles || [])) dncDigits.add(digits((r as any).phone));
+      }
     } catch (e) {
       console.warn("[send-broadcast] do-not-contact load failed (continuing):", e);
     }
