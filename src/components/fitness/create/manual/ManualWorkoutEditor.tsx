@@ -35,6 +35,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 interface Exercise {
   name: string;
+  equipment: string;
   sets: number;
   reps: string;
   rest_seconds: number;
@@ -47,20 +48,76 @@ interface Exercise {
 interface Day {
   day: string;
   focus: string;
+  warmup: string;
+  cooldown: string;
   exercises: Exercise[];
 }
 
 const DEFAULT_DAYS: Day[] = [
-  { day: 'Monday', focus: 'Upper Body', exercises: [] },
-  { day: 'Tuesday', focus: 'Lower Body', exercises: [] },
-  { day: 'Wednesday', focus: 'Rest', exercises: [] },
-  { day: 'Thursday', focus: 'Push', exercises: [] },
-  { day: 'Friday', focus: 'Pull', exercises: [] },
-  { day: 'Saturday', focus: 'Legs / Cardio', exercises: [] },
-  { day: 'Sunday', focus: 'Rest', exercises: [] },
+  { day: 'Monday', focus: 'Upper Body', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Tuesday', focus: 'Lower Body', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Wednesday', focus: 'Rest', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Thursday', focus: 'Push', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Friday', focus: 'Pull', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Saturday', focus: 'Legs / Cardio', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Sunday', focus: 'Rest', warmup: '', cooldown: '', exercises: [] },
 ];
 
-const EMPTY_EXERCISE: Exercise = { name: '', sets: 3, reps: '12', rest_seconds: 60, weight: '', form_tips: '' };
+const EMPTY_EXERCISE: Exercise = { name: '', equipment: '', sets: 3, reps: '12', rest_seconds: 60, weight: '', form_tips: '' };
+
+/** Normalise one stored exercise (template/draft JSON) into the editor shape. */
+function toEditorExercise(ex: any): Exercise {
+  const restRaw = ex?.rest;
+  const restNum = typeof restRaw === 'number'
+    ? restRaw
+    : typeof restRaw === 'string'
+      ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
+      : (typeof ex?.rest_seconds === 'number' ? ex.rest_seconds : 60);
+  const tips = ex?.form_tips ?? ex?.notes ?? '';
+  return {
+    name: ex?.name || '',
+    equipment: ex?.equipment || '',
+    sets: ex?.sets ?? 3,
+    reps: String(ex?.reps ?? '12'),
+    rest_seconds: restNum,
+    weight: ex?.weight || '',
+    form_tips: Array.isArray(tips) ? tips.filter(Boolean).join('\n') : String(tips || ''),
+    video_url: ex?.video_url,
+    video_file_path: ex?.video_file_path,
+  };
+}
+
+const WARMUP_RE = /^(warm[\s-]?up|warmup)$/i;
+const COOLDOWN_RE = /^(cool[\s-]?down|cooldown|stretch(ing)?)$/i;
+
+/**
+ * Legacy lift: older plans encoded warm-up / cool-down as fake exercises.
+ * Move them into the dedicated day fields so the PDF renders them properly.
+ */
+function toEditorDay(d: any): Day {
+  const exercises: Exercise[] = (d?.exercises || []).map(toEditorExercise);
+  let warmup = d?.warmup ? String(d.warmup) : '';
+  let cooldown = d?.cooldown ? String(d.cooldown) : '';
+
+  if (!warmup && exercises.length && WARMUP_RE.test(exercises[0].name.trim())) {
+    warmup = exercises[0].form_tips || exercises[0].name;
+    exercises.shift();
+  }
+  const last = exercises[exercises.length - 1];
+  if (!cooldown && last && COOLDOWN_RE.test(last.name.trim())) {
+    cooldown = last.form_tips || last.name;
+    exercises.pop();
+  }
+
+  return {
+    day: d?.day || '',
+    focus: d?.focus || '',
+    warmup,
+    cooldown,
+    exercises,
+  };
+}
+
 
 interface SortableExerciseRowProps {
   id: string;
