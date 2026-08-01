@@ -556,6 +556,35 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         />
       </div>
 
+      {(gateTruth?.length ?? 0) > 0 && (
+        <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
+          <CardContent className="flex flex-wrap items-center gap-4 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Faces on gates
+            </span>
+            {gateTruth!.map((d) => (
+              <div key={d.id} className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-foreground">{d.deviceName || d.name}</span>
+                <Badge
+                  className={
+                    d.faceCount >= stats.serverWithFace
+                      ? "rounded-full bg-emerald-100 text-emerald-700"
+                      : "rounded-full bg-amber-100 text-amber-700"
+                  }
+                >
+                  {d.faceCount} faces · {d.personCount} people
+                </Badge>
+              </div>
+            ))}
+            <span className="text-xs text-muted-foreground">
+              MIPS server holds {stats.serverWithFace} face photos — gates below this number are still catching up.
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+
+
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
         <CardContent className="space-y-3 p-4">
