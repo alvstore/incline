@@ -238,7 +238,7 @@ export function WebhookActivityPanel() {
         p_invoice_id: inv.id,
         p_member_id: inv.member_id,
         p_amount: row.amount,
-        p_payment_method: 'online',
+        p_payment_method: 'other',
         p_transaction_id: row.gateway_payment_id || undefined,
         p_notes: `Manual reconcile — ${GATEWAY_LABEL[row.gateway] || row.gateway} ${row.gateway_payment_id || row.gateway_order_id || ''}`,
       });
