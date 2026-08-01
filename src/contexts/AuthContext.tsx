@@ -306,11 +306,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
-    return { error: error as Error | null };
+    const redirectTo = `${window.location.origin}/auth/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (!error) return { error: null };
+
+    // Built-in auth mailer failed (rate limit / SMTP issue) — fall back to our
+    // own mail engine so the member still receives the reset link.
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke(
+        'request-password-reset',
+        { body: { email, redirect_to: redirectTo } },
+      );
+      if (!fnError && data?.ok) return { error: null };
+    } catch {
+      /* fall through to the original error */
+    }
+    return { error: error as Error };
   };
+
 
   const updatePassword = async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password });
