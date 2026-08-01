@@ -1,4 +1,4 @@
-// mips-face-sweep v1.0.0
+// mips-face-sweep v1.1.0
 // Self-healing face enrollment worker.
 //
 // The MIPS server accepts photos that the turnstiles then silently discard, so
@@ -11,9 +11,24 @@
 //      sync-to-mips (photo upload + per-device dispatch),
 //   4. re-reads photoCount and reports the before → after delta.
 //
+// v1.1.0 adds graceful degradation: transport failures (server rebooting,
+// Tomcat restarting, VPS unreachable) trip a shared circuit breaker instead of
+// hammering a starting server, and the sweep resumes automatically once a probe
+// succeeds.
+//
 // Run by the Automation Brain every 5 minutes (rule `mips_face_enrollment_sweep`).
 // Also callable on demand from the Device Command Center.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  classifyFailure,
+  isTripped,
+  mipsFetch,
+  MipsTransportError,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
