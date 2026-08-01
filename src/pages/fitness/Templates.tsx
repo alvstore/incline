@@ -48,6 +48,7 @@ import { EditTemplateTargetingDrawer } from "@/components/fitness/EditTemplateTa
 import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
 import { PlanViewerSheet } from "@/components/fitness/PlanViewerSheet";
 import { UploadPdfTemplateDrawer } from "@/components/fitness/UploadPdfTemplateDrawer";
+import { TemplateAssignmentsSheet } from "@/components/fitness/TemplateAssignmentsSheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
