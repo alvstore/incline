@@ -49,6 +49,7 @@ import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
 import { PlanViewerSheet } from "@/components/fitness/PlanViewerSheet";
 import { UploadPdfTemplateDrawer } from "@/components/fitness/UploadPdfTemplateDrawer";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
 
 type CommonFilter = "all" | "common" | "pt_only";
@@ -68,6 +69,7 @@ function getDifficultyColor(difficulty: string | null) {
 
 export default function FitnessTemplatesPage() {
   const { hasAnyRole } = useAuth();
+  const { effectiveBranchId } = useBranchContext();
   const canCreate = hasAnyRole(["owner", "admin", "manager"]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -408,6 +410,7 @@ export default function FitnessTemplatesPage() {
       <AssignPlanDrawer
         open={assignDrawerOpen}
         onOpenChange={setAssignDrawerOpen}
+        branchId={effectiveBranchId || undefined}
         plan={
           selectedTemplate
             ? {

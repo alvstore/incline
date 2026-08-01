@@ -24,11 +24,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   searchMembersForAssignment,
   assignPlanToMembers,
+  loadMemberContacts,
   BulkAssignResult,
   NotificationChannel,
 } from '@/services/fitnessService';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
-import { supabase } from '@/integrations/supabase/client';
+
 import { toast } from 'sonner';
 import { format, addWeeks } from 'date-fns';
 
@@ -80,8 +81,10 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const planWeeks = getPlanDurationWeeks(plan);
   const [validUntil, setValidUntil] = useState(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
   const [validityOverridden, setValidityOverridden] = useState(false);
-  const [channels, setChannels] = useState<NotificationChannel[]>(['in_app']);
-  const [sendPdf, setSendPdf] = useState(false);
+  // Deliver everywhere by default — members should get the plan instantly on
+  // in-app, WhatsApp and Email (with the PDF attached).
+  const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
+  const [sendPdf, setSendPdf] = useState(true);
   const [isCommon, setIsCommon] = useState(false);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
@@ -166,18 +169,15 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
       if (sendPdf && pdfChannels.length > 0) {
         const memberIds = data.filter((r) => r.success).map((r) => r.member_id);
         if (memberIds.length > 0) {
-          const { data: members } = await supabase
-            .from('members')
-            .select('id, full_name, phone, email')
-            .in('id', memberIds);
-          const memberMap = new Map((members || []).map((m: any) => [m.id, m]));
+          // Contact details live on `profiles`, not on `members`.
+          const contacts = await loadMemberContacts(memberIds);
           let pdfFailures = 0;
           for (const r of data) {
             if (!r.success) continue;
-            const m = memberMap.get(r.member_id);
+            const m = contacts.get(r.member_id);
             if (!m) continue;
             try {
-              await sendPlanToMember({
+              const res = await sendPlanToMember({
                 member: { id: m.id, full_name: m.full_name, phone: m.phone, email: m.email },
                 plan: {
                   name: plan!.name,
@@ -186,9 +186,10 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   data: plan!.content,
                   valid_until: validUntil,
                 },
-                branchId,
+                branchId: branchId || m.branch_id || undefined,
                 channels: pdfChannels,
               });
+              if (pdfChannels.some((c) => res.channels[c]?.sent === false)) pdfFailures++;
             } catch (e) {
               pdfFailures++;
             }
