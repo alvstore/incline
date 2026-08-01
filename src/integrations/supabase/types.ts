@@ -15180,6 +15180,19 @@ export type Database = {
         Args: { _phone: string; _ttl_seconds?: number }
         Returns: boolean
       }
+      upgrade_membership: {
+        Args: {
+          p_amount_paying?: number
+          p_gst_rate?: number
+          p_idempotency_key?: string
+          p_include_gst?: boolean
+          p_membership_id: string
+          p_new_plan_id: string
+          p_payment_method?: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       upsert_meta_contact_profile:
         | {
             Args: {
