@@ -216,7 +216,9 @@ export function UpgradeMembershipDrawer({
                 )}
               </div>
               <div className="text-xs font-medium text-emerald-700">
-                Credit available: {inr(credit)} (already paid)
+                Credit available: {inr(credit)} (already paid
+                {ledger?.invoice?.invoice_number ? ` on ${ledger.invoice.invoice_number}` : ''})
+
               </div>
             </CardContent>
           </Card>
