@@ -38,11 +38,13 @@ export interface PlanSendInput {
   channels: PlanSendChannel[];
 }
 
+export type WhatsAppSendMode = 'template_document' | 'native_document' | 'link';
+
 export interface PlanSendResult {
   pdfUrl?: string;
   pdfBlob?: Blob;
   channels: Partial<
-    Record<PlanSendChannel, { sent: boolean; error?: string }>
+    Record<PlanSendChannel, { sent: boolean; error?: string; mode?: WhatsAppSendMode }>
   >;
 }
 
@@ -128,45 +130,65 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
           triggerEvent,
           preferAttachment: true,
         });
-        // When an approved document-header template is available the PDF is
-        // delivered natively (HEADER document component) — caption must NOT
-        // include a download link or it will display as "Download: <url>".
         const hasDocHeader = (template?.header_type || 'none') === 'document';
-        const fallbackCaption = hasDocHeader
-          ? `Hi ${input.member.full_name}, your ${input.plan.type} plan "${input.plan.name}" is attached as a PDF.`
-          : `Hi ${input.member.full_name}, here is your new ${input.plan.type} plan: ${input.plan.name}\n\nDownload: ${pdfUrl}`;
-        const result = await dispatchCommunication({
-          branch_id: input.branchId,
-          channel: 'whatsapp',
-          category: 'transactional',
-          recipient: phone,
-          member_id: input.member.id,
-          template_id: template?.id,
-          payload: {
-            body: fallbackCaption,
-            variables: {
-              member_name: input.member.full_name,
-              plan_name: input.plan.name,
-              plan_title: input.plan.name, // alias for legacy templates
-              plan_type: input.plan.type,
-              trainer_name: input.plan.trainer_name || 'your trainer',
-              valid_until: input.plan.valid_until || '',
-              // Only pass document_link for body-only/link templates.
-              ...(hasDocHeader ? {} : { document_link: pdfUrl }),
+        const attachCaption = `Hi ${input.member.full_name}, your ${input.plan.type} plan "${input.plan.name}" is attached as a PDF.`;
+        const linkCaption = `Hi ${input.member.full_name}, here is your new ${input.plan.type} plan: ${input.plan.name}\n\nDownload: ${pdfUrl}`;
+        const baseVars = {
+          member_name: input.member.full_name,
+          plan_name: input.plan.name,
+          plan_title: input.plan.name, // alias for legacy templates
+          plan_type: input.plan.type,
+          trainer_name: input.plan.trainer_name || 'your trainer',
+          valid_until: input.plan.valid_until || '',
+        };
+
+        const send = async (opts: { templateId?: string; caption: string; link?: boolean }) =>
+          dispatchCommunication({
+            branch_id: input.branchId!,
+            channel: 'whatsapp',
+            category: 'transactional',
+            recipient: phone,
+            member_id: input.member.id,
+            template_id: opts.templateId,
+            payload: {
+              body: opts.caption,
+              variables: { ...baseVars, ...(opts.link ? { document_link: pdfUrl } : {}) },
             },
-          },
-          dedupe_key: `plan:${input.member.id}:${input.plan.type}:${input.plan.name}:${Date.now()}`,
-          force: true,
-          attachment: { url: pdfUrl, filename, content_type: 'application/pdf', kind: 'document' },
-        });
-        if (result.status === 'failed' || result.status === 'suppressed') {
-          channels.whatsapp = { sent: false, error: result.reason || result.status };
+            dedupe_key: `plan:${input.member.id}:${input.plan.type}:${input.plan.name}:${Date.now()}`,
+            force: true,
+            attachment: { url: pdfUrl, filename, content_type: 'application/pdf', kind: 'document' },
+          });
+
+        const failed = (r: any) => r.status === 'failed' || r.status === 'suppressed';
+
+        if (hasDocHeader) {
+          // Approved document-header template → native PDF attachment.
+          const result = await send({ templateId: template!.id, caption: attachCaption });
+          channels.whatsapp = failed(result)
+            ? { sent: false, error: result.reason || result.status, mode: 'template_document' }
+            : { sent: true, mode: 'template_document' };
         } else {
-          channels.whatsapp = { sent: true };
+          // No approved document template: try a native document message first
+          // (works inside the 24h service window), then fall back to the link
+          // template so the member still receives the plan.
+          const native = await send({ caption: attachCaption });
+          if (!failed(native)) {
+            channels.whatsapp = { sent: true, mode: 'native_document' };
+          } else {
+            const linkResult = await send({
+              templateId: template?.id,
+              caption: linkCaption,
+              link: true,
+            });
+            channels.whatsapp = failed(linkResult)
+              ? { sent: false, error: linkResult.reason || linkResult.status, mode: 'link' }
+              : { sent: true, mode: 'link' };
+          }
         }
       } catch (err: any) {
         channels.whatsapp = { sent: false, error: err?.message || 'WhatsApp failed' };
       }
+
     }
   }
 

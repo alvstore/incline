@@ -245,6 +245,7 @@ export default function FitnessMemberPlansPage() {
             <Eye className="h-3.5 w-3.5" /> View
           </Button>
           <SendPlanPdfMenu
+            triggerLabel="Resend"
             member={{
               id: a.member_id,
               full_name: a.member_name,

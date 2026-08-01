@@ -48,6 +48,7 @@ import { EditTemplateTargetingDrawer } from "@/components/fitness/EditTemplateTa
 import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
 import { PlanViewerSheet } from "@/components/fitness/PlanViewerSheet";
 import { UploadPdfTemplateDrawer } from "@/components/fitness/UploadPdfTemplateDrawer";
+import { TemplateAssignmentsSheet } from "@/components/fitness/TemplateAssignmentsSheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranchContext } from "@/contexts/BranchContext";
 import { useNavigate } from "react-router-dom";
@@ -105,6 +106,7 @@ export default function FitnessTemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<FitnessPlanTemplate | null>(null);
   const [targetingTemplate, setTargetingTemplate] = useState<FitnessPlanTemplate | null>(null);
   const [uploadPdfOpen, setUploadPdfOpen] = useState(false);
+  const [assignmentsTemplate, setAssignmentsTemplate] = useState<FitnessPlanTemplate | null>(null);
 
   const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["fitness-templates", planType],
@@ -215,14 +217,21 @@ export default function FitnessTemplatesPage() {
                 <FileText className="h-3 w-3" /> PDF
               </Badge>
             )}
-            <Badge
-              variant="outline"
-              className="text-xs gap-1"
-              title={`Assigned to ${usage} member${usage === 1 ? "" : "s"}`}
+            <button
+              type="button"
+              onClick={() => setAssignmentsTemplate(template)}
+              aria-label={`View ${usage} member${usage === 1 ? "" : "s"} assigned to ${template.name}`}
+              title={`View the ${usage} member${usage === 1 ? "" : "s"} assigned this plan`}
+              className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
             >
-              <Users className="h-3 w-3" />
-              {usage} {usage === 1 ? "use" : "uses"}
-            </Badge>
+              <Badge
+                variant="outline"
+                className="text-xs gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors"
+              >
+                <Users className="h-3 w-3" />
+                {usage} {usage === 1 ? "use" : "uses"}
+              </Badge>
+            </button>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => handleAssignTemplate(template)}>
@@ -434,6 +443,15 @@ export default function FitnessTemplatesPage() {
         onOpenChange={setUploadPdfOpen}
         defaultType={planType}
       />
+
+      <TemplateAssignmentsSheet
+        open={!!assignmentsTemplate}
+        onOpenChange={(o) => !o && setAssignmentsTemplate(null)}
+        template={assignmentsTemplate ? { id: assignmentsTemplate.id, name: assignmentsTemplate.name } : null}
+        branchId={effectiveBranchId || undefined}
+      />
+
+
 
       <EditTemplateTargetingDrawer
         open={!!targetingTemplate}

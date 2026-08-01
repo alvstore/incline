@@ -607,22 +607,11 @@ export interface MemberAssignmentRow {
   is_expired: boolean;
 }
 
-/**
- * Fetch all member plan assignments scoped to the active branch.
- * Joins members → profiles for display, and lazily resolves trainer + template names.
- */
-export async function fetchMemberAssignments(
-  branchId?: string | null,
-): Promise<MemberAssignmentRow[]> {
-  let query = supabase
-    .from('member_fitness_plans')
-    .select('id, member_id, plan_name, plan_type, description, plan_data, valid_from, valid_until, created_at, created_by, template_id, branch_id')
-    .order('created_at', { ascending: false })
-    .limit(500);
-  if (branchId) query = query.eq('branch_id', branchId);
+const ASSIGNMENT_COLUMNS =
+  'id, member_id, plan_name, plan_type, description, plan_data, valid_from, valid_until, created_at, created_by, template_id, branch_id';
 
-  const { data: rows, error } = await query;
-  if (error) throw error;
+/** Enrich raw member_fitness_plans rows with member / trainer / template names. */
+async function mapAssignmentRows(rows: any[]): Promise<MemberAssignmentRow[]> {
   if (!rows?.length) return [];
 
   const memberIds = Array.from(new Set(rows.map((r) => r.member_id).filter(Boolean)));
@@ -675,6 +664,44 @@ export async function fetchMemberAssignments(
     };
   });
 }
+
+/**
+ * Fetch all member plan assignments scoped to the active branch.
+ * Joins members → profiles for display, and lazily resolves trainer + template names.
+ */
+export async function fetchMemberAssignments(
+  branchId?: string | null,
+): Promise<MemberAssignmentRow[]> {
+  let query = supabase
+    .from('member_fitness_plans')
+    .select(ASSIGNMENT_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (branchId) query = query.eq('branch_id', branchId);
+
+  const { data: rows, error } = await query;
+  if (error) throw error;
+  return mapAssignmentRows(rows || []);
+}
+
+/**
+ * Every member this template has been assigned to — intentionally NOT branch
+ * filtered so historical/null-branch assignments stay visible from the
+ * template card's usage chip.
+ */
+export async function fetchAssignmentsForTemplate(
+  templateId: string,
+): Promise<MemberAssignmentRow[]> {
+  const { data: rows, error } = await supabase
+    .from('member_fitness_plans')
+    .select(ASSIGNMENT_COLUMNS)
+    .eq('template_id', templateId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return mapAssignmentRows(rows || []);
+}
+
 
 /** Soft-revoke an assignment by setting valid_until = today. */
 export async function revokeMemberAssignment(assignmentId: string): Promise<void> {
