@@ -91,6 +91,7 @@ export function usePurchasePTPackage() {
       gstRate?: 0 | 5;
       paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer';
       paymentSource?: 'in_person' | 'payment_link';
+      startDate?: string;
     }) => purchasePTPackage(args),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["member-pt-packages"] });
@@ -98,6 +99,20 @@ export function usePurchasePTPackage() {
     },
   });
 }
+
+export function useRenewPtPackage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (args: Parameters<typeof renewPtPackage>[0]) => renewPtPackage(args),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["member-pt-packages"] });
+      queryClient.invalidateQueries({ queryKey: ["active-member-packages"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+  });
+}
+
 
 export function useSchedulePTSession() {
   const queryClient = useQueryClient();
