@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  syncPersonToMIPS, fetchAllMIPSPersons, verifyPersonOnMIPS,
+  syncPersonToMIPS, fetchAllMIPSPersons, verifyPersonOnMIPS, fetchMIPSDevices,
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
