@@ -486,6 +486,39 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
   return j?.places?.[0]?.id ?? null;
 }
 
+/**
+ * Reads a place record (rating, count, reviews).
+ * The managed Google Maps connector key blocks `Places.GetPlace`, so we try the
+ * details endpoint first and fall back to `places:searchText`, which returns the
+ * same review payload and IS allowed on the managed key.
+ */
+async function fetchPlaceRecord(
+  key: string,
+  placeId: string,
+  textQuery: string,
+): Promise<{ ok: true; place: any } | { ok: false; status: number; body: string }> {
+  const details = await placesFetch(key, `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`, {
+    fieldMask: "id,displayName,rating,userRatingCount,reviews",
+  });
+  if (details.ok) return { ok: true, place: await details.json() };
+  const detailsBody = await details.text();
+
+  if (textQuery) {
+    const search = await placesFetch(key, "/v1/places:searchText", {
+      method: "POST",
+      fieldMask: "places.id,places.displayName,places.rating,places.userRatingCount,places.reviews",
+      body: { textQuery, maxResultCount: 5, languageCode: "en" },
+    });
+    if (search.ok) {
+      const j = await search.json();
+      const list = (j.places ?? []) as any[];
+      const match = list.find((p) => p.id === placeId) ?? list[0];
+      if (match) return { ok: true, place: match };
+    }
+  }
+  return { ok: false, status: details.status, body: detailsBody };
+}
+
 async function fetchPlacesReviewsForBranch(branch_id: string) {
   const key = await resolvePlacesKey(branch_id);
   if (!key) return { branch_id, fetched: 0, source: "places", reason: "no_places_api_key" };
@@ -494,24 +527,28 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   const placeId = await resolvePlaceId(branch_id, cfg);
   if (!placeId) return { branch_id, fetched: 0, source: "places", reason: "place_id_unresolved" };
 
-  const res = await placesFetch(
-    key,
-    `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
-    { fieldMask: "id,displayName,rating,userRatingCount,reviews" },
-  );
+  const { data: branch } = await sb
+    .from("branches")
+    .select("name, address, city")
+    .eq("id", branch_id)
+    .maybeSingle();
+  const textQuery = [cfg?.place_name, branch?.name, branch?.address, branch?.city]
+    .filter(Boolean)
+    .join(", ");
 
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("places details failed", res.status, txt.slice(0, 300));
+  const result = await fetchPlaceRecord(key, placeId, textQuery);
+  if (!result.ok) {
+    console.error("places details failed", result.status, result.body.slice(0, 300));
     return {
       branch_id,
       fetched: 0,
       source: "places",
-      reason: `places_${res.status}`,
-      detail: friendlyPlacesError(res.status, txt),
+      reason: `places_${result.status}`,
+      detail: friendlyPlacesError(result.status, result.body),
     };
   }
-  const j = await res.json();
+  const j = result.place;
+
   const reviews = (j.reviews ?? []) as any[];
   let upserted = 0;
   for (const r of reviews) {
