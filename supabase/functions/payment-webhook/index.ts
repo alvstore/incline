@@ -423,9 +423,7 @@ serve(async (req: Request) => {
             p_invoice_id: invoice.id,
             p_member_id: invoice.member_id,
             p_amount: payuAmount,
-            p_payment_method: gateway === 'razorpay'
-              ? (paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card')
-              : 'other',
+            p_payment_method: "other",
             p_transaction_id: payuTxnId,
             p_notes: "Auto-recorded via PayU",
             p_received_by: null,
@@ -522,7 +520,9 @@ serve(async (req: Request) => {
             p_invoice_id: existingTxn.invoice_id,
             p_member_id: invoice.member_id,
             p_amount: transactionData.amount,
-            p_payment_method: "online",
+            p_payment_method: gateway === 'razorpay'
+              ? (paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card')
+              : 'other',
             p_transaction_id: transactionData.gateway_payment_id,
             p_notes: `Online payment via ${gateway}`,
             p_received_by: null,

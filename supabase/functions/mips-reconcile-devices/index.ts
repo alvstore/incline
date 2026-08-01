@@ -1,4 +1,4 @@
-// v2.1.0 — Resumable, bounded reconciliation across members, employees and
+// v2.2.0 — Resumable, bounded reconciliation across members, employees and
 // trainers. Each run advances a rotating roster window and delegates the full
 // server + photo + per-device audited delivery to sync-to-mips. The rotating
 // window bounds runtime while eventually healing the complete branch roster.
@@ -13,7 +13,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const PER_RUN_CAP = 2;
+const PER_RUN_CAP = 3;
 const INVOCATION_BUDGET_MS = 45_000;
 
 Deno.serve(async (req) => {

@@ -1,4 +1,4 @@
-// v1.3.0 — Drain biometric_sync_queue: require delivery to every mapped gate.
+// v1.4.0 — Drain biometric_sync_queue in bounded batches of five.
 // dispatch, and only marks a row succeeded when the face photo uploaded and
 // at least one gate received the person. Failures keep retry_count + reason
 // from the Personnel Sync tab.
@@ -15,7 +15,7 @@ const corsHeaders = {
 };
 
 const MAX_RETRIES = 10;
-const PER_RUN_CAP = 2;
+const PER_RUN_CAP = 5;
 // Exponential backoff (minutes) applied against queued_at + processed_at.
 // retry 1→1m, 2→2m, 3→5m, 4→15m, 5→60m, 6→180m, cap 360m.
 const BACKOFF_MIN = [0, 1, 2, 5, 15, 60, 180, 360, 360, 360, 360];
