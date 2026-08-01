@@ -88,9 +88,8 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
         payload.duration_months = null;
       }
 
-      if (isSubscription) {
-        payload.sessions_per_month = formData.sessions_per_month;
-      }
+
+
 
       await createPackage.mutateAsync(payload);
       toast.success('PT Package created');
