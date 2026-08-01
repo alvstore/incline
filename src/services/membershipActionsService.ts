@@ -59,3 +59,46 @@ export async function setActiveBranch(branchId: string | null): Promise<void> {
   const { error } = await supabase.rpc('set_active_branch', { p_branch_id: branchId });
   if (error) throw error;
 }
+
+export interface UpgradeMembershipInput {
+  membershipId: string;
+  newPlanId: string;
+  reason?: string;
+  paymentMethod?: string;
+  amountPaying?: number;
+  includeGst?: boolean;
+  gstRate?: number;
+  idempotencyKey?: string;
+}
+
+export interface UpgradeMembershipResult {
+  membership_id: string;
+  invoice_id: string;
+  invoice_number: string;
+  credit_applied: number;
+  new_total: number;
+  balance_due: number;
+  new_end_date: string;
+}
+
+/**
+ * Mid-term upgrade: credits everything already paid on the running plan,
+ * amends the same invoice in place and extends the term from the original
+ * joining date. Server-side atomic RPC — never replicate this client-side.
+ */
+export async function upgradeMembership(
+  input: UpgradeMembershipInput,
+): Promise<UpgradeMembershipResult> {
+  const { data, error } = await supabase.rpc('upgrade_membership' as any, {
+    p_membership_id: input.membershipId,
+    p_new_plan_id: input.newPlanId,
+    p_reason: input.reason ?? null,
+    p_payment_method: input.paymentMethod ?? 'cash',
+    p_amount_paying: input.amountPaying ?? 0,
+    p_include_gst: input.includeGst ?? false,
+    p_gst_rate: input.gstRate ?? 0,
+    p_idempotency_key: input.idempotencyKey ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as UpgradeMembershipResult;
+}

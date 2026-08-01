@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   User, Users, Phone, Mail, Calendar, MapPin, Building2, 
-  CreditCard, Dumbbell, Clock, Gift, AlertCircle,
+  CreditCard, Dumbbell, Clock, Gift, AlertCircle, ArrowUpCircle,
   CheckCircle, XCircle, Pause, History, Snowflake, 
   Play, UserCog, IndianRupee, Ruler, UserMinus, UserCheck,
   Award, Copy, Share2, MessageCircle, Edit, Heart, Activity, Plus, FileText, Download,
@@ -41,6 +41,8 @@ import { can } from '@/lib/auth/permissions';
 
 import { CompGiftDrawer } from './CompGiftDrawer';
 import { GiftDaysDrawer } from './GiftDaysDrawer';
+import { UpgradeMembershipDrawer } from './UpgradeMembershipDrawer';
+
 import { DocumentVaultTab } from './DocumentVaultTab';
 import { MemberRegistrationFormDrawer } from './MemberRegistrationForm';
 import { TransferBranchDrawer } from './TransferBranchDrawer';
@@ -654,6 +656,8 @@ export function MemberProfileDrawer({
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
   const [giftDaysOpen, setGiftDaysOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
   const [registrationFormOpen, setRegistrationFormOpen] = useState(false);
   const [transferBranchOpen, setTransferBranchOpen] = useState(false);
   const [transferMembershipOpen, setTransferMembershipOpen] = useState(false);
@@ -1214,12 +1218,25 @@ export function MemberProfileDrawer({
             <Button 
               variant={activeMembership && daysLeft > 0 ? 'outline' : 'default'} 
               className="flex-1 min-h-[44px] h-auto py-2 whitespace-normal"
-              onClick={() => { onOpenChange(false); onPurchaseMembership(); }}
+              onClick={() => {
+                // Mid-term upgrade keeps the same invoice + joining date; renewals/new plans go to purchase.
+                if (isManagerOrAbove && activeMembership?.status === 'active' && daysLeft > 0) {
+                  setUpgradeOpen(true);
+                  return;
+                }
+                onOpenChange(false);
+                onPurchaseMembership();
+              }}
               disabled={activeMembership?.status === 'frozen'}
             >
-              <CreditCard className="h-4 w-4 mr-2 shrink-0" />
+              {activeMembership && daysLeft > 0 ? (
+                <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+              ) : (
+                <CreditCard className="h-4 w-4 mr-2 shrink-0" />
+              )}
               {activeMembership?.status === 'frozen' ? 'Frozen – Cannot Purchase' : activeMembership && daysLeft > 0 ? 'Upgrade Plan' : (activeMembership && daysLeft <= 0 ? 'Renew Plan' : 'Add Plan')}
             </Button>
+
             <Button 
               variant="outline" 
               className="flex-1 min-h-[44px]"
@@ -2222,7 +2239,18 @@ export function MemberProfileDrawer({
           member={memberDetails || member}
           profile={profile}
         />
+        {activeMembership && (
+          <UpgradeMembershipDrawer
+            open={upgradeOpen}
+            onOpenChange={setUpgradeOpen}
+            membership={activeMembership}
+            memberId={member.id}
+            memberName={profile?.full_name}
+            branchId={member.branch_id}
+          />
+        )}
         <GiftDaysDrawer
+
           open={giftDaysOpen}
           onOpenChange={setGiftDaysOpen}
           membershipId={activeMembership?.id}
