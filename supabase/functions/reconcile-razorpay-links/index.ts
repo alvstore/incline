@@ -150,7 +150,7 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       gateway_payment_id: gatewayPaymentId,
       event_type: "reconciled.captured",
       received_at: capturedAt,
-      source: "reconciler",
+      source: "order",
       webhook_data: { ...(tx.webhook_data || {}), reconciled_at: new Date().toISOString(), reconciler_version: "2.1.0", gateway_fee: gatewayFee, gateway_tax: gatewayTax },
     })
     .eq("id", tx.id);

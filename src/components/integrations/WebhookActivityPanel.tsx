@@ -113,7 +113,7 @@ export function WebhookActivityPanel() {
            member:members!payment_transactions_member_id_fkey(member_code, profiles:user_id(full_name))`,
           { count: 'exact' },
         )
-        .in('source', ['webhook', 'reconciler'])
+        .in('source', ['webhook', 'order', 'reconciler'])
         .order('received_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .range(from, to);
