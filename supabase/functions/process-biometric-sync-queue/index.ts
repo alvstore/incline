@@ -158,7 +158,20 @@ Deno.serve(async (req) => {
               processed_at: new Date().toISOString(),
             })
             .eq("id", (row as any).id);
+          await recordSuccess(supabase, null);
           ok++;
+        } else if (classifyFailure({ status: invokeRes.status, message: partialReason }) === "transport") {
+          // Server-side outage: reschedule without consuming the retry budget.
+          await recordTransportFailure(supabase, null, partialReason);
+          await supabase
+            .from("biometric_sync_queue")
+            .update({
+              status: "pending",
+              error_message: `deferred (MIPS unreachable): ${partialReason}`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", (row as any).id);
+          deferred++;
         } else {
           const nextRetry = ((row as any).retry_count || 0) + 1;
           await supabase
@@ -174,12 +187,26 @@ Deno.serve(async (req) => {
           failed++;
         }
       } catch (e: any) {
+        const msg = e?.message || String(e);
+        if (classifyFailure({ message: msg }) === "transport") {
+          await recordTransportFailure(supabase, null, msg);
+          await supabase
+            .from("biometric_sync_queue")
+            .update({
+              status: "pending",
+              error_message: `deferred (MIPS unreachable): ${msg}`,
+              processed_at: new Date().toISOString(),
+            })
+            .eq("id", (row as any).id);
+          deferred++;
+          continue;
+        }
         const nextRetry = ((row as any).retry_count || 0) + 1;
         await supabase
           .from("biometric_sync_queue")
           .update({
             status: nextRetry >= MAX_RETRIES ? "failed" : "pending",
-            error_message: e?.message || String(e),
+            error_message: msg,
             retry_count: nextRetry,
           })
           .eq("id", (row as any).id);
@@ -188,9 +215,10 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed: dueRows.length, picked: rows?.length || 0, ok, failed, skipped }),
+      JSON.stringify({ success: true, processed: dueRows.length, picked: rows?.length || 0, ok, failed, skipped, deferred }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e: any) {
     console.error("[process-biometric-sync-queue] fatal:", e);
     return new Response(JSON.stringify({ error: e?.message || String(e) }), {
