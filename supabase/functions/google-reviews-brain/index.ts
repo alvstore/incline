@@ -362,16 +362,19 @@ const GATEWAY_PLACES = "https://connector-gateway.lovable.dev/google_maps/places
 
 /**
  * Places key resolution order:
- *   1. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`)
- *   2. Google Maps connector key `GOOGLE_MAPS_API_KEY` (routed via the Lovable gateway)
+ *   1. Google Maps connector key `GOOGLE_MAPS_API_KEY` (routed via the Lovable gateway) —
+ *      managed, always enabled for Places API (New), no referrer/IP restrictions.
+ *   2. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`) as fallback.
  */
 async function resolvePlacesKey(branch_id?: string): Promise<string> {
+  if (ENV_PLACES_KEY && LOVABLE_API_KEY) return ENV_PLACES_KEY;
   if (branch_id) {
     const cfg = await getGoogleConfig(branch_id);
     if (cfg?.places_api_key) return String(cfg.places_api_key);
   }
   return ENV_PLACES_KEY;
 }
+
 
 /**
  * The connector key is a *gateway connection key*, not a Google API key — calling
