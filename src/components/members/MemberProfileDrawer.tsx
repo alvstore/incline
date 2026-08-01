@@ -654,6 +654,8 @@ export function MemberProfileDrawer({
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
   const [giftDaysOpen, setGiftDaysOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
   const [registrationFormOpen, setRegistrationFormOpen] = useState(false);
   const [transferBranchOpen, setTransferBranchOpen] = useState(false);
   const [transferMembershipOpen, setTransferMembershipOpen] = useState(false);
