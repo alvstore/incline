@@ -21,7 +21,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Steady-state top-up size. A cold or reset gate gets the burst size instead,
+// otherwise a full roster (~70 people) would take two hours at 3 per tick.
 const DEFAULT_BATCH = 3;
+const BURST_BATCH = 10;
+const BURST_SHORTFALL = 20;
+const MAX_BATCH = 12;
 const INVOCATION_BUDGET_MS = 45_000;
 
 function json(body: unknown, status = 200) {
@@ -78,7 +83,11 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const batchSize = Math.max(1, Math.min(10, Number((body as any)?.batch) || DEFAULT_BATCH));
+    // An explicit `batch` in the payload pins the size; otherwise it is chosen
+    // per branch from the measured shortfall (see below).
+    const pinnedBatch = Number((body as any)?.batch) > 0
+      ? Math.max(1, Math.min(MAX_BATCH, Number((body as any)?.batch)))
+      : null;
     const onlyBranch: string | undefined = (body as any)?.branch_id;
 
     // Branches that actually have mapped hardware.
@@ -180,6 +189,11 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Adaptive batch: burst when a gate is cold (reset / large backlog),
+      // small top-ups once the fleet is close to parity.
+      const batchSize = pinnedBatch
+        ?? (shortfall >= BURST_SHORTFALL ? BURST_BATCH : DEFAULT_BATCH);
+
       // Oldest-verified-first batch — a rotating cursor without extra state.
       const batch = roster.slice(0, batchSize);
       let ok = 0, failed = 0;
@@ -236,25 +250,36 @@ Deno.serve(async (req) => {
       }
 
       const after = await readDeviceCounts(baseUrl, token);
+      const deviceReport = after.map((d) => {
+        const prev = before.find((p) => p.id === d.id);
+        return {
+          name: d.name,
+          persons: d.persons,
+          faces_before: prev?.faces ?? null,
+          faces_after: d.faces,
+          delta: prev ? d.faces - prev.faces : null,
+          online: d.online,
+        };
+      });
+      // The server accepted the dispatches but no terminal counter moved: the
+      // gates are online yet not draining their download queue. That is a
+      // device-side condition, not a pipeline failure — flag it explicitly so
+      // the operator is told instead of watching a silent retry loop.
+      const gatesStalled = ok > 0
+        && deviceReport.length > 0
+        && deviceReport.every((d) => d.online && (d.delta ?? 0) === 0);
+
       summary.push({
         branch_id: branchId,
         expected,
         shortfall,
+        batch_size: batchSize,
         processed: ok + failed,
         ok,
         failed,
         failures,
-        devices: after.map((d) => {
-          const prev = before.find((p) => p.id === d.id);
-          return {
-            name: d.name,
-            persons: d.persons,
-            faces_before: prev?.faces ?? null,
-            faces_after: d.faces,
-            delta: prev ? d.faces - prev.faces : null,
-            online: d.online,
-          };
-        }),
+        gates_stalled: gatesStalled,
+        devices: deviceReport,
       });
     }
 

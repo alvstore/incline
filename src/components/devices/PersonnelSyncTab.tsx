@@ -205,6 +205,22 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     retry: 1,
   });
 
+  // ---- Enrollment sweep status: when the self-healing worker last ran ------
+  const { data: sweepStatus } = useQuery({
+    queryKey: ["mips-face-sweep-status"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("automation_rules")
+        .select("last_run_at, last_status, last_error, is_active")
+        .eq("key", "mips_face_enrollment_sweep")
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+
+
 
 
 
@@ -558,27 +574,69 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       {(gateTruth?.length ?? 0) > 0 && (
         <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
-          <CardContent className="flex flex-wrap items-center gap-4 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Faces on gates
-            </span>
-            {gateTruth!.map((d) => (
-              <div key={d.id} className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-foreground">{d.deviceName || d.name}</span>
-                <Badge
-                  className={
-                    d.faceCount >= stats.serverWithFace
-                      ? "rounded-full bg-emerald-100 text-emerald-700"
-                      : "rounded-full bg-amber-100 text-amber-700"
-                  }
-                >
-                  {d.faceCount} faces · {d.personCount} people
-                </Badge>
-              </div>
-            ))}
-            <span className="text-xs text-muted-foreground">
-              MIPS server holds {stats.serverWithFace} face photos — gates below this number are still catching up.
-            </span>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Faces on gates
+              </span>
+              {gateTruth!.map((d) => {
+                const target = stats.serverWithFace || 0;
+                const pct = target > 0 ? Math.min(100, Math.round(((d.faceCount || 0) / target) * 100)) : 0;
+                const done = target > 0 && d.faceCount >= target;
+                return (
+                  <div key={d.id} className="min-w-[190px] flex-1 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="font-medium text-foreground">{d.deviceName || d.name}</span>
+                      <Badge
+                        className={
+                          done
+                            ? "rounded-full bg-emerald-100 text-emerald-700"
+                            : "rounded-full bg-amber-100 text-amber-700"
+                        }
+                      >
+                        {d.faceCount}/{target} faces
+                      </Badge>
+                    </div>
+                    <div
+                      className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+                      role="progressbar"
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${d.deviceName || d.name} face enrollment progress`}
+                    >
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${done ? "bg-emerald-500" : "bg-amber-500"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{d.personCount} people on device</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-muted-foreground">
+              <span>
+                MIPS server holds {stats.serverWithFace} face photos — gates below this number are still catching up.
+              </span>
+              <span>
+                {sweepStatus?.is_active === false
+                  ? "Enrollment sweep is paused"
+                  : sweepStatus?.last_run_at
+                    ? `Sweep last ran ${new Date(sweepStatus.last_run_at).toLocaleTimeString()}`
+                    : "Sweep has not run yet"}
+              </span>
+            </div>
+
+            {stats.serverWithFace > 0 &&
+              gateTruth!.every((d) => (d.faceCount || 0) === 0) && (
+                <p className="rounded-xl bg-red-50 p-3 text-xs leading-relaxed text-red-700">
+                  Both gates are online but hold zero faces while the server holds {stats.serverWithFace}. The
+                  terminals are accepting the sync command and not downloading. This needs a device-side
+                  &quot;sync from server&quot; on the terminal itself — re-pushing from here will not clear it.
+                </p>
+              )}
           </CardContent>
         </Card>
       )}
