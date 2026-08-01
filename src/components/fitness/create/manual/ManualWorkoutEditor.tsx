@@ -237,29 +237,9 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     const content: any = d.content || {};
     const draftDays: any[] = content?.weeks?.[0]?.days || content?.days || [];
     if (draftDays.length) {
-      setDays(draftDays.map((dd: any) => ({
-        day: dd.day || '',
-        focus: dd.focus || '',
-        exercises: (dd.exercises || []).map((ex: any) => {
-          const restRaw = ex.rest;
-          const restNum = typeof restRaw === 'number'
-            ? restRaw
-            : typeof restRaw === 'string'
-              ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
-              : 60;
-          return {
-            name: ex.name || '',
-            sets: ex.sets ?? 3,
-            reps: String(ex.reps ?? '12'),
-            rest_seconds: restNum,
-            weight: ex.weight || '',
-            form_tips: ex.notes || ex.form_tips || '',
-            video_url: ex.video_url,
-            video_file_path: ex.video_file_path,
-          };
-        }),
-      })));
+      setDays(draftDays.map(toEditorDay));
     }
+
   }, [draftId]);
 
   useEffect(() => {
