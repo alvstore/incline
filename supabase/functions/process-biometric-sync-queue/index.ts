@@ -62,7 +62,39 @@ Deno.serve(async (req) => {
 
     console.log(`[process-biometric-sync-queue] picked=${rows?.length || 0} due=${dueRows.length}`);
 
-    let ok = 0, failed = 0, skipped = 0;
+    // Queue rows carry no branch, so honour any open breaker: if MIPS is known
+    // unreachable, leave the rows untouched rather than burning their retries.
+    const { data: breakerRows } = await supabase
+      .from("settings")
+      .select("branch_id, value")
+      .eq("key", "mips_breaker");
+    const openBreaker = (breakerRows || []).find((b: any) =>
+      isTripped({
+        open: Boolean(b?.value?.open),
+        open_until: b?.value?.open_until ?? null,
+        consecutive_failures: 0,
+        opens: 0,
+        last_error: b?.value?.last_error ?? null,
+        last_failure_at: null,
+        last_success_at: null,
+      })
+    );
+    if (openBreaker && dueRows.length > 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          paused: true,
+          reason: "MIPS server unreachable — queue paused, auto-resuming",
+          resumes_at: (openBreaker as any).value?.open_until ?? null,
+          last_error: (openBreaker as any).value?.last_error ?? null,
+          waiting: dueRows.length,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let ok = 0, failed = 0, skipped = 0, deferred = 0;
+
     for (const row of dueRows) {
       const personId = (row as any).person_uuid || (row as any).member_id || (row as any).staff_id;
       const personType = (row as any).person_type
