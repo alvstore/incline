@@ -125,11 +125,11 @@ export function UpgradeMembershipDrawer({
 
   const newEnd = useMemo(() => {
     if (!newPlan || !membership?.start_date) return null;
-    const gift = Number(membership?.gift_days_total ?? 0);
     const base = membershipEndDate(membership.start_date, Number(newPlan.duration_days ?? 0));
-    const carried = gift + Number(membership?.total_freeze_days_used ?? 0);
+    const carried = Number(ledger?.giftDays ?? 0) + Number(membership?.total_freeze_days_used ?? 0);
     return new Date(base.getTime() + carried * 86400000);
-  }, [newPlan, membership?.start_date, membership?.gift_days_total, membership?.total_freeze_days_used]);
+  }, [newPlan, membership?.start_date, ledger?.giftDays, membership?.total_freeze_days_used]);
+
 
   const daysUsed = membership?.start_date
     ? Math.max(differenceInCalendarDays(new Date(), parseISO(String(membership.start_date))), 0)
