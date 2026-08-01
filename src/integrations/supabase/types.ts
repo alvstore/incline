@@ -8441,6 +8441,8 @@ export type Database = {
           status: Database["public"]["Enums"]["membership_status"]
           total_freeze_days_used: number | null
           updated_at: string
+          upgrade_credit_amount: number
+          upgraded_from_membership_id: string | null
         }
         Insert: {
           branch_id: string
@@ -8464,6 +8466,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["membership_status"]
           total_freeze_days_used?: number | null
           updated_at?: string
+          upgrade_credit_amount?: number
+          upgraded_from_membership_id?: string | null
         }
         Update: {
           branch_id?: string
@@ -8487,6 +8491,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["membership_status"]
           total_freeze_days_used?: number | null
           updated_at?: string
+          upgrade_credit_amount?: number
+          upgraded_from_membership_id?: string | null
         }
         Relationships: [
           {
@@ -8522,6 +8528,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "membership_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_upgraded_from_membership_id_fkey"
+            columns: ["upgraded_from_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
         ]
@@ -14529,6 +14542,10 @@ export type Database = {
         }
         Returns: Json
       }
+      membership_end_date: {
+        Args: { p_duration_days: number; p_start: string }
+        Returns: string
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -15308,6 +15325,7 @@ export type Database = {
         | "expired"
         | "cancelled"
         | "transferred"
+        | "upgraded"
       messaging_platform: "whatsapp" | "instagram" | "messenger"
       no_show_policy: "mark_used" | "allow_reschedule" | "charge_penalty"
       order_status:
@@ -15598,6 +15616,7 @@ export const Constants = {
         "expired",
         "cancelled",
         "transferred",
+        "upgraded",
       ],
       messaging_platform: ["whatsapp", "instagram", "messenger"],
       no_show_policy: ["mark_used", "allow_reschedule", "charge_penalty"],
