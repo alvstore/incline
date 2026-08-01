@@ -68,6 +68,11 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
   if (Math.abs(paidAmount - Number(tx.amount)) > 0.01) {
     return { ok: false, reason: "amount_mismatch", expected: Number(tx.amount), captured: paidAmount };
   }
+  const paymentMethod = paidPayment?.method === "upi"
+    ? "upi"
+    : paidPayment?.method === "netbanking"
+      ? "bank_transfer"
+      : "card";
 
   // 1. Invoice snapshot (for member_id / branch_id / totals)
   const { data: inv } = await supabase
@@ -82,7 +87,7 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
     p_invoice_id: inv.id,
     p_member_id: inv.member_id,
     p_amount: paidAmount,
-    p_payment_method: "online",
+    p_payment_method: paymentMethod,
     p_transaction_id: gatewayPaymentId,
     p_notes: `Razorpay payment ${gatewayPaymentId} auto-reconciled`,
     p_received_by: null,
