@@ -822,13 +822,13 @@ async function handleMaterialize(a: MaterializeArgs): Promise<Response> {
     }));
   } else if (Array.isArray(a.member_ids) && a.member_ids.length > 0) {
     const { data: members } = await adminClient.from('members')
-      .select('id, phone_number, profiles:user_id (full_name, email, phone)')
+      .select('id, profiles:user_id (full_name, email, phone)')
       .in('id', a.member_ids);
     rows = (members || []).map((m: any) => ({
       source_type: 'member',
       source_ref_id: m.id,
       full_name: m.profiles?.full_name || null,
-      phone: m.profiles?.phone || m.phone_number || null,
+      phone: m.profiles?.phone || null,
       email: m.profiles?.email || null,
     }));
   } else {
@@ -946,11 +946,16 @@ async function handleChunk(a: ChunkArgs): Promise<Response> {
         const [c1, c2, c3] = await Promise.all([
           adminClient.from('whatsapp_chat_settings').select('phone_number').eq('branch_id', branchId).eq('do_not_contact', true),
           adminClient.from('leads').select('phone').eq('branch_id', branchId).eq('do_not_contact', true),
-          adminClient.from('members').select('phone_number').eq('branch_id', branchId).eq('do_not_contact', true),
+          // `members` has no phone column — phones live on the linked profile.
+          adminClient.from('members').select('user_id').eq('branch_id', branchId).eq('do_not_contact', true),
         ]);
         for (const r of (c1.data || [])) dnc.add(digits((r as any).phone_number));
         for (const r of (c2.data || [])) dnc.add(digits((r as any).phone));
-        for (const r of (c3.data || [])) dnc.add(digits((r as any).phone_number));
+        const dncUserIds = (c3.data || []).map((r: any) => r.user_id).filter(Boolean);
+        if (dncUserIds.length > 0) {
+          const { data: dncProfiles } = await adminClient.from('profiles').select('phone').in('id', dncUserIds);
+          for (const r of (dncProfiles || [])) dnc.add(digits((r as any).phone));
+        }
       } catch { /* best effort */ }
 
       const { data: batch, error: claimErr } = await adminClient.rpc('claim_broadcast_batch', {
