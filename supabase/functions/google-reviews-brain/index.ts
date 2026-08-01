@@ -357,19 +357,53 @@ async function listLocations(branch_id: string, account_id: string) {
 // exposes through Places API (New) — rating, review count and up to 5 recent
 // reviews. Read-only: no replies, no full history, but the dashboard is live.
 const ENV_PLACES_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const GATEWAY_PLACES = "https://connector-gateway.lovable.dev/google_maps/places";
 
 /**
  * Places key resolution order:
- *   1. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`)
- *   2. platform secret / Google Maps connector key `GOOGLE_MAPS_API_KEY`
+ *   1. Google Maps connector key `GOOGLE_MAPS_API_KEY` (routed via the Lovable gateway) —
+ *      managed, always enabled for Places API (New), no referrer/IP restrictions.
+ *   2. per-branch `credentials.places_api_key` (or legacy `credentials.api_key`) as fallback.
  */
 async function resolvePlacesKey(branch_id?: string): Promise<string> {
+  if (ENV_PLACES_KEY && LOVABLE_API_KEY) return ENV_PLACES_KEY;
   if (branch_id) {
     const cfg = await getGoogleConfig(branch_id);
     if (cfg?.places_api_key) return String(cfg.places_api_key);
   }
   return ENV_PLACES_KEY;
 }
+
+
+/**
+ * The connector key is a *gateway connection key*, not a Google API key — calling
+ * places.googleapis.com with it directly always 403s. Route those calls through the
+ * Lovable connector gateway; use direct Google calls only for a branch-pasted key.
+ */
+async function placesFetch(
+  key: string,
+  path: string, // e.g. "/v1/places:searchText"
+  init: { method?: string; fieldMask: string; body?: unknown },
+): Promise<Response> {
+  const viaGateway = key === ENV_PLACES_KEY && !!ENV_PLACES_KEY && !!LOVABLE_API_KEY;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Goog-FieldMask": init.fieldMask,
+  };
+  if (viaGateway) {
+    headers["Authorization"] = `Bearer ${LOVABLE_API_KEY}`;
+    headers["X-Connection-Api-Key"] = key;
+  } else {
+    headers["X-Goog-Api-Key"] = key;
+  }
+  return await fetch(`${viaGateway ? GATEWAY_PLACES : "https://places.googleapis.com"}${path}`, {
+    method: init.method ?? "GET",
+    headers,
+    body: init.body ? JSON.stringify(init.body) : undefined,
+  });
+}
+
 
 /** Turn a raw Google error body into something an owner can act on. */
 function friendlyGoogleError(status: number, body: string): string {
@@ -397,16 +431,12 @@ function extractPlaceIdFromLink(link?: string | null): string | null {
 async function searchPlaces(branch_id: string | undefined, query: string) {
   const key = await resolvePlacesKey(branch_id);
   if (!key) return json({ ok: false, reason: "No Places API key saved. Add one in Step 1 of the Google drawer." }, 200);
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const res = await placesFetch(key, "/v1/places:searchText", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
-    },
-    body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
+    fieldMask: "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
+    body: { textQuery: query, maxResultCount: 8 },
   });
+
   if (!res.ok) {
     const txt = await res.text();
     console.error("places searchText failed", res.status, txt.slice(0, 300));
@@ -445,21 +475,51 @@ async function resolvePlaceId(branch_id: string, cfg: any): Promise<string | nul
   if (fromLink) return fromLink;
   if (!key || !branch?.name) return null;
   const query = [branch.name, branch.address, branch.city].filter(Boolean).join(", ");
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  const res = await placesFetch(key, "/v1/places:searchText", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": "places.id,places.displayName",
-    },
-    body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
+    fieldMask: "places.id,places.displayName",
+    body: { textQuery: query, maxResultCount: 1 },
   });
+
   if (!res.ok) {
     console.error("places searchText failed", res.status, (await res.text()).slice(0, 300));
     return null;
   }
   const j = await res.json();
   return j?.places?.[0]?.id ?? null;
+}
+
+/**
+ * Reads a place record (rating, count, reviews).
+ * The managed Google Maps connector key blocks `Places.GetPlace`, so we try the
+ * details endpoint first and fall back to `places:searchText`, which returns the
+ * same review payload and IS allowed on the managed key.
+ */
+async function fetchPlaceRecord(
+  key: string,
+  placeId: string,
+  textQuery: string,
+): Promise<{ ok: true; place: any } | { ok: false; status: number; body: string }> {
+  const details = await placesFetch(key, `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`, {
+    fieldMask: "id,displayName,rating,userRatingCount,reviews",
+  });
+  if (details.ok) return { ok: true, place: await details.json() };
+  const detailsBody = await details.text();
+
+  if (textQuery) {
+    const search = await placesFetch(key, "/v1/places:searchText", {
+      method: "POST",
+      fieldMask: "places.id,places.displayName,places.rating,places.userRatingCount,places.reviews",
+      body: { textQuery, maxResultCount: 5, languageCode: "en" },
+    });
+    if (search.ok) {
+      const j = await search.json();
+      const list = (j.places ?? []) as any[];
+      const match = list.find((p) => p.id === placeId) ?? list[0];
+      if (match) return { ok: true, place: match };
+    }
+  }
+  return { ok: false, status: details.status, body: detailsBody };
 }
 
 async function fetchPlacesReviewsForBranch(branch_id: string) {
@@ -470,27 +530,28 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   const placeId = await resolvePlaceId(branch_id, cfg);
   if (!placeId) return { branch_id, fetched: 0, source: "places", reason: "place_id_unresolved" };
 
-  const res = await fetch(
-    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`,
-    {
-      headers: {
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,reviews",
-      },
-    },
-  );
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("places details failed", res.status, txt.slice(0, 300));
+  const { data: branch } = await sb
+    .from("branches")
+    .select("name, address, city")
+    .eq("id", branch_id)
+    .maybeSingle();
+  const textQuery = [cfg?.place_name, branch?.name, branch?.address, branch?.city]
+    .filter(Boolean)
+    .join(", ");
+
+  const result = await fetchPlaceRecord(key, placeId, textQuery);
+  if (!result.ok) {
+    console.error("places details failed", result.status, result.body.slice(0, 300));
     return {
       branch_id,
       fetched: 0,
       source: "places",
-      reason: `places_${res.status}`,
-      detail: friendlyPlacesError(res.status, txt),
+      reason: `places_${result.status}`,
+      detail: friendlyPlacesError(result.status, result.body),
     };
   }
-  const j = await res.json();
+  const j = result.place;
+
   const reviews = (j.reviews ?? []) as any[];
   let upserted = 0;
   for (const r of reviews) {
