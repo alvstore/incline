@@ -700,23 +700,39 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   if (!author_name) return { match_type: "none", evidence: {} };
   const sb = supa();
 
-  // Members: members.user_id -> profiles.full_name (branch-scoped)
+  // Members: fetch rows, then resolve names via a separate profiles read.
+  // (Never rely on auto-generated FK aliases — a bad hint silently returns null.)
   const { data: branchMembers } = await sb
     .from("members")
-    .select("id, user_id, joined_at, status, lifecycle_state, profiles!members_user_id_fkey(full_name)")
+    .select("id, user_id, joined_at, status, lifecycle_state, member_code")
     .eq("branch_id", branch_id)
     .limit(2000);
+
+  const userIds = (branchMembers ?? [])
+    .map((m: any) => m.user_id)
+    .filter(Boolean);
+  const nameById = new Map<string, string>();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const slice = userIds.slice(i, i + 200);
+    const { data: profs } = await sb
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", slice);
+    for (const p of (profs ?? []) as any[]) {
+      if (p.full_name) nameById.set(p.id, p.full_name);
+    }
+  }
 
   let bestMember: any = null;
   let bestScore = 0;
   const target = author_name.toLowerCase().trim();
   for (const m of (branchMembers ?? []) as any[]) {
-    const name = (m.profiles?.full_name ?? "").toLowerCase().trim();
-    if (!name) continue;
-    const score = similarity(target, name);
+    const full = m.user_id ? nameById.get(m.user_id) ?? "" : "";
+    if (!full) continue;
+    const score = nameScore(target, full);
     if (score > bestScore) {
       bestScore = score;
-      bestMember = { ...m, _name: m.profiles?.full_name };
+      bestMember = { ...m, _name: full };
     }
   }
   if (bestScore >= 0.7 && bestMember) {
@@ -726,6 +742,7 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
       match_confidence: bestScore,
       evidence: {
         name: bestMember._name,
+        member_code: bestMember.member_code,
         joined_at: bestMember.joined_at,
         status: bestMember.status,
         lifecycle_state: bestMember.lifecycle_state,
@@ -742,9 +759,9 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   let bestLead: any = null;
   let bestLeadScore = 0;
   for (const l of (leads ?? []) as any[]) {
-    const name = (l.full_name ?? "").toLowerCase().trim();
+    const name = (l.full_name ?? "").trim();
     if (!name) continue;
-    const score = similarity(target, name);
+    const score = nameScore(target, name);
     if (score > bestLeadScore) {
       bestLeadScore = score;
       bestLead = l;
@@ -765,6 +782,35 @@ async function findAuthorMatch(branch_id: string, author_name: string | null) {
   }
   return { match_type: "none", evidence: {} };
 }
+
+/**
+ * Name similarity tuned for Google display names, which are frequently longer
+ * or shorter than the CRM record ("Aamil" vs "Aamil Khan"). Combines bigram
+ * similarity with token overlap so partial names still match.
+ */
+function nameScore(a: string, b: string): number {
+  const norm = (s: string) =>
+    s.replace(/[^a-z\s]/gi, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const A = norm(a);
+  const B = norm(b);
+  if (!A || !B) return 0;
+  if (A === B) return 1;
+
+  const setA = new Set(A.split(" ").filter((t) => t.length > 1));
+  const setB = new Set(B.split(" ").filter((t) => t.length > 1));
+  let shared = 0;
+  for (const t of setA) if (setB.has(t)) shared++;
+
+  const minTokens = Math.min(setA.size, setB.size);
+  const tokenScore = minTokens > 0 ? shared / minTokens : 0;
+  // Every token of the shorter name present in the longer one → strong match.
+  if (tokenScore === 1 && minTokens >= 1) {
+    return setA.size === setB.size ? 0.98 : 0.9;
+  }
+
+  return Math.max(similarity(A, B), tokenScore * 0.8);
+}
+
 
 // Simple Dice-coefficient bigram similarity
 function similarity(a: string, b: string): number {
