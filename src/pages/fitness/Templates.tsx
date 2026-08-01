@@ -105,6 +105,7 @@ export default function FitnessTemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<FitnessPlanTemplate | null>(null);
   const [targetingTemplate, setTargetingTemplate] = useState<FitnessPlanTemplate | null>(null);
   const [uploadPdfOpen, setUploadPdfOpen] = useState(false);
+  const [assignmentsTemplate, setAssignmentsTemplate] = useState<FitnessPlanTemplate | null>(null);
 
   const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["fitness-templates", planType],
