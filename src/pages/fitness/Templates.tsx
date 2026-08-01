@@ -410,6 +410,7 @@ export default function FitnessTemplatesPage() {
       <AssignPlanDrawer
         open={assignDrawerOpen}
         onOpenChange={setAssignDrawerOpen}
+        branchId={effectiveBranchId || undefined}
         plan={
           selectedTemplate
             ? {
