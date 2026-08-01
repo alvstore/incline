@@ -821,7 +821,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
         const exercises: any[] = Array.isArray(day.exercises) ? day.exercises : [];
 
         // Day header band — kept with at least the first rows of content
-        ensureSpace(34);
+        ensureSpace(exercises.length ? 62 : 30);
         doc.setFillColor(15, 23, 42);
         doc.roundedRect(14, y, 182, 9, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
