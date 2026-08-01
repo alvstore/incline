@@ -12,6 +12,9 @@ const corsHeaders = {
 const PERMANENT_END = "2099-12-31 23:59:59";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
+// Above this the raw source is never decoded — decoding multi-MB photos in an
+// edge worker exhausts memory and the invocation is killed by the platform.
+const MAX_SOURCE_BYTES = 6 * 1024 * 1024;
 const BIOMETRIC_BUCKET = "member-photos";
 const AVATAR_PATH_PREFIX = "avatars/";
 
@@ -155,10 +158,18 @@ async function upsertPerson(
 
 /**
  * Re-encode an oversized image so it fits MIPS' 400KB face-photo cap.
- * Downscales to max 640px on the long edge, then walks JPEG quality down
- * until the payload fits. Returns null when the image can't be decoded.
+ *
+ * Memory discipline (edge worker OOM guard):
+ *  - sources above MAX_SOURCE_BYTES are never decoded — a 12MP phone JPEG
+ *    expands to >50MB RGBA and kills the worker ("not enough compute resources")
+ *  - one decode, one resize pass to <=640px, then quality steps on the same
+ *    small bitmap; intermediate references are dropped as we go
  */
 async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
+  if (bytes.length > MAX_SOURCE_BYTES) {
+    console.warn(`normalizePhotoBytes: source too large (${Math.round(bytes.length / 1024)}KB) — refusing to decode`);
+    return null;
+  }
   try {
     const decoded = await decodeImage(bytes);
     // GIF (Frame collections) are not supported for face enrollment.
@@ -169,13 +180,17 @@ async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null
       const scale = 640 / maxEdge;
       img = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
     }
-    for (const quality of [80, 65, 50, 40, 30]) {
+    for (const quality of [70, 55, 40, 30]) {
       const out = new Uint8Array(await img.encodeJPEG(quality));
-      if (out.length <= MAX_PHOTO_BYTES) return out;
+      if (out.length <= MAX_PHOTO_BYTES) {
+        img = null;
+        return out;
+      }
     }
     // Last resort — halve dimensions once more.
-    img = img.resize(Math.round(img.width / 2), Math.round(img.height / 2));
-    const out = new Uint8Array(await img.encodeJPEG(40));
+    const small = img.resize(Math.round(img.width / 2), Math.round(img.height / 2));
+    img = null;
+    const out = new Uint8Array(await small.encodeJPEG(40));
     return out.length <= MAX_PHOTO_BYTES ? out : null;
   } catch (e) {
     console.warn("normalizePhotoBytes failed:", e);

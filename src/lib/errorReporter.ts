@@ -101,8 +101,9 @@ export function installGlobalErrorReporter() {
 
   window.addEventListener('error', (e) => {
     // Opaque cross-origin errors: browser masks details for CORS-less scripts.
-    // Drop them — they can't be actioned and flood System Health.
-    const isOpaque = (!e.message || /^Script error\.?$/i.test(e.message)) && !e.filename && !e.lineno && !e.colno;
+    // Drop them unconditionally — Safari sometimes attaches a bogus filename or
+    // line number, and the payload is never actionable either way.
+    const isOpaque = !e.message || /^Script error\.?$/i.test(e.message);
     if (isOpaque) return;
     reportError(e.message || 'window.onerror', {
       severity: 'error',
