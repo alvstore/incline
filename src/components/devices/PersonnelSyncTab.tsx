@@ -205,6 +205,22 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     retry: 1,
   });
 
+  // ---- Enrollment sweep status: when the self-healing worker last ran ------
+  const { data: sweepStatus } = useQuery({
+    queryKey: ["mips-face-sweep-status"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("automation_rules")
+        .select("last_run_at, last_status, last_error, is_active")
+        .eq("key", "mips_face_enrollment_sweep")
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+
+
 
 
 
