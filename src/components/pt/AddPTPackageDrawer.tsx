@@ -248,25 +248,12 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
 
           {formData.price > 0 && (
             <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
-              {!formData.gst_enabled ? (
-                <>
-                  <p><strong>Base Price:</strong> ₹{formData.price}</p>
-                  <p className="text-muted-foreground">GST not applied</p>
-                  <p className="font-bold"><strong>Total:</strong> ₹{formData.price}</p>
-                </>
-              ) : (
-                <>
-                  <p><strong>Base Price:</strong> ₹{formData.gst_inclusive
-                    ? (formData.price - calculateGSTAmount(formData.price, formData.gst_percentage, true)).toFixed(2)
-                    : formData.price}</p>
-                  <p><strong>GST ({formData.gst_percentage}%):</strong> ₹{calculateGSTAmount(formData.price, formData.gst_percentage, formData.gst_inclusive).toFixed(2)}</p>
-                  <p className="font-bold"><strong>Total:</strong> ₹{formData.gst_inclusive
-                    ? formData.price
-                    : (formData.price + calculateGSTAmount(formData.price, formData.gst_percentage, false)).toFixed(2)}</p>
-                </>
-              )}
+              <p><strong>Taxable value:</strong> ₹{(formData.price - calculateGSTAmount(formData.price, 5, true)).toFixed(2)}</p>
+              <p><strong>GST (5%):</strong> ₹{calculateGSTAmount(formData.price, 5, true).toFixed(2)}</p>
+              <p className="font-bold"><strong>Member pays:</strong> ₹{formData.price.toFixed(2)}</p>
             </div>
           )}
+
 
           {!isDurationBased && (
             <div className="space-y-2">
