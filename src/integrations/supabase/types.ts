@@ -13470,6 +13470,7 @@ export type Database = {
           _payment_source?: string
           _price_paid: number
           _received_by?: string
+          _start_date?: string
           _trainer_id: string
         }
         Returns: Json
@@ -13827,10 +13828,6 @@ export type Database = {
         Args: { p_branch_id: string; p_phone: string }
         Returns: Json
       }
-      complete_pt_session: {
-        Args: { _notes?: string; _session_id: string }
-        Returns: Json
-      }
       compute_error_fingerprint: {
         Args: {
           p_function_name: string
@@ -14083,6 +14080,7 @@ export type Database = {
         }
         Returns: Json
       }
+      expire_pt_packages: { Args: never; Returns: Json }
       expire_wallet_balances: { Args: never; Returns: Json }
       extract_member_id_from_storage_path: {
         Args: { _path: string }
@@ -14466,6 +14464,7 @@ export type Database = {
         Args: {
           p_member_pt_package_id: string
           p_notes?: string
+          p_session_id?: string
           p_status?: string
           p_trainer_id: string
         }
@@ -14664,6 +14663,10 @@ export type Database = {
         Args: { p_announcement_id: string }
         Returns: Json
       }
+      pt_calendar_expiry: {
+        Args: { p_months: number; p_start: string; p_validity_days?: number }
+        Returns: string
+      }
       punch_duty: {
         Args: { p_branch_id?: string; p_shift_type?: string }
         Returns: {
@@ -14778,6 +14781,7 @@ export type Database = {
           _payment_source?: string
           _price_paid: number
           _received_by?: string
+          _start_date?: string
           _trainer_id: string
         }
         Returns: Json
@@ -14892,6 +14896,17 @@ export type Database = {
           p_reason: string
           p_role: Database["public"]["Enums"]["app_role"]
           p_target_user_id: string
+        }
+        Returns: Json
+      }
+      renew_pt_package: {
+        Args: {
+          _idempotency_key?: string
+          _member_package_id: string
+          _package_id?: string
+          _payment_method?: string
+          _payment_source?: string
+          _price?: number
         }
         Returns: Json
       }
