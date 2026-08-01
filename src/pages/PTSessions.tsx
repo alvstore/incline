@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
-  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage,
+  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage, useRenewPtPackage,
 } from "@/hooks/usePTPackages";
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
