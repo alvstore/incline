@@ -759,8 +759,54 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
 
   // ---- BODY ----
   if (isWorkout) {
+    // "How to use this plan" panel
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, y, 182, 22, 2, 2, 'F');
+    doc.setDrawColor(...accent);
+    doc.setLineWidth(0.8);
+    doc.line(14, y, 14, y + 22);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    setColor(doc, accent);
+    doc.text('HOW TO USE THIS PLAN', 19, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    setColor(doc, BRAND.muted);
+    const howTo = [
+      'Always complete the warm-up before the first working set and the cool-down after your last.',
+      'Form first — add load only when every rep of the last set is clean.',
+      'Rest times are guidelines; take longer on heavy compound lifts if needed.',
+      'Log your sets, reps and load each session so progression stays measurable.',
+    ];
+    howTo.forEach((t, i) => {
+      doc.text(`•  ${t}`, 19, y + 11 + i * 3.6, { maxWidth: 172 });
+    });
+    y += 28;
+
+    const ensureSpace = (needed: number) => {
+      if (y + needed > 282) { doc.addPage(); y = 20; }
+    };
+
+    const drawBand = (label: string, text: string, fill: [number, number, number], labelColor: [number, number, number]) => {
+      const lines = doc.splitTextToSize(text, 158);
+      const h = Math.max(9, 6 + lines.length * 3.8);
+      ensureSpace(h + 4);
+      doc.setFillColor(...fill);
+      doc.roundedRect(14, y, 182, h, 1.5, 1.5, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      setColor(doc, labelColor);
+      doc.text(label.toUpperCase(), 18, y + 5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      setColor(doc, BRAND.text);
+      doc.text(lines, 42, y + 5);
+      y += h + 3;
+    };
+
     const weeks = input.data?.weeks || (input.data?.days ? [{ week: 1, days: input.data.days }] : []);
     weeks.forEach((week: any, wi: number) => {
+      ensureSpace(18);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       setColor(doc, accent);
@@ -768,44 +814,89 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
       doc.setDrawColor(...accent);
       doc.setLineWidth(0.6);
       doc.line(14, y + 1.5, 40, y + 1.5);
-      y += 6;
+      y += 7;
       (week.days || []).forEach((day: any, di: number) => {
-        const dayLabel = day.day || day.label || `Day ${di + 1}`;
+        const dayLabel = String(day.day || day.label || `Day ${di + 1}`);
         const focusSuffix = day.focus ? ` — ${day.focus}` : '';
-        const rows: any[] = (day.exercises || []).map((ex: any) => {
-          if (typeof ex === 'string') return [{ content: '', _exercise: ex, _machine: '', styles: { minCellHeight: 9 } }, '', '', '', '', ''];
+        const exercises: any[] = Array.isArray(day.exercises) ? day.exercises : [];
+
+        // Day header band — kept with at least the first rows of content
+        ensureSpace(exercises.length ? 62 : 30);
+        doc.setFillColor(15, 23, 42);
+        doc.roundedRect(14, y, 182, 9, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`${dayLabel.toUpperCase()}${focusSuffix.toUpperCase()}`, 18, y + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(
+          exercises.length ? `${exercises.length} exercise${exercises.length === 1 ? '' : 's'}` : 'Rest & recovery',
+          192,
+          y + 6,
+          { align: 'right' },
+        );
+        y += 12;
+
+        if (!exercises.length) {
+          const restNote = day.notes || 'Full rest day — stay hydrated, walk lightly and prioritise sleep.';
+          drawBand('Rest', String(restNote), [241, 245, 249], BRAND.muted);
+          y += 2;
+          return;
+        }
+
+        if (day.warmup) drawBand('Warm-up', String(day.warmup), [255, 247, 237], [194, 65, 12]);
+
+        const rows: any[] = [];
+        exercises.forEach((ex: any) => {
+          if (typeof ex === 'string') {
+            rows.push([{ content: '', _exercise: ex, _machine: '', styles: { minCellHeight: 9 } }, '', '', '', '']);
+            return;
+          }
           const machine = ex.equipment ? String(ex.equipment) : '';
           const exerciseName = ex.name || ex.exercise || '';
-          const exerciseCell = {
-            content: '',
-            _exercise: exerciseName,
-            _machine: machine,
-            styles: { minCellHeight: machine ? 12 : 9 },
-          };
-          const sets = ex.sets ? String(ex.sets) : '';
-          const reps = ex.reps ? String(ex.reps) : '';
-          const rest = ex.rest || (ex.rest_seconds ? `${ex.rest_seconds}s` : '');
-          const tipsRaw = Array.isArray(ex.form_tips) ? ex.form_tips.join(' • ') : (ex.form_tips || '');
-          const tips = tipsRaw ? String(tipsRaw).slice(0, 80) : '';
-          return [exerciseCell, sets, reps, rest, ex.weight || '', tips];
+          rows.push([
+            { content: '', _exercise: exerciseName, _machine: machine, styles: { minCellHeight: machine ? 12 : 9 } },
+            ex.sets ? String(ex.sets) : '—',
+            ex.reps ? String(ex.reps) : '—',
+            ex.rest || (ex.rest_seconds ? `${ex.rest_seconds}s` : '—'),
+            ex.weight || '—',
+          ]);
+          const tipsRaw = Array.isArray(ex.form_tips)
+            ? ex.form_tips.filter(Boolean).join('  •  ')
+            : (ex.form_tips || ex.notes || '');
+          const tips = String(tipsRaw || '').replace(/\r/g, '').trim();
+          if (tips) {
+            rows.push([{
+              content: tips.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `Coach cue:  ${l}`).join('\n'),
+              colSpan: 5,
+              styles: {
+                fontStyle: 'italic' as const,
+                fontSize: 7.8,
+                textColor: BRAND.muted as any,
+                fillColor: [249, 250, 251] as any,
+                cellPadding: { top: 1, right: 3, bottom: 2, left: 6 } as any,
+              },
+            }]);
+          }
         });
+
         autoTable(doc, {
           startY: y,
-          head: [[`${dayLabel}${focusSuffix}`, 'Sets', 'Reps', 'Rest', 'Load', 'Form Tips']],
-          body: rows.length ? rows : [['Rest day', '', '', '', '', '']],
-          theme: 'striped',
-          headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-          bodyStyles: { fontSize: 8.5, textColor: BRAND.text, valign: 'middle' },
-          alternateRowStyles: { fillColor: [248, 250, 252] },
+          head: [['Exercise', 'Sets', 'Reps', 'Rest', 'Load']],
+          body: rows,
+          theme: 'grid',
+          headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: 'bold', fontSize: 8, lineColor: [226, 232, 240], lineWidth: 0.1 },
+          bodyStyles: { fontSize: 8.5, textColor: BRAND.text, valign: 'middle', lineColor: [237, 242, 247], lineWidth: 0.1 },
           columnStyles: {
-            0: { cellWidth: 60 },
-            1: { halign: 'center', cellWidth: 14 },
-            2: { halign: 'center', cellWidth: 18 },
-            3: { halign: 'center', cellWidth: 16 },
-            4: { halign: 'center', cellWidth: 18 },
-            5: { cellWidth: 'auto', textColor: BRAND.muted, fontSize: 8 },
+            0: { cellWidth: 86 },
+            1: { halign: 'center', cellWidth: 18 },
+            2: { halign: 'center', cellWidth: 26 },
+            3: { halign: 'center', cellWidth: 26 },
+            4: { halign: 'center', cellWidth: 26 },
           },
-          margin: { left: 14, right: 14 },
+          margin: { left: 14, right: 14, top: 20 },
           didDrawCell: (data) => {
             // Custom-render exercise column: bold exercise name + muted machine sublabel
             if (data.section === 'body' && data.column.index === 0) {
@@ -813,7 +904,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
               if (raw && typeof raw === 'object' && '_exercise' in raw) {
                 const x = data.cell.x + 2;
                 const w = data.cell.width - 4;
-                let yy = data.cell.y + 4.5;
+                let yy = data.cell.y + 5;
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(9);
                 setColor(doc, BRAND.text);
@@ -829,12 +920,15 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
             }
           },
         });
-        y = (doc as any).lastAutoTable.finalY + 4;
-        if (y > 260) { doc.addPage(); y = 20; }
+        y = (doc as any).lastAutoTable.finalY + 3;
+
+        if (day.cooldown) drawBand('Cool-down', String(day.cooldown), [239, 246, 255], [29, 78, 216]);
+        y += 3;
       });
       y += 2;
     });
   } else {
+
     // Diet body
     const meals = input.data?.meals || input.data?.days?.[0]?.meals || [];
     if (meals.length) {
@@ -1052,13 +1146,25 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
 
   // Page footers
   const pageCount = doc.getNumberOfPages();
+  const footerLeft = [
+    input.name,
+    input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
+  ].filter(Boolean).join('  •  ');
+  const footerRight = [resolvedBrand.website, `Page ${'{n}'} of ${pageCount}`].filter(Boolean).join('  •  ');
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+    const fy = doc.internal.pageSize.height - 5;
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.line(14, fy - 4, 196, fy - 4);
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`Page ${i} of ${pageCount}`, 196, doc.internal.pageSize.height - 4, { align: 'right' });
+    doc.setFontSize(6.8);
+    if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 110 });
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy, { align: 'right' });
   }
+
+
 
   return doc.output('blob');
 }

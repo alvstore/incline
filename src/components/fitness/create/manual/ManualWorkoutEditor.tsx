@@ -35,6 +35,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 interface Exercise {
   name: string;
+  equipment: string;
   sets: number;
   reps: string;
   rest_seconds: number;
@@ -47,20 +48,76 @@ interface Exercise {
 interface Day {
   day: string;
   focus: string;
+  warmup: string;
+  cooldown: string;
   exercises: Exercise[];
 }
 
 const DEFAULT_DAYS: Day[] = [
-  { day: 'Monday', focus: 'Upper Body', exercises: [] },
-  { day: 'Tuesday', focus: 'Lower Body', exercises: [] },
-  { day: 'Wednesday', focus: 'Rest', exercises: [] },
-  { day: 'Thursday', focus: 'Push', exercises: [] },
-  { day: 'Friday', focus: 'Pull', exercises: [] },
-  { day: 'Saturday', focus: 'Legs / Cardio', exercises: [] },
-  { day: 'Sunday', focus: 'Rest', exercises: [] },
+  { day: 'Monday', focus: 'Upper Body', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Tuesday', focus: 'Lower Body', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Wednesday', focus: 'Rest', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Thursday', focus: 'Push', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Friday', focus: 'Pull', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Saturday', focus: 'Legs / Cardio', warmup: '', cooldown: '', exercises: [] },
+  { day: 'Sunday', focus: 'Rest', warmup: '', cooldown: '', exercises: [] },
 ];
 
-const EMPTY_EXERCISE: Exercise = { name: '', sets: 3, reps: '12', rest_seconds: 60, weight: '', form_tips: '' };
+const EMPTY_EXERCISE: Exercise = { name: '', equipment: '', sets: 3, reps: '12', rest_seconds: 60, weight: '', form_tips: '' };
+
+/** Normalise one stored exercise (template/draft JSON) into the editor shape. */
+function toEditorExercise(ex: any): Exercise {
+  const restRaw = ex?.rest;
+  const restNum = typeof restRaw === 'number'
+    ? restRaw
+    : typeof restRaw === 'string'
+      ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
+      : (typeof ex?.rest_seconds === 'number' ? ex.rest_seconds : 60);
+  const tips = ex?.form_tips ?? ex?.notes ?? '';
+  return {
+    name: ex?.name || '',
+    equipment: ex?.equipment || '',
+    sets: ex?.sets ?? 3,
+    reps: String(ex?.reps ?? '12'),
+    rest_seconds: restNum,
+    weight: ex?.weight || '',
+    form_tips: Array.isArray(tips) ? tips.filter(Boolean).join('\n') : String(tips || ''),
+    video_url: ex?.video_url,
+    video_file_path: ex?.video_file_path,
+  };
+}
+
+const WARMUP_RE = /^(warm[\s-]?up|warmup)$/i;
+const COOLDOWN_RE = /^(cool[\s-]?down|cooldown|stretch(ing)?)$/i;
+
+/**
+ * Legacy lift: older plans encoded warm-up / cool-down as fake exercises.
+ * Move them into the dedicated day fields so the PDF renders them properly.
+ */
+function toEditorDay(d: any): Day {
+  const exercises: Exercise[] = (d?.exercises || []).map(toEditorExercise);
+  let warmup = d?.warmup ? String(d.warmup) : '';
+  let cooldown = d?.cooldown ? String(d.cooldown) : '';
+
+  if (!warmup && exercises.length && WARMUP_RE.test(exercises[0].name.trim())) {
+    warmup = exercises[0].form_tips || exercises[0].name;
+    exercises.shift();
+  }
+  const last = exercises[exercises.length - 1];
+  if (!cooldown && last && COOLDOWN_RE.test(last.name.trim())) {
+    cooldown = last.form_tips || last.name;
+    exercises.pop();
+  }
+
+  return {
+    day: d?.day || '',
+    focus: d?.focus || '',
+    warmup,
+    cooldown,
+    exercises,
+  };
+}
+
 
 interface SortableExerciseRowProps {
   id: string;
@@ -97,6 +154,9 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
           <Label className="text-xs">Exercise *</Label>
           <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
         </div>
+        
+
+
         <div className="col-span-3 sm:col-span-1">
           <Label className="text-xs">Sets</Label>
           <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
@@ -120,14 +180,23 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
         </div>
       </div>
       <div>
+        <Label className="text-xs">Equipment / Machine</Label>
+        <Input
+          value={ex.equipment}
+          onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
+          placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
+        />
+      </div>
+      <div>
         <Label className="text-xs">Form Tips</Label>
         <Textarea
           rows={2}
           value={ex.form_tips}
           onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
-          placeholder="Cues for proper form, breathing, tempo…"
+          placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
         />
       </div>
+
       <VideoAttachmentControl
         folder="exercises"
         label="Demo video (URL or upload)"
@@ -180,29 +249,9 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     const content: any = d.content || {};
     const draftDays: any[] = content?.weeks?.[0]?.days || content?.days || [];
     if (draftDays.length) {
-      setDays(draftDays.map((dd: any) => ({
-        day: dd.day || '',
-        focus: dd.focus || '',
-        exercises: (dd.exercises || []).map((ex: any) => {
-          const restRaw = ex.rest;
-          const restNum = typeof restRaw === 'number'
-            ? restRaw
-            : typeof restRaw === 'string'
-              ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
-              : 60;
-          return {
-            name: ex.name || '',
-            sets: ex.sets ?? 3,
-            reps: String(ex.reps ?? '12'),
-            rest_seconds: restNum,
-            weight: ex.weight || '',
-            form_tips: ex.notes || ex.form_tips || '',
-            video_url: ex.video_url,
-            video_file_path: ex.video_file_path,
-          };
-        }),
-      })));
+      setDays(draftDays.map(toEditorDay));
     }
+
   }, [draftId]);
 
   useEffect(() => {
@@ -225,29 +274,9 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
         const content: any = tpl.content || {};
         const tplDays: any[] = content?.weeks?.[0]?.days || [];
         if (tplDays.length) {
-          setDays(tplDays.map((d: any) => ({
-            day: d.day || '',
-            focus: d.focus || '',
-            exercises: (d.exercises || []).map((ex: any) => {
-              const restRaw = ex.rest;
-              const restNum = typeof restRaw === 'number'
-                ? restRaw
-                : typeof restRaw === 'string'
-                  ? parseInt(restRaw.replace(/\D/g, ''), 10) || 60
-                  : 60;
-              return {
-                name: ex.name || '',
-                sets: ex.sets ?? 3,
-                reps: String(ex.reps ?? '12'),
-                rest_seconds: restNum,
-                weight: ex.weight || '',
-                form_tips: ex.notes || '',
-                video_url: ex.video_url,
-                video_file_path: ex.video_file_path,
-              };
-            }),
-          })));
+          setDays(tplDays.map(toEditorDay));
         }
+
         toast.success(`Loaded template: ${tpl.name}`);
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load template');
@@ -296,21 +325,26 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     weeks: [{
       week: 1,
       days: days
-        .filter(d => d.exercises.length > 0)
+        .filter(d => d.exercises.length > 0 || d.warmup.trim() || d.cooldown.trim())
         .map(d => ({
           day: d.day,
           focus: d.focus,
+          warmup: d.warmup.trim() || undefined,
+          cooldown: d.cooldown.trim() || undefined,
           exercises: d.exercises.map(ex => ({
             name: ex.name,
+            equipment: ex.equipment || undefined,
             sets: ex.sets,
             reps: ex.reps,
             rest: `${ex.rest_seconds}s`,
             weight: ex.weight || undefined,
+            form_tips: ex.form_tips || undefined,
             notes: ex.form_tips || undefined,
             video_url: ex.video_url || undefined,
             video_file_path: ex.video_file_path || undefined,
           })),
         })),
+
     }],
   });
 
@@ -476,6 +510,29 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                   onChange={(e) => updateDay(activeIdx, { focus: e.target.value })}
                 />
               </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Warm-up</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
+                    value={days[activeIdx].warmup}
+                    onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Cool-down</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
+                    value={days[activeIdx].cooldown}
+                    onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
+                  />
+                </div>
+              </div>
+
+
 
               <DndContext
                 sensors={sensors}
