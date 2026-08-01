@@ -34,14 +34,16 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
     sessions_per_month: 8,
     price: 0,
     validity_days: 90,
-    session_type: 'per_session',
+    session_type: 'monthly',
     auto_renew: false,
-    gst_enabled: false,           // PT is GST-exempt by default
-    gst_inclusive: false,
-    gst_percentage: 18,
-    package_type: 'session_based' as 'session_based' | 'monthly',
-    duration_months: 3,
+    // PT billing is standardised at 5% GST, price-inclusive.
+    gst_enabled: true,
+    gst_inclusive: true,
+    gst_percentage: 5,
+    package_type: 'monthly' as 'session_based' | 'monthly',
+    duration_months: 1,
   });
+
 
   const effectiveGstPct = formData.gst_enabled ? formData.gst_percentage : 0;
 
@@ -86,9 +88,8 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
         payload.duration_months = null;
       }
 
-      if (isSubscription) {
-        payload.sessions_per_month = formData.sessions_per_month;
-      }
+
+
 
       await createPackage.mutateAsync(payload);
       toast.success('PT Package created');
@@ -102,11 +103,12 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
   const resetForm = () => {
     setFormData({
       name: '', description: '', total_sessions: 10, sessions_per_month: 8,
-      price: 0, validity_days: 90, session_type: 'per_session',
-      auto_renew: false, gst_enabled: false, gst_inclusive: false, gst_percentage: 18,
-      package_type: 'session_based' as 'session_based' | 'monthly', duration_months: 3,
+      price: 0, validity_days: 90, session_type: 'monthly',
+      auto_renew: false, gst_enabled: true, gst_inclusive: true, gst_percentage: 5,
+      package_type: 'monthly' as 'session_based' | 'monthly', duration_months: 1,
     });
   };
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -236,66 +238,23 @@ export function AddPTPackageDrawer({ open, onOpenChange, branchId }: AddPTPackag
             </div>
           )}
 
-          <div className="space-y-3 p-4 rounded-xl border bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-semibold">Charge GST</Label>
-                <p className="text-xs text-muted-foreground">PT is GST-exempt by default. Turn on only if you collect tax for this pack.</p>
-              </div>
-              <Switch
-                checked={formData.gst_enabled}
-                onCheckedChange={(v) => setFormData({ ...formData, gst_enabled: v })}
-              />
-            </div>
-
-            {formData.gst_enabled && (
-              <div className="grid grid-cols-2 gap-4 pt-1">
-                <div className="space-y-2">
-                  <Label>GST Rate</Label>
-                  <Select
-                    value={String(formData.gst_percentage)}
-                    onValueChange={(v) => setFormData({ ...formData, gst_percentage: parseFloat(v) })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {gstRates.map((r) => (
-                        <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3 pt-6">
-                  <Switch
-                    checked={formData.gst_inclusive}
-                    onCheckedChange={(v) => setFormData({ ...formData, gst_inclusive: v })}
-                  />
-                  <Label>Price includes GST</Label>
-                </div>
-              </div>
-            )}
+          <div className="space-y-1 p-4 rounded-xl border bg-muted/30">
+            <Label className="text-sm font-semibold">GST — 5% (inclusive)</Label>
+            <p className="text-xs text-muted-foreground">
+              Personal training is billed at a fixed 5% GST included in the price shown.
+              The invoice engine enforces this rate on every PT sale.
+            </p>
           </div>
+
 
           {formData.price > 0 && (
             <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
-              {!formData.gst_enabled ? (
-                <>
-                  <p><strong>Base Price:</strong> ₹{formData.price}</p>
-                  <p className="text-muted-foreground">GST not applied</p>
-                  <p className="font-bold"><strong>Total:</strong> ₹{formData.price}</p>
-                </>
-              ) : (
-                <>
-                  <p><strong>Base Price:</strong> ₹{formData.gst_inclusive
-                    ? (formData.price - calculateGSTAmount(formData.price, formData.gst_percentage, true)).toFixed(2)
-                    : formData.price}</p>
-                  <p><strong>GST ({formData.gst_percentage}%):</strong> ₹{calculateGSTAmount(formData.price, formData.gst_percentage, formData.gst_inclusive).toFixed(2)}</p>
-                  <p className="font-bold"><strong>Total:</strong> ₹{formData.gst_inclusive
-                    ? formData.price
-                    : (formData.price + calculateGSTAmount(formData.price, formData.gst_percentage, false)).toFixed(2)}</p>
-                </>
-              )}
+              <p><strong>Taxable value:</strong> ₹{(formData.price - calculateGSTAmount(formData.price, 5, true)).toFixed(2)}</p>
+              <p><strong>GST (5%):</strong> ₹{calculateGSTAmount(formData.price, 5, true).toFixed(2)}</p>
+              <p className="font-bold"><strong>Member pays:</strong> ₹{formData.price.toFixed(2)}</p>
             </div>
           )}
+
 
           {!isDurationBased && (
             <div className="space-y-2">

@@ -102,6 +102,8 @@ export async function purchasePTPackage(args: {
   paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer';
   paymentSource?: 'in_person' | 'payment_link';
   idempotencyKey: string;
+  /** ISO date (yyyy-MM-dd). Defaults to today on the server. */
+  startDate?: string;
 }): Promise<PurchasePTPackageResult> {
   const { data, error } = await supabase.rpc("purchase_pt_package", {
     _member_id: args.memberId,
@@ -113,10 +115,43 @@ export async function purchasePTPackage(args: {
     _payment_method: args.paymentMethod ?? 'cash',
     _payment_source: args.paymentSource ?? 'in_person',
     _idempotency_key: args.idempotencyKey,
+    _start_date: args.startDate ?? null,
   } as any);
   if (error) throw error;
   return data as unknown as PurchasePTPackageResult;
 }
+
+export interface RenewPTPackageResult extends PurchasePTPackageResult {
+  renewed_from?: string;
+  start_date?: string;
+  expiry_date?: string;
+}
+
+/**
+ * Continues an existing PT client on the same plan. The new term starts the
+ * day after the current expiry (or today, whichever is later) so there is no gap.
+ */
+export async function renewPtPackage(args: {
+  memberPackageId: string;
+  price?: number;
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer';
+  paymentSource?: 'in_person' | 'payment_link';
+  idempotencyKey?: string;
+  /** Switch plan on renewal (upgrade/downgrade); defaults to the same plan. */
+  packageId?: string;
+}): Promise<RenewPTPackageResult> {
+  const { data, error } = await supabase.rpc('renew_pt_package' as any, {
+    _member_package_id: args.memberPackageId,
+    _price: args.price ?? null,
+    _payment_method: args.paymentMethod ?? 'cash',
+    _payment_source: args.paymentSource ?? 'in_person',
+    _idempotency_key: args.idempotencyKey ?? null,
+    _package_id: args.packageId ?? null,
+  });
+  if (error) throw error;
+  return data as unknown as RenewPTPackageResult;
+}
+
 
 export async function cancelPendingPTPackage(
   memberPackageId: string,
@@ -315,19 +350,32 @@ export async function fetchTrainerSessions(
   });
 }
 
-// Complete PT session
+// Complete a previously scheduled PT session.
+// Routes through the canonical `log_pt_session` engine (handles monthly packs,
+// expiry checks, commission and auto gym check-in) instead of the retired
+// `complete_pt_session` RPC that divided by zero on monthly packages.
 export async function completePTSession(
   sessionId: string,
   notes?: string
 ): Promise<{ success: boolean; sessions_remaining?: number; error?: string }> {
-  const { data, error } = await supabase.rpc("complete_pt_session", {
-    _session_id: sessionId,
-    _notes: notes || null,
-  });
+  const { data: session, error: fetchError } = await supabase
+    .from('pt_sessions')
+    .select('id, member_pt_package_id, trainer_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!session) return { success: false, error: 'Session not found' };
 
-  if (error) throw error;
-  return data as { success: boolean; sessions_remaining?: number; error?: string };
+  const result = await logPtSession({
+    memberPackageId: session.member_pt_package_id,
+    trainerId: session.trainer_id,
+    status: 'completed',
+    notes,
+    existingSessionId: session.id,
+  });
+  return { success: true, sessions_remaining: result.sessions_remaining ?? undefined };
 }
+
 
 // Cancel PT session
 export async function cancelPTSession(
@@ -436,6 +484,8 @@ export interface LogPtSessionInput {
   trainerId: string;
   notes?: string | null;
   status?: PtSessionStatusInput;
+  /** Finish an already-scheduled pt_sessions row instead of creating a new one. */
+  existingSessionId?: string | null;
 }
 
 export interface LogPtSessionResult {
@@ -455,6 +505,7 @@ const PT_LOG_ERROR_MAP: Record<string, string> = {
   package_not_active: 'This PT package is not active.',
   no_sessions_left: 'No sessions left on this pack — please renew first.',
   package_expired: 'This monthly plan has expired — please renew first.',
+  session_not_scheduled: 'That session is no longer in a scheduled state.',
 };
 
 export async function logPtSession(
@@ -465,11 +516,13 @@ export async function logPtSession(
     p_trainer_id: input.trainerId,
     p_status: input.status ?? 'completed',
     p_notes: input.notes ?? null,
+    p_session_id: input.existingSessionId ?? null,
   });
   if (error) {
     const friendly = PT_LOG_ERROR_MAP[error.message] ?? error.message;
     throw new Error(friendly);
   }
+
   const result = data as unknown as LogPtSessionResult;
   // Only fire member receipts for actual attended sessions
   if (result.status === 'completed' || result.status === 'late') {

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
-  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage,
+  useCompletePTSession, useCancelPTSession, useSchedulePTSession, useUpdatePTPackage, useRenewPtPackage,
 } from "@/hooks/usePTPackages";
 import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -131,6 +131,27 @@ export default function PTSessionsPage() {
   const completeSession = useCompletePTSession();
   const cancelSession = useCancelPTSession();
   const updatePackage = useUpdatePTPackage();
+  const renewPackage = useRenewPtPackage();
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+
+  // Continues a client on the same plan — the server starts the new term the
+  // day after the current expiry so there is no gap in coverage.
+  const handleRenewPackage = async (pkg: any) => {
+    setRenewingId(pkg.id);
+    try {
+      const result = await renewPackage.mutateAsync({ memberPackageId: pkg.id });
+      if ((result as any)?.error) {
+        toast.error((result as any).error);
+        return;
+      }
+      toast.success(`${pkg.member_name || 'Client'} renewed until ${result.expiry_date ? format(new Date(result.expiry_date), 'PP') : 'the new term end'}`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to renew package');
+    } finally {
+      setRenewingId(null);
+    }
+  };
+
 
   // Session KPIs must cover every trainer in the branch — reading only the
   // first trainer made the dashboard show 0 sessions while packages existed.
@@ -753,6 +774,8 @@ export default function PTSessionsPage() {
                       <TableHead>Progress</TableHead>
                       <TableHead>Expires</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -801,7 +824,19 @@ export default function PTSessionsPage() {
                             {pkg.status}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg cursor-pointer"
+                            disabled={renewPackage.isPending}
+                            onClick={() => handleRenewPackage(pkg)}
+                          >
+                            {renewPackage.isPending && renewingId === pkg.id ? 'Renewing…' : 'Renew'}
+                          </Button>
+                        </TableCell>
                       </TableRow>
+
                     ))}
                   </TableBody>
                 </Table>
