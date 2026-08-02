@@ -46,7 +46,7 @@ export function TemplatePickerSheet({ open, onOpenChange, planType, member }: Pr
     const q = term.trim().toLowerCase();
     if (!q) return data;
     return data.filter((t) =>
-      [t.name, t.goal, t.plan_type].filter(Boolean).join(' ').toLowerCase().includes(q),
+      [t.name, t.goal, t.type].filter(Boolean).join(' ').toLowerCase().includes(q),
     );
   }, [data, term]);
 
@@ -111,19 +111,19 @@ export function TemplatePickerSheet({ open, onOpenChange, planType, member }: Pr
               {rows.map((t) => (
                 <li key={t.id}>
                   <button
-                    onClick={() => openTemplate(t.id, t.plan_type)}
+                    onClick={() => openTemplate(t.id, t.type)}
                     aria-label={`Use template ${t.name}`}
                     className="group flex min-h-[56px] w-full cursor-pointer items-center gap-3 rounded-xl bg-card p-3 text-left ring-1 ring-border transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                        t.plan_type === 'diet'
+                        t.type === 'diet'
                           ? 'bg-emerald-500/10 text-emerald-600'
                           : 'bg-primary/10 text-primary'
                       }`}
                       aria-hidden
                     >
-                      {t.plan_type === 'diet' ? (
+                      {t.type === 'diet' ? (
                         <UtensilsCrossed className="h-4 w-4" />
                       ) : (
                         <Dumbbell className="h-4 w-4" />
@@ -134,7 +134,7 @@ export function TemplatePickerSheet({ open, onOpenChange, planType, member }: Pr
                         {t.name}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {[t.goal, t.duration_weeks ? `${t.duration_weeks} weeks` : null]
+                        {[t.goal, t.difficulty]
                           .filter(Boolean)
                           .join(' · ') || 'No goal set'}
                       </span>
