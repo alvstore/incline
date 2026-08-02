@@ -1,8 +1,11 @@
-// generate-fitness-plan v4.0.0 — goal-driven programming contract, equipment
+// generate-fitness-plan v5.0.0 — truncation-proof generation: real token budget,
+// low reasoning budget on thinking models, repaired-JSON is rejected (not saved),
+// hard completeness validation (all 7 days, exact training-day count, 4+ exercises)
+// and a split day-by-day retry so a partial week can never reach the member.
+// v4.0.0 — goal-driven programming contract, equipment
 // enforcement with substitution, periodised (non-cloned) week expansion,
 // deterministic variety seeding and a differentiation guard.
-// v3.0.0 — single-week generation + server-side week expansion,
-// dynamic token budget, resilient JSON parsing/repair and shape validation.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { generateOnce } from "../_shared/ai-runtime.ts";
