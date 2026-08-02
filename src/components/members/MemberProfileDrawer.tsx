@@ -2367,13 +2367,14 @@ export function MemberProfileDrawer({
           onCreated={() => refetchMemberDetails?.()}
         />
 
-        {activeMembership && (
+        {currentMembership && (
           <AdjustMembershipDatesDrawer
             open={adjustDatesOpen}
             onOpenChange={setAdjustDatesOpen}
-            membership={activeMembership}
+            membership={currentMembership}
           />
         )}
+
       </SheetContent>
     </Sheet>
   );
