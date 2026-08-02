@@ -30,11 +30,21 @@ export default function CreateAIPage() {
   const generate = useGenerateFitnessPlan();
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template');
+  // The create landing page can pre-select who the plan is for.
+  const prefillMemberId = searchParams.get('memberId');
+  const prefillMemberName = searchParams.get('memberName') || '';
+  const prefillMemberCode = searchParams.get('memberCode') || '';
+  const prefillType = searchParams.get('type') === 'diet' ? 'diet' : 'workout';
 
-  const [type, setType] = useState<'workout' | 'diet'>('workout');
+  const [type, setType] = useState<'workout' | 'diet'>(prefillType);
   const [mode, setMode] = useState<'member' | 'audience'>('member');
-  const [member, setMember] = useState<PickedMember | null>(null);
+  const [member, setMember] = useState<PickedMember | null>(
+    prefillMemberId
+      ? { id: prefillMemberId, full_name: prefillMemberName, member_code: prefillMemberCode }
+      : null,
+  );
   const [profile, setProfile] = useState<MemberProfileOverrides>({});
+
   const [planName, setPlanName] = useState('');
   const [goal, setGoal] = useState('');
   const [durationWeeks, setDurationWeeks] = useState(4);
