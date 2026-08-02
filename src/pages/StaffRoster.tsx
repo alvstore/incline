@@ -546,6 +546,13 @@ export default function StaffRoster() {
         trainers={trainers}
       />
 
+      <LatePolicySheet
+        open={latePolicyOpen}
+        onOpenChange={setLatePolicyOpen}
+        branchId={branchId && branchId !== 'all' ? branchId : null}
+      />
+
+
       <SundayAssignSheet
         open={sundayOpen}
         onClose={() => setSundayOpen(false)}
