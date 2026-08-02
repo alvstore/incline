@@ -188,13 +188,20 @@ export async function createPlanTemplate(template: {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { content, ...rest } = template;
+  // `target_gender` and `target_experience` are NOT NULL in the database with
+  // sane defaults. Sending an explicit null overrides the default and fails the
+  // insert, so normalise them here for every caller.
+  const insertRow: Record<string, unknown> = {
+    ...rest,
+    target_gender: rest.target_gender ?? 'any',
+    target_experience: rest.target_experience ?? [],
+    content: toJsonContent(content ?? ({} as FitnessPlanContent)),
+    created_by: user?.id,
+  };
+
   const { data, error } = await supabase
     .from('fitness_plan_templates')
-    .insert({
-      ...rest,
-      content: toJsonContent(content ?? ({} as FitnessPlanContent)),
-      created_by: user?.id,
-    })
+    .insert(insertRow as never)
     .select()
     .single();
 
