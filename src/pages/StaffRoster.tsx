@@ -43,6 +43,7 @@ import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'luc
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
+import { LatePolicySheet } from '@/components/hrm/LatePolicySheet';
 
 // Returns the next upcoming Sunday (today if today is Sunday)
 function nextSunday(from: Date = new Date()): Date {
