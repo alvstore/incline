@@ -15286,6 +15286,10 @@ export type Database = {
         Returns: string
       }
       staff_check_out: { Args: { p_user_id: string }; Returns: Json }
+      start_membership_now: {
+        Args: { p_membership_id: string; p_reason?: string }
+        Returns: Json
+      }
       touch_presence: { Args: never; Returns: undefined }
       trainer_can_view_member: {
         Args: { _member_id: string; _user_id: string }

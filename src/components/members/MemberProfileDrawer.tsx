@@ -939,23 +939,46 @@ export function MemberProfileDrawer({
     date_of_birth: leadFallback.date_of_birth,
   } : null);
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
+  // Scheduled plan that has not started yet — still needs gift days / date edits / early start
+  const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
+  const currentMembership = activeMembership || pendingMembership;
   const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
   const hasRegistrationForm = !!registrationFormDocument;
 
-  // Gifted free days (membership extensions) for active membership
+  const startNowMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('start_membership_now' as any, {
+        p_membership_id: pendingMembership!.id,
+        p_reason: 'Member requested an earlier start',
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (res && res.success === false) throw new Error(res.error || 'Could not start membership');
+      return res;
+    },
+    onSuccess: (res: any) => {
+      toast.success(`Membership started — active until ${format(new Date(res.end_date), 'dd MMM yyyy')}. Gate access is syncing.`);
+      invalidateMembersData(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['member-details', member?.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to start membership'),
+  });
+
+  // Gifted free days (membership extensions) for the current membership
   const { data: freeDaysList = [] } = useQuery({
-    queryKey: ['member-profile-free-days', activeMembership?.id],
-    enabled: !!activeMembership?.id && open,
+    queryKey: ['member-profile-free-days', currentMembership?.id],
+    enabled: !!currentMembership?.id && open,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('membership_free_days')
         .select('id, days_added, reason, created_at')
-        .eq('membership_id', activeMembership!.id)
+        .eq('membership_id', currentMembership!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     },
   });
+
   const freeDaysTotal = (freeDaysList as any[]).reduce((s, r) => s + Number(r.days_added || 0), 0);
 
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
@@ -1181,12 +1204,26 @@ export function MemberProfileDrawer({
                       </p>
                     </>
                   )
+                ) : pendingMembership ? (
+                  <>
+                    <div className="text-sm sm:text-lg font-bold text-primary">SCHEDULED</div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Starts {format(new Date(pendingMembership.start_date), 'dd MMM')}
+                    </p>
+                    {freeDaysTotal > 0 && (
+                      <Badge variant="outline" className="mt-1 bg-warning/15 text-warning border-warning/40 text-[10px] gap-1">
+                        <Gift className="h-3 w-3" />
+                        +{freeDaysTotal}d gift
+                      </Badge>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="text-sm font-bold text-muted-foreground">No Plan</div>
                     <p className="text-xs text-muted-foreground">Days Left</p>
                   </>
                 )}
+
               </CardContent>
             </Card>
             <Card>
@@ -1297,7 +1334,18 @@ export function MemberProfileDrawer({
               </Button>
             )}
 
-            {isOwnerOrAdmin && activeMembership && (
+            {isManagerOrAbove && pendingMembership && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left text-success"
+                onClick={() => startNowMutation.mutate()}
+                disabled={startNowMutation.isPending}
+              >
+                <Play className="h-4 w-4 mr-2 shrink-0" /> Start Plan Now
+              </Button>
+            )}
+            {isOwnerOrAdmin && currentMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setAdjustDatesOpen(true)}>
                 <Calendar className="h-4 w-4 mr-2 shrink-0" /> Adjust Dates
               </Button>
@@ -1307,10 +1355,11 @@ export function MemberProfileDrawer({
                 <Gift className="h-4 w-4 mr-2 shrink-0" /> Comp/Gift
               </Button>
             )}
-            {isOwnerOrAdmin && activeMembership && (
+            {isManagerOrAbove && currentMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setGiftDaysOpen(true)}>
-                <Gift className="h-4 w-4 mr-2 shrink-0" /> Edit Gift Days
+                <Gift className="h-4 w-4 mr-2 shrink-0" /> Gift Days
               </Button>
+
             )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setTransferBranchOpen(true)}>
@@ -2253,7 +2302,8 @@ export function MemberProfileDrawer({
 
           open={giftDaysOpen}
           onOpenChange={setGiftDaysOpen}
-          membershipId={activeMembership?.id}
+          membershipId={currentMembership?.id}
+
           memberId={member.id}
         />
 
@@ -2331,13 +2381,14 @@ export function MemberProfileDrawer({
           onCreated={() => refetchMemberDetails?.()}
         />
 
-        {activeMembership && (
+        {currentMembership && (
           <AdjustMembershipDatesDrawer
             open={adjustDatesOpen}
             onOpenChange={setAdjustDatesOpen}
-            membership={activeMembership}
+            membership={currentMembership}
           />
         )}
+
       </SheetContent>
     </Sheet>
   );
