@@ -5447,8 +5447,12 @@ export type Database = {
           esi_enabled: boolean
           governing_jurisdiction: string
           id: string
+          late_grace_min: number
+          late_notifications_enabled: boolean
+          late_notify_managers: boolean
           lawyer_reviewed_at: string | null
           lawyer_reviewed_by: string | null
+          min_punch_gap_min: number
           notice_period_manager_days: number
           notice_period_staff_days: number
           notice_period_trainer_days: number
@@ -5461,6 +5465,7 @@ export type Database = {
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean
           tds_enabled: boolean
+          unscheduled_punch_policy: string
           updated_at: string
           weekly_hour_cap: number
         }
@@ -5477,8 +5482,12 @@ export type Database = {
           esi_enabled?: boolean
           governing_jurisdiction?: string
           id?: string
+          late_grace_min?: number
+          late_notifications_enabled?: boolean
+          late_notify_managers?: boolean
           lawyer_reviewed_at?: string | null
           lawyer_reviewed_by?: string | null
+          min_punch_gap_min?: number
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
@@ -5491,6 +5500,7 @@ export type Database = {
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
           tds_enabled?: boolean
+          unscheduled_punch_policy?: string
           updated_at?: string
           weekly_hour_cap?: number
         }
@@ -5507,8 +5517,12 @@ export type Database = {
           esi_enabled?: boolean
           governing_jurisdiction?: string
           id?: string
+          late_grace_min?: number
+          late_notifications_enabled?: boolean
+          late_notify_managers?: boolean
           lawyer_reviewed_at?: string | null
           lawyer_reviewed_by?: string | null
+          min_punch_gap_min?: number
           notice_period_manager_days?: number
           notice_period_staff_days?: number
           notice_period_trainer_days?: number
@@ -5521,6 +5535,7 @@ export type Database = {
           pt_commission_clawback_on_refund?: boolean
           pt_enabled?: boolean
           tds_enabled?: boolean
+          unscheduled_punch_policy?: string
           updated_at?: string
           weekly_hour_cap?: number
         }
@@ -11346,7 +11361,10 @@ export type Database = {
           check_out: string | null
           created_at: string
           id: string
+          is_late: boolean
+          late_minutes: number | null
           notes: string | null
+          scheduled_start: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours: number | null
           user_id: string
@@ -11357,7 +11375,10 @@ export type Database = {
           check_out?: string | null
           created_at?: string
           id?: string
+          is_late?: boolean
+          late_minutes?: number | null
           notes?: string | null
+          scheduled_start?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours?: number | null
           user_id: string
@@ -11368,7 +11389,10 @@ export type Database = {
           check_out?: string | null
           created_at?: string
           id?: string
+          is_late?: boolean
+          late_minutes?: number | null
           notes?: string | null
+          scheduled_start?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours?: number | null
           user_id?: string
@@ -14220,8 +14244,12 @@ export type Database = {
           esi_enabled: boolean
           governing_jurisdiction: string
           id: string
+          late_grace_min: number
+          late_notifications_enabled: boolean
+          late_notify_managers: boolean
           lawyer_reviewed_at: string | null
           lawyer_reviewed_by: string | null
+          min_punch_gap_min: number
           notice_period_manager_days: number
           notice_period_staff_days: number
           notice_period_trainer_days: number
@@ -14234,6 +14262,7 @@ export type Database = {
           pt_commission_clawback_on_refund: boolean
           pt_enabled: boolean
           tds_enabled: boolean
+          unscheduled_punch_policy: string
           updated_at: string
           weekly_hour_cap: number
         }[]
@@ -14675,7 +14704,10 @@ export type Database = {
           check_out: string | null
           created_at: string
           id: string
+          is_late: boolean
+          late_minutes: number | null
           notes: string | null
+          scheduled_start: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours: number | null
           user_id: string
@@ -14946,6 +14978,16 @@ export type Database = {
       resolve_member_document_url: {
         Args: { p_document_id: string; p_expires_in?: number }
         Returns: string
+      }
+      resolve_staff_shift: {
+        Args: { p_branch_id?: string; p_ts: string; p_user_id: string }
+        Returns: {
+          grace_min: number
+          has_schedule: boolean
+          is_off: boolean
+          scheduled_start: string
+          shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+        }[]
       }
       retry_ig_comment_run: { Args: { p_id: string }; Returns: undefined }
       reverse_payment: {
