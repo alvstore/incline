@@ -701,10 +701,87 @@ serve(async (req) => {
     }
 
     console.log(`Successfully generated ${type} plan:`, plan.name, `daysPerWeek=${daysPerWeek}, rotation=${variantCount}`);
+    onStage("Finalising");
 
     return new Response(
       JSON.stringify({ success: true, plan }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    }; // end core
+
+    // ── Synchronous mode (legacy callers) ──
+    if (!isAsync) return await core(() => {});
+
+    // ── Async job mode: return immediately, generate in the background ──
+    const { data: job, error: jobErr } = await supabaseAdmin
+      .from("ai_plan_jobs")
+      .insert({
+        branch_id: (body.memberInfo as { branch_id?: string | null })?.branch_id ?? null,
+        requested_by: caller.id,
+        type: body.type,
+        request: body as unknown as Record<string, unknown>,
+        status: "running",
+        stage: "Queued",
+        started_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (jobErr || !job) {
+      return new Response(
+        JSON.stringify({ error: `Could not start generation job: ${jobErr?.message ?? "unknown"}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const jobId = job.id as string;
+    const setStage = (stage: string) => {
+      supabaseAdmin.from("ai_plan_jobs").update({ stage }).eq("id", jobId).then(
+        () => {},
+        () => {},
+      );
+    };
+
+    const work = (async () => {
+      try {
+        const res = await core(setStage);
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.plan) {
+          await supabaseAdmin.from("ai_plan_jobs").update({
+            status: "done",
+            stage: "Done",
+            result: payload.plan,
+            finished_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        } else {
+          await supabaseAdmin.from("ai_plan_jobs").update({
+            status: "error",
+            stage: "Failed",
+            error: payload?.error || `Generation failed (HTTP ${res.status})`,
+            finished_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await supabaseAdmin.from("ai_plan_jobs").update({
+          status: "error",
+          stage: "Failed",
+          error: /429|rate/i.test(msg)
+            ? "Rate limit exceeded — please try again shortly."
+            : /402|credits/i.test(msg)
+              ? "AI credits exhausted. Please add funds to continue."
+              : msg,
+          finished_at: new Date().toISOString(),
+        }).eq("id", jobId);
+      }
+    })();
+
+    const runtime = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (runtime?.waitUntil) runtime.waitUntil(work);
+
+    return new Response(
+      JSON.stringify({ success: true, job_id: jobId }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error generating fitness plan:", error);
