@@ -218,11 +218,13 @@ async function executeCall(
     else body.max_tokens = opts.max_tokens;
   }
 
-  const maxAttempts = 3;
+  // v2.1 — fail fast: 2 attempts x 35s instead of 3 x 60s. A stuck provider
+  // used to consume ~3 minutes and blow past every caller's deadline.
+  const maxAttempts = 2;
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 60000);
+    const timer = setTimeout(() => ac.abort(), opts.timeoutMs ?? 35000);
     try {
       const resp = await fetch(endpoint, {
         method: "POST",
