@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sparkles,
   Hand,
@@ -12,16 +13,24 @@ import {
   ChevronRight,
   Library,
   Users,
-  ArrowRight,
   Check,
+  AlertTriangle,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
-import { useQuery } from '@tanstack/react-query';
 import { fetchPlanTemplates } from '@/services/fitnessService';
 import { fetchMealCatalog } from '@/services/mealCatalogService';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
+import { PipelineTile } from '@/components/fitness/create/PipelineTile';
+import { ManualTile } from '@/components/fitness/create/ManualTile';
+import { RecentPlansCard } from '@/components/fitness/create/RecentPlansCard';
+import { TemplatePickerSheet } from '@/components/fitness/create/TemplatePickerSheet';
+import {
+  MemberSearchPicker,
+  type PickedMember,
+} from '@/components/fitness/create/MemberSearchPicker';
 
 export default function CreateModePickerPage() {
   const navigate = useNavigate();
@@ -31,9 +40,10 @@ export default function CreateModePickerPage() {
   const canSeePipeline = hasAnyRole(['owner', 'admin', 'manager']);
   const { effectiveBranchId } = useBranchContext();
 
-  // Lightweight pipeline counts so the landing surfaces the Catalog →
-  // Templates → Assignments flow at a glance. All queries are gated behind
-  // canSeePipeline so members never trigger them.
+  const [member, setMember] = useState<PickedMember | null>(null);
+  const [templateSheet, setTemplateSheet] = useState<null | 'workout' | 'diet' | 'any'>(null);
+
+  // Readiness counts for the Catalog → Templates → Assignments strip.
   const catalogQuery = useQuery({
     queryKey: ['fitness-pipeline-catalog', effectiveBranchId],
     queryFn: async () => {
@@ -65,317 +75,311 @@ export default function CreateModePickerPage() {
     enabled: canSeePipeline,
   });
 
+  const mealCatalogEmpty = !catalogQuery.isLoading && !catalogQuery.data;
+
+  /** Carries the picked member into whichever editor the user opens next. */
+  function withMember(base: string, extra: Record<string, string> = {}) {
+    const params = new URLSearchParams(extra);
+    if (member) {
+      params.set('memberId', member.id);
+      params.set('memberName', member.full_name);
+      params.set('memberCode', member.member_code);
+    }
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
         <FitnessHubTabs />
 
-        {/* Hero */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 sm:p-8 shadow-lg shadow-indigo-500/20">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-2xl"
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -bottom-24 right-24 h-48 w-48 rounded-full bg-white/5 blur-2xl"
-          />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                Fitness Studio
-              </p>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">Create a Plan</h1>
-              <p className="text-sm leading-relaxed text-white/80">
-                {isAdmin
-                  ? 'Generate a personalised program with AI in seconds, or build every set, rep and meal by hand.'
-                  : 'Build a workout or diet plan for one of your clients.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {isAdmin && (
-                <Button
-                  size="lg"
-                  onClick={() => navigate('/fitness/create/ai')}
-                  className="gap-2 bg-white text-indigo-700 hover:bg-white/90 focus:ring-2 focus:ring-white focus:outline-none"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Start with AI
-                </Button>
-              )}
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => navigate('/fitness/create/manual?type=workout')}
-                className="gap-2 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white focus:ring-2 focus:ring-white focus:outline-none"
-              >
-                <Hand className="h-4 w-4" />
-                Build manually
-              </Button>
-            </div>
+        {/* Context bar — one line of orientation, no competing CTAs */}
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Fitness Studio
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Create a plan
+            </h1>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {isAdmin
+                ? 'Pick who it is for, then generate with AI, start from a template, or build it by hand.'
+                : 'Pick a client, then build a workout or diet plan.'}
+            </p>
           </div>
-        </section>
+          <Button
+            variant="outline"
+            onClick={() => navigate('/fitness/member-plans')}
+            className="gap-2 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Users className="h-4 w-4" aria-hidden />
+            Assigned plans
+          </Button>
+        </header>
 
-        {/* Pipeline */}
-        {canSeePipeline && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <PipelineTile
-              icon={<UtensilsCrossed className="h-5 w-5" />}
-              title="Meal Catalog"
-              count={catalogQuery.data}
-              loading={catalogQuery.isLoading}
-              singular="meal"
-              plural="meals"
-              emptyHint="Add your first meal"
-              hint="Source ingredients & macros"
-              onClick={() => navigate('/fitness/meal-catalog')}
-            />
-            <PipelineArrow />
-            <PipelineTile
-              icon={<Library className="h-5 w-5" />}
-              title="Plan Templates"
-              count={templateQuery.data}
-              loading={templateQuery.isLoading}
-              singular="template"
-              plural="templates"
-              emptyHint="No templates yet"
-              hint="Reusable plans for any goal"
-              onClick={() => navigate('/fitness/templates')}
-            />
-            <PipelineArrow />
-            <PipelineTile
-              icon={<Users className="h-5 w-5" />}
-              title="Member Assignments"
-              count={assignmentQuery.data}
-              loading={assignmentQuery.isLoading}
-              singular="plan"
-              plural="plans"
-              emptyHint="Nothing assigned yet"
-              hint="Active workout & diet plans"
-              onClick={() => navigate('/fitness/member-plans')}
-            />
-          </div>
-        )}
+        {/* Step 0 — who is this for? */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-border">
+          <CardContent className="p-5 sm:p-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Who is this plan for?</h2>
+              <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted">
+                Optional
+              </Badge>
+            </div>
+            <MemberSearchPicker value={member} onChange={setMember} label="Member" />
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {member
+                ? `${member.full_name} will be pre-filled on the next screen — metrics, goals and history included.`
+                : 'Skip this to build a reusable template instead of a member-specific plan.'}
+            </p>
+          </CardContent>
+        </Card>
 
-        {/* Mode cards */}
-        <div className={`grid items-stretch gap-4 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+        {/* Three creation paths */}
+        <div className={`grid items-stretch gap-4 ${isAdmin ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
           {isAdmin && (
-            <Card
-              role="button"
-              tabIndex={0}
-              aria-label="Create an AI-generated plan"
-              onClick={() => navigate('/fitness/create/ai')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  navigate('/fitness/create/ai');
-                }
-              }}
-              className="group flex h-full cursor-pointer flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-indigo-100 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:ring-white/10"
-            >
-              <CardContent className="flex flex-1 flex-col gap-4 p-5 sm:p-6">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <Sparkles className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-bold tracking-tight">AI-Generated Plan</h2>
-                      <Badge className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100">
-                        Recommended
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      A complete, periodised program in under a minute.
-                    </p>
-                  </div>
-                </div>
-
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {[
-                    'Pre-fills member metrics — age, weight, BMI and goals',
-                    'Respects your branch equipment and dietary preferences',
-                    'Full week layouts for workout or diet, any goal',
-                  ].map((line) => (
-                    <li key={line} className="flex items-start gap-2">
-                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                        <Check className="h-3 w-3" />
-                      </span>
-                      <span className="leading-relaxed">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="mt-auto pt-1">
-                  <Button className="w-full gap-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    Start with AI
-                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <PathCard
+              tone="primary"
+              icon={<Sparkles className="h-6 w-6" />}
+              title="AI-generated"
+              badge="Recommended"
+              subtitle="A complete, periodised program in under a minute."
+              bullets={[
+                'Uses member metrics, goals and last plan',
+                'Respects branch equipment & diet preferences',
+                'Workout or diet, any goal',
+              ]}
+              cta="Start with AI"
+              onClick={() => navigate(withMember('/fitness/create/ai'))}
+            />
           )}
 
-          <Card className="flex h-full flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-slate-200/70 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:ring-white/10">
+          <PathCard
+            tone="neutral"
+            icon={<Library className="h-6 w-6" />}
+            title="From template"
+            subtitle="Load a saved plan and adjust what changed."
+            bullets={[
+              'Fastest path for repeat programming',
+              'Edits stay local to this member',
+              `${templateQuery.data ?? 0} template${templateQuery.data === 1 ? '' : 's'} in the library`,
+            ]}
+            cta="Browse templates"
+            onClick={() => setTemplateSheet('any')}
+          />
+
+          <Card className="flex h-full flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 ring-border transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
             <CardContent className="flex flex-1 flex-col gap-4 p-5 sm:p-6">
               <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200">
-                  <Hand className="h-6 w-6" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+                  <Hand className="h-6 w-6" aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-bold tracking-tight">Build Manually</h2>
+                  <h2 className="text-lg font-bold tracking-tight text-foreground">Build manually</h2>
                   <p className="text-sm text-muted-foreground">
                     Full control over every set, rep and macro.
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3">
                 <ManualTile
                   icon={<Dumbbell className="h-5 w-5" />}
-                  title="Workout Plan"
+                  title="Workout plan"
                   hint="Day-by-day sets, reps & rest"
-                  onClick={() => navigate('/fitness/create/manual?type=workout')}
+                  onClick={() => navigate(withMember('/fitness/create/manual', { type: 'workout' }))}
+                  secondaryLabel="Start from template"
+                  onSecondary={() => setTemplateSheet('workout')}
                 />
                 <ManualTile
                   icon={<UtensilsCrossed className="h-5 w-5" />}
-                  title="Diet Plan"
-                  hint="Meals with live macro tracking"
-                  onClick={() => navigate('/fitness/create/manual?type=diet')}
+                  title="Diet plan"
+                  hint={
+                    mealCatalogEmpty
+                      ? 'Needs meals in the catalog first'
+                      : 'Meals with live macro tracking'
+                  }
+                  onClick={() => navigate(withMember('/fitness/create/manual', { type: 'diet' }))}
+                  secondaryLabel="Start from template"
+                  onSecondary={() => setTemplateSheet('diet')}
                 />
               </div>
 
-              <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
-                Start from a blank sheet or duplicate an existing template, then save it back to the
-                library for reuse.
-              </p>
+              {canSeePipeline && mealCatalogEmpty && (
+                <div className="mt-auto flex items-start gap-2 rounded-xl bg-warning/10 p-3 text-xs leading-relaxed text-warning-foreground ring-1 ring-warning/30">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+                  <span>
+                    Your meal catalog is empty, so diet plans will generate without your gym's
+                    foods.{' '}
+                    <button
+                      onClick={() => navigate('/fitness/meal-catalog')}
+                      className="cursor-pointer font-semibold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Add meals
+                    </button>
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Secondary links */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <SecondaryLink
-            icon={<Library className="h-4 w-4" />}
-            label="Browse template library"
-            onClick={() => navigate('/fitness/templates')}
-          />
-          <SecondaryLink
-            icon={<Users className="h-4 w-4" />}
-            label="View assigned member plans"
-            onClick={() => navigate('/fitness/member-plans')}
-          />
-        </div>
+        {/* Readiness strip */}
+        {canSeePipeline && (
+          <section aria-label="Plan pipeline readiness" className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Pipeline readiness
+            </h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+              <PipelineTile
+                step={1}
+                icon={<UtensilsCrossed className="h-5 w-5" />}
+                title="Meal catalog"
+                count={catalogQuery.data}
+                loading={catalogQuery.isLoading}
+                singular="meal"
+                plural="meals"
+                emptyHint="Add meals to unlock diet plans"
+                action="ingredients & macros"
+                blocking
+                onClick={() => navigate('/fitness/meal-catalog')}
+              />
+              <PipelineArrow />
+              <PipelineTile
+                step={2}
+                icon={<Library className="h-5 w-5" />}
+                title="Plan templates"
+                count={templateQuery.data}
+                loading={templateQuery.isLoading}
+                singular="template"
+                plural="templates"
+                emptyHint="Save your first template"
+                action="reusable programs"
+                onClick={() => navigate('/fitness/templates')}
+              />
+              <PipelineArrow />
+              <PipelineTile
+                step={3}
+                icon={<Users className="h-5 w-5" />}
+                title="Member assignments"
+                count={assignmentQuery.data}
+                loading={assignmentQuery.isLoading}
+                singular="plan"
+                plural="plans"
+                emptyHint="Nothing assigned yet"
+                action="active member plans"
+                onClick={() => navigate('/fitness/member-plans')}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Recent activity */}
+        {canSeePipeline && <RecentPlansCard />}
       </div>
+
+      <TemplatePickerSheet
+        open={templateSheet !== null}
+        onOpenChange={(o) => setTemplateSheet(o ? templateSheet : null)}
+        planType={templateSheet && templateSheet !== 'any' ? templateSheet : undefined}
+        member={member}
+      />
     </AppLayout>
   );
 }
 
-function PipelineTile({
+function PathCard({
+  tone,
   icon,
   title,
-  count,
-  loading,
-  singular,
-  plural,
-  emptyHint,
-  hint,
+  badge,
+  subtitle,
+  bullets,
+  cta,
   onClick,
 }: {
+  tone: 'primary' | 'neutral';
   icon: React.ReactNode;
   title: string;
-  count?: number;
-  loading: boolean;
-  singular: string;
-  plural: string;
-  emptyHint: string;
-  hint: string;
+  badge?: string;
+  subtitle: string;
+  bullets: string[];
+  cta: string;
   onClick: () => void;
 }) {
   return (
-    <button
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-label={cta}
       onClick={onClick}
-      aria-label={title}
-      className="group min-h-[44px] flex-1 rounded-2xl bg-card p-4 text-left shadow-lg shadow-slate-200/50 ring-1 ring-slate-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:ring-white/10"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={`group flex h-full cursor-pointer flex-col rounded-2xl border-0 shadow-lg shadow-slate-200/60 ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
+        tone === 'primary' ? 'ring-primary/20' : 'ring-border'
+      }`}
     >
-      <div className="mb-2 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-          {icon}
+      <CardContent className="flex flex-1 flex-col gap-4 p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+              tone === 'primary' ? 'bg-primary/10 text-primary' : 'bg-muted text-foreground'
+            }`}
+            aria-hidden
+          >
+            {icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
+              {badge && (
+                <Badge className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10">
+                  {badge}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">{hint}</p>
+
+        <ul className="space-y-2 text-sm text-muted-foreground">
+          {bullets.map((line) => (
+            <li key={line} className="flex items-start gap-2">
+              <span
+                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+                aria-hidden
+              >
+                <Check className="h-3 w-3" />
+              </span>
+              <span className="leading-relaxed">{line}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-auto pt-1">
+          <Button
+            variant={tone === 'primary' ? 'default' : 'outline'}
+            className="w-full gap-1 focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={-1}
+          >
+            {cta}
+            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </Button>
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-indigo-600" />
-      </div>
-      {loading ? (
-        <Skeleton className="h-8 w-24 rounded-md" />
-      ) : count && count > 0 ? (
-        <p className="text-2xl font-bold tabular-nums">
-          {count}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">
-            {count === 1 ? singular : plural}
-          </span>
-        </p>
-      ) : (
-        <p className="py-1 text-sm font-medium text-indigo-600">{emptyHint}</p>
-      )}
-    </button>
-  );
-}
-
-function ManualTile({
-  icon,
-  title,
-  hint,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  hint: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={title}
-      className="group flex min-h-[92px] flex-col items-start gap-1.5 rounded-xl bg-muted/40 p-4 text-left ring-1 ring-slate-200/70 transition-all duration-200 hover:bg-muted/70 hover:ring-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:ring-white/10"
-    >
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-        {icon}
-      </span>
-      <span className="text-sm font-semibold">{title}</span>
-      <span className="text-xs leading-relaxed text-muted-foreground">{hint}</span>
-    </button>
-  );
-}
-
-function SecondaryLink({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex min-h-[44px] items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-slate-600 ring-1 ring-slate-200/70 transition-colors hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-slate-300 dark:ring-white/10"
-    >
-      <span className="flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      <ChevronRight className="h-4 w-4" />
-    </button>
+      </CardContent>
+    </Card>
   );
 }
 
 function PipelineArrow() {
   return (
-    <div className="hidden items-center justify-center text-muted-foreground/60 sm:flex">
+    <div className="hidden items-center justify-center text-muted-foreground/60 sm:flex" aria-hidden>
       <ArrowRight className="h-4 w-4" />
     </div>
   );

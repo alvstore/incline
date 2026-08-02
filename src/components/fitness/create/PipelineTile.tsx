@@ -1,5 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Check, AlertTriangle } from 'lucide-react';
 
 interface PipelineTileProps {
   icon: React.ReactNode;
@@ -13,6 +13,8 @@ interface PipelineTileProps {
   /** Short action label describing where the tile leads. */
   action: string;
   step: number;
+  /** Empty state reads as a blocker (amber) rather than a neutral invite. */
+  blocking?: boolean;
   onClick: () => void;
 }
 
@@ -30,9 +32,11 @@ export function PipelineTile({
   emptyHint,
   action,
   step,
+  blocking,
   onClick,
 }: PipelineTileProps) {
   const empty = !loading && !count;
+  const ready = !loading && !!count;
 
   return (
     <button
@@ -47,12 +51,20 @@ export function PipelineTile({
         </span>
       </div>
 
+
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{title}</p>
         {loading ? (
           <Skeleton className="mt-1 h-4 w-28 rounded" />
         ) : empty ? (
-          <p className="truncate text-xs font-medium text-primary">{emptyHint}</p>
+          <p
+            className={`flex items-center gap-1 truncate text-xs font-medium ${
+              blocking ? 'text-warning' : 'text-primary'
+            }`}
+          >
+            {blocking && <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />}
+            {emptyHint}
+          </p>
         ) : (
           <p className="truncate text-xs text-muted-foreground">
             <span className="font-semibold tabular-nums text-foreground">{count}</span>{' '}
@@ -61,7 +73,17 @@ export function PipelineTile({
         )}
       </div>
 
+      {ready && (
+        <span
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+          aria-hidden
+        >
+          <Check className="h-3 w-3" />
+        </span>
+      )}
+
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+
     </button>
   );
 }
