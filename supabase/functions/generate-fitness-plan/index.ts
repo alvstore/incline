@@ -516,18 +516,22 @@ serve(async (req) => {
 
     const baseMessage = userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt;
 
-    const runAi = async (systemExtra = "") => {
+    const runAi = async (systemExtra = "", userExtra = "") => {
       const r = await generateOnce({
         purpose: "fitness_plan",
         branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
-        userMessage: baseMessage,
+        userMessage: baseMessage + userExtra,
         systemOverride: systemPrompt + systemExtra,
         responseFormat: "json",
         maxTokens,
+        // Deterministic-but-varied: enough sampling freedom to differentiate
+        // plans across goals/members without breaking the JSON contract.
+        temperature: 0.85,
         supabase: supabaseAdmin,
       });
       return r.content;
     };
+
 
     let content: string | undefined;
     try {
