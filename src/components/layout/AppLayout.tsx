@@ -65,18 +65,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     [moduleGroups, activeModuleId],
   );
 
-  const { data: org } = useQuery({
-    queryKey: ['org-branding'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('logo_url, name')
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: org } = useOrgBranding();
+
 
   const getInitials = (name: string | null) => {
     if (!name) return 'U';
