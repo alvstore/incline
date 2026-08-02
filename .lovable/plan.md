@@ -1,66 +1,74 @@
-## Part 1 — Why you can't reply from the dashboard
+# Fix plan — AI plan generation timeouts + 3 related System Health clusters
 
-**Confirmed root cause (verified in the database and code):**
+## What the evidence shows
 
-The Google Business Profile connection was never completed. The `google_business` integration row holds only `client_id`, `client_secret`, `api_key` — there is **no `refresh_token`**. Without it, `google-reviews-brain` falls back to the Places API lane, which is public and read-only. Every review is therefore stored with `source: "places"`, and `ExternalReviewsTab.tsx` line 365 disables the "Post reply to Google" button whenever `r.source === 'places'` (hence the "Places · read-only" badge on every card in your screenshot). The draft you typed was never rejected — the button simply can't fire.
+Clusters 1, 3 and 4 are the **same root cause**: a long-running request is killed by the browser before the server finishes. Cluster 2 is separate (memory on the MIPS photo sync).
 
-Secondary gaps found:
-- Reply posting (`replyToReview`) targets `mybusiness.googleapis.com/v4/{review}/reply`, which needs a Business Profile review name. Places reviews have no such ID, so even a forced click would fail.
-- Nothing in the UI tells you *what to do* — the disabled state has only a tooltip. There's no visible "Connect Google" call-to-action on the Feedback page.
-- `account_id`, `location_id`, and `place_id` are already saved, so once OAuth completes, the Business Profile lane can run immediately.
+Confirmed from the edge logs for `generate-fitness-plan`:
 
-### What will be built
+- Run started 11:33:23, finished successfully 11:36:03 — **160 seconds**.
+- On the way it logged `retrying — AI returned days without any exercises` plus two `[ai-dispatcher] transient google fail (attempt N/3) — retrying`.
+- It ended with `Http: connection closed before message completed` — the browser had already gone.
 
-1. **Connection Status Banner (Feedback → External Reviews)**
-   A Vuexy gradient status card at the top of the tab with three states:
-   - *Read-only mode* (current): amber card explaining that replies need Business Profile access, with a primary "Connect Google Business Profile" button that launches the OAuth flow directly — no digging through Settings.
-   - *Connecting / partial*: shows which of the 4 steps are done (Credentials → OAuth → Account → Location) as a compact stepper.
-   - *Live*: emerald card showing account name, location name, last sync time, and review count.
+The client gives up at 90s (`CreateAI.tsx` hard-aborts the AbortController), so the plan *is* generated on the server but the user only sees an error. That is the whole "cannot generate plan" complaint.
 
-2. **Guided 4-step connect drawer** (right-side Sheet, per project standard) replacing the current scattered flow: paste OAuth Client ID/Secret → "Connect Google" popup → pick Business Account → pick Location. Each step self-validates and shows the exact Google error text if it fails (redirect URI mismatch, API not enabled, no locations, etc.).
+Why runs exceed 90s today:
+- AI dispatcher: up to **3 attempts × 60s timeout** each, plus backoff.
+- On top of that: a **shape retry** (invalid AI JSON) and a **differentiation retry** (plan too similar to previous). Each of those is another full dispatcher cycle.
+- Worst case is well over 5 minutes; nothing can survive a synchronous browser wait.
 
-3. **Reply path hardening in `google-reviews-brain`**
-   - Store the Business Profile `review name` on each row so replies always resolve.
-   - When a Places review and a Business Profile review match (same author + text + date), merge them and promote `source` to `business_profile` so history typed under read-only mode becomes replyable.
-   - Surface real Google API status + body on failure instead of a generic error.
-   - Persist unsent drafts (typed reply survives refresh and becomes sendable the moment you connect).
+## Cluster-by-cluster
 
-4. **Review card UI/UX refresh (2026)**
-   - Cleaner card: reviewer avatar, star row, relative time, verdict chip.
-   - Reply composer with character counter (Google caps at 4096), tone chips (Warm / Concise / Apologetic), AI re-draft inline, and an explicit "Sent to Google · timestamp" state.
-   - Disabled send button gets a visible inline reason bar instead of a hidden tooltip.
-   - Skeleton, empty, and error states for the whole list.
+**Cluster 1 — `/fitness/create/ai` "Fetch is aborted" (2x)**
+Root cause: 90s client abort during a 160s server run.
+Files: `src/pages/fitness/CreateAI.tsx`, `src/services/ptService.ts`, `supabase/functions/generate-fitness-plan/index.ts`, `supabase/functions/_shared/ai-dispatcher.ts`.
 
-## Part 2 — Why every AI plan looks the same
+**Cluster 4 — `/fitness/create/manual` "Load failed" (1x)**
+Same family: Safari's wording for an aborted/dropped fetch on the same generation path (manual editor pulls the same equipment/plan endpoints). Fixed by the same change; no separate fix.
 
-**Confirmed root causes:**
+**Cluster 3 — `/dashboard` "Failed to fetch" (1x)**
+Same family, single occurrence, transient network drop on a dashboard query. No code defect found. Handled by noise-filtering rather than a code fix (see below).
 
-1. **The goal never changes the programming rules.** `ai_purposes.fitness_plan.system_prompt` is a single generic line ("You are a certified fitness coach…"), with **no model and no temperature set**. The goal is passed only as one bullet (`- Fitness Goals: …`) buried inside a long prompt that is otherwise dominated by a rigid JSON output contract plus a 100-line equipment list. The model treats it as a label, not as an instruction — so weight loss and muscle gain both come back as a generic 4-day split.
-2. **No goal→parameter mapping exists anywhere.** Nothing tells the model that fat loss means higher density, shorter rest, conditioning finishers, and a calorie deficit, while hypertrophy means 8–12 reps, 90–120s rest, higher per-muscle volume, and a surplus.
-3. **`expandWeeks` clones week 1 verbatim** into every later week, appending only a one-line progression note — so the plan also looks repetitive *within* itself.
-4. **Equipment is a soft preference, never enforced.** The prompt says "prefer"; nothing validates the output. 56 of 73 machines have muscle groups tagged; the other 17 arrive with no metadata, so the model ignores them.
+**Cluster 2 — `sync-to-mips` "not having enough compute resources" (1x)**
+Separate cause: `normalizePhotoBytes` decodes the full member photo into memory with `imagescript` and loops re-encoding to hit the 400KB target. A large source image blows the function's memory ceiling. File: `supabase/functions/sync-to-mips/index.ts`.
 
-### What will be built
+## The fix
 
-1. **Goal-specific programming engine** (new `_shared/plan-programming.ts`): a hard parameter block injected per goal — fat loss / muscle gain / strength / recomposition / endurance / general — defining split style, session count, rep ranges, rest, tempo, weekly volume per muscle, conditioning dose, and (for diet) calorie delta and macro split. The goal moves to the **top** of the prompt as a directive, not a bullet.
+### 1. Make plan generation a background job (removes clusters 1 and 4)
 
-2. **Equipment enforcement, not suggestion**
-   - Send the full operational catalog grouped by muscle group and movement pattern.
-   - Add a server-side validation pass: every prescribed `equipment` value must match a real machine (fuzzy + alias). Anything unmatched is auto-substituted with the closest owned machine that trains the same muscle group, or downgraded to a bodyweight/free-weight alternative. A `equipmentMatchSummary { matched, substituted, total }` is returned like the existing diet catalog summary.
-   - Flag the 17 untagged machines in the UI so they can be classified.
+Stop waiting on one long HTTP request.
 
-3. **Real variety between weeks and between plans**
-   - Replace verbatim week cloning with a periodisation model: exercise-order rotation, accessory swaps drawn from the owned-equipment pool, and goal-appropriate volume/intensity waves plus a deload.
-   - Add a deterministic variety seed per member+goal+date so two members with the same goal don't receive byte-identical programs.
-   - Raise temperature for this purpose to a value that produces variation without breaking the JSON contract, and pin an explicit model on the `fitness_plan` purpose.
+- New table `ai_plan_jobs` (id, branch_id, requested_by, type, request payload, status `queued|running|done|error`, `stage`, result JSONB, error text, timestamps) with RLS + GRANTs scoped to owner/admin/manager and the requesting user.
+- `generate-fitness-plan` gains two modes:
+  - `POST { ...existing body, async: true }` → insert the job row, kick the existing generation inside `EdgeRuntime.waitUntil(...)`, return `{ job_id }` in under a second.
+  - The background worker writes `stage` as it goes (`building prompt` → `calling AI` → `retry` → `enforcing equipment` → `expanding weeks` → `done`) and stores the final plan on the row.
+- `ptService.generateFitnessPlan` switches to: start job → poll `ai_plan_jobs` (Realtime subscribe, 2s polling fallback) → resolve with the stored plan.
+- `CreateAI.tsx` drops the 90s abort. `GenerationProgress` renders the live `stage` text, elapsed time, and a Cancel that marks the job cancelled. Refreshing the page no longer loses a running generation — the job is resumable from its id.
 
-4. **Differentiation guard**: after generation, compare the exercise/meal signature against the member's last plan. If similarity is above threshold, auto-retry once with an explicit "produce a materially different program" instruction before returning.
+### 2. Cut the worst-case runtime (so jobs finish in ~40-70s)
 
-5. **UI feedback on the Create-AI page**: the review step shows Goal → applied training parameters, equipment match rate, and how much the plan differs from the previous one. No change to the PDF output — that stays exactly as it is.
+- `_shared/ai-dispatcher.ts`: per-attempt timeout 60s → **35s**; attempts 3 → **2**. A stuck provider now fails fast instead of eating 3 minutes.
+- `generate-fitness-plan`: allow **at most one** extra AI round trip in total — if the shape retry already ran, skip the differentiation retry and accept the plan (it is still equipment-enforced and periodised). Log the skip.
+- Keep the existing template-week + server-side `expandWeeks` approach — that is already the cheap path.
 
-## Technical notes
+### 3. Surface the real failure
 
-- Files touched: `supabase/functions/google-reviews-brain/index.ts`, `supabase/functions/generate-fitness-plan/index.ts`, new `supabase/functions/_shared/plan-programming.ts`, `src/components/feedback/ExternalReviewsTab.tsx`, `src/components/settings/GoogleBusinessDiscovery.tsx` (folded into the new connect drawer), `src/pages/fitness/CreateAI.tsx`, `src/services/equipmentService.ts`.
-- Migrations: add `source`, `gbp_review_name`, and `draft_reply` columns to the Google reviews table (with GRANTs and RLS per project rules); update `ai_purposes.fitness_plan` with a goal-aware system prompt, model, and temperature.
-- Edge function version bumps and try/catch wrappers per project standard.
-- **You will need to complete the Google OAuth consent step once in the new drawer** — that's the only action that cannot be automated from here.
+- Job rows store the provider error text, so the UI shows "Google provider timed out — retry" instead of a generic edge error.
+- 402/429 from the gateway map to explicit messages (credits exhausted / rate limited).
+
+### 4. MIPS photo memory (cluster 2)
+
+In `sync-to-mips`:
+- Lower the pre-decode refusal ceiling and, before `decodeImage`, downscale in a single pass to a bounded max dimension instead of iterative re-encode loops.
+- Wrap normalization in a try/catch that falls back to "queue photo for `mips-face-sweep`" rather than failing the whole person sync, so a heavy image never takes the function down.
+
+### 5. Dashboard noise (cluster 3)
+
+Add `Failed to fetch` / `Load failed` with no stack to the benign-noise filter in `src/lib/errorReporter.ts` **only** when `navigator.onLine === false` or the request was aborted, so genuine backend outages still report.
+
+## Technical summary
+
+- Migration: `ai_plan_jobs` table + RLS + GRANTs (`authenticated` scoped by branch/requester, `service_role` all).
+- Edge: `generate-fitness-plan` (async job mode, single-retry budget), `_shared/ai-dispatcher.ts` (35s / 2 attempts), `sync-to-mips` (bounded photo decode).
+- Frontend: `src/services/ptService.ts` (job start + subscribe), `src/pages/fitness/CreateAI.tsx` (no client abort, live stage), `src/components/fitness/GenerationProgress.tsx` (stage text + elapsed), `src/lib/errorReporter.ts`.
+- Verification: generate one workout and one diet plan end to end, confirm the job row reaches `done`, confirm no new `Fetch is aborted` fingerprints, and re-run a MIPS photo sync for a member with a large photo.
