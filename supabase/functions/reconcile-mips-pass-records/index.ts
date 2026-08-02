@@ -452,15 +452,21 @@ Deno.serve(async (req) => {
       const matchedPerson = personNo ? await findPersonByCode(supabase, personNo) : null;
       if (!matchedPerson) unmatched++;
 
+      const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
+
       const attendanceMessage = !dryRun && matchedPerson
-        ? await markAttendance(supabase, matchedPerson, personName).catch((error: Error) => `Attendance error: ${error.message}`)
+        ? await markAttendance(supabase, matchedPerson, personName, scanTime).catch((error: Error) => `Attendance error: ${error.message}`)
         : null;
-      if (attendanceMessage && !attendanceMessage.toLowerCase().includes("error") && !attendanceMessage.toLowerCase().includes("already")) {
+      if (
+        attendanceMessage &&
+        !attendanceMessage.toLowerCase().includes("error") &&
+        !attendanceMessage.toLowerCase().includes("already") &&
+        !attendanceMessage.toLowerCase().includes("duplicate")
+      ) {
         attendanceUpdated++;
       }
 
       const result = matchedPerson ? mapResult(record, matchedPerson.type) : mapResult(record);
-      const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
       const deviceSn = getString(record.deviceKey ?? record.deviceSn ?? record.deviceName) || "mips-server";
       const message = matchedPerson
         ? (attendanceMessage || `${personName} · ${personNo}`)
