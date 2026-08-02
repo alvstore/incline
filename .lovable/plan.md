@@ -1,48 +1,43 @@
-## What I verified
+# Fix template save error + redesign the Create Plan page
 
-- `ai_purposes` for `fitness_plan` is on `google/gemini-3.6-flash` with `max_tokens: 8000`, but `generate-fitness-plan` **overrides** it: `maxTokens = Math.min(16000, 4000 + variantCount*1200 + …)`. With no rotation (your screenshot shows rotation `0`) that is **4000 tokens** — and on a thinking model, reasoning tokens are billed against that same budget, so the JSON gets cut off mid-object.
-- `parsePlanJson` (index.ts:29-77) silently *repairs* truncated JSON by closing open brackets. A response cut off inside Monday's first exercise becomes a valid object containing exactly one day with one exercise — which is precisely what the Preview screen shows.
-- `validatePlanShape` (index.ts:80-97) only requires **"weeks[0].days has at least one day, and some day has at least one exercise"**. The repaired 1-day/1-exercise object passes, so no retry fires and the plan is saved.
-- `expandWeeks` then faithfully clones that one broken day into Weeks 1..N — hence "Monday only" repeated on every week with progression notes appended.
-- `daysPerWeek` (6) and `durationWeeks` are sent correctly from `CreateAI.tsx` — the form inputs are not the problem; nothing on the server ever checks the AI honoured them.
-- `ai_plan_jobs` currently has zero rows, so the run in the screenshot went through the synchronous path.
+## What's broken
 
-Root cause: **token starvation + a repair-and-accept parser + completeness checks that are too weak to notice.**
+Saving a plan as a template fails with:
+
+```text
+null value in column "target_gender" of relation "fitness_plan_templates" violates not-null constraint
+```
+
+Confirmed cause (verified against the live table and the save code):
+
+- `fitness_plan_templates.target_gender` is `NOT NULL DEFAULT 'any'`, and `target_experience` is `NOT NULL DEFAULT '{}'`.
+- The "Save as Template" action on the Preview screen explicitly sends `target_gender: null` and `target_experience: null` when the plan has no audience targeting set. Sending an explicit `null` overrides the column default, so Postgres rejects the insert.
+
+This hits every plan saved without targeting — both AI-generated and manual.
 
 ## The fix
 
-### 1. Give the generation a real token budget
-- Stop hard-capping at 4000. Use `max(purposeRow.max_tokens, 12000)` for workout, plus the rotation allowance, cap 24000.
-- Pass an explicit low reasoning/thinking budget for Gemini thinking models in the dispatcher body (`reasoning_effort: "low"` / `thinkingBudget`), so reasoning cannot eat the output allowance.
+1. In the Preview screen's save handler, stop sending explicit nulls for the two non-null columns: fall back to `'any'` for gender and `[]` for experience.
+2. Harden the shared `createPlanTemplate` service so it strips `undefined`/`null` values for these two fields regardless of caller — this also protects the AI create screen and any future caller.
+3. No database change is needed; the column defaults are already correct.
 
-### 2. Never accept a truncated plan as final
-- `parsePlanJson` returns `{ plan, repaired: boolean }`. A repaired (truncated) parse is treated as a shape failure, not a success.
-- Surface the provider `finish_reason` from `generateOnce`; `finish_reason === "length"` is an automatic shape failure.
+## Create Plan page redesign (/fitness/create)
 
-### 3. Real completeness validation
-New `validatePlanCompleteness(plan, { daysPerWeek })` for workouts, run after shape validation:
-- `weeks[0].days` must cover all 7 calendar days (Monday…Sunday, no duplicates).
-- The number of days with a non-empty `exercises` array must equal the requested `daysPerWeek` (±0), with the rest explicitly `focus: "Rest"`.
-- Every training day needs **at least 4 exercises**.
-Failing any of these triggers the repair path instead of being saved.
+Rebuild the page visually using the active `ui-ux-pro-max` design skill, staying inside the project's Vuexy system (rounded-2xl cards, soft shadows, indigo/violet accents, lucide icons only). No logic or data-fetch changes:
 
-### 4. Make the retry actually able to succeed
-- Raise the extra-AI-call budget for *completeness* failures from 1 to 2 (differentiation stays capped, so worst case is bounded).
-- Retry 1: same prompt + "BE CONCISE, output must be complete" + increased token budget.
-- Retry 2 (**split generation**): ask for the week in two calls — days 1-3, then days 4-7 — and merge. Each call is small enough that truncation is effectively impossible. Stage text reports "Building days 1-3" / "Building days 4-7".
+- **Hero header** — gradient indigo/violet band with title, one-line purpose, and a primary "Start with AI" CTA.
+- **Pipeline strip** — keep Meal Catalog → Templates → Assignments, but as polished stat cards with icon badges, tabular counts, skeletons while loading, and a proper zero state instead of a bare `0`.
+- **Mode cards** — AI vs Manual as two equal-height feature cards with clearer benefit copy, a "Recommended" badge on AI, hover lift, and full-card keyboard focus rings.
+- **Manual card** — Workout / Diet as two large, 44px+ tap targets with icon + short descriptor.
+- **Quick links** — turn the two ghost buttons into a compact secondary row that doesn't compete with the primary actions.
+- **Responsive + a11y** — verified at 375 / 768 / 1024 / 1440, aria-labels on icon-only controls, visible focus rings, no horizontal scroll.
 
-### 5. Fail loudly instead of saving a stub
-- If the plan is still incomplete after retries, return 422 with a specific message ("AI returned only 1 of 6 training days — reduce weeks/rotation and retry") rather than a generic error, and do **not** persist it.
-- Client-side guard in `CreateAI.tsx`: before showing Preview/allowing Save, reject a plan whose training-day count doesn't match the requested `daysPerWeek`, showing the same message.
+## Note on the skill request
 
-### 6. Prompt tightening
-- Move the "EXACTLY N training days, remaining days as Rest, minimum 4-6 exercises per training day" instruction to the **top** of the user message (currently buried mid-prompt at index.ts:455) and repeat it as the closing line, which is where models weight hardest.
+`ui-ux-pro-max-v2` isn't available in this workspace; the active skill is `ui-ux-pro-max`, which I'll use for the redesign. New skills are added from Settings > Skills.
 
-## Technical summary
+## Technical details
 
-- `supabase/functions/generate-fitness-plan/index.ts` — token budget, `parsePlanJson` repaired-flag, `validatePlanCompleteness`, split-generation retry, prompt reordering, 422 messaging. Version bump to v5.0.0.
-- `supabase/functions/_shared/ai-runtime.ts` / `ai-dispatcher.ts` — expose `finish_reason`; pass a low reasoning budget for thinking models.
-- `src/pages/fitness/CreateAI.tsx` — completeness guard before Preview/Save; surface server stage text for the split-generation stages.
-
-### Verification
-Generate a 6-day/4-week Muscle Gain plan and a 4-day Fat Loss plan; confirm each week has 6 (resp. 4) training days with 4+ exercises each, rest days marked, and that the two goals produce visibly different splits and rest ranges.
+- `src/pages/fitness/PreviewPlan.tsx` — audience fallbacks in `handleSaveAsTemplate`.
+- `src/services/fitnessService.ts` — normalize `target_gender` / `target_experience` inside `createPlanTemplate`.
+- `src/pages/fitness/CreateModePicker.tsx` — presentation rewrite only; queries, roles gating and navigation targets stay identical.
