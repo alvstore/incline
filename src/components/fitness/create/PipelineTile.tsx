@@ -1,5 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Check, AlertTriangle } from 'lucide-react';
 
 interface PipelineTileProps {
   icon: React.ReactNode;
@@ -13,6 +13,8 @@ interface PipelineTileProps {
   /** Short action label describing where the tile leads. */
   action: string;
   step: number;
+  /** Empty state reads as a blocker (amber) rather than a neutral invite. */
+  blocking?: boolean;
   onClick: () => void;
 }
 
@@ -30,9 +32,11 @@ export function PipelineTile({
   emptyHint,
   action,
   step,
+  blocking,
   onClick,
 }: PipelineTileProps) {
   const empty = !loading && !count;
+  const ready = !loading && !!count;
 
   return (
     <button
@@ -46,6 +50,7 @@ export function PipelineTile({
           {step}
         </span>
       </div>
+
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{title}</p>
