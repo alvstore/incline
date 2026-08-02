@@ -52,6 +52,8 @@ export interface GenerateOnceOptions {
   temperature?: number;
   maxTokens?: number;
   responseFormat?: "text" | "json";
+  /** Reasoning/thinking budget for thinking models (keep low for long JSON output). */
+  reasoning?: { effort?: "minimal" | "low" | "medium" | "high" | "xhigh" };
   tools?: any[];               // OpenAI-style tool definitions (function calling)
   toolChoice?: any;            // optional forced tool choice
   supabase?: SupabaseClient;
@@ -69,7 +71,10 @@ export interface GenerateOnceResult {
   fallback_used: boolean;
   purpose_enabled: boolean;
   duration_ms: number;
+  /** Provider stop reason — "length" means the output was truncated. */
+  finish_reason?: string | null;
 }
+
 
 function getServiceSupabase(): SupabaseClient {
   return createClient(
