@@ -873,7 +873,7 @@ function AttendanceMatrix({
 
   // Group logs: user_id → date(YYYY-MM-DD) → earliest check_in
   const checkInByDay = useMemo(() => {
-    const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number }>>();
+    const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number; late_minutes: number | null; is_late: boolean | null }>>();
     for (const log of logs) {
       if (!log.check_in) continue;
       const date = log.check_in.slice(0, 10);
@@ -885,7 +885,13 @@ function AttendanceMatrix({
           : 0);
       const existing = userMap.get(date);
       if (!existing || log.check_in < existing.check_in) {
-        userMap.set(date, { check_in: log.check_in, check_out: log.check_out, hours: hrs });
+        userMap.set(date, {
+          check_in: log.check_in,
+          check_out: log.check_out,
+          hours: hrs,
+          late_minutes: log.late_minutes ?? null,
+          is_late: log.is_late ?? null,
+        });
       }
     }
     return map;
@@ -903,29 +909,19 @@ function AttendanceMatrix({
     const log = checkInByDay.get(staffRow.user_id)?.get(dateStr);
     const scheduledStart = shift?.morning_start || shift?.evening_start;
 
-    if (!scheduledStart) {
-      if (log) {
-        return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
-      }
-      return { kind: isFuture ? 'future' : 'unscheduled' };
-    }
-
     if (!log) {
+      if (!scheduledStart) return { kind: isFuture ? 'future' : 'unscheduled' };
       return { kind: isFuture ? 'future' : 'absent' };
     }
 
-    // Compare check-in time vs scheduled start (HH:MM)
-    const checkInTime = new Date(log.check_in);
-    const [sh, sm] = scheduledStart.slice(0, 5).split(':').map(Number);
-    const scheduled = new Date(year, month, d, sh, sm);
-    const lateMs = checkInTime.getTime() - scheduled.getTime();
-    const lateMin = Math.round(lateMs / 60000);
-
-    if (lateMin > GRACE_MINUTES) {
-      return { kind: 'late', lateMin, checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
+    // Lateness is stamped server-side against the resolved roster shift
+    // (overrides included), so the UI never recomputes it.
+    if (log.is_late) {
+      return { kind: 'late', lateMin: log.late_minutes ?? undefined, checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
     }
     return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
   }
+
 
   const rows = useMemo(() => {
     return staff
