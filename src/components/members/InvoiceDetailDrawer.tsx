@@ -42,6 +42,27 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
     },
   });
 
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadInvoice = async () => {
+    if (!invoice?.id) return;
+    setDownloading(true);
+    try {
+      const { generateInvoicePdfBlob } = await import('@/utils/invoicePdf');
+      const blob = await generateInvoicePdfBlob(invoice.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoice_number || 'invoice'}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not generate the invoice PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleDownloadLab = async (path: string, filename: string | null) => {
     const url = await signLabReport(path, 60);
     if (!url) { toast.error('Lab report unavailable'); return; }
@@ -52,6 +73,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
     if (filename) a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
   };
+
 
   if (!invoice) return null;
 
