@@ -539,8 +539,13 @@ serve(async (req) => {
     };
 
 
+    // Budget: at most ONE extra AI round trip in total (shape repair OR
+    // differentiation) so a run can never stack multiple full dispatcher cycles.
+    let extraAiCalls = 0;
+
     let content: string | undefined;
     try {
+      onStage("Calling AI");
       content = await runAi();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI gateway error";
