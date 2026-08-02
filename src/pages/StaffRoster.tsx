@@ -906,14 +906,26 @@ function AttendanceMatrix({
     const shift = staffRow.shifts[wd];
     const dateStr = `${ym}-${String(d).padStart(2, '0')}`;
     const isFuture = isCurrentMonth && d > todayDate;
+    const isToday = isCurrentMonth && d === todayDate;
 
     if (shift?.is_weekly_off) return { kind: 'off' };
 
     const log = checkInByDay.get(staffRow.user_id)?.get(dateStr);
+    // The block a punch is expected in: the last block whose start has passed.
     const scheduledStart = shift?.morning_start || shift?.evening_start;
 
     if (!log) {
       if (!scheduledStart) return { kind: isFuture ? 'future' : 'unscheduled' };
+      if (isToday) {
+        // A shift that has not started yet today is pending, not an absence.
+        const starts = [shift?.morning_start, shift?.evening_start].filter(Boolean) as string[];
+        const nowMin = today.getHours() * 60 + today.getMinutes();
+        const earliest = Math.min(...starts.map((s) => {
+          const [h, m] = s.split(':').map(Number);
+          return h * 60 + (m || 0);
+        }));
+        if (nowMin < earliest) return { kind: 'future' };
+      }
       return { kind: isFuture ? 'future' : 'absent' };
     }
 
