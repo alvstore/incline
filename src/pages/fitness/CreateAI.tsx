@@ -247,7 +247,27 @@ export default function CreateAIPage() {
         },
       });
 
+      // Guard: never let a truncated/partial week reach Preview or Save.
+      if (type === 'workout') {
+        const week1Days: any[] = (plan as any)?.weeks?.[0]?.days ?? [];
+        const trainingDays = week1Days.filter(
+          (d) => Array.isArray(d?.exercises) && d.exercises.length > 0,
+        );
+        if (daysPerWeek && trainingDays.length !== daysPerWeek) {
+          throw new Error(
+            `AI returned only ${trainingDays.length} of ${daysPerWeek} training days — reduce weeks/rotation and generate again.`,
+          );
+        }
+        const thin = trainingDays.find((d) => d.exercises.length < 4);
+        if (thin) {
+          throw new Error(
+            `AI returned only ${thin.exercises.length} exercise(s) on ${thin.day} — generate again.`,
+          );
+        }
+      }
+
       const matchSummary = (plan as any)?.catalogMatchSummary;
+
       if (type === 'diet' && matchSummary?.total) {
         const { matched, total } = matchSummary;
         if (matched < total) {

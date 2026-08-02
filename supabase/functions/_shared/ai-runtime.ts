@@ -52,6 +52,8 @@ export interface GenerateOnceOptions {
   temperature?: number;
   maxTokens?: number;
   responseFormat?: "text" | "json";
+  /** Reasoning/thinking budget for thinking models (keep low for long JSON output). */
+  reasoning?: { effort?: "minimal" | "low" | "medium" | "high" | "xhigh" };
   tools?: any[];               // OpenAI-style tool definitions (function calling)
   toolChoice?: any;            // optional forced tool choice
   supabase?: SupabaseClient;
@@ -69,7 +71,10 @@ export interface GenerateOnceResult {
   fallback_used: boolean;
   purpose_enabled: boolean;
   duration_ms: number;
+  /** Provider stop reason — "length" means the output was truncated. */
+  finish_reason?: string | null;
 }
+
 
 function getServiceSupabase(): SupabaseClient {
   return createClient(
@@ -176,6 +181,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
     temperature: opts.temperature ?? purposeRow?.temperature ?? undefined,
     max_tokens: opts.maxTokens ?? purposeRow?.max_tokens ?? undefined,
   };
+  if (opts.reasoning) callOpts.reasoning = opts.reasoning;
+
   if (opts.tools?.length) {
     callOpts.tools = opts.tools;
     if (opts.toolChoice) callOpts.tool_choice = opts.toolChoice;
@@ -225,6 +232,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       fallback_used: r.fallback_used,
       purpose_enabled: true,
       duration_ms: dur,
+      finish_reason: r.raw?.choices?.[0]?.finish_reason ?? r.raw?.choices?.[0]?.native_finish_reason ?? null,
+
     };
   } catch (err) {
     const dur = Date.now() - started;
