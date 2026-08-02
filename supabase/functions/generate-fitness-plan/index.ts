@@ -478,14 +478,29 @@ serve(async (req) => {
     // v1.2.0 — TWO-FIELD naming: "name" = generic movement, "equipment" = exact gym machine
     const equipmentPrompt = type === "workout" && availableEquipment.length > 0
       ? `\n\nIMPORTANT — this gym has the following OPERATIONAL equipment. Each line lists the muscle groups it trains and the movement pattern. When prescribing exercises, prefer movements that use this exact equipment, AND respect muscle-group coverage across the week (balance push/pull, include 1-2 dedicated CORE sessions, hit legs at least once).\n\nNAMING RULE (STRICT — TWO FIELDS):\n1. "name" → the GENERIC EXERCISE / MOVEMENT name the member will recognise (e.g. "Leg Press", "Lat Pulldown", "Hip Thrust", "Chest Press", "Seated Row", "Rear Delt Fly", "Leg Curl", "Plank"). Keep it short, human-friendly, Title Case. NEVER put the gym's machine label here.\n2. "equipment" → the EXACT machine name from the list below (e.g. "SUPER LEG PRESS 45°", "Hip Thrust Machine"). Use empty string for bodyweight / mobility / cardio that doesn't use a listed machine.\n\nNEVER include brand names (e.g. Panatta, Realleader, Booty Builder, Relax), model codes, SKUs, or part numbers (e.g. FW2035, PT-101, 1FW044, APT-128, XHA040) in EITHER field. If the listed machine name itself contains a brand or model, strip the brand/model out for the "equipment" field too (e.g. "PANATTA BACK DELTOIDS 1FW026" → name: "Rear Delt Fly", equipment: "Rear Delt Machine").\n\nBodyweight, mobility, stretching, and basic cardio (running, jump rope) are always allowed without being on the list — set "equipment" to "" for those. Do NOT recommend machines not on the list.\n\n${availableEquipment
-          .slice(0, 100)
-          .map((e) => {
-            const cat = e.primary_category || e.category;
-            const muscles = (e.muscle_groups || []).length ? ` muscles=[${(e.muscle_groups || []).join(",")}]` : "";
-            const move = e.movement_pattern ? ` pattern=${e.movement_pattern}` : "";
-            return `- ${e.name}${cat ? ` [${cat}]` : ""}${muscles}${move}`;
-          })
-          .join("\n")}`
+          .length === 0
+        ? ""
+        : (() => {
+            // Group by muscle group so the model can pick per body part instead
+            // of scanning a flat 100-line list. Untagged machines get their own bucket.
+            const groups = new Map<string, string[]>();
+            for (const e of availableEquipment) {
+              const cat = e.primary_category || e.category;
+              const move = e.movement_pattern ? ` pattern=${e.movement_pattern}` : "";
+              const line = `  - ${e.name}${cat ? ` [${cat}]` : ""}${move}`;
+              const muscles = (e.muscle_groups || []).length ? e.muscle_groups! : ["UNCLASSIFIED"];
+              for (const m of muscles) {
+                const k = String(m).toUpperCase();
+                if (!groups.has(k)) groups.set(k, []);
+                groups.get(k)!.push(line);
+              }
+            }
+            return [...groups.entries()]
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([m, lines]) => `${m}:\n${[...new Set(lines)].join("\n")}`)
+              .join("\n");
+          })()}\n\nHARD CONSTRAINT: any "equipment" value that is not on this list is rejected by the server and auto-substituted. Only prescribe machines from the list, or "" for bodyweight/free-weight/cardio.`
+
       : "";
 
     const previousPlanPrompt = previousPlanContext
