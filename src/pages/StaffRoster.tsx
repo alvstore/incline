@@ -1065,7 +1065,8 @@ function AttendanceMatrix({
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Late = check-in more than {GRACE_MINUTES} min after scheduled start. Absent = scheduled day with no check-in.
+        Late = check-in after the roster shift start plus the branch grace period (set in Late policy). Absent = scheduled day with no check-in.
+
       </p>
     </div>
   );
