@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { RecordMeasurementDrawer } from '@/components/members/RecordMeasurementDrawer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useMemberData } from '@/hooks/useMemberData';
@@ -16,6 +18,7 @@ import {
   Ruler,
   Box,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -23,6 +26,7 @@ import { Link } from 'react-router-dom';
 export default function MyProgress() {
   const { member, measurements, isLoading: memberLoading } = useMemberData();
   const { data: quota } = useScanQuota(member?.id);
+  const [recordOpen, setRecordOpen] = useState(false);
 
   if (memberLoading) {
     return (
@@ -56,11 +60,17 @@ export default function MyProgress() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Progress</h1>
-          <p className="text-muted-foreground">
-            Track your fitness journey with secure photos and a premium 3D body view.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">My Progress</h1>
+            <p className="text-muted-foreground">
+              Track your fitness journey with secure photos and a premium 3D body view.
+            </p>
+          </div>
+          <Button onClick={() => setRecordOpen(true)} className="shrink-0">
+            <Plus className="h-4 w-4 mr-2" />
+            Record measurements
+          </Button>
         </div>
 
         {/* Hero */}
@@ -230,6 +240,14 @@ export default function MyProgress() {
           </Card>
         </div>
       </div>
+
+      <RecordMeasurementDrawer
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+        memberId={member.id}
+        memberName={(member as any)?.profiles?.full_name || member.member_code || 'Me'}
+        memberGender={(member as any)?.gender}
+      />
     </AppLayout>
   );
 }
