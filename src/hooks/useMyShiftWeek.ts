@@ -59,7 +59,7 @@ export function useMyShiftWeek(userId: string | null | undefined, anchor: Date =
           .lte('date', endISO),
         supabase
           .from('staff_attendance')
-          .select('check_in')
+          .select('check_in, late_minutes, is_late')
           .eq('user_id', userId!)
           .gte('check_in', `${startISO}T00:00:00`)
           .lte('check_in', `${endISO}T23:59:59`)
@@ -70,10 +70,16 @@ export function useMyShiftWeek(userId: string | null | undefined, anchor: Date =
       (recurring || []).forEach((r: any) => recurringByWd.set(r.weekday, r));
       const overrideByDate = new Map<string, any>();
       (overrides || []).forEach((o: any) => overrideByDate.set(o.date, o));
-      const firstCheckByDate = new Map<string, string>();
+      const firstCheckByDate = new Map<string, { check_in: string; late_minutes: number | null; is_late: boolean }>();
       (attendance || []).forEach((a: any) => {
         const d = format(new Date(a.check_in), 'yyyy-MM-dd');
-        if (!firstCheckByDate.has(d)) firstCheckByDate.set(d, a.check_in);
+        if (!firstCheckByDate.has(d)) {
+          firstCheckByDate.set(d, {
+            check_in: a.check_in,
+            late_minutes: a.late_minutes ?? null,
+            is_late: !!a.is_late,
+          });
+        }
       });
 
       return days.map((d): MyShiftDay => {
@@ -90,19 +96,12 @@ export function useMyShiftWeek(userId: string | null | undefined, anchor: Date =
         const evening_start = src?.evening_start ?? null;
         const evening_end = src?.evening_end ?? null;
 
-        const checkIn = firstCheckByDate.get(iso) ?? null;
-        let late_minutes: number | null = null;
-        let is_late = false;
-        if (checkIn && !is_off) {
-          const schedStart = timeToMin(morning_start) ?? timeToMin(evening_start);
-          if (schedStart != null) {
-            const ci = new Date(checkIn);
-            const ciMin = ci.getHours() * 60 + ci.getMinutes();
-            const diff = ciMin - schedStart;
-            late_minutes = diff;
-            is_late = diff > LATE_GRACE_MIN;
-          }
-        }
+        // Lateness comes from the server-stamped roster comparison.
+        const att = firstCheckByDate.get(iso) ?? null;
+        const checkIn = att?.check_in ?? null;
+        const late_minutes = att?.late_minutes ?? null;
+        const is_late = !!att?.is_late;
+
 
         return {
           date: iso,
