@@ -13357,6 +13357,14 @@ export type Database = {
         }
         Relationships: []
       }
+      org_branding: {
+        Row: {
+          id: string | null
+          logo_url: string | null
+          name: string | null
+        }
+        Relationships: []
+      }
       policy_audit: {
         Row: {
           delete_policies: number | null
@@ -15410,6 +15418,7 @@ export type Database = {
         | "contract"
         | "comp_gift"
         | "branch_transfer"
+        | "locker_request"
       attendance_shift_type: "morning" | "evening" | "night" | "full_day"
       benefit_booking_status:
         | "booked"
@@ -15693,6 +15702,7 @@ export const Constants = {
         "contract",
         "comp_gift",
         "branch_transfer",
+        "locker_request",
       ],
       attendance_shift_type: ["morning", "evening", "night", "full_day"],
       benefit_booking_status: [
