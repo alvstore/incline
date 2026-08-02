@@ -326,6 +326,25 @@ async function markAttendance(
   const dayStartUtc = new Date(istDayStart.getTime() - 5.5 * 3600_000).toISOString();
   const dayEndUtc = new Date(istDayStart.getTime() + 24 * 3600_000 - 5.5 * 3600_000).toISOString();
 
+  // Night shifts cross midnight (e.g. 21:00 → 06:00). A small-hours scan is
+  // the tail of yesterday's shift, not a brand new — and very late — arrival.
+  const istHour = new Date(scanMs + 5.5 * 3600_000).getUTCHours();
+  if (istHour < 6) {
+    const { data: prevRows } = await supabase
+      .from("staff_attendance")
+      .select("id, check_in")
+      .eq("user_id", person.user_id)
+      .lt("check_in", dayStartUtc)
+      .gte("check_in", new Date(scanMs - 12 * 3600_000).toISOString())
+      .order("check_in", { ascending: false })
+      .limit(1);
+    const prev = (prevRows ?? [])[0] as { id: string } | undefined;
+    if (prev) {
+      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", prev.id);
+      return `${label} ${personName} scan recorded (night shift continues)`;
+    }
+  }
+
   // Stale rows left open from earlier days must never block today's punch:
   // the unique "one open row per shift" index rejects the insert otherwise,
   // which is exactly why present staff were showing up Absent.
