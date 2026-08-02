@@ -91,19 +91,8 @@ export function AppHeader({ variant = 'standalone', showBrand = false }: AppHead
   };
 
   // Org branding for the standalone (Header + Horizontal stacked) variant
-  const { data: org } = useQuery({
-    queryKey: ['org-branding'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('logo_url, name')
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-    enabled: variant === 'standalone' && showBrand,
-  });
+  const { data: org } = useOrgBranding();
+
 
   return (
     <header
