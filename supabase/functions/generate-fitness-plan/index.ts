@@ -464,7 +464,9 @@ serve(async (req) => {
          - Target Calories: ${caloriesTarget || "Calculate based on goals"}
          - Preferences: ${memberInfo.preferences || "None"}
          
-         Create a balanced, practical meal plan suitable for their goals.`;
+         Build the plan around the goal contract above.
+         FINAL CHECK before you answer: "dailyCalories" must reflect ${np.calorieDelta}; "macros" must match ${np.macroSplit}; protein must reach ${np.proteinTarget}; and nothing in the PROHIBITED list may appear.`;
+
 
     const catalogPrompt = type === "diet" && availableMeals.length > 0
       ? `\n\nIMPORTANT — prefer meals from this gym-stocked catalog whenever possible. Use the EXACT meal name when picking from the catalog so it can be tracked back to inventory. If you must propose something outside the catalog, do so sparingly.\n\n${availableMeals
