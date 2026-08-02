@@ -580,38 +580,56 @@ serve(async (req) => {
 
     console.log(`Generating ${type} plan for member:`, memberInfo.name, `with ${availableMeals.length} catalog meals, ${availableEquipment.length} equipment items, prevPlan=${!!previousPlanContext}`);
 
-    // Dynamic token budget: one template week (+ rotation variants) or 7 diet days.
-    // Base 4k, +1.2k per rotation variant, capped at 16k so we never inherit the
-    // old 2,500-token default that truncated the JSON mid-object.
-    const maxTokens = Math.min(16000, 4000 + variantCount * 1200 + (type === "diet" ? 2000 : 0));
+    // Token budget (v5): a full 7-day template week with 4-6 exercises per day
+    // does not fit in 4k, and on thinking models the reasoning tokens are billed
+    // against the same budget — which is what truncated plans to a single day.
+    const maxTokens = Math.min(
+      24000,
+      (type === "diet" ? 10000 : 12000) + variantCount * 1500,
+    );
 
     const baseMessage = userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt;
 
-    const runAi = async (systemExtra = "", userExtra = "") => {
+    const runAi = async (systemExtra = "", userExtra = "", tokenBoost = 0) => {
       const r = await generateOnce({
         purpose: "fitness_plan",
         branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
         userMessage: baseMessage + userExtra,
         systemOverride: systemPrompt + systemExtra,
         responseFormat: "json",
-        maxTokens,
+        maxTokens: Math.min(24000, maxTokens + tokenBoost),
+        // Keep thinking short — reasoning tokens compete with the JSON output.
+        reasoning: { effort: "low" },
         // Deterministic-but-varied: enough sampling freedom to differentiate
         // plans across goals/members without breaking the JSON contract.
         temperature: 0.85,
         supabase: supabaseAdmin,
       });
-      return r.content;
+      return { content: r.content, finishReason: r.finish_reason ?? null };
     };
 
+    /** Parse + fully validate one AI response. */
+    const evaluate = (raw: string | undefined, finishReason: string | null) => {
+      const { plan: p, repaired } = parsePlanJson(raw || "");
+      if (!p) return { plan: null as any, error: "AI response was truncated and could not be parsed" };
+      if (repaired || finishReason === "length") {
+        return { plan: p, error: "AI response was cut off before the week was complete" };
+      }
+      const shape = validatePlanShape(type, p);
+      if (shape) return { plan: p, error: shape };
+      const completeness = validatePlanCompleteness(type, p, daysPerWeek);
+      if (completeness) return { plan: p, error: completeness };
+      return { plan: p, error: null as string | null };
+    };
 
-    // Budget: at most ONE extra AI round trip in total (shape repair OR
-    // differentiation) so a run can never stack multiple full dispatcher cycles.
+    // Budget: at most TWO extra AI round trips for completeness repair, plus the
+    // differentiation retry only when repair wasn't needed.
     let extraAiCalls = 0;
 
-    let content: string | undefined;
+    let first: { content: string; finishReason: string | null };
     try {
       onStage("Calling AI");
-      content = await runAi();
+      first = await runAi();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI gateway error";
       if (/429|rate/i.test(msg)) {
@@ -629,27 +647,66 @@ serve(async (req) => {
       throw err;
     }
 
-    if (!content) {
+    if (!first.content) {
       throw new Error("No content in AI response");
     }
 
-    let plan = parsePlanJson(content);
-    let shapeError = plan ? validatePlanShape(type, plan) : "AI response was truncated";
+    let { plan, error: shapeError } = evaluate(first.content, first.finishReason);
 
+    // ── Retry 1: same prompt, tighter output, larger budget ──
     if (shapeError) {
-      console.warn(`[generate-fitness-plan] retrying — ${shapeError}`);
-      onStage("Repairing AI response");
+      console.warn(`[generate-fitness-plan] retry 1 — ${shapeError}`);
+      onStage("Rebuilding the week");
       try {
         extraAiCalls++;
         const retry = await runAi(
-          "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed."
+          "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed. ALL 7 calendar days must be present.",
+          "",
+          6000,
         );
-        const retryPlan = parsePlanJson(retry || "");
-        const retryError = retryPlan ? validatePlanShape(type, retryPlan) : "AI response was truncated";
-        if (!retryError) { plan = retryPlan; shapeError = null; }
-        else shapeError = retryError;
+        const r = evaluate(retry.content, retry.finishReason);
+        if (!r.error) { plan = r.plan; shapeError = null; }
+        else { shapeError = r.error; if (r.plan) plan = plan ?? r.plan; }
       } catch (e) {
-        console.error("[generate-fitness-plan] retry failed", (e as Error).message);
+        console.error("[generate-fitness-plan] retry 1 failed", (e as Error).message);
+      }
+    }
+
+    // ── Retry 2 (workout only): split generation — days 1-3, then days 4-7.
+    // Each half is small enough that truncation is effectively impossible. ──
+    if (shapeError && type === "workout") {
+      console.warn(`[generate-fitness-plan] retry 2 (split) — ${shapeError}`);
+      const half1 = WEEK_DAYS.slice(0, 3).map((d) => d[0].toUpperCase() + d.slice(1));
+      const half2 = WEEK_DAYS.slice(3).map((d) => d[0].toUpperCase() + d.slice(1));
+      const partial: any = { weeks: [{ week: 1, days: [] }] };
+      let splitOk = true;
+      for (const [idx, chunk] of [half1, half2].entries()) {
+        onStage(idx === 0 ? "Building days 1-3" : "Building days 4-7");
+        try {
+          extraAiCalls++;
+          const part = await runAi(
+            `\n\nPARTIAL WEEK MODE: return ONLY the days ${chunk.join(", ")} inside weeks[0].days. Omit "rotation". Keep every other rule.`,
+            `\n\nRETURN ONLY THESE DAYS: ${chunk.join(", ")}. Every training day among them needs at least ${MIN_EXERCISES_PER_DAY} exercises; rest days use {"day":"...","focus":"Rest","exercises":[]}.`,
+          );
+          const { plan: pp } = parsePlanJson(part.content || "");
+          if (!pp) { splitOk = false; break; }
+          // Carry top-level metadata from the first chunk.
+          if (idx === 0) {
+            for (const k of ["name", "description", "goal", "difficulty", "notes"]) {
+              if (pp[k] !== undefined) partial[k] = pp[k];
+            }
+          }
+          mergeDays(partial, pp);
+        } catch (e) {
+          console.error("[generate-fitness-plan] split chunk failed", (e as Error).message);
+          splitOk = false;
+          break;
+        }
+      }
+      if (splitOk) {
+        const merged = evaluate(JSON.stringify(partial), null);
+        if (!merged.error) { plan = merged.plan; shapeError = null; }
+        else { shapeError = merged.error; }
       }
     }
 
@@ -661,6 +718,7 @@ serve(async (req) => {
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
 
 
     // ── Differentiation guard: if the new program largely repeats what the
