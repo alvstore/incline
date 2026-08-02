@@ -584,8 +584,44 @@ serve(async (req) => {
       );
     }
 
+
+    // ── Differentiation guard: if the new program largely repeats what the
+    // member already did, regenerate once with an explicit "be different" order.
+    if (type === "workout" && previousPlanContext) {
+      const prev = previousPlanContext.toLowerCase();
+      const sig = exerciseSignature(plan);
+      const repeats = sig.filter((n) => prev.includes(n)).length;
+      const overlap = sig.length ? repeats / sig.length : 0;
+      if (overlap > 0.7) {
+        console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap with previous plan — regenerating`);
+        try {
+          const alt = await runAi(
+            "",
+            `\n\nDIFFERENTIATION ORDER — the previous draft repeated the member's last program. Produce a MATERIALLY DIFFERENT program: change the split, swap at least 70% of the exercises for different movements on the available equipment, and change the session order. Keep the same goal contract.`,
+          );
+          const altPlan = parsePlanJson(alt || "");
+          if (altPlan && !validatePlanShape(type, altPlan)) plan = altPlan;
+        } catch (e) {
+          console.error("[generate-fitness-plan] differentiation retry failed", (e as Error).message);
+        }
+      }
+    }
+
     // Expand the AI's single template week into the full program server-side.
-    if (type === "workout") expandWeeks(plan, durationWeeks);
+    if (type === "workout") expandWeeks(plan, durationWeeks, goalKey, seed);
+
+    // Enforce that every prescribed machine really exists in this branch.
+    if (type === "workout" && availableEquipment.length > 0) {
+      const eq = enforceEquipment(plan, availableEquipment);
+      if (eq) console.log(`Equipment enforcement: ${eq.matched} matched, ${eq.substituted} substituted, ${eq.dropped} bodyweight fallback of ${eq.total}.`);
+    }
+
+    // Stamp the applied programming contract so the UI can show what the goal changed.
+    plan.programming = type === "workout"
+      ? { goalKey, goalLabel: tp.label, repRange: tp.repRange, restRange: tp.restRange, weeklySets: tp.weeklySetsPerMuscle, conditioning: tp.conditioning, split: tp.split }
+      : { goalKey, goalLabel: np.label, calorieDelta: np.calorieDelta, macroSplit: np.macroSplit, proteinTarget: np.proteinTarget, mealPattern: np.mealPattern };
+
+
 
 
     // Post-process: for diet plans, attempt to map each AI-suggested meal back
