@@ -427,8 +427,17 @@ serve(async (req) => {
            "notes": "General dietary advice"
          }`;
 
+    // ── Goal-driven programming contract (v4) ──
+    const goalKey = resolveGoalKey(memberInfo.fitnessGoals);
+    const seed = varietySeed(memberInfo.name, goalKey, memberInfo.experience, new Date().toISOString().slice(0, 10));
+    const directive = goalDirective(type, goalKey, memberInfo.fitnessGoals);
+    const tp = trainingParams(goalKey);
+    const np = nutritionParams(goalKey);
+    const goalHeader = `${directive}\n\nVARIETY DIRECTIVE — ${varietyAngle(seed)}\n\n`;
+
     const userPrompt = type === "workout"
-      ? `Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
+      ? `${goalHeader}Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
+
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
          - Gender: ${memberInfo.gender || "Not specified"}
