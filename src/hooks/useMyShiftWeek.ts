@@ -28,12 +28,7 @@ export interface MyShiftDay {
   is_late: boolean;
 }
 
-function timeToMin(t: string | null | undefined): number | null {
-  if (!t) return null;
-  const [h, m] = t.slice(0, 5).split(':').map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-}
+
 
 export function useMyShiftWeek(userId: string | null | undefined, anchor: Date = new Date()) {
   const weekStart = startOfWeek(anchor, { weekStartsOn: 1 }); // Monday
