@@ -148,6 +148,7 @@ export default function StaffRoster() {
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [latePolicyOpen, setLatePolicyOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
   const [sundayOpen, setSundayOpen] = useState(false);
   const [sundayDate, setSundayDate] = useState<Date>(nextSunday());
