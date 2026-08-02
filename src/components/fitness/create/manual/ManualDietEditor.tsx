@@ -67,7 +67,18 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
   const [planName, setPlanName] = useState('');
   const [description, setDescription] = useState('');
-  const [member, setMember] = useState<PickedMember | null>(null);
+  // Pre-selected on the create landing page and carried through the URL.
+  const prefillMemberId = searchParams.get('memberId');
+  const [member, setMember] = useState<PickedMember | null>(
+    prefillMemberId
+      ? {
+          id: prefillMemberId,
+          full_name: searchParams.get('memberName') || '',
+          member_code: searchParams.get('memberCode') || '',
+        }
+      : null,
+  );
+
   const [dietaryType, setDietaryType] = useState('');
   const [cuisine, setCuisine] = useState('');
   const [calTarget, setCalTarget] = useState(2000);
