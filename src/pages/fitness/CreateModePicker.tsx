@@ -372,3 +372,11 @@ function SecondaryLink({
     </button>
   );
 }
+
+function PipelineArrow() {
+  return (
+    <div className="hidden items-center justify-center text-muted-foreground/60 sm:flex">
+      <ArrowRight className="h-4 w-4" />
+    </div>
+  );
+}
