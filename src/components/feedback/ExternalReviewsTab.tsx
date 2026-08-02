@@ -54,13 +54,14 @@ interface InboundRow {
 }
 
 export default function ExternalReviewsTab() {
-  const { effectiveBranchId: branchId = '' } = useBranchContext();
+  const { effectiveBranchId: branchId = '', branches } = useBranchContext();
   const qc = useQueryClient();
   const [classFilter, setClassFilter] = useState('all');
   const [replyFilter, setReplyFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [connectOpen, setConnectOpen] = useState(false);
+  const branchName = (branches ?? []).find((b: any) => b.id === branchId)?.name ?? 'this branch';
 
   // Branch Google integration health
   const { data: integration } = useQuery({
