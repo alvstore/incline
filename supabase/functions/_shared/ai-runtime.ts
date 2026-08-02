@@ -232,6 +232,8 @@ export async function generateOnce(opts: GenerateOnceOptions): Promise<GenerateO
       fallback_used: r.fallback_used,
       purpose_enabled: true,
       duration_ms: dur,
+      finish_reason: r.raw?.choices?.[0]?.finish_reason ?? r.raw?.choices?.[0]?.native_finish_reason ?? null,
+
     };
   } catch (err) {
     const dur = Date.now() - started;
