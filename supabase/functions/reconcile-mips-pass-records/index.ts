@@ -1,4 +1,8 @@
-// v1.0.0 — Reconcile recent MIPS pass records into access_logs + attendance.
+// v2.0.0 — Reconcile recent MIPS pass records into access_logs + attendance.
+// v2 fixes: staff check_in is stamped with the real hardware scan time (was
+// the cron run time, which made every lateness figure wrong), repeat scans
+// inside the branch punch-gap no longer open a second attendance row, and a
+// later scan closes the open row as a check-out instead of re-checking in.
 // Pulls the MIPS server's /through/record/list as the hardware source of truth,
 // then idempotently imports missing rows so Live Access Feed works even when
 // terminal webhooks are not landing.
@@ -281,7 +285,12 @@ async function findPersonByCode(supabase: ReturnType<typeof createClient>, perso
   return null;
 }
 
-async function markAttendance(supabase: ReturnType<typeof createClient>, person: PersonMatch, personName: string): Promise<string | null> {
+async function markAttendance(
+  supabase: ReturnType<typeof createClient>,
+  person: PersonMatch,
+  personName: string,
+  scanTime: string,
+): Promise<string | null> {
   if (person.type === "member") {
     const { data } = await supabase.rpc("member_check_in", {
       _member_id: person.id,
@@ -294,27 +303,94 @@ async function markAttendance(supabase: ReturnType<typeof createClient>, person:
 
   if (!person.user_id) return "Staff profile missing login id; access logged only";
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const { data: existing } = await supabase
-    .from("staff_attendance")
-    .select("id")
-    .eq("user_id", person.user_id)
-    .gte("check_in", todayStart.toISOString())
-    .is("check_out", null)
+  const label = person.type === "trainer" ? "Trainer" : "Staff";
+  const scanMs = new Date(scanTime).getTime();
+
+  // Branch punch policy: minimum gap between two gate scans that may open
+  // separate attendance rows. Repeat scans inside the window are access
+  // events only (no second check-in, no second late alert).
+  let minGapMin = 60;
+  const { data: hr } = await supabase
+    .from("hr_settings")
+    .select("min_punch_gap_min")
+    .eq("branch_id", person.branch_id)
     .maybeSingle();
+  if ((hr as { min_punch_gap_min?: number } | null)?.min_punch_gap_min != null) {
+    minGapMin = Number((hr as { min_punch_gap_min: number }).min_punch_gap_min);
+  }
 
-  if (existing?.id) return `${person.type === "trainer" ? "Trainer" : "Staff"} ${personName} already checked in`;
+  // IST calendar day of the scan — attendance is a per-day concept here.
+  const istDayStart = new Date(scanMs);
+  istDayStart.setTime(scanMs + 5.5 * 3600_000);
+  istDayStart.setUTCHours(0, 0, 0, 0);
+  const dayStartUtc = new Date(istDayStart.getTime() - 5.5 * 3600_000).toISOString();
+  const dayEndUtc = new Date(istDayStart.getTime() + 24 * 3600_000 - 5.5 * 3600_000).toISOString();
 
+  // Night shifts cross midnight (e.g. 21:00 → 06:00). A small-hours scan is
+  // the tail of yesterday's shift, not a brand new — and very late — arrival.
+  const istHour = new Date(scanMs + 5.5 * 3600_000).getUTCHours();
+  if (istHour < 6) {
+    const { data: prevRows } = await supabase
+      .from("staff_attendance")
+      .select("id, check_in")
+      .eq("user_id", person.user_id)
+      .lt("check_in", dayStartUtc)
+      .gte("check_in", new Date(scanMs - 12 * 3600_000).toISOString())
+      .order("check_in", { ascending: false })
+      .limit(1);
+    const prev = (prevRows ?? [])[0] as { id: string } | undefined;
+    if (prev) {
+      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", prev.id);
+      return `${label} ${personName} scan recorded (night shift continues)`;
+    }
+  }
+
+  // Stale rows left open from earlier days must never block today's punch:
+  // the unique "one open row per shift" index rejects the insert otherwise,
+  // which is exactly why present staff were showing up Absent.
+  await supabase
+    .from("staff_attendance")
+    .update({ check_out: dayStartUtc })
+    .eq("user_id", person.user_id)
+    .is("check_out", null)
+    .lt("check_in", dayStartUtc);
+
+  const { data: todays } = await supabase
+    .from("staff_attendance")
+    .select("id, check_in, check_out")
+    .eq("user_id", person.user_id)
+    .gte("check_in", dayStartUtc)
+    .lt("check_in", dayEndUtc)
+    .order("check_in", { ascending: true });
+
+  const rows = (todays ?? []) as Array<{ id: string; check_in: string; check_out: string | null }>;
+
+  if (rows.length > 0) {
+    const last = rows[rows.length - 1];
+    const lastMs = new Date(last.check_in).getTime();
+    if (Math.abs(scanMs - lastMs) < minGapMin * 60_000) {
+      return `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
+    }
+    // No dedicated exit reader yet: a later scan on the same day is treated as
+    // the latest seen time, not as a fresh (late) check-in.
+    if (scanMs > lastMs) {
+      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", last.id);
+    }
+    return `${label} ${personName} already checked in today`;
+  }
+
+  // check_in must be the real hardware scan time — never the import time, or
+  // lateness gets measured against whenever the cron happened to run.
   const { error } = await supabase.from("staff_attendance").insert({
     user_id: person.user_id,
     branch_id: person.branch_id,
-    check_in: new Date().toISOString(),
+    check_in: scanTime,
     notes: "Imported from MIPS pass records",
   });
   if (error) return `Staff attendance error: ${error.message}`;
-  return `${person.type === "trainer" ? "Trainer" : "Staff"} ${personName} checked in`;
+  return `${label} ${personName} checked in`;
 }
+
 
 async function authorize(req: Request, supabase: ReturnType<typeof createClient>, serviceKey: string): Promise<Response | null> {
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -382,6 +458,13 @@ Deno.serve(async (req) => {
       return !latest || new Date(iso).getTime() > new Date(latest).getTime() ? iso : latest;
     }, null);
 
+    // oldest first, so the first punch of a day opens the row and later ones
+    // close it rather than the other way round
+    records.sort((a, b) =>
+      new Date(normalizeScanTime(a.createTime ?? a.time ?? a.timestamp ?? a.eventTime)).getTime() -
+      new Date(normalizeScanTime(b.createTime ?? b.time ?? b.timestamp ?? b.eventTime)).getTime()
+    );
+
     for (const record of records) {
       const recordKey = getRecordKey(record);
       const { data: existing, error: existingError } = await supabase
@@ -404,15 +487,21 @@ Deno.serve(async (req) => {
       const matchedPerson = personNo ? await findPersonByCode(supabase, personNo) : null;
       if (!matchedPerson) unmatched++;
 
+      const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
+
       const attendanceMessage = !dryRun && matchedPerson
-        ? await markAttendance(supabase, matchedPerson, personName).catch((error: Error) => `Attendance error: ${error.message}`)
+        ? await markAttendance(supabase, matchedPerson, personName, scanTime).catch((error: Error) => `Attendance error: ${error.message}`)
         : null;
-      if (attendanceMessage && !attendanceMessage.toLowerCase().includes("error") && !attendanceMessage.toLowerCase().includes("already")) {
+      if (
+        attendanceMessage &&
+        !attendanceMessage.toLowerCase().includes("error") &&
+        !attendanceMessage.toLowerCase().includes("already") &&
+        !attendanceMessage.toLowerCase().includes("duplicate")
+      ) {
         attendanceUpdated++;
       }
 
       const result = matchedPerson ? mapResult(record, matchedPerson.type) : mapResult(record);
-      const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
       const deviceSn = getString(record.deviceKey ?? record.deviceSn ?? record.deviceName) || "mips-server";
       const message = matchedPerson
         ? (attendanceMessage || `${personName} · ${personNo}`)
