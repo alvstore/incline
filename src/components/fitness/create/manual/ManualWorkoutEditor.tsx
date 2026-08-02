@@ -228,7 +228,18 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('intermediate');
   const [goal, setGoal] = useState('General Fitness');
-  const [member, setMember] = useState<PickedMember | null>(null);
+  // Pre-selected on the create landing page and carried through the URL.
+  const prefillMemberId = searchParams.get('memberId');
+  const [member, setMember] = useState<PickedMember | null>(
+    prefillMemberId
+      ? {
+          id: prefillMemberId,
+          full_name: searchParams.get('memberName') || '',
+          member_code: searchParams.get('memberCode') || '',
+        }
+      : null,
+  );
+
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [activeIdx, setActiveIdx] = useState(0);
 
