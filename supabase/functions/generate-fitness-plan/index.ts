@@ -96,29 +96,162 @@ function validatePlanShape(type: "workout" | "diet", plan: any): string | null {
   return null;
 }
 
-/** Deep-clone week 1 into weeks 2..N with a progressive-overload note so we
- * never ask the model to re-emit the entire program (4x fewer tokens). */
-function expandWeeks(plan: any, durationWeeks: number) {
+/** Periodised week expansion. Instead of cloning week 1 verbatim we wave the
+ * volume/intensity, rotate the exercise order, and inject a deload — so weeks
+ * 2..N read as a real progression rather than the same page repeated. */
+function expandWeeks(plan: any, durationWeeks: number, goalKey: string, seed: number) {
   const base = plan?.weeks?.[0];
   if (!base || durationWeeks <= 1) return;
-  const out = [{ ...base, week: 1 }];
+
+  const isFatLoss = goalKey === "fat_loss" || goalKey === "endurance";
+  const out = [{ ...base, week: 1, phase: "Accumulation — establish technique and baseline loads" }];
+
   for (let w = 2; w <= durationWeeks; w++) {
     const cloned = JSON.parse(JSON.stringify(base));
     cloned.week = w;
-    cloned.progression =
-      w <= 2 ? "Repeat week 1 loads, focus on technique."
-      : w <= 4 ? "Add 2.5–5% load or 1 rep per set vs. week 1."
-      : w % 4 === 0 ? "Deload: reduce load ~40% and volume by one set."
-      : "Add 5–10% load or 1–2 reps per set vs. the previous week.";
-    (cloned.days || []).forEach((d: any) => {
-      (d.exercises || []).forEach((ex: any) => {
-        ex.notes = [ex.notes, cloned.progression].filter(Boolean).join(" • ");
+    const isDeload = w % 4 === 0;
+
+    if (isDeload) {
+      cloned.phase = "Deload — recover and resensitise";
+      cloned.progression = isFatLoss
+        ? "Deload: keep the sessions but cut conditioning volume by half and stay at RPE 6."
+        : "Deload: reduce load ~40% and drop one set per exercise. Keep movement quality high.";
+    } else {
+      const block = Math.ceil(w / 4);
+      cloned.phase = block <= 1 ? "Accumulation" : block === 2 ? "Intensification" : "Peak";
+      cloned.progression = isFatLoss
+        ? w % 4 === 2
+          ? "Add 1-2 reps per set OR shave 10s off rest vs. last week — increase density, not load."
+          : "Add one conditioning interval and hold the same loads with tighter rest."
+        : w % 4 === 2
+          ? "Add 2.5-5% load per exercise, keep reps the same."
+          : "Add one working set to the two main compounds, or 1-2 reps per set.";
+    }
+
+    // Rotate exercise order within each day so the session doesn't feel identical.
+    (cloned.days || []).forEach((d: any, dayIdx: number) => {
+      const ex = Array.isArray(d.exercises) ? d.exercises : [];
+      if (!isDeload && ex.length > 2) {
+        const shift = (w + dayIdx + seed) % ex.length;
+        d.exercises = [...ex.slice(shift), ...ex.slice(0, shift)];
+      }
+      if (isDeload) {
+        d.exercises = (d.exercises || []).map((e: any) => ({
+          ...e,
+          sets: typeof e.sets === "number" && e.sets > 1 ? e.sets - 1 : e.sets,
+        }));
+      }
+      (d.exercises || []).forEach((e: any) => {
+        e.notes = [e.notes, cloned.progression].filter(Boolean).join(" • ");
       });
     });
     out.push(cloned);
   }
   plan.weeks = out;
 }
+
+/** Flat list of exercise names in a plan — used for the differentiation guard. */
+function exerciseSignature(plan: any): string[] {
+  const names: string[] = [];
+  for (const wk of plan?.weeks ?? []) {
+    for (const d of wk?.days ?? []) {
+      for (const e of d?.exercises ?? []) {
+        if (e?.name) names.push(String(e.name).toLowerCase().trim());
+      }
+    }
+  }
+  return [...new Set(names)];
+}
+
+/** Normalise a machine label for matching: strip brands, model codes, symbols. */
+function normaliseEquip(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/\b(panatta|realleader|booty builder|relax|technogym|hammer strength|life ?fitness|cybex|matrix)\b/g, " ")
+    .replace(/\b[a-z]{0,3}\d[a-z0-9-]*\b/g, " ") // model codes like 1FW026, APT-128
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\b(machine|pro|plus|series|new|gym|the|with|and)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const ta = new Set(a.split(" ").filter((t) => t.length > 2));
+  const tb = new Set(b.split(" ").filter((t) => t.length > 2));
+  if (!ta.size || !tb.size) return 0;
+  let hit = 0;
+  ta.forEach((t) => { if (tb.has(t)) hit++; });
+  return hit / Math.min(ta.size, tb.size);
+}
+
+/**
+ * Enforce that every prescribed machine actually exists in the branch.
+ * Unmatched machines are substituted with the closest owned machine that trains
+ * the same muscle group, or downgraded to bodyweight/free-weight ("").
+ */
+function enforceEquipment(plan: any, inventory: EquipmentLite[]) {
+  if (!Array.isArray(plan?.weeks) || inventory.length === 0) return null;
+  const index = inventory.map((e) => ({
+    raw: e.name,
+    norm: normaliseEquip(e.name),
+    muscles: (e.muscle_groups || []).map((m) => String(m).toLowerCase()),
+    pattern: (e.movement_pattern || "").toLowerCase(),
+  }));
+
+  let matched = 0, substituted = 0, dropped = 0, total = 0;
+
+  const resolve = (equip: string, exerciseName: string) => {
+    const n = normaliseEquip(equip);
+    if (!n) return { value: "", kind: "bodyweight" as const };
+    const exact = index.find((i) => i.norm === n);
+    if (exact) return { value: exact.raw, kind: "matched" as const };
+    const partial = index
+      .map((i) => ({ i, score: tokenOverlap(n, i.norm) }))
+      .filter((x) => x.score >= 0.6)
+      .sort((a, b) => b.score - a.score)[0];
+    if (partial) return { value: partial.i.raw, kind: "matched" as const };
+    // Substitute by exercise-name / muscle affinity.
+    const en = normaliseEquip(exerciseName);
+    const byName = index
+      .map((i) => ({ i, score: Math.max(tokenOverlap(en, i.norm), tokenOverlap(en, i.muscles.join(" "))) }))
+      .filter((x) => x.score >= 0.5)
+      .sort((a, b) => b.score - a.score)[0];
+    if (byName) return { value: byName.i.raw, kind: "substituted" as const };
+    return { value: "", kind: "dropped" as const };
+  };
+
+  const walkDays = (days: any[]) => {
+    for (const d of days ?? []) {
+      for (const e of d?.exercises ?? []) {
+        if (typeof e !== "object" || e === null) continue;
+        total++;
+        const r = resolve(e.equipment ?? "", e.name ?? "");
+        if (r.kind === "matched") { matched++; e.equipment = r.value; }
+        else if (r.kind === "substituted") {
+          substituted++;
+          e.equipment = r.value;
+          e.substituted_from = e.equipment_original ?? null;
+          e.notes = [e.notes, `Substituted to available machine: ${r.value}`].filter(Boolean).join(" • ");
+        } else if (r.kind === "dropped") {
+          dropped++;
+          e.equipment = "";
+          e.notes = [e.notes, "Perform with free weights / bodyweight — no matching machine on site."].filter(Boolean).join(" • ");
+        } else {
+          matched++;
+          e.equipment = "";
+        }
+      }
+    }
+  };
+
+  for (const wk of plan.weeks) walkDays(wk?.days ?? []);
+  for (const v of plan?.rotation?.variants ?? []) walkDays(v?.days ?? []);
+
+  const summary = { matched, substituted, dropped, total, inventory: inventory.length };
+  plan.equipmentMatchSummary = summary;
+  return summary;
+}
+
 
 
 interface CatalogMeal {
