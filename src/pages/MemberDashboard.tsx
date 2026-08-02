@@ -458,7 +458,7 @@ export default function MemberDashboard() {
                   {!isFrozen && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <Button variant="outline" size="sm" asChild>
-                        <Link to="/my-classes">Book Now</Link>
+                        <Link to="/book-benefit">Book Now</Link>
                       </Button>
                       <Button
                         variant="outline"
