@@ -573,7 +573,9 @@ serve(async (req) => {
 
     if (shapeError) {
       console.warn(`[generate-fitness-plan] retrying — ${shapeError}`);
+      onStage("Repairing AI response");
       try {
+        extraAiCalls++;
         const retry = await runAi(
           "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed."
         );
@@ -598,14 +600,19 @@ serve(async (req) => {
 
     // ── Differentiation guard: if the new program largely repeats what the
     // member already did, regenerate once with an explicit "be different" order.
+    // Skipped when the shape repair already consumed the extra-call budget.
     if (type === "workout" && previousPlanContext) {
       const prev = previousPlanContext.toLowerCase();
       const sig = exerciseSignature(plan);
       const repeats = sig.filter((n) => prev.includes(n)).length;
       const overlap = sig.length ? repeats / sig.length : 0;
-      if (overlap > 0.7) {
+      if (overlap > 0.7 && extraAiCalls > 0) {
+        console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap but extra-call budget spent on shape repair — accepting plan`);
+      } else if (overlap > 0.7) {
         console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap with previous plan — regenerating`);
+        onStage("Differentiating from previous plan");
         try {
+          extraAiCalls++;
           const alt = await runAi(
             "",
             `\n\nDIFFERENTIATION ORDER — the previous draft repeated the member's last program. Produce a MATERIALLY DIFFERENT program: change the split, swap at least 70% of the exercises for different movements on the available equipment, and change the session order. Keep the same goal contract.`,
@@ -619,6 +626,7 @@ serve(async (req) => {
     }
 
     // Expand the AI's single template week into the full program server-side.
+    onStage("Building weeks");
     if (type === "workout") expandWeeks(plan, durationWeeks, goalKey, seed);
 
     // Enforce that every prescribed machine really exists in this branch.
