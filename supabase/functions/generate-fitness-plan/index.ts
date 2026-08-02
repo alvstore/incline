@@ -506,8 +506,16 @@ serve(async (req) => {
     const np = nutritionParams(goalKey);
     const goalHeader = `${directive}\n\nVARIETY DIRECTIVE — ${varietyAngle(seed)}\n\n`;
 
+    const dayContract = type === "workout"
+      ? `STRUCTURAL CONTRACT (highest priority — a plan that breaks this is rejected by the server):
+         • weeks[0].days MUST contain ALL 7 calendar days, in order: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
+         • EXACTLY ${daysPerWeek ?? 4} of them are training days with exercises.${daysPerWeek ? ` The other ${7 - daysPerWeek} day(s) MUST be { "day": "...", "focus": "Rest", "exercises": [] }.` : ""}
+         • EVERY training day MUST have at least ${MIN_EXERCISES_PER_DAY} exercises (aim 5-6).
+         • Keep "notes" short (under 8 words) so the JSON never runs out of room.`
+      : "";
+
     const userPrompt = type === "workout"
-      ? `${goalHeader}Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
+      ? `${dayContract}\n\n${goalHeader}Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
 
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
@@ -517,12 +525,12 @@ serve(async (req) => {
          - Fitness Goals: ${memberInfo.fitnessGoals || "General fitness"}
          - Health Conditions: ${memberInfo.healthConditions || "None reported"}
          - Experience Level: ${memberInfo.experience || "Beginner"}
-         ${daysPerWeek ? `- Sessions per week: EXACTLY ${daysPerWeek} training days. Mark the remaining ${7 - daysPerWeek} day(s) explicitly as { "day": "...", "focus": "Rest", "exercises": [] }.` : ""}
          - Preferences: ${memberInfo.preferences || "None"}
          ${variantCount > 0 ? `\n         ROTATION REQUIRED — produce a "rotation" object with intervalDays=${rotationIntervalDays} and exactly ${variantCount} variants (Block A, Block B${variantCount >= 3 ? ", Block C" : ""}${variantCount >= 4 ? ", Block D" : ""}). Each variant must cover the SAME muscle groups / movement patterns as the base "weeks[0]" but SWAP the exercises (e.g. Barbell Bench → Dumbbell Press, Back Squat → Goblet Squat, Lat Pulldown → Seated Row). The dashboard will rotate variants every ${rotationIntervalDays} days so members never repeat the identical session back-to-back.` : ""}
 
          Return ONLY week 1 (all 7 calendar days) — the system builds weeks 2–${durationWeeks} with progressive overload.
-         FINAL CHECK before you answer: every "reps" value must sit inside ${tp.repRange}; every "rest" value inside ${tp.restRange}; the conditioning rule (${tp.conditioning}) must be visibly applied; and nothing in the PROHIBITED list may appear.`
+         FINAL CHECK before you answer: all 7 days present; exactly ${daysPerWeek ?? 4} training days; ${MIN_EXERCISES_PER_DAY}+ exercises each; every "reps" value inside ${tp.repRange}; every "rest" value inside ${tp.restRange}; the conditioning rule (${tp.conditioning}) visibly applied; nothing from the PROHIBITED list.`
+
 
       : `Create a weekly meal plan for:
          - Name: ${memberInfo.name || "Member"}
