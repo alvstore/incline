@@ -1,4 +1,4 @@
-// v2.0.0 - Optional MIPS_WEBHOOK_SECRET gate + imgUri hostname allowlist
+// v2.1.0 - Roster-aware staff attendance: repeat-scan guard, server-stamped shift + lateness
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
