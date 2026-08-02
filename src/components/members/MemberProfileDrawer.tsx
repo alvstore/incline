@@ -1204,12 +1204,26 @@ export function MemberProfileDrawer({
                       </p>
                     </>
                   )
+                ) : pendingMembership ? (
+                  <>
+                    <div className="text-sm sm:text-lg font-bold text-primary">SCHEDULED</div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Starts {format(new Date(pendingMembership.start_date), 'dd MMM')}
+                    </p>
+                    {freeDaysTotal > 0 && (
+                      <Badge variant="outline" className="mt-1 bg-warning/15 text-warning border-warning/40 text-[10px] gap-1">
+                        <Gift className="h-3 w-3" />
+                        +{freeDaysTotal}d gift
+                      </Badge>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="text-sm font-bold text-muted-foreground">No Plan</div>
                     <p className="text-xs text-muted-foreground">Days Left</p>
                   </>
                 )}
+
               </CardContent>
             </Card>
             <Card>
