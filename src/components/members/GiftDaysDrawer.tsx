@@ -77,6 +77,27 @@ export function GiftDaysDrawer({ open, onOpenChange, membershipId, memberId }: G
     onError: (e: any) => toast.error(e?.message || 'Failed to adjust complimentary days'),
   });
 
+  const grant = useMutation({
+    mutationFn: async (vars: { days: number; reason: string }) => {
+      const { data, error } = await supabase.rpc('grant_membership_free_days' as any, {
+        p_membership_id: membershipId!,
+        p_days: vars.days,
+        p_reason: vars.reason,
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (!res?.success) throw new Error(res?.error || 'Could not grant complimentary days');
+      return res;
+    },
+    onSuccess: (res: any) => {
+      invalidate();
+      setGrantDays('');
+      setGrantReason('');
+      toast.success(`+${res.days_added} days granted — membership now ends ${format(new Date(res.new_end_date), 'dd MMM yyyy')}`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to grant complimentary days'),
+  });
+
   const total = rows.reduce((s, r) => s + Number(r.days_added || 0), 0);
 
   return (
@@ -87,11 +108,52 @@ export function GiftDaysDrawer({ open, onOpenChange, membershipId, memberId }: G
             <Gift className="h-5 w-5 text-warning" /> Complimentary Days
           </SheetTitle>
           <SheetDescription>
-            Editing or removing a gift entry shifts the membership end date by the same number of days. A reason is required and every change is audited.
+            Granting, editing or removing a gift entry shifts the membership end date by the same number of days. A reason is required and every change is audited.
           </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4 py-5">
+          <Card className="rounded-2xl border-warning/40 bg-warning/5 shadow-sm">
+            <CardContent className="pt-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Grant new days</p>
+              <div className="space-y-2">
+                <Label htmlFor="grant-days">Days to gift <span className="text-destructive">*</span></Label>
+                <Input
+                  id="grant-days"
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 15"
+                  value={grantDays}
+                  onChange={(e) => setGrantDays(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="grant-reason">Reason <span className="text-destructive">*</span></Label>
+                <Textarea
+                  id="grant-reason"
+                  value={grantReason}
+                  onChange={(e) => setGrantReason(e.target.value)}
+                  placeholder="e.g. Founder promise — 15 extra days at joining"
+                  className="min-h-[70px]"
+                />
+                <p className="text-xs text-muted-foreground">Minimum 6 characters.</p>
+              </div>
+              <Button
+                className="w-full cursor-pointer"
+                disabled={
+                  grant.isPending ||
+                  !membershipId ||
+                  Number(grantDays) <= 0 ||
+                  grantReason.trim().length < 6
+                }
+                onClick={() => grant.mutate({ days: Number(grantDays), reason: grantReason.trim() })}
+              >
+                {grant.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Gift className="h-4 w-4 mr-2" />}
+                Grant complimentary days
+              </Button>
+            </CardContent>
+          </Card>
+
           {isLoading ? (
             <>
               <Skeleton className="h-24 w-full rounded-2xl" />
@@ -107,6 +169,7 @@ export function GiftDaysDrawer({ open, onOpenChange, membershipId, memberId }: G
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {total} gifted day{total === 1 ? '' : 's'} total
               </p>
+
               {rows.map((r) => {
                 const isEditing = editingId === r.id;
                 return (
