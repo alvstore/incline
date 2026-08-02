@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { toast } from 'sonner';
 import { format, subDays } from 'date-fns';
+import GoogleBusinessDrawer from '@/components/settings/GoogleBusinessDrawer';
+import GoogleConnectionBanner, { type GoogleConnState } from './GoogleConnectionBanner';
 
 const CLASSIFICATION_BADGE: Record<string, { label: string; cls: string; icon: any }> = {
   pending:           { label: 'AI pending',      cls: 'bg-muted text-muted-foreground',     icon: Loader2 },
@@ -48,15 +50,18 @@ interface InboundRow {
   google_reply_text: string | null;
   replied_at: string | null;
   source?: string | null;
+  draft_reply?: string | null;
 }
 
 export default function ExternalReviewsTab() {
-  const { effectiveBranchId: branchId = '' } = useBranchContext();
+  const { effectiveBranchId: branchId = '', branches } = useBranchContext();
   const qc = useQueryClient();
   const [classFilter, setClassFilter] = useState('all');
   const [replyFilter, setReplyFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [connectOpen, setConnectOpen] = useState(false);
+  const branchName = (branches ?? []).find((b: any) => b.id === branchId)?.name ?? 'this branch';
 
   // Branch Google integration health
   const { data: integration } = useQuery({
@@ -73,6 +78,25 @@ export default function ExternalReviewsTab() {
       return data as { is_active: boolean; config: any } | null;
     },
     enabled: !!branchId,
+  });
+
+  // Live connection health — drives the banner and the reply-button gating.
+  const {
+    data: conn,
+    isFetching: connChecking,
+    refetch: recheckConn,
+  } = useQuery({
+    queryKey: ['gri-conn', branchId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'diagnose', branch_id: branchId },
+      });
+      if (error) throw error;
+      return data as { ok?: boolean; checks?: any[]; places?: any };
+    },
+    enabled: !!branchId,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   const { data: rows = [], isLoading, refetch } = useQuery<InboundRow[]>({
@@ -171,6 +195,15 @@ export default function ExternalReviewsTab() {
     onError: (e: any) => toast.error(e?.message ?? 'Reply failed'),
   });
 
+  const saveDraft = useMutation({
+    mutationFn: async ({ id, draft }: { id: string; draft: string }) => {
+      const { error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'save_draft', inbound_id: id, draft },
+      });
+      if (error) throw error;
+    },
+  });
+
   const updateRow = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
       const { error } = await supabase.from('google_reviews_inbound').update(patch).eq('id', id);
@@ -185,24 +218,31 @@ export default function ExternalReviewsTab() {
     return <Card className="rounded-2xl"><CardContent className="py-8 text-center text-muted-foreground">Select a branch to view external reviews.</CardContent></Card>;
   }
 
-  const notConfigured = !integration?.is_active || !integration?.config?.account_id || !integration?.config?.location_id;
+  const checks = (conn?.checks ?? []) as Array<{ key: string; ok: boolean; lane: 'places' | 'business_profile'; label: string; hint?: string }>;
+  const gbpChecks = checks.filter((c) => c.lane === 'business_profile');
+  const placesOk = checks.some((c) => c.key === 'places_fetch' && c.ok);
+  const gbpOk = gbpChecks.length > 0 && gbpChecks.every((c) => c.ok);
+  const connState: GoogleConnState = !conn
+    ? 'unknown'
+    : gbpOk
+      ? 'live'
+      : placesOk || integration?.is_active
+        ? 'read_only'
+        : 'not_configured';
+  const canReply = connState === 'live';
+  const notConfigured = connState === 'not_configured';
 
   return (
     <div className="space-y-6">
-      {notConfigured && (
-        <Card className="rounded-2xl border-warning/25 bg-warning/10">
-          <CardContent className="py-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
-            <div className="flex-1">
-              <p className="font-medium text-warning">Google Business not configured for this branch</p>
-              <p className="text-sm text-warning">Configure under Settings → Integrations → Google Business to start fetching reviews and posting replies.</p>
-            </div>
-            <Button asChild size="sm" variant="outline">
-              <a href="/settings?tab=integrations">Configure</a>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <GoogleConnectionBanner
+        state={connState}
+        checks={checks}
+        isChecking={connChecking}
+        isFetching={fetchNow.isPending}
+        onConnect={() => setConnectOpen(true)}
+        onRecheck={() => { recheckConn(); }}
+        onFetch={() => fetchNow.mutate()}
+      />
 
       {/* KPIs */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -297,7 +337,7 @@ export default function ExternalReviewsTab() {
           {rows.map((r) => {
             const cb = CLASSIFICATION_BADGE[r.ai_classification] ?? CLASSIFICATION_BADGE.pending;
             const rb = REPLY_STATUS_BADGE[r.reply_status] ?? REPLY_STATUS_BADGE.draft;
-            const draftValue = drafts[r.id] ?? r.reply_text ?? r.ai_draft_reply ?? '';
+            const draftValue = drafts[r.id] ?? r.draft_reply ?? r.reply_text ?? r.ai_draft_reply ?? '';
             const Icon = cb.icon;
             return (
               <Card key={r.id} className="rounded-2xl shadow-lg shadow/50">
@@ -354,18 +394,32 @@ export default function ExternalReviewsTab() {
                       <Textarea
                         value={draftValue}
                         onChange={(e) => setDrafts(d => ({ ...d, [r.id]: e.target.value }))}
+                        onBlur={() => saveDraft.mutate({ id: r.id, draft: draftValue })}
                         rows={3}
                         className="rounded-xl"
-                        placeholder="Write a reply or click Generate to draft with AI"
+                        aria-label={`Reply to the review by ${r.author_name ?? 'Anonymous'}`}
+                        placeholder="Write a reply or click Re-analyse to draft with AI"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        {draftValue.length}/4000 characters · drafts save automatically
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                          disabled={!draftValue.trim() || sendReply.isPending || notConfigured || r.source === 'places'}
-                          title={r.source === 'places' ? 'Replying needs Business Profile access (Step 2 in the Google drawer)' : undefined}
+                          disabled={!draftValue.trim() || sendReply.isPending || !canReply}
+                          title={
+                            canReply
+                              ? undefined
+                              : connState === 'read_only'
+                                ? 'Read-only mode: connect Business Profile to post replies. Your draft is saved.'
+                                : 'Connect Google Business Profile to post replies.'
+                          }
                         >
-                          <Send className="h-3.5 w-3.5 mr-1.5" />Post reply to Google
+                          {sendReply.isPending
+                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                          Post reply to Google
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => reclassify.mutate(r.id)} disabled={reclassify.isPending}>
                           <Sparkles className="h-3.5 w-3.5 mr-1.5" />Re-analyse with AI
@@ -394,6 +448,16 @@ export default function ExternalReviewsTab() {
           })}
         </div>
       )}
+
+      <GoogleBusinessDrawer
+        open={connectOpen}
+        onOpenChange={(o) => {
+          setConnectOpen(o);
+          if (!o) { recheckConn(); qc.invalidateQueries({ queryKey: ['gri-integration', branchId] }); }
+        }}
+        branchId={branchId}
+        branchName={branchName}
+      />
     </div>
   );
 }

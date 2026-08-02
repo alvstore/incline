@@ -4806,6 +4806,8 @@ export type Database = {
           author_photo_url: string | null
           branch_id: string
           created_at: string
+          draft_reply: string | null
+          gbp_review_name: string | null
           google_reply_text: string | null
           google_reply_updated_at: string | null
           google_review_id: string
@@ -4837,6 +4839,8 @@ export type Database = {
           author_photo_url?: string | null
           branch_id: string
           created_at?: string
+          draft_reply?: string | null
+          gbp_review_name?: string | null
           google_reply_text?: string | null
           google_reply_updated_at?: string | null
           google_review_id: string
@@ -4868,6 +4872,8 @@ export type Database = {
           author_photo_url?: string | null
           branch_id?: string
           created_at?: string
+          draft_reply?: string | null
+          gbp_review_name?: string | null
           google_reply_text?: string | null
           google_reply_updated_at?: string | null
           google_review_id?: string

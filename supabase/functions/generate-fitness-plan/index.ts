@@ -1,9 +1,21 @@
-// generate-fitness-plan v3.0.0 — single-week generation + server-side week expansion,
+// generate-fitness-plan v4.0.0 — goal-driven programming contract, equipment
+// enforcement with substitution, periodised (non-cloned) week expansion,
+// deterministic variety seeding and a differentiation guard.
+// v3.0.0 — single-week generation + server-side week expansion,
 // dynamic token budget, resilient JSON parsing/repair and shape validation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import {
+  goalDirective,
+  nutritionParams,
+  resolveGoalKey,
+  trainingParams,
+  varietyAngle,
+  varietySeed,
+} from "../_shared/plan-programming.ts";
 const serve = Deno.serve;
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,29 +96,162 @@ function validatePlanShape(type: "workout" | "diet", plan: any): string | null {
   return null;
 }
 
-/** Deep-clone week 1 into weeks 2..N with a progressive-overload note so we
- * never ask the model to re-emit the entire program (4x fewer tokens). */
-function expandWeeks(plan: any, durationWeeks: number) {
+/** Periodised week expansion. Instead of cloning week 1 verbatim we wave the
+ * volume/intensity, rotate the exercise order, and inject a deload — so weeks
+ * 2..N read as a real progression rather than the same page repeated. */
+function expandWeeks(plan: any, durationWeeks: number, goalKey: string, seed: number) {
   const base = plan?.weeks?.[0];
   if (!base || durationWeeks <= 1) return;
-  const out = [{ ...base, week: 1 }];
+
+  const isFatLoss = goalKey === "fat_loss" || goalKey === "endurance";
+  const out = [{ ...base, week: 1, phase: "Accumulation — establish technique and baseline loads" }];
+
   for (let w = 2; w <= durationWeeks; w++) {
     const cloned = JSON.parse(JSON.stringify(base));
     cloned.week = w;
-    cloned.progression =
-      w <= 2 ? "Repeat week 1 loads, focus on technique."
-      : w <= 4 ? "Add 2.5–5% load or 1 rep per set vs. week 1."
-      : w % 4 === 0 ? "Deload: reduce load ~40% and volume by one set."
-      : "Add 5–10% load or 1–2 reps per set vs. the previous week.";
-    (cloned.days || []).forEach((d: any) => {
-      (d.exercises || []).forEach((ex: any) => {
-        ex.notes = [ex.notes, cloned.progression].filter(Boolean).join(" • ");
+    const isDeload = w % 4 === 0;
+
+    if (isDeload) {
+      cloned.phase = "Deload — recover and resensitise";
+      cloned.progression = isFatLoss
+        ? "Deload: keep the sessions but cut conditioning volume by half and stay at RPE 6."
+        : "Deload: reduce load ~40% and drop one set per exercise. Keep movement quality high.";
+    } else {
+      const block = Math.ceil(w / 4);
+      cloned.phase = block <= 1 ? "Accumulation" : block === 2 ? "Intensification" : "Peak";
+      cloned.progression = isFatLoss
+        ? w % 4 === 2
+          ? "Add 1-2 reps per set OR shave 10s off rest vs. last week — increase density, not load."
+          : "Add one conditioning interval and hold the same loads with tighter rest."
+        : w % 4 === 2
+          ? "Add 2.5-5% load per exercise, keep reps the same."
+          : "Add one working set to the two main compounds, or 1-2 reps per set.";
+    }
+
+    // Rotate exercise order within each day so the session doesn't feel identical.
+    (cloned.days || []).forEach((d: any, dayIdx: number) => {
+      const ex = Array.isArray(d.exercises) ? d.exercises : [];
+      if (!isDeload && ex.length > 2) {
+        const shift = (w + dayIdx + seed) % ex.length;
+        d.exercises = [...ex.slice(shift), ...ex.slice(0, shift)];
+      }
+      if (isDeload) {
+        d.exercises = (d.exercises || []).map((e: any) => ({
+          ...e,
+          sets: typeof e.sets === "number" && e.sets > 1 ? e.sets - 1 : e.sets,
+        }));
+      }
+      (d.exercises || []).forEach((e: any) => {
+        e.notes = [e.notes, cloned.progression].filter(Boolean).join(" • ");
       });
     });
     out.push(cloned);
   }
   plan.weeks = out;
 }
+
+/** Flat list of exercise names in a plan — used for the differentiation guard. */
+function exerciseSignature(plan: any): string[] {
+  const names: string[] = [];
+  for (const wk of plan?.weeks ?? []) {
+    for (const d of wk?.days ?? []) {
+      for (const e of d?.exercises ?? []) {
+        if (e?.name) names.push(String(e.name).toLowerCase().trim());
+      }
+    }
+  }
+  return [...new Set(names)];
+}
+
+/** Normalise a machine label for matching: strip brands, model codes, symbols. */
+function normaliseEquip(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/\b(panatta|realleader|booty builder|relax|technogym|hammer strength|life ?fitness|cybex|matrix)\b/g, " ")
+    .replace(/\b[a-z]{0,3}\d[a-z0-9-]*\b/g, " ") // model codes like 1FW026, APT-128
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\b(machine|pro|plus|series|new|gym|the|with|and)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const ta = new Set(a.split(" ").filter((t) => t.length > 2));
+  const tb = new Set(b.split(" ").filter((t) => t.length > 2));
+  if (!ta.size || !tb.size) return 0;
+  let hit = 0;
+  ta.forEach((t) => { if (tb.has(t)) hit++; });
+  return hit / Math.min(ta.size, tb.size);
+}
+
+/**
+ * Enforce that every prescribed machine actually exists in the branch.
+ * Unmatched machines are substituted with the closest owned machine that trains
+ * the same muscle group, or downgraded to bodyweight/free-weight ("").
+ */
+function enforceEquipment(plan: any, inventory: EquipmentLite[]) {
+  if (!Array.isArray(plan?.weeks) || inventory.length === 0) return null;
+  const index = inventory.map((e) => ({
+    raw: e.name,
+    norm: normaliseEquip(e.name),
+    muscles: (e.muscle_groups || []).map((m) => String(m).toLowerCase()),
+    pattern: (e.movement_pattern || "").toLowerCase(),
+  }));
+
+  let matched = 0, substituted = 0, dropped = 0, total = 0;
+
+  const resolve = (equip: string, exerciseName: string) => {
+    const n = normaliseEquip(equip);
+    if (!n) return { value: "", kind: "bodyweight" as const };
+    const exact = index.find((i) => i.norm === n);
+    if (exact) return { value: exact.raw, kind: "matched" as const };
+    const partial = index
+      .map((i) => ({ i, score: tokenOverlap(n, i.norm) }))
+      .filter((x) => x.score >= 0.6)
+      .sort((a, b) => b.score - a.score)[0];
+    if (partial) return { value: partial.i.raw, kind: "matched" as const };
+    // Substitute by exercise-name / muscle affinity.
+    const en = normaliseEquip(exerciseName);
+    const byName = index
+      .map((i) => ({ i, score: Math.max(tokenOverlap(en, i.norm), tokenOverlap(en, i.muscles.join(" "))) }))
+      .filter((x) => x.score >= 0.5)
+      .sort((a, b) => b.score - a.score)[0];
+    if (byName) return { value: byName.i.raw, kind: "substituted" as const };
+    return { value: "", kind: "dropped" as const };
+  };
+
+  const walkDays = (days: any[]) => {
+    for (const d of days ?? []) {
+      for (const e of d?.exercises ?? []) {
+        if (typeof e !== "object" || e === null) continue;
+        total++;
+        const r = resolve(e.equipment ?? "", e.name ?? "");
+        if (r.kind === "matched") { matched++; e.equipment = r.value; }
+        else if (r.kind === "substituted") {
+          substituted++;
+          e.equipment = r.value;
+          e.substituted_from = e.equipment_original ?? null;
+          e.notes = [e.notes, `Substituted to available machine: ${r.value}`].filter(Boolean).join(" • ");
+        } else if (r.kind === "dropped") {
+          dropped++;
+          e.equipment = "";
+          e.notes = [e.notes, "Perform with free weights / bodyweight — no matching machine on site."].filter(Boolean).join(" • ");
+        } else {
+          matched++;
+          e.equipment = "";
+        }
+      }
+    }
+  };
+
+  for (const wk of plan.weeks) walkDays(wk?.days ?? []);
+  for (const v of plan?.rotation?.variants ?? []) walkDays(v?.days ?? []);
+
+  const summary = { matched, substituted, dropped, total, inventory: inventory.length };
+  plan.equipmentMatchSummary = summary;
+  return summary;
+}
+
 
 
 interface CatalogMeal {
@@ -282,8 +427,17 @@ serve(async (req) => {
            "notes": "General dietary advice"
          }`;
 
+    // ── Goal-driven programming contract (v4) ──
+    const goalKey = resolveGoalKey(memberInfo.fitnessGoals);
+    const seed = varietySeed(memberInfo.name, goalKey, memberInfo.experience, new Date().toISOString().slice(0, 10));
+    const directive = goalDirective(type, goalKey, memberInfo.fitnessGoals);
+    const tp = trainingParams(goalKey);
+    const np = nutritionParams(goalKey);
+    const goalHeader = `${directive}\n\nVARIETY DIRECTIVE — ${varietyAngle(seed)}\n\n`;
+
     const userPrompt = type === "workout"
-      ? `Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
+      ? `${goalHeader}Create the TEMPLATE WEEK (week 1 only) of a ${durationWeeks}-week workout plan for:
+
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
          - Gender: ${memberInfo.gender || "Not specified"}
@@ -296,7 +450,9 @@ serve(async (req) => {
          - Preferences: ${memberInfo.preferences || "None"}
          ${variantCount > 0 ? `\n         ROTATION REQUIRED — produce a "rotation" object with intervalDays=${rotationIntervalDays} and exactly ${variantCount} variants (Block A, Block B${variantCount >= 3 ? ", Block C" : ""}${variantCount >= 4 ? ", Block D" : ""}). Each variant must cover the SAME muscle groups / movement patterns as the base "weeks[0]" but SWAP the exercises (e.g. Barbell Bench → Dumbbell Press, Back Squat → Goblet Squat, Lat Pulldown → Seated Row). The dashboard will rotate variants every ${rotationIntervalDays} days so members never repeat the identical session back-to-back.` : ""}
 
-         Return ONLY week 1 (all 7 calendar days) — the system builds weeks 2–${durationWeeks} with progressive overload. Keep it balanced and suitable for their level.`
+         Return ONLY week 1 (all 7 calendar days) — the system builds weeks 2–${durationWeeks} with progressive overload.
+         FINAL CHECK before you answer: every "reps" value must sit inside ${tp.repRange}; every "rest" value inside ${tp.restRange}; the conditioning rule (${tp.conditioning}) must be visibly applied; and nothing in the PROHIBITED list may appear.`
+
       : `Create a weekly meal plan for:
          - Name: ${memberInfo.name || "Member"}
          - Age: ${memberInfo.age || "Not specified"}
@@ -308,7 +464,9 @@ serve(async (req) => {
          - Target Calories: ${caloriesTarget || "Calculate based on goals"}
          - Preferences: ${memberInfo.preferences || "None"}
          
-         Create a balanced, practical meal plan suitable for their goals.`;
+         Build the plan around the goal contract above.
+         FINAL CHECK before you answer: "dailyCalories" must reflect ${np.calorieDelta}; "macros" must match ${np.macroSplit}; protein must reach ${np.proteinTarget}; and nothing in the PROHIBITED list may appear.`;
+
 
     const catalogPrompt = type === "diet" && availableMeals.length > 0
       ? `\n\nIMPORTANT — prefer meals from this gym-stocked catalog whenever possible. Use the EXACT meal name when picking from the catalog so it can be tracked back to inventory. If you must propose something outside the catalog, do so sparingly.\n\n${availableMeals
@@ -320,14 +478,29 @@ serve(async (req) => {
     // v1.2.0 — TWO-FIELD naming: "name" = generic movement, "equipment" = exact gym machine
     const equipmentPrompt = type === "workout" && availableEquipment.length > 0
       ? `\n\nIMPORTANT — this gym has the following OPERATIONAL equipment. Each line lists the muscle groups it trains and the movement pattern. When prescribing exercises, prefer movements that use this exact equipment, AND respect muscle-group coverage across the week (balance push/pull, include 1-2 dedicated CORE sessions, hit legs at least once).\n\nNAMING RULE (STRICT — TWO FIELDS):\n1. "name" → the GENERIC EXERCISE / MOVEMENT name the member will recognise (e.g. "Leg Press", "Lat Pulldown", "Hip Thrust", "Chest Press", "Seated Row", "Rear Delt Fly", "Leg Curl", "Plank"). Keep it short, human-friendly, Title Case. NEVER put the gym's machine label here.\n2. "equipment" → the EXACT machine name from the list below (e.g. "SUPER LEG PRESS 45°", "Hip Thrust Machine"). Use empty string for bodyweight / mobility / cardio that doesn't use a listed machine.\n\nNEVER include brand names (e.g. Panatta, Realleader, Booty Builder, Relax), model codes, SKUs, or part numbers (e.g. FW2035, PT-101, 1FW044, APT-128, XHA040) in EITHER field. If the listed machine name itself contains a brand or model, strip the brand/model out for the "equipment" field too (e.g. "PANATTA BACK DELTOIDS 1FW026" → name: "Rear Delt Fly", equipment: "Rear Delt Machine").\n\nBodyweight, mobility, stretching, and basic cardio (running, jump rope) are always allowed without being on the list — set "equipment" to "" for those. Do NOT recommend machines not on the list.\n\n${availableEquipment
-          .slice(0, 100)
-          .map((e) => {
-            const cat = e.primary_category || e.category;
-            const muscles = (e.muscle_groups || []).length ? ` muscles=[${(e.muscle_groups || []).join(",")}]` : "";
-            const move = e.movement_pattern ? ` pattern=${e.movement_pattern}` : "";
-            return `- ${e.name}${cat ? ` [${cat}]` : ""}${muscles}${move}`;
-          })
-          .join("\n")}`
+          .length === 0
+        ? ""
+        : (() => {
+            // Group by muscle group so the model can pick per body part instead
+            // of scanning a flat 100-line list. Untagged machines get their own bucket.
+            const groups = new Map<string, string[]>();
+            for (const e of availableEquipment) {
+              const cat = e.primary_category || e.category;
+              const move = e.movement_pattern ? ` pattern=${e.movement_pattern}` : "";
+              const line = `  - ${e.name}${cat ? ` [${cat}]` : ""}${move}`;
+              const muscles = (e.muscle_groups || []).length ? e.muscle_groups! : ["UNCLASSIFIED"];
+              for (const m of muscles) {
+                const k = String(m).toUpperCase();
+                if (!groups.has(k)) groups.set(k, []);
+                groups.get(k)!.push(line);
+              }
+            }
+            return [...groups.entries()]
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([m, lines]) => `${m}:\n${[...new Set(lines)].join("\n")}`)
+              .join("\n");
+          })()}\n\nHARD CONSTRAINT: any "equipment" value that is not on this list is rejected by the server and auto-substituted. Only prescribe machines from the list, or "" for bodyweight/free-weight/cardio.`
+
       : "";
 
     const previousPlanPrompt = previousPlanContext
@@ -343,18 +516,22 @@ serve(async (req) => {
 
     const baseMessage = userPrompt + catalogPrompt + equipmentPrompt + previousPlanPrompt;
 
-    const runAi = async (systemExtra = "") => {
+    const runAi = async (systemExtra = "", userExtra = "") => {
       const r = await generateOnce({
         purpose: "fitness_plan",
         branchId: (memberInfo as { branch_id?: string | null })?.branch_id ?? null,
-        userMessage: baseMessage,
+        userMessage: baseMessage + userExtra,
         systemOverride: systemPrompt + systemExtra,
         responseFormat: "json",
         maxTokens,
+        // Deterministic-but-varied: enough sampling freedom to differentiate
+        // plans across goals/members without breaking the JSON contract.
+        temperature: 0.85,
         supabase: supabaseAdmin,
       });
       return r.content;
     };
+
 
     let content: string | undefined;
     try {
@@ -407,8 +584,44 @@ serve(async (req) => {
       );
     }
 
+
+    // ── Differentiation guard: if the new program largely repeats what the
+    // member already did, regenerate once with an explicit "be different" order.
+    if (type === "workout" && previousPlanContext) {
+      const prev = previousPlanContext.toLowerCase();
+      const sig = exerciseSignature(plan);
+      const repeats = sig.filter((n) => prev.includes(n)).length;
+      const overlap = sig.length ? repeats / sig.length : 0;
+      if (overlap > 0.7) {
+        console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap with previous plan — regenerating`);
+        try {
+          const alt = await runAi(
+            "",
+            `\n\nDIFFERENTIATION ORDER — the previous draft repeated the member's last program. Produce a MATERIALLY DIFFERENT program: change the split, swap at least 70% of the exercises for different movements on the available equipment, and change the session order. Keep the same goal contract.`,
+          );
+          const altPlan = parsePlanJson(alt || "");
+          if (altPlan && !validatePlanShape(type, altPlan)) plan = altPlan;
+        } catch (e) {
+          console.error("[generate-fitness-plan] differentiation retry failed", (e as Error).message);
+        }
+      }
+    }
+
     // Expand the AI's single template week into the full program server-side.
-    if (type === "workout") expandWeeks(plan, durationWeeks);
+    if (type === "workout") expandWeeks(plan, durationWeeks, goalKey, seed);
+
+    // Enforce that every prescribed machine really exists in this branch.
+    if (type === "workout" && availableEquipment.length > 0) {
+      const eq = enforceEquipment(plan, availableEquipment);
+      if (eq) console.log(`Equipment enforcement: ${eq.matched} matched, ${eq.substituted} substituted, ${eq.dropped} bodyweight fallback of ${eq.total}.`);
+    }
+
+    // Stamp the applied programming contract so the UI can show what the goal changed.
+    plan.programming = type === "workout"
+      ? { goalKey, goalLabel: tp.label, repRange: tp.repRange, restRange: tp.restRange, weeklySets: tp.weeklySetsPerMuscle, conditioning: tp.conditioning, split: tp.split }
+      : { goalKey, goalLabel: np.label, calorieDelta: np.calorieDelta, macroSplit: np.macroSplit, proteinTarget: np.proteinTarget, mealPattern: np.mealPattern };
+
+
 
 
     // Post-process: for diet plans, attempt to map each AI-suggested meal back

@@ -1,3 +1,5 @@
+// v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
+// persistence, Places→GBP duplicate promotion, draft persistence, real Google errors.
 // v4.1.0 — Author matching without FK aliases + token-aware name scoring; AI
 // classification accepts tool-call OR JSON body, with a JSON-mode retry.
 // v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
@@ -30,6 +32,7 @@ type Action =
   | "diagnose"
   | "classify"
   | "reply"
+  | "save_draft"
   | "request_member_review";
 
 interface Body {
@@ -39,6 +42,7 @@ interface Body {
   query?: string; // for search_places
   inbound_id?: string;
   reply_text?: string;
+  draft?: string;
   // for request_member_review (legacy shim)
   feedback_id?: string;
   channel?: "whatsapp" | "sms" | "email" | "in_app";
@@ -643,6 +647,7 @@ async function fetchReviewsForBranch(branch_id: string) {
   const newIds: string[] = [];
   for (const r of reviews) {
     const ratingMap: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+    const reviewName = r.name ?? `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${r.reviewId}`;
     const row = {
       branch_id,
       google_review_id: r.reviewId ?? r.name,
@@ -653,6 +658,9 @@ async function fetchReviewsForBranch(branch_id: string) {
       posted_at: r.createTime ?? null,
       google_reply_text: r.reviewReply?.comment ?? null,
       google_reply_updated_at: r.reviewReply?.updateTime ?? null,
+      // v5 — mark the lane and keep the reply target so replies always resolve.
+      source: "business_profile",
+      gbp_review_name: reviewName,
       raw: r,
     };
     const { data: up, error } = await sb
@@ -664,6 +672,7 @@ async function fetchReviewsForBranch(branch_id: string) {
       console.error("upsert error", error);
       continue;
     }
+    if (up) await promotePlacesDuplicate(branch_id, up.id, row);
     if (up && (up.ai_classification === "pending" || !up.ai_classification)) {
       newIds.push(up.id);
       inserted++;
@@ -673,8 +682,45 @@ async function fetchReviewsForBranch(branch_id: string) {
   for (const id of newIds.slice(0, 10)) {
     try { await classifyOne(id); } catch (e) { console.error("classify err", id, e); }
   }
-  return { branch_id, fetched: reviews.length, classified: newIds.length };
+  return { branch_id, fetched: reviews.length, classified: newIds.length, source: "business_profile" };
 }
+
+/**
+ * The Places lane stores the same review under a different Google id. When the
+ * Business Profile lane later ingests it, fold the older read-only row into the
+ * replyable one (keeping any draft the staff already typed) and delete the dupe.
+ */
+async function promotePlacesDuplicate(
+  branch_id: string,
+  gbpRowId: string,
+  gbp: { author_name: string | null; review_text: string | null; posted_at: string | null },
+) {
+  if (!gbp.author_name && !gbp.review_text) return;
+  const sb = supa();
+  const { data: dupes } = await sb
+    .from("google_reviews_inbound")
+    .select("id, author_name, review_text, posted_at, reply_text, ai_draft_reply, draft_reply, reply_status")
+    .eq("branch_id", branch_id)
+    .eq("source", "places")
+    .neq("id", gbpRowId)
+    .limit(50);
+  const norm = (s?: string | null) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const day = (s?: string | null) => (s ? new Date(s).toISOString().slice(0, 10) : "");
+  for (const d of dupes ?? []) {
+    const sameAuthor = norm(d.author_name) === norm(gbp.author_name);
+    const sameText = norm(d.review_text).slice(0, 120) === norm(gbp.review_text).slice(0, 120);
+    const sameDay = day(d.posted_at) === day(gbp.posted_at);
+    if (!sameAuthor || !(sameText || sameDay)) continue;
+    // Carry the staff's unsent work forward onto the replyable row.
+    const carry = d.draft_reply || d.reply_text || null;
+    if (carry) {
+      await sb.from("google_reviews_inbound").update({ draft_reply: carry }).eq("id", gbpRowId);
+    }
+    await sb.from("google_reviews_inbound").delete().eq("id", d.id);
+    console.log(`merged places duplicate ${d.id} into business_profile row ${gbpRowId}`);
+  }
+}
+
 
 async function fetchReviews(branch_id?: string) {
   const sb = supa();
@@ -993,16 +1039,38 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
   const sb = supa();
   const { data: row } = await sb
     .from("google_reviews_inbound")
-    .select("id, branch_id, google_review_id, raw")
+    .select("id, branch_id, google_review_id, raw, source, gbp_review_name")
     .eq("id", inbound_id)
     .maybeSingle();
   if (!row) return json({ ok: false, error: "not_found" }, 404);
   const cfg = await getGoogleConfig(row.branch_id);
-  if (!cfg) return json({ ok: false, error: "Google Business not configured for branch" }, 412);
+  if (!cfg) return json({ ok: false, error: "Google Business Profile is not configured for this branch." }, 412);
+  if (!cfg.refresh_token) {
+    return json({
+      ok: false,
+      code: "not_connected",
+      error: "Replies need Business Profile access. Connect the Google account (Step 2) and fetch reviews again.",
+    }, 412);
+  }
+  // Prefer the stored Business Profile review name; Places rows have none.
+  const reviewName =
+    row.gbp_review_name ??
+    (row.raw as any)?.name ??
+    (row.source === "places"
+      ? null
+      : `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${row.google_review_id}`);
+  if (!reviewName) {
+    return json({
+      ok: false,
+      code: "places_only",
+      error:
+        "This review was read from the public Places lane, which has no reply endpoint. Run \"Fetch now\" after connecting Business Profile — the review will be re-imported as replyable and your draft is kept.",
+    }, 409);
+  }
   const token = await refreshAccessToken(row.branch_id, cfg);
-  if (!token) return json({ ok: false, error: "no_token" }, 412);
-  // Google review name format: accounts/{account}/locations/{loc}/reviews/{id}
-  const reviewName = (row.raw as any)?.name ?? `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${row.google_review_id}`;
+  if (!token) {
+    return json({ ok: false, code: "token_refresh_failed", error: "Could not refresh the Google access token. Reconnect the Google account." }, 412);
+  }
   const url = `https://mybusiness.googleapis.com/v4/${reviewName}/reply`;
   const res = await fetch(url, {
     method: "PUT",
@@ -1011,13 +1079,23 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
   });
   if (!res.ok) {
     const txt = await res.text();
-    return json({ ok: false, error: `Google API ${res.status}: ${txt.slice(0, 300)}` }, 502);
+    console.error("reply failed", res.status, txt.slice(0, 300));
+    // Keep the draft so the operator never loses the text they wrote.
+    await sb.from("google_reviews_inbound").update({ draft_reply: reply_text }).eq("id", inbound_id);
+    return json({
+      ok: false,
+      code: `google_${res.status}`,
+      status: res.status,
+      error: friendlyGoogleError(res.status, txt),
+      details: txt.slice(0, 400),
+    }, 502);
   }
   await sb
     .from("google_reviews_inbound")
     .update({
       reply_status: "sent",
       reply_text,
+      draft_reply: null,
       replied_at: new Date().toISOString(),
       replied_by: user_id ?? null,
       google_reply_text: reply_text,
@@ -1026,6 +1104,18 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
     .eq("id", inbound_id);
   return json({ ok: true });
 }
+
+/** Persist an unsent draft so it survives refresh and the Google connect flow. */
+async function saveDraft(inbound_id: string, draft: string) {
+  const sb = supa();
+  const { error } = await sb
+    .from("google_reviews_inbound")
+    .update({ draft_reply: draft || null })
+    .eq("id", inbound_id);
+  if (error) return json({ ok: false, error: error.message }, 500);
+  return json({ ok: true });
+}
+
 
 // ─── Action: request_member_review (legacy compatibility) ───
 async function requestMemberReview(feedback_id: string, channel?: string) {
@@ -1247,6 +1337,9 @@ Deno.serve(async (req) => {
         const r = await classifyOne(body.inbound_id);
         return json(r);
       }
+      case "save_draft":
+        if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
+        return await saveDraft(body.inbound_id, body.draft ?? "");
       case "reply":
         if (!body.inbound_id || !body.reply_text)
           return json({ error: "inbound_id and reply_text required" }, 400);
