@@ -850,7 +850,6 @@ function MonthView({
 // ---------------------------------------------------------------------------
 // Attendance Matrix (robust monthly log with on-time/late/absent detection)
 // ---------------------------------------------------------------------------
-const GRACE_MINUTES = 10;
 
 type AttCellKind = 'ontime' | 'late' | 'absent' | 'off' | 'unscheduled' | 'future';
 

@@ -10,7 +10,6 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, addDays, format } from 'date-fns';
 
-export const LATE_GRACE_MIN = 10;
 
 export type ShiftSource = 'override' | 'recurring' | 'none';
 
