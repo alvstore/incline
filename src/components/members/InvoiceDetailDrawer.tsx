@@ -227,15 +227,13 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
             <Button 
               variant="outline" 
               className="flex-1"
-              onClick={() => {
-                // Simple download - just show info for now
-                const info = `Invoice: ${invoice.invoice_number}\nTotal: ₹${invoice.total_amount}\nStatus: ${invoice.status}`;
-                alert(info);
-              }}
+              disabled={downloading}
+              onClick={handleDownloadInvoice}
             >
               <Download className="h-4 w-4 mr-2" />
-              Download
+              {downloading ? 'Preparing…' : 'Download'}
             </Button>
+
           </div>
         </div>
       </SheetContent>
