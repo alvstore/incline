@@ -1320,7 +1320,18 @@ export function MemberProfileDrawer({
               </Button>
             )}
 
-            {isOwnerOrAdmin && activeMembership && (
+            {isManagerOrAbove && pendingMembership && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left text-success"
+                onClick={() => startNowMutation.mutate()}
+                disabled={startNowMutation.isPending}
+              >
+                <Play className="h-4 w-4 mr-2 shrink-0" /> Start Plan Now
+              </Button>
+            )}
+            {isOwnerOrAdmin && currentMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setAdjustDatesOpen(true)}>
                 <Calendar className="h-4 w-4 mr-2 shrink-0" /> Adjust Dates
               </Button>
@@ -1330,10 +1341,11 @@ export function MemberProfileDrawer({
                 <Gift className="h-4 w-4 mr-2 shrink-0" /> Comp/Gift
               </Button>
             )}
-            {isOwnerOrAdmin && activeMembership && (
+            {isManagerOrAbove && currentMembership && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setGiftDaysOpen(true)}>
-                <Gift className="h-4 w-4 mr-2 shrink-0" /> Edit Gift Days
+                <Gift className="h-4 w-4 mr-2 shrink-0" /> Gift Days
               </Button>
+
             )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setTransferBranchOpen(true)}>
