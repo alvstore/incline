@@ -266,8 +266,9 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
 
   try {
     const now = new Date();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // Overnight shifts (e.g. 21:00 -> 10:00 next day) mean the matching open row
+    // can be on the previous calendar day. Look back 18h instead of midnight.
+    const lookbackStart = new Date(now.getTime() - 18 * 60 * 60_000);
 
     // Branch late/punch policy (min gap between gate scans)
     let minGapMin = 60;
@@ -280,14 +281,16 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
       if (hr?.min_punch_gap_min != null) minGapMin = Number(hr.min_punch_gap_min);
     } catch (_) { /* defaults */ }
 
-    const { data: openRow } = await supabase
+    const { data: openRows } = await supabase
       .from("staff_attendance")
       .select("id, check_in")
       .eq("user_id", userId)
-      .gte("check_in", todayStart.toISOString())
+      .gte("check_in", lookbackStart.toISOString())
       .is("check_out", null)
-      .maybeSingle();
+      .order("check_in", { ascending: false })
+      .limit(1);
 
+    const openRow = openRows?.[0];
     if (openRow) {
       await supabase.from("staff_attendance").update({ check_out: now.toISOString() }).eq("id", openRow.id);
       message = `${label} ${personName} checked out`;

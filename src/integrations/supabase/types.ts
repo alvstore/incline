@@ -11427,6 +11427,7 @@ export type Database = {
           late_minutes: number | null
           notes: string | null
           scheduled_start: string | null
+          shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours: number | null
           user_id: string
@@ -11441,6 +11442,7 @@ export type Database = {
           late_minutes?: number | null
           notes?: string | null
           scheduled_start?: string | null
+          shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours?: number | null
           user_id: string
@@ -11455,6 +11457,7 @@ export type Database = {
           late_minutes?: number | null
           notes?: string | null
           scheduled_start?: string | null
+          shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours?: number | null
           user_id?: string
@@ -13565,6 +13568,19 @@ export type Database = {
         Args: { p_row: Json; p_table: string }
         Returns: string
       }
+      _staff_roster_for_date: {
+        Args: { p_date: string; p_user_id: string }
+        Returns: {
+          branch_id: string
+          e_end: string
+          e_start: string
+          grace_min: number
+          has_schedule: boolean
+          is_off: boolean
+          m_end: string
+          m_start: string
+        }[]
+      }
       activate_pt_package: {
         Args: { _member_package_id: string; _payment_id?: string }
         Returns: Json
@@ -13698,6 +13714,7 @@ export type Database = {
         Returns: undefined
       }
       auto_close_stale_attendance: { Args: never; Returns: number }
+      auto_close_stale_staff_attendance: { Args: never; Returns: number }
       auto_expire_memberships: { Args: never; Returns: undefined }
       award_group_bonus: { Args: { p_group_id: string }; Returns: Json }
       bill_locker_period: {
@@ -14770,6 +14787,7 @@ export type Database = {
           late_minutes: number | null
           notes: string | null
           scheduled_start: string | null
+          shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
           total_hours: number | null
           user_id: string
@@ -15047,7 +15065,9 @@ export type Database = {
           grace_min: number
           has_schedule: boolean
           is_off: boolean
+          is_overnight: boolean
           scheduled_start: string
+          shift_date: string
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
         }[]
       }
