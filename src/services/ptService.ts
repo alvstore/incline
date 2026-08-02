@@ -435,10 +435,15 @@ export async function generateFitnessPlan(
     }>;
     /** Brief textual summary of the member's previous plan + adherence. */
     previousPlanContext?: string;
-    /** Abort the request from the UI (cancel button / client timeout). */
+    /** Cancel the job from the UI. */
     signal?: AbortSignal;
+    /** Live server-reported stage (e.g. "Calling AI"). */
+    onStage?: (stage: string) => void;
   }
 ): Promise<any> {
+  // v2 — job-based generation. The edge function returns a job id immediately
+  // and finishes the work in the background, so a 2-3 minute AI run can never
+  // be killed by a browser fetch timeout.
   const { data, error } = await supabase.functions.invoke("generate-fitness-plan", {
     body: {
       type,
@@ -450,8 +455,8 @@ export async function generateFitnessPlan(
       availableMeals: options?.availableMeals,
       availableEquipment: options?.availableEquipment,
       previousPlanContext: options?.previousPlanContext,
+      async: true,
     },
-    ...(options?.signal ? { signal: options.signal } : {}),
   });
 
   if (error) {
@@ -468,8 +473,92 @@ export async function generateFitnessPlan(
     }
     throw error;
   }
-  if (data.error) throw new Error(data.error);
-  return data.plan;
+  if (data?.error) throw new Error(data.error);
+
+  // Legacy/synchronous response (function returned the plan directly).
+  if (data?.plan) return data.plan;
+
+  const jobId: string | undefined = data?.job_id;
+  if (!jobId) throw new Error('Generation did not start — no job id returned');
+
+  return await waitForPlanJob(jobId, options?.signal, options?.onStage);
+}
+
+interface PlanJobRow {
+  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled';
+  stage: string | null;
+  result: unknown;
+  error: string | null;
+}
+
+/** Poll (and live-subscribe to) an ai_plan_jobs row until it settles. */
+async function waitForPlanJob(
+  jobId: string,
+  signal?: AbortSignal,
+  onStage?: (stage: string) => void,
+): Promise<any> {
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let lastStage = '';
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poller);
+      supabase.removeChannel(channel);
+      signal?.removeEventListener('abort', onAbort);
+      fn();
+    };
+
+    const handle = (row: PlanJobRow | null) => {
+      if (!row) return;
+      if (row.stage && row.stage !== lastStage) {
+        lastStage = row.stage;
+        onStage?.(row.stage);
+      }
+      if (row.status === 'done') finish(() => resolve(row.result));
+      else if (row.status === 'error') finish(() => reject(new Error(row.error || 'Plan generation failed')));
+      else if (row.status === 'cancelled') {
+        finish(() => {
+          const err = new Error('Generation cancelled');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    };
+
+    const onAbort = () => {
+      void supabase.from('ai_plan_jobs').update({ status: 'cancelled' }).eq('id', jobId);
+      finish(() => {
+        const err = new Error('Generation cancelled');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    };
+    signal?.addEventListener('abort', onAbort);
+
+    const fetchOnce = async () => {
+      const { data: row } = await supabase
+        .from('ai_plan_jobs')
+        .select('status, stage, result, error')
+        .eq('id', jobId)
+        .maybeSingle();
+      handle(row as PlanJobRow | null);
+    };
+
+    const channel = supabase
+      .channel(`ai_plan_job_${jobId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ai_plan_jobs', filter: `id=eq.${jobId}` },
+        (payload) => handle(payload.new as unknown as PlanJobRow),
+      )
+      .subscribe();
+
+    // 2.5s polling fallback in case Realtime is unavailable.
+    const poller = setInterval(() => { void fetchOnce(); }, 2500);
+    void fetchOnce();
+  });
 }
 
 

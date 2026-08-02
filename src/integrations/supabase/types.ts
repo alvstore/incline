@@ -525,6 +525,62 @@ export type Database = {
           },
         ]
       }
+      ai_plan_jobs: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          request: Json
+          requested_by: string | null
+          result: Json | null
+          stage: string | null
+          started_at: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          request?: Json
+          requested_by?: string | null
+          result?: Json | null
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          request?: Json
+          requested_by?: string | null
+          result?: Json | null
+          stage?: string | null
+          started_at?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_plan_jobs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_provider_configs: {
         Row: {
           api_key_secret_name: string | null

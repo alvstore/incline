@@ -8,6 +8,8 @@ interface Props {
   type: 'workout' | 'diet';
   /** Wall-clock seconds after which we consider the run at risk. */
   timeoutSeconds?: number;
+  /** Live stage reported by the server job (overrides the guessed stage). */
+  stage?: string;
   onCancel: () => void;
 }
 
@@ -18,7 +20,7 @@ const stagesFor = (type: 'workout' | 'diet') =>
 
 /** Live progress panel for long AI plan generation — staged labels, elapsed
  * timer, a soft-capped progress bar and a working cancel button. */
-export function GenerationProgress({ type, timeoutSeconds = 90, onCancel }: Props) {
+export function GenerationProgress({ type, timeoutSeconds = 120, stage, onCancel }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const stages = stagesFor(type);
 
@@ -36,7 +38,7 @@ export function GenerationProgress({ type, timeoutSeconds = 90, onCancel }: Prop
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          {stages[stageIdx]}…
+          {stage || stages[stageIdx]}…
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">{elapsed}s</span>
       </div>
@@ -66,7 +68,9 @@ export function GenerationProgress({ type, timeoutSeconds = 90, onCancel }: Prop
 
       <div className="flex items-center justify-between gap-2 pt-1">
         <p className="text-xs text-muted-foreground">
-          {elapsed > 45 ? 'Taking longer than usual — large plans can take up to a minute.' : 'Usually takes 10–25 seconds.'}
+          {elapsed > 60
+            ? 'Still working — the plan is generating on the server and will finish even if this takes a while.'
+            : 'Usually takes 20–60 seconds.'}
         </p>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-7 shrink-0">
           <X className="mr-1 h-3 w-3" /> Cancel

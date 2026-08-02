@@ -177,8 +177,8 @@ export default function CreateAIPage() {
     setProgressMsg('running');
     const controller = new AbortController();
     abortRef.current = controller;
-    // Hard client-side ceiling so the button can never hang forever.
-    const slow = setTimeout(() => controller.abort(), 90000);
+    // No client-side timeout: generation runs as a background job on the
+    // server and we follow its progress, so the browser can never abort it.
 
     try {
       const memberInfo = mode === 'member' ? {
@@ -243,6 +243,7 @@ export default function CreateAIPage() {
           availableEquipment: type === 'workout' ? branchEquipment.slice(0, 100) : undefined,
           previousPlanContext: mode === 'member' ? buildPreviousPlanContext() : undefined,
           signal: controller.signal,
+          onStage: (stage: string) => setProgressMsg(stage),
         },
       });
 
@@ -254,7 +255,6 @@ export default function CreateAIPage() {
         }
       }
 
-      clearTimeout(slow);
       setProgressMsg(null);
       abortRef.current = null;
 
@@ -296,7 +296,6 @@ export default function CreateAIPage() {
       toast.success('Plan generated!');
       navigate(`/fitness/preview/${id}`);
     } catch (err: any) {
-      clearTimeout(slow);
       setProgressMsg(null);
       abortRef.current = null;
       const aborted = err?.name === 'AbortError' || /abort/i.test(err?.message || '');
@@ -592,7 +591,11 @@ export default function CreateAIPage() {
               </Button>
 
               {progressMsg && generate.isPending && (
-                <GenerationProgress type={type} onCancel={cancelGeneration} />
+                <GenerationProgress
+                  type={type}
+                  stage={progressMsg && progressMsg !== 'running' ? progressMsg : undefined}
+                  onCancel={cancelGeneration}
+                />
               )}
 
               {genError && !generate.isPending && (

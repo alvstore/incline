@@ -29,6 +29,8 @@ function isNoise(message: string): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     if (/Failed to fetch|NetworkError|Load failed|Network error/i.test(message)) return true;
   }
+  // User- or client-initiated cancellations are not application faults.
+  if (/^Fetch is aborted$|AbortError|signal is aborted|The operation was aborted/i.test(message)) return true;
   return NOISE_PATTERNS.some((re) => re.test(message));
 }
 

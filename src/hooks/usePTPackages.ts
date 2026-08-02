@@ -206,6 +206,7 @@ export function useGenerateFitnessPlan() {
         }>;
         previousPlanContext?: string;
         signal?: AbortSignal;
+        onStage?: (stage: string) => void;
       };
     }) => generateFitnessPlan(type, memberInfo, options),
   });

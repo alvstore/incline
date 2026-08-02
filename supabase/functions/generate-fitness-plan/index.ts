@@ -353,7 +353,13 @@ serve(async (req) => {
       );
     }
 
-    const { type, memberInfo, durationWeeks = 4, daysPerWeek, rotationIntervalDays = 0, caloriesTarget, availableMeals = [], availableEquipment = [], previousPlanContext } = await req.json() as GeneratePlanRequest;
+    const body = await req.json() as GeneratePlanRequest & { async?: boolean };
+    const isAsync = body.async === true;
+
+    // The whole generation pipeline lives in `core` so it can run either
+    // synchronously (legacy callers) or in the background behind a job row.
+    const core = async (onStage: (s: string) => void): Promise<Response> => {
+    const { type, memberInfo, durationWeeks = 4, daysPerWeek, rotationIntervalDays = 0, caloriesTarget, availableMeals = [], availableEquipment = [], previousPlanContext } = body;
     // Cap variants for cost — even at 30-day rotation across 24 weeks we limit to 4 distinct sessions per slot.
     const variantCount = rotationIntervalDays && rotationIntervalDays > 0
       ? Math.max(2, Math.min(4, Math.ceil((durationWeeks * 7) / rotationIntervalDays)))
@@ -533,8 +539,13 @@ serve(async (req) => {
     };
 
 
+    // Budget: at most ONE extra AI round trip in total (shape repair OR
+    // differentiation) so a run can never stack multiple full dispatcher cycles.
+    let extraAiCalls = 0;
+
     let content: string | undefined;
     try {
+      onStage("Calling AI");
       content = await runAi();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI gateway error";
@@ -562,7 +573,9 @@ serve(async (req) => {
 
     if (shapeError) {
       console.warn(`[generate-fitness-plan] retrying — ${shapeError}`);
+      onStage("Repairing AI response");
       try {
+        extraAiCalls++;
         const retry = await runAi(
           "\n\nBE CONCISE: keep notes under 8 words, omit optional fields, and make sure the JSON object is COMPLETE and closed."
         );
@@ -587,14 +600,19 @@ serve(async (req) => {
 
     // ── Differentiation guard: if the new program largely repeats what the
     // member already did, regenerate once with an explicit "be different" order.
+    // Skipped when the shape repair already consumed the extra-call budget.
     if (type === "workout" && previousPlanContext) {
       const prev = previousPlanContext.toLowerCase();
       const sig = exerciseSignature(plan);
       const repeats = sig.filter((n) => prev.includes(n)).length;
       const overlap = sig.length ? repeats / sig.length : 0;
-      if (overlap > 0.7) {
+      if (overlap > 0.7 && extraAiCalls > 0) {
+        console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap but extra-call budget spent on shape repair — accepting plan`);
+      } else if (overlap > 0.7) {
         console.warn(`[generate-fitness-plan] ${Math.round(overlap * 100)}% overlap with previous plan — regenerating`);
+        onStage("Differentiating from previous plan");
         try {
+          extraAiCalls++;
           const alt = await runAi(
             "",
             `\n\nDIFFERENTIATION ORDER — the previous draft repeated the member's last program. Produce a MATERIALLY DIFFERENT program: change the split, swap at least 70% of the exercises for different movements on the available equipment, and change the session order. Keep the same goal contract.`,
@@ -608,6 +626,7 @@ serve(async (req) => {
     }
 
     // Expand the AI's single template week into the full program server-side.
+    onStage("Building weeks");
     if (type === "workout") expandWeeks(plan, durationWeeks, goalKey, seed);
 
     // Enforce that every prescribed machine really exists in this branch.
@@ -682,10 +701,87 @@ serve(async (req) => {
     }
 
     console.log(`Successfully generated ${type} plan:`, plan.name, `daysPerWeek=${daysPerWeek}, rotation=${variantCount}`);
+    onStage("Finalising");
 
     return new Response(
       JSON.stringify({ success: true, plan }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    }; // end core
+
+    // ── Synchronous mode (legacy callers) ──
+    if (!isAsync) return await core(() => {});
+
+    // ── Async job mode: return immediately, generate in the background ──
+    const { data: job, error: jobErr } = await supabaseAdmin
+      .from("ai_plan_jobs")
+      .insert({
+        branch_id: (body.memberInfo as { branch_id?: string | null })?.branch_id ?? null,
+        requested_by: caller.id,
+        type: body.type,
+        request: body as unknown as Record<string, unknown>,
+        status: "running",
+        stage: "Queued",
+        started_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (jobErr || !job) {
+      return new Response(
+        JSON.stringify({ error: `Could not start generation job: ${jobErr?.message ?? "unknown"}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const jobId = job.id as string;
+    const setStage = (stage: string) => {
+      supabaseAdmin.from("ai_plan_jobs").update({ stage }).eq("id", jobId).then(
+        () => {},
+        () => {},
+      );
+    };
+
+    const work = (async () => {
+      try {
+        const res = await core(setStage);
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.plan) {
+          await supabaseAdmin.from("ai_plan_jobs").update({
+            status: "done",
+            stage: "Done",
+            result: payload.plan,
+            finished_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        } else {
+          await supabaseAdmin.from("ai_plan_jobs").update({
+            status: "error",
+            stage: "Failed",
+            error: payload?.error || `Generation failed (HTTP ${res.status})`,
+            finished_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await supabaseAdmin.from("ai_plan_jobs").update({
+          status: "error",
+          stage: "Failed",
+          error: /429|rate/i.test(msg)
+            ? "Rate limit exceeded — please try again shortly."
+            : /402|credits/i.test(msg)
+              ? "AI credits exhausted. Please add funds to continue."
+              : msg,
+          finished_at: new Date().toISOString(),
+        }).eq("id", jobId);
+      }
+    })();
+
+    const runtime = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (runtime?.waitUntil) runtime.waitUntil(work);
+
+    return new Response(
+      JSON.stringify({ success: true, job_id: jobId }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error generating fitness plan:", error);

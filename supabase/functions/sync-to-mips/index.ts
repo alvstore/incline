@@ -17,7 +17,7 @@ const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Above this the raw source is never decoded — decoding multi-MB photos in an
 // edge worker exhausts memory and the invocation is killed by the platform.
-const MAX_SOURCE_BYTES = 6 * 1024 * 1024;
+const MAX_SOURCE_BYTES = 3 * 1024 * 1024; // decode ceiling — larger sources OOM the edge worker
 // Face-safety floors: the terminal runs its own face detection on the image we
 // push. Anything smaller / more compressed than this is accepted by the MIPS
 // server but silently discarded by the gate, which is exactly how the fleet
@@ -193,6 +193,8 @@ async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null
     // GIF (Frame collections) are not supported for face enrollment.
     if (!decoded || typeof (decoded as any).encodeJPEG !== "function") return null;
     let img: any = decoded;
+    // Single bounded downscale pass — iterative resizes each allocate a fresh
+    // full RGBA buffer and were the source of edge-worker OOM kills.
     const maxEdge = Math.max(img.width, img.height);
     if (maxEdge > 1080) {
       const scale = 1080 / maxEdge;
@@ -202,12 +204,12 @@ async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null
       const out = new Uint8Array(await img.encodeJPEG(quality));
       if (out.length <= MAX_PHOTO_BYTES) return out;
     }
-    // Still too big: step the long edge down, never past MIN_FACE_EDGE.
-    let edge = Math.max(img.width, img.height);
-    while (edge > MIN_FACE_EDGE) {
-      edge = Math.max(MIN_FACE_EDGE, Math.round(edge * 0.8));
-      const scale = edge / Math.max(img.width, img.height);
+    // Still too big: one final downscale straight to the face-safety floor.
+    const curEdge = Math.max(img.width, img.height);
+    if (curEdge > MIN_FACE_EDGE) {
+      const scale = MIN_FACE_EDGE / curEdge;
       const small = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
+      img = null;
       for (const quality of [75, MIN_FACE_QUALITY]) {
         const out = new Uint8Array(await small.encodeJPEG(quality));
         if (out.length <= MAX_PHOTO_BYTES) return out;
@@ -216,6 +218,8 @@ async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null
     console.warn("normalizePhotoBytes: cannot reach 400KB without dropping below face-safety floors");
     return null;
   } catch (e) {
+    // Never let a heavy image take the whole sync down — the caller reports
+    // needs_better_source and mips-face-sweep can retry later.
     console.warn("normalizePhotoBytes failed:", e);
     return null;
   }
