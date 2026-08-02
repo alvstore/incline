@@ -643,6 +643,7 @@ async function fetchReviewsForBranch(branch_id: string) {
   const newIds: string[] = [];
   for (const r of reviews) {
     const ratingMap: Record<string, number> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+    const reviewName = r.name ?? `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${r.reviewId}`;
     const row = {
       branch_id,
       google_review_id: r.reviewId ?? r.name,
@@ -653,6 +654,9 @@ async function fetchReviewsForBranch(branch_id: string) {
       posted_at: r.createTime ?? null,
       google_reply_text: r.reviewReply?.comment ?? null,
       google_reply_updated_at: r.reviewReply?.updateTime ?? null,
+      // v5 — mark the lane and keep the reply target so replies always resolve.
+      source: "business_profile",
+      gbp_review_name: reviewName,
       raw: r,
     };
     const { data: up, error } = await sb
@@ -664,6 +668,7 @@ async function fetchReviewsForBranch(branch_id: string) {
       console.error("upsert error", error);
       continue;
     }
+    if (up) await promotePlacesDuplicate(branch_id, up.id, row);
     if (up && (up.ai_classification === "pending" || !up.ai_classification)) {
       newIds.push(up.id);
       inserted++;
@@ -673,8 +678,45 @@ async function fetchReviewsForBranch(branch_id: string) {
   for (const id of newIds.slice(0, 10)) {
     try { await classifyOne(id); } catch (e) { console.error("classify err", id, e); }
   }
-  return { branch_id, fetched: reviews.length, classified: newIds.length };
+  return { branch_id, fetched: reviews.length, classified: newIds.length, source: "business_profile" };
 }
+
+/**
+ * The Places lane stores the same review under a different Google id. When the
+ * Business Profile lane later ingests it, fold the older read-only row into the
+ * replyable one (keeping any draft the staff already typed) and delete the dupe.
+ */
+async function promotePlacesDuplicate(
+  branch_id: string,
+  gbpRowId: string,
+  gbp: { author_name: string | null; review_text: string | null; posted_at: string | null },
+) {
+  if (!gbp.author_name && !gbp.review_text) return;
+  const sb = supa();
+  const { data: dupes } = await sb
+    .from("google_reviews_inbound")
+    .select("id, author_name, review_text, posted_at, reply_text, ai_draft_reply, draft_reply, reply_status")
+    .eq("branch_id", branch_id)
+    .eq("source", "places")
+    .neq("id", gbpRowId)
+    .limit(50);
+  const norm = (s?: string | null) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const day = (s?: string | null) => (s ? new Date(s).toISOString().slice(0, 10) : "");
+  for (const d of dupes ?? []) {
+    const sameAuthor = norm(d.author_name) === norm(gbp.author_name);
+    const sameText = norm(d.review_text).slice(0, 120) === norm(gbp.review_text).slice(0, 120);
+    const sameDay = day(d.posted_at) === day(gbp.posted_at);
+    if (!sameAuthor || !(sameText || sameDay)) continue;
+    // Carry the staff's unsent work forward onto the replyable row.
+    const carry = d.draft_reply || d.reply_text || null;
+    if (carry) {
+      await sb.from("google_reviews_inbound").update({ draft_reply: carry }).eq("id", gbpRowId);
+    }
+    await sb.from("google_reviews_inbound").delete().eq("id", d.id);
+    console.log(`merged places duplicate ${d.id} into business_profile row ${gbpRowId}`);
+  }
+}
+
 
 async function fetchReviews(branch_id?: string) {
   const sb = supa();
