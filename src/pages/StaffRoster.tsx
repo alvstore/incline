@@ -344,7 +344,16 @@ export default function StaffRoster() {
                   </Button>
                 </>
               )}
+              {editAny && (
+                <Button
+                  variant="ghost" className="text-primary-foreground hover:bg-card/15"
+                  onClick={() => setLatePolicyOpen(true)}
+                >
+                  <Clock className="mr-2 h-4 w-4" /> Late policy
+                </Button>
+              )}
             </div>
+
           </div>
         </div>
 
