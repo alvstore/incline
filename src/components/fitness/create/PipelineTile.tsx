@@ -57,7 +57,14 @@ export function PipelineTile({
         {loading ? (
           <Skeleton className="mt-1 h-4 w-28 rounded" />
         ) : empty ? (
-          <p className="truncate text-xs font-medium text-primary">{emptyHint}</p>
+          <p
+            className={`flex items-center gap-1 truncate text-xs font-medium ${
+              blocking ? 'text-warning' : 'text-primary'
+            }`}
+          >
+            {blocking && <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />}
+            {emptyHint}
+          </p>
         ) : (
           <p className="truncate text-xs text-muted-foreground">
             <span className="font-semibold tabular-nums text-foreground">{count}</span>{' '}
@@ -66,7 +73,17 @@ export function PipelineTile({
         )}
       </div>
 
+      {ready && (
+        <span
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+          aria-hidden
+        >
+          <Check className="h-3 w-3" />
+        </span>
+      )}
+
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+
     </button>
   );
 }
