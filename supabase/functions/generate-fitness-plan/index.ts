@@ -102,6 +102,65 @@ function validatePlanShape(type: "workout" | "diet", plan: any): string | null {
   return null;
 }
 
+const WEEK_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const MIN_EXERCISES_PER_DAY = 4;
+
+function normDay(d: unknown): string {
+  return String(d ?? "").trim().toLowerCase().slice(0, 12);
+}
+
+/** Which calendar days are missing from the template week. */
+function missingDays(days: any[]): string[] {
+  const present = new Set(days.map((d) => normDay(d?.day)));
+  return WEEK_DAYS.filter((d) => !present.has(d));
+}
+
+/** Hard completeness contract for workout template weeks. Returns an error
+ * string when the AI honoured neither the 7-day layout, the requested number
+ * of training days, nor a usable exercise count per session. */
+function validatePlanCompleteness(
+  type: "workout" | "diet",
+  plan: any,
+  daysPerWeek?: number,
+): string | null {
+  if (type !== "workout") return null;
+  const days: any[] = plan?.weeks?.[0]?.days ?? [];
+  const miss = missingDays(days);
+  if (miss.length) {
+    return `AI returned only ${7 - miss.length} of 7 calendar days (missing ${miss.join(", ")})`;
+  }
+  const training = days.filter((d) => Array.isArray(d?.exercises) && d.exercises.length > 0);
+  if (daysPerWeek && training.length !== daysPerWeek) {
+    return `AI returned ${training.length} of ${daysPerWeek} requested training days`;
+  }
+  if (!daysPerWeek && training.length === 0) return "AI returned days without any exercises";
+  const thin = training.filter((d) => d.exercises.length < MIN_EXERCISES_PER_DAY);
+  if (thin.length) {
+    return `AI returned only ${Math.min(...thin.map((d) => d.exercises.length))} exercise(s) on ${thin.map((d) => d.day).join(", ")} (minimum ${MIN_EXERCISES_PER_DAY} per training day)`;
+  }
+  return null;
+}
+
+/** Merge a partial-week response (days subset) into the base template week. */
+function mergeDays(target: any, incoming: any) {
+  const inDays: any[] = incoming?.weeks?.[0]?.days ?? incoming?.days ?? [];
+  if (!inDays.length) return;
+  if (!target.weeks) target.weeks = [{ week: 1, days: [] }];
+  if (!Array.isArray(target.weeks[0].days)) target.weeks[0].days = [];
+  const byDay = new Map<string, any>(
+    target.weeks[0].days.map((d: any) => [normDay(d?.day), d]),
+  );
+  for (const d of inDays) {
+    if (!d?.day) continue;
+    byDay.set(normDay(d.day), d);
+  }
+  target.weeks[0].days = WEEK_DAYS
+    .map((k) => byDay.get(k))
+    .filter(Boolean);
+}
+
+
+
 /** Periodised week expansion. Instead of cloning week 1 verbatim we wave the
  * volume/intensity, rotate the exercise order, and inject a deload — so weeks
  * 2..N read as a real progression rather than the same page repeated. */
