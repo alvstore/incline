@@ -740,8 +740,9 @@ serve(async (req) => {
             "",
             `\n\nDIFFERENTIATION ORDER — the previous draft repeated the member's last program. Produce a MATERIALLY DIFFERENT program: change the split, swap at least 70% of the exercises for different movements on the available equipment, and change the session order. Keep the same goal contract.`,
           );
-          const altPlan = parsePlanJson(alt || "");
-          if (altPlan && !validatePlanShape(type, altPlan)) plan = altPlan;
+          const altEval = evaluate(alt.content, alt.finishReason);
+          if (altEval.plan && !altEval.error) plan = altEval.plan;
+
         } catch (e) {
           console.error("[generate-fitness-plan] differentiation retry failed", (e as Error).message);
         }
