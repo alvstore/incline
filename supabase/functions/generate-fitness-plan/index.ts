@@ -28,16 +28,19 @@ const corsHeaders = {
 const ALLOWED_AI_ROLES = ["owner", "admin", "manager"] as const;
 
 /** Strip markdown fences and repair a truncated JSON object by closing
- * any still-open strings/arrays/objects. Returns null when unrecoverable. */
-function parsePlanJson(raw: string): any | null {
-  if (!raw) return null;
+ * any still-open strings/arrays/objects.
+ * `repaired: true` means the model's output was TRUNCATED — the caller must
+ * treat that as a failure and regenerate, never save it. */
+function parsePlanJson(raw: string): { plan: any | null; repaired: boolean } {
+  if (!raw) return { plan: null, repaired: false };
   let s = raw.trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
   const start = s.indexOf("{");
   if (start > 0) s = s.slice(start);
-  try { return JSON.parse(s); } catch { /* attempt repair */ }
+  try { return { plan: JSON.parse(s), repaired: false }; } catch { /* attempt repair */ }
+
 
   // Bracket-balanced repair for truncated output.
   const stack: string[] = [];
