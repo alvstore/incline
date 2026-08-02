@@ -1,4 +1,4 @@
-// v2.0.0 - Optional MIPS_WEBHOOK_SECRET gate + imgUri hostname allowlist
+// v2.1.0 - Roster-aware staff attendance: repeat-scan guard, server-stamped shift + lateness
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -265,27 +265,57 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
   let message = `${label} ${personName} checked in`;
 
   try {
+    const now = new Date();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const { data: existing } = await supabase
+    // Branch late/punch policy (min gap between gate scans)
+    let minGapMin = 60;
+    try {
+      const { data: hr } = await supabase
+        .from("hr_settings")
+        .select("min_punch_gap_min")
+        .eq("branch_id", branchId)
+        .maybeSingle();
+      if (hr?.min_punch_gap_min != null) minGapMin = Number(hr.min_punch_gap_min);
+    } catch (_) { /* defaults */ }
+
+    const { data: openRow } = await supabase
       .from("staff_attendance")
-      .select("id, check_out")
+      .select("id, check_in")
       .eq("user_id", userId)
       .gte("check_in", todayStart.toISOString())
       .is("check_out", null)
       .maybeSingle();
 
-    if (existing) {
-      await supabase.from("staff_attendance").update({ check_out: new Date().toISOString() }).eq("id", existing.id);
+    if (openRow) {
+      await supabase.from("staff_attendance").update({ check_out: now.toISOString() }).eq("id", openRow.id);
       message = `${label} ${personName} checked out`;
-    } else {
-      await supabase.from("staff_attendance").insert({
-        user_id: userId,
-        branch_id: branchId,
-        check_in: new Date().toISOString(),
-      });
+      return message;
     }
+
+    // Repeat scan guard: don't open a new attendance row (and don't raise a new
+    // late alert) when the person already punched within the policy window.
+    const { data: recent } = await supabase
+      .from("staff_attendance")
+      .select("id, check_in")
+      .eq("user_id", userId)
+      .gte("check_in", new Date(now.getTime() - minGapMin * 60_000).toISOString())
+      .order("check_in", { ascending: false })
+      .limit(1);
+
+    if (recent && recent.length > 0) {
+      message = `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
+      return message;
+    }
+
+    // shift_type / scheduled_start / late_minutes are stamped server-side by
+    // tg_stamp_staff_attendance_shift using the staff roster.
+    await supabase.from("staff_attendance").insert({
+      user_id: userId,
+      branch_id: branchId,
+      check_in: now.toISOString(),
+    });
   } catch (e) {
     console.warn("Staff attendance failed:", e);
     message = `${label} ${personName} attendance error: ${e}`;
@@ -293,6 +323,7 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
 
   return message;
 }
+
 
 async function handleImgRegCallback(supabase: any, payload: Record<string, unknown>) {
   const personNo = String(payload.personNo || payload.personSn || "");

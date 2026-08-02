@@ -215,6 +215,9 @@ export interface AttendanceLogRow {
   check_out: string | null;
   shift_type?: string | null;
   total_hours?: number | null;
+  scheduled_start?: string | null;
+  late_minutes?: number | null;
+  is_late?: boolean | null;
 }
 
 export function useStaffAttendanceMonth(branchId: string | undefined, ym: string) {
@@ -227,7 +230,8 @@ export function useStaffAttendanceMonth(branchId: string | undefined, ym: string
       const endIso = new Date(y, m, 0, 23, 59, 59).toISOString();
       const { data, error } = await supabase
         .from('staff_attendance')
-        .select('id,user_id,check_in,check_out,shift_type,total_hours')
+        .select('id,user_id,check_in,check_out,shift_type,total_hours,scheduled_start,late_minutes,is_late')
+
         .gte('check_in', startIso)
         .lte('check_in', endIso)
         .order('check_in', { ascending: false });

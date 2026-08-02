@@ -43,6 +43,7 @@ import { ChevronLeft, ChevronRight, Repeat, CalendarDays, X as XIcon } from 'luc
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { canEditAnyRoster, canEditRosterRow, canExportRoster } from '@/lib/auth/permissions';
+import { LatePolicySheet } from '@/components/hrm/LatePolicySheet';
 
 // Returns the next upcoming Sunday (today if today is Sunday)
 function nextSunday(from: Date = new Date()): Date {
@@ -148,6 +149,7 @@ export default function StaffRoster() {
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [latePolicyOpen, setLatePolicyOpen] = useState(false);
   const [busyPdf, setBusyPdf] = useState(false);
   const [sundayOpen, setSundayOpen] = useState(false);
   const [sundayDate, setSundayDate] = useState<Date>(nextSunday());
@@ -344,7 +346,16 @@ export default function StaffRoster() {
                   </Button>
                 </>
               )}
+              {editAny && (
+                <Button
+                  variant="ghost" className="text-primary-foreground hover:bg-card/15"
+                  onClick={() => setLatePolicyOpen(true)}
+                >
+                  <Clock className="mr-2 h-4 w-4" /> Late policy
+                </Button>
+              )}
             </div>
+
           </div>
         </div>
 
@@ -535,6 +546,13 @@ export default function StaffRoster() {
         monthAnchor={monthAnchor}
         trainers={trainers}
       />
+
+      <LatePolicySheet
+        open={latePolicyOpen}
+        onOpenChange={setLatePolicyOpen}
+        branchId={branchId && branchId !== 'all' ? branchId : null}
+      />
+
 
       <SundayAssignSheet
         open={sundayOpen}
@@ -832,7 +850,6 @@ function MonthView({
 // ---------------------------------------------------------------------------
 // Attendance Matrix (robust monthly log with on-time/late/absent detection)
 // ---------------------------------------------------------------------------
-const GRACE_MINUTES = 10;
 
 type AttCellKind = 'ontime' | 'late' | 'absent' | 'off' | 'unscheduled' | 'future';
 
@@ -855,7 +872,7 @@ function AttendanceMatrix({
 
   // Group logs: user_id → date(YYYY-MM-DD) → earliest check_in
   const checkInByDay = useMemo(() => {
-    const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number }>>();
+    const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number; late_minutes: number | null; is_late: boolean | null }>>();
     for (const log of logs) {
       if (!log.check_in) continue;
       const date = log.check_in.slice(0, 10);
@@ -867,7 +884,13 @@ function AttendanceMatrix({
           : 0);
       const existing = userMap.get(date);
       if (!existing || log.check_in < existing.check_in) {
-        userMap.set(date, { check_in: log.check_in, check_out: log.check_out, hours: hrs });
+        userMap.set(date, {
+          check_in: log.check_in,
+          check_out: log.check_out,
+          hours: hrs,
+          late_minutes: log.late_minutes ?? null,
+          is_late: log.is_late ?? null,
+        });
       }
     }
     return map;
@@ -885,29 +908,19 @@ function AttendanceMatrix({
     const log = checkInByDay.get(staffRow.user_id)?.get(dateStr);
     const scheduledStart = shift?.morning_start || shift?.evening_start;
 
-    if (!scheduledStart) {
-      if (log) {
-        return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
-      }
-      return { kind: isFuture ? 'future' : 'unscheduled' };
-    }
-
     if (!log) {
+      if (!scheduledStart) return { kind: isFuture ? 'future' : 'unscheduled' };
       return { kind: isFuture ? 'future' : 'absent' };
     }
 
-    // Compare check-in time vs scheduled start (HH:MM)
-    const checkInTime = new Date(log.check_in);
-    const [sh, sm] = scheduledStart.slice(0, 5).split(':').map(Number);
-    const scheduled = new Date(year, month, d, sh, sm);
-    const lateMs = checkInTime.getTime() - scheduled.getTime();
-    const lateMin = Math.round(lateMs / 60000);
-
-    if (lateMin > GRACE_MINUTES) {
-      return { kind: 'late', lateMin, checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
+    // Lateness is stamped server-side against the resolved roster shift
+    // (overrides included), so the UI never recomputes it.
+    if (log.is_late) {
+      return { kind: 'late', lateMin: log.late_minutes ?? undefined, checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
     }
     return { kind: 'ontime', checkIn: log.check_in, checkOut: log.check_out, hours: log.hours };
   }
+
 
   const rows = useMemo(() => {
     return staff
@@ -1051,7 +1064,8 @@ function AttendanceMatrix({
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Late = check-in more than {GRACE_MINUTES} min after scheduled start. Absent = scheduled day with no check-in.
+        Late = check-in after the roster shift start plus the branch grace period (set in Late policy). Absent = scheduled day with no check-in.
+
       </p>
     </div>
   );
