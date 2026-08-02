@@ -939,23 +939,46 @@ export function MemberProfileDrawer({
     date_of_birth: leadFallback.date_of_birth,
   } : null);
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
+  // Scheduled plan that has not started yet — still needs gift days / date edits / early start
+  const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
+  const currentMembership = activeMembership || pendingMembership;
   const activePTPackage = memberDetails?.member_pt_packages?.find((p: any) => p.status === 'active');
   const hasRegistrationForm = !!registrationFormDocument;
 
-  // Gifted free days (membership extensions) for active membership
+  const startNowMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('start_membership_now' as any, {
+        p_membership_id: pendingMembership!.id,
+        p_reason: 'Member requested an earlier start',
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (res && res.success === false) throw new Error(res.error || 'Could not start membership');
+      return res;
+    },
+    onSuccess: (res: any) => {
+      toast.success(`Membership started — active until ${format(new Date(res.end_date), 'dd MMM yyyy')}. Gate access is syncing.`);
+      invalidateMembersData(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['member-details', member?.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to start membership'),
+  });
+
+  // Gifted free days (membership extensions) for the current membership
   const { data: freeDaysList = [] } = useQuery({
-    queryKey: ['member-profile-free-days', activeMembership?.id],
-    enabled: !!activeMembership?.id && open,
+    queryKey: ['member-profile-free-days', currentMembership?.id],
+    enabled: !!currentMembership?.id && open,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('membership_free_days')
         .select('id, days_added, reason, created_at')
-        .eq('membership_id', activeMembership!.id)
+        .eq('membership_id', currentMembership!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     },
   });
+
   const freeDaysTotal = (freeDaysList as any[]).reduce((s, r) => s + Number(r.days_added || 0), 0);
 
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
