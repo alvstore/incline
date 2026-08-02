@@ -60,7 +60,7 @@ function parsePlanJson(raw: string): { plan: any | null; repaired: boolean } {
     else if (c === "}" || c === "]") { stack.pop(); lastSafe = i; }
     else if (c === "," && stack.length) lastSafe = Math.max(lastSafe, i - 1);
   }
-  if (lastSafe < 0) return null;
+  if (lastSafe < 0) return { plan: null, repaired: true };
   let candidate = s.slice(0, lastSafe + 1);
   // Recompute the open stack for the truncated candidate.
   const stack2: string[] = [];
