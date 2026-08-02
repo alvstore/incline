@@ -79,7 +79,7 @@ function parsePlanJson(raw: string): { plan: any | null; repaired: boolean } {
   }
   if (inStr) candidate += '"';
   while (stack2.length) candidate += stack2.pop();
-  try { return JSON.parse(candidate); } catch { return null; }
+  try { return { plan: JSON.parse(candidate), repaired: true }; } catch { return { plan: null, repaired: true }; }
 }
 
 /** Returns an error string when the plan is structurally unusable. */
