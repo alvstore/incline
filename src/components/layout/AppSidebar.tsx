@@ -13,20 +13,8 @@ import { Menu, LogOut, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-function useOrgBranding() {
-  return useQuery({
-    queryKey: ['org-branding'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('logo_url, name')
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-}
+import { useOrgBranding } from '@/hooks/useOrgBranding';
+
 
 function useWhatsAppUnreadCount() {
   const queryClient = useQueryClient();

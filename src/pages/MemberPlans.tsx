@@ -58,6 +58,7 @@ export default function MemberPlansPage() {
         .from('membership_plans')
         .select('id, name, description, price, discounted_price, duration_days, admission_fee, branch_id, is_active')
         .eq('is_active', true)
+        .eq('is_visible_to_members', true)
         .or(`branch_id.eq.${member!.branch_id},branch_id.is.null`)
         .order('price', { ascending: true });
       if (error) throw error;

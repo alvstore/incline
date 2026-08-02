@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,27 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
     },
   });
 
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadInvoice = async () => {
+    if (!invoice?.id) return;
+    setDownloading(true);
+    try {
+      const { generateInvoicePdfBlob } = await import('@/utils/invoicePdf');
+      const blob = await generateInvoicePdfBlob(invoice.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoice_number || 'invoice'}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not generate the invoice PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleDownloadLab = async (path: string, filename: string | null) => {
     const url = await signLabReport(path, 60);
     if (!url) { toast.error('Lab report unavailable'); return; }
@@ -52,6 +74,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
     if (filename) a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
   };
+
 
   if (!invoice) return null;
 
@@ -227,15 +250,13 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
             <Button 
               variant="outline" 
               className="flex-1"
-              onClick={() => {
-                // Simple download - just show info for now
-                const info = `Invoice: ${invoice.invoice_number}\nTotal: ₹${invoice.total_amount}\nStatus: ${invoice.status}`;
-                alert(info);
-              }}
+              disabled={downloading}
+              onClick={handleDownloadInvoice}
             >
               <Download className="h-4 w-4 mr-2" />
-              Download
+              {downloading ? 'Preparing…' : 'Download'}
             </Button>
+
           </div>
         </div>
       </SheetContent>

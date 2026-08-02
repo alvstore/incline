@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
+import { useOrgBranding } from '@/hooks/useOrgBranding';
 import { supabase } from '@/integrations/supabase/client';
 import { SessionTimeoutWarning } from '@/components/auth/SessionTimeoutWarning';
 import { AlertTriangle, RefreshCw, Building2 } from 'lucide-react';
@@ -64,18 +65,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     [moduleGroups, activeModuleId],
   );
 
-  const { data: org } = useQuery({
-    queryKey: ['org-branding'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('organization_settings')
-        .select('logo_url, name')
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: org } = useOrgBranding();
+
 
   const getInitials = (name: string | null) => {
     if (!name) return 'U';

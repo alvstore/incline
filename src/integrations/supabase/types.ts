@@ -14376,16 +14376,24 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_org_branding: {
-        Args: { _branch_id?: string }
-        Returns: {
-          branch_id: string
-          id: string
-          logo_url: string
-          name: string
-          website_theme: Json
-        }[]
-      }
+      get_org_branding:
+        | {
+            Args: never
+            Returns: {
+              logo_url: string
+              name: string
+            }[]
+          }
+        | {
+            Args: { _branch_id?: string }
+            Returns: {
+              branch_id: string
+              id: string
+              logo_url: string
+              name: string
+              website_theme: Json
+            }[]
+          }
       get_payment_webhook_payload: {
         Args: { p_id: string }
         Returns: {
@@ -15410,6 +15418,7 @@ export type Database = {
         | "contract"
         | "comp_gift"
         | "branch_transfer"
+        | "locker_request"
       attendance_shift_type: "morning" | "evening" | "night" | "full_day"
       benefit_booking_status:
         | "booked"
@@ -15693,6 +15702,7 @@ export const Constants = {
         "contract",
         "comp_gift",
         "branch_transfer",
+        "locker_request",
       ],
       attendance_shift_type: ["morning", "evening", "night", "full_day"],
       benefit_booking_status: [

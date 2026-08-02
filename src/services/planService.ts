@@ -78,7 +78,9 @@ export async function updatePlan(
     is_active: boolean;
     includes_free_locker: boolean;
     free_locker_size: string | null;
+    is_visible_to_members: boolean;
   }>
+
 ) {
   const { data, error } = await supabase
     .from('membership_plans')

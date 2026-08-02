@@ -202,6 +202,16 @@ export default function ApprovalQueuePage() {
       );
     }
 
+    if (request.reference_type === 'locker') {
+      return (
+        <div className="space-y-1 text-sm">
+          <p><span className="text-muted-foreground">Member:</span> {data?.memberName || 'N/A'} {data?.memberCode ? `(${data.memberCode})` : ''}</p>
+          <p><span className="text-muted-foreground">Type:</span> Locker allocation request</p>
+          {data?.note && <p><span className="text-muted-foreground">Preference:</span> {data.note}</p>}
+        </div>
+      );
+    }
+
     if (request.approval_type === 'comp_gift') {
       return (
         <div className="space-y-1 text-sm">
