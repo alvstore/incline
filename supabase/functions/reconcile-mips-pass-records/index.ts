@@ -307,8 +307,8 @@ async function markAttendance(
   const scanMs = new Date(scanTime).getTime();
 
   // Branch punch policy: minimum gap between two gate scans that may open
-  // separate attendance rows. Repeat scans inside the window are logged as
-  // access events only (no second check-in, no second late alert).
+  // separate attendance rows. Repeat scans inside the window are access
+  // events only (no second check-in, no second late alert).
   let minGapMin = 60;
   const { data: hr } = await supabase
     .from("hr_settings")
@@ -319,44 +319,49 @@ async function markAttendance(
     minGapMin = Number((hr as { min_punch_gap_min: number }).min_punch_gap_min);
   }
 
-  const windowStart = new Date(scanMs - minGapMin * 60_000).toISOString();
-  const windowEnd = new Date(scanMs + minGapMin * 60_000).toISOString();
+  // IST calendar day of the scan — attendance is a per-day concept here.
+  const istDayStart = new Date(scanMs);
+  istDayStart.setTime(scanMs + 5.5 * 3600_000);
+  istDayStart.setUTCHours(0, 0, 0, 0);
+  const dayStartUtc = new Date(istDayStart.getTime() - 5.5 * 3600_000).toISOString();
+  const dayEndUtc = new Date(istDayStart.getTime() + 24 * 3600_000 - 5.5 * 3600_000).toISOString();
 
-  const { data: near } = await supabase
+  // Stale rows left open from earlier days must never block today's punch:
+  // the unique "one open row per shift" index rejects the insert otherwise,
+  // which is exactly why present staff were showing up Absent.
+  await supabase
     .from("staff_attendance")
-    .select("id, check_in")
-    .eq("user_id", person.user_id)
-    .gte("check_in", windowStart)
-    .lte("check_in", windowEnd)
-    .limit(1);
-  if (near && near.length > 0) {
-    return `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
-  }
-
-  // An open row from earlier the same day gets closed by this scan instead of
-  // opening a second check-in (there is no dedicated check-out reader yet).
-  const dayStart = new Date(new Date(scanMs).toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  dayStart.setHours(0, 0, 0, 0);
-  const { data: openRow } = await supabase
-    .from("staff_attendance")
-    .select("id, check_in")
+    .update({ check_out: dayStartUtc })
     .eq("user_id", person.user_id)
     .is("check_out", null)
-    .lt("check_in", windowStart)
-    .gte("check_in", new Date(scanMs - 20 * 60 * 60_000).toISOString())
-    .order("check_in", { ascending: false })
-    .limit(1);
+    .lt("check_in", dayStartUtc);
 
-  if (openRow && openRow.length > 0) {
-    await supabase
-      .from("staff_attendance")
-      .update({ check_out: scanTime })
-      .eq("id", (openRow[0] as { id: string }).id);
-    return `${label} ${personName} checked out`;
+  const { data: todays } = await supabase
+    .from("staff_attendance")
+    .select("id, check_in, check_out")
+    .eq("user_id", person.user_id)
+    .gte("check_in", dayStartUtc)
+    .lt("check_in", dayEndUtc)
+    .order("check_in", { ascending: true });
+
+  const rows = (todays ?? []) as Array<{ id: string; check_in: string; check_out: string | null }>;
+
+  if (rows.length > 0) {
+    const last = rows[rows.length - 1];
+    const lastMs = new Date(last.check_in).getTime();
+    if (Math.abs(scanMs - lastMs) < minGapMin * 60_000) {
+      return `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
+    }
+    // No dedicated exit reader yet: a later scan on the same day is treated as
+    // the latest seen time, not as a fresh (late) check-in.
+    if (scanMs > lastMs) {
+      await supabase.from("staff_attendance").update({ check_out: scanTime }).eq("id", last.id);
+    }
+    return `${label} ${personName} already checked in today`;
   }
 
   // check_in must be the real hardware scan time — never the import time, or
-  // lateness is measured against when the cron happened to run.
+  // lateness gets measured against whenever the cron happened to run.
   const { error } = await supabase.from("staff_attendance").insert({
     user_id: person.user_id,
     branch_id: person.branch_id,
