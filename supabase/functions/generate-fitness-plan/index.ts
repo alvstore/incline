@@ -1,9 +1,21 @@
-// generate-fitness-plan v3.0.0 — single-week generation + server-side week expansion,
+// generate-fitness-plan v4.0.0 — goal-driven programming contract, equipment
+// enforcement with substitution, periodised (non-cloned) week expansion,
+// deterministic variety seeding and a differentiation guard.
+// v3.0.0 — single-week generation + server-side week expansion,
 // dynamic token budget, resilient JSON parsing/repair and shape validation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import {
+  goalDirective,
+  nutritionParams,
+  resolveGoalKey,
+  trainingParams,
+  varietyAngle,
+  varietySeed,
+} from "../_shared/plan-programming.ts";
 const serve = Deno.serve;
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
