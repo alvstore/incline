@@ -875,7 +875,11 @@ function AttendanceMatrix({
     const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number; late_minutes: number | null; is_late: boolean | null }>>();
     for (const log of logs) {
       if (!log.check_in) continue;
-      const date = log.check_in.slice(0, 10);
+      // Group by the IST calendar day of the punch, not the UTC date, or a
+      // late-evening / after-midnight scan lands on the wrong column.
+      const date = new Date(new Date(log.check_in).getTime() + 5.5 * 3600_000)
+        .toISOString()
+        .slice(0, 10);
       if (!map.has(log.user_id)) map.set(log.user_id, new Map());
       const userMap = map.get(log.user_id)!;
       const hrs = log.total_hours != null ? Number(log.total_hours)
