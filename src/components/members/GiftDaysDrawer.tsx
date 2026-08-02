@@ -32,6 +32,9 @@ export function GiftDaysDrawer({ open, onOpenChange, membershipId, memberId }: G
   const [editingId, setEditingId] = useState<string | null>(null);
   const [days, setDays] = useState('');
   const [reason, setReason] = useState('');
+  const [grantDays, setGrantDays] = useState('');
+  const [grantReason, setGrantReason] = useState('');
+
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['gift-days', membershipId],
