@@ -464,6 +464,58 @@ export default function MemberRequests() {
             </CardContent>
           </Card>
 
+          {/* Locker Request */}
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5" />
+                Request a Locker
+              </CardTitle>
+              <CardDescription>Ask the front desk to allocate a locker for you</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Sheet open={lockerSheetOpen} onOpenChange={setLockerSheetOpen}>
+                <SheetTrigger asChild>
+                  <Button className="w-full" variant="outline" disabled={hasPendingLockerRequest}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {hasPendingLockerRequest ? 'Request Pending' : 'Request Locker'}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right">
+                  <SheetHeader>
+                    <SheetTitle>Request a Locker</SheetTitle>
+                  </SheetHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <label className="text-sm font-medium" htmlFor="locker-note">Preference (optional)</label>
+                      <Textarea
+                        id="locker-note"
+                        placeholder="e.g., Large locker, near the changing room"
+                        value={lockerNote}
+                        onChange={(e) => setLockerNote(e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      The team will confirm availability and charges (if any) before allocating.
+                    </p>
+                  </div>
+                  <SheetFooter>
+                    <Button variant="outline" onClick={() => setLockerSheetOpen(false)}>Cancel</Button>
+                    <Button
+                      onClick={() => submitLockerRequest.mutate()}
+                      disabled={submitLockerRequest.isPending}
+                    >
+                      Submit Request
+                    </Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
+            </CardContent>
+          </Card>
+
+
+
           {/* Diet Plan Request */}
           <Card className="border-border/50">
             <CardHeader>
