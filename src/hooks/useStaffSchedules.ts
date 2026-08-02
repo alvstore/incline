@@ -218,6 +218,7 @@ export interface AttendanceLogRow {
   scheduled_start?: string | null;
   late_minutes?: number | null;
   is_late?: boolean | null;
+  shift_date?: string | null;
 }
 
 export function useStaffAttendanceMonth(branchId: string | undefined, ym: string) {
@@ -226,18 +227,20 @@ export function useStaffAttendanceMonth(branchId: string | undefined, ym: string
     enabled: !!branchId && /^\d{4}-\d{2}$/.test(ym),
     queryFn: async (): Promise<AttendanceLogRow[]> => {
       const [y, m] = ym.split('-').map(Number);
-      const startIso = `${ym}-01T00:00:00`;
-      const endIso = new Date(y, m, 0, 23, 59, 59).toISOString();
+      // Widen by a day on each side: an overnight shift's punch can land on the
+      // adjacent calendar day while its shift_date sits inside this month.
+      const startIso = new Date(y, m - 1, 0, 0, 0, 0).toISOString();
+      const endIso = new Date(y, m, 1, 23, 59, 59).toISOString();
       const { data, error } = await supabase
         .from('staff_attendance')
-        .select('id,user_id,check_in,check_out,shift_type,total_hours,scheduled_start,late_minutes,is_late')
-
+        .select('id,user_id,check_in,check_out,shift_type,total_hours,scheduled_start,late_minutes,is_late,shift_date')
         .gte('check_in', startIso)
         .lte('check_in', endIso)
         .order('check_in', { ascending: false });
       if (error) throw error;
       return (data || []) as AttendanceLogRow[];
     },
+
   });
 }
 

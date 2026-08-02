@@ -2312,7 +2312,7 @@ export function MemberProfileDrawer({
           onOpenChange={setCompGiftOpen}
           memberId={member.id}
           memberName={profile?.full_name}
-          membershipId={activeMembership?.id}
+          membershipId={currentMembership?.id}
           branchId={member.branch_id}
         />
         <MemberRegistrationFormDrawer

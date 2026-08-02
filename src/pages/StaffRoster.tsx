@@ -870,18 +870,20 @@ function AttendanceMatrix({
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
   const todayDate = today.getDate();
 
-  // Group logs: user_id → date(YYYY-MM-DD) → earliest check_in
+  // Group logs: user_id → shift date(YYYY-MM-DD) → earliest check_in
   const checkInByDay = useMemo(() => {
     const map = new Map<string, Map<string, { check_in: string; check_out: string | null; hours: number; late_minutes: number | null; is_late: boolean | null }>>();
     for (const log of logs) {
       if (!log.check_in) continue;
-      // Group by the IST calendar day of the punch, not the UTC date, or a
-      // late-evening / after-midnight scan lands on the wrong column.
-      const date = new Date(new Date(log.check_in).getTime() + 5.5 * 3600_000)
-        .toISOString()
-        .slice(0, 10);
+      // Prefer the server-stamped shift date so an overnight shift (e.g. 21:00 →
+      // 10:00 next day) stays on the day it started. Fall back to IST calendar day.
+      const date = (log as { shift_date?: string | null }).shift_date
+        ?? new Date(new Date(log.check_in).getTime() + 5.5 * 3600_000)
+          .toISOString()
+          .slice(0, 10);
       if (!map.has(log.user_id)) map.set(log.user_id, new Map());
       const userMap = map.get(log.user_id)!;
+
       const hrs = log.total_hours != null ? Number(log.total_hours)
         : (log.check_in && log.check_out
           ? (new Date(log.check_out).getTime() - new Date(log.check_in).getTime()) / 3_600_000

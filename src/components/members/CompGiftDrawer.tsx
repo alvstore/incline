@@ -440,8 +440,24 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
               <Label>Reason *</Label>
               <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Service recovery, loyalty gesture" />
             </div>
+            {!membershipId && (
+              <p className="text-xs font-medium text-red-600">
+                This member has no active or scheduled plan to extend.
+              </p>
+            )}
+            {membershipId && (!(parseInt(days) > 0) || reason.trim().length < 6) && (
+              <p className="text-xs text-slate-500">Enter a day count above 0 and a reason of at least 6 characters.</p>
+            )}
             <SheetFooter>
-              <Button onClick={() => extendMutation.mutate()} disabled={extendMutation.isPending || !membershipId}>
+              <Button
+                onClick={() => extendMutation.mutate()}
+                disabled={
+                  extendMutation.isPending ||
+                  !membershipId ||
+                  !(parseInt(days) > 0) ||
+                  reason.trim().length < 6
+                }
+              >
                 {isManagerOrAbove ? (
                   <CheckCircle className="h-4 w-4 mr-2" />
                 ) : (
@@ -454,6 +470,7 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                     : 'Submit for Approval'}
               </Button>
             </SheetFooter>
+
           </TabsContent>
 
           <TabsContent value="comp" className="space-y-4 mt-4">
