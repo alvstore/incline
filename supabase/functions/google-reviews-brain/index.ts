@@ -1035,16 +1035,38 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
   const sb = supa();
   const { data: row } = await sb
     .from("google_reviews_inbound")
-    .select("id, branch_id, google_review_id, raw")
+    .select("id, branch_id, google_review_id, raw, source, gbp_review_name")
     .eq("id", inbound_id)
     .maybeSingle();
   if (!row) return json({ ok: false, error: "not_found" }, 404);
   const cfg = await getGoogleConfig(row.branch_id);
-  if (!cfg) return json({ ok: false, error: "Google Business not configured for branch" }, 412);
+  if (!cfg) return json({ ok: false, error: "Google Business Profile is not configured for this branch." }, 412);
+  if (!cfg.refresh_token) {
+    return json({
+      ok: false,
+      code: "not_connected",
+      error: "Replies need Business Profile access. Connect the Google account (Step 2) and fetch reviews again.",
+    }, 412);
+  }
+  // Prefer the stored Business Profile review name; Places rows have none.
+  const reviewName =
+    row.gbp_review_name ??
+    (row.raw as any)?.name ??
+    (row.source === "places"
+      ? null
+      : `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${row.google_review_id}`);
+  if (!reviewName) {
+    return json({
+      ok: false,
+      code: "places_only",
+      error:
+        "This review was read from the public Places lane, which has no reply endpoint. Run \"Fetch now\" after connecting Business Profile — the review will be re-imported as replyable and your draft is kept.",
+    }, 409);
+  }
   const token = await refreshAccessToken(row.branch_id, cfg);
-  if (!token) return json({ ok: false, error: "no_token" }, 412);
-  // Google review name format: accounts/{account}/locations/{loc}/reviews/{id}
-  const reviewName = (row.raw as any)?.name ?? `accounts/${cfg.account_id}/locations/${cfg.location_id}/reviews/${row.google_review_id}`;
+  if (!token) {
+    return json({ ok: false, code: "token_refresh_failed", error: "Could not refresh the Google access token. Reconnect the Google account." }, 412);
+  }
   const url = `https://mybusiness.googleapis.com/v4/${reviewName}/reply`;
   const res = await fetch(url, {
     method: "PUT",
@@ -1053,13 +1075,23 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
   });
   if (!res.ok) {
     const txt = await res.text();
-    return json({ ok: false, error: `Google API ${res.status}: ${txt.slice(0, 300)}` }, 502);
+    console.error("reply failed", res.status, txt.slice(0, 300));
+    // Keep the draft so the operator never loses the text they wrote.
+    await sb.from("google_reviews_inbound").update({ draft_reply: reply_text }).eq("id", inbound_id);
+    return json({
+      ok: false,
+      code: `google_${res.status}`,
+      status: res.status,
+      error: friendlyGoogleError(res.status, txt),
+      details: txt.slice(0, 400),
+    }, 502);
   }
   await sb
     .from("google_reviews_inbound")
     .update({
       reply_status: "sent",
       reply_text,
+      draft_reply: null,
       replied_at: new Date().toISOString(),
       replied_by: user_id ?? null,
       google_reply_text: reply_text,
@@ -1068,6 +1100,18 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
     .eq("id", inbound_id);
   return json({ ok: true });
 }
+
+/** Persist an unsent draft so it survives refresh and the Google connect flow. */
+async function saveDraft(inbound_id: string, draft: string) {
+  const sb = supa();
+  const { error } = await sb
+    .from("google_reviews_inbound")
+    .update({ draft_reply: draft || null })
+    .eq("id", inbound_id);
+  if (error) return json({ ok: false, error: error.message }, 500);
+  return json({ ok: true });
+}
+
 
 // ─── Action: request_member_review (legacy compatibility) ───
 async function requestMemberReview(feedback_id: string, channel?: string) {
