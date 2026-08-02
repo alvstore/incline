@@ -281,7 +281,12 @@ async function findPersonByCode(supabase: ReturnType<typeof createClient>, perso
   return null;
 }
 
-async function markAttendance(supabase: ReturnType<typeof createClient>, person: PersonMatch, personName: string): Promise<string | null> {
+async function markAttendance(
+  supabase: ReturnType<typeof createClient>,
+  person: PersonMatch,
+  personName: string,
+  scanTime: string,
+): Promise<string | null> {
   if (person.type === "member") {
     const { data } = await supabase.rpc("member_check_in", {
       _member_id: person.id,
@@ -294,27 +299,70 @@ async function markAttendance(supabase: ReturnType<typeof createClient>, person:
 
   if (!person.user_id) return "Staff profile missing login id; access logged only";
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const { data: existing } = await supabase
-    .from("staff_attendance")
-    .select("id")
-    .eq("user_id", person.user_id)
-    .gte("check_in", todayStart.toISOString())
-    .is("check_out", null)
+  const label = person.type === "trainer" ? "Trainer" : "Staff";
+  const scanMs = new Date(scanTime).getTime();
+
+  // Branch punch policy: minimum gap between two gate scans that may open
+  // separate attendance rows. Repeat scans inside the window are logged as
+  // access events only (no second check-in, no second late alert).
+  let minGapMin = 60;
+  const { data: hr } = await supabase
+    .from("hr_settings")
+    .select("min_punch_gap_min")
+    .eq("branch_id", person.branch_id)
     .maybeSingle();
+  if ((hr as { min_punch_gap_min?: number } | null)?.min_punch_gap_min != null) {
+    minGapMin = Number((hr as { min_punch_gap_min: number }).min_punch_gap_min);
+  }
 
-  if (existing?.id) return `${person.type === "trainer" ? "Trainer" : "Staff"} ${personName} already checked in`;
+  const windowStart = new Date(scanMs - minGapMin * 60_000).toISOString();
+  const windowEnd = new Date(scanMs + minGapMin * 60_000).toISOString();
 
+  const { data: near } = await supabase
+    .from("staff_attendance")
+    .select("id, check_in")
+    .eq("user_id", person.user_id)
+    .gte("check_in", windowStart)
+    .lte("check_in", windowEnd)
+    .limit(1);
+  if (near && near.length > 0) {
+    return `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
+  }
+
+  // An open row from earlier the same day gets closed by this scan instead of
+  // opening a second check-in (there is no dedicated check-out reader yet).
+  const dayStart = new Date(new Date(scanMs).toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  dayStart.setHours(0, 0, 0, 0);
+  const { data: openRow } = await supabase
+    .from("staff_attendance")
+    .select("id, check_in")
+    .eq("user_id", person.user_id)
+    .is("check_out", null)
+    .lt("check_in", windowStart)
+    .gte("check_in", new Date(scanMs - 20 * 60 * 60_000).toISOString())
+    .order("check_in", { ascending: false })
+    .limit(1);
+
+  if (openRow && openRow.length > 0) {
+    await supabase
+      .from("staff_attendance")
+      .update({ check_out: scanTime })
+      .eq("id", (openRow[0] as { id: string }).id);
+    return `${label} ${personName} checked out`;
+  }
+
+  // check_in must be the real hardware scan time — never the import time, or
+  // lateness is measured against when the cron happened to run.
   const { error } = await supabase.from("staff_attendance").insert({
     user_id: person.user_id,
     branch_id: person.branch_id,
-    check_in: new Date().toISOString(),
+    check_in: scanTime,
     notes: "Imported from MIPS pass records",
   });
   if (error) return `Staff attendance error: ${error.message}`;
-  return `${person.type === "trainer" ? "Trainer" : "Staff"} ${personName} checked in`;
+  return `${label} ${personName} checked in`;
 }
+
 
 async function authorize(req: Request, supabase: ReturnType<typeof createClient>, serviceKey: string): Promise<Response | null> {
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
