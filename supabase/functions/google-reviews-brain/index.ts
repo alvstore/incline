@@ -1,3 +1,5 @@
+// v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
+// persistence, Places→GBP duplicate promotion, draft persistence, real Google errors.
 // v4.1.0 — Author matching without FK aliases + token-aware name scoring; AI
 // classification accepts tool-call OR JSON body, with a JSON-mode retry.
 // v3.0.0 — Lane-aware Google Reviews: Places (New) quick-connect + Business Profile full access
@@ -30,6 +32,7 @@ type Action =
   | "diagnose"
   | "classify"
   | "reply"
+  | "save_draft"
   | "request_member_review";
 
 interface Body {
@@ -39,6 +42,7 @@ interface Body {
   query?: string; // for search_places
   inbound_id?: string;
   reply_text?: string;
+  draft?: string;
   // for request_member_review (legacy shim)
   feedback_id?: string;
   channel?: "whatsapp" | "sms" | "email" | "in_app";
@@ -1333,6 +1337,9 @@ Deno.serve(async (req) => {
         const r = await classifyOne(body.inbound_id);
         return json(r);
       }
+      case "save_draft":
+        if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
+        return await saveDraft(body.inbound_id, body.draft ?? "");
       case "reply":
         if (!body.inbound_id || !body.reply_text)
           return json({ error: "inbound_id and reply_text required" }, 400);
