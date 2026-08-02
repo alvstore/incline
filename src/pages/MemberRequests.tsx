@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemberData } from '@/hooks/useMemberData';
-import { Snowflake, User, Clock, AlertCircle, Loader2, CheckCircle, XCircle, Plus, UtensilsCrossed, Dumbbell } from 'lucide-react';
+import { Snowflake, User, Clock, AlertCircle, Loader2, CheckCircle, XCircle, Plus, UtensilsCrossed, Dumbbell, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -25,8 +25,12 @@ export default function MemberRequests() {
   const [unfreezeSheetOpen, setUnfreezeSheetOpen] = useState(false);
   const [planRequestOpen, setPlanRequestOpen] = useState<null | 'diet' | 'workout'>(null);
   const [planNote, setPlanNote] = useState('');
+  const [lockerSheetOpen, setLockerSheetOpen] = useState(false);
+  const [lockerNote, setLockerNote] = useState('');
 
   const isFrozen = activeMembership?.status === 'frozen';
+  // Freeze is only offered when the purchased plan actually allows freeze days.
+  const freezeAllowed = Number((activeMembership as any)?.plan?.max_freeze_days || 0) > 0;
 
   // Fetch existing requests
   const { data: requests = [], isLoading: requestsLoading } = useQuery({
@@ -134,6 +138,35 @@ export default function MemberRequests() {
     },
   });
 
+  // Submit locker request
+  const submitLockerRequest = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('approval_requests')
+        .insert({
+          approval_type: 'locker_request' as any,
+          reference_type: 'locker',
+          reference_id: member!.id,
+          branch_id: member!.branch_id,
+          requested_by: user!.id,
+          request_data: {
+            memberName: (member as any)?.profiles?.full_name || member!.member_code,
+            memberCode: member!.member_code,
+            note: lockerNote,
+            requested_at: new Date().toISOString(),
+          },
+        } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Locker request submitted');
+      setLockerSheetOpen(false);
+      setLockerNote('');
+      queryClient.invalidateQueries({ queryKey: ['my-requests'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
+  });
+
   // Request a Diet/Workout plan — creates tasks for the assigned trainer
   // (or all branch trainers when none is assigned).
   const submitPlanRequest = useMutation({
@@ -226,6 +259,7 @@ export default function MemberRequests() {
 
   const getRequestTypeLabel = (request: any) => {
     if (request.reference_type === 'trainer_change') return 'Trainer Change';
+    if (request.reference_type === 'locker') return 'Locker Request';
     if (request.reference_type === 'membership_unfreeze') return 'Membership Unfreeze';
     switch (request.approval_type) {
       case 'membership_freeze':
@@ -235,6 +269,9 @@ export default function MemberRequests() {
     }
   };
 
+  const hasPendingLockerRequest = requests.some(
+    (r: any) => r.reference_type === 'locker' && r.status === 'pending'
+  );
   const hasPendingTrainerRequest = requests.some(
     (r: any) => r.reference_type === 'trainer_change' && r.status === 'pending'
   );
@@ -255,8 +292,8 @@ export default function MemberRequests() {
 
         {/* Quick Actions */}
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Freeze / Unfreeze Card */}
-          {isFrozen ? (
+          {/* Freeze / Unfreeze Card — only when the plan includes freeze days */}
+          {!freezeAllowed && !isFrozen ? null : isFrozen ? (
             <Card className="border-info/50 bg-info/5">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -392,11 +429,11 @@ export default function MemberRequests() {
                 </SheetTrigger>
                 <SheetContent side="right">
                   <SheetHeader>
-                    <SheetTitle>Request Trainer Change</SheetTitle>
+                    <SheetTitle>{member.assigned_trainer_id ? 'Request Trainer Change' : 'Request a Trainer'}</SheetTitle>
                   </SheetHeader>
                   <div className="space-y-4 py-4">
                     <div>
-                      <label className="text-sm font-medium">Reason for change</label>
+                      <label className="text-sm font-medium">{member.assigned_trainer_id ? 'Reason for change' : 'What are you looking for?'}</label>
                       <Textarea
                         placeholder="e.g., Schedule conflicts, Training style preference, etc."
                         value={trainerChangeReason}
