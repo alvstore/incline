@@ -1,23 +1,19 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, differenceInDays } from "date-fns";
-import { Progress } from "@/components/ui/progress";
+import { format } from "date-fns";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
-import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import {
-  Plus, Package, Calendar, Check, X, Edit, TrendingUp, Users, Dumbbell,
-  Eye, EyeOff, Crown, IndianRupee, Download, Sparkles, CalendarDays, Clock,
-  Utensils, Heart, Moon, Activity, Target, Zap, AlertCircle, XCircle,
+  Plus, Package, Calendar, TrendingUp, Users, Dumbbell,
+  Eye, EyeOff, Download, Sparkles, ChevronDown, BarChart3,
 } from "lucide-react";
 import {
   usePTPackages, useActiveMemberPackages, useTrainerSessions,
@@ -27,73 +23,17 @@ import { useTrainers } from "@/hooks/useTrainers";
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { AddPTPackageDrawer } from "@/components/pt/AddPTPackageDrawer";
 import { EditPTPackageDrawer } from "@/components/pt/EditPTPackageDrawer";
 import { CancelInvoiceDrawer } from "@/components/invoices/CancelInvoiceDrawer";
+import { PendingPaymentsAlert } from "@/components/pt/PendingPaymentsAlert";
+import { TodaySessionsPanel } from "@/components/pt/TodaySessionsPanel";
+import { ClientsTable } from "@/components/pt/ClientsTable";
+import { InsightsPanel } from "@/components/pt/InsightsPanel";
+import { PackageCard } from "@/components/pt/PackageCard";
+import type { PTMemberPackageRow } from "@/components/pt/ptTypes";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
-
-const SESSION_TYPES = [
-  { value: "per_session", label: "Per Session" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-  { value: "custom", label: "Custom" },
-];
-
-type Tier = 'silver' | 'gold' | 'platinum' | 'default';
-
-function inferTier(name: string | null | undefined): Tier {
-  const n = (name || '').toLowerCase();
-  if (n.includes('platinum') || n.includes('elite')) return 'platinum';
-  if (n.includes('gold')) return 'gold';
-  if (n.includes('silver') || n.includes('basic') || n.includes('foundation')) return 'silver';
-  return 'default';
-}
-
-const TIER_RIBBON: Record<Tier, string> = {
-  silver: 'bg-gradient-to-r from-muted-foreground/60 via-muted to-muted-foreground/60',
-  gold: 'bg-gradient-to-r from-warning via-warning to-warning',
-  platinum: 'bg-gradient-to-r from-primary via-primary to-primary/90',
-  default: 'bg-gradient-to-r from-primary via-primary to-primary/80',
-};
-
-const TIER_ICON_BG: Record<Tier, string> = {
-  silver: 'bg-muted text-muted-foreground',
-  gold: 'bg-warning/15 text-warning',
-  platinum: 'bg-primary/15 text-primary',
-  default: 'bg-primary/15 text-primary',
-};
-
-const AVATAR_PALETTE = [
-  'bg-primary/15 text-primary',
-  'bg-primary/15 text-primary',
-  'bg-success/15 text-success',
-  'bg-warning/15 text-warning',
-  'bg-info/15 text-info',
-  'bg-destructive/15 text-destructive',
-];
-
-function initialsOf(name: string | null | undefined): string {
-  if (!name) return '–';
-  const parts = name.trim().split(/\s+/);
-  const first = parts[0]?.[0] ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-  return (first + last).toUpperCase() || name[0]?.toUpperCase() || '–';
-}
-
-function avatarColor(name: string | null | undefined): string {
-  const s = (name || '?');
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
-}
-
-function formatINR(value: number): string {
-  if (value >= 1_00_000) return `₹${(value / 1_00_000).toFixed(1)}L`;
-  if (value >= 1_000) return `₹${(value / 1_000).toFixed(1)}k`;
-  return `₹${value.toLocaleString('en-IN')}`;
-}
 
 export default function PTSessionsPage() {
   const { roles } = useAuth();
@@ -105,11 +45,9 @@ export default function PTSessionsPage() {
   const [selectedPackageForSession, setSelectedPackageForSession] = useState<string>("");
   const [showInactive, setShowInactive] = useState(false);
   const [cancelInvoiceTarget, setCancelInvoiceTarget] = useState<any>(null);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const canCancelInvoice = can.cancelInvoice(roles.map(r => r.role));
-  const [newSession, setNewSession] = useState({
-    scheduled_at: "",
-    duration_minutes: 60,
-  });
+  const [newSession, setNewSession] = useState({ scheduled_at: "", duration_minutes: 60 });
 
   // Cmd+K: ?new=1 opens Create PT Package
   useEffect(() => {
@@ -125,7 +63,7 @@ export default function PTSessionsPage() {
   const queryBranchId = branchFilter || undefined;
   const { data: packages, isLoading: packagesLoading } = usePTPackages(queryBranchId, showInactive);
   const { data: trainers } = useTrainers(queryBranchId || branchId);
-  const { data: activePackages } = useActiveMemberPackages(queryBranchId);
+  const { data: activePackages, isLoading: activeLoading } = useActiveMemberPackages(queryBranchId);
   const { data: pendingPackages } = useActiveMemberPackages(queryBranchId, { statuses: ['pending_payment'] });
   const scheduleSession = useSchedulePTSession();
   const completeSession = useCompletePTSession();
@@ -134,33 +72,12 @@ export default function PTSessionsPage() {
   const renewPackage = useRenewPtPackage();
   const [renewingId, setRenewingId] = useState<string | null>(null);
 
-  // Continues a client on the same plan — the server starts the new term the
-  // day after the current expiry so there is no gap in coverage.
-  const handleRenewPackage = async (pkg: any) => {
-    setRenewingId(pkg.id);
-    try {
-      const result = await renewPackage.mutateAsync({ memberPackageId: pkg.id });
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
-        return;
-      }
-      toast.success(`${pkg.member_name || 'Client'} renewed until ${result.expiry_date ? format(new Date(result.expiry_date), 'PP') : 'the new term end'}`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to renew package');
-    } finally {
-      setRenewingId(null);
-    }
-  };
-
-
   // Session KPIs must cover every trainer in the branch — reading only the
   // first trainer made the dashboard show 0 sessions while packages existed.
   const trainerIds = useMemo(() => (trainers || []).map((t: any) => t.id).filter(Boolean), [trainers]);
-  const { data: sessions } = useTrainerSessions(trainerIds, { startDate: new Date() });
+  const { data: sessions, isLoading: sessionsLoading } = useTrainerSessions(trainerIds, { startDate: new Date() });
 
-  const filteredPackages = (packages || []).filter((pkg: any) =>
-    showInactive ? true : pkg.is_active !== false
-  );
+  const filteredPackages = (packages || []).filter((pkg: any) => (showInactive ? true : pkg.is_active !== false));
 
   const completedCount = sessions?.filter((s) => s.status === "completed").length || 0;
   const scheduledCount = sessions?.filter((s) => s.status === "scheduled").length || 0;
@@ -180,15 +97,11 @@ export default function PTSessionsPage() {
   }, [activePackages]);
 
   const totalRevenue = trainerRevenue.reduce((sum, t) => sum + t.revenue, 0);
-  const topPerformer = trainerRevenue[0];
-  const topThree = trainerRevenue.slice(0, 3);
-  const topRevenue = topThree[0]?.revenue || 0;
 
   const packageTypeSplit = useMemo(() => {
     // Prefer the canonical package_type; fall back to session count so legacy
     // rows without the column still classify correctly.
-    const isMonthly = (p: any) =>
-      p.package_type ? p.package_type === 'monthly' : !(p.sessions_total > 0);
+    const isMonthly = (p: any) => (p.package_type ? p.package_type === 'monthly' : !(p.sessions_total > 0));
     const durationBased = activePackages?.filter(isMonthly).length || 0;
     const sessionBased = (activePackages?.length || 0) - durationBased;
     return [
@@ -197,7 +110,9 @@ export default function PTSessionsPage() {
     ];
   }, [activePackages]);
 
-  const typeTotal = packageTypeSplit.reduce((s, p) => s + p.value, 0);
+  const todayCount = sessions?.filter(
+    (s) => new Date(s.scheduled_at).toDateString() === new Date().toDateString(),
+  ).length || 0;
 
   const openEditDrawer = (pkg: any) => {
     setEditingPackage(pkg);
@@ -210,6 +125,26 @@ export default function PTSessionsPage() {
       toast.success(pkg.is_active ? "Package deactivated" : "Package activated");
     } catch {
       toast.error("Failed to update package status");
+    }
+  };
+
+  // Continues a client on the same plan — the server starts the new term the
+  // day after the current expiry so there is no gap in coverage.
+  const handleRenewPackage = async (pkg: any) => {
+    setRenewingId(pkg.id);
+    try {
+      const result = await renewPackage.mutateAsync({ memberPackageId: pkg.id });
+      if ((result as any)?.error) {
+        toast.error((result as any).error);
+        return;
+      }
+      toast.success(
+        `${pkg.member_name || 'Client'} renewed until ${result.expiry_date ? format(new Date(result.expiry_date), 'PP') : 'the new term end'}`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to renew package');
+    } finally {
+      setRenewingId(null);
     }
   };
 
@@ -257,17 +192,16 @@ export default function PTSessionsPage() {
 
   return (
     <AppLayout>
-      <TooltipProvider delayDuration={200}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
-              <Sparkles className="h-3.5 w-3.5" /> Coaching Studio
+              <Sparkles className="h-3.5 w-3.5" aria-hidden /> Coaching Studio
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Personal Training Packages</h1>
-            <p className="text-sm text-muted-foreground max-w-2xl">
-              Design, sell and track every 1-on-1 coaching package across your branches.
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Personal Training</h1>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Run today's sessions, track every client's package, and manage what you sell.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -290,14 +224,17 @@ export default function PTSessionsPage() {
                 exportToCSV(rows, 'pt_sessions');
               }}
             >
-              <Download className="h-4 w-4" /> Export
+              <Download className="h-4 w-4" aria-hidden /> Export
+            </Button>
+            <Button onClick={() => setIsScheduleOpen(true)} variant="outline" className="rounded-xl gap-1.5">
+              <Calendar className="h-4 w-4" aria-hidden /> Schedule
             </Button>
             {canManage && (
               <Button
                 onClick={() => setIsCreatePackageOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md hover:shadow-xl hover:shadow-lg transition-all duration-200"
+                className="rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 transition-all duration-200 hover:shadow-xl"
               >
-                <Plus className="mr-2 h-4 w-4" /> Create Package
+                <Plus className="mr-2 h-4 w-4" aria-hidden /> Create Package
               </Button>
             )}
           </div>
@@ -306,25 +243,25 @@ export default function PTSessionsPage() {
         {/* KPI Stats */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <KpiCard
+            icon={<Dumbbell className="h-5 w-5" />}
+            tint="amber"
+            label="Sessions Today"
+            value={todayCount}
+            sub="Scheduled for today"
+          />
+          <KpiCard
+            icon={<Users className="h-5 w-5" />}
+            tint="emerald"
+            label="Active Clients"
+            value={activePackages?.length || 0}
+            sub={`Across ${trainerRevenue.length || 0} trainer${trainerRevenue.length === 1 ? '' : 's'}`}
+          />
+          <KpiCard
             icon={<Package className="h-5 w-5" />}
             tint="indigo"
             label="Total Packages"
             value={packages?.length || 0}
             sub={`${filteredPackages.length} visible`}
-          />
-          <KpiCard
-            icon={<Users className="h-5 w-5" />}
-            tint="emerald"
-            label="Active Memberships"
-            value={activePackages?.length || 0}
-            sub={`Across ${trainerRevenue.length || 0} trainer${trainerRevenue.length === 1 ? '' : 's'}`}
-          />
-          <KpiCard
-            icon={<Dumbbell className="h-5 w-5" />}
-            tint="amber"
-            label="Sessions Today"
-            value={sessions?.filter((s) => new Date(s.scheduled_at).toDateString() === new Date().toDateString()).length || 0}
-            sub="Scheduled for today"
           />
           <KpiCard
             icon={<TrendingUp className="h-5 w-5" />}
@@ -335,293 +272,103 @@ export default function PTSessionsPage() {
           />
         </div>
 
-        {/* Analytics Row */}
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* Top Performer */}
-          <Card className="rounded-2xl border-0 overflow-hidden text-white relative bg-gradient-to-br from-primary via-primary to-primary/90 shadow-lg shadow-md">
-            <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-            <div className="absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-primary/20 blur-2xl" />
-            <CardHeader className="pb-2 relative z-10">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-white/70">
-                  Top Performer
-                </p>
-                <div className="rounded-full bg-warning/20 p-1.5 ring-1 ring-warning/30">
-                  <Crown className="h-4 w-4 text-warning-foreground" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10 space-y-4">
-              {topPerformer ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-white/15 ring-2 ring-white/30 flex items-center justify-center text-base font-bold">
-                      {initialsOf(topPerformer.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-lg font-bold leading-tight truncate">{topPerformer.name}</p>
-                      <p className="text-xs text-white/70">Leading this period</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-white/10 backdrop-blur px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-white/60">Revenue</p>
-                      <p className="text-lg font-bold flex items-center">
-                        <IndianRupee className="h-4 w-4" />{topPerformer.revenue.toLocaleString('en-IN')}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-white/10 backdrop-blur px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-white/60">Clients</p>
-                      <p className="text-lg font-bold">{topPerformer.clients}</p>
-                    </div>
-                  </div>
-                  {topThree.length > 0 && (
-                    <div className="flex items-end gap-1.5 h-8 pt-1">
-                      {topThree.map((t, i) => {
-                        const pct = topRevenue ? Math.max(8, (t.revenue / topRevenue) * 100) : 8;
-                        return (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                            <div
-                              className="w-full rounded-t-md bg-white/70"
-                              style={{ height: `${pct}%`, opacity: 1 - i * 0.25 }}
-                              aria-label={`${t.name} revenue share`}
-                            />
-                            <span className="text-[9px] text-white/60 font-medium">#{i + 1}</span>
-                          </div>
-                        );
-                      })}
-                      {Array.from({ length: Math.max(0, 3 - topThree.length) }).map((_, i) => (
-                        <div key={`pad-${i}`} className="flex-1 h-2 rounded-t-md bg-white/10" />
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <div className="h-12 w-12 rounded-full bg-white/10 flex items-center justify-center mb-3">
-                    <Crown className="h-5 w-5 text-white/70" />
-                  </div>
-                  <p className="text-sm font-medium text-white">No active packages yet</p>
-                  <p className="text-xs text-white/60 mt-1">Sell your first package to crown a top performer.</p>
-                  {canManage && (
-                    <button
-                      onClick={() => setIsCreatePackageOpen(true)}
-                      className="mt-3 text-xs font-semibold text-white underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/40 rounded"
-                    >
-                      Create your first package →
-                    </button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Money that hasn't landed yet gets one compact strip, not a table. */}
+        <PendingPaymentsAlert
+          rows={(pendingPackages || []) as PTMemberPackageRow[]}
+          canCancelInvoice={canCancelInvoice}
+          onCancelInvoice={setCancelInvoiceTarget}
+        />
 
-          {/* Package Type Split */}
-          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-foreground">Package Type Split</CardTitle>
-              <p className="text-xs text-muted-foreground">How your active members are distributed.</p>
-            </CardHeader>
-            <CardContent>
-              {typeTotal > 0 ? (
-                <div className="flex items-center gap-4">
-                  <div className="relative h-32 w-32 flex-shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={packageTypeSplit.filter(d => d.value > 0)}
-                          cx="50%" cy="50%"
-                          innerRadius={42} outerRadius={58}
-                          paddingAngle={3}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {packageTypeSplit.filter(d => d.value > 0).map((d, i) => (
-                            <Cell key={i} fill={d.color} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xl font-bold text-foreground leading-none">{typeTotal}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Active</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-3 min-w-0">
-                    {packageTypeSplit.map((d) => {
-                      const pct = typeTotal ? Math.round((d.value / typeTotal) * 100) : 0;
-                      return (
-                        <div key={d.name} className="space-y-1">
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: d.color }} />
-                              <span className="font-medium text-foreground truncate">{d.name}</span>
-                            </div>
-                            <span className="font-semibold text-foreground tabular-nums">{d.value} · {pct}%</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: d.color }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <EmptyMini icon={<Package className="h-5 w-5" />} title="No packages yet" hint="Active packages will appear here." />
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Revenue by Trainer */}
-          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
-            <CardHeader className="pb-2 flex flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-sm font-semibold text-foreground">Revenue by Trainer</CardTitle>
-                <p className="text-xs text-muted-foreground">Top earners this period.</p>
-              </div>
-              {totalRevenue > 0 && (
-                <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</p>
-                  <p className="text-sm font-bold text-foreground">{formatINR(totalRevenue)}</p>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent>
-              {trainerRevenue.length > 0 ? (
-                <ul className="space-y-3">
-                  {trainerRevenue.slice(0, 5).map((t, i) => {
-                    const pct = topRevenue ? Math.max(4, (t.revenue / topRevenue) * 100) : 0;
-                    const rankStyles = i === 0
-                      ? 'bg-warning/15 text-warning'
-                      : i === 1
-                        ? 'bg-muted text-foreground'
-                        : i === 2
-                          ? 'bg-warning/15 text-warning'
-                          : 'bg-muted text-muted-foreground';
-                    return (
-                      <li key={`${t.name}-${i}`} className="flex items-center gap-3">
-                        <span className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0', rankStyles)}>
-                          {i + 1}
-                        </span>
-                        <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0', avatarColor(t.name))}>
-                          {initialsOf(t.name)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-foreground truncate">{t.name}</p>
-                            <p className="text-sm font-bold text-foreground tabular-nums flex-shrink-0">
-                              {formatINR(t.revenue)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-primary to-primary"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
-                              {t.clients} client{t.clients === 1 ? '' : 's'}
-                            </span>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <EmptyMini icon={<TrendingUp className="h-5 w-5" />} title="No revenue yet" hint="Revenue will appear once packages are sold." />
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Session Status Strip */}
-        {totalSessions > 0 && (
-          <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
-            <CardContent className="py-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Session Status</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusPill color="emerald" label="Completed" count={completedCount} />
-                    <StatusPill color="indigo" label="Scheduled" count={scheduledCount} />
-                    <StatusPill color="rose" label="Cancelled" count={cancelledCount} />
-                  </div>
-                </div>
-                <div className="flex h-2 w-full md:w-72 overflow-hidden rounded-full bg-muted">
-                  <div className="bg-success" style={{ width: `${(completedCount / totalSessions) * 100}%` }} />
-                  <div className="bg-primary" style={{ width: `${(scheduledCount / totalSessions) * 100}%` }} />
-                  <div className="bg-destructive" style={{ width: `${(cancelledCount / totalSessions) * 100}%` }} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <Tabs defaultValue="packages" className="space-y-4">
+        <Tabs defaultValue="today" className="space-y-4">
           <TabsList className="rounded-xl bg-muted p-1">
-            <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Packages</TabsTrigger>
-            <TabsTrigger value="active" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Active Packages</TabsTrigger>
-            <TabsTrigger value="sessions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Sessions</TabsTrigger>
+            <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              Today's Sessions
+            </TabsTrigger>
+            <TabsTrigger value="clients" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              Clients
+            </TabsTrigger>
+            <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              Packages
+            </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="today">
+            <TodaySessionsPanel
+              sessions={(sessions || []) as any}
+              loading={sessionsLoading}
+              busy={completeSession.isPending || cancelSession.isPending}
+              onComplete={handleCompleteSession}
+              onCancel={handleCancelSession}
+              onSchedule={() => setIsScheduleOpen(true)}
+            />
+          </TabsContent>
+
+          <TabsContent value="clients">
+            <ClientsTable
+              rows={(activePackages || []) as PTMemberPackageRow[]}
+              loading={activeLoading}
+              renewingId={renewingId}
+              renewPending={renewPackage.isPending}
+              canCancelInvoice={canCancelInvoice}
+              onSchedule={() => setIsScheduleOpen(true)}
+              onRenew={handleRenewPackage}
+              onCancelInvoice={(pkg) =>
+                setCancelInvoiceTarget({
+                  id: pkg.invoice_id,
+                  invoice_number: pkg.invoice_number ?? null,
+                  total_amount: pkg.price_paid,
+                  amount_paid: 0,
+                  status: 'pending',
+                })
+              }
+            />
+          </TabsContent>
+
           <TabsContent value="packages" className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl bg-card px-4 py-3 shadow-sm shadow-md">
+            <div className="flex items-center justify-between rounded-xl bg-card px-4 py-3 shadow-sm">
               <div className="flex items-center gap-3">
                 <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive" />
-                <Label htmlFor="show-inactive" className="text-sm cursor-pointer flex items-center gap-1.5 text-foreground">
-                  {showInactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  Show Inactive
+                <Label htmlFor="show-inactive" className="flex cursor-pointer items-center gap-1.5 text-sm text-foreground">
+                  {showInactive ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
+                  Show inactive
                 </Label>
               </div>
-              <span className="text-xs text-muted-foreground hidden sm:inline">
+              <span className="hidden text-xs text-muted-foreground sm:inline">
                 {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
               </span>
             </div>
 
-            <AddPTPackageDrawer open={isCreatePackageOpen} onOpenChange={setIsCreatePackageOpen} branchId={branchId} />
-            <EditPTPackageDrawer open={isEditPackageOpen} onOpenChange={setIsEditPackageOpen} package={editingPackage} />
-
             {packagesLoading ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <Card key={i} className="rounded-2xl border-0 bg-card shadow-lg shadow-md animate-pulse overflow-hidden">
+                  <Card key={i} className="overflow-hidden rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
                     <div className="h-1.5 bg-muted" />
-                    <CardHeader>
-                      <div className="h-4 bg-muted rounded w-24" />
-                      <div className="h-6 bg-muted rounded w-40 mt-2" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="h-4 bg-muted rounded w-full" />
-                        <div className="h-4 bg-muted rounded w-3/4" />
-                      </div>
+                    <CardContent className="space-y-3 p-5">
+                      <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                      <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+                      <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                      <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : filteredPackages.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
-                <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                    <Package className="h-6 w-6 text-primary" />
-                  </div>
+              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50">
+                <CardContent className="flex flex-col items-center py-16 text-center">
+                  <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+                    <Package className="h-6 w-6" />
+                  </span>
                   <p className="text-base font-semibold text-foreground">
                     {showInactive ? "No PT packages yet" : "No active PT packages"}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                  <p className="mt-1 max-w-xs text-sm text-muted-foreground">
                     {showInactive
                       ? "Create your first coaching package to get started."
-                      : "Create your first package, or toggle 'Show Inactive' to see archived ones."}
+                      : "Create a package, or toggle 'Show inactive' to see archived ones."}
                   </p>
                   {canManage && (
-                    <Button
-                      onClick={() => setIsCreatePackageOpen(true)}
-                      className="mt-5 rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md"
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Create Package
+                    <Button onClick={() => setIsCreatePackageOpen(true)} className="mt-5 rounded-xl">
+                      <Plus className="mr-2 h-4 w-4" aria-hidden /> Create package
                     </Button>
                   )}
                 </CardContent>
@@ -640,281 +387,93 @@ export default function PTSessionsPage() {
               </div>
             )}
           </TabsContent>
-
-          <TabsContent value="active" className="space-y-4">
-            <div className="flex justify-end">
-              <Button
-                onClick={() => setIsScheduleOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-md"
-              >
-                <Calendar className="mr-2 h-4 w-4" /> Schedule Session
-              </Button>
-            </div>
-
-            <Sheet open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>Schedule PT Session</SheetTitle>
-                  <SheetDescription>Book a personal training session</SheetDescription>
-                </SheetHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Member Package *</Label>
-                    <Select value={selectedPackageForSession} onValueChange={setSelectedPackageForSession}>
-                      <SelectTrigger><SelectValue placeholder="Select member package" /></SelectTrigger>
-                      <SelectContent>
-                        {activePackages?.map((pkg) => (
-                          <SelectItem key={pkg.id} value={pkg.id}>
-                            {pkg.member_name} - {pkg.package_name} ({pkg.sessions_remaining} left)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Date & Time *</Label>
-                    <Input type="datetime-local" value={newSession.scheduled_at} onChange={(e) => setNewSession({ ...newSession, scheduled_at: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Duration (minutes)</Label>
-                    <Input type="number" value={newSession.duration_minutes} onChange={(e) => setNewSession({ ...newSession, duration_minutes: parseInt(e.target.value) || 60 })} />
-                  </div>
-                </div>
-                <SheetFooter>
-                  <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>Cancel</Button>
-                  <Button onClick={handleScheduleSession} disabled={scheduleSession.isPending}>
-                    {scheduleSession.isPending ? "Scheduling..." : "Schedule"}
-                  </Button>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
-
-            {pendingPackages && pendingPackages.length > 0 && (
-              <Card className="rounded-2xl border-0 bg-amber-50/70 ring-1 ring-amber-200 shadow-md">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-amber-900 text-base">
-                    <AlertCircle className="h-4 w-4" />
-                    Pending payment ({pendingPackages.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-xs text-amber-800/80 mb-3">
-                    These packages were sold but their invoice hasn't been fully paid yet. Collect payment to activate, or cancel the invoice to reverse the sale and free up trainer commissions.
-                  </p>
-                  <div className="rounded-xl overflow-hidden border border-amber-200 bg-card">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-amber-100/60 hover:bg-amber-100/60">
-                          <TableHead>Member</TableHead>
-                          <TableHead>Package</TableHead>
-                          <TableHead>Trainer</TableHead>
-                          <TableHead className="text-right">Price</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pendingPackages.map((pkg: any) => (
-                          <TableRow key={pkg.id} className="hover:bg-amber-50/60">
-                            <TableCell className="font-medium">{pkg.member_name || pkg.member_code || '—'}</TableCell>
-                            <TableCell>{pkg.package_name}</TableCell>
-                            <TableCell>{pkg.trainer_name || '—'}</TableCell>
-                            <TableCell className="text-right">₹{Number(pkg.price_paid || 0).toLocaleString('en-IN')}</TableCell>
-                            <TableCell className="text-right">
-                              {canCancelInvoice && pkg.invoice_id ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                                  onClick={() => setCancelInvoiceTarget({
-                                    id: pkg.invoice_id,
-                                    invoice_number: pkg.invoice_number ?? null,
-                                    total_amount: pkg.price_paid,
-                                    amount_paid: 0,
-                                    status: 'pending',
-                                  })}
-                                >
-                                  <XCircle className="h-4 w-4 mr-1" /> Cancel
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">Awaiting payment</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {activePackages?.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
-                <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-success/10 flex items-center justify-center mb-4">
-                    <Users className="h-6 w-6 text-success" />
-                  </div>
-                  <p className="text-base font-semibold text-foreground">No active PT packages</p>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                    Once members purchase a package it will appear here for scheduling.
-                  </p>
-                  <Button onClick={() => setIsScheduleOpen(true)} className="mt-5 rounded-xl bg-gradient-to-r from-primary to-primary/90 text-white">
-                    <Calendar className="mr-2 h-4 w-4" /> Schedule Session
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Member</TableHead>
-                      <TableHead>Package</TableHead>
-                      <TableHead>Trainer</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead>Expires</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activePackages?.map((pkg) => (
-                      <TableRow key={pkg.id} className="hover:bg-muted/50 transition-colors duration-150">
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold', avatarColor(pkg.member_name))}>
-                              {initialsOf(pkg.member_name)}
-                            </div>
-                            <span className="font-medium text-foreground">{pkg.member_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-foreground">{pkg.package_name}</TableCell>
-                        <TableCell className="text-foreground">{pkg.trainer_name || "—"}</TableCell>
-                        <TableCell>
-                          {(() => {
-                            if (pkg.sessions_total > 0) {
-                              const used = pkg.sessions_total - pkg.sessions_remaining;
-                              const pct = Math.round((used / pkg.sessions_total) * 100);
-                              return (
-                                <div className="space-y-1 min-w-[130px]">
-                                  <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-warning' : '[&>div]:bg-success'}`} />
-                                  <p className="text-xs text-muted-foreground">{used}/{pkg.sessions_total} sessions</p>
-                                </div>
-                              );
-                            }
-                            const start = new Date(pkg.start_date || pkg.created_at);
-                            const end = new Date(pkg.expiry_date);
-                            const totalDays = Math.max(1, differenceInDays(end, start));
-                            const elapsed = Math.max(0, differenceInDays(new Date(), start));
-                            const pct = Math.min(100, Math.round((elapsed / totalDays) * 100));
-                            const daysLeft = Math.max(0, differenceInDays(end, new Date()));
-                            return (
-                              <div className="space-y-1 min-w-[150px]">
-                                <Progress value={pct} className={`h-2 ${pct >= 90 ? '[&>div]:bg-destructive' : pct >= 75 ? '[&>div]:bg-warning' : '[&>div]:bg-success'}`} />
-                                <p className="text-xs text-muted-foreground">{elapsed}d / {totalDays}d · {daysLeft}d left</p>
-                                <p className="text-[10px] text-muted-foreground">{format(start, "MMM d")} → {format(end, "MMM d")}</p>
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-foreground">{format(new Date(pkg.expiry_date), "PP")}</TableCell>
-                        <TableCell>
-                          <Badge variant={pkg.status === "active" ? "default" : "secondary"} className="rounded-full">
-                            {pkg.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-lg cursor-pointer"
-                            disabled={renewPackage.isPending}
-                            onClick={() => handleRenewPackage(pkg)}
-                          >
-                            {renewPackage.isPending && renewingId === pkg.id ? 'Renewing…' : 'Renew'}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="sessions" className="space-y-4">
-            {sessions?.length === 0 ? (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md">
-                <CardContent className="py-16 flex flex-col items-center text-center">
-                  <div className="h-14 w-14 rounded-full bg-warning/10 flex items-center justify-center mb-4">
-                    <Clock className="h-6 w-6 text-warning" />
-                  </div>
-                  <p className="text-base font-semibold text-foreground">No upcoming sessions</p>
-                  <p className="text-sm text-muted-foreground mt-1 max-w-xs">Sessions you schedule will appear here.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sessions?.map((session) => (
-                      <TableRow key={session.id} className="hover:bg-muted/50 transition-colors duration-150">
-                        <TableCell className="font-medium text-foreground">{format(new Date(session.scheduled_at), "PPP p")}</TableCell>
-                        <TableCell className="text-foreground">{session.member_name}</TableCell>
-                        <TableCell className="text-foreground">{session.duration_minutes} min</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={session.status === "completed" ? "default" : session.status === "cancelled" ? "destructive" : "secondary"}
-                            className="rounded-full"
-                          >
-                            {session.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {session.status === "scheduled" && (
-                            <div className="flex gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label="Mark session complete"
-                                className="h-9 w-9 rounded-lg hover:bg-success/10 text-success cursor-pointer"
-                                onClick={() => handleCompleteSession(session.id)}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label="Cancel session"
-                                className="h-9 w-9 rounded-lg hover:bg-destructive/10 text-destructive cursor-pointer"
-                                onClick={() => handleCancelSession(session.id)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-            )}
-          </TabsContent>
         </Tabs>
+
+        {/* Analytics live below the operational surface, collapsed by default. */}
+        <Collapsible open={insightsOpen} onOpenChange={setInsightsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full justify-between rounded-2xl bg-card py-6 text-left shadow-sm hover:bg-muted/50"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <BarChart3 className="h-4 w-4 text-primary" aria-hidden />
+                Insights &amp; revenue
+              </span>
+              <ChevronDown
+                className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', insightsOpen && 'rotate-180')}
+                aria-hidden
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-4">
+            <InsightsPanel
+              trainerRevenue={trainerRevenue}
+              packageTypeSplit={packageTypeSplit}
+              totalRevenue={totalRevenue}
+              completedCount={completedCount}
+              scheduledCount={scheduledCount}
+              cancelledCount={cancelledCount}
+              canManage={canManage}
+              onCreatePackage={() => setIsCreatePackageOpen(true)}
+            />
+          </CollapsibleContent>
+        </Collapsible>
       </div>
-      </TooltipProvider>
+
+      <AddPTPackageDrawer open={isCreatePackageOpen} onOpenChange={setIsCreatePackageOpen} branchId={branchId} />
+      <EditPTPackageDrawer open={isEditPackageOpen} onOpenChange={setIsEditPackageOpen} package={editingPackage} />
+
+      <Sheet open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+        <SheetContent className="w-full sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Schedule PT session</SheetTitle>
+            <SheetDescription>Book a personal training session for an active client package.</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="pt-package-select">Member package *</Label>
+              <Select value={selectedPackageForSession} onValueChange={setSelectedPackageForSession}>
+                <SelectTrigger id="pt-package-select">
+                  <SelectValue placeholder="Select member package" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePackages?.map((pkg) => (
+                    <SelectItem key={pkg.id} value={pkg.id}>
+                      {pkg.member_name} - {pkg.package_name} ({pkg.sessions_remaining} left)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pt-schedule-at">Date &amp; time *</Label>
+              <Input
+                id="pt-schedule-at"
+                type="datetime-local"
+                value={newSession.scheduled_at}
+                onChange={(e) => setNewSession({ ...newSession, scheduled_at: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pt-duration">Duration (minutes)</Label>
+              <Input
+                id="pt-duration"
+                type="number"
+                value={newSession.duration_minutes}
+                onChange={(e) => setNewSession({ ...newSession, duration_minutes: parseInt(e.target.value) || 60 })}
+              />
+            </div>
+          </div>
+          <SheetFooter>
+            <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>Cancel</Button>
+            <Button onClick={handleScheduleSession} disabled={scheduleSession.isPending}>
+              {scheduleSession.isPending ? "Scheduling…" : "Schedule"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       <CancelInvoiceDrawer
         open={!!cancelInvoiceTarget}
         onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
@@ -923,8 +482,6 @@ export default function PTSessionsPage() {
     </AppLayout>
   );
 }
-
-/* ───────────────── helpers ───────────────── */
 
 function KpiCard({
   icon, tint, label, value, sub,
@@ -942,204 +499,15 @@ function KpiCard({
     sky: 'bg-info/10 text-info',
   } as const;
   return (
-    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex items-start justify-between">
-          <div className={cn('h-10 w-10 rounded-full flex items-center justify-center', tintMap[tint])}>
-            {icon}
-          </div>
-        </div>
+    <Card className="rounded-2xl border-0 bg-card shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
+      <CardContent className="space-y-3 p-5">
+        <span className={cn('flex h-10 w-10 items-center justify-center rounded-full', tintMap[tint])} aria-hidden>
+          {icon}
+        </span>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold text-foreground tabular-nums mt-1">{value}</p>
-          <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function StatusPill({ color, label, count }: { color: 'emerald' | 'indigo' | 'rose'; label: string; count: number }) {
-  const map = {
-    emerald: 'bg-success/10 text-success',
-    indigo: 'bg-primary/10 text-primary',
-    rose: 'bg-destructive/10 text-destructive',
-  } as const;
-  return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium', map[color])}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', color === 'emerald' ? 'bg-success' : color === 'indigo' ? 'bg-primary' : 'bg-destructive')} />
-      {label} <span className="font-bold tabular-nums">{count}</span>
-    </span>
-  );
-}
-
-function EmptyMini({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-8 text-center">
-      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-2">
-        {icon}
-      </div>
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px]">{hint}</p>
-    </div>
-  );
-}
-
-// Parse a free-text description into "Label: value" feature rows.
-// Splits on sentence boundaries that precede a capitalized label-with-colon.
-function parseFeatureRows(text: string): Array<{ label: string; value: string }> {
-  if (!text) return [];
-  // Split on ". " preceding a Label: pattern, OR newlines preceding same.
-  const normalized = text.replace(/\r\n/g, '\n').trim();
-  const segments = normalized
-    .split(/(?:\.\s+|\n+)(?=[A-Z][A-Za-z0-9 /&-]{1,40}:)/g)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const rows: Array<{ label: string; value: string }> = [];
-  for (const seg of segments) {
-    const m = seg.match(/^([A-Z][A-Za-z0-9 /&-]{1,40}):\s*(.+?)\.?$/s);
-    if (m) {
-      rows.push({ label: m[1].trim(), value: m[2].trim() });
-    }
-  }
-  return rows;
-}
-
-const FEATURE_ICON_MAP: Array<{ test: RegExp; Icon: typeof Dumbbell }> = [
-  { test: /coaching|training|session|workout|gym/i, Icon: Dumbbell },
-  { test: /nutrition|diet|meal|caloric/i, Icon: Utensils },
-  { test: /recovery|sauna|ice|massage|rest/i, Icon: Heart },
-  { test: /sleep|rest/i, Icon: Moon },
-  { test: /frequency|schedule|day|week/i, Icon: CalendarDays },
-  { test: /goal|target|focus/i, Icon: Target },
-  { test: /assessment|scan|measure|tracking/i, Icon: Activity },
-  { test: /support|access|premium|priority/i, Icon: Zap },
-];
-
-function iconForLabel(label: string): typeof Dumbbell {
-  for (const { test, Icon } of FEATURE_ICON_MAP) {
-    if (test.test(label)) return Icon;
-  }
-  return Sparkles;
-}
-
-function PackageCard({
-  pkg, canManage, onEdit, onToggle,
-}: {
-  pkg: any;
-  canManage: boolean;
-  onEdit: () => void;
-  onToggle: () => void;
-}) {
-  const tier = inferTier(pkg.name);
-  const isMonthly = pkg.session_type === 'monthly' || pkg.session_type === 'quarterly' || (pkg.total_sessions ?? 0) === 0;
-  const inactive = pkg.is_active === false;
-  const months = Math.max(1, Math.round((pkg.validity_days || 30) / 30));
-  const badgeLabel = isMonthly
-    ? (pkg.session_type === 'quarterly' ? 'Quarterly' : 'Monthly Plan')
-    : (SESSION_TYPES.find((t) => t.value === pkg.session_type)?.label || 'Per Session');
-
-  const featureRows = useMemo(() => parseFeatureRows(pkg.description || ''), [pkg.description]);
-  const hasParsedFeatures = featureRows.length > 0;
-
-  return (
-    <Card
-      className={cn(
-        'rounded-2xl border-0 bg-card shadow-lg shadow-md hover:shadow-xl hover:shadow-md transition-all duration-200 overflow-hidden relative group flex flex-col',
-        inactive && 'opacity-70',
-      )}
-    >
-      <div className={cn('h-1.5', TIER_RIBBON[tier])} />
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold', TIER_ICON_BG[tier])}>
-            {isMonthly ? <CalendarDays className="h-3 w-3" /> : <Dumbbell className="h-3 w-3" />}
-            {badgeLabel}
-          </span>
-          {canManage && (
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 md:transition-opacity max-md:opacity-100">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Edit package"
-                className="h-8 w-8 rounded-lg hover:bg-primary/10 text-primary cursor-pointer"
-                onClick={onEdit}
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={inactive ? 'Activate package' : 'Deactivate package'}
-                className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground cursor-pointer"
-                onClick={onToggle}
-              >
-                {inactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0', TIER_ICON_BG[tier])}>
-            <Package className="h-4 w-4" />
-          </div>
-          <CardTitle className="text-lg font-bold text-foreground leading-snug">{pkg.name}</CardTitle>
-        </div>
-        {inactive && (
-          <Badge className="absolute top-3 right-3 rounded-full bg-muted text-foreground text-[10px] hover:bg-muted">
-            Inactive
-          </Badge>
-        )}
-      </CardHeader>
-
-      <CardContent className="flex flex-col flex-1 gap-4">
-        {pkg.description && (
-          hasParsedFeatures ? (
-            <ul className="space-y-2.5">
-              {featureRows.map((row, idx) => {
-                const Icon = iconForLabel(row.label);
-                return (
-                  <li key={`${row.label}-${idx}`} className="flex items-start gap-2.5">
-                    <span className={cn('mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0', TIER_ICON_BG[tier])}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{row.label}</p>
-                      <p className="text-sm text-foreground leading-snug">{row.value}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-              {pkg.description}
-            </p>
-          )
-        )}
-
-        <div className="mt-auto pt-2">
-          <div className="grid grid-cols-3 divide-x divide-border rounded-xl bg-muted/40 py-3">
-            <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                {isMonthly ? 'Months' : 'Sessions'}
-              </p>
-              <p className="text-base font-bold text-foreground mt-0.5 tabular-nums">
-                {isMonthly ? months : (pkg.total_sessions || 0)}
-              </p>
-            </div>
-            <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Price</p>
-              <p className="text-base font-bold text-foreground mt-0.5 flex items-center justify-center tabular-nums">
-                <IndianRupee className="h-3.5 w-3.5" />{(pkg.price || 0).toLocaleString('en-IN')}
-              </p>
-            </div>
-            <div className="text-center px-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Validity</p>
-              <p className="text-base font-bold text-foreground mt-0.5 tabular-nums">{pkg.validity_days || 0}d</p>
-            </div>
-          </div>
+          <p className="mt-1 text-3xl font-bold tabular-nums text-foreground">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
         </div>
       </CardContent>
     </Card>
