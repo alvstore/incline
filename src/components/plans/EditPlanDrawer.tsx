@@ -158,6 +158,7 @@ export function EditPlanDrawer({ open, onOpenChange, plan, branchId }: EditPlanD
           is_active: formData.is_active,
           includes_free_locker: formData.includes_free_locker,
           free_locker_size: formData.includes_free_locker ? formData.free_locker_size : null,
+          is_visible_to_members: formData.is_visible_to_members,
         },
       });
 
