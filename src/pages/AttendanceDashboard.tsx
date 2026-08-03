@@ -1156,20 +1156,27 @@ export default function AttendanceDashboard() {
                               <p className="text-xs text-muted-foreground truncate">{s.email}</p>
                             </div>
                           </div>
-                          <div className="mt-3 grid grid-cols-3 gap-2">
+                          <div className="mt-3 grid grid-cols-4 gap-2">
                             <div className="bg-success/10 rounded-lg p-2 text-center">
                               <p className="text-lg font-bold text-success">{s.days}</p>
                               <p className="text-xs text-muted-foreground">Present</p>
                             </div>
+                            <div className="bg-destructive/10 rounded-lg p-2 text-center">
+                              <p className="text-lg font-bold text-destructive">{s.missedDays}</p>
+                              <p className="text-xs text-muted-foreground">Missed</p>
+                            </div>
                             <div className="bg-muted/50 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-foreground">{s.totalDays}</p>
-                              <p className="text-xs text-muted-foreground">Total Days</p>
+                              <p className="text-lg font-bold text-foreground">{s.elapsedDays}<span className="text-xs text-muted-foreground">/{s.totalDays}</span></p>
+                              <p className="text-xs text-muted-foreground">Days elapsed</p>
                             </div>
                             <div className="bg-muted/50 rounded-lg p-2 text-center">
                               <p className="text-lg font-bold text-foreground">{Math.round(s.totalHours * 10) / 10}h</p>
                               <p className="text-xs text-muted-foreground">Hours</p>
                             </div>
                           </div>
+                          {s.openShifts > 0 && (
+                            <p className="mt-2 text-xs text-warning">{s.openShifts} day{s.openShifts > 1 ? 's' : ''} without a check-out — hours understated</p>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
