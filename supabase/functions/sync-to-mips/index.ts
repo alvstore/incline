@@ -1027,6 +1027,11 @@ Deno.serve(async (req) => {
         console.warn("Biometric backfill failed (non-fatal):", e);
       }
     }
+    // Release the normalized image buffer before the device dispatch phase —
+    // holding it through the remaining HTTP round-trips is what pushed heavy
+    // enrollments over the worker memory ceiling.
+    if (photoResult) photoResult.bytes = undefined;
+
 
     // Step 5: Dispatch to ALL mapped devices (multi-device) — unless caller
     // explicitly opted out (verification-only flows).
