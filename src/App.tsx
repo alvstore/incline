@@ -94,7 +94,7 @@ const MemberStore = lazy(() => import("./pages/MemberStore"));
 const MyWorkout = lazy(() => import("./pages/MyWorkout"));
 const MyDiet = lazy(() => import("./pages/MyDiet"));
 const MyBenefits = lazy(() => import("./pages/MyBenefits"));
-const BookBenefitSlot = lazy(() => import("./pages/BookBenefitSlot"));
+
 const MemberProfile = lazy(() => import("./pages/MemberProfile"));
 const MemberFeedback = lazy(() => import("./pages/MemberFeedback"));
 const MemberAnnouncements = lazy(() => import("./pages/MemberAnnouncements"));
