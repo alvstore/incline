@@ -553,9 +553,24 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     return json(500, { error: "signature_upload_failed", detail: sigUpErr.message });
   }
 
-  let pdfBytes: Uint8Array;
-  try {
-    pdfBytes = await generateWaiverPdf({
+  // 8) Insert the consent/signature row immediately — it is the legal record.
+  //    The waiver PDF is rendered and uploaded in the background right after.
+  const { error: sigRowErr } = await admin.from("member_onboarding_signatures").insert({
+    member_id: member.id,
+    signature_path: sigPath,
+    waiver_pdf_path: pdfPath,
+    par_q,
+    consents,
+    custom_terms: customTerms,
+    terms_version: termsVersion,
+    signer_ip: ip,
+    signer_user_agent: ua,
+    signed_at: signedAt,
+  });
+  if (sigRowErr) await captureEdgeError("register-member", sigRowErr, { route: "sig_row_insert" });
+
+  backgroundTask((async () => {
+    const pdfBytes = await generateWaiverPdf({
       member_code: member.member_code ?? member.id,
       full_name: reg.full_name,
       email: reg.email,
@@ -571,33 +586,12 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
       signed_at: signedAt,
       signature_png_bytes: signatureBytes,
     });
-  } catch (e) {
-    await captureEdgeError("register-member", e, { route: "pdf_render" });
-    return json(500, { error: "pdf_render_failed" });
-  }
+    const { error: pdfUpErr } = await admin.storage
+      .from("member-onboarding")
+      .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+    if (pdfUpErr) await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
+  })());
 
-  const { error: pdfUpErr } = await admin.storage
-    .from("member-onboarding")
-    .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
-  if (pdfUpErr) {
-    await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
-    return json(500, { error: "pdf_upload_failed", detail: pdfUpErr.message });
-  }
-
-  // 8) Insert signature row
-  const { error: sigRowErr } = await admin.from("member_onboarding_signatures").insert({
-    member_id: member.id,
-    signature_path: sigPath,
-    waiver_pdf_path: pdfPath,
-    par_q,
-    consents,
-    custom_terms: customTerms,
-    terms_version: termsVersion,
-    signer_ip: ip,
-    signer_user_agent: ua,
-    signed_at: signedAt,
-  });
-  if (sigRowErr) await captureEdgeError("register-member", sigRowErr, { route: "sig_row_insert" });
 
   // 9) Mark OTP consumed
   await admin.from("otp_verifications").update({ consumed_at: signedAt }).eq("id", otp.id);
