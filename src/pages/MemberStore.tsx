@@ -297,140 +297,335 @@ export default function MemberStore() {
     return { text: `${stock} in stock`, canAdd: true, stock };
   };
 
+  const categories: string[] = Array.from(
+    new Set(products.map((p: any) => p.category?.name).filter(Boolean)),
+  ) as string[];
+
+  const visibleProducts = filteredProducts.filter(
+    (p: any) => activeCategory === 'all' || p.category?.name === activeCategory,
+  );
+
+  const CartBody = () => (
+    <div className="space-y-4">
+      {cart.map((item) => (
+        <div key={item.product.id} className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 p-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{item.product.name}</p>
+            <p className="text-xs text-muted-foreground">₹{item.product.price} × {item.quantity}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-bold tabular-nums">₹{(item.product.price * item.quantity).toLocaleString()}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive"
+              onClick={() => removeFromCart(item.product.id)}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      {/* Promo Code */}
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" aria-hidden="true" /> Promo code
+        </p>
+        {appliedDiscount ? (
+          <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+            <div>
+              <p className="text-sm font-semibold text-primary">{appliedDiscount.code}</p>
+              <p className="text-xs text-muted-foreground">
+                {appliedDiscount.type === 'percentage' ? `${appliedDiscount.value}% off` : `₹${appliedDiscount.value} off`}
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" aria-label="Remove promo code" onClick={removePromo}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <label htmlFor="promo-code" className="sr-only">Promo code</label>
+            <Input
+              id="promo-code"
+              placeholder="Enter code"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              className="flex-1 rounded-xl"
+            />
+            <Button variant="outline" className="rounded-xl" onClick={applyPromoCode} disabled={applyingPromo || !promoCode.trim()}>
+              {applyingPromo ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Wallet */}
+      {walletBalance > 0 && (
+        <div className="border-t border-border/60 pt-4">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-muted/40 p-3">
+            <Checkbox checked={useWalletBalance} onCheckedChange={(checked) => setUseWalletBalance(!!checked)} />
+            <span className="flex flex-1 items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span>
+                <span className="block text-sm font-medium">Use wallet balance</span>
+                <span className="block text-xs text-muted-foreground">₹{walletBalance.toLocaleString()} available</span>
+              </span>
+            </span>
+            {useWalletBalance && (
+              <span className="text-sm font-semibold text-primary">-₹{walletDeduction.toLocaleString()}</span>
+            )}
+          </label>
+        </div>
+      )}
+
+      {/* Summary */}
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="tabular-nums">₹{cartTotal.toLocaleString()}</span>
+        </div>
+        {discountAmount > 0 && (
+          <div className="flex justify-between text-sm text-primary">
+            <span>Discount ({appliedDiscount?.code})</span>
+            <span className="tabular-nums">-₹{discountAmount.toLocaleString()}</span>
+          </div>
+        )}
+        {walletDeduction > 0 && (
+          <div className="flex justify-between text-sm text-primary">
+            <span>Wallet</span>
+            <span className="tabular-nums">-₹{walletDeduction.toLocaleString()}</span>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-border/60 pt-2 text-lg font-bold">
+          <span>{finalAmount <= 0 ? 'Amount due' : 'To pay'}</span>
+          <span className={finalAmount <= 0 ? 'text-success' : ''}>
+            {finalAmount <= 0 ? 'Fully covered' : `₹${finalAmount.toLocaleString()}`}
+          </span>
+        </div>
+      </div>
+
+      <Button
+        className="w-full rounded-xl"
+        size="lg"
+        onClick={() => checkout.mutate()}
+        disabled={checkout.isPending}
+      >
+        {checkout.isPending ? (
+          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</>
+        ) : (
+          <><Check className="mr-2 h-4 w-4" />{finalAmount <= 0 ? 'Place order (paid)' : 'Place order'}</>
+        )}
+      </Button>
+      <p className="text-center text-xs text-muted-foreground">
+        {finalAmount <= 0
+          ? 'Order will be marked as paid automatically.'
+          : 'You will be redirected to a secure online payment page after placing your order.'}
+      </p>
+    </div>
+  );
+
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Store</h1>
-            <p className="text-muted-foreground">Browse and purchase products</p>
+      <div className="mx-auto max-w-6xl space-y-5 pb-24 md:pb-6">
+        {/* Hero */}
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-accent p-6 text-primary-foreground shadow-lg shadow-primary/20">
+          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary-foreground/10 blur-2xl" aria-hidden="true" />
+          <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1.5">
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary-foreground/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider backdrop-blur">
+                <ShoppingBag className="h-3.5 w-3.5" aria-hidden="true" />
+                Member store
+              </span>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Shop supplements & gear</h1>
+              <p className="text-sm text-primary-foreground/80">
+                Pay with your wallet, apply promo codes, and pick up at the front desk.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:w-64">
+              <div className="rounded-xl bg-primary-foreground/10 px-3 py-2 backdrop-blur-sm">
+                <p className="text-[10px] uppercase tracking-wider text-primary-foreground/70">Wallet</p>
+                <p className="text-lg font-bold tabular-nums">₹{walletBalance.toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl bg-primary-foreground/10 px-3 py-2 backdrop-blur-sm">
+                <p className="text-[10px] uppercase tracking-wider text-primary-foreground/70">Cart</p>
+                <p className="text-lg font-bold tabular-nums">{cartCount} item{cartCount === 1 ? '' : 's'}</p>
+              </div>
+            </div>
           </div>
-          {cartCount > 0 && (
-            <Badge variant="default" className="text-lg px-4 py-2">
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              {cartCount} items • ₹{cartTotal.toLocaleString()}
-            </Badge>
-          )}
-        </div>
+        </section>
 
-        {/* Unclaimed Rewards Banner */}
+        {/* Unclaimed rewards */}
         {unclaimedRewards.length > 0 && (
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Gift className="h-5 w-5 text-primary" />
-                <div className="flex-1">
-                  <p className="font-medium">You have {unclaimedRewards.length} unclaimed referral reward{unclaimedRewards.length > 1 ? 's' : ''}!</p>
-                  <p className="text-sm text-muted-foreground">Redeem to add credits to your wallet</p>
-                </div>
-                <div className="flex gap-2">
-                  {unclaimedRewards.slice(0, 3).map(reward => (
-                    <Button
-                      key={reward.id}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => claimReward.mutate(reward.id)}
-                      disabled={claimReward.isPending}
-                    >
-                      <Gift className="h-3 w-3 mr-1" />
-                      Redeem ₹{reward.reward_value}
-                    </Button>
-                  ))}
-                </div>
+          <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-sm">
+            <CardContent className="flex flex-wrap items-center gap-3 p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Gift className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-[200px] flex-1">
+                <p className="text-sm font-semibold">
+                  {unclaimedRewards.length} unclaimed referral reward{unclaimedRewards.length > 1 ? 's' : ''}
+                </p>
+                <p className="text-xs text-muted-foreground">Redeem to add credits to your wallet</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {unclaimedRewards.slice(0, 3).map((reward) => (
+                  <Button
+                    key={reward.id}
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => claimReward.mutate(reward.id)}
+                    disabled={claimReward.isPending}
+                  >
+                    <Gift className="mr-1 h-3.5 w-3.5" />
+                    Redeem ₹{reward.reward_value}
+                  </Button>
+                ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Add-Ons banner — service add-ons live in their own flow, separate from products */}
-        <Card className="border-primary/30 bg-gradient-to-r from-primary/10 to-primary/10">
-          <CardContent className="p-4 flex items-center justify-between gap-4">
+        {/* Add-ons */}
+        <Card className="rounded-2xl border-border/60 shadow-sm">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/15 text-primary">
-                <Sparkles className="h-5 w-5" />
-              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+              </span>
               <div>
-                <p className="font-semibold text-foreground">Need extra sessions or PT?</p>
+                <p className="text-sm font-semibold">Need extra sessions or PT?</p>
                 <p className="text-xs text-muted-foreground">Buy benefit credits or a PT package — separate from products.</p>
               </div>
             </div>
-            <Button onClick={() => setAddOnOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Buy Add-Ons
+            <Button className="rounded-xl" onClick={() => setAddOnOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" /> Buy add-ons
             </Button>
           </CardContent>
         </Card>
 
-        <h2 className="text-xl font-semibold pt-2">Products</h2>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search + categories */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <label htmlFor="store-search" className="sr-only">Search products</label>
+            <Input
+              id="store-search"
+              placeholder="Search products…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-xl pl-10"
+            />
+          </div>
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {['all', ...categories].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory(cat)}
+                  className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                    activeCategory === cat
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                  }`}
+                >
+                  {cat === 'all' ? 'All products' : cat}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Products Grid */}
-          <div className="md:col-span-2">
-            {filteredProducts.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No products found</p>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Products */}
+          <div className="lg:col-span-2">
+            {visibleProducts.length === 0 ? (
+              <Card className="rounded-2xl border-border/60">
+                <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                    <Package className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                  </span>
+                  <p className="text-sm text-muted-foreground">No products found</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
-                {filteredProducts.map((product: any) => {
+              <div className="grid gap-4 sm:grid-cols-2">
+                {visibleProducts.map((product: any) => {
                   const stockInfo = getStockDisplay(product);
-                  const cartItem = cart.find(item => item.product.id === product.id);
+                  const cartItem = cart.find((item) => item.product.id === product.id);
                   const maxQty = stockInfo.stock ?? 999;
 
                   return (
-                    <Card key={product.id} className="border-border/50">
-                      <CardContent className="p-4">
-                        <div className="flex gap-4">
-                          {product.image_url ? (
-                            <img
-                              src={product.image_url}
-                              alt={product.name}
-                              className="w-20 h-20 object-cover rounded-lg"
-                            />
-                          ) : (
-                            <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center">
-                              <Package className="h-8 w-8 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-semibold">{product.name}</h3>
-                            <p className="text-sm text-muted-foreground">{product.category?.name}</p>
-                            <p className="text-lg font-bold text-accent mt-1">₹{product.price}</p>
-                            <p className={`text-xs ${stockInfo.canAdd ? 'text-muted-foreground' : 'text-destructive'}`}>
-                              {stockInfo.text}
-                            </p>
+                    <Card
+                      key={product.id}
+                      className="group overflow-hidden rounded-2xl border-border/60 shadow-sm transition-all duration-200 hover:shadow-lg hover:shadow-primary/10"
+                    >
+                      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Package className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
                           </div>
-                        </div>
-                        <div className="mt-4">
-                          {cartItem ? (
-                            <div className="flex items-center justify-between">
-                              <Button variant="outline" size="icon" onClick={() => updateQuantity(product.id, -1)}>
-                                <Minus className="h-4 w-4" />
-                              </Button>
-                              <span className="font-semibold">{cartItem.quantity}</span>
-                              <Button variant="outline" size="icon" onClick={() => updateQuantity(product.id, 1)} disabled={cartItem.quantity >= maxQty}>
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button className="w-full" onClick={() => addToCart(product)} disabled={!stockInfo.canAdd}>
-                              {stockInfo.canAdd ? 'Add to Cart' : 'Out of Stock'}
-                            </Button>
+                        )}
+                        <Badge
+                          className={`absolute left-3 top-3 rounded-full text-[11px] ${
+                            stockInfo.canAdd
+                              ? 'border-transparent bg-success/15 text-success'
+                              : 'border-transparent bg-destructive/15 text-destructive'
+                          }`}
+                        >
+                          {stockInfo.text}
+                        </Badge>
+                      </div>
+                      <CardContent className="space-y-3 p-4">
+                        <div className="space-y-0.5">
+                          {product.category?.name && (
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {product.category.name}
+                            </p>
                           )}
+                          <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                          <p className="text-xl font-bold">₹{Number(product.price).toLocaleString()}</p>
                         </div>
+                        {cartItem ? (
+                          <div className="flex items-center justify-between rounded-xl bg-muted/50 p-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Remove one ${product.name}`}
+                              onClick={() => updateQuantity(product.id, -1)}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-semibold tabular-nums">{cartItem.quantity}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Add one ${product.name}`}
+                              onClick={() => updateQuantity(product.id, 1)}
+                              disabled={cartItem.quantity >= maxQty}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            className="w-full rounded-xl"
+                            onClick={() => addToCart(product)}
+                            disabled={!stockInfo.canAdd}
+                          >
+                            {stockInfo.canAdd ? 'Add to cart' : 'Out of stock'}
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -439,151 +634,61 @@ export default function MemberStore() {
             )}
           </div>
 
-          {/* Cart & Checkout */}
-          <div className="space-y-4">
-            <Card className="border-border/50 sticky top-4">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  Your Cart
+          {/* Desktop cart */}
+          <aside className="hidden lg:block">
+            <Card className="sticky top-4 rounded-2xl border-border/60 shadow-lg shadow-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+                  Your cart
+                  {cartCount > 0 && (
+                    <Badge className="ml-auto rounded-full bg-primary/10 text-primary">{cartCount}</Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {cart.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Your cart is empty</p>
+                  <div className="flex flex-col items-center gap-3 py-10 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                      <ShoppingBag className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    </span>
+                    <p className="text-sm text-muted-foreground">Your cart is empty</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Cart Items */}
-                    {cart.map((item) => (
-                      <div key={item.product.id} className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{item.product.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            ₹{item.product.price} × {item.quantity}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">₹{(item.product.price * item.quantity).toLocaleString()}</p>
-                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => removeFromCart(item.product.id)}>
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Promo Code */}
-                    <div className="border-t pt-4 space-y-3">
-                      <p className="text-sm font-medium flex items-center gap-1">
-                        <Tag className="h-4 w-4" /> Promo Code
-                      </p>
-                      {appliedDiscount ? (
-                        <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-md px-3 py-2">
-                          <div>
-                            <p className="text-sm font-medium text-primary">{appliedDiscount.code}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {appliedDiscount.type === 'percentage' ? `${appliedDiscount.value}% off` : `₹${appliedDiscount.value} off`}
-                            </p>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={removePromo}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Enter code"
-                            value={promoCode}
-                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                            className="flex-1"
-                          />
-                          <Button variant="outline" onClick={applyPromoCode} disabled={applyingPromo || !promoCode.trim()}>
-                            {applyingPromo ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Wallet Balance */}
-                    {walletBalance > 0 && (
-                      <div className="border-t pt-4">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={useWalletBalance}
-                            onCheckedChange={(checked) => setUseWalletBalance(!!checked)}
-                          />
-                          <div className="flex items-center gap-2 flex-1">
-                            <Wallet className="h-4 w-4 text-primary" />
-                            <div>
-                              <p className="text-sm font-medium">Use Wallet Balance</p>
-                              <p className="text-xs text-muted-foreground">₹{walletBalance.toLocaleString()} available</p>
-                            </div>
-                          </div>
-                          {useWalletBalance && (
-                            <span className="text-sm font-medium text-primary">-₹{walletDeduction.toLocaleString()}</span>
-                          )}
-                        </label>
-                      </div>
-                    )}
-
-                    {/* Order Summary */}
-                    <div className="border-t pt-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>₹{cartTotal.toLocaleString()}</span>
-                      </div>
-                      {discountAmount > 0 && (
-                        <div className="flex justify-between text-sm text-primary">
-                          <span>Discount ({appliedDiscount?.code})</span>
-                          <span>-₹{discountAmount.toLocaleString()}</span>
-                        </div>
-                      )}
-                      {walletDeduction > 0 && (
-                        <div className="flex justify-between text-sm text-primary">
-                          <span>Wallet</span>
-                          <span>-₹{walletDeduction.toLocaleString()}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                        <span>{finalAmount <= 0 ? 'Amount Due' : 'To Pay'}</span>
-                        <span className={finalAmount <= 0 ? 'text-success' : ''}>
-                          {finalAmount <= 0 ? 'Fully Covered' : `₹${finalAmount.toLocaleString()}`}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Button 
-                      className="w-full" 
-                      size="lg"
-                      onClick={() => checkout.mutate()}
-                      disabled={checkout.isPending}
-                    >
-                      {checkout.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          {finalAmount <= 0 ? 'Place Order (Paid)' : 'Place Order'}
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-center text-muted-foreground">
-                      {finalAmount <= 0
-                        ? 'Order will be marked as paid automatically.'
-                        : 'You will be redirected to a secure online payment page after placing your order.'}
-                    </p>
-                  </div>
+                  <CartBody />
                 )}
               </CardContent>
             </Card>
-          </div>
+          </aside>
         </div>
       </div>
+
+      {/* Mobile sticky cart bar */}
+      {cartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card/95 p-3 pb-safe backdrop-blur lg:hidden">
+          <Button className="h-12 w-full rounded-xl" onClick={() => setCartOpen(true)}>
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            View cart • {cartCount} item{cartCount === 1 ? '' : 's'} • ₹{cartTotal.toLocaleString()}
+          </Button>
+        </div>
+      )}
+
+      {/* Mobile cart drawer */}
+      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+          <SheetHeader className="border-b border-border/60 px-6 py-4 text-left">
+            <SheetTitle>Your cart</SheetTitle>
+            <SheetDescription>Review your items and check out securely.</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {cart.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Your cart is empty</p>
+            ) : (
+              <CartBody />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <PurchaseAddOnDrawer
         open={addOnOpen}
@@ -597,3 +702,4 @@ export default function MemberStore() {
     </AppLayout>
   );
 }
+
