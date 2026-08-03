@@ -214,7 +214,8 @@ function RoutedContent() {
           <Route path="/member-dashboard" element={<ProtectedRoute requiredRoles={['member']}><MemberDashboard /></ProtectedRoute>} />
           <Route path="/my-attendance" element={<ProtectedRoute requiredRoles={['member']}><MyAttendance /></ProtectedRoute>} />
           <Route path="/my-progress" element={<ProtectedRoute requiredRoles={['member']}><MyProgress /></ProtectedRoute>} />
-          <Route path="/my-classes" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
+          <Route path="/book" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
+          <Route path="/my-classes" element={<Navigate to="/book" replace />} />
           <Route path="/my-pt-sessions" element={<ProtectedRoute requiredRoles={['member']}><MyPTSessions /></ProtectedRoute>} />
           <Route path="/pt-attendance" element={<Navigate to="/attendance-dashboard?tab=pt" replace />} />
           <Route path="/my-referrals" element={<ProtectedRoute requiredRoles={['member']}><MemberReferrals /></ProtectedRoute>} />
