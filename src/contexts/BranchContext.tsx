@@ -52,7 +52,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   const isRestrictedRole = hasAnyRole(['staff', 'trainer', 'member']) && !isOwnerOrAdmin && !isManager;
 
   // For managers: fetch their assigned branches from staff_branches
-  const { data: managerBranches = [], error: managerError, refetch: refetchManager } = useQuery({
+  const { data: managerBranches = [], error: managerError, refetch: refetchManager, isPending: managerPending, fetchStatus: managerFetchStatus } = useQuery({
     queryKey: ['manager-branches', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
