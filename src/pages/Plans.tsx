@@ -443,6 +443,22 @@ export default function PlansPage() {
     setSelectedPlanIndex(globalIndex);
   };
 
+  const updatePlanMutation = useUpdatePlan();
+  const [togglingPlanId, setTogglingPlanId] = useState<string | null>(null);
+
+  const handleToggleVisibility = (plan: MembershipPlanWithBenefits, value: boolean) => {
+    setTogglingPlanId(plan.id);
+    updatePlanMutation.mutate(
+      { planId: plan.id, data: { is_visible_to_members: value } },
+      {
+        onSuccess: () =>
+          toast.success(value ? `${plan.name} is now visible to members` : `${plan.name} is hidden from members`),
+        onError: (err: any) => toast.error(err?.message || 'Could not update plan visibility'),
+        onSettled: () => setTogglingPlanId(null),
+      },
+    );
+  };
+
   const searchLower = planSearch.toLowerCase();
   const activePlans = (plans?.filter(p => p.is_active) || []).filter(
     p => !planSearch || p.name.toLowerCase().includes(searchLower)
