@@ -314,7 +314,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       setSelectedTemplate(null);
       setFormData({
         name: '',
-        type: 'whatsapp',
+        type: filterType || 'whatsapp',
         trigger: 'custom',
         subject: '',
         content: '',
