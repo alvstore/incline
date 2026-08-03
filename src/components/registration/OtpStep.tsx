@@ -93,6 +93,8 @@ export function OtpStep({
           onChange={onOtpChange}
           autoFocus
           disabled={verifying}
+          inputMode="numeric"
+          autoComplete="one-time-code"
           containerClassName="has-[:disabled]:opacity-60"
         >
           <InputOTPGroup className="gap-2">
@@ -100,8 +102,6 @@ export function OtpStep({
               <InputOTPSlot
                 key={i}
                 index={i}
-                inputMode="numeric"
-                autoComplete="one-time-code"
                 className="h-14 w-12 rounded-xl border-2 border-primary-foreground/15 bg-card/5 text-xl font-bold text-primary-foreground shadow-sm transition-all data-[active=true]:border-primary data-[active=true]:ring-2 data-[active=true]:ring-primary/30"
               />
             ))}
