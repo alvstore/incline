@@ -9,7 +9,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2 } from 'lucide-react';
+import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2, UserRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useLinkedMembers } from '@/hooks/useLinkedMembers';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTaskHistory,
