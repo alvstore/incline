@@ -220,6 +220,12 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Per-channel outcome is visible in function logs so a silently
+        // skipped channel (e.g. SMS provider disabled) is diagnosable.
+        console.log(
+          `retention stage ${matchedTemplate.stage_level} member=${member.member_id} results=${JSON.stringify(channelResults)}`,
+        );
+
         // Insert nudge log
         await adminClient.from("retention_nudge_logs").insert({
           member_id: member.member_id,
