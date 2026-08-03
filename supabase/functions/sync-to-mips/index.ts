@@ -1,3 +1,7 @@
+// v2.2.0 — transport-aware: a slow / rebooting MIPS server is now an outage
+// (503 retryable + shared circuit breaker) instead of an unhandled 500/546, and
+// the CRM row stays `pending` so the queue re-drives it rather than reading as
+// a permanent failure.
 // v2.1.0 — bounded timeouts on every MIPS call (no invocation can hang on a
 // rebooting server). Face-safe photo normalization (never degrades a face below the
 // terminal's detection threshold), per-stage audit rows for photo upload and
@@ -5,6 +9,14 @@
 // hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
+import {
+  classifyFailure,
+  isTripped,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
+
 
 
 const corsHeaders = {
@@ -590,10 +602,15 @@ Deno.serve(async (req) => {
     }
   }
 
-
+  // Outage bookkeeping — set as soon as we know who we were syncing so the
+  // transport handler can park the row as `pending` instead of `failed`.
+  let ctxTable: string | null = null;
+  let ctxPersonId: string | null = null;
+  let ctxBranchId: string | null = null;
 
   try {
     const body = await req.json();
+
     const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
 
       person_type: "member" | "employee" | "trainer";
@@ -624,8 +641,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    ctxBranchId = branch_id ?? null;
+    ctxPersonId = person_id ?? null;
+
+    // Circuit breaker — while MIPS is down, fail fast with a retryable 503
+    // instead of burning 45s of timeouts per invocation (the 546/503 bursts).
+    const breaker = await readBreaker(supabase, ctxBranchId);
+    if (isTripped(breaker)) {
+      return new Response(JSON.stringify({
+        error: "MIPS server is temporarily unreachable",
+        retryable: true,
+        mips_outage: true,
+        retry_after: breaker.open_until,
+        last_error: breaker.last_error,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", ...(breaker.open_until ? { "Retry-After": "120" } : {}) },
+      });
+    }
+
     const baseUrl = getBaseUrl(mipsBaseUrl);
     const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+
 
     // ── Verify-only mode ──
     if (verify_only && person_no) {
@@ -833,6 +870,9 @@ Deno.serve(async (req) => {
       });
     }
 
+    ctxTable = tableName;
+    ctxBranchId = effectiveBranchId ?? ctxBranchId;
+
     const mipsPersonSn = stripHyphens(personNo);
     console.log(`Syncing ${person_type}: ${name} (${personNo} → ${mipsPersonSn}) gender=${gender} dob=${birthday || "-"} dept=${deptName}`);
 
@@ -1020,6 +1060,9 @@ Deno.serve(async (req) => {
     }).eq("id", person_id);
     console.log(`CRM updated: mips_person_id=${personId}, mips_person_sn=${mipsPersonSn}`);
 
+    // The server answered — clear any breaker state for this branch.
+    try { await recordSuccess(supabase, ctxBranchId); } catch (_) { /* non-fatal */ }
+
     return new Response(JSON.stringify({
       success: photoUploaded && allDevicesDelivered,
       mips_person_id: personId,
@@ -1040,10 +1083,32 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("sync-to-mips error:", message);
-    return new Response(JSON.stringify({ error: message }), {
+    const kind = classifyFailure({ message });
+    console.error(`sync-to-mips error (${kind}):`, message);
+
+    if (kind === "transport") {
+      // MIPS is unreachable / rebooting: this is an outage, not bad data.
+      // Trip the shared breaker and park the row as retryable.
+      try { await recordTransportFailure(supabase, ctxBranchId, message); } catch (_) { /* non-fatal */ }
+      if (ctxTable && ctxPersonId) {
+        try {
+          await supabase.from(ctxTable).update({ mips_sync_status: "pending" }).eq("id", ctxPersonId);
+        } catch (_) { /* non-fatal */ }
+      }
+      return new Response(JSON.stringify({
+        error: message,
+        retryable: true,
+        mips_outage: true,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "120" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: message, retryable: false }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 });
