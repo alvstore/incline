@@ -181,8 +181,24 @@ export function RequestComposerDrawer({
           linked_entity_type: 'member',
           linked_entity_id: member.id,
         }));
-        const { error } = await supabase.from('tasks').insert(rows as any);
+        const { data: created, error } = await supabase
+          .from('tasks')
+          .insert(rows as any)
+          .select('id, branch_id, assigned_to, title, description, priority, due_date');
         if (error) throw error;
+        await Promise.all(
+          (created || []).map((t: any) =>
+            notifyTaskAssignee({
+              taskId: t.id,
+              branchId: t.branch_id,
+              assignedTo: t.assigned_to,
+              title: t.title,
+              description: t.description,
+              priority: t.priority,
+              dueDate: t.due_date,
+            }),
+          ),
+        );
         return;
       }
 
