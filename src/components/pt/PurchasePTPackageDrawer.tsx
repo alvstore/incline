@@ -146,16 +146,28 @@ export function PurchasePTPackageDrawer({
     queryKey: ['pt-trainer-detail', trainerId],
     enabled: !!trainerId,
     queryFn: async () => {
-      const { data } = await supabase
+      // No declared FK between trainers.user_id and profiles — resolve in two reads.
+      const { data: t } = await supabase
         .from('trainers')
-        .select('id, pt_share_percentage, profiles:profiles!trainers_user_id_fkey(full_name)')
+        .select('id, user_id, pt_share_percentage')
         .eq('id', trainerId!)
         .maybeSingle();
-      return data as any;
+      if (!t) return null;
+      let full_name: string | null = null;
+      if (t.user_id) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', t.user_id)
+          .maybeSingle();
+        full_name = p?.full_name ?? null;
+      }
+      return { ...t, full_name };
     },
   });
   const trainerShare = Number(trainer?.pt_share_percentage ?? 20);
-  const trainerName: string | null = trainer?.profiles?.full_name ?? null;
+  const trainerName: string | null = trainer?.full_name ?? null;
+
 
   const { data: packages = [], isLoading } = useQuery<CatalogPkg[]>({
     queryKey: ['pt-packages-active', branchId, dbType],

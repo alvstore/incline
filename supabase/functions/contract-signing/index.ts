@@ -662,7 +662,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     }
   } catch (_) { /* logo is best-effort */ }
 
-  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT — NOT YET SIGNED" : "EMPLOYEE COPY";
+  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT - NOT YET SIGNED" : "EMPLOYEE COPY";
   const isDraft = copy === "draft";
   const pageWidth = PageSizes.A4[0];
   const pageHeight = PageSizes.A4[1];
@@ -678,9 +678,22 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   let y = pageHeight - marginY;
   const lineHeight = 13;
 
-  const headerLegal = `${employer.legal_name || "Incline"} — The Incline Life by Incline`;
-  const headerAddr = employer.full_address || [employer.city, employer.state].filter(Boolean).join(", ");
-  const headerContact = [employer.phone, employer.email].filter(Boolean).join("  ·  ");
+  // pdf-lib standard fonts are WinAnsi-only: "₹" (and any other non-Latin-1 glyph)
+  // throws "WinAnsi cannot encode". Normalise every string before it is drawn.
+  const win = (s: unknown): string =>
+    String(s ?? "")
+      .replace(/\u20b9/g, "Rs.")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2022/g, "-")
+      .replace(/\u00a0/g, " ")
+      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
+
+  const headerLegal = win(`${employer.legal_name || "Incline"} — The Incline Life by Incline`);
+  const headerAddr = win(employer.full_address || [employer.city, employer.state].filter(Boolean).join(", "));
+  const headerContact = win([employer.phone, employer.email].filter(Boolean).join("  ·  "));
+
 
   function drawHeader(p: any) {
     // Soft slate rule beneath the header
@@ -696,10 +709,12 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     if (employer.gstin) idRight.push(`GSTIN: ${employer.gstin}`);
     if (employer.pan) idRight.push(`PAN: ${employer.pan}`);
     if (employer.firm_registration_no) idRight.push(`Reg: ${employer.firm_registration_no}`);
-    idRight.forEach((t, i) => {
+    idRight.forEach((raw, i) => {
+      const t = win(raw);
       const w = font.widthOfTextAtSize(t, 7.5);
       p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: SLATE_500 });
     });
+
     // Diagonal copy watermark
     p.drawText(copyLabel, {
       x: pageWidth / 2 - 100, y: pageHeight / 2,
@@ -710,11 +725,12 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
 
   function drawFooter(p: any, pageNum: number, totalPages: number) {
     p.drawRectangle({ x: marginX, y: 44, width: pageWidth - marginX * 2, height: 0.6, color: SLATE_500, opacity: 0.4 });
-    const refLine = `Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`;
+    const refLine = win(`Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`);
     p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: SLATE_500 });
-    const verify = `Verify: /verify/contract/${contractId.slice(0, 8)}`;
+    const verify = win(`Verify: /verify/contract/${contractId.slice(0, 8)}`);
     const vw = font.widthOfTextAtSize(verify, 7);
     p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: SLATE_500 });
+
   }
 
   drawHeader(page);
@@ -730,12 +746,14 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     }
   }
 
-  function writeLine(text: string, opts: { bold?: boolean; size?: number; color?: any } = {}) {
+  function writeLine(rawText: string, opts: { bold?: boolean; size?: number; color?: any } = {}) {
+    const text = win(rawText);
     const size = opts.size ?? 9;
     const f = opts.bold ? fontBold : font;
     const color = opts.color ?? rgb(0.1, 0.1, 0.15);
     const maxWidth = pageWidth - marginX * 2;
     const words = text.split(/\s+/);
+
     let line = "";
     for (const w of words) {
       const candidate = line ? line + " " + w : w;

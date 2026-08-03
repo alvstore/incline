@@ -269,10 +269,21 @@ async function generateWaiverPdf(input: {
     }
   };
 
+  // pdf-lib standard fonts are WinAnsi-only: "₹" and other non-Latin-1 glyphs throw.
+  const win = (s: unknown): string =>
+    String(s ?? "")
+      .replace(/\u20b9/g, "Rs.")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2022/g, "-")
+      .replace(/\u00a0/g, " ")
+      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
+
   const draw = (text: string, opts: { size?: number; bold?: boolean; color?: ReturnType<typeof rgb>; indent?: number } = {}) => {
     const size = opts.size ?? 10;
     ensure(size + 6);
-    page.drawText(text, {
+    page.drawText(win(text), {
       x: margin + (opts.indent ?? 0),
       y,
       size,
@@ -287,7 +298,8 @@ async function generateWaiverPdf(input: {
     const size = opts.size ?? 9;
     const f = opts.bold ? fontBold : font;
     const maxW = pageW - margin * 2 - (opts.indent ?? 0);
-    const words = String(text).split(/\s+/).filter(Boolean);
+    const words = win(text).split(/\s+/).filter(Boolean);
+
     let line = "";
     for (const w of words) {
       const candidate = line ? `${line} ${w}` : w;

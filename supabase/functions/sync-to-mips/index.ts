@@ -29,7 +29,7 @@ const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
 // Above this the raw source is never decoded — decoding multi-MB photos in an
 // edge worker exhausts memory and the invocation is killed by the platform.
-const MAX_SOURCE_BYTES = 3 * 1024 * 1024; // decode ceiling — larger sources OOM the edge worker
+const MAX_SOURCE_BYTES = 2 * 1024 * 1024; // decode ceiling — larger sources OOM the edge worker
 // Face-safety floors: the terminal runs its own face detection on the image we
 // push. Anything smaller / more compressed than this is accepted by the MIPS
 // server but silently discarded by the gate, which is exactly how the fleet
@@ -1027,6 +1027,11 @@ Deno.serve(async (req) => {
         console.warn("Biometric backfill failed (non-fatal):", e);
       }
     }
+    // Release the normalized image buffer before the device dispatch phase —
+    // holding it through the remaining HTTP round-trips is what pushed heavy
+    // enrollments over the worker memory ceiling.
+    if (photoResult) photoResult.bytes = undefined;
+
 
     // Step 5: Dispatch to ALL mapped devices (multi-device) — unless caller
     // explicitly opted out (verification-only flows).
