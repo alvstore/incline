@@ -14,6 +14,7 @@ import {
   resolveMemberDisplayName,
   type MemberRequestReference,
 } from '@/lib/tasks/memberRequestTasks';
+import { notifyTaskAssignee } from '@/lib/tasks/taskNotify';
 import type { LockerSize, RequestKind, RequestOption } from './requestTypes';
 
 const MEMBER_REQUEST_LABEL_LOWER: Record<MemberRequestReference, string> = {
