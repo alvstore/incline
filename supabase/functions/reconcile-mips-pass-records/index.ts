@@ -256,7 +256,7 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
   throw new Error(`MIPS records failed: ${errors.join(" | ")}`.slice(0, 500));
 }
 
-async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string): Promise<PersonMatch | null> {
+async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
   const candidates = normalizePersonCodeCandidates(personCode);
   if (!candidates.length) return null;
 
