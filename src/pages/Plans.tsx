@@ -103,6 +103,16 @@ function PlanListItem({
           {!plan.is_active && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0" data-testid={`badge-inactive-${plan.id}`}>Inactive</Badge>
           )}
+          {(plan as any).is_visible_to_members === false && (
+            <Badge
+              variant="outline"
+              className="gap-1 text-[10px] px-1.5 py-0 shrink-0 border-muted-foreground/30 text-muted-foreground"
+              data-testid={`badge-hidden-${plan.id}`}
+            >
+              <EyeOff className="h-2.5 w-2.5" />
+              Hidden from members
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs font-bold text-foreground">
