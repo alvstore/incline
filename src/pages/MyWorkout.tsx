@@ -89,39 +89,8 @@ export default function MyWorkout() {
     );
   }
 
-  type WorkoutExercise = { name: string; sets: number; reps: string; notes?: string };
-  type WorkoutDay = { day: string; exercises: WorkoutExercise[] };
 
-  /**
-   * Plans are stored either flat (`{ days: [...] }`) or periodised
-   * (`{ weeks: [{ week, days: [...] }] }`). Normalise both to a day list so
-   * members always see the full programme.
-   */
-  const normalizePlan = (raw: any): { days: WorkoutDay[] } | null => {
-    if (!raw) return null;
-    const toDay = (d: any, prefix?: string): WorkoutDay => ({
-      day: [prefix, d?.day || d?.name || d?.title || d?.focus].filter(Boolean).join(' · ') || 'Session',
-      exercises: (Array.isArray(d?.exercises) ? d.exercises : []).map((ex: any) => ({
-        name: ex?.name || ex?.exercise || 'Exercise',
-        sets: Number(ex?.sets) || 0,
-        reps: String(ex?.reps ?? ex?.rep_range ?? ''),
-        notes: ex?.notes || ex?.tempo || undefined,
-      })),
-    });
 
-    if (Array.isArray(raw.weeks) && raw.weeks.length > 0) {
-      const days: WorkoutDay[] = [];
-      raw.weeks.forEach((wk: any, i: number) => {
-        const label = `Week ${wk?.week ?? i + 1}`;
-        (Array.isArray(wk?.days) ? wk.days : []).forEach((d: any) => days.push(toDay(d, label)));
-      });
-      return { days };
-    }
-    if (Array.isArray(raw.days)) return { days: raw.days.map((d: any) => toDay(d)) };
-    return null;
-  };
-
-  const planData = normalizePlan(workoutPlan?.plan_data);
 
 
   return (
