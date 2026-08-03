@@ -58,11 +58,19 @@ Deno.serve(async (req) => {
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+    // v2.3.0: absence threshold is driven by the LOWEST configured stage
+    // trigger instead of a hardcoded 5 days, so lowering Stage 1 in
+    // `retention_templates` immediately widens the eligibility window.
+    const minDaysTrigger = Math.max(
+      1,
+      Math.min(...templates.map((t: any) => Number(t.days_trigger) || 3)),
+    );
+
     for (const branch of branches) {
-      // Get inactive members (5+ days absent, up to 200)
+      // Get inactive members (minDaysTrigger+ days absent, up to 200)
       const { data: inactiveMembers } = await adminClient.rpc("get_inactive_members", {
         p_branch_id: branch.id,
-        p_days: 5,
+        p_days: minDaysTrigger,
         p_limit: 200,
       });
 
