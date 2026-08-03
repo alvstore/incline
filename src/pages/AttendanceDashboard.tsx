@@ -373,6 +373,43 @@ export default function AttendanceDashboard() {
 
   const checkedInUserIds = new Set((checkedInStaff.data || []).map((a: any) => a.user_id));
 
+  /**
+   * Today's real attendance state per staff member.
+   * A finished shift (check-in + check-out) must NOT read as "Not Checked In".
+   */
+  const staffTodaySummary = useMemo(() => {
+    const map = new Map<string, { firstIn: string; lastOut: string | null; isLate: boolean; lateMinutes: number | null; open: boolean }>();
+    for (const row of (staffTodayAttendance.data || []) as any[]) {
+      if (!row?.user_id) continue;
+      const existing = map.get(row.user_id);
+      const open = !row.check_out;
+      if (!existing) {
+        map.set(row.user_id, {
+          firstIn: row.check_in,
+          lastOut: row.check_out ?? null,
+          isLate: !!row.is_late,
+          lateMinutes: row.late_minutes ?? null,
+          open,
+        });
+      } else {
+        if (new Date(row.check_in) < new Date(existing.firstIn)) {
+          existing.firstIn = row.check_in;
+          existing.isLate = !!row.is_late;
+          existing.lateMinutes = row.late_minutes ?? null;
+        }
+        if (row.check_out && (!existing.lastOut || new Date(row.check_out) > new Date(existing.lastOut))) {
+          existing.lastOut = row.check_out;
+        }
+        existing.open = existing.open || open;
+      }
+    }
+    return map;
+  }, [staffTodayAttendance.data]);
+
+  const fmtTime = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+
+
   const decisionFor = (staff: any) =>
     canRecordAttendanceFor(actorRoles, staff?.roles, staff?.user_id === user?.id);
 
