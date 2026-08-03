@@ -228,9 +228,40 @@ async function findPersonByCode(supabase: any, personCode: string) {
     if (empByMips) return { ...empByMips, type: "employee" };
   }
 
+  // Last resort: manual alias mapping (legacy / device-created person codes)
+  for (const candidate of [personCode, ...candidates]) {
+    const aliased = await findPersonByAlias(supabase, candidate);
+    if (aliased) return aliased;
+  }
+
   console.warn(`findPersonByCode: no match for ${personCode}; tried ${candidates.join(", ")}`);
   return null;
 }
+
+/**
+ * Resolve a device person code through the manual alias table.
+ * Covers faces enrolled under an old employee code or created directly on MIPS.
+ */
+async function findPersonByAlias(supabase: any, personCode: string) {
+  if (!personCode) return null;
+  const { data, error } = await supabase.rpc("resolve_mips_person_alias", {
+    _person_code: personCode,
+  });
+  if (error) {
+    console.warn(`findPersonByAlias error for ${personCode}: ${error.message}`);
+    return null;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  console.log(`findPersonByAlias: ${personCode} -> ${row.target_type} ${row.target_id}`);
+  return {
+    id: row.target_id,
+    branch_id: row.branch_id,
+    user_id: row.user_id,
+    type: row.target_type,
+  };
+}
+
 
 async function handleMemberCheckin(
   supabase: any,
