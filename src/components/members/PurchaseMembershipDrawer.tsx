@@ -67,7 +67,7 @@ export function PurchaseMembershipDrawer({
 
   // GST State
   const [includeGst, setIncludeGst] = useState(false);
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(5);
 
   // Partial Payment State (member mode never offers partial)
   const [isPartialPayment, setIsPartialPayment] = useState(false);

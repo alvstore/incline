@@ -34,7 +34,7 @@ export function TopUpBenefitDrawer({
   const [quantity, setQuantity] = useState(5);
   const [price, setPrice] = useState(500);
   const [submitting, setSubmitting] = useState(false);
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(5);
   // Stable idempotency key — reuses across retries within the same drawer session.
   const idempotencyKey = useStableIdempotencyKey(memberId, 'topup', `${benefitTypeId}`);
   const handleSubmit = async () => {
