@@ -55,28 +55,7 @@ interface MemberRegistrationFormProps {
   data: RegistrationFormData;
 }
 
-interface TermClause { title: string; body: string; }
-
-const DEFAULT_TERMS: TermClause[] = [
-  { title: 'Health Declaration & Assumption of Risk', body: 'I confirm that I am medically fit to participate in physical exercise. I understand that fitness activities involve inherent risks, including injury, illness, or in rare cases, death. I voluntarily assume all such risks and agree that the fitness centre, its owners, staff, and trainers shall not be held liable for any injury, loss, or damage sustained while using the facility.' },
-  { title: 'Medical Disclosure & Responsibility', body: 'I agree to disclose any pre-existing medical conditions. I understand that I should seek medical advice before starting any exercise program. The fitness centre is not responsible for any health complications arising due to undisclosed conditions.' },
-  { title: 'Code of Conduct & Right of Admission', body: 'Management reserves the right of admission and may terminate membership without refund for: abusive, threatening, or inappropriate behavior; misuse of equipment (including dropping weights negligently); or violation of gym rules or safety guidelines.' },
-  { title: 'Membership Usage & Access Control', body: 'Membership allows one entry per day, unless otherwise specified. Sharing membership credentials (ID card, biometrics, etc.) is strictly prohibited. Any misuse will result in immediate termination without refund.' },
-  { title: 'Fees, Taxes & Payment Policy', body: 'All membership fees are non-refundable and non-transferable under any circumstances, including non-usage, relocation, or change of mind. Applicable taxes, including 5% GST, will be charged additionally. Prices and tax rates are subject to change as per government regulations.' },
-  { title: 'Membership Freeze / Pause', body: 'Membership freezing may be allowed only with prior written request, subject to management approval, and applicable fees and conditions.' },
-  { title: 'Personal Training Policy', body: 'Members are strictly prohibited from offering personal training services or receiving unofficial ("under-the-table") training. All training must be booked through authorized gym channels.' },
-  { title: 'Equipment Use & Property Damage', body: 'Members must use equipment responsibly and follow staff instructions. Any damage caused due to negligence or misuse must be compensated fully by the member.' },
-  { title: 'Personal Belongings & Locker Use', body: 'Lockers are provided for temporary use only. All belongings are kept at the member\u2019s own risk. The fitness centre is not liable for any loss, theft, or damage.' },
-  { title: 'Supplements & External Products', body: 'The fitness centre does not endorse or take responsibility for any supplements or products purchased from third parties. Members consume such products at their own risk.' },
-  { title: 'CCTV Surveillance & Privacy', body: 'The premises are under CCTV surveillance for safety and security. Recorded footage may be accessed only by management. Requests for footage retrieval and masking, if approved, will incur an administrative fee of \u20B9200.' },
-  { title: 'Data Protection & Consent', body: 'By enrolling, I consent to the collection and use of my personal data for membership management and communication and updates. Data will be handled in accordance with applicable privacy laws.' },
-  { title: 'Emergency Medical Consent', body: 'In case of an emergency, I authorize the fitness centre staff to arrange medical assistance. All associated costs shall be borne by me.' },
-  { title: 'Indemnity Clause', body: 'I agree to indemnify and hold harmless the fitness centre, its staff, and affiliates from any claims, damages, or liabilities arising out of my use of the facility.' },
-  { title: 'Rules & Amendments', body: 'Management reserves the right to modify rules, timings, fees, and policies at any time. Members are expected to stay informed and comply with updated terms.' },
-  { title: 'Dispute Resolution & Jurisdiction', body: 'Any disputes arising shall be subject to the jurisdiction of courts in the city where the fitness centre is located.' },
-];
-
-const MEMBER_DECLARATION = 'I have read, understood, and agree to abide by all the terms and conditions stated above.';
+import { FACILITY_TERMS as DEFAULT_TERMS, MEMBER_DECLARATION, TERMS_VERSION } from '@/lib/registration/terms';
 
 export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: MemberRegistrationFormProps) {
   const queryClient = useQueryClient();
