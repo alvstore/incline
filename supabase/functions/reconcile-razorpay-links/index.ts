@@ -1,4 +1,4 @@
-// v2.1.0 — preserves capture time and Razorpay settlement deductions.
+// v3.0.0 — de-duplicates against manual staff entries; preserves capture time and Razorpay settlement deductions.
 //
 // Fetches the current status of pending Razorpay Payment Links via the
 // Razorpay REST API and, if paid, records the payment locally so invoices
