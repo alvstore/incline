@@ -37,6 +37,8 @@ export default function MemberStore() {
   const { member, activeMembership, isLoading: memberLoading } = useMemberData();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [cartOpen, setCartOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
   const [useWalletBalance, setUseWalletBalance] = useState(false);
