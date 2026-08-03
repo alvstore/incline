@@ -163,14 +163,30 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
           )}
 
+          {task.linked_entity_type === 'member' && linkedMember && (
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-sm">
+              <UserRound className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="font-semibold text-foreground">
+                {linkedMember.full_name || 'Member'}
+              </span>
+              {linkedMember.member_code && (
+                <span className="text-xs text-muted-foreground">{linkedMember.member_code}</span>
+              )}
+            </div>
+          )}
+
           {linkRoute && (
-            <a
-              href={linkRoute}
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                navigate(linkRoute);
+              }}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring rounded"
             >
               <ExternalLink className="h-3 w-3" />
-              Open linked {task.linked_entity_type}
-            </a>
+              Open linked {LINKED_ENTITY_LABEL[task.linked_entity_type] || task.linked_entity_type}
+            </button>
           )}
 
           <Tabs defaultValue="comments" className="mt-4">
