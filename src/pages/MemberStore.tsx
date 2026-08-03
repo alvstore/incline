@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { hashCart } from '@/lib/cartHash';
-import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
+import { AddOnShowcase } from '@/components/member/store/AddOnShowcase';
 
 
 interface CartItem {
@@ -43,7 +43,7 @@ export default function MemberStore() {
   const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [applyingPromo, setApplyingPromo] = useState(false);
-  const [addOnOpen, setAddOnOpen] = useState(false);
+  
 
   // Wallet data
   const { data: wallet } = useWallet(member?.id || '');
@@ -684,15 +684,7 @@ export default function MemberStore() {
         </SheetContent>
       </Sheet>
 
-      <PurchaseAddOnDrawer
-        open={addOnOpen}
-        onOpenChange={setAddOnOpen}
-        memberId={member.id}
-        memberName={(member as any).profiles?.full_name}
-        membershipId={activeMembership?.id ?? null}
-        branchId={member.branch_id}
-        mode="member"
-      />
+
     </AppLayout>
   );
 }
