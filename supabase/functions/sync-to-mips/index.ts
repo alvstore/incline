@@ -1,3 +1,7 @@
+// v2.2.0 — transport-aware: a slow / rebooting MIPS server is now an outage
+// (503 retryable + shared circuit breaker) instead of an unhandled 500/546, and
+// the CRM row stays `pending` so the queue re-drives it rather than reading as
+// a permanent failure.
 // v2.1.0 — bounded timeouts on every MIPS call (no invocation can hang on a
 // rebooting server). Face-safe photo normalization (never degrades a face below the
 // terminal's detection threshold), per-stage audit rows for photo upload and
@@ -5,6 +9,14 @@
 // hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
+import {
+  classifyFailure,
+  isTripped,
+  readBreaker,
+  recordSuccess,
+  recordTransportFailure,
+} from "../_shared/mipsHealth.ts";
+
 
 
 const corsHeaders = {
