@@ -646,6 +646,8 @@ export default function PlansPage() {
                         getDurationLabel={getDurationLabel}
                         onClick={() => handleSelectPlan(plan, globalIndex)}
                         animationDelay={globalIndex * 50}
+                        onToggleVisibility={handleToggleVisibility}
+                        isTogglingVisibility={togglingPlanId === plan.id}
                       />
                     );
                   })}
