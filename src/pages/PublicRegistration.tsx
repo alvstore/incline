@@ -24,6 +24,7 @@ import inclineLogo from "@/assets/incline-logo.png";
 import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
+import { FACILITY_TERMS, TERMS_VERSION } from "@/lib/registration/terms";
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
@@ -65,7 +66,8 @@ export default function PublicRegistration() {
   const [step, setStep] = useState<"details" | "parq" | "sign" | "otp" | "done">("details");
   const [details, setDetails] = useState<DetailsForm | null>(null);
   const [parq, setParq] = useState<Record<string, string>>({});
-  const [consents, setConsents] = useState({ dpdp: false, whatsapp: false, photo: false, waiver: false });
+  const [consents, setConsents] = useState({ dpdp: false, whatsapp: false, photo: false, waiver: false, facility_rules: false });
+  const [termsRead, setTermsRead] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState<string>("");
   const [otp, setOtp] = useState("");
   const [healthConditions, setHealthConditions] = useState<string[]>([]);
@@ -119,6 +121,7 @@ export default function PublicRegistration() {
           registration: details,
           par_q: parq,
           consents,
+          terms_version: TERMS_VERSION,
           signature_data_url: signatureUrl,
         },
       });
@@ -159,7 +162,8 @@ export default function PublicRegistration() {
 
   const submitSign = () => {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
-    if (!consents.dpdp || !consents.whatsapp || !consents.waiver) return toast.error("All required consents must be accepted");
+    if (!consents.dpdp || !consents.whatsapp || !consents.waiver || !consents.facility_rules)
+      return toast.error("All required consents must be accepted");
     setSignatureUrl(sigRef.current!.toDataURL());
     sendOtp.mutate(details!.phone);
   };
