@@ -746,12 +746,14 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     }
   }
 
-  function writeLine(text: string, opts: { bold?: boolean; size?: number; color?: any } = {}) {
+  function writeLine(rawText: string, opts: { bold?: boolean; size?: number; color?: any } = {}) {
+    const text = win(rawText);
     const size = opts.size ?? 9;
     const f = opts.bold ? fontBold : font;
     const color = opts.color ?? rgb(0.1, 0.1, 0.15);
     const maxWidth = pageWidth - marginX * 2;
     const words = text.split(/\s+/);
+
     let line = "";
     for (const w of words) {
       const candidate = line ? line + " " + w : w;
