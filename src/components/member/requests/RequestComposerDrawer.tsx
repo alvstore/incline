@@ -8,6 +8,11 @@ import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { LOCKER_SIZES, REQUEST_TITLES } from './requestTypes';
+import {
+  memberRequestTaskTitle,
+  resolveMemberDisplayName,
+  type MemberRequestReference,
+} from '@/lib/tasks/memberRequestTasks';
 import type { LockerSize, RequestKind, RequestOption } from './requestTypes';
 
 interface RequestComposerDrawerProps {
