@@ -137,6 +137,25 @@ function PlanListItem({
         </div>
       </div>
 
+      <div
+        className="flex items-center gap-1.5 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+        title={(plan as any).is_visible_to_members === false ? 'Hidden from the member portal' : 'Visible in the member portal'}
+      >
+        {(plan as any).is_visible_to_members === false ? (
+          <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <Switch
+          checked={(plan as any).is_visible_to_members !== false}
+          disabled={isTogglingVisibility}
+          onCheckedChange={(value) => onToggleVisibility(plan, value)}
+          aria-label={`Toggle member portal visibility for ${plan.name}`}
+          data-testid={`switch-visible-${plan.id}`}
+        />
+      </div>
+
       <ChevronRight className={`h-4 w-4 shrink-0 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground/50'}`} />
     </div>
   );
