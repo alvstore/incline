@@ -305,7 +305,7 @@ export default function AttendanceDashboard() {
     queryFn: async () => {
       const start = `${historyMonth}-01T00:00:00`;
       const [year, month] = historyMonth.split('-').map(Number);
-      const end = new Date(year, month, 0).toISOString();
+      const end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
       let query = supabase.from('staff_attendance').select(`*, profiles:user_id(full_name, email, avatar_url)`).gte('check_in', start).lte('check_in', end).order('check_in', { ascending: false });
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       const { data, error } = await query;
