@@ -224,7 +224,9 @@ export default function PublicRegistration() {
     window.location.reload();
   };
 
-  const submitDetails = form.handleSubmit((values) => {
+  // Single source of truth for the comma-joined health string. Used by both the
+  // normal submit path and the draft-restore path so a refresh never drops it.
+  const buildHealthConditions = useCallback(() => {
     const conditions = [...healthConditions];
     if (conditions.includes("Other") && healthOther.trim()) {
       const idx = conditions.indexOf("Other");
@@ -232,7 +234,14 @@ export default function PublicRegistration() {
     } else if (conditions.includes("Other") && !healthOther.trim()) {
       conditions.splice(conditions.indexOf("Other"), 1);
     }
-    const merged: DetailsForm = { ...values, health_conditions: conditions.join(", ") || undefined };
+    return conditions.join(", ") || undefined;
+  }, [healthConditions, healthOther]);
+
+  const submitDetails = form.handleSubmit((values) => {
+    const health = buildHealthConditions();
+    const merged: DetailsForm = { ...values, health_conditions: health };
+    // Mirror into the form so the autosaved draft carries it through a refresh.
+    form.setValue("health_conditions", health);
     setDetails(merged);
     setStep("parq");
   });
@@ -244,6 +253,8 @@ export default function PublicRegistration() {
     if (!consents.dpdp || !consents.whatsapp || !consents.waiver || !consents.facility_rules)
       return toast.error("All required consents must be accepted");
     setSignatureUrl(sigRef.current!.toDataURL());
+    // Re-merge in case the member edited health chips after the details step.
+    setDetails((prev) => (prev ? { ...prev, health_conditions: buildHealthConditions() } : prev));
     sendOtp.mutate(details?.phone ?? form.getValues("phone"));
   };
 
@@ -253,12 +264,13 @@ export default function PublicRegistration() {
     if (!details && (step === "parq" || step === "sign")) {
       const values = form.getValues();
       if (values.phone && values.email && values.full_name && values.branch_id) {
-        setDetails(values);
+        setDetails({ ...values, health_conditions: buildHealthConditions() });
       } else {
         setStep("details");
       }
     }
-  }, [details, step, form]);
+  }, [details, step, form, buildHealthConditions]);
+
 
   const stepIdx = useMemo(
     () => Math.min({ details: 0, parq: 1, sign: 2, otp: 3, done: 3 }[step], 3),

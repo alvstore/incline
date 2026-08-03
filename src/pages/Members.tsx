@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { AddMemberDrawer } from '@/components/members/AddMemberDrawer';
 import { PurchaseMembershipDrawer } from '@/components/members/PurchaseMembershipDrawer';
-import { PurchasePTDrawer } from '@/components/members/PurchasePTDrawer';
+import { PurchasePTPackageDrawer } from '@/components/pt/PurchasePTPackageDrawer';
 import { MemberProfileDrawer } from '@/components/members/MemberProfileDrawer';
 import { QuickFreezeDrawer } from '@/components/members/QuickFreezeDrawer';
 import { GroupPurchaseDrawer } from '@/components/members/GroupPurchaseDrawer';
@@ -990,7 +990,7 @@ export default function MembersPage() {
               memberName={selectedMember.profiles?.full_name || selectedMember.member_code}
               branchId={selectedMember.branch_id}
             />
-            <PurchasePTDrawer
+            <PurchasePTPackageDrawer
               open={purchasePTOpen}
               onOpenChange={setPurchasePTOpen}
               memberId={selectedMember.id}

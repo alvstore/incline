@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -10,18 +9,21 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Dumbbell, CalendarDays, Plus, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, Dumbbell, CalendarDays, Plus, Check, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { computePtCheckout, formatINR } from '@/lib/payments/ptCheckout';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
+import { useAuth } from '@/contexts/AuthContext';
+import { can } from '@/lib/auth/permissions';
 
 type Mode = 'session' | 'monthly';
 type PayMethod = 'cash' | 'card' | 'upi' | 'bank_transfer';
 type PaySource = 'in_person' | 'payment_link';
 
-// PT GST is mandatory 5% (inclusive), enforced by purchase_pt_package RPC.
+// PT GST is 5% inclusive by default; owners/admins/managers may mark a sale exempt (0%).
 const PT_GST_RATE = 5;
 
 interface PurchasePTPackageDrawerProps {
@@ -29,6 +31,8 @@ interface PurchasePTPackageDrawerProps {
   onOpenChange: (open: boolean) => void;
   memberId: string;
   branchId: string;
+  /** Optional — shown in the header so staff know who they are selling to. */
+  memberName?: string;
 }
 
 interface CatalogPkg {
@@ -50,16 +54,49 @@ interface CustomForm {
   price: number;
 }
 
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+/** Calendar-correct end date preview, mirroring pt_calendar_expiry. */
+function previewExpiry(startISO: string, months: number | null, validityDays: number | null): string | null {
+  if (!startISO) return null;
+  const d = new Date(`${startISO}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  if (months && months > 0) {
+    const day = d.getDate();
+    const end = new Date(d);
+    end.setMonth(end.getMonth() + months);
+    // Clamp for short months (31 Jan + 1 month -> 28/29 Feb)
+    if (end.getDate() < day) end.setDate(0);
+    end.setDate(end.getDate() - 1);
+    return end.toISOString().slice(0, 10);
+  }
+  if (validityDays && validityDays > 0) {
+    const end = new Date(d);
+    end.setDate(end.getDate() + validityDays - 1);
+    return end.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+const prettyDate = (iso: string | null) =>
+  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
 export function PurchasePTPackageDrawer({
-  open, onOpenChange, memberId, branchId,
+  open, onOpenChange, memberId, branchId, memberName,
 }: PurchasePTPackageDrawerProps) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>('session');
+  const { roles } = useAuth();
+  const roleList = useMemo(() => roles?.map((r) => r.role) ?? [], [roles]);
+  const canEditTax = can.viewFinancials(roleList);
+
+  const [mode, setMode] = useState<Mode>('monthly');
   const [selected, setSelected] = useState<string | 'custom' | null>(null);
   const [paySource, setPaySource] = useState<PaySource>('in_person');
   const [payMethod, setPayMethod] = useState<PayMethod>('cash');
   const [pendingPackageId, setPendingPackageId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string>(todayISO());
+  const [gstExempt, setGstExempt] = useState(false);
+  const [chargeOverride, setChargeOverride] = useState<string>('');
   const [custom, setCustom] = useState<CustomForm>({
     name: '',
     sessions: 12,
@@ -68,21 +105,25 @@ export function PurchasePTPackageDrawer({
     price: 0,
   });
 
-  useEffect(() => { setSelected(null); }, [mode]);
+  useEffect(() => { setSelected(null); setChargeOverride(''); }, [mode]);
   useEffect(() => {
     if (!open) {
-      setMode('session'); setSelected(null);
+      setMode('monthly'); setSelected(null);
       setPaySource('in_person'); setPayMethod('cash');
       setPendingPackageId(null);
+      setStartDate(todayISO());
+      setGstExempt(false);
+      setChargeOverride('');
     }
   }, [open]);
 
   const dbType = mode === 'session' ? 'session_based' : 'monthly';
+  const gstRate: 0 | 5 = gstExempt ? 0 : PT_GST_RATE;
 
   // Idempotency key stable across retries within this draft
   const draftId = selected === 'custom'
     ? `custom-${mode}-${custom.name}-${custom.price}`
-    : (selected ?? 'none');
+    : `${selected ?? 'none'}-${startDate}-${gstRate}-${chargeOverride}`;
   const idempotencyKey = useStableIdempotencyKey(memberId, 'pt-purchase', draftId);
 
   // Member must already have a trainer assigned
@@ -100,6 +141,21 @@ export function PurchasePTPackageDrawer({
     },
   });
   const trainerId = member?.assigned_trainer_id ?? null;
+
+  const { data: trainer } = useQuery({
+    queryKey: ['pt-trainer-detail', trainerId],
+    enabled: !!trainerId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('trainers')
+        .select('id, pt_share_percentage, profiles:profiles!trainers_user_id_fkey(full_name)')
+        .eq('id', trainerId!)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+  const trainerShare = Number(trainer?.pt_share_percentage ?? 20);
+  const trainerName: string | null = trainer?.profiles?.full_name ?? null;
 
   const { data: packages = [], isLoading } = useQuery<CatalogPkg[]>({
     queryKey: ['pt-packages-active', branchId, dbType],
@@ -122,36 +178,31 @@ export function PurchasePTPackageDrawer({
     [packages, selected],
   );
 
-  // Live checkout math — PT always GST 5% inclusive
-  const price = selected === 'custom'
+  const listPrice = selected === 'custom'
     ? custom.price
     : selectedPkg ? Number(selectedPkg.price) || 0 : 0;
-  const breakdown = computePtCheckout({
-    price,
-    gstPct: PT_GST_RATE,
-    gstInclusive: true,
-  });
+  const overrideValue = chargeOverride.trim() === '' ? null : Number(chargeOverride);
+  const price = overrideValue != null && !Number.isNaN(overrideValue) && overrideValue > 0
+    ? overrideValue
+    : listPrice;
+  const discount = Math.max(0, listPrice - price);
 
-  // Commission preview off pre-GST subtotal
-  const { data: trainerShare } = useQuery({
-    queryKey: ['trainer-share', trainerId],
-    enabled: !!trainerId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('trainers')
-        .select('pt_share_percentage')
-        .eq('id', trainerId!)
-        .maybeSingle();
-      return Number(data?.pt_share_percentage ?? 20);
-    },
-  });
-  const commissionPreview = trainerShare != null
-    ? Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100
-    : 0;
+  const breakdown = computePtCheckout({ price, gstPct: gstRate, gstInclusive: true });
+
+  const durationMonths = selected === 'custom'
+    ? (mode === 'monthly' ? custom.durationMonths : null)
+    : (selectedPkg?.package_type === 'monthly' ? selectedPkg.duration_months : null);
+  const validityDays = selected === 'custom'
+    ? (mode === 'session' ? Math.max(1, custom.validityMonths) * 30 : null)
+    : selectedPkg?.validity_days ?? null;
+  const expiryPreview = previewExpiry(startDate, durationMonths ?? null, validityDays ?? null);
+
+  const commissionPreview = Math.round(breakdown.subtotal * (trainerShare / 100) * 100) / 100;
 
   const purchase = useMutation({
     mutationFn: async () => {
       if (!trainerId) throw new Error('Assign a trainer to this member before purchase');
+      if (!startDate) throw new Error('Pick a start date');
       let packageId: string | null = null;
 
       if (selected === 'custom') {
@@ -160,10 +211,6 @@ export function PurchasePTPackageDrawer({
         if (mode === 'session' && custom.sessions <= 0) throw new Error('Sessions must be > 0');
         if (mode === 'monthly' && custom.durationMonths <= 0) throw new Error('Duration must be > 0');
 
-        const validityDays = mode === 'session'
-          ? Math.max(1, custom.validityMonths) * 30
-          : Math.max(1, custom.durationMonths) * 30;
-
         const insert = {
           branch_id: branchId,
           name: custom.name.trim(),
@@ -171,9 +218,9 @@ export function PurchasePTPackageDrawer({
           package_type: dbType,
           total_sessions: mode === 'session' ? custom.sessions : null,
           duration_months: mode === 'monthly' ? custom.durationMonths : null,
-          validity_days: validityDays,
+          validity_days: mode === 'session' ? Math.max(1, custom.validityMonths) * 30 : null,
           price: custom.price,
-          gst_percentage: PT_GST_RATE,
+          gst_percentage: gstRate,
           gst_inclusive: true,
           is_active: false,
         };
@@ -196,10 +243,11 @@ export function PurchasePTPackageDrawer({
           _trainer_id: trainerId,
           _branch_id: branchId,
           _price_paid: price,
-          _gst_rate: PT_GST_RATE,
+          _gst_rate: gstRate,
           _payment_method: payMethod,
           _payment_source: paySource,
           _idempotency_key: idempotencyKey,
+          _start_date: startDate,
         } as any,
       );
       if (rpcErr) throw rpcErr;
@@ -212,11 +260,12 @@ export function PurchasePTPackageDrawer({
       const mpId = data?.member_package_id;
       queryClient.invalidateQueries({ queryKey: ['my-pt-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['member-pt-packages'] });
+      queryClient.invalidateQueries({ queryKey: ['active-member-packages'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
 
       if (paySource === 'payment_link') {
         toast.success('Package created · awaiting payment');
         setPendingPackageId(mpId);
-        // Open payment page in new tab so the drawer can keep polling
         if (invoiceId) window.open(`/member/pay?invoice=${invoiceId}`, '_blank');
         return;
       }
@@ -276,7 +325,7 @@ export function PurchasePTPackageDrawer({
 
   const awaitingPayment = !!pendingPackageId;
   const canCharge =
-    !purchase.isPending && !awaitingPayment && !!trainerId &&
+    !purchase.isPending && !awaitingPayment && !!trainerId && !!startDate && price > 0 &&
     ((selected && selected !== 'custom') ||
       (selected === 'custom' &&
         custom.name.trim().length > 0 &&
@@ -294,7 +343,8 @@ export function PurchasePTPackageDrawer({
             <Dumbbell className="h-5 w-5" /> Purchase PT Package
           </SheetTitle>
           <SheetDescription>
-            Pick a preset pack or build a custom one — GST 5% (mandatory, inclusive) and commission preview shown live.
+            {memberName ? `Add a personal training package for ${memberName}. ` : ''}
+            Pick a plan, set the start date and confirm the tax treatment — commission preview updates live.
           </SheetDescription>
         </SheetHeader>
 
@@ -323,11 +373,11 @@ export function PurchasePTPackageDrawer({
         <div className="px-6 pt-4">
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
             <TabsList className="grid grid-cols-2 w-full bg-muted p-1 rounded-xl">
-              <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                <Dumbbell className="h-4 w-4 mr-2" /> Session Pack
-              </TabsTrigger>
               <TabsTrigger value="monthly" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 <CalendarDays className="h-4 w-4 mr-2" /> Monthly Plan
+              </TabsTrigger>
+              <TabsTrigger value="session" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                <Dumbbell className="h-4 w-4 mr-2" /> Session Pack
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -348,6 +398,7 @@ export function PurchasePTPackageDrawer({
 
               {packages.map((pkg) => {
                 const isSel = selected === pkg.id;
+                const isMonthly = pkg.package_type === 'monthly';
                 return (
                   <Card
                     key={pkg.id}
@@ -369,20 +420,24 @@ export function PurchasePTPackageDrawer({
                             </p>
                           )}
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {mode === 'session' && pkg.total_sessions != null && (
+                            {isMonthly ? (
                               <Badge variant="secondary" className="text-xs">
-                                {pkg.total_sessions} sessions
+                                Monthly access
+                                {pkg.duration_months ? ` · ${pkg.duration_months} month${pkg.duration_months > 1 ? 's' : ''}` : ''}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                {pkg.total_sessions ?? 0} sessions
                               </Badge>
                             )}
-                            {mode === 'monthly' && pkg.duration_months != null && (
-                              <Badge variant="secondary" className="text-xs">
-                                {pkg.duration_months} month{pkg.duration_months > 1 ? 's' : ''}
+                            {!isMonthly && pkg.validity_days != null && (
+                              <Badge variant="outline" className="text-xs">
+                                Valid {pkg.validity_days} days
                               </Badge>
                             )}
                             <Badge variant="outline" className="text-xs">
-                              Valid {pkg.validity_days} days
+                              {gstExempt ? 'GST exempt' : 'GST 5% incl.'}
                             </Badge>
-                            <Badge variant="outline" className="text-xs">GST 5% incl.</Badge>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -452,13 +507,85 @@ export function PurchasePTPackageDrawer({
                       )}
 
                       <div className="space-y-1.5">
-                        <Label htmlFor="custom-price" className="text-xs">Price (₹, GST 5% incl.)</Label>
+                        <Label htmlFor="custom-price" className="text-xs">
+                          Price (₹, {gstExempt ? 'GST exempt' : 'GST 5% incl.'})
+                        </Label>
                         <Input id="custom-price" type="number" min={0}
                           value={custom.price}
                           onChange={(e) => setCustom({ ...custom, price: parseFloat(e.target.value) || 0 })}
                         />
                       </div>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Schedule + tax controls */}
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardContent className="p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pt-start-date" className="text-xs">Start date</Label>
+                      <Input
+                        id="pt-start-date"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Ends on</Label>
+                      <div className="h-10 flex items-center rounded-md border border-input px-3 text-sm text-muted-foreground">
+                        {prettyDate(expiryPreview)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      {trainerName ? `${trainerName} ` : 'The assigned trainer '}
+                      can mark PT attendance from {prettyDate(startDate)} onwards
+                      {expiryPreview ? ` until ${prettyDate(expiryPreview)}` : ''}.
+                    </span>
+                  </div>
+
+                  {canEditTax && (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <Label htmlFor="pt-gst-exempt" className="text-sm">GST exempt sale</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Off = GST 5% inclusive (standard). On = 0% on the invoice.
+                          </p>
+                        </div>
+                        <Switch
+                          id="pt-gst-exempt"
+                          checked={gstExempt}
+                          onCheckedChange={setGstExempt}
+                          aria-label="Toggle GST exempt sale"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pt-charge" className="text-xs">
+                          Amount to charge (₹) — leave blank for list price
+                        </Label>
+                        <Input
+                          id="pt-charge"
+                          type="number"
+                          min={0}
+                          placeholder={listPrice ? String(listPrice) : '0'}
+                          value={chargeOverride}
+                          onChange={(e) => setChargeOverride(e.target.value)}
+                        />
+                        {discount > 0 && (
+                          <p className="text-xs text-warning">
+                            Discount applied: {formatINR(discount)} off list price.
+                          </p>
+                        )}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -497,7 +624,7 @@ export function PurchasePTPackageDrawer({
             <span>{formatINR(breakdown.subtotal)}</span>
           </div>
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>GST {PT_GST_RATE}% (mandatory, incl.)</span>
+            <span>{gstExempt ? 'GST (exempt sale)' : 'GST 5% (inclusive)'}</span>
             <span>{formatINR(breakdown.tax)}</span>
           </div>
           <div className="flex justify-between text-sm text-success">
@@ -519,7 +646,7 @@ export function PurchasePTPackageDrawer({
             ) : awaitingPayment ? (
               <>Waiting for payment…</>
             ) : (
-              <>Charge & Assign · {formatINR(breakdown.total)}</>
+              <>Charge &amp; Assign · {formatINR(breakdown.total)}</>
             )}
           </Button>
         </div>
