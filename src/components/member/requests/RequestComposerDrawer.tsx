@@ -111,7 +111,7 @@ export function RequestComposerDrawer({
     }
   }, [open, initialKind]);
 
-  const fallbackName = member?.profiles?.full_name || member?.member_code || 'Member';
+  
 
   const submit = useMutation({
     mutationFn: async () => {
