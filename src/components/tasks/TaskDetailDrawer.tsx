@@ -59,6 +59,11 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
   const [remindAt, setRemindAt] = useState('');
   const roleNames = (roles || []).map((r: any) => r.role);
   const canDelete = can.deleteTask(roleNames);
+  const navigate = useNavigate();
+  const linkedMembers = useLinkedMembers(task ? [task] : []);
+  const linkedMember = task?.linked_entity_id ? linkedMembers[task.linked_entity_id] : undefined;
+
+
 
   const { data: history = [] } = useQuery({
     queryKey: ['task-history', task?.id],
