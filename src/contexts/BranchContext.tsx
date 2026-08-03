@@ -122,31 +122,45 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 
   const showAllOption = isOwnerOrAdmin;
 
+  // A role-scoped query is "still resolving" while it is pending AND actually
+  // fetching. A disabled query is pending with fetchStatus 'idle' — that must
+  // not be treated as loading, otherwise owners would hang forever.
+  const managerResolving = managerPending && managerFetchStatus !== 'idle';
+  const staffResolving = staffPending && staffFetchStatus !== 'idle';
+  const memberResolving = memberPending && memberFetchStatus !== 'idle';
+
   // Compute branchStatus
   const branchStatus: BranchStatus = useMemo(() => {
     if (!user) return 'loading';
+    // Roles arrive asynchronously after a hard refresh. Until they do we cannot
+    // tell which branch query matters, so never render "no branch assigned".
+    if (authLoading || roles.length === 0) return 'loading';
     if (branchesLoading) return 'loading';
-    
+
     // Check for errors
     const hasError = branchesError || managerError || staffError || memberError;
     if (hasError && branches.length === 0) return 'error';
 
     // For restricted roles, check if they have a branch
     if (isRestrictedRole) {
-      if (hasAnyRole(['staff', 'trainer']) && !staffBranch && !branchesLoading) {
-        return 'no_branch_assigned';
+      if (hasAnyRole(['staff', 'trainer'])) {
+        if (staffResolving) return 'loading';
+        if (!staffBranch) return 'no_branch_assigned';
       }
-      if (hasAnyRole(['member']) && !memberBranch && !branchesLoading) {
-        return 'no_branch_assigned';
+      if (hasAnyRole(['member'])) {
+        if (memberResolving) return 'loading';
+        if (!memberBranch) return 'no_branch_assigned';
       }
     }
 
-    if (isManager && !isOwnerOrAdmin && managerBranches.length === 0 && !branchesLoading) {
-      return 'no_branch_assigned';
+    if (isManager && !isOwnerOrAdmin) {
+      if (managerResolving) return 'loading';
+      if (managerBranches.length === 0) return 'no_branch_assigned';
     }
 
     return 'ready';
-  }, [user, branchesLoading, branchesError, managerError, staffError, memberError, branches, isRestrictedRole, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole]);
+  }, [user, authLoading, roles.length, branchesLoading, branchesError, managerError, staffError, memberError, branches, isRestrictedRole, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole, staffResolving, memberResolving, managerResolving]);
+
 
   // Auto-initialize branch selection for restricted roles.
   // Honour any previously-saved selection that is still valid for this user.
