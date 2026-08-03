@@ -281,9 +281,25 @@ async function findPersonByCode(supabase: ReturnType<typeof createClient>, perso
   if (trainerByMipsId.data) return { ...trainerByMipsId.data, type: "trainer" } as PersonMatch;
   if (memberByMipsId.data) return { ...memberByMipsId.data, type: "member" } as PersonMatch;
   if (employeeByMipsId.data) return { ...employeeByMipsId.data, type: "employee" } as PersonMatch;
+  // Manual alias mapping (legacy / device-created person codes)
+  for (const candidate of [personCode, ...candidates]) {
+    if (!candidate) continue;
+    const { data, error } = await supabase.rpc("resolve_mips_person_alias", { _person_code: candidate });
+    if (error) continue;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      return {
+        id: row.target_id,
+        branch_id: row.branch_id,
+        user_id: row.user_id,
+        type: row.target_type,
+      } as PersonMatch;
+    }
+  }
 
   return null;
 }
+
 
 async function markAttendance(
   supabase: ReturnType<typeof createClient>,

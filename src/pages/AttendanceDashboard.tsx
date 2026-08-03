@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -372,6 +372,43 @@ export default function AttendanceDashboard() {
   };
 
   const checkedInUserIds = new Set((checkedInStaff.data || []).map((a: any) => a.user_id));
+
+  /**
+   * Today's real attendance state per staff member.
+   * A finished shift (check-in + check-out) must NOT read as "Not Checked In".
+   */
+  const staffTodaySummary = useMemo(() => {
+    const map = new Map<string, { firstIn: string; lastOut: string | null; isLate: boolean; lateMinutes: number | null; open: boolean }>();
+    for (const row of (staffTodayAttendance.data || []) as any[]) {
+      if (!row?.user_id) continue;
+      const existing = map.get(row.user_id);
+      const open = !row.check_out;
+      if (!existing) {
+        map.set(row.user_id, {
+          firstIn: row.check_in,
+          lastOut: row.check_out ?? null,
+          isLate: !!row.is_late,
+          lateMinutes: row.late_minutes ?? null,
+          open,
+        });
+      } else {
+        if (new Date(row.check_in) < new Date(existing.firstIn)) {
+          existing.firstIn = row.check_in;
+          existing.isLate = !!row.is_late;
+          existing.lateMinutes = row.late_minutes ?? null;
+        }
+        if (row.check_out && (!existing.lastOut || new Date(row.check_out) > new Date(existing.lastOut))) {
+          existing.lastOut = row.check_out;
+        }
+        existing.open = existing.open || open;
+      }
+    }
+    return map;
+  }, [staffTodayAttendance.data]);
+
+  const fmtTime = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+
 
   const decisionFor = (staff: any) =>
     canRecordAttendanceFor(actorRoles, staff?.roles, staff?.user_id === user?.id);
@@ -953,6 +990,10 @@ export default function AttendanceDashboard() {
                           const isCheckedIn = checkedInUserIds.has(staff.user_id);
                           const isSelf = staff.user_id === user?.id;
                           const decision = decisionFor(staff);
+                          const today = staffTodaySummary.get(staff.user_id);
+                          const weeklyOff = (staff.weekly_off || 'Sunday').toLowerCase();
+                          const isWeeklyOff = !today && new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === weeklyOff;
+
                           return (
                             <TableRow key={staff.user_id}>
                               <TableCell>
@@ -976,10 +1017,34 @@ export default function AttendanceDashboard() {
                                 <span className="text-sm capitalize">{staff.weekly_off || 'Sunday'}</span>
                               </TableCell>
                               <TableCell>
-                                <Badge className={`border ${isCheckedIn ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-border'}`}>
-                                  {isCheckedIn ? 'Checked In' : 'Not Checked In'}
-                                </Badge>
+                                <div className="flex flex-col gap-1">
+                                  <Badge className={`border w-fit ${
+                                    isCheckedIn
+                                      ? 'bg-success/10 text-success border-success/20'
+                                      : today
+                                        ? 'bg-info/10 text-info border-info/20'
+                                        : isWeeklyOff
+                                          ? 'bg-muted text-muted-foreground border-border'
+                                          : 'bg-muted text-muted-foreground border-border'
+                                  }`}>
+                                    {isCheckedIn ? 'Checked In' : today ? 'Present' : isWeeklyOff ? 'Weekly Off' : 'Not Checked In'}
+                                  </Badge>
+                                  {today && (
+                                    <span className="text-xs text-muted-foreground">
+                                      in {fmtTime(today.firstIn)}{today.lastOut ? ` · out ${fmtTime(today.lastOut)}` : ''}
+                                      {today.isLate && (
+                                        <span className="ml-1 text-warning font-medium">
+                                          late{today.lateMinutes != null ? ` ${today.lateMinutes}m` : ''}
+                                        </span>
+                                      )}
+                                      {!today.isLate && today.lateMinutes != null && (
+                                        <span className="ml-1 text-success font-medium">on-time</span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
+
                               <TableCell>
                                 {!decision.allowed ? (
                                   <span className="text-xs text-muted-foreground italic" title={decision.reason}>{decision.reason}</span>
