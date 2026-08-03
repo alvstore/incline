@@ -90,6 +90,7 @@ export function CorrectInvoiceDrawer({ open, onOpenChange, invoice, onCorrected 
         p_reason: reason.trim(),
         p_settlement: overpaid ? settlement : 'leave_due',
         p_line_description: lineDesc.trim() || null,
+        p_gst_rate: taxRateNum,
       });
       if (error) throw error;
       return data;
