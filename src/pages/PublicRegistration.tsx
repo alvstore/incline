@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { z } from "zod";
@@ -8,16 +8,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { LiquidButton } from "@/components/ui/liquid-button";
 import { GlassCard } from "@/components/registration/GlassCard";
 import { StepDots } from "@/components/registration/StepDots";
+import { OtpStep } from "@/components/registration/OtpStep";
 import { SignaturePad, type SignaturePadHandle } from "@/components/registration/SignaturePad";
 import { toast } from "sonner";
 import {
   Loader2, ShieldCheck, ArrowRight, ArrowLeft,
-  Sparkles, RefreshCw, ChevronDown, MapPin, Check,
+  Sparkles, RefreshCw, ChevronDown, MapPin, Check, History,
 } from "lucide-react";
 import heroImage from "@/assets/registration-hero-v2.jpg";
 import inclineLogo from "@/assets/incline-logo.png";
@@ -25,6 +25,11 @@ import { cn } from "@/lib/utils";
 
 import SEO from "@/components/seo/SEO";
 import { FACILITY_TERMS, TERMS_VERSION } from "@/lib/registration/terms";
+import {
+  useInitialRegistrationDraft,
+  useRegistrationDraftAutosave,
+  clearRegistrationDraft,
+} from "@/lib/registration/useRegistrationDraft";
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
