@@ -258,7 +258,9 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
 
 async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
   const candidates = normalizePersonCodeCandidates(personCode);
-  if (!candidates.length) return null;
+  if (!candidates.length) {
+    return await resolveAlias(supabase, personCode, personName);
+  }
 
   const [memberBySn, employeeBySn, trainerBySn] = await Promise.all([
     supabase.from("members").select("id, branch_id, user_id").in("mips_person_sn", candidates).maybeSingle(),
