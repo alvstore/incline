@@ -84,7 +84,7 @@ export default function MemberClassBooking() {
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
 
   // ─── Profile (gender filter) ───
-  const { data: profile } = useQuery({
+  const { data: profile, isFetched: profileFetched } = useQuery({
     queryKey: ['my-profile-gender', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -92,6 +92,9 @@ export default function MemberClassBooking() {
       return data ?? null;
     },
   });
+  // Profile is "resolved" once the query settled (or there is no user to look up).
+  const profileResolved = !user?.id || profileFetched;
+
 
   // ─── Auto-generate recovery slots ───
   // Auto-generate recovery slots in background (fire-and-forget style)
@@ -143,7 +146,8 @@ export default function MemberClassBooking() {
   // ─── Fetch Recovery Slots (7 days) ───
   const { data: recoverySlots = [], isLoading: slotsLoading } = useQuery({
     queryKey: ['agenda-slots', member?.branch_id, todayStr, profile?.gender ?? 'unknown'],
-    enabled: !!member,
+    enabled: !!member && profileResolved,
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from('benefit_slots')
@@ -439,7 +443,7 @@ export default function MemberClassBooking() {
     return m;
   }, [agendaItems]);
 
-  const isLoading = memberLoading || classesLoading || slotsLoading || ptLoading;
+  const isLoading = memberLoading || !profileResolved || classesLoading || slotsLoading || ptLoading;
 
   if (memberLoading) {
     return <AppLayout><div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div></AppLayout>;
@@ -448,7 +452,9 @@ export default function MemberClassBooking() {
     return <AppLayout><div className="flex flex-col items-center justify-center min-h-[50vh] gap-4"><AlertCircle className="h-12 w-12 text-warning" /><h2 className="text-xl font-semibold">No Member Profile Found</h2></div></AppLayout>;
   }
 
-  const noGenderSet = !profile?.gender;
+  // Only warn once the profile lookup has actually settled — avoids a flash on first paint.
+  const noGenderSet = profileResolved && !profile?.gender;
+
   const totalForDay = dayItems.length;
 
   return (

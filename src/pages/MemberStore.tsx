@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { hashCart } from '@/lib/cartHash';
-import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
+import { AddOnShowcase } from '@/components/member/store/AddOnShowcase';
 
 
 interface CartItem {
@@ -43,7 +43,7 @@ export default function MemberStore() {
   const [appliedDiscount, setAppliedDiscount] = useState<AppliedDiscount | null>(null);
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [applyingPromo, setApplyingPromo] = useState(false);
-  const [addOnOpen, setAddOnOpen] = useState(false);
+  
 
   // Wallet data
   const { data: wallet } = useWallet(member?.id || '');
@@ -491,23 +491,14 @@ export default function MemberStore() {
           </Card>
         )}
 
-        {/* Add-ons */}
-        <Card className="rounded-2xl border-border/60 shadow-sm">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
-                <Sparkles className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold">Need extra sessions or PT?</p>
-                <p className="text-xs text-muted-foreground">Buy benefit credits or a PT package — separate from products.</p>
-              </div>
-            </div>
-            <Button className="rounded-xl" onClick={() => setAddOnOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" /> Buy add-ons
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Recovery & add-ons */}
+        <AddOnShowcase
+          memberId={member.id}
+          memberName={(member as any).profiles?.full_name}
+          membershipId={activeMembership?.id ?? null}
+          branchId={member.branch_id}
+        />
+
 
         {/* Search + categories */}
         <div className="space-y-3">
@@ -693,15 +684,7 @@ export default function MemberStore() {
         </SheetContent>
       </Sheet>
 
-      <PurchaseAddOnDrawer
-        open={addOnOpen}
-        onOpenChange={setAddOnOpen}
-        memberId={member.id}
-        memberName={(member as any).profiles?.full_name}
-        membershipId={activeMembership?.id ?? null}
-        branchId={member.branch_id}
-        mode="member"
-      />
+
     </AppLayout>
   );
 }
