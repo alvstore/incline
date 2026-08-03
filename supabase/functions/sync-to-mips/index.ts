@@ -641,8 +641,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    ctxBranchId = branch_id ?? null;
+    ctxPersonId = person_id ?? null;
+
+    // Circuit breaker — while MIPS is down, fail fast with a retryable 503
+    // instead of burning 45s of timeouts per invocation (the 546/503 bursts).
+    const breaker = await readBreaker(supabase, ctxBranchId);
+    if (isTripped(breaker)) {
+      return new Response(JSON.stringify({
+        error: "MIPS server is temporarily unreachable",
+        retryable: true,
+        mips_outage: true,
+        retry_after: breaker.open_until,
+        last_error: breaker.last_error,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", ...(breaker.open_until ? { "Retry-After": "120" } : {}) },
+      });
+    }
+
     const baseUrl = getBaseUrl(mipsBaseUrl);
     const token = await getRuoYiToken(mipsBaseUrl, mipsUsername, mipsPassword);
+
 
     // ── Verify-only mode ──
     if (verify_only && person_no) {
