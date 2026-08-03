@@ -146,7 +146,8 @@ export default function MemberClassBooking() {
   // ─── Fetch Recovery Slots (7 days) ───
   const { data: recoverySlots = [], isLoading: slotsLoading } = useQuery({
     queryKey: ['agenda-slots', member?.branch_id, todayStr, profile?.gender ?? 'unknown'],
-    enabled: !!member,
+    enabled: !!member && profileResolved,
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from('benefit_slots')
@@ -451,7 +452,9 @@ export default function MemberClassBooking() {
     return <AppLayout><div className="flex flex-col items-center justify-center min-h-[50vh] gap-4"><AlertCircle className="h-12 w-12 text-warning" /><h2 className="text-xl font-semibold">No Member Profile Found</h2></div></AppLayout>;
   }
 
-  const noGenderSet = !profile?.gender;
+  // Only warn once the profile lookup has actually settled — avoids a flash on first paint.
+  const noGenderSet = profileResolved && !profile?.gender;
+
   const totalForDay = dayItems.length;
 
   return (
