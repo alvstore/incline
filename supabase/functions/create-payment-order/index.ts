@@ -190,7 +190,7 @@ serve(async (req) => {
       source: "order",
     });
 
-    return jsonResponse(orderResponse, 200);
+    return jsonResponse({ ...orderResponse, convenienceFee: feeInfo, amountDue }, 200);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Internal server error";
     console.error("create-payment-order error:", errorMessage);
