@@ -678,9 +678,22 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
   let y = pageHeight - marginY;
   const lineHeight = 13;
 
-  const headerLegal = `${employer.legal_name || "Incline"} — The Incline Life by Incline`;
-  const headerAddr = employer.full_address || [employer.city, employer.state].filter(Boolean).join(", ");
-  const headerContact = [employer.phone, employer.email].filter(Boolean).join("  ·  ");
+  // pdf-lib standard fonts are WinAnsi-only: "₹" (and any other non-Latin-1 glyph)
+  // throws "WinAnsi cannot encode". Normalise every string before it is drawn.
+  const win = (s: unknown): string =>
+    String(s ?? "")
+      .replace(/\u20b9/g, "Rs.")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2022/g, "-")
+      .replace(/\u00a0/g, " ")
+      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
+
+  const headerLegal = win(`${employer.legal_name || "Incline"} — The Incline Life by Incline`);
+  const headerAddr = win(employer.full_address || [employer.city, employer.state].filter(Boolean).join(", "));
+  const headerContact = win([employer.phone, employer.email].filter(Boolean).join("  ·  "));
+
 
   function drawHeader(p: any) {
     // Soft slate rule beneath the header
