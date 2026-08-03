@@ -593,44 +593,23 @@ export default function PublicRegistration() {
           )}
 
           {step === "otp" && (
-            <div className="space-y-6">
-              <p className="text-sm text-primary-foreground/70">
-                We sent a 6-digit code to <span className="font-semibold text-primary-foreground">{details?.phone}</span> on WhatsApp
-                {details?.email ? " & email" : ""}.
-              </p>
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-                  <InputOTPGroup className="gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                      <InputOTPSlot
-                        key={i}
-                        index={i}
-                        className="h-14 w-12 rounded-xl border-2 border-primary-foreground/15 bg-card/5 text-xl font-bold text-primary-foreground shadow-sm transition-all data-[active=true]:border-primary data-[active=true]:ring-2 data-[active=true]:ring-primary/30"
-                      />
-                    ))}
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-              <LiquidButton
-                type="button"
-                size="lg"
-                className="w-full"
-                disabled={otp.length !== 6 || verifyAndRegister.isPending}
-                onClick={() => verifyAndRegister.mutate()}
-              >
-                {verifyAndRegister.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Verify & complete <ArrowRight className="h-4 w-4" />
-              </LiquidButton>
-              <button
-                type="button"
-                className="block w-full text-center text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50"
-                onClick={() => sendOtp.mutate(details!.phone)}
-                disabled={sendOtp.isPending}
-              >
-                Resend code
-              </button>
-            </div>
+            <OtpStep
+              phone={details?.phone ?? ""}
+              email={details?.email}
+              sentAt={otpSentAt}
+              lockedUntil={resendLockedUntil}
+              otp={otp}
+              onOtpChange={(v) => { setOtp(v); setOtpError(null); }}
+              onVerify={handleVerify}
+              onResend={() => sendOtp.mutate(details!.phone)}
+              verifying={verifyAndRegister.isPending}
+              verifyStage={verifyStage}
+              resending={sendOtp.isPending}
+              errorMessage={otpError}
+              onChangeNumber={() => { setOtp(""); setOtpError(null); setStep("details"); }}
+            />
           )}
+
 
           {step === "done" && (
             <div className="space-y-4 py-6 text-center">
