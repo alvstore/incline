@@ -7866,6 +7866,7 @@ export type Database = {
           signed_at: string
           signer_ip: unknown
           signer_user_agent: string | null
+          terms_version: string | null
           waiver_pdf_path: string
         }
         Insert: {
@@ -7879,6 +7880,7 @@ export type Database = {
           signed_at?: string
           signer_ip?: unknown
           signer_user_agent?: string | null
+          terms_version?: string | null
           waiver_pdf_path: string
         }
         Update: {
@@ -7892,6 +7894,7 @@ export type Database = {
           signed_at?: string
           signer_ip?: unknown
           signer_user_agent?: string | null
+          terms_version?: string | null
           waiver_pdf_path?: string
         }
         Relationships: [
@@ -14050,6 +14053,7 @@ export type Database = {
       }
       correct_invoice: {
         Args: {
+          p_gst_rate?: number
           p_invoice_id: string
           p_line_description?: string
           p_new_discount: number
@@ -14057,7 +14061,7 @@ export type Database = {
           p_new_tax: number
           p_new_total: number
           p_reason: string
-          p_settlement?: string
+          p_settlement: string
         }
         Returns: Json
       }
