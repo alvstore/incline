@@ -32,7 +32,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(5);
   const [includeGst, setIncludeGst] = useState(true);
   const [items, setItems] = useState<LineItem[]>([
     { description: '', quantity: 1, unit_price: 0 },
