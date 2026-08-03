@@ -69,7 +69,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   });
 
   // For staff/trainer: fetch their branch from employees/trainers
-  const { data: staffBranch, error: staffError, refetch: refetchStaff } = useQuery({
+  const { data: staffBranch, error: staffError, refetch: refetchStaff, isPending: staffPending, fetchStatus: staffFetchStatus } = useQuery({
     queryKey: ['staff-home-branch', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
