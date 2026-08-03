@@ -223,10 +223,11 @@ Deno.serve(async (req) => {
     try {
       await admin.from("audit_logs").insert({
         action: "staff_offboarded",
-        actor_id: actorId,
-        target_type: offboardTrainer && !offboardEmployee ? "trainer" : "employee",
-        target_id: offboardEmployee ? employeeRow.id : trainerRow?.id,
-        details: {
+        user_id: actorId,
+        table_name: offboardTrainer && !offboardEmployee ? "trainers" : "employees",
+        record_id: offboardEmployee ? employeeRow.id : trainerRow?.id,
+        action_description: `Staff offboarded (${exit_type || "exit"})`,
+        new_data: {
           user_id: resolvedUserId,
           roles_removed: roles,
           remaining_roles: remainingRoles,
