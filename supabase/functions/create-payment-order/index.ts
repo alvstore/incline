@@ -40,7 +40,19 @@ serve(async (req) => {
       );
     }
 
-    // Invoice lookup
+    // Apply (or refresh) the online convenience fee before pricing the order.
+    // Server-side only; POS/store invoices are rejected inside the RPC.
+    let feeInfo: Record<string, unknown> | null = null;
+    const { data: feeResult, error: feeError } = await supabase.rpc("apply_convenience_fee", {
+      p_invoice_id: invoiceId,
+    });
+    if (feeError) {
+      console.warn("create-payment-order: convenience fee skipped:", feeError.message);
+    } else if ((feeResult as any)?.applied) {
+      feeInfo = feeResult as Record<string, unknown>;
+    }
+
+    // Invoice lookup (after fee application so totals are final)
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .select("id, invoice_number, total_amount, amount_paid, branch_id, member_id, status")
