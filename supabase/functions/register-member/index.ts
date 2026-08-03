@@ -1,8 +1,11 @@
-// v1.1.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.2.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
 // Two modes:
 //   { mode: 'send_otp', phone }
 //   { mode: 'verify_and_register', phone, code, registration:{...}, par_q, consents, signature_data_url }
 //
+// Latency: OTP delivery, waiver PDF render/upload, staff handoff and welcome
+// messages all run as background tasks (EdgeRuntime.waitUntil) so the member
+// never waits on them. Everything their account depends on stays inline.
 // Reuses existing dispatch-communication, send-whatsapp + send-sms fallback,
 // phoneVariants() identity helper, captureEdgeError, and signMemberDocument.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -22,6 +25,17 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+/** Keeps the isolate alive for post-response work without blocking the caller. */
+function backgroundTask(p: Promise<unknown>) {
+  const safe = p.catch((e) => captureEdgeError("register-member", e, { route: "background_task" }));
+  try {
+    (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(safe);
+  } catch {
+    /* runtime without waitUntil — the promise still runs best-effort */
+  }
+}
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -211,7 +225,9 @@ async function sendOtpHandler(req: Request, body: Record<string, unknown>): Prom
     }).catch((e) => captureEdgeError("register-member", e, { route: "send_otp_email" })));
   }
 
-  await Promise.allSettled(deliveries);
+  // Don't make the member wait on WhatsApp/email delivery — respond as soon as
+  // the code is persisted and let dispatch finish in the background.
+  backgroundTask(Promise.allSettled(deliveries));
 
   return json(200, {
     status: "sent",
@@ -537,9 +553,24 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     return json(500, { error: "signature_upload_failed", detail: sigUpErr.message });
   }
 
-  let pdfBytes: Uint8Array;
-  try {
-    pdfBytes = await generateWaiverPdf({
+  // 8) Insert the consent/signature row immediately — it is the legal record.
+  //    The waiver PDF is rendered and uploaded in the background right after.
+  const { error: sigRowErr } = await admin.from("member_onboarding_signatures").insert({
+    member_id: member.id,
+    signature_path: sigPath,
+    waiver_pdf_path: pdfPath,
+    par_q,
+    consents,
+    custom_terms: customTerms,
+    terms_version: termsVersion,
+    signer_ip: ip,
+    signer_user_agent: ua,
+    signed_at: signedAt,
+  });
+  if (sigRowErr) await captureEdgeError("register-member", sigRowErr, { route: "sig_row_insert" });
+
+  backgroundTask((async () => {
+    const pdfBytes = await generateWaiverPdf({
       member_code: member.member_code ?? member.id,
       full_name: reg.full_name,
       email: reg.email,
@@ -555,33 +586,12 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
       signed_at: signedAt,
       signature_png_bytes: signatureBytes,
     });
-  } catch (e) {
-    await captureEdgeError("register-member", e, { route: "pdf_render" });
-    return json(500, { error: "pdf_render_failed" });
-  }
+    const { error: pdfUpErr } = await admin.storage
+      .from("member-onboarding")
+      .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+    if (pdfUpErr) await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
+  })());
 
-  const { error: pdfUpErr } = await admin.storage
-    .from("member-onboarding")
-    .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
-  if (pdfUpErr) {
-    await captureEdgeError("register-member", pdfUpErr, { route: "pdf_upload" });
-    return json(500, { error: "pdf_upload_failed", detail: pdfUpErr.message });
-  }
-
-  // 8) Insert signature row
-  const { error: sigRowErr } = await admin.from("member_onboarding_signatures").insert({
-    member_id: member.id,
-    signature_path: sigPath,
-    waiver_pdf_path: pdfPath,
-    par_q,
-    consents,
-    custom_terms: customTerms,
-    terms_version: termsVersion,
-    signer_ip: ip,
-    signer_user_agent: ua,
-    signed_at: signedAt,
-  });
-  if (sigRowErr) await captureEdgeError("register-member", sigRowErr, { route: "sig_row_insert" });
 
   // 9) Mark OTP consumed
   await admin.from("otp_verifications").update({ consumed_at: signedAt }).eq("id", otp.id);
@@ -593,25 +603,24 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   });
   if (sessErr) await captureEdgeError("register-member", sessErr, { route: "session_signin" });
 
-  // 11) Fire-and-forget staff notification
-  try {
-    await admin.functions.invoke("notify-staff-handoff", {
-      body: {
-        kind: "member_self_registered",
-        member_id: member.id,
-        branch_id: reg.branch_id,
-        full_name: reg.full_name,
-        phone,
-      },
-    });
-  } catch (e) {
-    await captureEdgeError("register-member", e, { route: "notify_staff" });
-  }
+  // 11) Staff notification — background
+  backgroundTask(admin.functions.invoke("notify-staff-handoff", {
+    body: {
+      kind: "member_self_registered",
+      member_id: member.id,
+      branch_id: reg.branch_id,
+      full_name: reg.full_name,
+      phone,
+    },
+  }).then((r) => {
+    if ((r as { error?: unknown })?.error) {
+      return captureEdgeError("register-member", (r as { error: unknown }).error, { route: "notify_staff" });
+    }
+  }));
 
-  // 12) Fire-and-forget welcome. The dispatcher handles ONE channel per call,
-  // so we dispatch WhatsApp, SMS and Email as independent invocations to
-  // guarantee the member gets a welcome even if one template isn't authored.
-  // Every message carries the member code AND the portal login link.
+  // 12) Welcome messages — background, all channels in parallel. The dispatcher
+  // handles ONE channel per call, so WhatsApp, SMS and Email go out as separate
+  // invocations. Every message carries the member code AND the portal login link.
   const LOGIN_URL = "https://theincline.in/auth";
   const welcomeVars = {
     name: reg.full_name,
@@ -632,33 +641,30 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   if (phone) welcomeChannels.push({ channel: "sms", recipient: phone });
   if (reg.email) welcomeChannels.push({ channel: "email", recipient: reg.email });
 
-  for (const c of welcomeChannels) {
-    try {
-      await admin.functions.invoke("dispatch-communication", {
-        body: {
-          event: "member_created",
-          channel: c.channel,
-          member_id: member.id,
-          branch_id: reg.branch_id,
-          recipient: c.recipient,
-          dedupe_key: `member_created:${member.id}:${c.channel}`,
-          variables: welcomeVars,
-          ...(c.channel === "email"
-            ? {
-                payload: {
-                  subject: `Welcome to The Incline Life, ${reg.full_name}!`,
-                  body: welcomeFallback,
-                  use_branded_template: true,
-                },
-              }
-            : {}),
-          fallback_body: welcomeFallback,
-        },
-      });
-    } catch (e) {
-      await captureEdgeError("register-member", e, { route: `welcome_dispatch_${c.channel}` });
-    }
-  }
+  backgroundTask(Promise.allSettled(welcomeChannels.map((c) =>
+    admin.functions.invoke("dispatch-communication", {
+      body: {
+        event: "member_created",
+        channel: c.channel,
+        member_id: member.id,
+        branch_id: reg.branch_id,
+        recipient: c.recipient,
+        dedupe_key: `member_created:${member.id}:${c.channel}`,
+        variables: welcomeVars,
+        ...(c.channel === "email"
+          ? {
+              payload: {
+                subject: `Welcome to The Incline Life, ${reg.full_name}!`,
+                body: welcomeFallback,
+                use_branded_template: true,
+              },
+            }
+          : {}),
+        fallback_body: welcomeFallback,
+      },
+    }).catch((e) => captureEdgeError("register-member", e, { route: `welcome_dispatch_${c.channel}` })),
+  )));
+
 
 
   return json(200, {
