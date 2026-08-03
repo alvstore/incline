@@ -48,15 +48,25 @@ async function buildPdf(opts: {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+  const win = (x: unknown): string =>
+    String(x ?? "")
+      .replace(/\u20b9/g, "Rs.")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2022/g, "-")
+      .replace(/\u00a0/g, " ")
+      .replace(/[^\x09\x0a\x0d\x20-\xff]/g, "");
+
   const teal = rgb(0, 0.72, 0.61);
   const slate = rgb(0.39, 0.45, 0.55);
   const dark = rgb(0.06, 0.09, 0.16);
 
   // Header
   page.drawText("The Incline Life by Incline", { x: 40, y: 800, size: 14, font: bold, color: teal });
-  page.drawText(opts.title, { x: 40, y: 778, size: 18, font: bold, color: dark });
-  page.drawText(`${opts.memberName} · ${opts.branchName}`, { x: 40, y: 758, size: 11, font, color: slate });
-  page.drawText(`Scan: ${opts.scanDateLabel}`, { x: 40, y: 744, size: 10, font, color: slate });
+  page.drawText(win(opts.title), { x: 40, y: 778, size: 18, font: bold, color: dark });
+  page.drawText(win(`${opts.memberName} · ${opts.branchName}`), { x: 40, y: 758, size: 11, font, color: slate });
+  page.drawText(win(`Scan: ${opts.scanDateLabel}`), { x: 40, y: 744, size: 10, font, color: slate });
   page.drawLine({ start: { x: 40, y: 730 }, end: { x: width - 40, y: 730 }, thickness: 1.5, color: teal });
 
   // Rows
@@ -68,14 +78,14 @@ async function buildPdf(opts: {
       y = 800;
       void p;
     }
-    page.drawText(label, { x: 50, y, size: 11, font, color: slate });
-    page.drawText(String(value ?? "—"), { x: 280, y, size: 11, font: bold, color: dark });
+    page.drawText(win(label), { x: 50, y, size: 11, font, color: slate });
+    page.drawText(win(value ?? "-"), { x: 280, y, size: 11, font: bold, color: dark });
     y -= lh;
   }
 
   // Footer
   page.drawText(
-    "Generated from your body scan. Wellness reference only — not medical advice.",
+    "Generated from your body scan. Wellness reference only - not medical advice.",
     { x: 40, y: 40, size: 9, font, color: slate },
   );
 
