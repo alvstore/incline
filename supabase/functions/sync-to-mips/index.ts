@@ -1060,6 +1060,9 @@ Deno.serve(async (req) => {
     }).eq("id", person_id);
     console.log(`CRM updated: mips_person_id=${personId}, mips_person_sn=${mipsPersonSn}`);
 
+    // The server answered — clear any breaker state for this branch.
+    try { await recordSuccess(supabase, ctxBranchId); } catch (_) { /* non-fatal */ }
+
     return new Response(JSON.stringify({
       success: photoUploaded && allDevicesDelivered,
       mips_person_id: personId,
@@ -1080,10 +1083,32 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("sync-to-mips error:", message);
-    return new Response(JSON.stringify({ error: message }), {
+    const kind = classifyFailure({ message });
+    console.error(`sync-to-mips error (${kind}):`, message);
+
+    if (kind === "transport") {
+      // MIPS is unreachable / rebooting: this is an outage, not bad data.
+      // Trip the shared breaker and park the row as retryable.
+      try { await recordTransportFailure(supabase, ctxBranchId, message); } catch (_) { /* non-fatal */ }
+      if (ctxTable && ctxPersonId) {
+        try {
+          await supabase.from(ctxTable).update({ mips_sync_status: "pending" }).eq("id", ctxPersonId);
+        } catch (_) { /* non-fatal */ }
+      }
+      return new Response(JSON.stringify({
+        error: message,
+        retryable: true,
+        mips_outage: true,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "120" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: message, retryable: false }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 });
