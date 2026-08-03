@@ -1,4 +1,4 @@
-// v1.0.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.1.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
 // Two modes:
 //   { mode: 'send_otp', phone }
 //   { mode: 'verify_and_register', phone, code, registration:{...}, par_q, consents, signature_data_url }
@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 import { phoneVariants, normalizePhone } from "../_shared/phone.ts";
+import { FACILITY_TERMS, TERMS_VERSION } from "../_shared/terms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,6 +229,7 @@ async function generateWaiverPdf(input: {
   branch_name: string;
   registration: RegistrationPayload;
   custom_terms?: string | null;
+  terms_version?: string | null;
   par_q: Record<string, string>;
   consents: Record<string, boolean>;
   ip: string | null;
@@ -338,6 +340,14 @@ async function generateWaiverPdf(input: {
     qi++;
   }
 
+  section(`Facility Terms & Conditions (v${input.terms_version || TERMS_VERSION})`);
+  let ti = 1;
+  for (const clause of FACILITY_TERMS) {
+    drawWrapped(`${ti}. ${clause.title}`, { size: 9 });
+    drawWrapped(clause.body, { size: 8 });
+    ti++;
+  }
+
   if (input.custom_terms && input.custom_terms.trim()) {
     section("Additional Terms");
     drawWrapped(input.custom_terms.trim(), { size: 9 });
@@ -400,6 +410,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // Optional branch/campaign-specific terms shown on /register — printed on the
   // contract and persisted so staff reprints match exactly.
   const customTerms = body.custom_terms ? String(body.custom_terms).slice(0, 4000) : null;
+  const termsVersion = body.terms_version ? String(body.terms_version).slice(0, 64) : TERMS_VERSION;
   if (!consents.dpdp || !consents.whatsapp || !consents.waiver) {
     return json(400, { error: "required_consents_missing" });
   }
@@ -536,6 +547,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
       branch_name: branch.name,
       registration: reg,
       custom_terms: customTerms,
+      terms_version: termsVersion,
       par_q,
       consents,
       ip,
@@ -564,6 +576,7 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
     par_q,
     consents,
     custom_terms: customTerms,
+    terms_version: termsVersion,
     signer_ip: ip,
     signer_user_agent: ua,
     signed_at: signedAt,
