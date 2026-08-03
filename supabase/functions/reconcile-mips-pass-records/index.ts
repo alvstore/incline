@@ -516,7 +516,9 @@ Deno.serve(async (req) => {
 
       const personNo = getString(record.personNo ?? record.personSn ?? record.personId);
       const personName = getString(record.personName ?? record.name) || "Unknown";
-      const matchedPerson = personNo ? await findPersonByCode(supabase, personNo) : null;
+      const matchedPerson = personNo || personName
+        ? await findPersonByCode(supabase, personNo, personName)
+        : null;
       if (!matchedPerson) unmatched++;
 
       const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
