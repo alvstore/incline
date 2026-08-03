@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { notifyTaskAssignee } from '@/lib/tasks/taskNotify';
 
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -138,6 +139,17 @@ export async function createTask(task: {
     .single();
 
   if (error) throw error;
+
+  await notifyTaskAssignee({
+    taskId: data.id,
+    branchId: data.branch_id,
+    assignedTo: data.assigned_to,
+    title: data.title,
+    description: data.description,
+    priority: data.priority,
+    dueDate: data.due_date,
+  });
+
   return data;
 }
 
@@ -159,6 +171,17 @@ export async function assignTask(taskId: string, userId: string | null, assigned
     .single();
 
   if (error) throw error;
+
+  await notifyTaskAssignee({
+    taskId: data.id,
+    branchId: data.branch_id,
+    assignedTo: data.assigned_to,
+    title: data.title,
+    description: data.description,
+    priority: data.priority,
+    dueDate: data.due_date,
+  });
+
   return data;
 }
 

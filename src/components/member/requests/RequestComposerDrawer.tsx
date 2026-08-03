@@ -14,6 +14,7 @@ import {
   resolveMemberDisplayName,
   type MemberRequestReference,
 } from '@/lib/tasks/memberRequestTasks';
+import { notifyTaskAssignee } from '@/lib/tasks/taskNotify';
 import type { LockerSize, RequestKind, RequestOption } from './requestTypes';
 
 const MEMBER_REQUEST_LABEL_LOWER: Record<MemberRequestReference, string> = {
@@ -122,18 +123,31 @@ export function RequestComposerDrawer({
 
       /** Every member request gets a task so staff/trainers see it in their queue. */
       const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
-        const { error } = await supabase.from('tasks').insert({
-          branch_id: member.branch_id,
-          title,
-          description,
-          priority: 'medium',
-          status: 'pending',
-          assigned_to: assignedTo,
-          assigned_by: userId,
-          linked_entity_type: 'member',
-          linked_entity_id: member.id,
-        } as any);
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert({
+            branch_id: member.branch_id,
+            title,
+            description,
+            priority: 'medium',
+            status: 'pending',
+            assigned_to: assignedTo,
+            assigned_by: userId,
+            linked_entity_type: 'member',
+            linked_entity_id: member.id,
+          } as any)
+          .select('id, branch_id, assigned_to, title, description, priority, due_date')
+          .single();
         if (error) throw error;
+        await notifyTaskAssignee({
+          taskId: (data as any).id,
+          branchId: (data as any).branch_id,
+          assignedTo: (data as any).assigned_to,
+          title: (data as any).title,
+          description: (data as any).description,
+          priority: (data as any).priority,
+          dueDate: (data as any).due_date,
+        });
       };
 
       if (kind === 'diet' || kind === 'workout') {
@@ -167,8 +181,24 @@ export function RequestComposerDrawer({
           linked_entity_type: 'member',
           linked_entity_id: member.id,
         }));
-        const { error } = await supabase.from('tasks').insert(rows as any);
+        const { data: created, error } = await supabase
+          .from('tasks')
+          .insert(rows as any)
+          .select('id, branch_id, assigned_to, title, description, priority, due_date');
         if (error) throw error;
+        await Promise.all(
+          (created || []).map((t: any) =>
+            notifyTaskAssignee({
+              taskId: t.id,
+              branchId: t.branch_id,
+              assignedTo: t.assigned_to,
+              title: t.title,
+              description: t.description,
+              priority: t.priority,
+              dueDate: t.due_date,
+            }),
+          ),
+        );
         return;
       }
 

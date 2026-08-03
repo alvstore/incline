@@ -1,4 +1,4 @@
-// run-retention-nudges v2.2.0 — accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain); routes through dispatch-communication; skips members with frozen membership
+// run-retention-nudges v2.3.0 — dynamic absence threshold from retention_templates.days_trigger; per-channel result logging; accepts service-role bearer OR (apikey=service-role + x-system-call=automation-brain); routes through dispatch-communication; skips frozen memberships
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -58,11 +58,19 @@ Deno.serve(async (req) => {
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+    // v2.3.0: absence threshold is driven by the LOWEST configured stage
+    // trigger instead of a hardcoded 5 days, so lowering Stage 1 in
+    // `retention_templates` immediately widens the eligibility window.
+    const minDaysTrigger = Math.max(
+      1,
+      Math.min(...templates.map((t: any) => Number(t.days_trigger) || 3)),
+    );
+
     for (const branch of branches) {
-      // Get inactive members (5+ days absent, up to 200)
+      // Get inactive members (minDaysTrigger+ days absent, up to 200)
       const { data: inactiveMembers } = await adminClient.rpc("get_inactive_members", {
         p_branch_id: branch.id,
-        p_days: 5,
+        p_days: minDaysTrigger,
         p_limit: 200,
       });
 
@@ -211,6 +219,12 @@ Deno.serve(async (req) => {
             channelResults[channel] = "failed";
           }
         }
+
+        // Per-channel outcome is visible in function logs so a silently
+        // skipped channel (e.g. SMS provider disabled) is diagnosable.
+        console.log(
+          `retention stage ${matchedTemplate.stage_level} member=${member.member_id} results=${JSON.stringify(channelResults)}`,
+        );
 
         // Insert nudge log
         await adminClient.from("retention_nudge_logs").insert({

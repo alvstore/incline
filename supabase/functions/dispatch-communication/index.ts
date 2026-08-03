@@ -1,4 +1,4 @@
-// dispatch-communication v1.23.0
+// dispatch-communication v1.24.0
 // v1.23.0: FIX — document attachments on body-only approved templates are no
 //          longer silently dropped. Meta templates like `invoice_generated_pdf`
 //          say "attached" but have NO HEADER component, so the PDF URL is now
@@ -706,6 +706,35 @@ Deno.serve(async (req) => {
           // from the category. This stops the dispatcher from emitting opaque
           // "Outside 24h customer-service window" failures whenever a caller
           // forgets to pass template_id but an approved template exists.
+          //
+          // v1.24.0: EVENT-FIRST resolution. Workers (retention nudges, task
+          // assignment, reminders) already pass the canonical event key in
+          // `payload.variables.event_key`. Matching templates.trigger_event on
+          // that key is far more precise than the coarse category map and fixes
+          // retention nudges being suppressed with no_template_for_closed_session
+          // while approved retention_stage_1/2/3 templates existed.
+          if (!input.template_id) {
+            const eventKey = String(
+              (input.payload as any)?.variables?.event_key ??
+                (input.payload as any)?.event_key ??
+                '',
+            ).trim();
+            if (eventKey) {
+              const { data: eventTpl } = await supabase
+                .from('templates')
+                .select('id, branch_id')
+                .eq('trigger_event', eventKey)
+                .not('meta_template_name', 'is', null)
+                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                .order('branch_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle();
+              if (eventTpl?.id) {
+                input.template_id = eventTpl.id;
+                (input as any).__auto_resolved_template = 'event_key';
+              }
+            }
+          }
           if (!input.template_id) {
             const CATEGORY_TO_TRIGGER_EVENTS: Partial<Record<Category, string[]>> = {
               membership_reminder: ['membership_expiring', 'membership_expired', 'membership_renewal'],
@@ -714,7 +743,11 @@ Deno.serve(async (req) => {
               class_notification: ['class_booked', 'class_reminder', 'class_cancelled'],
               new_lead: ['lead_created', 'lead_welcome'],
               task_reminder: ['task_assigned', 'task_reminder'],
-              retention_nudge: ['retention_nudge', 'inactive_member', 'comeback'],
+              retention_nudge: [
+                'retention_stage_1', 'retention_stage_2', 'retention_stage_3',
+                'retention_nudge_t1', 'retention_nudge_t2',
+                'retention_nudge', 'inactive_member', 'comeback',
+              ],
               review_request: ['review_request', 'feedback_request'],
               low_stock: ['low_stock_alert'],
               announcement: ['announcement', 'broadcast'],
