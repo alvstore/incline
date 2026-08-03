@@ -30,13 +30,24 @@ interface TaskDetailDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Routes that actually exist in the app. The members screen is a list that
+// opens the profile drawer via ?member=<id> — there is no /members/:id route.
 const linkedEntityRoute: Record<string, (id: string) => string> = {
-  member: (id) => `/members/${id}`,
+  member: (id) => `/members?member=${id}`,
   invoice: (id) => `/invoices?id=${id}`,
   approval: (_id) => `/approvals`,
   lead: (id) => `/leads?id=${id}`,
   booking: (_id) => `/all-bookings`,
   complaint: (_id) => `/feedback`,
+};
+
+const LINKED_ENTITY_LABEL: Record<string, string> = {
+  member: 'member',
+  invoice: 'invoice',
+  approval: 'approval',
+  lead: 'lead',
+  booking: 'booking',
+  complaint: 'feedback',
 };
 
 export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerProps) {
