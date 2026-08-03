@@ -23,6 +23,7 @@ import {
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { PlanDownloadButton } from '@/components/fitness/PlanDownloadButton';
+import { WorkoutPlanViewer } from '@/components/member/workout/WorkoutPlanViewer';
 
 export default function MyWorkout() {
   useAuth();
