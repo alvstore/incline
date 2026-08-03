@@ -662,7 +662,7 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     }
   } catch (_) { /* logo is best-effort */ }
 
-  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT — NOT YET SIGNED" : "EMPLOYEE COPY";
+  const copyLabel = copy === "original" ? "ORIGINAL" : copy === "employer_copy" ? "EMPLOYER COPY" : copy === "draft" ? "DRAFT - NOT YET SIGNED" : "EMPLOYEE COPY";
   const isDraft = copy === "draft";
   const pageWidth = PageSizes.A4[0];
   const pageHeight = PageSizes.A4[1];
