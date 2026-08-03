@@ -497,7 +497,7 @@ export default function PublicRegistration() {
               <div className="rounded-2xl border border-primary-foreground/10 bg-card/5">
                 <div className="flex items-center justify-between border-b border-primary-foreground/10 px-4 py-2.5">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/60">
-                    Incline 24/7 — Facility Terms &amp; Conditions
+                    Incline — Facility Terms &amp; Conditions
                   </p>
                   <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
                     v{TERMS_VERSION}
@@ -534,7 +534,7 @@ export default function PublicRegistration() {
               <div className="space-y-2.5">
                 {[
                   { k: "waiver", l: "I accept the assumption of risk and waiver above.", required: true },
-                  { k: "facility_rules", l: "I have read and accept the Incline 24/7 facility terms, including 24/7 unstaffed-hours access, CCTV, turnstile, footwear, locker and parking rules.", required: true },
+                  { k: "facility_rules", l: "I have read and accept the Incline facility terms, including 24/7 unstaffed-hours access, CCTV, turnstile, footwear, locker and parking rules.", required: true },
                   { k: "dpdp", l: "I consent to processing of my personal data per the DPDP Act, 2023.", required: true },
                   { k: "whatsapp", l: "I agree to receive WhatsApp / SMS / Email / RCS updates from Incline.", required: true },
                   { k: "photo", l: "I consent to my photo being used for member identification.", required: false },
