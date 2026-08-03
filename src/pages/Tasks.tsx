@@ -147,6 +147,9 @@ export default function TasksPage() {
     });
   }, [tasks, filter, search, user?.id]);
 
+  const linkedMembers = useLinkedMembers(tasks);
+
+
   const myOpenCount = useMemo(
     () => tasks.filter((t: any) => t.assigned_to === user?.id && t.status !== 'completed' && t.status !== 'cancelled').length,
     [tasks, user?.id],
