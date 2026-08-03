@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dumbbell } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { DayRail } from './DayRail';
+import { Dumbbell, Moon } from 'lucide-react';
 import { DaySessionCard } from './DaySessionCard';
 import { WeekGrid } from './WeekGrid';
+import { PlanSegmentedTabs } from '@/components/member/plan/PlanSegmentedTabs';
+import { PlanDayRail } from '@/components/member/plan/PlanDayRail';
 import { normalizeWorkoutPlan, type WorkoutDay } from './planNormalize';
 
 type ViewMode = 'today' | 'day' | 'week';
@@ -77,41 +77,18 @@ export function WorkoutPlanViewer({ planId, planData }: WorkoutPlanViewerProps) 
   const activeDay = days[activeIndex] ?? days[0];
   const shownDay = mode === 'today' ? (todaysDay ?? activeDay) : activeDay;
 
-  const tabs: { key: ViewMode; label: string }[] = [
-    { key: 'today', label: 'Today' },
-    { key: 'day', label: 'Day view' },
-    { key: 'week', label: 'Full week' },
-  ];
-
   return (
     <div className="space-y-4">
-      {/* Segmented control */}
-      <div className="sticky top-16 z-10 -mx-1 px-1 py-1">
-        <div
-          role="tablist"
-          aria-label="Workout plan view"
-          className="inline-flex w-full gap-1 rounded-2xl border border-border/60 bg-card/95 p-1 shadow-sm backdrop-blur sm:w-auto"
-        >
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={mode === tab.key}
-              type="button"
-              onClick={() => setMode(tab.key)}
-              className={cn(
-                'flex-1 cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 sm:flex-none',
-                'focus:outline-none focus:ring-2 focus:ring-primary',
-                mode === tab.key
-                  ? 'bg-gradient-to-r from-primary to-accent text-primary-foreground shadow'
-                  : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PlanSegmentedTabs<ViewMode>
+        ariaLabel="Workout plan view"
+        value={mode}
+        onChange={setMode}
+        tabs={[
+          { key: 'today', label: 'Today' },
+          { key: 'day', label: 'Day view' },
+          { key: 'week', label: 'Full week' },
+        ]}
+      />
 
       {mode === 'week' ? (
         <WeekGrid
@@ -128,7 +105,22 @@ export function WorkoutPlanViewer({ planId, planData }: WorkoutPlanViewerProps) 
               No session is scheduled for today — showing the first session of your plan.
             </p>
           )}
-          {mode === 'day' && <DayRail days={days} activeId={shownDay.id} onSelect={setActiveId} />}
+          {mode === 'day' && (
+            <PlanDayRail
+              activeId={shownDay.id}
+              onSelect={setActiveId}
+              items={days.map((day) => ({
+                id: day.id,
+                label: day.dayLabel,
+                sublabel: day.weekLabel,
+                caption: day.isRest
+                  ? 'Rest & recover'
+                  : day.focus || `${day.exercises.length} exercises`,
+                muted: day.isRest,
+                icon: day.isRest ? <Moon className="h-3.5 w-3.5" /> : <Dumbbell className="h-3.5 w-3.5" />,
+              }))}
+            />
+          )}
           <DaySessionCard
             day={shownDay}
             doneKeys={doneKeys}
