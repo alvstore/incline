@@ -1017,10 +1017,34 @@ export default function AttendanceDashboard() {
                                 <span className="text-sm capitalize">{staff.weekly_off || 'Sunday'}</span>
                               </TableCell>
                               <TableCell>
-                                <Badge className={`border ${isCheckedIn ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-border'}`}>
-                                  {isCheckedIn ? 'Checked In' : 'Not Checked In'}
-                                </Badge>
+                                <div className="flex flex-col gap-1">
+                                  <Badge className={`border w-fit ${
+                                    isCheckedIn
+                                      ? 'bg-success/10 text-success border-success/20'
+                                      : today
+                                        ? 'bg-info/10 text-info border-info/20'
+                                        : isWeeklyOff
+                                          ? 'bg-muted text-muted-foreground border-border'
+                                          : 'bg-muted text-muted-foreground border-border'
+                                  }`}>
+                                    {isCheckedIn ? 'Checked In' : today ? 'Present' : isWeeklyOff ? 'Weekly Off' : 'Not Checked In'}
+                                  </Badge>
+                                  {today && (
+                                    <span className="text-xs text-muted-foreground">
+                                      in {fmtTime(today.firstIn)}{today.lastOut ? ` · out ${fmtTime(today.lastOut)}` : ''}
+                                      {today.isLate && (
+                                        <span className="ml-1 text-warning font-medium">
+                                          late{today.lateMinutes != null ? ` ${today.lateMinutes}m` : ''}
+                                        </span>
+                                      )}
+                                      {!today.isLate && today.lateMinutes != null && (
+                                        <span className="ml-1 text-success font-medium">on-time</span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
+
                               <TableCell>
                                 {!decision.allowed ? (
                                   <span className="text-xs text-muted-foreground italic" title={decision.reason}>{decision.reason}</span>
