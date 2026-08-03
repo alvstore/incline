@@ -211,7 +211,9 @@ async function sendOtpHandler(req: Request, body: Record<string, unknown>): Prom
     }).catch((e) => captureEdgeError("register-member", e, { route: "send_otp_email" })));
   }
 
-  await Promise.allSettled(deliveries);
+  // Don't make the member wait on WhatsApp/email delivery — respond as soon as
+  // the code is persisted and let dispatch finish in the background.
+  backgroundTask(Promise.allSettled(deliveries));
 
   return json(200, {
     status: "sent",
