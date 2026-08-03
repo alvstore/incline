@@ -325,10 +325,27 @@ export default function PublicRegistration() {
 
         {/* Glass card */}
         <GlassCard className="mt-8 flex-1 p-5 sm:mt-10 sm:p-7">
+        <GlassCard className="mt-8 flex-1 p-5 sm:mt-10 sm:p-7">
+          {draftRestored && step !== "done" && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 text-xs text-primary-foreground/85">
+              <span className="flex items-center gap-2">
+                <History className="h-3.5 w-3.5 text-primary" />
+                We restored the details you filled earlier.
+              </span>
+              <button
+                type="button"
+                onClick={startOver}
+                className="shrink-0 font-semibold text-primary hover:text-primary/80"
+              >
+                Start over
+              </button>
+            </div>
+          )}
           <div className="mb-6 flex items-center justify-between">
             <StepDots total={4} current={stepIdx} labels={[...STEPS]} />
             <span className="text-xs font-medium text-primary-foreground/60">{STEPS[stepIdx]}</span>
           </div>
+
 
           {step === "details" && (
             <form onSubmit={submitDetails} className="space-y-5">
