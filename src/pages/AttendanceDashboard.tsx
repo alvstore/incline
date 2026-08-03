@@ -486,32 +486,52 @@ export default function AttendanceDashboard() {
     return <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">Manual</Badge>;
   };
 
-  // History: per-staff summary (actual attendance days vs calendar days)
+  // History: per-staff summary. "Days elapsed" only counts days that have actually
+  // happened in the selected month, so a mid-month view never reads as mass absence.
   const historyStaffSummary = (() => {
     const [year, month] = historyMonth.split('-').map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
+    const elapsedDays = isCurrentMonth
+      ? Math.min(now.getDate(), daysInMonth)
+      : (new Date(year, month - 1, 1) > now ? 0 : daysInMonth);
 
-    const map = new Map<string, { name: string; email: string; days: number; totalHours: number }>();
-    
+    type Row = { name: string; email: string; dayKeys: Set<string>; totalHours: number; openShifts: number };
+    const map = new Map<string, Row>();
+
     // Seed from allStaffProfiles
     allStaffProfiles.forEach((s: any) => {
-      map.set(s.user_id, { name: s.name, email: '', days: 0, totalHours: 0 });
+      map.set(s.user_id, { name: s.name, email: '', dayKeys: new Set(), totalHours: 0, openShifts: 0 });
     });
 
     historyData.forEach((r: any) => {
       const key = r.user_id;
-      const existing = map.get(key) || { name: r.profiles?.full_name || 'Unknown', email: r.profiles?.email || '', days: 0, totalHours: 0 };
+      const existing = map.get(key) || { name: r.profiles?.full_name || 'Unknown', email: r.profiles?.email || '', dayKeys: new Set<string>(), totalHours: 0, openShifts: 0 };
       existing.name = existing.name || r.profiles?.full_name || 'Unknown';
       existing.email = r.profiles?.email || existing.email;
-      existing.days += 1;
+      existing.dayKeys.add(r.shift_date || format(new Date(r.check_in), 'yyyy-MM-dd'));
       if (r.check_in && r.check_out) {
         existing.totalHours += (new Date(r.check_out).getTime() - new Date(r.check_in).getTime()) / 3600000;
+      } else {
+        existing.openShifts += 1;
       }
       map.set(key, existing);
     });
 
     return Array.from(map.entries()).map(([userId, data]) => {
-      return { userId, ...data, totalDays: daysInMonth };
+      const days = data.dayKeys.size;
+      return {
+        userId,
+        name: data.name,
+        email: data.email,
+        days,
+        totalHours: data.totalHours,
+        openShifts: data.openShifts,
+        elapsedDays,
+        totalDays: daysInMonth,
+        missedDays: Math.max(elapsedDays - days, 0),
+      };
     }).filter(s => s.days > 0 || allStaffProfiles.some((p: any) => p.user_id === s.userId));
   })();
 
