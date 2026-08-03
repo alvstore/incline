@@ -282,8 +282,9 @@ export default function PublicRegistration() {
         <img
           src={heroImage}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover opacity-60"
-          fetchPriority="high"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#08060f]/40 via-[#08060f]/70 to-[#08060f]" />
         <div className="absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/30 blur-[120px]" />
