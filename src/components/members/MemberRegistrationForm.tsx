@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { buildRegistrationFormPdf, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
 import {
+import { FACILITY_TERMS as DEFAULT_TERMS, MEMBER_DECLARATION, TERMS_VERSION } from '@/lib/registration/terms';
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
   MORE_GOALS,
@@ -55,7 +56,6 @@ interface MemberRegistrationFormProps {
   data: RegistrationFormData;
 }
 
-import { FACILITY_TERMS as DEFAULT_TERMS, MEMBER_DECLARATION, TERMS_VERSION } from '@/lib/registration/terms';
 
 export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: MemberRegistrationFormProps) {
   const queryClient = useQueryClient();
@@ -297,6 +297,7 @@ export function MemberRegistrationFormDrawer({ open, onOpenChange, data }: Membe
             waiver_pdf_path: fileName,
             par_q: parqMap,
             custom_terms: customTerms || null,
+            terms_version: TERMS_VERSION,
             consents: { waiver: true, source: 'staff_registration_form' },
             signed_at: new Date().toISOString(),
           });
