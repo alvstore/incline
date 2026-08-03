@@ -602,10 +602,15 @@ Deno.serve(async (req) => {
     }
   }
 
-
+  // Outage bookkeeping — set as soon as we know who we were syncing so the
+  // transport handler can park the row as `pending` instead of `failed`.
+  let ctxTable: string | null = null;
+  let ctxPersonId: string | null = null;
+  let ctxBranchId: string | null = null;
 
   try {
     const body = await req.json();
+
     const { person_type, person_id, branch_id, verify_only, person_no, deploy_to_devices } = body as {
 
       person_type: "member" | "employee" | "trainer";
