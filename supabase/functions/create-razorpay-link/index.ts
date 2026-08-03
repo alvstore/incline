@@ -88,7 +88,15 @@ serve(async (req: Request) => {
     const keyId = integration.credentials.key_id as string;
     const keySecret = integration.credentials.key_secret as string;
 
-    // Fetch invoice + member details
+    // Apply (or refresh) the online convenience fee before pricing the link.
+    const { error: feeError } = await supabase.rpc("apply_convenience_fee", {
+      p_invoice_id: invoiceId,
+    });
+    if (feeError) {
+      console.warn("create-razorpay-link: convenience fee skipped:", feeError.message);
+    }
+
+    // Fetch invoice + member details (after fee application so totals are final)
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .select("id, invoice_number, total_amount, amount_paid, member_id, branch_id")
