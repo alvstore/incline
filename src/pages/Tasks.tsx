@@ -166,6 +166,16 @@ export default function TasksPage() {
     stats?.overdue || 0
   } overdue · ${filterCounts.today} due today`;
 
+  const filterLabel =
+    ({
+      all: 'All tasks',
+      mine: 'My tasks',
+      today: 'Due today',
+      overdue: 'Overdue',
+      high: 'High priority',
+      unassigned: 'Unassigned',
+    } as Record<QuickFilter, string>)[filter] || 'All tasks';
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -192,7 +202,18 @@ export default function TasksPage() {
           onFilter={(k) => setFilter(k as QuickFilter)}
         />
 
-        <TaskFilterPills value={filter} onChange={setFilter} counts={filterCounts} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TaskFilterPills value={filter} onChange={setFilter} counts={filterCounts} />
+          <PrintTasksButton disabled={isLoading} />
+        </div>
+
+        <TaskPrintSheet
+          tasks={visibleTasks}
+          filterLabel={filterLabel}
+          branchLabel={effectiveBranchId ? 'Selected branch' : 'All branches'}
+          linkedMembers={linkedMembers}
+        />
+
 
         {view === 'board' && (
           <TaskBoard
