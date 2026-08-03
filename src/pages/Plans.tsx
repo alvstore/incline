@@ -14,9 +14,12 @@ import { AddPlanDrawer } from '@/components/plans/AddPlanDrawer';
 import { EditPlanDrawer } from '@/components/plans/EditPlanDrawer';
 import {
   Plus, Clock, Users, Snowflake, ArrowRightLeft, Edit2, Crown, TrendingUp, Star,
-  IndianRupee, Sparkles, Check, Dumbbell, ChevronRight, Tag, Search, X,
+  IndianRupee, Sparkles, Check, Dumbbell, ChevronRight, Tag, Search, X, Eye, EyeOff,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import { useUpdatePlan } from '@/hooks/usePlans';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { MembershipPlanWithBenefits } from '@/types/membership';
@@ -42,6 +45,8 @@ interface PlanListItemProps {
   getDurationLabel: (days: number) => string;
   onClick: () => void;
   animationDelay: number;
+  onToggleVisibility: (plan: MembershipPlanWithBenefits, value: boolean) => void;
+  isTogglingVisibility: boolean;
 }
 
 function PlanListItem({
@@ -54,6 +59,8 @@ function PlanListItem({
   getDurationLabel,
   onClick,
   animationDelay,
+  onToggleVisibility,
+  isTogglingVisibility,
 }: PlanListItemProps) {
   const [visible, setVisible] = useState(false);
   const accent = accentColors[index % accentColors.length];
@@ -99,6 +106,16 @@ function PlanListItem({
           {!plan.is_active && (
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0" data-testid={`badge-inactive-${plan.id}`}>Inactive</Badge>
           )}
+          {(plan as any).is_visible_to_members === false && (
+            <Badge
+              variant="outline"
+              className="gap-1 text-[10px] px-1.5 py-0 shrink-0 border-muted-foreground/30 text-muted-foreground"
+              data-testid={`badge-hidden-${plan.id}`}
+            >
+              <EyeOff className="h-2.5 w-2.5" />
+              Hidden from members
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs font-bold text-foreground">
@@ -118,6 +135,25 @@ function PlanListItem({
             {memberCount}
           </span>
         </div>
+      </div>
+
+      <div
+        className="flex items-center gap-1.5 shrink-0"
+        onClick={(e) => e.stopPropagation()}
+        title={(plan as any).is_visible_to_members === false ? 'Hidden from the member portal' : 'Visible in the member portal'}
+      >
+        {(plan as any).is_visible_to_members === false ? (
+          <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <Switch
+          checked={(plan as any).is_visible_to_members !== false}
+          disabled={isTogglingVisibility}
+          onCheckedChange={(value) => onToggleVisibility(plan, value)}
+          aria-label={`Toggle member portal visibility for ${plan.name}`}
+          data-testid={`switch-visible-${plan.id}`}
+        />
       </div>
 
       <ChevronRight className={`h-4 w-4 shrink-0 transition-colors ${isSelected ? 'text-primary' : 'text-muted-foreground/50'}`} />
@@ -407,6 +443,22 @@ export default function PlansPage() {
     setSelectedPlanIndex(globalIndex);
   };
 
+  const updatePlanMutation = useUpdatePlan();
+  const [togglingPlanId, setTogglingPlanId] = useState<string | null>(null);
+
+  const handleToggleVisibility = (plan: MembershipPlanWithBenefits, value: boolean) => {
+    setTogglingPlanId(plan.id);
+    updatePlanMutation.mutate(
+      { planId: plan.id, data: { is_visible_to_members: value } },
+      {
+        onSuccess: () =>
+          toast.success(value ? `${plan.name} is now visible to members` : `${plan.name} is hidden from members`),
+        onError: (err: any) => toast.error(err?.message || 'Could not update plan visibility'),
+        onSettled: () => setTogglingPlanId(null),
+      },
+    );
+  };
+
   const searchLower = planSearch.toLowerCase();
   const activePlans = (plans?.filter(p => p.is_active) || []).filter(
     p => !planSearch || p.name.toLowerCase().includes(searchLower)
@@ -567,6 +619,8 @@ export default function PlansPage() {
                   getDurationLabel={getDurationLabel}
                   onClick={() => handleSelectPlan(plan, index)}
                   animationDelay={index * 50}
+                  onToggleVisibility={handleToggleVisibility}
+                  isTogglingVisibility={togglingPlanId === plan.id}
                 />
               ))}
 
@@ -592,6 +646,8 @@ export default function PlansPage() {
                         getDurationLabel={getDurationLabel}
                         onClick={() => handleSelectPlan(plan, globalIndex)}
                         animationDelay={globalIndex * 50}
+                        onToggleVisibility={handleToggleVisibility}
+                        isTogglingVisibility={togglingPlanId === plan.id}
                       />
                     );
                   })}

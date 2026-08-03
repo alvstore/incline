@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { PlanDownloadButton } from '@/components/fitness/PlanDownloadButton';
 
 interface MealMacros {
   calories?: number;
@@ -295,14 +296,29 @@ export default function MyDiet() {
                   value={trainerName || 'Self-managed'}
                 />
               </CardContent>
-              {templateName && (
-                <div className="px-5 pb-4">
+              <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+                {templateName && (
                   <Badge variant="secondary" className="gap-1.5">
                     <BookmarkCheck className="h-3 w-3" />
                     Created from template: <span className="font-semibold">{templateName}</span>
                   </Badge>
-                </div>
-              )}
+                )}
+                <PlanDownloadButton
+                  className="ml-auto"
+                  pdfUrl={dietPlan.pdf_url}
+                  pdfFilename={dietPlan.pdf_filename}
+                  planName={dietPlan.name}
+                  planType="diet"
+                  planData={dietPlan.plan_data}
+                  caloriesTarget={dietPlan.calories_target}
+                  validFrom={dietPlan.start_date}
+                  validUntil={dietPlan.end_date}
+                  memberName={(member as any)?.profiles?.full_name || null}
+                  memberCode={member.member_code}
+                  trainerName={dietPlan.trainer_name}
+                  branchId={member.branch_id}
+                />
+              </div>
             </Card>
 
             {dietPlan.source_kind === 'pdf' && dietPlan.pdf_url ? (

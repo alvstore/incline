@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { PlanDownloadButton } from '@/components/fitness/PlanDownloadButton';
 
 export default function MyWorkout() {
   useAuth();
@@ -170,7 +171,24 @@ export default function MyWorkout() {
                       )}
                     </div>
                   </div>
-                  <Badge className="bg-success text-success-foreground">Active</Badge>
+                  <div className="flex items-center gap-2">
+                    <PlanDownloadButton
+                      pdfUrl={(workoutPlan as any).pdf_url}
+                      pdfFilename={(workoutPlan as any).pdf_filename}
+                      planName={workoutPlan.plan_name || 'Workout Plan'}
+                      planType="workout"
+                      planData={workoutPlan.plan_data}
+                      description={(workoutPlan as any).description}
+                      validFrom={workoutPlan.valid_from}
+                      validUntil={workoutPlan.valid_until}
+                      memberName={(member as any)?.profiles?.full_name || null}
+                      memberCode={member.member_code}
+                      trainerName={(workoutPlan as any).trainer?.full_name || null}
+                      goal={member.fitness_goals || null}
+                      branchId={member.branch_id}
+                    />
+                    <Badge className="bg-success text-success-foreground">Active</Badge>
+                  </div>
                 </div>
               </div>
               <CardContent className="grid gap-4 p-5 sm:grid-cols-3">
