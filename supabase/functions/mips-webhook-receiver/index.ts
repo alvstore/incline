@@ -1,4 +1,4 @@
-// v2.1.0 - Roster-aware staff attendance: repeat-scan guard, server-stamped shift + lateness
+// v2.2.0 - Roster-aware staff attendance + alias resolution by MIPS person id & name
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -242,10 +242,11 @@ async function findPersonByCode(supabase: any, personCode: string) {
  * Resolve a device person code through the manual alias table.
  * Covers faces enrolled under an old employee code or created directly on MIPS.
  */
-async function findPersonByAlias(supabase: any, personCode: string) {
-  if (!personCode) return null;
+async function findPersonByAlias(supabase: any, personCode: string, personName?: string) {
+  if (!personCode && !personName) return null;
   const { data, error } = await supabase.rpc("resolve_mips_person_alias", {
-    _person_code: personCode,
+    _person_code: personCode || null,
+    _person_name: personName || null,
   });
   if (error) {
     console.warn(`findPersonByAlias error for ${personCode}: ${error.message}`);
@@ -568,6 +569,11 @@ Deno.serve(async (req) => {
       // Tier 3: Match by code normalization (member_code, employee_code)
       if (!person) {
         person = await findPersonByCode(supabase, personNo);
+      }
+
+      // Tier 4: Alias by numeric MIPS id or by person name (device-created faces)
+      if (!person) {
+        person = await findPersonByAlias(supabase, personNo, personName);
       }
 
       if (person) {

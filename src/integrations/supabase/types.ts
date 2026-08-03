@@ -8693,7 +8693,8 @@ export type Database = {
           created_by: string | null
           id: string
           note: string | null
-          person_code: string
+          person_code: string | null
+          person_id: string | null
           person_name: string | null
           target_id: string
           target_type: string
@@ -8704,7 +8705,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           note?: string | null
-          person_code: string
+          person_code?: string | null
+          person_id?: string | null
           person_name?: string | null
           target_id: string
           target_type: string
@@ -8715,7 +8717,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           note?: string | null
-          person_code?: string
+          person_code?: string | null
+          person_id?: string | null
           person_name?: string | null
           target_id?: string
           target_type?: string
@@ -13826,6 +13829,7 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_access_contract_object: { Args: { _path: string }; Returns: boolean }
       can_access_member_avatar: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
@@ -15100,15 +15104,25 @@ export type Database = {
         Args: { p_document_id: string; p_expires_in?: number }
         Returns: string
       }
-      resolve_mips_person_alias: {
-        Args: { _person_code: string }
-        Returns: {
-          branch_id: string
-          target_id: string
-          target_type: string
-          user_id: string
-        }[]
-      }
+      resolve_mips_person_alias:
+        | {
+            Args: { _person_code: string }
+            Returns: {
+              branch_id: string
+              target_id: string
+              target_type: string
+              user_id: string
+            }[]
+          }
+        | {
+            Args: { _person_code: string; _person_name?: string }
+            Returns: {
+              branch_id: string
+              target_id: string
+              target_type: string
+              user_id: string
+            }[]
+          }
       resolve_staff_shift: {
         Args: { p_branch_id?: string; p_ts: string; p_user_id: string }
         Returns: {
@@ -15319,6 +15333,16 @@ export type Database = {
           p_transaction_id?: string
         }
         Returns: Json
+      }
+      settle_payment_adopt_manual: {
+        Args: {
+          p_amount: number
+          p_gateway_payment_id: string
+          p_invoice_id: string
+          p_metadata?: Json
+          p_payment_source: string
+        }
+        Returns: string
       }
       should_send_communication:
         | {

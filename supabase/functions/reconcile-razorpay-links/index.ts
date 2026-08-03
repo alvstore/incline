@@ -1,4 +1,4 @@
-// v2.1.0 — preserves capture time and Razorpay settlement deductions.
+// v3.0.0 — de-duplicates against manual staff entries; preserves capture time and Razorpay settlement deductions.
 //
 // Fetches the current status of pending Razorpay Payment Links via the
 // Razorpay REST API and, if paid, records the payment locally so invoices
@@ -88,20 +88,14 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
     .maybeSingle();
   if (!inv) return { ok: false, reason: "invoice_missing" };
 
-  const { data: settled, error: settleError } = await supabase.rpc("settle_payment", {
-    p_branch_id: inv.branch_id,
+  // 2. De-duplicate against a manual staff entry for the same gateway payment.
+  // Front desk often records the Razorpay payment by hand seconds before the
+  // reconciler imports it; adopt that ledger row instead of inserting a twin.
+  const { data: adoptedId } = await supabase.rpc("settle_payment_adopt_manual", {
     p_invoice_id: inv.id,
-    p_member_id: inv.member_id,
     p_amount: paidAmount,
-    p_payment_method: paymentMethod,
-    p_transaction_id: gatewayPaymentId,
-    p_notes: `Razorpay payment ${gatewayPaymentId} auto-reconciled`,
-    p_received_by: null,
-    p_income_category_id: null,
-    p_payment_source: "razorpay",
-    p_idempotency_key: `reconcile:razorpay:${gatewayPaymentId}`,
     p_gateway_payment_id: gatewayPaymentId,
-    p_payment_transaction_id: tx.id,
+    p_payment_source: "razorpay",
     p_metadata: {
       gateway: "razorpay",
       source: "reconcile-razorpay-links",
@@ -112,8 +106,35 @@ async function settleCaptured(supabase: any, tx: any, paidPayment: any) {
       net_settlement_amount: netSettlement,
     },
   });
-  if (settleError) throw settleError;
-  if (settled?.success === false) throw new Error(settled.error || "settle_payment failed");
+
+  if (!adoptedId) {
+    const { data: settled, error: settleError } = await supabase.rpc("settle_payment", {
+      p_branch_id: inv.branch_id,
+      p_invoice_id: inv.id,
+      p_member_id: inv.member_id,
+      p_amount: paidAmount,
+      p_payment_method: paymentMethod,
+      p_transaction_id: gatewayPaymentId,
+      p_notes: `Razorpay payment ${gatewayPaymentId} auto-reconciled`,
+      p_received_by: null,
+      p_income_category_id: null,
+      p_payment_source: "razorpay",
+      p_idempotency_key: `reconcile:razorpay:${gatewayPaymentId}`,
+      p_gateway_payment_id: gatewayPaymentId,
+      p_payment_transaction_id: tx.id,
+      p_metadata: {
+        gateway: "razorpay",
+        source: "reconcile-razorpay-links",
+        gateway_order_id: tx.gateway_order_id,
+        gateway_captured_at: capturedAt,
+        gateway_fee: gatewayFee,
+        gateway_tax: gatewayTax,
+        net_settlement_amount: netSettlement,
+      },
+    });
+    if (settleError) throw settleError;
+    if (settled?.success === false) throw new Error(settled.error || "settle_payment failed");
+  }
 
   // Idempotent settlement can return an already-recorded payment. Enrich that
   // ledger row as well so historical reconciliations gain the true capture

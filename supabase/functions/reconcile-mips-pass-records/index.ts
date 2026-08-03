@@ -1,4 +1,4 @@
-// v2.0.0 — Reconcile recent MIPS pass records into access_logs + attendance.
+// v2.1.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
 // v2 fixes: staff check_in is stamped with the real hardware scan time (was
 // the cron run time, which made every lateness figure wrong), repeat scans
 // inside the branch punch-gap no longer open a second attendance row, and a
@@ -256,9 +256,11 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
   throw new Error(`MIPS records failed: ${errors.join(" | ")}`.slice(0, 500));
 }
 
-async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string): Promise<PersonMatch | null> {
+async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
   const candidates = normalizePersonCodeCandidates(personCode);
-  if (!candidates.length) return null;
+  if (!candidates.length) {
+    return await resolveAlias(supabase, personCode, personName);
+  }
 
   const [memberBySn, employeeBySn, trainerBySn] = await Promise.all([
     supabase.from("members").select("id, branch_id, user_id").in("mips_person_sn", candidates).maybeSingle(),
@@ -281,24 +283,38 @@ async function findPersonByCode(supabase: ReturnType<typeof createClient>, perso
   if (trainerByMipsId.data) return { ...trainerByMipsId.data, type: "trainer" } as PersonMatch;
   if (memberByMipsId.data) return { ...memberByMipsId.data, type: "member" } as PersonMatch;
   if (employeeByMipsId.data) return { ...employeeByMipsId.data, type: "employee" } as PersonMatch;
-  // Manual alias mapping (legacy / device-created person codes)
+  // Manual alias mapping (legacy / device-created person codes, numeric ids, names)
   for (const candidate of [personCode, ...candidates]) {
     if (!candidate) continue;
-    const { data, error } = await supabase.rpc("resolve_mips_person_alias", { _person_code: candidate });
-    if (error) continue;
-    const row = Array.isArray(data) ? data[0] : data;
-    if (row) {
-      return {
-        id: row.target_id,
-        branch_id: row.branch_id,
-        user_id: row.user_id,
-        type: row.target_type,
-      } as PersonMatch;
-    }
+    const aliased = await resolveAlias(supabase, candidate);
+    if (aliased) return aliased;
   }
 
-  return null;
+  return await resolveAlias(supabase, "", personName);
 }
+
+/** Resolve a punch through mips_person_aliases by code, numeric id, or person name. */
+async function resolveAlias(
+  supabase: ReturnType<typeof createClient>,
+  personCode: string,
+  personName?: string,
+): Promise<PersonMatch | null> {
+  if (!personCode && !personName) return null;
+  const { data, error } = await supabase.rpc("resolve_mips_person_alias", {
+    _person_code: personCode || null,
+    _person_name: personName || null,
+  });
+  if (error) return null;
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown>) : (data as Record<string, unknown>);
+  if (!row) return null;
+  return {
+    id: row.target_id,
+    branch_id: row.branch_id,
+    user_id: row.user_id,
+    type: row.target_type,
+  } as PersonMatch;
+}
+
 
 
 async function markAttendance(
@@ -500,7 +516,9 @@ Deno.serve(async (req) => {
 
       const personNo = getString(record.personNo ?? record.personSn ?? record.personId);
       const personName = getString(record.personName ?? record.name) || "Unknown";
-      const matchedPerson = personNo ? await findPersonByCode(supabase, personNo) : null;
+      const matchedPerson = personNo || personName
+        ? await findPersonByCode(supabase, personNo, personName)
+        : null;
       if (!matchedPerson) unmatched++;
 
       const scanTime = normalizeScanTime(record.createTime ?? record.time ?? record.timestamp ?? record.eventTime);
