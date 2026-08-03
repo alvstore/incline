@@ -1161,7 +1161,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(26);
     doc.setTextColor(100, 116, 139);
-    doc.text(watermark, 105, 165, { align: 'center', angle: 38 } as any);
+    doc.text(watermark, 118, 178, { align: 'center', angle: 38 } as any);
     if (gs) (doc as any).setGState((doc as any).GState({ opacity: 1 }));
 
     const fy = doc.internal.pageSize.height - 5;
