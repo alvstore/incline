@@ -243,7 +243,7 @@ export default function PublicRegistration() {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
     if (!consents.dpdp || !consents.whatsapp || !consents.waiver || !consents.facility_rules)
       return toast.error("All required consents must be accepted");
-    setSignatureUrl(sigRef.current!.toDataURL("image/png", 0.8));
+    setSignatureUrl(sigRef.current!.toDataURL());
     sendOtp.mutate(details?.phone ?? form.getValues("phone"));
   };
 
