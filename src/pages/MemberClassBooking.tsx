@@ -65,8 +65,14 @@ function getTypeBadge(type: string) {
 export default function MemberClassBooking() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  // Deep links: /book?type=recovery (used by "Book steam" style entry points)
+  const initialFilter = ((): FilterType => {
+    const t = searchParams.get('type');
+    return t === 'recovery' || t === 'classes' || t === 'pt' ? t : 'all';
+  })();
   const { member, activeMembership, ptPackages, isLoading: memberLoading } = useMemberData();
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [showMyBookings, setShowMyBookings] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [timeBucket, setTimeBucket] = useState<'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('all');
