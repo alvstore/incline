@@ -236,50 +236,10 @@ export default function MyWorkout() {
                   />
                 </CardContent>
               </Card>
-            ) : planData?.days && planData.days.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {planData.days.map((day, dayIndex) => (
-                  <Card key={dayIndex} className="rounded-2xl border-border/60 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
-                          <Target className="h-4 w-4" />
-                        </div>
-                        {day.day}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {day.exercises.map((exercise, i) => (
-                          <div
-                            key={i}
-                            className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted"
-                          >
-                            <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-sm">{exercise.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {exercise.sets} sets × {exercise.reps}
-                              </p>
-                              {exercise.notes && (
-                                <p className="text-xs text-muted-foreground mt-1 italic">{exercise.notes}</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
             ) : (
-              <Card className="rounded-2xl border-dashed">
-                <CardContent className="py-12 text-center">
-                  <Dumbbell className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Your trainer is preparing the plan details.</p>
-                </CardContent>
-              </Card>
+              <WorkoutPlanViewer planId={workoutPlan.id} planData={workoutPlan.plan_data} />
             )}
+
           </>
         ) : (
           <Card className="rounded-2xl border-dashed">
