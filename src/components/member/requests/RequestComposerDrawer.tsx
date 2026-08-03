@@ -9,11 +9,19 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { LOCKER_SIZES, REQUEST_TITLES } from './requestTypes';
 import {
+  MEMBER_REQUEST_LABEL,
   memberRequestTaskTitle,
   resolveMemberDisplayName,
   type MemberRequestReference,
 } from '@/lib/tasks/memberRequestTasks';
 import type { LockerSize, RequestKind, RequestOption } from './requestTypes';
+
+const MEMBER_REQUEST_LABEL_LOWER: Record<MemberRequestReference, string> = {
+  member: MEMBER_REQUEST_LABEL.member.toLowerCase(),
+  membership_unfreeze: MEMBER_REQUEST_LABEL.membership_unfreeze.toLowerCase(),
+  trainer_change: MEMBER_REQUEST_LABEL.trainer_change.toLowerCase(),
+  locker: MEMBER_REQUEST_LABEL.locker.toLowerCase(),
+};
 
 interface RequestComposerDrawerProps {
   open: boolean;
