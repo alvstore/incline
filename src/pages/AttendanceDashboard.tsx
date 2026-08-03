@@ -990,6 +990,10 @@ export default function AttendanceDashboard() {
                           const isCheckedIn = checkedInUserIds.has(staff.user_id);
                           const isSelf = staff.user_id === user?.id;
                           const decision = decisionFor(staff);
+                          const today = staffTodaySummary.get(staff.user_id);
+                          const weeklyOff = (staff.weekly_off || 'Sunday').toLowerCase();
+                          const isWeeklyOff = !today && new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === weeklyOff;
+
                           return (
                             <TableRow key={staff.user_id}>
                               <TableCell>
