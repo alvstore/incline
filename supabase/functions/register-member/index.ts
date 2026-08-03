@@ -1,8 +1,11 @@
-// v1.1.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
+// v1.2.0 — Public self-registration with WhatsApp OTP and onboarding waiver.
 // Two modes:
 //   { mode: 'send_otp', phone }
 //   { mode: 'verify_and_register', phone, code, registration:{...}, par_q, consents, signature_data_url }
 //
+// Latency: OTP delivery, waiver PDF render/upload, staff handoff and welcome
+// messages all run as background tasks (EdgeRuntime.waitUntil) so the member
+// never waits on them. Everything their account depends on stays inline.
 // Reuses existing dispatch-communication, send-whatsapp + send-sms fallback,
 // phoneVariants() identity helper, captureEdgeError, and signMemberDocument.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
