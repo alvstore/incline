@@ -1,4 +1,4 @@
-// v2.0.0 — Reconcile recent MIPS pass records into access_logs + attendance.
+// v2.1.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
 // v2 fixes: staff check_in is stamped with the real hardware scan time (was
 // the cron run time, which made every lateness figure wrong), repeat scans
 // inside the branch punch-gap no longer open a second attendance row, and a

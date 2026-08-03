@@ -1,4 +1,4 @@
-// v2.1.0 - Roster-aware staff attendance: repeat-scan guard, server-stamped shift + lateness
+// v2.2.0 - Roster-aware staff attendance + alias resolution by MIPS person id & name
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
