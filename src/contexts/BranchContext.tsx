@@ -29,7 +29,7 @@ const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
 export function BranchProvider({ children }: { children: ReactNode }) {
   const { data: allBranches = [], isLoading: branchesLoading, error: branchesError, refetch: refetchBranches } = useBranches();
-  const { user, roles, hasAnyRole } = useAuth();
+  const { user, roles, hasAnyRole, isLoading: authLoading } = useAuth();
   const [selectedBranch, setSelectedBranchState] = useState<string>(() => {
     return localStorage.getItem('incline-selected-branch') || 'all';
   });
