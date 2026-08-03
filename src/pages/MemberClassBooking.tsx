@@ -84,7 +84,7 @@ export default function MemberClassBooking() {
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
 
   // ─── Profile (gender filter) ───
-  const { data: profile } = useQuery({
+  const { data: profile, isFetched: profileFetched } = useQuery({
     queryKey: ['my-profile-gender', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -92,6 +92,9 @@ export default function MemberClassBooking() {
       return data ?? null;
     },
   });
+  // Profile is "resolved" once the query settled (or there is no user to look up).
+  const profileResolved = !user?.id || profileFetched;
+
 
   // ─── Auto-generate recovery slots ───
   // Auto-generate recovery slots in background (fire-and-forget style)

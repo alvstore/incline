@@ -491,23 +491,14 @@ export default function MemberStore() {
           </Card>
         )}
 
-        {/* Add-ons */}
-        <Card className="rounded-2xl border-border/60 shadow-sm">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
-                <Sparkles className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold">Need extra sessions or PT?</p>
-                <p className="text-xs text-muted-foreground">Buy benefit credits or a PT package — separate from products.</p>
-              </div>
-            </div>
-            <Button className="rounded-xl" onClick={() => setAddOnOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" /> Buy add-ons
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Recovery & add-ons */}
+        <AddOnShowcase
+          memberId={member.id}
+          memberName={(member as any).profiles?.full_name}
+          membershipId={activeMembership?.id ?? null}
+          branchId={member.branch_id}
+        />
+
 
         {/* Search + categories */}
         <div className="space-y-3">
