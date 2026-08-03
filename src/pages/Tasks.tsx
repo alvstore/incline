@@ -14,6 +14,8 @@ import { TaskFilterPills, type QuickFilter } from '@/components/tasks/TaskFilter
 import { TaskBoard } from '@/components/tasks/TaskBoard';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskCalendarView } from '@/components/tasks/TaskCalendarView';
+import { TaskPrintSheet, PrintTasksButton } from '@/components/tasks/TaskPrintSheet';
+import { useLinkedMembers } from '@/hooks/useLinkedMembers';
 import { isPast, isToday } from 'date-fns';
 
 export default function TasksPage() {
