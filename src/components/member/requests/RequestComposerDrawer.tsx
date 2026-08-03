@@ -8,7 +8,20 @@ import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { LOCKER_SIZES, REQUEST_TITLES } from './requestTypes';
+import {
+  MEMBER_REQUEST_LABEL,
+  memberRequestTaskTitle,
+  resolveMemberDisplayName,
+  type MemberRequestReference,
+} from '@/lib/tasks/memberRequestTasks';
 import type { LockerSize, RequestKind, RequestOption } from './requestTypes';
+
+const MEMBER_REQUEST_LABEL_LOWER: Record<MemberRequestReference, string> = {
+  member: MEMBER_REQUEST_LABEL.member.toLowerCase(),
+  membership_unfreeze: MEMBER_REQUEST_LABEL.membership_unfreeze.toLowerCase(),
+  trainer_change: MEMBER_REQUEST_LABEL.trainer_change.toLowerCase(),
+  locker: MEMBER_REQUEST_LABEL.locker.toLowerCase(),
+};
 
 interface RequestComposerDrawerProps {
   open: boolean;
@@ -98,11 +111,30 @@ export function RequestComposerDrawer({
     }
   }, [open, initialKind]);
 
-  const memberName = member?.profiles?.full_name || member?.member_code || 'Member';
+  
 
   const submit = useMutation({
     mutationFn: async () => {
       if (!kind) return;
+
+      // Always show the member's real name in staff-facing task titles.
+      const memberName = await resolveMemberDisplayName(member || {});
+
+      /** Every member request gets a task so staff/trainers see it in their queue. */
+      const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
+        const { error } = await supabase.from('tasks').insert({
+          branch_id: member.branch_id,
+          title,
+          description,
+          priority: 'medium',
+          status: 'pending',
+          assigned_to: assignedTo,
+          assigned_by: userId,
+          linked_entity_type: 'member',
+          linked_entity_id: member.id,
+        } as any);
+        if (error) throw error;
+      };
 
       if (kind === 'diet' || kind === 'workout') {
         const title = `${kind === 'diet' ? 'Diet' : 'Workout'} plan request from ${memberName}`;
@@ -146,11 +178,22 @@ export function RequestComposerDrawer({
         requested_by: userId,
       };
 
+      const queueTask = async (reference: MemberRequestReference, assignedTo: string | null) => {
+        await createRequestTask(
+          memberRequestTaskTitle(reference, memberName),
+          note?.trim()
+            ? note.trim()
+            : `${memberName} raised a ${MEMBER_REQUEST_LABEL_LOWER[reference]} request from the member portal.`,
+          assignedTo,
+        );
+      };
+
       if (kind === 'freeze' || kind === 'unfreeze') {
+        const reference: MemberRequestReference = kind === 'unfreeze' ? 'membership_unfreeze' : 'member';
         const { error } = await supabase.from('approval_requests').insert({
           ...base,
           approval_type: 'membership_freeze' as const,
-          reference_type: kind === 'unfreeze' ? 'membership_unfreeze' : 'member',
+          reference_type: reference,
           request_data: {
             membershipId: activeMembership?.id,
             reason: note,
@@ -158,6 +201,7 @@ export function RequestComposerDrawer({
           },
         });
         if (error) throw error;
+        await queueTask(reference, null);
         return;
       }
 
@@ -173,6 +217,17 @@ export function RequestComposerDrawer({
           },
         });
         if (error) throw error;
+
+        let trainerUserId: string | null = null;
+        if (member.assigned_trainer_id) {
+          const { data: t } = await (supabase as any)
+            .from('trainers_directory')
+            .select('user_id')
+            .eq('id', member.assigned_trainer_id)
+            .maybeSingle();
+          trainerUserId = t?.user_id ?? null;
+        }
+        await queueTask('trainer_change', trainerUserId);
         return;
       }
 
@@ -190,6 +245,11 @@ export function RequestComposerDrawer({
         },
       } as any);
       if (error) throw error;
+      await createRequestTask(
+        memberRequestTaskTitle('locker', memberName),
+        `${memberName} requested a ${lockerSize.toLowerCase()} locker.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
+        null,
+      );
     },
     onSuccess: () => {
       toast.success(

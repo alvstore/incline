@@ -14,6 +14,8 @@ import { TaskFilterPills, type QuickFilter } from '@/components/tasks/TaskFilter
 import { TaskBoard } from '@/components/tasks/TaskBoard';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskCalendarView } from '@/components/tasks/TaskCalendarView';
+import { TaskPrintSheet, PrintTasksButton } from '@/components/tasks/TaskPrintSheet';
+import { useLinkedMembers } from '@/hooks/useLinkedMembers';
 import { isPast, isToday } from 'date-fns';
 
 export default function TasksPage() {
@@ -145,6 +147,9 @@ export default function TasksPage() {
     });
   }, [tasks, filter, search, user?.id]);
 
+  const linkedMembers = useLinkedMembers(tasks);
+
+
   const myOpenCount = useMemo(
     () => tasks.filter((t: any) => t.assigned_to === user?.id && t.status !== 'completed' && t.status !== 'cancelled').length,
     [tasks, user?.id],
@@ -165,6 +170,16 @@ export default function TasksPage() {
   const subtitle = `${stats?.total || 0} total · ${stats?.pending || 0 + (stats?.inProgress || 0)} open · ${
     stats?.overdue || 0
   } overdue · ${filterCounts.today} due today`;
+
+  const filterLabel =
+    ({
+      all: 'All tasks',
+      mine: 'My tasks',
+      today: 'Due today',
+      overdue: 'Overdue',
+      high: 'High priority',
+      unassigned: 'Unassigned',
+    } as Record<QuickFilter, string>)[filter] || 'All tasks';
 
   return (
     <AppLayout>
@@ -192,7 +207,18 @@ export default function TasksPage() {
           onFilter={(k) => setFilter(k as QuickFilter)}
         />
 
-        <TaskFilterPills value={filter} onChange={setFilter} counts={filterCounts} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TaskFilterPills value={filter} onChange={setFilter} counts={filterCounts} />
+          <PrintTasksButton disabled={isLoading} />
+        </div>
+
+        <TaskPrintSheet
+          tasks={visibleTasks}
+          filterLabel={filterLabel}
+          branchLabel={effectiveBranchId ? 'Selected branch' : 'All branches'}
+          linkedMembers={linkedMembers}
+        />
+
 
         {view === 'board' && (
           <TaskBoard

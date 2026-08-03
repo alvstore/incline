@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { supabase } from '@/integrations/supabase/client';
+import { closeMemberRequestTask } from '@/lib/tasks/memberRequestTasks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -139,6 +140,7 @@ export default function ApprovalQueuePage() {
   // error is surfaced to the operator.
   const approveMutation = useMutation({
     mutationFn: async ({ requestId, approved }: { requestId: string; approved: boolean }) => {
+      const request = requests.find((r) => r.id === requestId);
       const { data, error } = await supabase.rpc('process_approval_request', {
         p_request_id: requestId,
         p_decision: approved ? 'approve' : 'reject',
@@ -147,6 +149,13 @@ export default function ApprovalQueuePage() {
       if (error) throw error;
       const result = data as { success?: boolean; error?: string; status?: string } | null;
       if (!result?.success) throw new Error(result?.error || 'Failed to process approval');
+
+      // Close the staff task raised by the member's portal request.
+      await closeMemberRequestTask({
+        memberId: (request as any)?.reference_id,
+        referenceType: (request as any)?.reference_type,
+        decision: approved ? 'approved' : 'rejected',
+      });
       return { approved };
     },
     onSuccess: (data) => {
@@ -155,6 +164,8 @@ export default function ApprovalQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['approval-stats'] });
       queryClient.invalidateQueries({ queryKey: ['members'] });
       queryClient.invalidateQueries({ queryKey: ['memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-stats'] });
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to process request');

@@ -9,7 +9,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2 } from 'lucide-react';
+import { Calendar, Clock, ExternalLink, History, MessageSquare, Bell, Trash2, UserRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useLinkedMembers } from '@/hooks/useLinkedMembers';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTaskHistory,
@@ -30,13 +32,24 @@ interface TaskDetailDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Routes that actually exist in the app. The members screen is a list that
+// opens the profile drawer via ?member=<id> — there is no /members/:id route.
 const linkedEntityRoute: Record<string, (id: string) => string> = {
-  member: (id) => `/members/${id}`,
+  member: (id) => `/members?member=${id}`,
   invoice: (id) => `/invoices?id=${id}`,
   approval: (_id) => `/approvals`,
   lead: (id) => `/leads?id=${id}`,
   booking: (_id) => `/all-bookings`,
   complaint: (_id) => `/feedback`,
+};
+
+const LINKED_ENTITY_LABEL: Record<string, string> = {
+  member: 'member',
+  invoice: 'invoice',
+  approval: 'approval',
+  lead: 'lead',
+  booking: 'booking',
+  complaint: 'feedback',
 };
 
 export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerProps) {
@@ -46,6 +59,11 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
   const [remindAt, setRemindAt] = useState('');
   const roleNames = (roles || []).map((r: any) => r.role);
   const canDelete = can.deleteTask(roleNames);
+  const navigate = useNavigate();
+  const linkedMembers = useLinkedMembers(task ? [task] : []);
+  const linkedMember = task?.linked_entity_id ? linkedMembers[task.linked_entity_id] : undefined;
+
+
 
   const { data: history = [] } = useQuery({
     queryKey: ['task-history', task?.id],
@@ -152,14 +170,30 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
           )}
 
+          {task.linked_entity_type === 'member' && linkedMember && (
+            <div className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-sm">
+              <UserRound className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="font-semibold text-foreground">
+                {linkedMember.full_name || 'Member'}
+              </span>
+              {linkedMember.member_code && (
+                <span className="text-xs text-muted-foreground">{linkedMember.member_code}</span>
+              )}
+            </div>
+          )}
+
           {linkRoute && (
-            <a
-              href={linkRoute}
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                navigate(linkRoute);
+              }}
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring rounded"
             >
               <ExternalLink className="h-3 w-3" />
-              Open linked {task.linked_entity_type}
-            </a>
+              Open linked {LINKED_ENTITY_LABEL[task.linked_entity_type] || task.linked_entity_type}
+            </button>
           )}
 
           <Tabs defaultValue="comments" className="mt-4">
