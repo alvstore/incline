@@ -8684,6 +8684,42 @@ export type Database = {
           },
         ]
       }
+      mips_person_aliases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          person_code: string
+          person_name: string | null
+          target_id: string
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          person_code: string
+          person_name?: string | null
+          target_id: string
+          target_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          person_code?: string
+          person_name?: string | null
+          target_id?: string
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mips_sync_attempts: {
         Row: {
           attempt_no: number
@@ -15058,6 +15094,15 @@ export type Database = {
       resolve_member_document_url: {
         Args: { p_document_id: string; p_expires_in?: number }
         Returns: string
+      }
+      resolve_mips_person_alias: {
+        Args: { _person_code: string }
+        Returns: {
+          branch_id: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }[]
       }
       resolve_staff_shift: {
         Args: { p_branch_id?: string; p_ts: string; p_user_id: string }
