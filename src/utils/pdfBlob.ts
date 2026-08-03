@@ -1144,15 +1144,26 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   doc.setFontSize(7);
   doc.text('THE INCLINE LIFE BY INCLINE', 105, py + 24, { align: 'center' });
 
-  // Page footers
+  // Page footers + diagonal brand watermark
   const pageCount = doc.getNumberOfPages();
   const footerLeft = [
     input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
   ].filter(Boolean).join('  •  ');
   const footerRight = [resolvedBrand.website, `Page ${'{n}'} of ${pageCount}`].filter(Boolean).join('  •  ');
+  const watermark = `INCLINE — ${(resolvedBrand.tagline || 'Rise. Reflect. Repeat.').toUpperCase()}`;
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
+
+    // Watermark — light, rotated, centred; drawn first so content stays legible.
+    const gs = (doc as any).GState ? (doc as any).GState({ opacity: 0.07 }) : null;
+    if (gs) (doc as any).setGState(gs);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(26);
+    doc.setTextColor(100, 116, 139);
+    doc.text(watermark, 105, 165, { align: 'center', angle: 38 } as any);
+    if (gs) (doc as any).setGState((doc as any).GState({ opacity: 1 }));
+
     const fy = doc.internal.pageSize.height - 5;
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.2);
@@ -1163,6 +1174,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 110 });
     doc.text(footerRight.replace('{n}', String(i)), 196, fy, { align: 'right' });
   }
+
 
 
 
