@@ -990,7 +990,7 @@ export default function MembersPage() {
               memberName={selectedMember.profiles?.full_name || selectedMember.member_code}
               branchId={selectedMember.branch_id}
             />
-            <PurchasePTDrawer
+            <PurchasePTPackageDrawer
               open={purchasePTOpen}
               onOpenChange={setPurchasePTOpen}
               memberId={selectedMember.id}
