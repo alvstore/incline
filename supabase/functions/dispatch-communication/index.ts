@@ -1,4 +1,4 @@
-// dispatch-communication v1.23.0
+// dispatch-communication v1.24.0
 // v1.23.0: FIX — document attachments on body-only approved templates are no
 //          longer silently dropped. Meta templates like `invoice_generated_pdf`
 //          say "attached" but have NO HEADER component, so the PDF URL is now
