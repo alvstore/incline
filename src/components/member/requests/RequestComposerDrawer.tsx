@@ -122,18 +122,31 @@ export function RequestComposerDrawer({
 
       /** Every member request gets a task so staff/trainers see it in their queue. */
       const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
-        const { error } = await supabase.from('tasks').insert({
-          branch_id: member.branch_id,
-          title,
-          description,
-          priority: 'medium',
-          status: 'pending',
-          assigned_to: assignedTo,
-          assigned_by: userId,
-          linked_entity_type: 'member',
-          linked_entity_id: member.id,
-        } as any);
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert({
+            branch_id: member.branch_id,
+            title,
+            description,
+            priority: 'medium',
+            status: 'pending',
+            assigned_to: assignedTo,
+            assigned_by: userId,
+            linked_entity_type: 'member',
+            linked_entity_id: member.id,
+          } as any)
+          .select('id, branch_id, assigned_to, title, description, priority, due_date')
+          .single();
         if (error) throw error;
+        await notifyTaskAssignee({
+          taskId: (data as any).id,
+          branchId: (data as any).branch_id,
+          assignedTo: (data as any).assigned_to,
+          title: (data as any).title,
+          description: (data as any).description,
+          priority: (data as any).priority,
+          dueDate: (data as any).due_date,
+        });
       };
 
       if (kind === 'diet' || kind === 'workout') {
