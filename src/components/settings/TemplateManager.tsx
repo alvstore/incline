@@ -314,7 +314,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       setSelectedTemplate(null);
       setFormData({
         name: '',
-        type: 'whatsapp',
+        type: filterType || 'whatsapp',
         trigger: 'custom',
         subject: '',
         content: '',
@@ -678,6 +678,48 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         </div>
       </div>
       )}
+
+      {/* Compact action bar — the Add Template / Presets actions live in the
+          gradient header, which the Templates Hub hides. Without this bar there
+          is no way to create a manual template from Settings → Communication
+          Templates. */}
+      {hideHeader && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {templates.length} template{templates.length === 1 ? '' : 's'} · create manual templates or start from a preset
+          </p>
+          <div className="flex items-center gap-2">
+            <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="rounded-xl">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Quick Presets
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {DYNAMIC_PDF_PRESETS.map((p) => (
+                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
+                    <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{p.label}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{p.attachment_filename_template}</p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="rounded-xl shadow-sm" onClick={() => openEditor()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Template
+            </Button>
+          </div>
+        </div>
+      )}
+
+
 
       {isLoading ? (
         <div className="space-y-3">
