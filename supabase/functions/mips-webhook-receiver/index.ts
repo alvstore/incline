@@ -571,6 +571,11 @@ Deno.serve(async (req) => {
         person = await findPersonByCode(supabase, personNo);
       }
 
+      // Tier 4: Alias by numeric MIPS id or by person name (device-created faces)
+      if (!person) {
+        person = await findPersonByAlias(supabase, personNo, personName);
+      }
+
       if (person) {
         console.log(`Person found: type=${person.type}, id=${person.id}`);
         branchId = person.branch_id;
