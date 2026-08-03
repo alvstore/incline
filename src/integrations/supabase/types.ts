@@ -14376,24 +14376,16 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_org_branding:
-        | {
-            Args: never
-            Returns: {
-              logo_url: string
-              name: string
-            }[]
-          }
-        | {
-            Args: { _branch_id?: string }
-            Returns: {
-              branch_id: string
-              id: string
-              logo_url: string
-              name: string
-              website_theme: Json
-            }[]
-          }
+      get_org_branding: {
+        Args: { _branch_id?: string }
+        Returns: {
+          branch_id: string
+          id: string
+          logo_url: string
+          name: string
+          website_theme: Json
+        }[]
+      }
       get_payment_webhook_payload: {
         Args: { p_id: string }
         Returns: {

@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_org_branding();
