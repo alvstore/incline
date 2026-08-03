@@ -325,7 +325,6 @@ export default function PublicRegistration() {
 
         {/* Glass card */}
         <GlassCard className="mt-8 flex-1 p-5 sm:mt-10 sm:p-7">
-        <GlassCard className="mt-8 flex-1 p-5 sm:mt-10 sm:p-7">
           {draftRestored && step !== "done" && (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 text-xs text-primary-foreground/85">
               <span className="flex items-center gap-2">
