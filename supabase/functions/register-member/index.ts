@@ -26,6 +26,17 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+/** Keeps the isolate alive for post-response work without blocking the caller. */
+function backgroundTask(p: Promise<unknown>) {
+  const safe = p.catch((e) => captureEdgeError("register-member", e, { route: "background_task" }));
+  try {
+    (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(safe);
+  } catch {
+    /* runtime without waitUntil — the promise still runs best-effort */
+  }
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
