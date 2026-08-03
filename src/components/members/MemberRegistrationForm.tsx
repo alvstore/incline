@@ -16,8 +16,8 @@ import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/sign
 import { format } from 'date-fns';
 import { buildRegistrationFormPdf, printBlob } from '@/utils/pdfBlob';
 import { useBrandContext } from '@/lib/brand/useBrandContext';
-import {
 import { FACILITY_TERMS as DEFAULT_TERMS, MEMBER_DECLARATION, TERMS_VERSION } from '@/lib/registration/terms';
+import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
   MORE_GOALS,
