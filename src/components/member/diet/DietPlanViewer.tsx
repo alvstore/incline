@@ -50,7 +50,7 @@ export function DietPlanViewer({ planData }: { planData: unknown }) {
 
   return (
     <div className="space-y-4">
-      <PlanSegmentedTabs
+      <PlanSegmentedTabs<ViewMode>
         ariaLabel="Diet plan view"
         value={mode}
         onChange={setMode}
