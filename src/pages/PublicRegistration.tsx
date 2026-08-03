@@ -488,18 +488,49 @@ export default function PublicRegistration() {
 
           {step === "sign" && (
             <div className="space-y-5">
-              <p className="text-sm text-primary-foreground/70">Review and sign to continue.</p>
-              <div className="max-h-44 overflow-auto rounded-2xl border border-primary-foreground/10 bg-card/5 p-4 text-xs leading-relaxed text-primary-foreground/80">
-                I acknowledge that physical exercise involves inherent risk of injury. I voluntarily assume all such risks
-                and agree to follow gym rules, trainer instructions, and equipment guidelines. I release The Incline Life
-                by Incline, its staff and contractors from liability for any injury, loss, or damage arising from my
-                participation, except in cases of gross negligence. I confirm my PAR-Q answers are accurate and I'll seek
-                medical clearance if any answer was "Yes".
+              <p className="text-sm text-primary-foreground/70">Review the facility terms, then sign to continue.</p>
+
+              <div className="rounded-2xl border border-primary-foreground/10 bg-card/5">
+                <div className="flex items-center justify-between border-b border-primary-foreground/10 px-4 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-foreground/60">
+                    Incline 24/7 — Facility Terms &amp; Conditions
+                  </p>
+                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    v{TERMS_VERSION}
+                  </span>
+                </div>
+                <div
+                  className="max-h-60 space-y-3 overflow-auto px-4 py-3 text-xs leading-relaxed text-primary-foreground/75"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) setTermsRead(true);
+                  }}
+                >
+                  <p>
+                    I acknowledge that physical exercise involves inherent risk of injury. I voluntarily assume all such
+                    risks, confirm my PAR-Q answers are accurate, and will seek medical clearance if any answer was
+                    &ldquo;Yes&rdquo;.
+                  </p>
+                  {FACILITY_TERMS.map((t, i) => (
+                    <div key={t.title}>
+                      <p className="font-semibold text-primary-foreground/90">
+                        {i + 1}. {t.title}
+                      </p>
+                      <p className="mt-0.5">{t.body}</p>
+                    </div>
+                  ))}
+                </div>
+                {!termsRead && (
+                  <p className="border-t border-primary-foreground/10 px-4 py-2 text-[11px] text-primary-foreground/50">
+                    Scroll to the end to read all {FACILITY_TERMS.length} clauses.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2.5">
                 {[
                   { k: "waiver", l: "I accept the assumption of risk and waiver above.", required: true },
+                  { k: "facility_rules", l: "I have read and accept the Incline 24/7 facility terms, including 24/7 unstaffed-hours access, CCTV, turnstile, footwear, locker and parking rules.", required: true },
                   { k: "dpdp", l: "I consent to processing of my personal data per the DPDP Act, 2023.", required: true },
                   { k: "whatsapp", l: "I agree to receive WhatsApp / SMS / Email / RCS updates from Incline.", required: true },
                   { k: "photo", l: "I consent to my photo being used for member identification.", required: false },
