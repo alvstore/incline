@@ -870,6 +870,9 @@ Deno.serve(async (req) => {
       });
     }
 
+    ctxTable = tableName;
+    ctxBranchId = effectiveBranchId ?? ctxBranchId;
+
     const mipsPersonSn = stripHyphens(personNo);
     console.log(`Syncing ${person_type}: ${name} (${personNo} → ${mipsPersonSn}) gender=${gender} dob=${birthday || "-"} dept=${deptName}`);
 
