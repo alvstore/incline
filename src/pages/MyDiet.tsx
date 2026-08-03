@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { PlanDownloadButton } from '@/components/fitness/PlanDownloadButton';
 
 interface MealMacros {
   calories?: number;
