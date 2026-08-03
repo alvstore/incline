@@ -42,6 +42,8 @@ interface PlanListItemProps {
   getDurationLabel: (days: number) => string;
   onClick: () => void;
   animationDelay: number;
+  onToggleVisibility: (plan: MembershipPlanWithBenefits, value: boolean) => void;
+  isTogglingVisibility: boolean;
 }
 
 function PlanListItem({
@@ -54,6 +56,8 @@ function PlanListItem({
   getDurationLabel,
   onClick,
   animationDelay,
+  onToggleVisibility,
+  isTogglingVisibility,
 }: PlanListItemProps) {
   const [visible, setVisible] = useState(false);
   const accent = accentColors[index % accentColors.length];
