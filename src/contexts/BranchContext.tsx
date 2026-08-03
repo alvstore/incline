@@ -91,7 +91,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   });
 
   // For members: fetch their branch
-  const { data: memberBranch, error: memberError, refetch: refetchMember } = useQuery({
+  const { data: memberBranch, error: memberError, refetch: refetchMember, isPending: memberPending, fetchStatus: memberFetchStatus } = useQuery({
     queryKey: ['member-home-branch', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
