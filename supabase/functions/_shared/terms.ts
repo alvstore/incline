@@ -1,6 +1,6 @@
 /**
  * MIRROR of src/lib/registration/terms.ts — keep in sync.
- * Single source of truth for the Incline 24/7 membership terms & conditions.
+ * Single source of truth for the Incline membership terms & conditions.
  *
  * Rendered on:
  *  - `/register` (public self-onboarding, signed digitally)
@@ -26,7 +26,7 @@ export const FACILITY_TERMS: TermClause[] = [
   {
     title: '24/7 Access Consent & Unstaffed Hours',
     body:
-      'I understand and agree that Incline 24/7 operates on a 24-hour basis and that during certain hours the facility may be unstaffed. I voluntarily choose to use the facility during these times at my own absolute risk.',
+      'I understand and agree that Incline operates on a 24x7 basis and that during certain hours the facility may be unstaffed. I voluntarily choose to use the facility during these times at my own absolute risk.',
   },
   {
     title: 'Health Declaration & Assumption of Risk',
@@ -36,7 +36,7 @@ export const FACILITY_TERMS: TermClause[] = [
   {
     title: 'Medical Liability & Disclosure',
     body:
-      'Incline 24/7 and its management are not legally or financially liable for any personal injury, medical emergency, or accident that occurs on the premises. Members must ensure they are medically fit to engage in physical activity and agree to disclose any pre-existing medical conditions. The fitness centre is not responsible for health complications arising from undisclosed conditions.',
+      'Incline and its management are not legally or financially liable for any personal injury, medical emergency, or accident that occurs on the premises. Members must ensure they are medically fit to engage in physical activity and agree to disclose any pre-existing medical conditions. The fitness centre is not responsible for health complications arising from undisclosed conditions.',
   },
   {
     title: 'CCTV Surveillance Consent & Privacy',
@@ -46,7 +46,7 @@ export const FACILITY_TERMS: TermClause[] = [
   {
     title: 'Personal Training Policy — No Outside Trainers',
     body:
-      'External or freelance personal trainers are strictly prohibited from training members inside the facility. Only certified trainers officially employed or authorized by Incline 24/7 are permitted to conduct training sessions. Violation of this rule will result in the immediate termination of the membership for both the trainer and the client, without a refund.',
+      'External or freelance personal trainers are strictly prohibited from training members inside the facility. Only certified trainers officially employed or authorized by Incline are permitted to conduct training sessions. Violation of this rule will result in the immediate termination of the membership for both the trainer and the client, without a refund.',
   },
   {
     title: 'Access Control & Turnstile Usage',
@@ -66,12 +66,12 @@ export const FACILITY_TERMS: TermClause[] = [
   {
     title: 'Locker Policy & Liability',
     body:
-      'Lockers are available for use only during active workouts unless a long-term locker rental has been purchased. Using or locking a locker overnight without a valid rental purchase is strictly prohibited, and management reserves the right to cut unauthorized locks and remove items. All items stored in lockers are kept entirely at the member\u2019s risk \u2014 Incline 24/7 is not responsible or liable for any lost, stolen, or damaged personal belongings.',
+      'Lockers are available for use only during active workouts unless a long-term locker rental has been purchased. Using or locking a locker overnight without a valid rental purchase is strictly prohibited, and management reserves the right to cut unauthorized locks and remove items. All items stored in lockers are kept entirely at the member\u2019s risk \u2014 Incline is not responsible or liable for any lost, stolen, or damaged personal belongings.',
   },
   {
     title: 'Parking Facility',
     body:
-      'Vehicles parked on or near the Incline 24/7 premises are parked entirely at the owner\u2019s risk. Management is not liable for any theft, damage, or loss of vehicles or items left inside vehicles.',
+      'Vehicles parked on or near the Incline premises are parked entirely at the owner\u2019s risk. Management is not liable for any theft, damage, or loss of vehicles or items left inside vehicles.',
   },
   {
     title: 'Code of Conduct & Right of Admission',
