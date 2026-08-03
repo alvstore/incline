@@ -709,10 +709,12 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
     if (employer.gstin) idRight.push(`GSTIN: ${employer.gstin}`);
     if (employer.pan) idRight.push(`PAN: ${employer.pan}`);
     if (employer.firm_registration_no) idRight.push(`Reg: ${employer.firm_registration_no}`);
-    idRight.forEach((t, i) => {
+    idRight.forEach((raw, i) => {
+      const t = win(raw);
       const w = font.widthOfTextAtSize(t, 7.5);
       p.drawText(t, { x: pageWidth - marginX - w, y: pageHeight - 38 - i * 11, size: 7.5, font, color: SLATE_500 });
     });
+
     // Diagonal copy watermark
     p.drawText(copyLabel, {
       x: pageWidth / 2 - 100, y: pageHeight / 2,
