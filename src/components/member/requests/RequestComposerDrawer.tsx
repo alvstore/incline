@@ -98,11 +98,30 @@ export function RequestComposerDrawer({
     }
   }, [open, initialKind]);
 
-  const memberName = member?.profiles?.full_name || member?.member_code || 'Member';
+  const fallbackName = member?.profiles?.full_name || member?.member_code || 'Member';
 
   const submit = useMutation({
     mutationFn: async () => {
       if (!kind) return;
+
+      // Always show the member's real name in staff-facing task titles.
+      const memberName = await resolveMemberDisplayName(member || {});
+
+      /** Every member request gets a task so staff/trainers see it in their queue. */
+      const createRequestTask = async (title: string, description: string, assignedTo: string | null) => {
+        const { error } = await supabase.from('tasks').insert({
+          branch_id: member.branch_id,
+          title,
+          description,
+          priority: 'medium',
+          status: 'pending',
+          assigned_to: assignedTo,
+          assigned_by: userId,
+          linked_entity_type: 'member',
+          linked_entity_id: member.id,
+        } as any);
+        if (error) throw error;
+      };
 
       if (kind === 'diet' || kind === 'workout') {
         const title = `${kind === 'diet' ? 'Diet' : 'Workout'} plan request from ${memberName}`;
