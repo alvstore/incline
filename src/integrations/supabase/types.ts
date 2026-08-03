@@ -13716,6 +13716,7 @@ export type Database = {
           sessions_total: number
         }[]
       }
+      apply_convenience_fee: { Args: { p_invoice_id: string }; Returns: Json }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
