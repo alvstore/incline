@@ -443,7 +443,7 @@ export default function MemberClassBooking() {
     return m;
   }, [agendaItems]);
 
-  const isLoading = memberLoading || classesLoading || slotsLoading || ptLoading;
+  const isLoading = memberLoading || !profileResolved || classesLoading || slotsLoading || ptLoading;
 
   if (memberLoading) {
     return <AppLayout><div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div></AppLayout>;
