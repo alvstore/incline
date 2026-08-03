@@ -13829,6 +13829,7 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_access_contract_object: { Args: { _path: string }; Returns: boolean }
       can_access_member_avatar: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
