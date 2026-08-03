@@ -725,11 +725,12 @@ async function buildStampedPdf(contractId: string, copy: CopyKind) {
 
   function drawFooter(p: any, pageNum: number, totalPages: number) {
     p.drawRectangle({ x: marginX, y: 44, width: pageWidth - marginX * 2, height: 0.6, color: SLATE_500, opacity: 0.4 });
-    const refLine = `Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`;
+    const refLine = win(`Contract Ref: ${contractId.slice(0, 8).toUpperCase()}  ·  Page ${pageNum} of ${totalPages}`);
     p.drawText(refLine, { x: marginX, y: 30, size: 7, font, color: SLATE_500 });
-    const verify = `Verify: /verify/contract/${contractId.slice(0, 8)}`;
+    const verify = win(`Verify: /verify/contract/${contractId.slice(0, 8)}`);
     const vw = font.widthOfTextAtSize(verify, 7);
     p.drawText(verify, { x: pageWidth - marginX - vw, y: 30, size: 7, font, color: SLATE_500 });
+
   }
 
   drawHeader(page);
