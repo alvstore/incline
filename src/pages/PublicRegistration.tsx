@@ -66,18 +66,40 @@ const fieldInputCls =
 const fieldSelectCls =
   "h-11 w-full rounded-xl border border-primary-foreground/10 bg-card/5 px-3 text-sm text-primary-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/40 focus:outline-none [&>option]:text-foreground";
 
+const OTP_ERROR_COPY: Record<string, string> = {
+  otp_invalid: "That code doesn't match. Check the digits and try again.",
+  otp_expired: "That code expired. Tap Resend to get a fresh one.",
+  otp_not_found: "We couldn't find an active code. Tap Resend to get a new one.",
+  too_many_attempts: "Too many wrong attempts. Tap Resend to get a new code.",
+  already_member: "This number is already registered. Please log in instead.",
+  rate_limited: "Too many requests. Please try again in 10 minutes.",
+};
+const friendlyOtpError = (raw: string) =>
+  OTP_ERROR_COPY[raw] || raw.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
 export default function PublicRegistration() {
   const nav = useNavigate();
-  const [step, setStep] = useState<"details" | "parq" | "sign" | "otp" | "done">("details");
+  const initialDraft = useInitialRegistrationDraft();
+  const [step, setStep] = useState<"details" | "parq" | "sign" | "otp" | "done">(
+    initialDraft?.step ?? "details",
+  );
   const [details, setDetails] = useState<DetailsForm | null>(null);
-  const [parq, setParq] = useState<Record<string, string>>({});
-  const [consents, setConsents] = useState({ dpdp: false, whatsapp: false, photo: false, waiver: false, facility_rules: false });
+  const [parq, setParq] = useState<Record<string, string>>(initialDraft?.parq ?? {});
+  const [consents, setConsents] = useState({
+    dpdp: false, whatsapp: false, photo: false, waiver: false, facility_rules: false,
+    ...(initialDraft?.consents ?? {}),
+  });
   const [termsRead, setTermsRead] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState<string>("");
   const [otp, setOtp] = useState("");
-  const [healthConditions, setHealthConditions] = useState<string[]>([]);
-  const [healthOther, setHealthOther] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpSentAt, setOtpSentAt] = useState(() => Date.now());
+  const [resendLockedUntil, setResendLockedUntil] = useState(0);
+  const [verifyStage, setVerifyStage] = useState("Verifying code...");
+  const [healthConditions, setHealthConditions] = useState<string[]>(initialDraft?.healthConditions ?? []);
+  const [healthOther, setHealthOther] = useState(initialDraft?.healthOther ?? "");
   const [showMoreGoals, setShowMoreGoals] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(!!initialDraft);
   const sigRef = useRef<SignaturePadHandle>(null);
 
   const { data: branches } = useQuery({
@@ -88,53 +110,96 @@ export default function PublicRegistration() {
       if (error) throw error;
       return (data ?? []) as Array<{ id: string; name: string; city: string | null }>;
     },
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   const form = useForm<DetailsForm>({
     resolver: zodResolver(detailsSchema),
-    defaultValues: { gender: "male" as const, phone: "+91" } as Partial<DetailsForm> as DetailsForm,
+    defaultValues: {
+      gender: "male" as const,
+      phone: "+91",
+      ...(initialDraft?.values ?? {}),
+    } as Partial<DetailsForm> as DetailsForm,
   });
 
   const selectedGoal = form.watch("fitness_goals");
+  const watchedValues = form.watch();
+
+  // Autosave the wizard (never the signature, OTP or government ID number).
+  useRegistrationDraftAutosave(
+    {
+      step: step === "otp" || step === "done" ? "sign" : step,
+      values: watchedValues as unknown as Record<string, unknown>,
+      parq,
+      consents,
+      healthConditions,
+      healthOther,
+    },
+    step !== "done",
+  );
 
   const sendOtp = useMutation({
     mutationFn: async (phone: string) => {
       const { data, error } = await supabase.functions.invoke("register-member", {
-        body: { mode: "send_otp", phone, email: details?.email ?? null },
+        body: { mode: "send_otp", phone, email: details?.email ?? form.getValues("email") ?? null },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (data?.status === "already_member") throw new Error("This number is already registered. Please log in.");
+      if (data?.status === "rate_limited") throw new Error("rate_limited");
+      if (data?.status === "already_member") throw new Error("already_member");
       return data as { channels?: string[] };
     },
     onSuccess: (data) => {
       const ch = data?.channels?.includes("email") ? "WhatsApp & email" : "WhatsApp";
       toast.success(`OTP sent on ${ch}`);
+      setOtp("");
+      setOtpError(null);
+      setOtpSentAt(Date.now());
+      setResendLockedUntil(0);
       setStep("otp");
     },
-    onError: (e: Error) => toast.error(`OTP send failed — ${e.message}. Tap Resend.`),
+    onError: (e: Error) => {
+      const msg = friendlyOtpError(e.message);
+      if (e.message === "rate_limited") setResendLockedUntil(Date.now() + 10 * 60_000);
+      setOtpError(msg);
+      toast.error(msg);
+      // Keep the member on the OTP screen if they were already there.
+      if (step === "sign") setStep("otp");
+    },
   });
 
   const verifyAndRegister = useMutation({
     mutationFn: async () => {
       if (!details) throw new Error("Missing details");
-      const { data, error } = await supabase.functions.invoke("register-member", {
-        body: {
-          mode: "verify_and_register",
-          phone: details.phone,
-          code: otp,
-          registration: details,
-          par_q: parq,
-          consents,
-          terms_version: TERMS_VERSION,
-          signature_data_url: signatureUrl,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data as { access_token: string; refresh_token: string; member_code: string };
+      setVerifyStage("Verifying code...");
+      const parqMap: Record<string, string> = {};
+      PARQ_QUESTIONS.forEach((q, i) => { parqMap[q] = parq[`q${i}`] || "no"; });
+      const stageTimer = window.setTimeout(() => setVerifyStage("Creating your account..."), 1200);
+      const stageTimer2 = window.setTimeout(() => setVerifyStage("Almost there..."), 4000);
+      try {
+        const { data, error } = await supabase.functions.invoke("register-member", {
+          body: {
+            mode: "verify_and_register",
+            phone: details.phone,
+            code: otp,
+            registration: details,
+            par_q: parqMap,
+            consents,
+            terms_version: TERMS_VERSION,
+            signature_data_url: signatureUrl,
+          },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        return data as { access_token: string; refresh_token: string; member_code: string };
+      } finally {
+        window.clearTimeout(stageTimer);
+        window.clearTimeout(stageTimer2);
+      }
     },
     onSuccess: async (data) => {
+      clearRegistrationDraft();
       if (data.access_token && data.refresh_token) {
         await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
       }
@@ -142,8 +207,22 @@ export default function PublicRegistration() {
       setStep("done");
       setTimeout(() => nav("/member-dashboard", { replace: true }), 1500);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      const msg = friendlyOtpError(e.message);
+      setOtpError(msg);
+      toast.error(msg);
+    },
   });
+
+  const handleVerify = useCallback(() => {
+    if (verifyAndRegister.isPending) return;
+    verifyAndRegister.mutate();
+  }, [verifyAndRegister]);
+
+  const startOver = () => {
+    clearRegistrationDraft();
+    window.location.reload();
+  };
 
   const submitDetails = form.handleSubmit((values) => {
     const conditions = [...healthConditions];
@@ -158,25 +237,35 @@ export default function PublicRegistration() {
     setStep("parq");
   });
 
-  const submitParq = () => {
-    const map: Record<string, string> = {};
-    PARQ_QUESTIONS.forEach((q, i) => { map[q] = parq[`q${i}`] || "no"; });
-    setParq(map);
-    setStep("sign");
-  };
+  const submitParq = () => setStep("sign");
 
   const submitSign = () => {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
     if (!consents.dpdp || !consents.whatsapp || !consents.waiver || !consents.facility_rules)
       return toast.error("All required consents must be accepted");
-    setSignatureUrl(sigRef.current!.toDataURL());
-    sendOtp.mutate(details!.phone);
+    setSignatureUrl(sigRef.current!.toDataURL("image/png", 0.8));
+    sendOtp.mutate(details?.phone ?? form.getValues("phone"));
   };
+
+  // A restored draft can land on "sign" without `details` in memory — rebuild it
+  // from the restored form values so the signature step can still send an OTP.
+  useEffect(() => {
+    if (!details && (step === "parq" || step === "sign")) {
+      const values = form.getValues();
+      if (values.phone && values.email && values.full_name && values.branch_id) {
+        setDetails(values);
+      } else {
+        setStep("details");
+      }
+    }
+  }, [details, step, form]);
 
   const stepIdx = useMemo(
     () => Math.min({ details: 0, parq: 1, sign: 2, otp: 3, done: 3 }[step], 3),
     [step]
   );
+
+
 
   return (
     <div
