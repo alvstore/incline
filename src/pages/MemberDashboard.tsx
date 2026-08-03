@@ -314,7 +314,7 @@ export default function MemberDashboard() {
               </CardContent>
             </Card>
           ) : (
-            <Link to="/my-classes">
+            <Link to="/book">
               <Card className="hover:border-accent/50 transition-colors cursor-pointer h-full">
                 <CardContent className="flex flex-col items-center justify-center py-6 gap-2">
                   <Calendar className="h-8 w-8 text-accent" />
@@ -458,7 +458,7 @@ export default function MemberDashboard() {
                   {!isFrozen && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <Button variant="outline" size="sm" asChild>
-                        <Link to="/book-benefit">Book Now</Link>
+                        <Link to="/book?type=recovery">Book Now</Link>
                       </Button>
                       <Button
                         variant="outline"
@@ -542,7 +542,7 @@ export default function MemberDashboard() {
               {upcomingClasses.length === 0 ? (
                 <div className="text-center py-4">
                   <p className="text-muted-foreground mb-4">No upcoming classes</p>
-                  {!isFrozen && <Button variant="outline" asChild><Link to="/my-classes">Book a Class</Link></Button>}
+                  {!isFrozen && <Button variant="outline" asChild><Link to="/book">Book a Class</Link></Button>}
                 </div>
               ) : (
                 <div className="space-y-3">

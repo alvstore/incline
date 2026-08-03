@@ -111,7 +111,7 @@ export function ContactMemberContext({ memberId, onInsert }: Props) {
           size="sm"
           variant="outline"
           className="w-full rounded-xl gap-2 justify-start bg-card"
-          onClick={() => onInsert(`Hi ${firstName}, book your facility slot here: ${baseUrl}/my-classes`)}
+          onClick={() => onInsert(`Hi ${firstName}, book your facility slot here: ${baseUrl}/book`)}
         >
           <CalendarCheck className="h-3.5 w-3.5 text-info" /> Book Facility Slot
         </Button>

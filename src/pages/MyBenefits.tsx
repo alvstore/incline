@@ -148,7 +148,7 @@ export default function MyBenefits() {
               Buy Add-On Credits
             </Button>
             <Button asChild>
-              <Link to="/book-benefit">
+              <Link to="/book?type=recovery">
                 <Calendar className="h-4 w-4 mr-2" />
                 Book a Slot
               </Link>
