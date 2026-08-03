@@ -66,7 +66,7 @@ export const NAV_MODULES: NavModule[] = [
     id: 'benefits',
     label: 'Benefits',
     icon: Heart,
-    hrefs: ['/benefit-tracking', '/book-benefit', '/my-benefits'],
+    hrefs: ['/benefit-tracking', '/book', '/my-benefits'],
     prefixes: ['/benefit'],
   },
   {

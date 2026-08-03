@@ -1,18 +1,26 @@
+import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Megaphone, AlertCircle, Loader2, Sparkles, Clock3, ShieldAlert, ArrowUpRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Megaphone, AlertCircle, Sparkles, Clock3, ShieldAlert, ChevronRight, Paperclip } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemberData } from '@/hooks/useMemberData';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AnnouncementAttachment } from '@/components/announcements/AnnouncementAttachment';
 
+type Filter = 'all' | 'important' | 'expiring';
+
 export default function MemberAnnouncements() {
   const { member, isLoading: memberLoading } = useMemberData();
   const branchName = member?.branch?.name || 'your branch';
+  const [filter, setFilter] = useState<Filter>('all');
+  const [active, setActive] = useState<any | null>(null);
 
-  // Fetch active announcements for members
   const { data: announcements = [], isLoading: announcementsLoading } = useQuery({
     queryKey: ['member-announcements', member?.branch_id],
     enabled: !!member,
@@ -41,65 +49,61 @@ export default function MemberAnnouncements() {
     },
   });
 
-  const featuredAnnouncement = announcements[0];
-  const remainingAnnouncements = announcements.slice(1);
-  const importantCount = announcements.filter((announcement: any) => Number(announcement.priority) > 0).length;
-  const expiringSoonCount = announcements.filter((announcement: any) => {
-    if (!announcement.expire_at) return false;
-    const expiry = new Date(announcement.expire_at).getTime();
+  const isExpiringSoon = (a: any) => {
+    if (!a.expire_at) return false;
+    const expiry = new Date(a.expire_at).getTime();
     return expiry > Date.now() && expiry - Date.now() < 7 * 24 * 60 * 60 * 1000;
-  }).length;
+  };
 
+  const importantCount = announcements.filter((a: any) => Number(a.priority) > 0).length;
+  const expiringSoonCount = announcements.filter(isExpiringSoon).length;
+
+  const filtered = useMemo(() => {
+    if (filter === 'important') return announcements.filter((a: any) => Number(a.priority) > 0);
+    if (filter === 'expiring') return announcements.filter(isExpiringSoon);
+    return announcements;
+  }, [announcements, filter]);
+
+  const featured = filtered[0];
+  const rest = filtered.slice(1);
   const isLoading = memberLoading || announcementsLoading;
 
-  const renderAnnouncementBadges = (announcement: any) => (
-    <div className="flex flex-wrap items-center gap-2">
-      {Number(announcement.priority) > 0 && (
-        <Badge className="rounded-full border-transparent bg-warning/15 text-warning dark:text-warning hover:bg-warning/15 gap-1.5">
-          <ShieldAlert className="h-3 w-3" />
+  const metaBadges = (a: any) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {Number(a.priority) > 0 && (
+        <Badge className="gap-1 rounded-full border-transparent bg-warning/15 text-warning hover:bg-warning/15">
+          <ShieldAlert className="h-3 w-3" aria-hidden="true" />
           Important
         </Badge>
       )}
-      <Badge variant="outline" className="rounded-full bg-background/60 text-xs capitalize">
-        {(announcement.target_audience || 'all').replace('_', ' ')}
-      </Badge>
-      {announcement.expire_at && (
-        <Badge variant="outline" className="rounded-full bg-background/60 text-xs gap-1">
-          <Clock3 className="h-3 w-3" />
-          Expires {formatDistanceToNow(new Date(announcement.expire_at), { addSuffix: true })}
+      {a.expire_at && (
+        <Badge variant="outline" className="gap-1 rounded-full text-[11px]">
+          <Clock3 className="h-3 w-3" aria-hidden="true" />
+          Expires {formatDistanceToNow(new Date(a.expire_at), { addSuffix: true })}
+        </Badge>
+      )}
+      {a.attachment_url && (
+        <Badge variant="outline" className="gap-1 rounded-full text-[11px]">
+          <Paperclip className="h-3 w-3" aria-hidden="true" />
+          Attachment
         </Badge>
       )}
     </div>
   );
 
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-[50vh] px-4">
-          <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-            <Loader2 className="h-4 w-4 animate-spin text-accent" />
-            Loading announcements
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (!member) {
+  if (!memberLoading && !member) {
     return (
       <AppLayout>
         <div className="flex min-h-[50vh] items-center justify-center px-4">
-          <Card className="w-full max-w-lg border-border/60 bg-card/90 shadow-xl">
-            <CardContent className="space-y-5 p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-warning/10">
-                <AlertCircle className="h-8 w-8 text-warning" />
+          <Card className="w-full max-w-lg rounded-2xl border-border/60 shadow-lg">
+            <CardContent className="space-y-4 p-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/10">
+                <AlertCircle className="h-7 w-7 text-warning" aria-hidden="true" />
               </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-semibold tracking-tight">No member profile found</h2>
-                <p className="text-sm text-muted-foreground">
-                  Your account is not linked to a member profile yet. Please contact the front desk so they can connect your profile.
-                </p>
-              </div>
+              <h1 className="text-xl font-bold">No member profile found</h1>
+              <p className="text-sm text-muted-foreground">
+                Your account is not linked to a member profile yet. Please contact the front desk.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -109,203 +113,166 @@ export default function MemberAnnouncements() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-border/60 bg-gradient-to-br from-muted via-muted to-muted text-primary-foreground shadow-2xl shadow/20">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(249,115,22,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(255,255,255,0.08),_transparent_28%)]" />
-          <div className="relative grid gap-8 p-6 md:p-8 lg:grid-cols-[1.35fr_0.85fr] lg:p-10">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/15 bg-card/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.22em] text-primary-foreground/80 backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5 text-warning" />
-                Live bulletin
-              </div>
-              <div className="space-y-3">
-                <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-balance md:text-4xl lg:text-5xl">
-                  Announcements for {branchName}
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-primary-foreground/72 md:text-base">
-                  Read the latest updates, urgent notices, and branch-wide messages in one clean feed.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
-                  {announcements.length} live updates
-                </Badge>
-                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
-                  {importantCount} important
-                </Badge>
-                <Badge className="rounded-full border-primary-foreground/15 bg-card/10 px-3 py-1 text-primary-foreground hover:bg-card/15">
-                  {expiringSoonCount} expiring soon
-                </Badge>
-              </div>
+      <div className="mx-auto max-w-4xl space-y-5 pb-6">
+        {/* Hero */}
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-accent p-6 text-primary-foreground shadow-lg shadow-primary/20 sm:p-7">
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary-foreground/10 blur-2xl" aria-hidden="true" />
+          <div className="relative space-y-4">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary-foreground/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Live bulletin
+            </span>
+            <div className="space-y-1.5">
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Announcements</h1>
+              <p className="text-sm text-primary-foreground/80">
+                Updates, notices and news for {branchName}.
+              </p>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Visible now</p>
-                <div className="mt-2 text-3xl font-semibold tabular-nums">{announcements.length}</div>
-                <p className="mt-1 text-sm text-primary-foreground/65">messages for members</p>
-              </div>
-              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Priority</p>
-                <div className="mt-2 text-3xl font-semibold tabular-nums">{importantCount}</div>
-                <p className="mt-1 text-sm text-primary-foreground/65">urgent or important notices</p>
-              </div>
-              <div className="rounded-2xl border border-primary-foreground/10 bg-card/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/55">Branch</p>
-                <div className="mt-2 text-lg font-semibold leading-tight">{branchName}</div>
-                <p className="mt-1 text-sm text-primary-foreground/65">personalized for your membership</p>
-              </div>
+            <div className="grid grid-cols-3 gap-2 sm:max-w-md">
+              {[
+                { label: 'Live', value: announcements.length },
+                { label: 'Important', value: importantCount },
+                { label: 'Expiring', value: expiringSoonCount },
+              ].map((s) => (
+                <div key={s.label} className="rounded-xl bg-primary-foreground/10 px-3 py-2 backdrop-blur-sm">
+                  <p className="text-[10px] uppercase tracking-wider text-primary-foreground/70">{s.label}</p>
+                  <p className="text-xl font-bold tabular-nums">{s.value}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {announcements.length === 0 ? (
-          <Card className="overflow-hidden border-border/60 bg-card/90 shadow-xl shadow/5">
-            <CardContent className="grid gap-6 p-8 md:grid-cols-[0.75fr_1.25fr] md:p-10">
-              <div className="flex items-center justify-center rounded-[1.75rem] border border-dashed border-border bg-muted/30 p-10">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-muted to-muted text-primary-foreground shadow-lg">
-                  <Megaphone className="h-9 w-9" />
-                </div>
-              </div>
-              <div className="space-y-4 self-center">
-                <div className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Nothing new yet
-                </div>
-                <h3 className="text-2xl font-semibold tracking-tight">Your gym has not posted an update yet.</h3>
-                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                  When the team shares a notice, it will appear here immediately. Check back soon for class reminders, schedule changes, and branch news.
-                </p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Badge variant="outline" className="rounded-full">Branch updates</Badge>
-                  <Badge variant="outline" className="rounded-full">Class changes</Badge>
-                  <Badge variant="outline" className="rounded-full">Member notices</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {featuredAnnouncement && (
-              <Card className="overflow-hidden border-border/60 bg-card shadow-xl shadow/5">
-                <div className="h-1 bg-gradient-to-r from-muted via-accent to-warning" />
-                <CardHeader className="space-y-4 p-6 md:p-7">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
-                          <Megaphone className="h-4 w-4" />
-                        </span>
-                        Featured notice
-                      </div>
-                      <CardTitle className="text-2xl tracking-tight md:text-3xl">{featuredAnnouncement.title}</CardTitle>
-                      <p className="max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">
-                        {format(new Date(featuredAnnouncement.created_at), 'EEEE, dd MMM yyyy • HH:mm')}
-                      </p>
-                    </div>
-                    {Number(featuredAnnouncement.priority) > 0 ? (
-                      <Badge className="rounded-full bg-warning/15 text-warning hover:bg-warning/15 dark:text-warning">
-                        Important
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="rounded-full bg-muted/30">
-                        Latest
-                      </Badge>
-                    )}
-                  </div>
-                  {renderAnnouncementBadges(featuredAnnouncement)}
-                </CardHeader>
-                <CardContent className="grid gap-6 border-t border-border/60 p-6 md:grid-cols-[1.35fr_0.65fr] md:p-7">
-                  <div className="space-y-4">
-                    <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85 md:text-[15px]">
-                      {featuredAnnouncement.content}
-                    </p>
-                    <AnnouncementAttachment
-                      url={(featuredAnnouncement as any).attachment_url}
-                      kind={(featuredAnnouncement as any).attachment_kind}
-                      filename={(featuredAnnouncement as any).attachment_filename}
-                    />
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <ArrowUpRight className="h-4 w-4" />
-                      Added {formatDistanceToNow(new Date(featuredAnnouncement.created_at), { addSuffix: true })}
-                    </div>
-                  </div>
-                  <div className="grid gap-3 rounded-[1.5rem] border border-border/60 bg-muted/20 p-4">
-                    <div className="rounded-2xl bg-background/80 p-4 shadow-sm">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Audience</p>
-                      <p className="mt-2 text-sm font-medium capitalize">{(featuredAnnouncement.target_audience || 'all').replace('_', ' ')}</p>
-                    </div>
-                    <div className="rounded-2xl bg-background/80 p-4 shadow-sm">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Posted</p>
-                      <p className="mt-2 text-sm font-medium">{format(new Date(featuredAnnouncement.created_at), 'dd MMM yyyy')}</p>
-                    </div>
-                    {featuredAnnouncement.expire_at && (
-                      <div className="rounded-2xl bg-background/80 p-4 shadow-sm">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Valid until</p>
-                        <p className="mt-2 text-sm font-medium">{format(new Date(featuredAnnouncement.expire_at), 'dd MMM yyyy')}</p>
-                      </div>
-                    )}
+        {/* Filters */}
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
+          <TabsList className="rounded-xl">
+            <TabsTrigger value="all" className="rounded-lg text-xs">All</TabsTrigger>
+            <TabsTrigger value="important" className="rounded-lg text-xs">Important</TabsTrigger>
+            <TabsTrigger value="expiring" className="rounded-lg text-xs">Expiring soon</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="rounded-2xl border-border/60">
+                <CardContent className="flex gap-4 p-5">
+                  <Skeleton className="h-12 w-12 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-2/3" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
                 </CardContent>
               </Card>
-            )}
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <Card className="rounded-2xl border-border/60 shadow-lg shadow-primary/5">
+            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                <Megaphone className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+              </span>
+              <h2 className="text-lg font-semibold">
+                {filter === 'all' ? 'Nothing posted yet' : 'No announcements in this filter'}
+              </h2>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                When the team shares a notice it will appear here instantly — class changes, branch news and member updates.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {/* Featured */}
+            <Card className="overflow-hidden rounded-2xl border-border/60 shadow-lg shadow-primary/5">
+              <div className="h-1 bg-gradient-to-r from-primary via-accent to-warning" aria-hidden="true" />
+              <CardContent className="space-y-4 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Latest notice</p>
+                    <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{featured.title}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(featured.created_at), 'EEEE, dd MMM yyyy • HH:mm')}
+                    </p>
+                  </div>
+                  {metaBadges(featured)}
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">{featured.content}</p>
+                <AnnouncementAttachment
+                  url={(featured as any).attachment_url}
+                  kind={(featured as any).attachment_kind}
+                  filename={(featured as any).attachment_filename}
+                />
+              </CardContent>
+            </Card>
 
-            {remainingAnnouncements.length > 0 && (
-              <div className="grid gap-4">
-                {remainingAnnouncements.map((announcement: any, index: number) => (
-                  <Card
-                    key={announcement.id}
-                    className="overflow-hidden border-border/60 bg-card/95 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-                    style={{ animationDelay: `${index * 45}ms` }}
-                  >
-                    <CardContent className="p-5 md:p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-muted to-muted text-primary-foreground shadow-sm">
-                          <Megaphone className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <h3 className="text-lg font-semibold tracking-tight">{announcement.title}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                {format(new Date(announcement.created_at), 'EEEE, dd MMM yyyy • HH:mm')}
-                              </p>
-                            </div>
-                            {Number(announcement.priority) > 0 ? (
-                              <Badge className="rounded-full bg-warning/15 text-warning hover:bg-warning/15 dark:text-warning">
-                                Important
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="rounded-full">
-                                Update
-                              </Badge>
-                            )}
+            {/* Feed */}
+            {rest.length > 0 && (
+              <ul className="space-y-3">
+                {rest.map((a: any) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      onClick={() => setActive(a)}
+                      className="w-full cursor-pointer rounded-2xl border border-border/60 bg-card p-4 text-left shadow-sm transition-all duration-200 hover:shadow-lg hover:shadow-primary/10 focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                          <Megaphone className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <p className="truncate text-sm font-semibold">{a.title}</p>
+                          <p className="line-clamp-2 text-sm text-muted-foreground">{a.content}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                            </span>
+                            {metaBadges(a)}
                           </div>
-                          {renderAnnouncementBadges(announcement)}
-                          <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
-                            {announcement.content}
-                          </p>
-                          <AnnouncementAttachment
-                            url={(announcement as any).attachment_url}
-                            kind={(announcement as any).attachment_kind}
-                            filename={(announcement as any).attachment_filename}
-                            compact
-                          />
-                          {announcement.expire_at && (
-                            <p className="text-xs text-muted-foreground">
-                              Valid until {format(new Date(announcement.expire_at), 'dd MMM yyyy')}
-                            </p>
-                          )}
                         </div>
+                        <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
         )}
       </div>
+
+      {/* Detail drawer */}
+      <Sheet open={!!active} onOpenChange={(o) => !o && setActive(null)}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+          <SheetHeader className="border-b border-border/60 px-6 py-4 text-left">
+            <SheetTitle>{active?.title || 'Announcement'}</SheetTitle>
+            <SheetDescription>
+              {active ? format(new Date(active.created_at), 'EEEE, dd MMM yyyy • HH:mm') : ''}
+            </SheetDescription>
+          </SheetHeader>
+          {active && (
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+              {metaBadges(active)}
+              <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">{active.content}</p>
+              <AnnouncementAttachment
+                url={active.attachment_url}
+                kind={active.attachment_kind}
+                filename={active.attachment_filename}
+              />
+              {active.expire_at && (
+                <p className="text-xs text-muted-foreground">
+                  Valid until {format(new Date(active.expire_at), 'dd MMM yyyy')}
+                </p>
+              )}
+            </div>
+          )}
+          <div className="border-t border-border/60 px-6 py-4">
+            <Button variant="outline" className="w-full rounded-xl" onClick={() => setActive(null)}>
+              Close
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </AppLayout>
   );
 }

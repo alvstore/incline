@@ -94,7 +94,7 @@ const MemberStore = lazy(() => import("./pages/MemberStore"));
 const MyWorkout = lazy(() => import("./pages/MyWorkout"));
 const MyDiet = lazy(() => import("./pages/MyDiet"));
 const MyBenefits = lazy(() => import("./pages/MyBenefits"));
-const BookBenefitSlot = lazy(() => import("./pages/BookBenefitSlot"));
+
 const MemberProfile = lazy(() => import("./pages/MemberProfile"));
 const MemberFeedback = lazy(() => import("./pages/MemberFeedback"));
 const MemberAnnouncements = lazy(() => import("./pages/MemberAnnouncements"));
@@ -214,7 +214,8 @@ function RoutedContent() {
           <Route path="/member-dashboard" element={<ProtectedRoute requiredRoles={['member']}><MemberDashboard /></ProtectedRoute>} />
           <Route path="/my-attendance" element={<ProtectedRoute requiredRoles={['member']}><MyAttendance /></ProtectedRoute>} />
           <Route path="/my-progress" element={<ProtectedRoute requiredRoles={['member']}><MyProgress /></ProtectedRoute>} />
-          <Route path="/my-classes" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
+          <Route path="/book" element={<ProtectedRoute requiredRoles={['member']}><MemberClassBooking /></ProtectedRoute>} />
+          <Route path="/my-classes" element={<Navigate to="/book" replace />} />
           <Route path="/my-pt-sessions" element={<ProtectedRoute requiredRoles={['member']}><MyPTSessions /></ProtectedRoute>} />
           <Route path="/pt-attendance" element={<Navigate to="/attendance-dashboard?tab=pt" replace />} />
           <Route path="/my-referrals" element={<ProtectedRoute requiredRoles={['member']}><MemberReferrals /></ProtectedRoute>} />
@@ -226,7 +227,7 @@ function RoutedContent() {
           <Route path="/my-workout" element={<ProtectedRoute requiredRoles={['member']}><MyWorkout /></ProtectedRoute>} />
           <Route path="/my-diet" element={<ProtectedRoute requiredRoles={['member']}><MyDiet /></ProtectedRoute>} />
           <Route path="/my-benefits" element={<ProtectedRoute requiredRoles={['member']}><MyBenefits /></ProtectedRoute>} />
-          <Route path="/book-benefit" element={<ProtectedRoute requiredRoles={['member']}><BookBenefitSlot /></ProtectedRoute>} />
+          <Route path="/book-benefit" element={<Navigate to="/book?type=recovery" replace />} />
           <Route path="/member-profile" element={<ProtectedRoute requiredRoles={['member']}><MemberProfile /></ProtectedRoute>} />
 
           {/* ==================== TRAINER ROUTES ==================== */}
