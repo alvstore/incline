@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { compressImageFile } from '@/utils/imageCompression';
 import { uploadBiometricPhoto } from '@/lib/media/biometricPhotoUrls';
-import { checkPersonPhoto } from '@/lib/media/checkPersonPhoto';
+import { preparePersonPhoto } from '@/lib/media/preparePersonPhoto';
 import { queueMemberSync, queueStaffSync, queueTrainerSync } from '@/services/biometricService';
 
 export type PersonEntity = 'members' | 'employees' | 'trainers';
@@ -91,12 +91,13 @@ export async function uploadAndSyncPersonPhoto({
   personName,
   person,
 }: UploadPersonPhotoArgs): Promise<UploadPersonPhotoResult> {
-  // Reject photos the turnstiles will never be able to enrol, before they
-  // enter the pipeline and fail silently at the gate days later.
-  const check = await checkPersonPhoto(file);
-  if (!check.ok) throw new Error(check.reason || 'This photo cannot be used for face enrolment.');
+  // Auto-remediate instead of rejecting: EXIF orient → centre square crop →
+  // brightness lift → device-safe 720px JPEG. Only truly unusable files throw.
+  const prepared = await preparePersonPhoto(file);
+  if (prepared.notes.length) console.info('[photo] auto-fixed:', prepared.notes.join(', '));
 
-  const compressed = await compressImageFile(file);
+  const compressed = await compressImageFile(prepared.file);
+
 
   const filePath = `${userId}/avatar-${Date.now()}.jpg`;
   const { error: uploadError } = await supabase.storage

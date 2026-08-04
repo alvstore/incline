@@ -1,3 +1,8 @@
+// v2.4.0 — zero-decode photo pipeline. The edge worker NEVER decodes an image
+// again (that was the 546 "not enough compute resources" kill): oversized
+// sources are re-fetched through Supabase Storage's server-side image
+// transformer at a device-safe 720px / q80, and anything that still will not
+// fit 400KB is reported as `needs_better_source` for a client-side retake.
 // v2.2.0 — transport-aware: a slow / rebooting MIPS server is now an outage
 // (503 retryable + shared circuit breaker) instead of an unhandled 500/546, and
 // the CRM row stays `pending` so the queue re-drives it rather than reading as
@@ -8,7 +13,6 @@
 // photo assign, and retryable per-device delivery so one healthy gate cannot
 // hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
   classifyFailure,
   isTripped,
@@ -27,9 +31,8 @@ const corsHeaders = {
 const PERMANENT_END = "2099-12-31 23:59:59";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
-// Above this the raw source is never decoded — decoding multi-MB photos in an
-// edge worker exhausts memory and the invocation is killed by the platform.
-const MAX_SOURCE_BYTES = 2 * 1024 * 1024; // decode ceiling — larger sources OOM the edge worker
+// Photos are never decoded in this worker (see fetchDeviceReadyBytes).
+
 // Face-safety floors: the terminal runs its own face detection on the image we
 // push. Anything smaller / more compressed than this is accepted by the MIPS
 // server but silently discarded by the gate, which is exactly how the fleet
@@ -181,60 +184,57 @@ async function upsertPerson(
   return { success: true, personId: existingPerson.personId, response: json };
 }
 
+/** Parse `bucket` + `path` out of any Supabase Storage URL. */
+function parseStorageUrl(url: string): { bucket: string; path: string } | null {
+  const m = url.match(/\/storage\/v1\/(?:object|render\/image)\/(?:public|sign|authenticated)\/([^/]+)\/(.+?)(?:\?.*)?$/);
+  if (!m) return null;
+  return { bucket: m[1], path: decodeURIComponent(m[2]) };
+}
+
 /**
- * Re-encode an oversized image so it fits MIPS' 400KB face-photo cap WITHOUT
- * destroying the face.
+ * Shrink an oversized photo WITHOUT decoding it in this worker.
  *
- * Face safety:
- *  - never resized below MIN_FACE_EDGE (720px) on the long edge
- *  - never encoded below MIN_FACE_QUALITY (60)
- *  - if 400KB is unreachable within those floors we return null so the caller
- *    reports `needs_better_source` instead of pushing an image the terminal
- *    will accept and then silently discard.
- *
- * Memory discipline (edge worker OOM guard): sources above MAX_SOURCE_BYTES are
- * never decoded — a 12MP phone JPEG expands to >50MB RGBA and kills the worker.
+ * Decoding was the cause of the 546 "not enough compute resources" kills: a
+ * 12MP phone JPEG expands to >50MB RGBA and the edge worker dies mid-batch.
+ * Instead we ask Supabase Storage's server-side image transformer for a
+ * device-safe derivative (long edge MIN_FACE_EDGE, quality ≥ MIN_FACE_QUALITY)
+ * and stream those bytes straight to MIPS. If we cannot reach 400KB within the
+ * face-safety floors, the caller reports `needs_better_source` so the member is
+ * asked for a retake instead of the gate silently discarding the face.
  */
-async function normalizePhotoBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
-  if (bytes.length > MAX_SOURCE_BYTES) {
-    console.warn(`normalizePhotoBytes: source too large (${Math.round(bytes.length / 1024)}KB) — refusing to decode`);
+async function fetchDeviceReadyBytes(
+  supabase: any,
+  sourceUrl: string,
+): Promise<Uint8Array | null> {
+  const parsed = parseStorageUrl(sourceUrl);
+  if (!parsed || !supabase) {
+    console.warn("fetchDeviceReadyBytes: not a storage URL — cannot transform");
     return null;
   }
-  try {
-    const decoded = await decodeImage(bytes);
-    // GIF (Frame collections) are not supported for face enrollment.
-    if (!decoded || typeof (decoded as any).encodeJPEG !== "function") return null;
-    let img: any = decoded;
-    // Single bounded downscale pass — iterative resizes each allocate a fresh
-    // full RGBA buffer and were the source of edge-worker OOM kills.
-    const maxEdge = Math.max(img.width, img.height);
-    if (maxEdge > 1080) {
-      const scale = 1080 / maxEdge;
-      img = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
-    }
-    for (const quality of [85, 75, 65, MIN_FACE_QUALITY]) {
-      const out = new Uint8Array(await img.encodeJPEG(quality));
-      if (out.length <= MAX_PHOTO_BYTES) return out;
-    }
-    // Still too big: one final downscale straight to the face-safety floor.
-    const curEdge = Math.max(img.width, img.height);
-    if (curEdge > MIN_FACE_EDGE) {
-      const scale = MIN_FACE_EDGE / curEdge;
-      const small = img.resize(Math.round(img.width * scale), Math.round(img.height * scale));
-      img = null;
-      for (const quality of [75, MIN_FACE_QUALITY]) {
-        const out = new Uint8Array(await small.encodeJPEG(quality));
-        if (out.length <= MAX_PHOTO_BYTES) return out;
+  for (const quality of [80, 70, MIN_FACE_QUALITY]) {
+    try {
+      const { data } = await supabase.storage.from(parsed.bucket).createSignedUrl(parsed.path, 300, {
+        transform: {
+          width: MIN_FACE_EDGE,
+          height: MIN_FACE_EDGE,
+          resize: "contain",
+          quality,
+        },
+      });
+      if (!data?.signedUrl) continue;
+      const res = await fetch(data.signedUrl, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) {
+        console.warn(`fetchDeviceReadyBytes: transform fetch ${res.status}`);
+        continue;
       }
+      const out = new Uint8Array(await res.arrayBuffer());
+      if (out.length <= MAX_PHOTO_BYTES) return out;
+      console.warn(`fetchDeviceReadyBytes: q${quality} still ${Math.round(out.length / 1024)}KB`);
+    } catch (e) {
+      console.warn("fetchDeviceReadyBytes error:", e);
     }
-    console.warn("normalizePhotoBytes: cannot reach 400KB without dropping below face-safety floors");
-    return null;
-  } catch (e) {
-    // Never let a heavy image take the whole sync down — the caller reports
-    // needs_better_source and mips-face-sweep can retry later.
-    console.warn("normalizePhotoBytes failed:", e);
-    return null;
   }
+  return null;
 }
 
 
@@ -295,17 +295,17 @@ async function uploadPhoto(
     let photoBytes = new Uint8Array(await photoRes.arrayBuffer());
     let sizeKB = Math.round(photoBytes.length / 1024);
 
-    // Never fail on size — MIPS caps face photos at 400KB, so re-encode
-    // server-side (downscale + iterative JPEG quality) instead of aborting.
+    // Never fail on size and never decode here — ask Storage for a device-safe
+    // derivative instead (see fetchDeviceReadyBytes).
     if (photoBytes.length > MAX_PHOTO_BYTES) {
-      const normalized = await normalizePhotoBytes(photoBytes);
+      const normalized = await fetchDeviceReadyBytes(supabase, url);
       if (!normalized) {
         return {
           success: false,
           message: `needs_better_source: ${sizeKB}KB photo cannot fit 400KB without dropping below ${MIN_FACE_EDGE}px / q${MIN_FACE_QUALITY} face-safety floors`,
         };
       }
-      console.log(`Photo normalized: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
+      console.log(`Photo normalized via storage transform: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
       photoBytes = normalized;
       sizeKB = Math.round(photoBytes.length / 1024);
     }

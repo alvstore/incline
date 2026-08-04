@@ -395,6 +395,34 @@ function countPriorNameAsks(history: Array<{ role: string; content: string }>): 
     .length;
 }
 
+// v4.8.0 — answer-first funnel guards.
+// The funnel used to re-ask the SAME field on every turn, which produced the
+// "asked five times for an email" loops. Each capture field now has its own
+// ask counter, and a real user question always outranks the capture prompt.
+const EMAIL_ASK_DETECT_RE = /\b(e-?mail)\b/i;
+const GOAL_ASK_DETECT_RE = /\b(fitness goal|main goal|your goal)\b/i;
+const PLAN_ASK_DETECT_RE = /\b(membership duration|which duration|duration works best)\b/i;
+
+function countPriorAsks(
+  history: Array<{ role: string; content: string }>,
+  re: RegExp,
+): number {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  return history
+    .slice(-10)
+    .filter((m) => m && m.role !== "user" && typeof m.content === "string" && re.test(m.content))
+    .length;
+}
+
+/** True when the incoming message is a real question we should answer first. */
+function userAskedSomething(text: unknown): boolean {
+  const t = String(text || "").trim();
+  if (!t || ACK_RE.test(t)) return false;
+  if (t.includes("?")) return true;
+  return /\b(kya|kaise|kitna|kitne|kab|kahan|kaha|batao|price|cost|fee|fees|charge|timing|timings|open|hours|location|address|where|when|how|why|plan|plans|offer|trial|tour|facility|facilities|sauna|ice\s*bath|pt|trainer)\b/i.test(t);
+}
+
+
 
 
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
@@ -1188,6 +1216,13 @@ GENERAL RULES:
     // (location/pricing/timeline), prepend the canned answer before re-asking.
     const _pivot = intentPivotPrefix(ctx.messageContent);
 
+    // v4.8.0 — the capture prompt never wins over a real question, and no
+    // single field is ever asked more than twice. When a step is deferred we
+    // fall through to the LLM, which answers naturally and nudges softly.
+    const _userAsked = userAskedSomething(ctx.messageContent);
+    const _defer = (asks: number) => asks >= 2 || (_userAsked && !_pivot);
+
+
     // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
     if (!hasName) {
       const askTurns = countPriorNameAsks(history);
@@ -1230,7 +1265,7 @@ GENERAL RULES:
 
 
     // Step 2: name captured, no email → ask email (plain text)
-    if (hasName && !hasEmail) {
+    if (hasName && !hasEmail && !_defer(countPriorAsks(history, EMAIL_ASK_DETECT_RE))) {
       return {
         replyText: _fn
           ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
@@ -1240,7 +1275,7 @@ GENERAL RULES:
     }
 
     // Step 3: name+email captured, no goal → ask goal (interactive list)
-    if (hasName && hasEmail && !hasGoal) {
+    if (hasName && hasEmail && !hasGoal && !_defer(countPriorAsks(history, GOAL_ASK_DETECT_RE))) {
       const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
       const reply = JSON.stringify({
         type: "interactive_list",
@@ -1259,7 +1294,7 @@ GENERAL RULES:
       return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
     }
 
-    if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
+    if (hasName && hasEmail && hasGoal && !hasPlanInterest && !_defer(countPriorAsks(history, PLAN_ASK_DETECT_RE))) {
       // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
       // inferred "annual" from "Founding"), soften the prompt to a confirm ask
       // so the user explicitly taps one of the four durations.
@@ -1356,7 +1391,14 @@ KNOWN SO FAR (ground truth — NEVER re-ask any filled field):
 - email: ${memory?.profile?.email || "—"}
 - fitness_goal: ${memory?.facts?.fitness_goal || memory?.facts?.goal || "—"}
 - plan_interest: ${memory?.facts?.plan_interest || "—"}
-ADVANCE RULE: move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, acknowledge by first name and ask the next missing field — NEVER ask for name again.`;
+ADVANCE RULE: move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, acknowledge by first name and ask the next missing field — NEVER ask for name again.
+
+ANSWER-FIRST RULE (highest priority in this block):
+- If the person asked ANYTHING (question, doubt, objection, "kya/kaise/kitna", a topic like timings, location, facilities, PT, tour), ANSWER that first, warmly and specifically, in 1–2 short sentences.
+- Only after answering may you add ONE short, optional nudge for the next missing field. Phrase it as an invitation ("if you'd like, drop your email and I'll send the tour details"), never as a gate.
+- NEVER ask for the same field more than twice in a conversation. If it was already asked twice, stop asking it entirely and just keep helping.
+- NEVER repeat a sentence you already sent earlier in this conversation. Rephrase or move on.
+- Never say you cannot continue without a detail. Every reply must move the conversation forward on its own.`;
 
   }
 
