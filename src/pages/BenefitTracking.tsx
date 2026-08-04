@@ -592,7 +592,7 @@ export default function BenefitTracking() {
                 membershipId={membership.id}
                 memberId={selectedMember.id}
                 memberName={selectedMember.profiles?.full_name || selectedMember.member_code}
-                availableBenefits={balances}
+                availableBenefits={combinedBalances as any}
                 preselectedBenefit={preselectedBenefit}
               />
             )}
