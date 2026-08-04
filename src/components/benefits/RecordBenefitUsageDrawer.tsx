@@ -224,6 +224,44 @@ export function RecordBenefitUsageDrawer({
                 </div>
               )}
 
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="usage_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Usage Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          max={todayStr()}
+                          className="h-11 rounded-xl"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Backdate within the membership period</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="usage_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Time (Optional)</FormLabel>
+                      <FormControl>
+                        <Input type="time" className="h-11 rounded-xl" {...field} />
+                      </FormControl>
+                      <FormDescription>Leave blank if unknown</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+
               <FormField
                 control={form.control}
                 name="usage_count"
