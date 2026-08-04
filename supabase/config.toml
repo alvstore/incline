@@ -144,3 +144,6 @@ verify_jwt = false
 
 [functions.sms-webhook]
 verify_jwt = false
+
+[functions.sweep-biometric-photos]
+verify_jwt = false

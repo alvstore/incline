@@ -30,6 +30,8 @@ import {
   useRegistrationDraftAutosave,
   clearRegistrationDraft,
 } from "@/lib/registration/useRegistrationDraft";
+import { uploadAndSyncPersonPhoto } from "@/lib/media/syncPersonPhoto";
+
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
@@ -84,7 +86,10 @@ const friendlyOtpError = (raw: string) =>
 export default function PublicRegistration() {
   const nav = useNavigate();
   const initialDraft = useInitialRegistrationDraft();
+  const [newMember, setNewMember] = useState<{ memberId: string; userId: string; memberCode: string } | null>(null);
+  const [photoState, setPhotoState] = useState<"idle" | "uploading" | "done">("idle");
   const [step, setStep] = useState<"details" | "parq" | "sign" | "otp" | "done">(
+
     initialDraft?.step ?? "details",
   );
   const [details, setDetails] = useState<DetailsForm | null>(null);
@@ -198,7 +203,13 @@ export default function PublicRegistration() {
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        return data as { access_token: string; refresh_token: string; member_code: string };
+        return data as {
+          access_token: string;
+          refresh_token: string;
+          member_code: string;
+          member_id: string;
+          user_id: string;
+        };
       } finally {
         window.clearTimeout(stageTimer);
         window.clearTimeout(stageTimer2);
@@ -209,10 +220,11 @@ export default function PublicRegistration() {
       if (data.access_token && data.refresh_token) {
         await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
       }
+      setNewMember({ memberId: data.member_id, userId: data.user_id, memberCode: data.member_code });
       toast.success(`Welcome to Incline! Your member code: ${data.member_code}`);
       setStep("done");
-      setTimeout(() => nav("/member-dashboard", { replace: true }), 1500);
     },
+
     onError: (e: Error) => {
       const msg = friendlyOtpError(e.message);
       setOtpError(msg);
@@ -792,13 +804,60 @@ export default function PublicRegistration() {
                 Visit reception to activate your plan. We've sent your welcome message with
                 your member code and login link.
               </p>
+
+              {/* Face photo — optional but prompted, so the gates recognise you on day one. */}
+              {newMember && photoState !== "done" && (
+                <div className="rounded-2xl bg-primary-foreground/10 p-4 text-left">
+                  <p className="text-sm font-semibold">Add your photo for gate entry</p>
+                  <p className="mt-1 text-xs text-primary-foreground/70">
+                    A clear, front-facing photo lets the entry gates recognise you. You can also do this later from your profile.
+                  </p>
+                  <Label
+                    htmlFor="register-photo"
+                    className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl"
+                  >
+                    {photoState === "uploading" ? "Uploading…" : "Take / upload photo"}
+                  </Label>
+                  <input
+                    id="register-photo"
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    className="hidden"
+                    disabled={photoState === "uploading"}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !newMember) return;
+                      setPhotoState("uploading");
+                      try {
+                        await uploadAndSyncPersonPhoto({
+                          file,
+                          userId: newMember.userId,
+                          personName: details?.full_name || "Member",
+                          person: { entityType: "members", entityId: newMember.memberId },
+                        });
+                        setPhotoState("done");
+                        toast.success("Photo saved — gate access is being set up");
+                      } catch (err) {
+                        setPhotoState("idle");
+                        toast.error(err instanceof Error ? err.message : "Could not upload photo");
+                      }
+                    }}
+                  />
+                </div>
+              )}
+              {photoState === "done" && (
+                <p className="text-xs font-medium text-success">Photo received — you're set for gate entry.</p>
+              )}
+
               <a
-                href="/auth"
+                href="/member-dashboard"
                 className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground"
               >
-                Log in to your account
+                Go to my dashboard
               </a>
             </div>
+
 
           )}
         </GlassCard>
