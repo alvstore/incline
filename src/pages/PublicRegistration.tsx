@@ -802,13 +802,60 @@ export default function PublicRegistration() {
                 Visit reception to activate your plan. We've sent your welcome message with
                 your member code and login link.
               </p>
+
+              {/* Face photo — optional but prompted, so the gates recognise you on day one. */}
+              {newMember && photoState !== "done" && (
+                <div className="rounded-2xl bg-primary-foreground/10 p-4 text-left">
+                  <p className="text-sm font-semibold">Add your photo for gate entry</p>
+                  <p className="mt-1 text-xs text-primary-foreground/70">
+                    A clear, front-facing photo lets the entry gates recognise you. You can also do this later from your profile.
+                  </p>
+                  <Label
+                    htmlFor="register-photo"
+                    className="mt-3 inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl"
+                  >
+                    {photoState === "uploading" ? "Uploading…" : "Take / upload photo"}
+                  </Label>
+                  <input
+                    id="register-photo"
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    className="hidden"
+                    disabled={photoState === "uploading"}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !newMember) return;
+                      setPhotoState("uploading");
+                      try {
+                        await uploadAndSyncPersonPhoto({
+                          file,
+                          userId: newMember.userId,
+                          personName: details?.full_name || "Member",
+                          person: { entityType: "members", entityId: newMember.memberId },
+                        });
+                        setPhotoState("done");
+                        toast.success("Photo saved — gate access is being set up");
+                      } catch (err) {
+                        setPhotoState("idle");
+                        toast.error(err instanceof Error ? err.message : "Could not upload photo");
+                      }
+                    }}
+                  />
+                </div>
+              )}
+              {photoState === "done" && (
+                <p className="text-xs font-medium text-success">Photo received — you're set for gate entry.</p>
+              )}
+
               <a
-                href="/auth"
+                href="/member-dashboard"
                 className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary-foreground px-5 py-2.5 text-sm font-semibold text-primary shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-foreground"
               >
-                Log in to your account
+                Go to my dashboard
               </a>
             </div>
+
 
           )}
         </GlassCard>
