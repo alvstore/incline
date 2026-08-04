@@ -15,6 +15,8 @@ import { BenefitBalancesGrid } from '@/components/benefits/BenefitBalanceCard';
 import { RecordBenefitUsageDrawer } from '@/components/benefits/RecordBenefitUsageDrawer';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { CompGiftDrawer } from '@/components/members/CompGiftDrawer';
+import { CompAmendActions } from '@/components/members/CompAmendActions';
+
 
 import { benefitTypeLabels, frequencyLabels } from '@/services/benefitService';
 import { format } from 'date-fns';
