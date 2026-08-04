@@ -5377,7 +5377,7 @@ export type Database = {
         Row: {
           created_at: string
           data_key: string
-          expires_at: string | null
+          expires_at: string
           id: string
           report_type: string
           token: string
@@ -5385,7 +5385,7 @@ export type Database = {
         Insert: {
           created_at?: string
           data_key: string
-          expires_at?: string | null
+          expires_at?: string
           id?: string
           report_type: string
           token: string
@@ -5393,7 +5393,7 @@ export type Database = {
         Update: {
           created_at?: string
           data_key?: string
-          expires_at?: string | null
+          expires_at?: string
           id?: string
           report_type?: string
           token?: string
@@ -6453,10 +6453,8 @@ export type Database = {
           comm_consent_at: string | null
           comm_consent_channels: string[]
           comm_consent_granted: boolean
-          comm_consent_ip: unknown
           comm_consent_source: string | null
           comm_consent_text: string | null
-          comm_consent_user_agent: string | null
           conversion_idempotency_key: string | null
           converted_at: string | null
           converted_member_id: string | null
@@ -6516,10 +6514,8 @@ export type Database = {
           comm_consent_at?: string | null
           comm_consent_channels?: string[]
           comm_consent_granted?: boolean
-          comm_consent_ip?: unknown
           comm_consent_source?: string | null
           comm_consent_text?: string | null
-          comm_consent_user_agent?: string | null
           conversion_idempotency_key?: string | null
           converted_at?: string | null
           converted_member_id?: string | null
@@ -6579,10 +6575,8 @@ export type Database = {
           comm_consent_at?: string | null
           comm_consent_channels?: string[]
           comm_consent_granted?: boolean
-          comm_consent_ip?: unknown
           comm_consent_source?: string | null
           comm_consent_text?: string | null
-          comm_consent_user_agent?: string | null
           conversion_idempotency_key?: string | null
           converted_at?: string | null
           converted_member_id?: string | null
@@ -10288,10 +10282,8 @@ export type Database = {
           comm_consent_at: string | null
           comm_consent_channels: string[]
           comm_consent_granted: boolean
-          comm_consent_ip: unknown
           comm_consent_source: string | null
           comm_consent_text: string | null
-          comm_consent_user_agent: string | null
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -10320,10 +10312,8 @@ export type Database = {
           comm_consent_at?: string | null
           comm_consent_channels?: string[]
           comm_consent_granted?: boolean
-          comm_consent_ip?: unknown
           comm_consent_source?: string | null
           comm_consent_text?: string | null
-          comm_consent_user_agent?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -10352,10 +10342,8 @@ export type Database = {
           comm_consent_at?: string | null
           comm_consent_channels?: string[]
           comm_consent_granted?: boolean
-          comm_consent_ip?: unknown
           comm_consent_source?: string | null
           comm_consent_text?: string | null
-          comm_consent_user_agent?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null

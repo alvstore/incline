@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { useQueryClient } from '@tanstack/react-query';
 import { StaffAvatarUpload } from '@/components/common/StaffAvatarUpload';
 import { queueStaffSync } from '@/services/biometricService';
@@ -102,8 +103,16 @@ export function EditEmployeeDrawer({ open, onOpenChange, employee }: EditEmploye
         emergency_contact_name: employee.profile?.emergency_contact_name || '',
         emergency_contact_phone: employee.profile?.emergency_contact_phone || '',
         government_id_type: employee.profile?.government_id_type || '',
-        government_id_number: employee.profile?.government_id_number || '',
+        government_id_number: '',
       });
+      // Gov ID number is column-restricted on profiles; load it via the gated RPC.
+      if (employee.user_id) {
+        fetchGovernmentId(employee.user_id).then((row) => {
+          if (row?.government_id_number) {
+            setProfileData((prev) => ({ ...prev, government_id_number: row.government_id_number || '' }));
+          }
+        });
+      }
     }
   }, [employee]);
 

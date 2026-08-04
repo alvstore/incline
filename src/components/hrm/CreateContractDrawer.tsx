@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CONTRACT_VARIABLES, type ContractVariableKey, type FillRole } from '@/lib/hrm/contractVariables';
 import { resolveContractPrefill, prefillToVariables, type ContractPrefillMap } from '@/lib/hrm/contractPrefill';
 import { copyToClipboard } from '@/lib/utils/clipboard';
+import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 
 type AgreementRole = 'trainer' | 'staff' | 'manager';
 
@@ -358,7 +359,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       // Fetch profile (always exists, keyed by user_id == profiles.id)
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
         .eq('id', employee.user_id).maybeSingle();
 
       // Always try to load both sides to maximize prefill coverage.
@@ -371,6 +372,9 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
         .from('trainers')
         .select('id, fixed_salary, pt_share_percentage, government_id_type, government_id_number')
         .eq('user_id', employee.user_id).maybeSingle();
+
+      // Gov ID number is column-restricted on profiles; read it through the gated RPC.
+      const govId = await fetchGovernmentId(employee.user_id);
 
       if (isTrainer) {
         const pct = Number((trnRow as any)?.pt_share_percentage ?? 40);
@@ -385,7 +389,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       const map = resolveContractPrefill({
         employee: empRow as any,
         trainer: trnRow as any,
-        profile: profileRow as any,
+        profile: { ...(profileRow as any), government_id_number: govId?.government_id_number ?? null } as any,
       });
       setPrefill(map);
       // Seed variables state with auto-filled values (HR can override before submit).
