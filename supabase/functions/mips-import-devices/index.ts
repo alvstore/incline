@@ -1,4 +1,4 @@
-// mips-import-devices v1.0.0 — bulk-upsert MIPS server devices into access_devices.
+// mips-import-devices v1.1.0 — bulk-upsert MIPS server devices into access_devices,
 // Safe to run repeatedly (cron-friendly). Never overwrites branch_id/door_role/public_ip
 // if already set by an admin. Called by MIPSDevicesTab "Import all" button.
 
