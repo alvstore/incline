@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useRecordBenefitUsage, useValidateBenefitUsage } from '@/hooks/useBenefits';
+import { useRecordBenefitUsage } from '@/hooks/useBenefits';
 import { benefitTypeLabels, type MemberBenefitBalance } from '@/services/benefitService';
 import type { Database } from '@/integrations/supabase/types';
 
