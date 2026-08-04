@@ -395,6 +395,34 @@ function countPriorNameAsks(history: Array<{ role: string; content: string }>): 
     .length;
 }
 
+// v4.8.0 — answer-first funnel guards.
+// The funnel used to re-ask the SAME field on every turn, which produced the
+// "asked five times for an email" loops. Each capture field now has its own
+// ask counter, and a real user question always outranks the capture prompt.
+const EMAIL_ASK_DETECT_RE = /\b(e-?mail)\b/i;
+const GOAL_ASK_DETECT_RE = /\b(fitness goal|main goal|your goal)\b/i;
+const PLAN_ASK_DETECT_RE = /\b(membership duration|which duration|duration works best)\b/i;
+
+function countPriorAsks(
+  history: Array<{ role: string; content: string }>,
+  re: RegExp,
+): number {
+  if (!Array.isArray(history) || history.length === 0) return 0;
+  return history
+    .slice(-10)
+    .filter((m) => m && m.role !== "user" && typeof m.content === "string" && re.test(m.content))
+    .length;
+}
+
+/** True when the incoming message is a real question we should answer first. */
+function userAskedSomething(text: unknown): boolean {
+  const t = String(text || "").trim();
+  if (!t || ACK_RE.test(t)) return false;
+  if (t.includes("?")) return true;
+  return /\b(kya|kaise|kitna|kitne|kab|kahan|kaha|batao|price|cost|fee|fees|charge|timing|timings|open|hours|location|address|where|when|how|why|plan|plans|offer|trial|tour|facility|facilities|sauna|ice\s*bath|pt|trainer)\b/i.test(t);
+}
+
+
 
 
 export function looksLikeRealName(name: unknown, phone?: string | null): boolean {
