@@ -44,17 +44,20 @@ const detailsSchema = z.object({
   date_of_birth: z.string().min(1, "DOB required"),
   gender: z.enum(["male", "female", "other"]),
   branch_id: z.string().uuid("Select a branch"),
-  city: z.string().optional(),
+  city: z.string().trim().min(2, "City required").max(80),
   state: z.string().optional(),
-  postal_code: z.string().optional(),
-  address: z.string().optional(),
-  government_id_type: z.string().optional(),
-  government_id_number: z.string().trim().max(30).optional(),
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: z.string().optional(),
-  fitness_goals: z.string().optional(),
+  postal_code: z.string().trim().regex(/^\d{6}$/, "Enter a valid 6-digit pincode"),
+  address: z.string().trim().min(6, "Address required").max(240),
+  government_id_type: z.string().min(1, "Select an ID type"),
+  government_id_number: z.string().trim().min(4, "ID number required").max(30),
+  emergency_contact_name: z.string().trim().min(2, "Emergency contact name required").max(120),
+  emergency_contact_phone: z.string().regex(/^\+91\d{10}$/, "Enter a valid +91 number"),
+  fitness_goals: z.string().trim().min(1, "Select a fitness goal"),
   health_conditions: z.string().optional(),
   health_conditions_other: z.string().optional(),
+}).refine((v) => v.emergency_contact_phone !== v.phone, {
+  path: ["emergency_contact_phone"],
+  message: "Emergency contact must differ from your own number",
 });
 type DetailsForm = z.infer<typeof detailsSchema>;
 
