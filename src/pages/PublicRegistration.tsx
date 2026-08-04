@@ -623,15 +623,20 @@ export default function PublicRegistration() {
             <div className="space-y-5">
               <p className="text-sm text-primary-foreground/70">Quick health check — answer honestly to keep you safe.</p>
               <div className="space-y-3">
-                {PARQ_QUESTIONS.map((q, i) => (
-                  <div key={i} className="rounded-2xl border border-primary-foreground/10 bg-card/5 p-4">
+                {PARQ_QUESTIONS.map((q, i) => {
+                  const unanswered = !!parqError && !parq[`q${i}`];
+                  return (
+                  <div
+                    key={i}
+                    className={`rounded-2xl border bg-card/5 p-4 ${unanswered ? "border-destructive/60" : "border-primary-foreground/10"}`}
+                  >
                     <p className="mb-3 text-sm font-medium text-primary-foreground/90">{q}</p>
                     <div className="flex gap-2">
                       {(["no", "yes"] as const).map((v) => (
                         <button
                           key={v}
                           type="button"
-                          onClick={() => setParq((p) => ({ ...p, [`q${i}`]: v }))}
+                          onClick={() => { setParqError(null); setParq((p) => ({ ...p, [`q${i}`]: v })); }}
                           className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                             parq[`q${i}`] === v
                               ? v === "yes"
@@ -645,8 +650,10 @@ export default function PublicRegistration() {
                       ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
+              {parqError && <p className="text-xs font-medium text-destructive">{parqError}</p>}
               <div className="flex gap-3 pt-2">
                 <LiquidButton type="button" variant="glass" size="lg" className="flex-1" onClick={() => setStep("details")}>
                   <ArrowLeft className="h-4 w-4" /> Back
