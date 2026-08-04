@@ -35,6 +35,7 @@ import {
   PRIMARY_GOALS,
   MORE_GOALS,
   HEALTH_CONDITION_OPTIONS,
+  NO_HEALTH_CONDITION,
 } from "@/lib/registration/healthQuestions";
 
 const detailsSchema = z.object({
