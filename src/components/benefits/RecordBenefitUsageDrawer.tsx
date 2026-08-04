@@ -125,7 +125,10 @@ export function RecordBenefitUsageDrawer({
         usageCount: values.usage_count,
         notes: values.notes,
         benefitTypeId: matchedBalance?.benefit_type_id || undefined,
+        usageDate: values.usage_date,
+        usageTime: values.usage_time || null,
       });
+
 
       if (!result?.success) {
         toast.error(result?.error || 'Cannot record usage');
