@@ -19,6 +19,7 @@ import {
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { differenceInDays, format } from 'date-fns';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
@@ -702,7 +703,7 @@ export function MemberProfileDrawer({
           profiles:user_id(
             full_name, email, phone, avatar_url, gender, date_of_birth,
             address, city, state, postal_code, country,
-            government_id_type, government_id_number, government_id_verified,
+            government_id_type, government_id_verified,
             emergency_contact_name, emergency_contact_phone
           ),
 
@@ -724,6 +725,12 @@ export function MemberProfileDrawer({
         .single();
       
       if (error) throw error;
+
+      // Government ID number is column-restricted; fetch via the gated RPC.
+      const govId = await fetchGovernmentId((data as any)?.user_id);
+      if (govId?.government_id_number && (data as any)?.profiles) {
+        (data as any).profiles.government_id_number = govId.government_id_number;
+      }
       return data;
     },
     enabled: !!member?.id && open,
