@@ -173,8 +173,42 @@ export function calculateBenefitBalances(
   });
 }
 
-// Record a benefit usage
+// Atomic record: consumes plan allowance -> complimentary gifts -> purchased credits
+export interface RecordUsageResult {
+  success: boolean;
+  error?: string;
+  sources?: string[];
+  from_plan?: number;
+  from_gift?: number;
+  from_credit?: number;
+  plan_remaining?: number | null;
+  gift_remaining?: number;
+  credit_remaining?: number;
+}
+
+export async function recordBenefitUsageAtomic(params: {
+  membershipId: string;
+  memberId: string;
+  benefitType: BenefitType;
+  benefitTypeId?: string | null;
+  usageCount?: number;
+  notes?: string;
+}): Promise<RecordUsageResult> {
+  const { data, error } = await supabase.rpc('record_benefit_usage', {
+    p_membership_id: params.membershipId,
+    p_member_id: params.memberId,
+    p_benefit_type: safeBenefitEnum(params.benefitType) as BenefitType,
+    p_benefit_type_id: params.benefitTypeId || null,
+    p_usage_count: params.usageCount ?? 1,
+    p_notes: params.notes || null,
+  });
+  if (error) throw error;
+  return (data || { success: false, error: 'Unknown error' }) as unknown as RecordUsageResult;
+}
+
+// Record a benefit usage (legacy direct insert)
 export async function recordBenefitUsage(
+
   membershipId: string,
   benefitType: BenefitType,
   usageCount: number = 1,
