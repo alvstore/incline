@@ -148,7 +148,7 @@ export function RecordBenefitUsageDrawer({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {recordableBenefits.map((benefit) => (
+                        {recordableBenefits.map((benefit: any) => (
                           <SelectItem
                             key={benefit.benefit_type_id || benefit.benefit_type}
                             value={benefit.benefit_type_id || benefit.benefit_type}
@@ -157,12 +157,14 @@ export function RecordBenefitUsageDrawer({
                               <span>{benefit.label}</span>
                               {!benefit.isUnlimited && (
                                 <span className="text-xs text-muted-foreground">
-                                  {benefit.remaining} left
+                                  {totalAvailable(benefit)} left
+                                  {benefit.compRemaining > 0 ? ' (gift)' : ''}
                                 </span>
                               )}
                             </div>
                           </SelectItem>
                         ))}
+
                       </SelectContent>
                     </Select>
                     <FormMessage />
