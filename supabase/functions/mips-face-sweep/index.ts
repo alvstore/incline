@@ -249,9 +249,13 @@ Deno.serve(async (req) => {
       }
 
       // ---- Pick the next people, one push each -----------------------------
+      // Re-read after the parity settle above, so people a gate has already
+      // proven it carries are not pushed again on this tick.
+      const settled = await readLedger(supabase, branchId);
+      const stillOutstanding = settled.filter((r) => r.state === "pending" || r.state === "missing");
       const perTick = pinned ?? PER_TICK;
-      const bySn = new Map<string, typeof outstanding>();
-      for (const row of outstanding) {
+      const bySn = new Map<string, typeof stillOutstanding>();
+      for (const row of stillOutstanding) {
         const list = bySn.get(row.person_sn) || [];
         list.push(row);
         bySn.set(row.person_sn, list);
