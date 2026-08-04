@@ -13,6 +13,7 @@ import { Gift, Calendar, Heart, Clock, ArrowRight, Sparkles, ShieldCheck, CheckC
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
 import { toast } from 'sonner';
 import { addDays, parseISO, format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
