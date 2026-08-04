@@ -54,7 +54,7 @@ export async function fetchEmployees(branchId?: string) {
   if (userIds.length > 0) {
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
       .in('id', userIds);
     profiles = profileData || [];
   }
@@ -78,7 +78,7 @@ export async function getEmployee(id: string) {
   if (data?.user_id) {
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
       .eq('id', data.user_id)
       .single();
     profile = profileData;
@@ -281,7 +281,7 @@ export async function fetchAllPayrollStaff(branchId?: string): Promise<PayrollSt
   if (allUserIds.length > 0) {
     const { data: pData } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+      .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
       .in('id', allUserIds);
     profiles = pData || [];
   }

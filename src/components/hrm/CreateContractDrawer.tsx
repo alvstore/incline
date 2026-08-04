@@ -358,7 +358,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
       // Fetch profile (always exists, keyed by user_id == profiles.id)
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+        .select('address, city, state, country, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
         .eq('id', employee.user_id).maybeSingle();
 
       // Always try to load both sides to maximize prefill coverage.
@@ -369,7 +369,7 @@ export function CreateContractDrawer({ open, onOpenChange, employee, defaultRole
 
       const { data: trnRow } = await supabase
         .from('trainers')
-        .select('id, fixed_salary, pt_share_percentage, government_id_type, government_id_number')
+        .select('id, fixed_salary, pt_share_percentage, government_id_type')
         .eq('user_id', employee.user_id).maybeSingle();
 
       if (isTrainer) {

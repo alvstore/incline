@@ -56,7 +56,7 @@ export function useUnifiedStaff() {
       if (allUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type, government_id_number')
+          .select('id, full_name, email, phone, avatar_url, gender, date_of_birth, address, city, state, postal_code, emergency_contact_name, emergency_contact_phone, government_id_type')
           .in('id', allUserIds);
         profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
       }
