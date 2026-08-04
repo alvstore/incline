@@ -42,6 +42,25 @@ async function queueForEntity(
   }
 }
 
+/**
+ * A fresh photo clears any `rejected` state in the per-gate enrolment ledger so
+ * the face sweep picks the person up again on its next tick.
+ */
+async function requeueFaceEnrolment(ref: PersonRef): Promise<void> {
+  const { data } = await supabase
+    .from(ref.entityType)
+    .select('mips_person_sn')
+    .eq('id', ref.entityId)
+    .maybeSingle();
+  const sn = (data as { mips_person_sn?: string | null } | null)?.mips_person_sn;
+  if (!sn) return;
+  await supabase
+    .from('mips_device_face_state')
+    .update({ state: 'pending', attempts: 0, reason: 'New photo uploaded — re-queued' })
+    .eq('person_sn', sn)
+    .neq('state', 'pending');
+}
+
 export interface UploadPersonPhotoArgs {
   file: File;
   /** Auth user id — required, avatars bucket RLS keys on this folder. */
