@@ -14,6 +14,8 @@ import { Loader2, User, Phone, Mail, AlertCircle, Camera, Target, Activity, MapP
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { uploadAndSyncPersonPhoto } from '@/lib/media/syncPersonPhoto';
+
 import {
   DIETARY_PREFERENCES,
   CUISINE_PREFERENCES,
