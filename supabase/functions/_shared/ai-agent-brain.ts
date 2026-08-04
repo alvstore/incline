@@ -1391,7 +1391,14 @@ KNOWN SO FAR (ground truth — NEVER re-ask any filled field):
 - email: ${memory?.profile?.email || "—"}
 - fitness_goal: ${memory?.facts?.fitness_goal || memory?.facts?.goal || "—"}
 - plan_interest: ${memory?.facts?.plan_interest || "—"}
-ADVANCE RULE: move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, acknowledge by first name and ask the next missing field — NEVER ask for name again.`;
+ADVANCE RULE: move to the FIRST missing field in order name → email → goal → plan_interest. If name is already known, acknowledge by first name and ask the next missing field — NEVER ask for name again.
+
+ANSWER-FIRST RULE (highest priority in this block):
+- If the person asked ANYTHING (question, doubt, objection, "kya/kaise/kitna", a topic like timings, location, facilities, PT, tour), ANSWER that first, warmly and specifically, in 1–2 short sentences.
+- Only after answering may you add ONE short, optional nudge for the next missing field. Phrase it as an invitation ("if you'd like, drop your email and I'll send the tour details"), never as a gate.
+- NEVER ask for the same field more than twice in a conversation. If it was already asked twice, stop asking it entirely and just keep helping.
+- NEVER repeat a sentence you already sent earlier in this conversation. Rephrase or move on.
+- Never say you cannot continue without a detail. Every reply must move the conversation forward on its own.`;
 
   }
 
