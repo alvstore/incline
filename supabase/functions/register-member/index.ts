@@ -653,29 +653,65 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   if (phone) welcomeChannels.push({ channel: "sms", recipient: phone });
   if (reg.email) welcomeChannels.push({ channel: "email", recipient: reg.email });
 
-  backgroundTask(Promise.allSettled(welcomeChannels.map((c) =>
-    admin.functions.invoke("dispatch-communication", {
-      body: {
-        event: "member_created",
-        channel: c.channel,
-        member_id: member.id,
-        branch_id: reg.branch_id,
-        recipient: c.recipient,
-        dedupe_key: `member_created:${member.id}:${c.channel}`,
-        variables: welcomeVars,
+  // The dispatcher contract requires `category` + `payload.body`; anything else
+  // is rejected 400 before a log row is written (this is why welcome messages
+  // never appeared). Event resolution happens via payload.variables.event_key.
+  // Any channel that fails is written into communication_retry_queue so the
+  // 5-minute worker retries it instead of the send being lost.
+  backgroundTask(Promise.allSettled(welcomeChannels.map(async (c) => {
+    const body = {
+      branch_id: reg.branch_id,
+      channel: c.channel,
+      category: "transactional",
+      recipient: c.recipient,
+      member_id: member.id,
+      dedupe_key: `member_created:${member.id}:${c.channel}`,
+      force: true,
+      source_caller: "register-member",
+      payload: {
         ...(c.channel === "email"
           ? {
-              payload: {
-                subject: `Welcome to The Incline Life, ${reg.full_name}!`,
-                body: welcomeFallback,
-                use_branded_template: true,
-              },
+              subject: `Welcome to The Incline Life, ${reg.full_name}!`,
+              use_branded_template: true,
             }
           : {}),
-        fallback_body: welcomeFallback,
+        body: welcomeFallback,
+        variables: { ...welcomeVars, event_key: "member_created" },
       },
-    }).catch((e) => captureEdgeError("register-member", e, { route: `welcome_dispatch_${c.channel}` })),
-  )));
+    };
+    let reason = "";
+    try {
+      const r = await admin.functions.invoke("dispatch-communication", { body });
+      const status = (r as { data?: { status?: string; reason?: string } })?.data?.status;
+      const err = (r as { error?: unknown })?.error;
+      if (!err && (status === "sent" || status === "queued" || status === "deduped")) return;
+      if (status === "suppressed") return; // preference / kill-switch — terminal
+      reason = String(
+        (r as { data?: { reason?: string } })?.data?.reason ??
+          (err instanceof Error ? err.message : err ?? "dispatch_failed"),
+      );
+    } catch (e) {
+      reason = e instanceof Error ? e.message : String(e);
+    }
+    await captureEdgeError("register-member", new Error(reason), {
+      route: `welcome_dispatch_${c.channel}`,
+    });
+    await admin.from("communication_retry_queue").insert({
+      branch_id: reg.branch_id,
+      member_id: member.id,
+      type: c.channel,
+      recipient: c.recipient,
+      subject: c.channel === "email" ? `Welcome to The Incline Life, ${reg.full_name}!` : null,
+      content: welcomeFallback,
+      status: "pending",
+      retry_count: 0,
+      max_retries: 3,
+      next_retry_at: new Date(Date.now() + 60_000).toISOString(),
+      last_error: reason.slice(0, 500),
+      metadata: { category: "transactional", event_key: "member_created", source: "register-member" },
+    });
+  })));
+
 
 
 
