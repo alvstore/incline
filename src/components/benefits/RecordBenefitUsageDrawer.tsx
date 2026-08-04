@@ -73,6 +73,16 @@ export function RecordBenefitUsageDrawer({
     },
   });
 
+  // Keep the preselected card in sync when the drawer is reopened from a card
+  useEffect(() => {
+    if (open) {
+      form.reset({ benefit_type: preselectedBenefit || '', usage_count: 1, notes: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedBenefit]);
+
+
+
   const selectedBenefitValue = form.watch('benefit_type');
   // Match by benefit_type_id if it looks like a UUID, otherwise by enum
   const selectedBalance = availableBenefits.find(b => 
