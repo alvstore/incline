@@ -1216,6 +1216,13 @@ GENERAL RULES:
     // (location/pricing/timeline), prepend the canned answer before re-asking.
     const _pivot = intentPivotPrefix(ctx.messageContent);
 
+    // v4.8.0 — the capture prompt never wins over a real question, and no
+    // single field is ever asked more than twice. When a step is deferred we
+    // fall through to the LLM, which answers naturally and nudges softly.
+    const _userAsked = userAskedSomething(ctx.messageContent);
+    const _defer = (asks: number) => asks >= 2 || (_userAsked && !_pivot);
+
+
     // Step 1: nothing captured → ask name, but soften per turn count (v4.6.0).
     if (!hasName) {
       const askTurns = countPriorNameAsks(history);
