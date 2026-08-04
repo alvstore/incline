@@ -4,11 +4,14 @@ import {
   fetchBenefitUsage,
   fetchBenefitUsageHistory,
   recordBenefitUsage,
+  recordBenefitUsageAtomic,
   validateBenefitUsage,
   calculateBenefitBalances,
   type MembershipWithBenefits,
   type MemberBenefitBalance,
 } from '@/services/benefitService';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
+
 import type { Database } from '@/integrations/supabase/types';
 
 type BenefitType = Database['public']['Enums']['benefit_type'];
