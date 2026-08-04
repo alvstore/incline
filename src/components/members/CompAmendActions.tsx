@@ -53,8 +53,7 @@ export function CompAmendActions({ comp, compact = true }: CompAmendActionsProps
     },
     onSuccess: () => {
       toast.success(mode === 'revoke' ? 'Gift revoked' : 'Gift updated');
-      ['member-comps', 'member-comps-profile', 'member-comps-tracking', 'member-benefit-credits', 'member-details', 'benefit-balances']
-        .forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+      invalidateBenefitData(queryClient);
       invalidateMembersData(queryClient);
       setMode(null);
       setReason('');
