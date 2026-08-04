@@ -1,12 +1,14 @@
-// mips-face-parity v1.1.0
+// mips-face-parity v1.2.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
-// turnstile can end up with a different face count (e.g. Gate 1 = 41,
-// Gate 2 = 31) when a syncPerson dispatch silently failed for one device.
+// turnstile can end up with a different face count (e.g. Gate 1 = 69,
+// Gate 2 = 70) when a syncPerson dispatch silently failed for one device.
 //
 // Actions:
 //   { action: "report", branch_id? }  → per-device persons/faces + server photo count
+//   { action: "audit", branch_id }    → NAMED list of who is missing a face per gate,
+//        read from the mips_device_face_state ledger written by mips-face-sweep.
 //   { action: "resync", branch_id?, device_ids?: number[] }
 //        → re-dispatch every person that HAS a photo to the given devices
 //          (defaults to all devices on the branch).
