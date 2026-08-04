@@ -240,10 +240,10 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
     onSuccess: () => {
       if (isManagerOrAbove) {
         toast.success(`Comp sessions granted successfully`);
-        queryClient.invalidateQueries({ queryKey: ['member-comps'] });
-        queryClient.invalidateQueries({ queryKey: ['member-details'] });
+        invalidateBenefitData(queryClient);
         invalidateMembersData(queryClient);
       } else {
+
         toast.success(`Comp sessions request submitted for approval`);
         queryClient.invalidateQueries({ queryKey: ['approval-queue'] });
         queryClient.invalidateQueries({ queryKey: ['approval-stats'] });
