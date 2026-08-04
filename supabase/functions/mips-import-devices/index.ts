@@ -63,7 +63,16 @@ Deno.serve(async (req) => {
     const rows: any[] = listJson.rows || listJson.data || [];
     if (!Array.isArray(rows)) return json({ error: "MIPS returned no device list" }, 502);
 
+    // Callback URLs (record upload / heartbeat / person registration) are wiped
+    // by a device factory reset. We re-assert them here on every import so the
+    // fleet self-heals — and we report which gates still refuse to keep them,
+    // because on firmware 1.42.x these fields are owned by the terminal's own
+    // settings screen and the server-side PUT is silently ignored.
+    const callbackBase = `${SUPA_URL}/functions/v1/mips-webhook-receiver`;
+    const callbacks: Array<Record<string, unknown>> = [];
+
     let imported = 0, updated = 0, skipped = 0;
+
     for (const d of rows) {
       const sn: string = d.deviceKey || d.sn || d.serialNumber || "";
       if (!sn) { skipped++; continue; }
