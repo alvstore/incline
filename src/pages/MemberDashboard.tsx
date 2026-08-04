@@ -16,6 +16,7 @@ import { format, differenceInDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { getBenefitIcon } from '@/lib/benefitIcons';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useState } from 'react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
