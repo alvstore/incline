@@ -72,6 +72,11 @@ export async function uploadAndSyncPersonPhoto({
   personName,
   person,
 }: UploadPersonPhotoArgs): Promise<UploadPersonPhotoResult> {
+  // Reject photos the turnstiles will never be able to enrol, before they
+  // enter the pipeline and fail silently at the gate days later.
+  const check = await checkPersonPhoto(file);
+  if (!check.ok) throw new Error(check.reason || 'This photo cannot be used for face enrolment.');
+
   const compressed = await compressImageFile(file);
 
   const filePath = `${userId}/avatar-${Date.now()}.jpg`;
@@ -100,11 +105,14 @@ export async function uploadAndSyncPersonPhoto({
       .update({ biometric_photo_path: path, biometric_photo_url: avatarUrl })
       .eq('id', ref.entityId);
     await queueForEntity(ref, signedUrl, personName);
+    // A new photo makes a previously rejected enrolment eligible again.
+    await requeueFaceEnrolment(ref);
     queued = true;
   } catch (e: unknown) {
     queueError = e instanceof Error ? e.message : String(e);
     console.warn('Biometric queue failed:', queueError);
   }
+
 
   return { avatarUrl, person: ref, queued, queueError };
 }
