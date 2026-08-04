@@ -8684,6 +8684,78 @@ export type Database = {
           },
         ]
       }
+      mips_device_face_state: {
+        Row: {
+          attempts: number
+          branch_id: string
+          created_at: string
+          device_id: string | null
+          device_name: string | null
+          enrolled_at: string | null
+          id: string
+          last_attempt_at: string | null
+          mips_device_id: number
+          person_id: string | null
+          person_name: string | null
+          person_sn: string
+          person_type: string
+          reason: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          branch_id: string
+          created_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          mips_device_id: number
+          person_id?: string | null
+          person_name?: string | null
+          person_sn: string
+          person_type: string
+          reason?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          branch_id?: string
+          created_at?: string
+          device_id?: string | null
+          device_name?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          mips_device_id?: number
+          person_id?: string | null
+          person_name?: string | null
+          person_sn?: string
+          person_type?: string
+          reason?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mips_device_face_state_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mips_device_face_state_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "access_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mips_person_aliases: {
         Row: {
           created_at: string
