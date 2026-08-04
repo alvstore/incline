@@ -568,7 +568,10 @@ export default function PublicRegistration() {
                 )}
               </Field>
 
-              <Field label="Any health conditions or injuries? (tap all that apply)">
+              <Field
+                label="Any health conditions or injuries? * (tap all that apply)"
+                error={healthError ?? undefined}
+              >
                 <div className="flex flex-wrap gap-2">
                   {HEALTH_CONDITION_OPTIONS.map((opt) => {
                     const checked = healthConditions.includes(opt);
@@ -576,11 +579,16 @@ export default function PublicRegistration() {
                       <button
                         type="button"
                         key={opt}
-                        onClick={() =>
-                          setHealthConditions((prev) =>
-                            checked ? prev.filter((p) => p !== opt) : [...prev, opt]
-                          )
-                        }
+                        onClick={() => {
+                          setHealthError(null);
+                          setHealthConditions((prev) => {
+                            if (opt === NO_HEALTH_CONDITION) return checked ? [] : [NO_HEALTH_CONDITION];
+                            const next = checked
+                              ? prev.filter((p) => p !== opt)
+                              : [...prev.filter((p) => p !== NO_HEALTH_CONDITION), opt];
+                            return next;
+                          });
+                        }}
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                           checked
                             ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.6)]"
@@ -602,6 +610,7 @@ export default function PublicRegistration() {
                 )}
                 <p className="mt-2 text-[11px] text-primary-foreground/50">Confidential — only your trainer sees this.</p>
               </Field>
+
 
               <LiquidButton type="submit" size="lg" className="w-full">
                 Continue <ArrowRight className="h-4 w-4" />
