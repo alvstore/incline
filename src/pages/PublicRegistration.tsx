@@ -101,6 +101,8 @@ export default function PublicRegistration() {
   const [verifyStage, setVerifyStage] = useState("Verifying code...");
   const [healthConditions, setHealthConditions] = useState<string[]>(initialDraft?.healthConditions ?? []);
   const [healthOther, setHealthOther] = useState(initialDraft?.healthOther ?? "");
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [parqError, setParqError] = useState<string | null>(null);
   const [showMoreGoals, setShowMoreGoals] = useState(false);
   const [draftRestored, setDraftRestored] = useState(!!initialDraft);
   const sigRef = useRef<SignaturePadHandle>(null);
