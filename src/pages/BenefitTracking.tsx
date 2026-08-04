@@ -209,35 +209,49 @@ export default function BenefitTracking() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Benefit Tracking</h1>
-          <p className="text-muted-foreground">
-            Record and track member benefit usage (sauna, ice bath, etc.)
-          </p>
+        {/* Hero */}
+        <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-primary-foreground shadow-lg shadow-indigo-500/20">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Recovery &amp; Benefits</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight">Benefit Tracking</h1>
+              <p className="mt-1 text-sm opacity-90">
+                Search a member, record sauna / ice bath / scan usage, sell add-ons and manage gifts.
+              </p>
+            </div>
+            {selectedMember && (
+              <Button
+                variant="secondary"
+                className="cursor-pointer rounded-xl"
+                onClick={() => { setSelectedMember(null); setSearchQuery(''); }}
+              >
+                Change member
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Search Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Find Member</CardTitle>
-            <CardDescription>
-              Search by name, email, phone, or member code
-            </CardDescription>
+        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Find member</CardTitle>
+            <CardDescription>Search by name, email, phone, or member code</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                aria-label="Search members"
                 placeholder="Search members..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="h-11 rounded-xl pl-10"
               />
             </div>
 
             {/* Search Results */}
             {searchQuery.length >= 2 && searchResults && searchResults.length > 0 && (
-              <div className="mt-3 border rounded-md divide-y">
+              <div className="mt-3 divide-y overflow-hidden rounded-xl border">
                 {searchResults.map((member) => (
                   <button
                     key={member.id}
@@ -245,70 +259,108 @@ export default function BenefitTracking() {
                       setSelectedMember(member);
                       setSearchQuery('');
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-center justify-between"
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <div>
-                      <div className="font-medium">
-                        {member.profiles?.full_name || member.member_code}
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                        {initials(member.profiles?.full_name)}
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {member.profiles?.email || member.profiles?.phone || member.member_code}
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">
+                          {member.profiles?.full_name || member.member_code}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {member.profiles?.email || member.profiles?.phone || '—'}
+                          {member.branch_name ? ` • ${member.branch_name}` : ''}
+                        </div>
                       </div>
                     </div>
-                    <Badge variant="outline">{member.member_code}</Badge>
+                    <Badge variant="outline" className="shrink-0 rounded-full">{member.member_code}</Badge>
                   </button>
                 ))}
               </div>
             )}
 
             {searchQuery.length >= 2 && isSearching && (
-              <div className="mt-3 text-center text-muted-foreground">Searching...</div>
+              <div className="mt-3 text-center text-sm text-muted-foreground">Searching...</div>
             )}
 
             {searchQuery.length >= 2 && !isSearching && searchResults?.length === 0 && (
-              <div className="mt-3 text-center text-muted-foreground">No members found</div>
+              <div className="mt-3 text-center text-sm text-muted-foreground">No members found</div>
             )}
           </CardContent>
         </Card>
+
+        {/* Empty state */}
+        {!selectedMember && (
+          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+            <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                <Users className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold">No member selected</p>
+                <p className="text-sm text-muted-foreground">
+                  Search above to view balances, gifts and usage history.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Selected Member Section */}
         {selectedMember && (
           <>
             {/* Member Header */}
-            <Card>
+            <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-6 w-6 text-primary" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                      {initials(selectedMember.profiles?.full_name)}
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold">
                         {selectedMember.profiles?.full_name || selectedMember.member_code}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        {selectedMember.member_code} • {selectedMember.profiles?.email}
+                        {selectedMember.member_code}
+                        {selectedMember.profiles?.email ? ` • ${selectedMember.profiles.email}` : ''}
+                        {selectedMember.branch_name ? ` • ${selectedMember.branch_name}` : ''}
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setAddOnOpen(true)} disabled={!selectedMemberMeta?.branch_id || !membership}>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      className="cursor-pointer rounded-xl"
+                      onClick={() => setGiftOpen(true)}
+                      disabled={!selectedMemberMeta?.branch_id}
+                    >
+                      <Gift className="mr-2 h-4 w-4" /> Grant Gift
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="cursor-pointer rounded-xl"
+                      onClick={() => setAddOnOpen(true)}
+                      disabled={!selectedMemberMeta?.branch_id || !membership}
+                    >
                       Sell Add-On
                     </Button>
-                    <Button onClick={() => handleRecordUsage()}>
+                    <Button className="cursor-pointer rounded-xl" onClick={() => handleRecordUsage()}>
                       Record Usage
                     </Button>
                   </div>
                 </div>
 
                 {membership && (
-                  <div className="mt-4 p-3 bg-muted rounded-md">
+                  <div className="mt-4 grid gap-2 rounded-xl bg-muted p-3 sm:grid-cols-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Current Plan:</span>
+                      <span className="text-muted-foreground">Current plan</span>
                       <span className="font-medium">{membership.plan.name}</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm mt-1">
-                      <span className="text-muted-foreground">Valid Until:</span>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Valid until</span>
                       <span className="font-medium">{format(new Date(membership.end_date), 'dd MMM yyyy')}</span>
                     </div>
                   </div>
@@ -317,7 +369,7 @@ export default function BenefitTracking() {
             </Card>
 
             {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               <StatCard
                 title="Total Benefits"
                 value={totalBenefits}
@@ -341,6 +393,7 @@ export default function BenefitTracking() {
                 className={totalGiftSessions > 0 ? 'border-warning/50' : ''}
               />
             </div>
+
 
             {/* Tabs for Benefits & History */}
             <Tabs defaultValue="benefits" className="space-y-4">
