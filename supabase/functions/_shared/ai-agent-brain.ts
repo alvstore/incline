@@ -1294,7 +1294,7 @@ GENERAL RULES:
       return { replyText: reply, leadCaptured: false, leadId: null, handoffTriggered: false, skipped: false };
     }
 
-    if (hasName && hasEmail && hasGoal && !hasPlanInterest) {
+    if (hasName && hasEmail && hasGoal && !hasPlanInterest && !_defer(countPriorAsks(history, PLAN_ASK_DETECT_RE))) {
       // v1.2.0 — if we have an UNconfirmed plan_interest (e.g. LLM previously
       // inferred "annual" from "Founding"), soften the prompt to a confirm ask
       // so the user explicitly taps one of the four durations.
