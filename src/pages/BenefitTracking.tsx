@@ -137,6 +137,9 @@ export default function BenefitTracking() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_comps', filter: `member_id=eq.${selectedMember.id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['member-comps-tracking', selectedMember.id] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_benefit_credits', filter: `member_id=eq.${selectedMember.id}` }, () => {
+        invalidateBenefitData(queryClient);
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'benefit_usage' }, () => {
         if (membership?.id) {
           queryClient.invalidateQueries({ queryKey: ['benefit-usage', membership.id] });
