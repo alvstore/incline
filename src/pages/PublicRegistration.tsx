@@ -468,7 +468,7 @@ export default function PublicRegistration() {
               </Field>
 
 
-              <Field label="Address">
+              <Field label="Address *" error={form.formState.errors.address?.message}>
                 <Input
                   className={fieldInputCls}
                   placeholder="House / street / area"
@@ -477,12 +477,16 @@ export default function PublicRegistration() {
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="City"><Input className={fieldInputCls} {...form.register("city")} /></Field>
-                <Field label="Pincode"><Input className={fieldInputCls} {...form.register("postal_code")} /></Field>
+                <Field label="City *" error={form.formState.errors.city?.message}>
+                  <Input className={fieldInputCls} {...form.register("city")} />
+                </Field>
+                <Field label="Pincode *" error={form.formState.errors.postal_code?.message}>
+                  <Input className={fieldInputCls} inputMode="numeric" maxLength={6} {...form.register("postal_code")} />
+                </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Government ID type">
+                <Field label="Government ID type *" error={form.formState.errors.government_id_type?.message}>
                   <select className={fieldSelectCls} {...form.register("government_id_type")}>
                     <option value="">Select</option>
                     <option value="aadhaar">Aadhaar</option>
@@ -492,20 +496,26 @@ export default function PublicRegistration() {
                     <option value="voter_id">Voter ID</option>
                   </select>
                 </Field>
-                <Field label="ID number" error={form.formState.errors.government_id_number?.message}>
+                <Field label="ID number *" error={form.formState.errors.government_id_number?.message}>
                   <Input className={fieldInputCls} placeholder="XXXX XXXX XXXX" {...form.register("government_id_number")} />
                 </Field>
               </div>
 
 
-              <Field label="Emergency contact name">
+              <Field label="Emergency contact name *" error={form.formState.errors.emergency_contact_name?.message}>
                 <Input className={fieldInputCls} {...form.register("emergency_contact_name")} />
               </Field>
-              <Field label="Emergency contact phone">
-                <Input className={fieldInputCls} {...form.register("emergency_contact_phone")} />
+              <Field label="Emergency contact phone *" error={form.formState.errors.emergency_contact_phone?.message}>
+                <PhoneInput
+                  className="bg-card/5 border-primary-foreground/10 text-primary-foreground placeholder:text-primary-foreground/40"
+                  value={form.watch("emergency_contact_phone")}
+                  onChange={(v) =>
+                    form.setValue("emergency_contact_phone", v ? `+91${v}` : "", { shouldValidate: true })
+                  }
+                />
               </Field>
 
-              <Field label="Primary fitness goal (optional)">
+              <Field label="Primary fitness goal *" error={form.formState.errors.fitness_goals?.message}>
                 <div className="grid grid-cols-2 gap-2.5">
                   {PRIMARY_GOALS.map((g) => {
                     const Icon = g.icon;
