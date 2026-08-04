@@ -296,17 +296,17 @@ async function uploadPhoto(
     let photoBytes = new Uint8Array(await photoRes.arrayBuffer());
     let sizeKB = Math.round(photoBytes.length / 1024);
 
-    // Never fail on size — MIPS caps face photos at 400KB, so re-encode
-    // server-side (downscale + iterative JPEG quality) instead of aborting.
+    // Never fail on size and never decode here — ask Storage for a device-safe
+    // derivative instead (see fetchDeviceReadyBytes).
     if (photoBytes.length > MAX_PHOTO_BYTES) {
-      const normalized = await normalizePhotoBytes(photoBytes);
+      const normalized = await fetchDeviceReadyBytes(supabase, url);
       if (!normalized) {
         return {
           success: false,
           message: `needs_better_source: ${sizeKB}KB photo cannot fit 400KB without dropping below ${MIN_FACE_EDGE}px / q${MIN_FACE_QUALITY} face-safety floors`,
         };
       }
-      console.log(`Photo normalized: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
+      console.log(`Photo normalized via storage transform: ${sizeKB}KB → ${Math.round(normalized.length / 1024)}KB`);
       photoBytes = normalized;
       sizeKB = Math.round(photoBytes.length / 1024);
     }
