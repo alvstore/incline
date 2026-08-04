@@ -193,6 +193,8 @@ export async function recordBenefitUsageAtomic(params: {
   benefitTypeId?: string | null;
   usageCount?: number;
   notes?: string;
+  usageDate?: string | null;
+  usageTime?: string | null;
 }): Promise<RecordUsageResult> {
   const { data, error } = await supabase.rpc('record_benefit_usage', {
     p_membership_id: params.membershipId,
@@ -201,10 +203,13 @@ export async function recordBenefitUsageAtomic(params: {
     p_benefit_type_id: params.benefitTypeId || null,
     p_usage_count: params.usageCount ?? 1,
     p_notes: params.notes || null,
-  });
+    p_usage_date: params.usageDate || null,
+    p_usage_time: params.usageTime || null,
+  } as any);
   if (error) throw error;
   return (data || { success: false, error: 'Unknown error' }) as unknown as RecordUsageResult;
 }
+
 
 // Record a benefit usage (legacy direct insert)
 export async function recordBenefitUsage(

@@ -35,11 +35,22 @@ import type { Database } from '@/integrations/supabase/types';
 
 type BenefitType = Database['public']['Enums']['benefit_type'];
 
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const formSchema = z.object({
   benefit_type: z.string().min(1, 'Please select a benefit'),
   usage_count: z.coerce.number().min(1, 'Minimum 1').max(10, 'Maximum 10'),
+  usage_date: z
+    .string()
+    .min(1, 'Please select a date')
+    .refine((v) => v <= todayStr(), 'Usage date cannot be in the future'),
+  usage_time: z.string().optional(),
   notes: z.string().optional(),
 });
+
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -69,6 +80,8 @@ export function RecordBenefitUsageDrawer({
     defaultValues: {
       benefit_type: preselectedBenefit || '',
       usage_count: 1,
+      usage_date: todayStr(),
+      usage_time: '',
       notes: '',
     },
   });
@@ -76,10 +89,17 @@ export function RecordBenefitUsageDrawer({
   // Keep the preselected card in sync when the drawer is reopened from a card
   useEffect(() => {
     if (open) {
-      form.reset({ benefit_type: preselectedBenefit || '', usage_count: 1, notes: '' });
+      form.reset({
+        benefit_type: preselectedBenefit || '',
+        usage_count: 1,
+        usage_date: todayStr(),
+        usage_time: '',
+        notes: '',
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, preselectedBenefit]);
+
 
 
 
@@ -105,7 +125,10 @@ export function RecordBenefitUsageDrawer({
         usageCount: values.usage_count,
         notes: values.notes,
         benefitTypeId: matchedBalance?.benefit_type_id || undefined,
+        usageDate: values.usage_date,
+        usageTime: values.usage_time || null,
       });
+
 
       if (!result?.success) {
         toast.error(result?.error || 'Cannot record usage');
@@ -200,6 +223,44 @@ export function RecordBenefitUsageDrawer({
                   </div>
                 </div>
               )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="usage_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Usage Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          max={todayStr()}
+                          className="h-11 rounded-xl"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Backdate within the membership period</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="usage_time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Time (Optional)</FormLabel>
+                      <FormControl>
+                        <Input type="time" className="h-11 rounded-xl" {...field} />
+                      </FormControl>
+                      <FormDescription>Leave blank if unknown</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
 
               <FormField
                 control={form.control}
