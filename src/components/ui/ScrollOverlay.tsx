@@ -29,11 +29,11 @@ const ScrollOverlay = () => {
       <section className="h-[100dvh] flex items-center relative px-4">
         <div className="w-full max-w-7xl mx-auto flex justify-end">
           <div className="max-w-md text-right mr-8 md:mr-32">
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-foreground leading-tight mb-6 tracking-tight">
               WHERE <span className="text-primary">GLOBAL STRENGTH</span>
               <br />
               MEETS <span className="text-primary">CLINICAL SERENITY.</span>
-            </h1>
+            </h2>
             <p className="text-muted-foreground text-base leading-relaxed">
               Rajasthan's new benchmark for excellence. An elevated sanctuary designed for the driven—delivering Italian
               biomechanics in every rep, and advanced restoration in every recovery.
