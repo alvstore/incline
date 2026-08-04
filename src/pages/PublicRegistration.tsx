@@ -35,6 +35,7 @@ import {
   PRIMARY_GOALS,
   MORE_GOALS,
   HEALTH_CONDITION_OPTIONS,
+  NO_HEALTH_CONDITION,
 } from "@/lib/registration/healthQuestions";
 
 const detailsSchema = z.object({
@@ -44,17 +45,20 @@ const detailsSchema = z.object({
   date_of_birth: z.string().min(1, "DOB required"),
   gender: z.enum(["male", "female", "other"]),
   branch_id: z.string().uuid("Select a branch"),
-  city: z.string().optional(),
+  city: z.string().trim().min(2, "City required").max(80),
   state: z.string().optional(),
-  postal_code: z.string().optional(),
-  address: z.string().optional(),
-  government_id_type: z.string().optional(),
-  government_id_number: z.string().trim().max(30).optional(),
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: z.string().optional(),
-  fitness_goals: z.string().optional(),
+  postal_code: z.string().trim().regex(/^\d{6}$/, "Enter a valid 6-digit pincode"),
+  address: z.string().trim().min(6, "Address required").max(240),
+  government_id_type: z.string().min(1, "Select an ID type"),
+  government_id_number: z.string().trim().min(4, "ID number required").max(30),
+  emergency_contact_name: z.string().trim().min(2, "Emergency contact name required").max(120),
+  emergency_contact_phone: z.string().regex(/^\+91\d{10}$/, "Enter a valid +91 number"),
+  fitness_goals: z.string().trim().min(1, "Select a fitness goal"),
   health_conditions: z.string().optional(),
   health_conditions_other: z.string().optional(),
+}).refine((v) => v.emergency_contact_phone !== v.phone, {
+  path: ["emergency_contact_phone"],
+  message: "Emergency contact must differ from your own number",
 });
 type DetailsForm = z.infer<typeof detailsSchema>;
 
@@ -98,6 +102,8 @@ export default function PublicRegistration() {
   const [verifyStage, setVerifyStage] = useState("Verifying code...");
   const [healthConditions, setHealthConditions] = useState<string[]>(initialDraft?.healthConditions ?? []);
   const [healthOther, setHealthOther] = useState(initialDraft?.healthOther ?? "");
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [parqError, setParqError] = useState<string | null>(null);
   const [showMoreGoals, setShowMoreGoals] = useState(false);
   const [draftRestored, setDraftRestored] = useState(!!initialDraft);
   const sigRef = useRef<SignaturePadHandle>(null);
@@ -238,6 +244,16 @@ export default function PublicRegistration() {
   }, [healthConditions, healthOther]);
 
   const submitDetails = form.handleSubmit((values) => {
+    if (healthConditions.length === 0) {
+      setHealthError("Select at least one option (choose “None” if you have no conditions)");
+      toast.error("Please answer the health conditions question");
+      return;
+    }
+    if (healthConditions.includes("Other") && !healthOther.trim()) {
+      setHealthError("Please specify your other condition");
+      return;
+    }
+    setHealthError(null);
     const health = buildHealthConditions();
     const merged: DetailsForm = { ...values, health_conditions: health };
     // Mirror into the form so the autosaved draft carries it through a refresh.
@@ -246,7 +262,17 @@ export default function PublicRegistration() {
     setStep("parq");
   });
 
-  const submitParq = () => setStep("sign");
+  const parqComplete = PARQ_QUESTIONS.every((_, i) => parq[`q${i}`] === "yes" || parq[`q${i}`] === "no");
+
+  const submitParq = () => {
+    if (!parqComplete) {
+      setParqError("Please answer every question before continuing");
+      toast.error("Answer all health check questions");
+      return;
+    }
+    setParqError(null);
+    setStep("sign");
+  };
 
   const submitSign = () => {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
@@ -443,7 +469,7 @@ export default function PublicRegistration() {
               </Field>
 
 
-              <Field label="Address">
+              <Field label="Address *" error={form.formState.errors.address?.message}>
                 <Input
                   className={fieldInputCls}
                   placeholder="House / street / area"
@@ -452,12 +478,16 @@ export default function PublicRegistration() {
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="City"><Input className={fieldInputCls} {...form.register("city")} /></Field>
-                <Field label="Pincode"><Input className={fieldInputCls} {...form.register("postal_code")} /></Field>
+                <Field label="City *" error={form.formState.errors.city?.message}>
+                  <Input className={fieldInputCls} {...form.register("city")} />
+                </Field>
+                <Field label="Pincode *" error={form.formState.errors.postal_code?.message}>
+                  <Input className={fieldInputCls} inputMode="numeric" maxLength={6} {...form.register("postal_code")} />
+                </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Government ID type">
+                <Field label="Government ID type *" error={form.formState.errors.government_id_type?.message}>
                   <select className={fieldSelectCls} {...form.register("government_id_type")}>
                     <option value="">Select</option>
                     <option value="aadhaar">Aadhaar</option>
@@ -467,20 +497,26 @@ export default function PublicRegistration() {
                     <option value="voter_id">Voter ID</option>
                   </select>
                 </Field>
-                <Field label="ID number" error={form.formState.errors.government_id_number?.message}>
+                <Field label="ID number *" error={form.formState.errors.government_id_number?.message}>
                   <Input className={fieldInputCls} placeholder="XXXX XXXX XXXX" {...form.register("government_id_number")} />
                 </Field>
               </div>
 
 
-              <Field label="Emergency contact name">
+              <Field label="Emergency contact name *" error={form.formState.errors.emergency_contact_name?.message}>
                 <Input className={fieldInputCls} {...form.register("emergency_contact_name")} />
               </Field>
-              <Field label="Emergency contact phone">
-                <Input className={fieldInputCls} {...form.register("emergency_contact_phone")} />
+              <Field label="Emergency contact phone *" error={form.formState.errors.emergency_contact_phone?.message}>
+                <PhoneInput
+                  className="bg-card/5 border-primary-foreground/10 text-primary-foreground placeholder:text-primary-foreground/40"
+                  value={form.watch("emergency_contact_phone")}
+                  onChange={(v) =>
+                    form.setValue("emergency_contact_phone", v ? `+91${v}` : "", { shouldValidate: true })
+                  }
+                />
               </Field>
 
-              <Field label="Primary fitness goal (optional)">
+              <Field label="Primary fitness goal *" error={form.formState.errors.fitness_goals?.message}>
                 <div className="grid grid-cols-2 gap-2.5">
                   {PRIMARY_GOALS.map((g) => {
                     const Icon = g.icon;
@@ -533,7 +569,10 @@ export default function PublicRegistration() {
                 )}
               </Field>
 
-              <Field label="Any health conditions or injuries? (tap all that apply)">
+              <Field
+                label="Any health conditions or injuries? * (tap all that apply)"
+                error={healthError ?? undefined}
+              >
                 <div className="flex flex-wrap gap-2">
                   {HEALTH_CONDITION_OPTIONS.map((opt) => {
                     const checked = healthConditions.includes(opt);
@@ -541,11 +580,16 @@ export default function PublicRegistration() {
                       <button
                         type="button"
                         key={opt}
-                        onClick={() =>
-                          setHealthConditions((prev) =>
-                            checked ? prev.filter((p) => p !== opt) : [...prev, opt]
-                          )
-                        }
+                        onClick={() => {
+                          setHealthError(null);
+                          setHealthConditions((prev) => {
+                            if (opt === NO_HEALTH_CONDITION) return checked ? [] : [NO_HEALTH_CONDITION];
+                            const next = checked
+                              ? prev.filter((p) => p !== opt)
+                              : [...prev.filter((p) => p !== NO_HEALTH_CONDITION), opt];
+                            return next;
+                          });
+                        }}
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                           checked
                             ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.6)]"
@@ -568,6 +612,7 @@ export default function PublicRegistration() {
                 <p className="mt-2 text-[11px] text-primary-foreground/50">Confidential — only your trainer sees this.</p>
               </Field>
 
+
               <LiquidButton type="submit" size="lg" className="w-full">
                 Continue <ArrowRight className="h-4 w-4" />
               </LiquidButton>
@@ -578,15 +623,20 @@ export default function PublicRegistration() {
             <div className="space-y-5">
               <p className="text-sm text-primary-foreground/70">Quick health check — answer honestly to keep you safe.</p>
               <div className="space-y-3">
-                {PARQ_QUESTIONS.map((q, i) => (
-                  <div key={i} className="rounded-2xl border border-primary-foreground/10 bg-card/5 p-4">
+                {PARQ_QUESTIONS.map((q, i) => {
+                  const unanswered = !!parqError && !parq[`q${i}`];
+                  return (
+                  <div
+                    key={i}
+                    className={`rounded-2xl border bg-card/5 p-4 ${unanswered ? "border-destructive/60" : "border-primary-foreground/10"}`}
+                  >
                     <p className="mb-3 text-sm font-medium text-primary-foreground/90">{q}</p>
                     <div className="flex gap-2">
                       {(["no", "yes"] as const).map((v) => (
                         <button
                           key={v}
                           type="button"
-                          onClick={() => setParq((p) => ({ ...p, [`q${i}`]: v }))}
+                          onClick={() => { setParqError(null); setParq((p) => ({ ...p, [`q${i}`]: v })); }}
                           className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                             parq[`q${i}`] === v
                               ? v === "yes"
@@ -600,8 +650,10 @@ export default function PublicRegistration() {
                       ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
+              {parqError && <p className="text-xs font-medium text-destructive">{parqError}</p>}
               <div className="flex gap-3 pt-2">
                 <LiquidButton type="button" variant="glass" size="lg" className="flex-1" onClick={() => setStep("details")}>
                   <ArrowLeft className="h-4 w-4" /> Back

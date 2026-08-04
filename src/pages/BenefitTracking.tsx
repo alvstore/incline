@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatCard } from '@/components/ui/stat-card';
@@ -30,6 +31,7 @@ interface MemberSearchResult {
   member_code: string;
   branch_name?: string | null;
   branch_code?: string | null;
+  avatar_url?: string | null;
   profiles: {
     full_name: string;
     email: string | null;
@@ -90,19 +92,34 @@ export default function BenefitTracking() {
       }
 
       // Transform the result to match expected format
-      return (data || [])
+      const rows = (data || [])
         .filter((row: any) => row.member_status === 'active') // Only active members (using new RPC field)
         .map((row: any) => ({
           id: row.id,
           member_code: row.member_code,
           branch_name: row.branch_name ?? null,
           branch_code: row.branch_code ?? null,
+          avatar_url: row.avatar_url ?? null,
           profiles: {
             full_name: row.full_name,
             email: row.email,
             phone: row.phone
           }
-        }));
+        })) as MemberSearchResult[];
+
+      // search_members does not return photos — enrich with member avatars.
+      if (rows.length > 0) {
+        const { data: photoRows } = await supabase
+          .from('members')
+          .select('id, profiles:user_id(avatar_url)')
+          .in('id', rows.map((r) => r.id));
+        const photoMap = new Map(
+          (photoRows || []).map((p: any) => [p.id, p.profiles?.avatar_url ?? null]),
+        );
+        rows.forEach((r) => { r.avatar_url = photoMap.get(r.id) ?? null; });
+      }
+
+      return rows;
     },
     enabled: searchQuery.length >= 2,
   });
@@ -210,7 +227,7 @@ export default function BenefitTracking() {
     <AppLayout>
       <div className="space-y-6">
         {/* Hero */}
-        <div className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-primary-foreground shadow-lg shadow-indigo-500/20">
+        <div className="rounded-2xl bg-gradient-to-r from-primary to-primary/70 p-6 text-primary-foreground shadow-lg shadow-primary/20">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Recovery &amp; Benefits</p>
@@ -232,7 +249,7 @@ export default function BenefitTracking() {
         </div>
 
         {/* Search Section */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+        <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Find member</CardTitle>
             <CardDescription>Search by name, email, phone, or member code</CardDescription>
@@ -259,12 +276,15 @@ export default function BenefitTracking() {
                       setSelectedMember(member);
                       setSearchQuery('');
                     }}
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                        {initials(member.profiles?.full_name)}
-                      </div>
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarImage src={member.avatar_url || undefined} alt={member.profiles?.full_name || member.member_code} />
+                        <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+                          {initials(member.profiles?.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="min-w-0">
                         <div className="truncate font-medium">
                           {member.profiles?.full_name || member.member_code}
@@ -293,7 +313,7 @@ export default function BenefitTracking() {
 
         {/* Empty state */}
         {!selectedMember && (
-          <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 dark:shadow-none">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5">
             <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
                 <Users className="h-7 w-7 text-primary" />
@@ -312,13 +332,16 @@ export default function BenefitTracking() {
         {selectedMember && (
           <>
             {/* Member Header */}
-            <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10 dark:shadow-none">
+            <Card className="rounded-2xl border-0 shadow-lg shadow-foreground/5 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10">
               <CardContent className="pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {initials(selectedMember.profiles?.full_name)}
-                    </div>
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={selectedMember.avatar_url || undefined} alt={selectedMember.profiles?.full_name || selectedMember.member_code} />
+                      <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                        {initials(selectedMember.profiles?.full_name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
                       <h2 className="text-xl font-semibold">
                         {selectedMember.profiles?.full_name || selectedMember.member_code}

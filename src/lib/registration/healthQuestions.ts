@@ -29,7 +29,10 @@ export const ALL_GOALS: readonly string[] = [
   ...MORE_GOALS,
 ] as const;
 
+export const NO_HEALTH_CONDITION = "None / no known conditions";
+
 export const HEALTH_CONDITION_OPTIONS: readonly string[] = [
+  NO_HEALTH_CONDITION,
   "Diabetes",
   "Hypertension / High BP",
   "Heart condition",
