@@ -13683,6 +13683,10 @@ export type Database = {
         }
         Returns: Json
       }
+      amend_member_comp: {
+        Args: { p_comp_id: string; p_new_sessions: number; p_reason: string }
+        Returns: Json
+      }
       analytics_revenue_by_plan: {
         Args: {
           p_branch?: string
@@ -15189,6 +15193,10 @@ export type Database = {
       revoke_membership_free_days: {
         Args: { p_free_days_id: string }
         Returns: Json
+      }
+      safe_benefit_enum: {
+        Args: { p_code: string }
+        Returns: Database["public"]["Enums"]["benefit_type"]
       }
       search_command_bookings: {
         Args: { p_branch_id?: string; p_limit?: number; search_term: string }
