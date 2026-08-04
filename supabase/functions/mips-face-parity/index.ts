@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { action = "report", branch_id, device_ids, person_type, person_id } = body as {
-      action?: "report" | "resync" | "diagnose";
+      action?: "report" | "resync" | "diagnose" | "audit";
       branch_id?: string;
       device_ids?: number[];
       person_type?: "member" | "employee" | "trainer";
