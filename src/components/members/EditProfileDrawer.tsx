@@ -113,23 +113,22 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
 
     setIsUploading(true);
     try {
-      const fileName = `avatar-${Date.now()}.jpg`;
-      const filePath = `${member.user_id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true, contentType: file.type || 'image/jpeg' });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // Cache-bust so <img> reloads immediately.
-      const displayUrl = `${publicUrl}?v=${Date.now()}`;
-      setAvatarUrl(displayUrl);
-      toast.success('Avatar uploaded successfully');
+      // Single shared path: auto-remediate → avatars bucket → profiles.avatar_url
+      // → private biometric copy → members.biometric_photo_path → face sync queue.
+      const res = await uploadAndSyncPersonPhoto({
+        file,
+        userId: member.user_id,
+        personName: formData.full_name || profile?.full_name || 'Member',
+        person: { entityType: 'members', entityId: member.id },
+      });
+      setAvatarUrl(res.avatarUrl);
+      if (res.queued) {
+        toast.success('Photo updated — queued for gate face enrolment');
+      } else {
+        toast.warning(res.queueError
+          ? `Photo saved, but biometric sync failed: ${res.queueError}`
+          : 'Photo saved (biometric sync not queued)');
+      }
     } catch (error: any) {
       toast.error(error?.message || 'Failed to upload avatar');
       console.error('Upload error:', error);
@@ -137,6 +136,7 @@ export function EditProfileDrawer({ open, onOpenChange, member, profile }: EditP
       setIsUploading(false);
     }
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
