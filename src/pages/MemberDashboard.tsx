@@ -39,6 +39,16 @@ export default function MemberDashboard() {
   const [emblaRef] = useEmblaCarousel({ loop: true });
   const [addOnOpen, setAddOnOpen] = useState(false);
 
+  // Gifts/credits granted by staff should appear without a page refresh
+  useRealtimeInvalidate({
+    channel: 'member-dashboard-benefits',
+    tables: ['member_benefit_credits', 'member_comps'],
+    invalidateKeys: [['dashboard-benefit-credits'], ['my-entitlements']],
+    enabled: !!member?.id,
+  });
+
+
+
   // Fetch benefit add-on credits (purchased extras)
   const { data: benefitCredits = [] } = useQuery({
     queryKey: ['dashboard-benefit-credits', member?.id],
