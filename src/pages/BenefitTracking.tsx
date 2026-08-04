@@ -392,7 +392,9 @@ export default function BenefitTracking() {
                             <TableHead>Used</TableHead>
                             <TableHead>Remaining</TableHead>
                             <TableHead>Reason</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
+
                         </TableHeader>
                         <TableBody>
                           {comps.map((c: any) => {
@@ -421,7 +423,13 @@ export default function BenefitTracking() {
                                 <TableCell className="text-muted-foreground max-w-[240px] truncate">
                                   {c.reason || '-'}
                                 </TableCell>
+                                <TableCell>
+                                  <div className="flex justify-end">
+                                    <CompAmendActions comp={c} />
+                                  </div>
+                                </TableCell>
                               </TableRow>
+
                             );
                           })}
                         </TableBody>
