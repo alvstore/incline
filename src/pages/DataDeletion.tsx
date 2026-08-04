@@ -68,7 +68,7 @@ export default function DataDeletion() {
                 <ShieldX className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <CardTitle>Data Deletion Request</CardTitle>
+                <CardTitle asChild><h1>Data Deletion Request</h1></CardTitle>
                 <CardDescription>
                   Permanently remove your data from The Incline Life by Incline
                 </CardDescription>

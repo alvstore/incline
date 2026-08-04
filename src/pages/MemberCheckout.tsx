@@ -300,7 +300,7 @@ export default function MemberCheckout() {
           {isPaid ? (
             <div className="text-center py-4 space-y-3">
               <CheckCircle className="h-16 w-16 text-success mx-auto" />
-              <h3 className="text-lg font-semibold text-success">Payment Received</h3>
+              <h2 className="text-lg font-semibold text-success">Payment Received</h2>
               <p className="text-muted-foreground text-sm">Thank you! Your payment has been confirmed.</p>
               {profile && (
                 <Button variant="outline" onClick={() => navigate('/my-invoices')}>
