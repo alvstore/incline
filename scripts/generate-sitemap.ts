@@ -8,7 +8,6 @@ import { writeFileSync } from "fs";
 import { resolve } from "path";
 
 const BASE_URL = "https://theincline.in";
-const today = new Date().toISOString().slice(0, 10);
 
 interface SitemapEntry {
   path: string;
@@ -18,13 +17,13 @@ interface SitemapEntry {
 }
 
 const entries: SitemapEntry[] = [
-  { path: "/", changefreq: "weekly", priority: "1.0", lastmod: today },
-  { path: "/register", changefreq: "monthly", priority: "0.9", lastmod: today },
-  { path: "/feedback", changefreq: "monthly", priority: "0.6", lastmod: today },
-  { path: "/privacy-policy", changefreq: "yearly", priority: "0.3", lastmod: today },
-  { path: "/terms", changefreq: "yearly", priority: "0.3", lastmod: today },
-  { path: "/terms-of-service", changefreq: "yearly", priority: "0.3", lastmod: today },
-  { path: "/data-deletion", changefreq: "yearly", priority: "0.3", lastmod: today },
+  { path: "/", changefreq: "weekly", priority: "1.0" },
+  { path: "/register", changefreq: "monthly", priority: "0.9" },
+  { path: "/feedback", changefreq: "monthly", priority: "0.6" },
+  { path: "/privacy-policy", changefreq: "yearly", priority: "0.3" },
+  { path: "/terms", changefreq: "yearly", priority: "0.3" },
+  { path: "/terms-of-service", changefreq: "yearly", priority: "0.3" },
+  { path: "/data-deletion", changefreq: "yearly", priority: "0.3" },
 ];
 
 function generateSitemap(entries: SitemapEntry[]) {
