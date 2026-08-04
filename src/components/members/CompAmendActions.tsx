@@ -8,6 +8,7 @@ import { Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
