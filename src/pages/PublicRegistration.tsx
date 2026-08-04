@@ -352,13 +352,14 @@ export default function PublicRegistration() {
         {/* Headline */}
         <div className="mt-8 sm:mt-10">
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-primary/90">Welcome</p>
-          <h2 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">
             Your transformation
             <br />
             <span className="bg-gradient-to-r from-primary to-primary/40 bg-clip-text text-transparent">
               starts here.
             </span>
-          </h2>
+          </h1>
+
         </div>
 
         {/* Glass card */}
