@@ -57,13 +57,12 @@ export function RecordBenefitUsageDrawer({
   open,
   onOpenChange,
   membershipId,
+  memberId,
   memberName,
   availableBenefits,
   preselectedBenefit,
 }: RecordBenefitUsageDrawerProps) {
-  const [isValidating, setIsValidating] = useState(false);
   const recordMutation = useRecordBenefitUsage();
-  const validateMutation = useValidateBenefitUsage();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -78,50 +77,49 @@ export function RecordBenefitUsageDrawer({
   // Match by benefit_type_id if it looks like a UUID, otherwise by enum
   const selectedBalance = availableBenefits.find(b => 
     b.benefit_type_id === selectedBenefitValue || b.benefit_type === selectedBenefitValue
-  );
+  ) as any;
+
+  const totalAvailable = (b: any) =>
+    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + (b?.creditRemaining ?? 0);
 
   async function onSubmit(values: FormValues) {
-    setIsValidating(true);
-
     try {
-      // Validate first
-      const validation = await validateMutation.mutateAsync({
-        membershipId,
-        benefitType: values.benefit_type as BenefitType,
-      });
-
-      if (!validation.valid) {
-        toast.error(validation.message || 'Cannot record usage');
-        setIsValidating(false);
-        return;
-      }
-
-      // Record usage - resolve the actual enum and optional UUID
-      const matchedBalance = availableBenefits.find(b => 
+      const matchedBalance = availableBenefits.find(b =>
         b.benefit_type_id === values.benefit_type || b.benefit_type === values.benefit_type
-      );
-      await recordMutation.mutateAsync({
+      ) as any;
+
+      const result = await recordMutation.mutateAsync({
         membershipId,
+        memberId,
         benefitType: (matchedBalance?.benefit_type || values.benefit_type) as BenefitType,
         usageCount: values.usage_count,
         notes: values.notes,
         benefitTypeId: matchedBalance?.benefit_type_id || undefined,
       });
 
-      toast.success(`${matchedBalance?.label || values.benefit_type} usage recorded`);
+      if (!result?.success) {
+        toast.error(result?.error || 'Cannot record usage');
+        return;
+      }
+
+      const parts: string[] = [];
+      if (result.from_gift) parts.push(`${result.from_gift} gift`);
+      if (result.from_credit) parts.push(`${result.from_credit} purchased`);
+      toast.success(
+        `${matchedBalance?.label || values.benefit_type} usage recorded${parts.length ? ` (${parts.join(', ')})` : ''}`
+      );
       form.reset();
       onOpenChange(false);
-    } catch (error) {
-      toast.error('Failed to record usage');
-    } finally {
-      setIsValidating(false);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to record usage');
     }
   }
 
-  // Filter to only show benefits that have remaining usage
+  // Show plan allowance, complimentary gifts and purchased credits
   const recordableBenefits = availableBenefits.filter(
-    b => b.isUnlimited || (b.remaining !== null && b.remaining > 0)
+    (b: any) => b.isUnlimited || totalAvailable(b) > 0
   );
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
