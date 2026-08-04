@@ -376,13 +376,13 @@ export default function MemberDashboard() {
                   <p className="text-muted-foreground mb-4">No active membership</p>
                   <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
                 </div>
-              ) : !entitlements || entitlements.length === 0 ? (
+              ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
                 <div className="text-center py-4">
                   <p className="text-muted-foreground">No benefits configured for your plan</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {entitlements.map((ent: any) => {
+                  {(entitlements || []).map((ent: any) => {
                     const IconComponent = getBenefitIcon(ent.icon || ent.code);
                     // Sum purchased add-on credits for this benefit type (matches by name OR code, case-insensitive)
                     const matchingCredits = (benefitCredits as any[]).filter((c: any) => {
