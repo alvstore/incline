@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { compressImageFile } from '@/utils/imageCompression';
 import { uploadBiometricPhoto } from '@/lib/media/biometricPhotoUrls';
+import { checkPersonPhoto } from '@/lib/media/checkPersonPhoto';
 import { queueMemberSync, queueStaffSync, queueTrainerSync } from '@/services/biometricService';
 
 export type PersonEntity = 'members' | 'employees' | 'trainers';
@@ -41,6 +42,25 @@ async function queueForEntity(
   }
 }
 
+/**
+ * A fresh photo clears any `rejected` state in the per-gate enrolment ledger so
+ * the face sweep picks the person up again on its next tick.
+ */
+async function requeueFaceEnrolment(ref: PersonRef): Promise<void> {
+  const { data } = await supabase
+    .from(ref.entityType)
+    .select('mips_person_sn')
+    .eq('id', ref.entityId)
+    .maybeSingle();
+  const sn = (data as { mips_person_sn?: string | null } | null)?.mips_person_sn;
+  if (!sn) return;
+  await supabase
+    .from('mips_device_face_state')
+    .update({ state: 'pending', attempts: 0, reason: 'New photo uploaded — re-queued' })
+    .eq('person_sn', sn)
+    .neq('state', 'pending');
+}
+
 export interface UploadPersonPhotoArgs {
   file: File;
   /** Auth user id — required, avatars bucket RLS keys on this folder. */
@@ -71,6 +91,11 @@ export async function uploadAndSyncPersonPhoto({
   personName,
   person,
 }: UploadPersonPhotoArgs): Promise<UploadPersonPhotoResult> {
+  // Reject photos the turnstiles will never be able to enrol, before they
+  // enter the pipeline and fail silently at the gate days later.
+  const check = await checkPersonPhoto(file);
+  if (!check.ok) throw new Error(check.reason || 'This photo cannot be used for face enrolment.');
+
   const compressed = await compressImageFile(file);
 
   const filePath = `${userId}/avatar-${Date.now()}.jpg`;
@@ -99,11 +124,14 @@ export async function uploadAndSyncPersonPhoto({
       .update({ biometric_photo_path: path, biometric_photo_url: avatarUrl })
       .eq('id', ref.entityId);
     await queueForEntity(ref, signedUrl, personName);
+    // A new photo makes a previously rejected enrolment eligible again.
+    await requeueFaceEnrolment(ref);
     queued = true;
   } catch (e: unknown) {
     queueError = e instanceof Error ? e.message : String(e);
     console.warn('Biometric queue failed:', queueError);
   }
+
 
   return { avatarUrl, person: ref, queued, queueError };
 }

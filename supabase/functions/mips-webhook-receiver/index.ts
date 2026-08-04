@@ -504,6 +504,53 @@ Deno.serve(async (req) => {
     }));
     console.log("Full payload:", JSON.stringify(payload));
 
+    // Person-registration callback (`?event=regPerson`): the device tells us,
+    // per person, whether it actually built a face template. This is the only
+    // authoritative per-person signal — when a gate is configured to send it we
+    // write it straight into the enrolment ledger instead of inferring from the
+    // photoCount delta.
+    const eventParam = new URL(req.url).searchParams.get("event") || "";
+    if (eventParam === "regPerson") {
+      try {
+        const personSn = String(
+          payload.personSn || payload.personNo || payload.person_sn || payload.personCode || "",
+        );
+        const deviceKey = String(payload.deviceKey || payload.deviceSn || payload.sn || "");
+        const okFlag = payload.result ?? payload.success ?? payload.code ?? payload.status;
+        const enrolled = okFlag === 200 || okFlag === 0 || okFlag === true ||
+          okFlag === "success" || okFlag === "0" || okFlag === "200";
+        if (personSn) {
+          let mipsDeviceId: number | null = null;
+          if (deviceKey) {
+            const { data: dev } = await supabase
+              .from("access_devices")
+              .select("mips_device_id")
+              .eq("serial_number", deviceKey)
+              .maybeSingle();
+            mipsDeviceId = dev?.mips_device_id ?? null;
+          }
+          const patch = enrolled
+            ? { state: "enrolled", reason: null, enrolled_at: new Date().toISOString(), last_attempt_at: new Date().toISOString() }
+            : {
+                state: "rejected",
+                reason: `Device rejected this photo: ${String(payload.msg || payload.message || "no face template")}`,
+                last_attempt_at: new Date().toISOString(),
+              };
+          let q = supabase.from("mips_device_face_state").update(patch).eq("person_sn", personSn);
+          if (mipsDeviceId != null) q = q.eq("mips_device_id", mipsDeviceId);
+          await q;
+          console.log(`[regPerson] ${personSn} on device ${deviceKey || "?"} → ${patch.state}`);
+        }
+      } catch (e) {
+        console.warn("[regPerson] ledger update failed:", e instanceof Error ? e.message : String(e));
+      }
+      return new Response(DEVICE_ACK, {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // Check for ImgReg (registration photo callback)
     const eventType_raw = String(payload.eventType || payload.event_type || payload.type || "");
     if (eventType_raw === "ImgReg" || eventType_raw === "img_reg" || eventType_raw === "register") {

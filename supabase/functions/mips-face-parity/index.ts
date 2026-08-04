@@ -1,12 +1,14 @@
-// mips-face-parity v1.1.0
+// mips-face-parity v1.2.0
 // Reconciles FACE (photo) enrolment across every MIPS device of a branch.
 //
 // Problem it solves: the MIPS server holds N persons with photos, but each
-// turnstile can end up with a different face count (e.g. Gate 1 = 41,
-// Gate 2 = 31) when a syncPerson dispatch silently failed for one device.
+// turnstile can end up with a different face count (e.g. Gate 1 = 69,
+// Gate 2 = 70) when a syncPerson dispatch silently failed for one device.
 //
 // Actions:
 //   { action: "report", branch_id? }  → per-device persons/faces + server photo count
+//   { action: "audit", branch_id }    → NAMED list of who is missing a face per gate,
+//        read from the mips_device_face_state ledger written by mips-face-sweep.
 //   { action: "resync", branch_id?, device_ids?: number[] }
 //        → re-dispatch every person that HAS a photo to the given devices
 //          (defaults to all devices on the branch).
@@ -72,7 +74,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { action = "report", branch_id, device_ids, person_type, person_id } = body as {
-      action?: "report" | "resync" | "diagnose";
+      action?: "report" | "resync" | "diagnose" | "audit";
       branch_id?: string;
       device_ids?: number[];
       person_type?: "member" | "employee" | "trainer";
@@ -112,6 +114,47 @@ Deno.serve(async (req) => {
       faces: Number(d.photoCount ?? d.faceCount ?? d.faceNum ?? 0),
       online: d.onlineFlag === 1 || d.status === 1 || d.status === "1",
     })).filter((d) => !isNaN(d.id));
+
+    // Named audit: who exactly is missing a face on each gate. Reads the
+    // per-person ledger built by mips-face-sweep (single-person pushes with
+    // photoCount attribution) — this firmware exposes no per-device roster.
+    if (action === "audit") {
+      if (!branch_id) return json({ error: "branch_id is required" }, 400);
+      const { data: ledger } = await supabase
+        .from("mips_device_face_state")
+        .select("mips_device_id, device_name, person_sn, person_name, person_type, state, reason, attempts, last_attempt_at")
+        .eq("branch_id", branch_id)
+        .limit(5000);
+      const rows = ledger || [];
+      return json({
+        success: true,
+        devices: devices.map((d) => {
+          const forDevice = rows.filter((r: any) => Number(r.mips_device_id) === d.id);
+          const notEnrolled = forDevice.filter((r: any) => r.state !== "enrolled");
+          return {
+            id: d.id,
+            name: d.name,
+            online: d.online,
+            persons_on_device: d.persons,
+            faces_on_device: d.faces,
+            tracked: forDevice.length,
+            enrolled: forDevice.length - notEnrolled.length,
+            missing: notEnrolled.map((r: any) => ({
+              person_sn: r.person_sn,
+              person_name: r.person_name,
+              person_type: r.person_type,
+              state: r.state,
+              reason: r.reason,
+              attempts: r.attempts,
+              last_attempt_at: r.last_attempt_at,
+            })),
+          };
+        }),
+        note: rows.length === 0
+          ? "Ledger is empty — run the face sweep once to start attributing faces per person."
+          : undefined,
+      });
+    }
 
     // Diagnostic: prove whether the terminal rejects the face image or whether
     // the dispatch itself was lost. Re-push one person, then re-read each

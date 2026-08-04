@@ -19,6 +19,7 @@ import {
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
+import FaceEnrolmentPanel from "./FaceEnrolmentPanel";
 
 interface PersonnelSyncTabProps {
   branchId?: string;
@@ -642,6 +643,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
       )}
 
 
+      <FaceEnrolmentPanel branchId={branchId} />
 
 
       <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">

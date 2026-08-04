@@ -1,23 +1,21 @@
-// mips-face-sweep v1.1.0
-// Self-healing face enrollment worker.
+// mips-face-sweep v2.0.0
+// Ledger-driven face enrolment worker.
 //
-// The MIPS server accepts photos that the turnstiles then silently discard, so
-// the only device-side truth available on this firmware (1.42.x) is the
-// `photoCount` field on GET /through/device/list. This worker:
-//   1. computes the expected face population from the CRM (people with a
-//      biometric photo AND a MIPS person id, on a branch that has devices),
-//   2. reads each gate's live photoCount,
-//   3. if a gate is short, re-pushes a small rotating batch of people through
-//      sync-to-mips (photo upload + per-device dispatch),
-//   4. re-reads photoCount and reports the before → after delta.
+// v1.x pushed a rotating batch of people every 5 minutes and hoped the gates'
+// `photoCount` climbed. That never converged: photos the terminal cannot build
+// a face template from are accepted by the server (`syncPerson` → 200) and then
+// silently discarded by the gate, so the same broken photos were re-pushed
+// forever while the counter stayed flat.
 //
-// v1.1.0 adds graceful degradation: transport failures (server rebooting,
-// Tomcat restarting, VPS unreachable) trip a shared circuit breaker instead of
-// hammering a starting server, and the sweep resumes automatically once a probe
-// succeeds.
+// v2.0.0 pushes ONE person at a time and attributes the resulting photoCount
+// delta to that person, building a per-device/per-person ledger
+// (`mips_device_face_state`). From then on:
+//   - only `pending` / `missing` people are pushed, at most PER_TICK per branch,
+//   - `rejected` people are never re-pushed until their photo changes,
+//   - when the ledger says every gate is at parity the worker does nothing —
+//     no login, no traffic.
 //
 // Run by the Automation Brain every 5 minutes (rule `mips_face_enrollment_sweep`).
-// Also callable on demand from the Device Command Center.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   classifyFailure,
@@ -28,7 +26,14 @@ import {
   recordSuccess,
   recordTransportFailure,
 } from "../_shared/mipsHealth.ts";
-
+import {
+  type LedgerDevice,
+  type LedgerPerson,
+  markAttempt,
+  markEnrolled,
+  readLedger,
+  seedLedger,
+} from "../_shared/mipsFaceState.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,12 +41,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Steady-state top-up size. A cold or reset gate gets the burst size instead,
-// otherwise a full roster (~70 people) would take two hours at 3 per tick.
-const DEFAULT_BATCH = 3;
-const BURST_BATCH = 10;
-const BURST_SHORTFALL = 20;
-const MAX_BATCH = 12;
+// One or two people per tick is deliberate: single-person pushes are the only
+// way to attribute a photoCount delta, and they cost the VPS almost nothing.
+const PER_TICK = 2;
+const MAX_PER_TICK = 6;
+const SETTLE_MS = 6_000;
 const INVOCATION_BUDGET_MS = 45_000;
 
 function json(body: unknown, status = 200) {
@@ -58,15 +62,22 @@ async function login(baseUrl: string, username: string, password: string): Promi
     body: JSON.stringify({ username, password }),
   }, 10_000);
   let j: any;
-  // A booting Tomcat answers with an HTML error page — that is a transport
-  // condition, not bad credentials.
   try { j = JSON.parse(text); } catch { throw new MipsTransportError(`MIPS login non-JSON: ${text.slice(0, 200)}`); }
   const token = j.token || j.data?.token;
   if (!token) throw new Error(`MIPS login failed: ${j.msg || text.slice(0, 200)}`);
   return token;
 }
 
-async function readDeviceCounts(baseUrl: string, token: string) {
+interface DeviceCount {
+  id: number;
+  name: string;
+  sn: string;
+  persons: number;
+  faces: number;
+  online: boolean;
+}
+
+async function readDeviceCounts(baseUrl: string, token: string): Promise<DeviceCount[]> {
   const { text } = await mipsFetch(`${baseUrl}/through/device/list`, {
     method: "GET",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "TENANT-ID": "1" },
@@ -86,6 +97,7 @@ async function readDeviceCounts(baseUrl: string, token: string) {
     .filter((d) => !isNaN(d.id));
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -97,14 +109,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    // An explicit `batch` in the payload pins the size; otherwise it is chosen
-    // per branch from the measured shortfall (see below).
-    const pinnedBatch = Number((body as any)?.batch) > 0
-      ? Math.max(1, Math.min(MAX_BATCH, Number((body as any)?.batch)))
+    const pinned = Number((body as any)?.batch) > 0
+      ? Math.max(1, Math.min(MAX_PER_TICK, Number((body as any)?.batch)))
       : null;
     const onlyBranch: string | undefined = (body as any)?.branch_id;
+    const force = Boolean((body as any)?.force);
 
-    // Branches that actually have mapped hardware.
     const { data: devices, error: devErr } = await supabase
       .from("access_devices")
       .select("id, branch_id, mips_device_id, device_name")
@@ -119,16 +129,71 @@ Deno.serve(async (req) => {
     for (const branchId of branchIds) {
       if (Date.now() - startedAt >= INVOCATION_BUDGET_MS) break;
 
-      // Resolve MIPS credentials for this branch (env fallback).
+      const branchDevices: LedgerDevice[] = (devices || [])
+        .filter((d: any) => d.branch_id === branchId)
+        .map((d: any) => ({
+          id: d.id,
+          mips_device_id: Number(d.mips_device_id),
+          name: d.device_name ?? null,
+        }));
+
+      // ---- CRM roster: people who should carry a face on every gate ---------
+      const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
+      const [members, employees, trainers] = await Promise.all([
+        supabase.from("members")
+          .select("id, mips_person_sn, full_name:member_code")
+          .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+        supabase.from("employees")
+          .select("id, mips_person_sn, full_name")
+          .eq("branch_id", branchId).not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+        supabase.from("trainers")
+          .select("id, mips_person_sn, full_name")
+          .eq("branch_id", branchId).eq("is_active", true)
+          .not("mips_person_id", "is", null).or(photoFilter).limit(1000),
+      ]);
+
+      const roster: LedgerPerson[] = [
+        ...(members.data || []).map((m: any) => ({
+          table: "members" as const, type: "member" as const,
+          id: m.id, sn: m.mips_person_sn || "", name: m.full_name ?? null,
+        })),
+        ...(employees.data || []).map((e: any) => ({
+          table: "employees" as const, type: "employee" as const,
+          id: e.id, sn: e.mips_person_sn || "", name: e.full_name ?? null,
+        })),
+        ...(trainers.data || []).map((t: any) => ({
+          table: "trainers" as const, type: "trainer" as const,
+          id: t.id, sn: t.mips_person_sn || "", name: t.full_name ?? null,
+        })),
+      ].filter((p) => !!p.sn);
+
+      await seedLedger(supabase, branchId, branchDevices, roster);
+      const ledger = await readLedger(supabase, branchId);
+
+      const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
+      const rejected = ledger.filter((r) => r.state === "rejected");
+
+      // Nothing to do → do not even touch the MIPS server.
+      if (outstanding.length === 0 && !force) {
+        summary.push({
+          branch_id: branchId,
+          at_parity: true,
+          expected: roster.length,
+          enrolled: ledger.filter((r) => r.state === "enrolled").length,
+          rejected: rejected.length,
+          processed: 0,
+        });
+        continue;
+      }
+
+      // ---- Credentials + breaker -------------------------------------------
       let serverUrl = Deno.env.get("MIPS_SERVER_URL") || "";
       let username = Deno.env.get("MIPS_USERNAME") || "";
       let password = Deno.env.get("MIPS_PASSWORD") || "";
       const { data: conn } = await supabase
         .from("mips_connections")
         .select("server_url, username, password")
-        .eq("branch_id", branchId)
-        .eq("is_active", true)
-        .maybeSingle();
+        .eq("branch_id", branchId).eq("is_active", true).maybeSingle();
       if (conn) {
         serverUrl = (conn as any).server_url;
         username = (conn as any).username;
@@ -139,10 +204,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Circuit breaker: while the server is known-unreachable, skip instead of
-      // hammering it. The cooldown expiring makes the next tick the probe.
       const breaker = await readBreaker(supabase, branchId);
-      if (isTripped(breaker) && !(body as any)?.force) {
+      if (isTripped(breaker) && !force) {
         summary.push({
           branch_id: branchId,
           paused: true,
@@ -155,93 +218,68 @@ Deno.serve(async (req) => {
 
       const baseUrl = serverUrl.replace(/\/+$/, "");
       let token: string;
-      let before: Awaited<ReturnType<typeof readDeviceCounts>>;
+      let counts: DeviceCount[];
       try {
         token = await login(baseUrl, username, password);
-        before = await readDeviceCounts(baseUrl, token);
+        counts = await readDeviceCounts(baseUrl, token);
         await recordSuccess(supabase, branchId);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (e instanceof MipsTransportError || classifyFailure({ message: msg }) === "transport") {
           const state = await recordTransportFailure(supabase, branchId, msg);
-          summary.push({
-            branch_id: branchId,
-            transport_error: msg,
-            breaker_open: state.open,
-            resumes_at: state.open_until,
-          });
+          summary.push({ branch_id: branchId, transport_error: msg, breaker_open: state.open, resumes_at: state.open_until });
         } else {
           summary.push({ branch_id: branchId, error: msg });
         }
         continue;
       }
 
-
-      // Expected face population = CRM people with a photo AND a MIPS identity.
-      const photoFilter = "biometric_photo_path.not.is.null,biometric_photo_url.not.is.null";
-      const [members, employees, trainers] = await Promise.all([
-        supabase.from("members")
-          .select("id, mips_face_verified_at")
-          .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null)
-          .or(photoFilter)
-          .order("mips_face_verified_at", { ascending: true, nullsFirst: true })
-          .limit(500),
-        supabase.from("employees")
-          .select("id, mips_face_verified_at")
-          .eq("branch_id", branchId)
-          .not("mips_person_id", "is", null)
-          .or(photoFilter)
-          .order("mips_face_verified_at", { ascending: true, nullsFirst: true })
-          .limit(500),
-        supabase.from("trainers")
-          .select("id, mips_face_verified_at")
-          .eq("branch_id", branchId)
-          .eq("is_active", true)
-          .not("mips_person_id", "is", null)
-          .or(photoFilter)
-          .order("mips_face_verified_at", { ascending: true, nullsFirst: true })
-          .limit(500),
-      ]);
-
-      const roster = [
-        ...((members.data || []).map((m: any) => ({ table: "members", type: "member", id: m.id, verified: m.mips_face_verified_at }))),
-        ...((employees.data || []).map((e: any) => ({ table: "employees", type: "employee", id: e.id, verified: e.mips_face_verified_at }))),
-        ...((trainers.data || []).map((t: any) => ({ table: "trainers", type: "trainer", id: t.id, verified: t.mips_face_verified_at }))),
-      ].sort((a, b) => {
-        if (!a.verified && !b.verified) return 0;
-        if (!a.verified) return -1;
-        if (!b.verified) return 1;
-        return new Date(a.verified).getTime() - new Date(b.verified).getTime();
-      });
-
-      const expected = roster.length;
-      const minFaces = before.length ? Math.min(...before.map((d) => d.faces)) : 0;
-      const shortfall = Math.max(expected - minFaces, 0);
-
-      if (shortfall === 0 || roster.length === 0) {
-        summary.push({
-          branch_id: branchId,
-          expected,
-          devices: before.map((d) => ({ name: d.name, faces: d.faces, persons: d.persons, online: d.online })),
-          shortfall: 0,
-          processed: 0,
-        });
-        continue;
+      // A gate already carrying a face for everyone is trivially at parity —
+      // settle its whole ledger without pushing anything.
+      for (const dev of branchDevices) {
+        const live = counts.find((c) => c.id === dev.mips_device_id);
+        if (live && roster.length > 0 && live.faces >= roster.length) {
+          await supabase
+            .from("mips_device_face_state")
+            .update({ state: "enrolled", reason: null, enrolled_at: new Date().toISOString() })
+            .eq("branch_id", branchId)
+            .eq("mips_device_id", dev.mips_device_id)
+            .neq("state", "enrolled");
+        }
       }
 
-      // Adaptive batch: burst when a gate is cold (reset / large backlog),
-      // small top-ups once the fleet is close to parity.
-      const batchSize = pinnedBatch
-        ?? (shortfall >= BURST_SHORTFALL ? BURST_BATCH : DEFAULT_BATCH);
+      // ---- Pick the next people, one push each -----------------------------
+      // Re-read after the parity settle above, so people a gate has already
+      // proven it carries are not pushed again on this tick.
+      const settled = await readLedger(supabase, branchId);
+      const stillOutstanding = settled.filter((r) => r.state === "pending" || r.state === "missing");
+      const perTick = pinned ?? PER_TICK;
+      const bySn = new Map<string, typeof stillOutstanding>();
+      for (const row of stillOutstanding) {
+        const list = bySn.get(row.person_sn) || [];
+        list.push(row);
+        bySn.set(row.person_sn, list);
+      }
+      const candidates = [...bySn.entries()]
+        .sort((a, b) => {
+          const aa = Math.min(...a[1].map((r) => r.attempts));
+          const bb = Math.min(...b[1].map((r) => r.attempts));
+          if (aa !== bb) return aa - bb;
+          const at = a[1][0].last_attempt_at ? Date.parse(a[1][0].last_attempt_at) : 0;
+          const bt = b[1][0].last_attempt_at ? Date.parse(b[1][0].last_attempt_at) : 0;
+          return at - bt;
+        })
+        .slice(0, perTick);
 
-      // Oldest-verified-first batch — a rotating cursor without extra state.
-      const batch = roster.slice(0, batchSize);
-      let ok = 0, failed = 0;
-      const failures: string[] = [];
+      let enrolledNow = 0, stalled = 0, pushFailed = 0;
+      const notes: string[] = [];
 
-      for (const person of batch) {
+      for (const [personSn, rows] of candidates) {
         if (Date.now() - startedAt >= INVOCATION_BUDGET_MS) break;
+        const row = rows[0];
+        const before = await readDeviceCounts(baseUrl, token).catch(() => counts);
+
+        let pushError = "";
         try {
           const res = await fetch(`${SUPA_URL}/functions/v1/sync-to-mips`, {
             method: "POST",
@@ -251,85 +289,75 @@ Deno.serve(async (req) => {
               apikey: SERVICE_KEY,
             },
             body: JSON.stringify({
-              person_type: person.type,
-              person_id: person.id,
+              person_type: row.person_type,
+              person_id: row.person_id,
               branch_id: branchId,
               deploy_to_devices: true,
             }),
             signal: AbortSignal.timeout(25_000),
           });
           const data = await res.json().catch(() => ({}));
-          const dispatched = Array.isArray(data?.dispatched_device_ids) ? data.dispatched_device_ids : [];
-          const requested = Array.isArray(data?.requested_device_ids) ? data.requested_device_ids : [];
-          const success = res.ok
-            && data?.photo_uploaded === true
-            && requested.length > 0
-            && dispatched.length === requested.length;
-
-          if (success) {
-            ok++;
-            await supabase.from(person.table)
-              .update({ mips_face_verified_at: new Date().toISOString() })
-              .eq("id", person.id);
-          } else {
-            failed++;
-            // Push to the back of the queue for this cycle so a permanently
-            // broken source photo cannot block everyone behind it.
-            await supabase.from(person.table)
-              .update({ mips_face_verified_at: new Date().toISOString() })
-              .eq("id", person.id);
-            if (failures.length < 10) {
-              failures.push(
-                `${person.type}:${person.id} → ${data?.photo_result?.message || data?.error || `devices ${dispatched.length}/${requested.length}`}`,
-              );
-            }
+          if (!res.ok || data?.photo_uploaded !== true) {
+            pushError = String(data?.photo_result?.message || data?.error || `HTTP ${res.status}`);
           }
         } catch (e) {
-          failed++;
-          if (failures.length < 10) failures.push(`${person.type}:${person.id} → ${e instanceof Error ? e.message : String(e)}`);
+          pushError = e instanceof Error ? e.message : String(e);
         }
+
+        if (pushError) {
+          pushFailed++;
+          for (const r of rows) {
+            await markAttempt(supabase, branchId, r.mips_device_id, personSn, r.attempts, `Push failed: ${pushError}`);
+          }
+          if (notes.length < 10) notes.push(`${personSn} → push failed: ${pushError}`);
+          continue;
+        }
+
+        // Give the terminals a moment to drain the download, then attribute the
+        // delta. Single-person pushes make this attribution exact.
+        await sleep(SETTLE_MS);
+        const after = await readDeviceCounts(baseUrl, token).catch(() => before);
+
+        for (const r of rows) {
+          const b = before.find((d) => d.id === r.mips_device_id)?.faces ?? 0;
+          const a = after.find((d) => d.id === r.mips_device_id)?.faces ?? b;
+          if (a > b) {
+            enrolledNow++;
+            await markEnrolled(supabase, branchId, r.mips_device_id, personSn);
+          } else {
+            stalled++;
+            await markAttempt(
+              supabase, branchId, r.mips_device_id, personSn, r.attempts,
+              "Server accepted the photo but the gate's face counter did not move",
+            );
+          }
+        }
+        counts = after;
       }
 
-      // The verification read must never fail the whole sweep — if the server
-      // slipped away mid-batch, report what we know and let the breaker handle it.
-      let after = before;
-      try {
-        after = await readDeviceCounts(baseUrl, token);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (e instanceof MipsTransportError) await recordTransportFailure(supabase, branchId, msg);
-      }
-
-      const deviceReport = after.map((d) => {
-        const prev = before.find((p) => p.id === d.id);
-        return {
-          name: d.name,
-          persons: d.persons,
-          faces_before: prev?.faces ?? null,
-          faces_after: d.faces,
-          delta: prev ? d.faces - prev.faces : null,
-          online: d.online,
-        };
-      });
-      // The server accepted the dispatches but no terminal counter moved: the
-      // gates are online yet not draining their download queue. That is a
-      // device-side condition, not a pipeline failure — flag it explicitly so
-      // the operator is told instead of watching a silent retry loop.
-      const gatesStalled = ok > 0
-        && deviceReport.length > 0
-        && deviceReport.every((d) => d.online && (d.delta ?? 0) === 0);
-
+      const finalLedger = await readLedger(supabase, branchId);
       summary.push({
         branch_id: branchId,
-        expected,
-        shortfall,
-        batch_size: batchSize,
-        processed: ok + failed,
-        ok,
-        failed,
-        failures,
-        gates_stalled: gatesStalled,
-        devices: deviceReport,
+        expected: roster.length,
+        processed: candidates.length,
+        enrolled_now: enrolledNow,
+        stalled,
+        push_failed: pushFailed,
+        notes,
+        devices: branchDevices.map((d) => {
+          const rows = finalLedger.filter((r) => r.mips_device_id === d.mips_device_id);
+          const live = counts.find((c) => c.id === d.mips_device_id);
+          return {
+            name: d.name,
+            mips_device_id: d.mips_device_id,
+            online: live?.online ?? null,
+            faces_on_device: live?.faces ?? null,
+            persons_on_device: live?.persons ?? null,
+            enrolled: rows.filter((r) => r.state === "enrolled").length,
+            pending: rows.filter((r) => r.state === "pending" || r.state === "missing").length,
+            rejected: rows.filter((r) => r.state === "rejected").length,
+          };
+        }),
       });
     }
 
