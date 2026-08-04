@@ -35,11 +35,22 @@ import type { Database } from '@/integrations/supabase/types';
 
 type BenefitType = Database['public']['Enums']['benefit_type'];
 
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const formSchema = z.object({
   benefit_type: z.string().min(1, 'Please select a benefit'),
   usage_count: z.coerce.number().min(1, 'Minimum 1').max(10, 'Maximum 10'),
+  usage_date: z
+    .string()
+    .min(1, 'Please select a date')
+    .refine((v) => v <= todayStr(), 'Usage date cannot be in the future'),
+  usage_time: z.string().optional(),
   notes: z.string().optional(),
 });
+
 
 type FormValues = z.infer<typeof formSchema>;
 
