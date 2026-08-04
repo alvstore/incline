@@ -427,11 +427,11 @@ export default function MemberDashboard() {
                       </div>
                     );
                   })}
-                  {/* Add-On Credits (purchased extras) */}
+                  {/* Credits & gifts (purchased add-ons + complimentary sessions) */}
                   {benefitCredits.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <Heart className="h-3 w-3 text-destructive" /> Add-On Credits
+                        <Heart className="h-3 w-3 text-destructive" /> Credits &amp; Gifts
                       </p>
                       {benefitCredits.map((credit: any) => {
                         const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
