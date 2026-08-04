@@ -241,6 +241,16 @@ export default function PublicRegistration() {
   }, [healthConditions, healthOther]);
 
   const submitDetails = form.handleSubmit((values) => {
+    if (healthConditions.length === 0) {
+      setHealthError("Select at least one option (choose “None” if you have no conditions)");
+      toast.error("Please answer the health conditions question");
+      return;
+    }
+    if (healthConditions.includes("Other") && !healthOther.trim()) {
+      setHealthError("Please specify your other condition");
+      return;
+    }
+    setHealthError(null);
     const health = buildHealthConditions();
     const merged: DetailsForm = { ...values, health_conditions: health };
     // Mirror into the form so the autosaved draft carries it through a refresh.
@@ -249,7 +259,17 @@ export default function PublicRegistration() {
     setStep("parq");
   });
 
-  const submitParq = () => setStep("sign");
+  const parqComplete = PARQ_QUESTIONS.every((_, i) => parq[`q${i}`] === "yes" || parq[`q${i}`] === "no");
+
+  const submitParq = () => {
+    if (!parqComplete) {
+      setParqError("Please answer every question before continuing");
+      toast.error("Answer all health check questions");
+      return;
+    }
+    setParqError(null);
+    setStep("sign");
+  };
 
   const submitSign = () => {
     if (sigRef.current?.isEmpty()) return toast.error("Please sign before continuing");
