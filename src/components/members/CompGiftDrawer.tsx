@@ -16,6 +16,8 @@ import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { toast } from 'sonner';
 import { addDays, parseISO, format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { CompAmendActions } from '@/components/members/CompAmendActions';
+
 
 interface CompGiftDrawerProps {
   open: boolean;
@@ -523,9 +525,13 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                           {c.expires_at && ` · expires ${format(new Date(c.expires_at), 'dd MMM yyyy')}`}
                         </p>
                       </div>
-                      <span className="text-slate-700 font-semibold whitespace-nowrap">
-                        {c.used_sessions}/{c.comp_sessions}
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-slate-700 font-semibold whitespace-nowrap">
+                          {c.used_sessions}/{c.comp_sessions}
+                        </span>
+                        <CompAmendActions comp={c} />
+                      </div>
+
                     </div>
                   ))}
                 </div>
