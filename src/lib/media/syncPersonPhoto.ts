@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { compressImageFile } from '@/utils/imageCompression';
 import { uploadBiometricPhoto } from '@/lib/media/biometricPhotoUrls';
+import { checkPersonPhoto } from '@/lib/media/checkPersonPhoto';
 import { queueMemberSync, queueStaffSync, queueTrainerSync } from '@/services/biometricService';
 
 export type PersonEntity = 'members' | 'employees' | 'trainers';
