@@ -175,12 +175,18 @@ export function RecordBenefitUsageDrawer({
               {selectedBalance && !selectedBalance.isUnlimited && (
                 <div className="rounded-xl bg-muted p-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Used this period:</span>
-                    <span className="font-medium">{selectedBalance.used}</span>
+                    <span className="text-muted-foreground">Plan allowance left:</span>
+                    <span className="font-medium">{selectedBalance.remaining ?? 0}</span>
                   </div>
-                  <div className="mt-1 flex justify-between">
-                    <span className="text-muted-foreground">Remaining:</span>
-                    <span className="font-medium text-primary">{selectedBalance.remaining}</span>
+                  {selectedBalance.compRemaining > 0 && (
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-muted-foreground">Complimentary gift sessions:</span>
+                      <span className="font-medium">{selectedBalance.compRemaining}</span>
+                    </div>
+                  )}
+                  <div className="mt-1 flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">Total available:</span>
+                    <span className="font-medium text-primary">{totalAvailable(selectedBalance)}</span>
                   </div>
                 </div>
               )}
@@ -195,11 +201,12 @@ export function RecordBenefitUsageDrawer({
                       <Input
                         type="number"
                         min={1}
-                        max={selectedBalance?.remaining ?? 10}
+                        max={selectedBalance?.isUnlimited ? 10 : (totalAvailable(selectedBalance) || 1)}
                         className="h-11 rounded-xl"
                         {...field}
                       />
                     </FormControl>
+
                     <FormDescription>Number of times this benefit is being used</FormDescription>
                     <FormMessage />
                   </FormItem>
