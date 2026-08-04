@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useRecordBenefitUsage, useValidateBenefitUsage } from '@/hooks/useBenefits';
+import { useRecordBenefitUsage } from '@/hooks/useBenefits';
 import { benefitTypeLabels, type MemberBenefitBalance } from '@/services/benefitService';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -57,13 +57,12 @@ export function RecordBenefitUsageDrawer({
   open,
   onOpenChange,
   membershipId,
+  memberId,
   memberName,
   availableBenefits,
   preselectedBenefit,
 }: RecordBenefitUsageDrawerProps) {
-  const [isValidating, setIsValidating] = useState(false);
   const recordMutation = useRecordBenefitUsage();
-  const validateMutation = useValidateBenefitUsage();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -74,54 +73,63 @@ export function RecordBenefitUsageDrawer({
     },
   });
 
+  // Keep the preselected card in sync when the drawer is reopened from a card
+  useEffect(() => {
+    if (open) {
+      form.reset({ benefit_type: preselectedBenefit || '', usage_count: 1, notes: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedBenefit]);
+
+
+
   const selectedBenefitValue = form.watch('benefit_type');
   // Match by benefit_type_id if it looks like a UUID, otherwise by enum
   const selectedBalance = availableBenefits.find(b => 
     b.benefit_type_id === selectedBenefitValue || b.benefit_type === selectedBenefitValue
-  );
+  ) as any;
+
+  const totalAvailable = (b: any) =>
+    (b?.remaining ?? 0) + (b?.compRemaining ?? 0) + (b?.creditRemaining ?? 0);
 
   async function onSubmit(values: FormValues) {
-    setIsValidating(true);
-
     try {
-      // Validate first
-      const validation = await validateMutation.mutateAsync({
-        membershipId,
-        benefitType: values.benefit_type as BenefitType,
-      });
-
-      if (!validation.valid) {
-        toast.error(validation.message || 'Cannot record usage');
-        setIsValidating(false);
-        return;
-      }
-
-      // Record usage - resolve the actual enum and optional UUID
-      const matchedBalance = availableBenefits.find(b => 
+      const matchedBalance = availableBenefits.find(b =>
         b.benefit_type_id === values.benefit_type || b.benefit_type === values.benefit_type
-      );
-      await recordMutation.mutateAsync({
+      ) as any;
+
+      const result = await recordMutation.mutateAsync({
         membershipId,
+        memberId,
         benefitType: (matchedBalance?.benefit_type || values.benefit_type) as BenefitType,
         usageCount: values.usage_count,
         notes: values.notes,
         benefitTypeId: matchedBalance?.benefit_type_id || undefined,
       });
 
-      toast.success(`${matchedBalance?.label || values.benefit_type} usage recorded`);
+      if (!result?.success) {
+        toast.error(result?.error || 'Cannot record usage');
+        return;
+      }
+
+      const parts: string[] = [];
+      if (result.from_gift) parts.push(`${result.from_gift} gift`);
+      if (result.from_credit) parts.push(`${result.from_credit} purchased`);
+      toast.success(
+        `${matchedBalance?.label || values.benefit_type} usage recorded${parts.length ? ` (${parts.join(', ')})` : ''}`
+      );
       form.reset();
       onOpenChange(false);
-    } catch (error) {
-      toast.error('Failed to record usage');
-    } finally {
-      setIsValidating(false);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to record usage');
     }
   }
 
-  // Filter to only show benefits that have remaining usage
+  // Show plan allowance, complimentary gifts and purchased credits
   const recordableBenefits = availableBenefits.filter(
-    b => b.isUnlimited || (b.remaining !== null && b.remaining > 0)
+    (b: any) => b.isUnlimited || totalAvailable(b) > 0
   );
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -143,14 +151,14 @@ export function RecordBenefitUsageDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Benefit Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className="h-11 rounded-xl">
                           <SelectValue placeholder="Select benefit..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {recordableBenefits.map((benefit) => (
+                        {recordableBenefits.map((benefit: any) => (
                           <SelectItem
                             key={benefit.benefit_type_id || benefit.benefit_type}
                             value={benefit.benefit_type_id || benefit.benefit_type}
@@ -159,12 +167,14 @@ export function RecordBenefitUsageDrawer({
                               <span>{benefit.label}</span>
                               {!benefit.isUnlimited && (
                                 <span className="text-xs text-muted-foreground">
-                                  {benefit.remaining} left
+                                  {totalAvailable(benefit)} left
+                                  {benefit.compRemaining > 0 ? ' (gift)' : ''}
                                 </span>
                               )}
                             </div>
                           </SelectItem>
                         ))}
+
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -175,12 +185,18 @@ export function RecordBenefitUsageDrawer({
               {selectedBalance && !selectedBalance.isUnlimited && (
                 <div className="rounded-xl bg-muted p-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Used this period:</span>
-                    <span className="font-medium">{selectedBalance.used}</span>
+                    <span className="text-muted-foreground">Plan allowance left:</span>
+                    <span className="font-medium">{selectedBalance.remaining ?? 0}</span>
                   </div>
-                  <div className="mt-1 flex justify-between">
-                    <span className="text-muted-foreground">Remaining:</span>
-                    <span className="font-medium text-primary">{selectedBalance.remaining}</span>
+                  {selectedBalance.compRemaining > 0 && (
+                    <div className="mt-1 flex justify-between">
+                      <span className="text-muted-foreground">Complimentary gift sessions:</span>
+                      <span className="font-medium">{selectedBalance.compRemaining}</span>
+                    </div>
+                  )}
+                  <div className="mt-1 flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground">Total available:</span>
+                    <span className="font-medium text-primary">{totalAvailable(selectedBalance)}</span>
                   </div>
                 </div>
               )}
@@ -195,11 +211,12 @@ export function RecordBenefitUsageDrawer({
                       <Input
                         type="number"
                         min={1}
-                        max={selectedBalance?.remaining ?? 10}
+                        max={selectedBalance?.isUnlimited ? 10 : (totalAvailable(selectedBalance) || 1)}
                         className="h-11 rounded-xl"
                         {...field}
                       />
                     </FormControl>
+
                     <FormDescription>Number of times this benefit is being used</FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -237,9 +254,10 @@ export function RecordBenefitUsageDrawer({
               <Button
                 type="submit"
                 className="flex-1 cursor-pointer rounded-xl"
-                disabled={isValidating || recordMutation.isPending}
+                disabled={recordMutation.isPending}
               >
-                {isValidating ? 'Validating...' : recordMutation.isPending ? 'Recording...' : 'Record Usage'}
+                {recordMutation.isPending ? 'Recording...' : 'Record Usage'}
+
               </Button>
             </div>
           </form>

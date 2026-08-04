@@ -4,11 +4,14 @@ import {
   fetchBenefitUsage,
   fetchBenefitUsageHistory,
   recordBenefitUsage,
+  recordBenefitUsageAtomic,
   validateBenefitUsage,
   calculateBenefitBalances,
   type MembershipWithBenefits,
   type MemberBenefitBalance,
 } from '@/services/benefitService';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
+
 import type { Database } from '@/integrations/supabase/types';
 
 type BenefitType = Database['public']['Enums']['benefit_type'];
@@ -68,30 +71,42 @@ export function useBenefitUsageHistory(membershipId: string, benefitType?: Benef
   });
 }
 
-// Record benefit usage mutation
+// Record benefit usage mutation (atomic: plan -> gifts -> purchased credits)
 export function useRecordBenefitUsage() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({
       membershipId,
+      memberId,
       benefitType,
       usageCount,
       notes,
       benefitTypeId,
     }: {
       membershipId: string;
+      memberId: string;
       benefitType: BenefitType;
       usageCount?: number;
       notes?: string;
       benefitTypeId?: string;
-    }) => recordBenefitUsage(membershipId, benefitType, usageCount, notes, benefitTypeId),
+    }) =>
+      recordBenefitUsageAtomic({
+        membershipId,
+        memberId,
+        benefitType,
+        benefitTypeId,
+        usageCount,
+        notes,
+      }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['benefit-usage', variables.membershipId] });
       queryClient.invalidateQueries({ queryKey: ['benefit-usage-history', variables.membershipId] });
+      invalidateBenefitData(queryClient);
     },
   });
 }
+
 
 // Validate benefit usage
 export function useValidateBenefitUsage() {
