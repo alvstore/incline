@@ -27,12 +27,24 @@ type BenefitType = Database['public']['Enums']['benefit_type'];
 interface MemberSearchResult {
   id: string;
   member_code: string;
+  branch_name?: string | null;
+  branch_code?: string | null;
   profiles: {
     full_name: string;
     email: string | null;
     phone: string | null;
   } | null;
 }
+
+function initials(name?: string | null) {
+  return (name || '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+}
+
 
 export default function BenefitTracking() {
   const [searchQuery, setSearchQuery] = useState('');
