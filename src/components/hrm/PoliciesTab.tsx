@@ -138,8 +138,8 @@ export default function PoliciesTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => downloadStampedPdf(p.id)} title="Download Stamped PDF"><Download className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="ghost" onClick={() => setViewing(p)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadStampedPdf(p.id)} aria-label="Download stamped PDF" title="Download Stamped PDF"><Download className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => setViewing(p)} aria-label="View policy"><Eye className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="outline" onClick={() => setEditing(p)}><FileSignature className="h-3.5 w-3.5 mr-1" />Edit</Button>
                   </div>
                 </div>

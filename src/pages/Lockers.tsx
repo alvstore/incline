@@ -347,8 +347,8 @@ export default function LockersPage() {
           </div>
 
           <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
-            <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="icon" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('grid')}><Grid3x3 className="h-4 w-4" /></Button>
-            <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="icon" aria-label="Grid view" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('grid')}><Grid3x3 className="h-4 w-4" /></Button>
+            <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="icon" aria-label="List view" className="h-8 w-8 rounded-lg" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
           </div>
         </div>
 

@@ -446,9 +446,9 @@ ${rows.map(r => `<tr>
               <div className="flex items-center justify-between">
                 <CardTitle>{format(calendarMonth, 'MMMM yyyy')}</CardTitle>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={() => setCalendarMonth(d => subMonths(d, 1))} className="rounded-xl"><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => setCalendarMonth(d => subMonths(d, 1))} className="rounded-xl"><ChevronLeft className="h-4 w-4" /></Button>
                   <Button variant="outline" size="sm" onClick={() => setCalendarMonth(new Date())} className="rounded-xl">Today</Button>
-                  <Button variant="outline" size="icon" onClick={() => setCalendarMonth(d => addMonths(d, 1))} className="rounded-xl"><ChevronRight className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" aria-label="Next month" onClick={() => setCalendarMonth(d => addMonths(d, 1))} className="rounded-xl"><ChevronRight className="h-4 w-4" /></Button>
                 </div>
               </div>
             </CardHeader>
