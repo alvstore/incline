@@ -244,9 +244,10 @@ export function RecordBenefitUsageDrawer({
               <Button
                 type="submit"
                 className="flex-1 cursor-pointer rounded-xl"
-                disabled={isValidating || recordMutation.isPending}
+                disabled={recordMutation.isPending}
               >
-                {isValidating ? 'Validating...' : recordMutation.isPending ? 'Recording...' : 'Record Usage'}
+                {recordMutation.isPending ? 'Recording...' : 'Record Usage'}
+
               </Button>
             </div>
           </form>
