@@ -1265,7 +1265,7 @@ GENERAL RULES:
 
 
     // Step 2: name captured, no email → ask email (plain text)
-    if (hasName && !hasEmail) {
+    if (hasName && !hasEmail && !_defer(countPriorAsks(history, EMAIL_ASK_DETECT_RE))) {
       return {
         replyText: _fn
           ? `${_pivot}Thanks, ${_fn} — what's the best email to send your tour details to? ✨`
@@ -1275,7 +1275,7 @@ GENERAL RULES:
     }
 
     // Step 3: name+email captured, no goal → ask goal (interactive list)
-    if (hasName && hasEmail && !hasGoal) {
+    if (hasName && hasEmail && !hasGoal && !_defer(countPriorAsks(history, GOAL_ASK_DETECT_RE))) {
       const baseBody = _fn ? `Got it, ${_fn} — what's your main fitness goal?` : "What's your main fitness goal?";
       const reply = JSON.stringify({
         type: "interactive_list",
