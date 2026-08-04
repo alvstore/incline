@@ -94,6 +94,8 @@ export default function BenefitTracking() {
         .map((row: any) => ({
           id: row.id,
           member_code: row.member_code,
+          branch_name: row.branch_name ?? null,
+          branch_code: row.branch_code ?? null,
           profiles: {
             full_name: row.full_name,
             email: row.email,
