@@ -15298,7 +15298,9 @@ export type Database = {
         Args: { p_branch_id?: string; p_limit?: number; search_term: string }
         Returns: {
           avatar_url: string
+          branch_code: string
           branch_id: string
+          branch_name: string
           email: string
           full_name: string
           id: string

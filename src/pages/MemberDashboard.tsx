@@ -16,6 +16,7 @@ import { format, differenceInDays } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { getBenefitIcon } from '@/lib/benefitIcons';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useState } from 'react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
@@ -37,6 +38,16 @@ export default function MemberDashboard() {
   const isFrozen = activeMembership?.status === 'frozen';
   const [emblaRef] = useEmblaCarousel({ loop: true });
   const [addOnOpen, setAddOnOpen] = useState(false);
+
+  // Gifts/credits granted by staff should appear without a page refresh
+  useRealtimeInvalidate({
+    channel: 'member-dashboard-benefits',
+    tables: ['member_benefit_credits', 'member_comps'],
+    invalidateKeys: [['dashboard-benefit-credits'], ['my-entitlements']],
+    enabled: !!member?.id,
+  });
+
+
 
   // Fetch benefit add-on credits (purchased extras)
   const { data: benefitCredits = [] } = useQuery({
@@ -376,13 +387,13 @@ export default function MemberDashboard() {
                   <p className="text-muted-foreground mb-4">No active membership</p>
                   <Button variant="outline" asChild><Link to="/my-requests">Get Membership</Link></Button>
                 </div>
-              ) : !entitlements || entitlements.length === 0 ? (
+              ) : (!entitlements || entitlements.length === 0) && benefitCredits.length === 0 ? (
                 <div className="text-center py-4">
                   <p className="text-muted-foreground">No benefits configured for your plan</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {entitlements.map((ent: any) => {
+                  {(entitlements || []).map((ent: any) => {
                     const IconComponent = getBenefitIcon(ent.icon || ent.code);
                     // Sum purchased add-on credits for this benefit type (matches by name OR code, case-insensitive)
                     const matchingCredits = (benefitCredits as any[]).filter((c: any) => {
@@ -427,11 +438,11 @@ export default function MemberDashboard() {
                       </div>
                     );
                   })}
-                  {/* Add-On Credits (purchased extras) */}
+                  {/* Credits & gifts (purchased add-ons + complimentary sessions) */}
                   {benefitCredits.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <Heart className="h-3 w-3 text-destructive" /> Add-On Credits
+                        <Heart className="h-3 w-3 text-destructive" /> Credits &amp; Gifts
                       </p>
                       {benefitCredits.map((credit: any) => {
                         const daysLeft = Math.ceil((new Date(credit.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));

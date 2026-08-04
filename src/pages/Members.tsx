@@ -137,7 +137,13 @@ export default function MembersPage() {
               phone: row.phone,
               avatar_url: row.avatar_url
             },
-            branch: { name: row.branch_name },
+            branch: {
+              name:
+                row.branch_name ||
+                branches.find((b: any) => b.id === row.branch_id)?.name ||
+                null,
+              code: row.branch_code || null,
+            },
             memberships: []
           })),
           count: null // RPC doesn't return total count

@@ -15,11 +15,20 @@ import { Loader2 } from 'lucide-react';
 import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 import { EligibleAddOns } from '@/components/benefits/EligibleAddOns';
 import { CombinedCreditsSummary } from '@/components/benefits/CombinedCreditsSummary';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 
 export default function MyBenefits() {
   const { profile } = useAuth();
   const { member, activeMembership, isLoading: memberLoading } = useMemberData();
   const [addOnOpen, setAddOnOpen] = useState(false);
+
+  useRealtimeInvalidate({
+    channel: 'my-benefits-credits',
+    tables: ['member_benefit_credits', 'member_comps', 'benefit_bookings'],
+    invalidateKeys: [['my-benefit-credits'], ['my-benefit-usage'], ['my-benefit-bookings']],
+    enabled: !!member?.id,
+  });
+
 
   // Fetch benefit credits
   const { data: benefitCredits = [], isLoading: creditsLoading } = useQuery({

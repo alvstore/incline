@@ -13,6 +13,7 @@ import { Gift, Calendar, Heart, Clock, ArrowRight, Sparkles, ShieldCheck, CheckC
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
 import { toast } from 'sonner';
 import { addDays, parseISO, format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -240,10 +241,10 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
     onSuccess: () => {
       if (isManagerOrAbove) {
         toast.success(`Comp sessions granted successfully`);
-        queryClient.invalidateQueries({ queryKey: ['member-comps'] });
-        queryClient.invalidateQueries({ queryKey: ['member-details'] });
+        invalidateBenefitData(queryClient);
         invalidateMembersData(queryClient);
       } else {
+
         toast.success(`Comp sessions request submitted for approval`);
         queryClient.invalidateQueries({ queryKey: ['approval-queue'] });
         queryClient.invalidateQueries({ queryKey: ['approval-stats'] });
