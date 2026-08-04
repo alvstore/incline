@@ -79,7 +79,7 @@ export default function EmbedLeadForm() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Card className="w-full max-w-md rounded-2xl border-0 shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Get Started Today</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Get Started with Incline Fitness Today</h1>
           <CardDescription>Fill in your details and we'll reach out to you</CardDescription>
         </CardHeader>
         <CardContent>

@@ -170,7 +170,7 @@ const InclineAscent = () => {
       <div className="fixed top-6 left-1/2 -translate-x-1/2 md:left-8 md:translate-x-0 z-50 pointer-events-none">
         <img
           src={INCLINE_LOGO}
-          alt="INCLINE"
+          alt="The Incline Life luxury fitness club logo"
           width={224}
           height={128}
           decoding="async"
