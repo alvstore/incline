@@ -19,6 +19,7 @@ import {
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
+import FaceEnrolmentPanel from "./FaceEnrolmentPanel";
 
 interface PersonnelSyncTabProps {
   branchId?: string;
