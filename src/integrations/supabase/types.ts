@@ -14961,6 +14961,17 @@ export type Database = {
         Returns: number
       }
       reconcile_payments_daily: { Args: never; Returns: Json }
+      record_benefit_usage: {
+        Args: {
+          p_benefit_type: Database["public"]["Enums"]["benefit_type"]
+          p_benefit_type_id?: string
+          p_member_id: string
+          p_membership_id: string
+          p_notes?: string
+          p_usage_count?: number
+        }
+        Returns: Json
+      }
       record_consent: {
         Args: {
           p_action?: string
