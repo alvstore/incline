@@ -198,7 +198,13 @@ export default function PublicRegistration() {
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        return data as { access_token: string; refresh_token: string; member_code: string };
+        return data as {
+          access_token: string;
+          refresh_token: string;
+          member_code: string;
+          member_id: string;
+          user_id: string;
+        };
       } finally {
         window.clearTimeout(stageTimer);
         window.clearTimeout(stageTimer2);
@@ -209,10 +215,11 @@ export default function PublicRegistration() {
       if (data.access_token && data.refresh_token) {
         await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
       }
+      setNewMember({ memberId: data.member_id, userId: data.user_id, memberCode: data.member_code });
       toast.success(`Welcome to Incline! Your member code: ${data.member_code}`);
       setStep("done");
-      setTimeout(() => nav("/member-dashboard", { replace: true }), 1500);
     },
+
     onError: (e: Error) => {
       const msg = friendlyOtpError(e.message);
       setOtpError(msg);
