@@ -19,6 +19,7 @@ import { CompAmendActions } from '@/components/members/CompAmendActions';
 
 
 import { benefitTypeLabels, frequencyLabels } from '@/services/benefitService';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
 import { format } from 'date-fns';
 import type { Database } from '@/integrations/supabase/types';
 
