@@ -31,9 +31,8 @@ const corsHeaders = {
 const PERMANENT_END = "2099-12-31 23:59:59";
 const REVOKED_DATE = "2000-01-01 00:00:00";
 const MAX_PHOTO_BYTES = 400 * 1024; // 400KB per MIPS manual
-// Above this the raw source is never decoded — decoding multi-MB photos in an
-// edge worker exhausts memory and the invocation is killed by the platform.
-const MAX_SOURCE_BYTES = 2 * 1024 * 1024; // decode ceiling — larger sources OOM the edge worker
+// Photos are never decoded in this worker (see fetchDeviceReadyBytes).
+
 // Face-safety floors: the terminal runs its own face detection on the image we
 // push. Anything smaller / more compressed than this is accepted by the MIPS
 // server but silently discarded by the gate, which is exactly how the fleet
