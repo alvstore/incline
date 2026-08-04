@@ -114,9 +114,44 @@ Deno.serve(async (req) => {
       } else {
         skipped++; // no branch — cannot insert
       }
+      // Re-assert the device callbacks and verify they stuck.
+      if (mipsId != null) {
+        try {
+          const detail = await (await fetch(`${baseUrl}/through/device/${mipsId}`, {
+            headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Accept": "application/json" },
+          })).json();
+          const dev = detail?.data;
+          if (dev) {
+            delete dev.deviceRegion;
+            dev.sevUploadRecRecordUrl = `${callbackBase}?event=record`;
+            dev.sevUploadDevHeartbeatUrl = `${callbackBase}?event=heartbeat`;
+            dev.sevUploadRegPersonUrl = `${callbackBase}?event=regPerson`;
+            await fetch(`${baseUrl}/through/device`, {
+              method: "PUT",
+              headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Content-Type": "application/json" },
+              body: JSON.stringify(dev),
+            });
+            const after = await (await fetch(`${baseUrl}/through/device/${mipsId}`, {
+              headers: { "Authorization": `Bearer ${token}`, "TENANT-ID": "1", "Accept": "application/json" },
+            })).json();
+            const persisted = !!after?.data?.sevUploadRegPersonUrl;
+            callbacks.push({
+              device: name,
+              mips_device_id: mipsId,
+              configured: persisted,
+              hint: persisted
+                ? undefined
+                : "This firmware keeps callback URLs on the terminal itself — set them in the device's on-screen settings. Access events still arrive via record reconciliation.",
+            });
+          }
+        } catch (e) {
+          callbacks.push({ device: name, mips_device_id: mipsId, configured: false, error: String(e) });
+        }
+      }
     }
 
-    return json({ success: true, imported, updated, skipped, total: rows.length });
+    return json({ success: true, imported, updated, skipped, total: rows.length, callbacks });
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("mips-import-devices error:", msg);
