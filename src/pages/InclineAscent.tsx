@@ -159,7 +159,7 @@ const InclineAscent = () => {
     >
       <SEO
         title="The Incline Life | Luxury Gym & Recovery Club in Udaipur"
-        description="Udaipur's most luxurious fitness destination. Panatta equipment, elite personal training, group classes, sauna, ice bath & recovery suite. Join Incline today."
+        description="Udaipur's 24/7 luxury gym in Sector 14 — Panatta strength gear, personal training, infrared sauna, ice bath and recovery lounge."
         path="/"
         jsonLd={[...branchJsonLd, faqJsonLd]}
       />
