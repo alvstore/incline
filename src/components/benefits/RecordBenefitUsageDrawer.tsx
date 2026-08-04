@@ -151,7 +151,7 @@ export function RecordBenefitUsageDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Benefit Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className="h-11 rounded-xl">
                           <SelectValue placeholder="Select benefit..." />
