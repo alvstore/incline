@@ -10764,10 +10764,14 @@ export type Database = {
           branch_id: string | null
           created_at: string
           details: Json
+          first_seen_at: string
           id: string
           kind: string
+          last_seen_at: string
+          occurrence_count: number
           reference_id: string | null
           reference_type: string | null
+          resolution: string | null
           resolved_at: string | null
           resolved_by: string | null
           run_date: string
@@ -10777,10 +10781,14 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           details?: Json
+          first_seen_at?: string
           id?: string
           kind: string
+          last_seen_at?: string
+          occurrence_count?: number
           reference_id?: string | null
           reference_type?: string | null
+          resolution?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           run_date?: string
@@ -10790,10 +10798,14 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           details?: Json
+          first_seen_at?: string
           id?: string
           kind?: string
+          last_seen_at?: string
+          occurrence_count?: number
           reference_id?: string | null
           reference_type?: string | null
+          resolution?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           run_date?: string
@@ -15023,6 +15035,10 @@ export type Database = {
         Args: { p_max_age_min?: number }
         Returns: number
       }
+      recheck_invoice_reconciliation: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
       reconcile_payments_daily: { Args: never; Returns: Json }
       record_benefit_usage: {
         Args: {
@@ -15203,6 +15219,14 @@ export type Database = {
               user_id: string
             }[]
           }
+      resolve_reconciliation_finding: {
+        Args: {
+          p_kind: string
+          p_reference_id: string
+          p_reference_type: string
+        }
+        Returns: undefined
+      }
       resolve_staff_shift: {
         Args: { p_branch_id?: string; p_ts: string; p_user_id: string }
         Returns: {
@@ -15526,6 +15550,17 @@ export type Database = {
             }
             Returns: undefined
           }
+      upsert_reconciliation_finding: {
+        Args: {
+          p_branch_id: string
+          p_details: Json
+          p_kind: string
+          p_reference_id: string
+          p_reference_type: string
+          p_severity: string
+        }
+        Returns: undefined
+      }
       user_visible_branch_ids: {
         Args: { p_user_id: string }
         Returns: string[]
