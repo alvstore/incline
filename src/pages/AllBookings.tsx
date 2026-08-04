@@ -41,12 +41,15 @@ export default function AllBookingsPage() {
   useHighlightRow();
   useRealtimeInvalidate({
     channel: 'page-all-bookings',
-    tables: ['class_bookings', 'benefit_bookings', 'pt_sessions'],
+    tables: ['class_bookings', 'benefit_bookings', 'pt_sessions', 'member_comps', 'member_benefit_credits'],
     invalidateKeys: [
       ['all-class-bookings'],
       ['all-benefit-bookings'],
       ['all-pt-sessions'],
       ['monthly-bookings-calendar'],
+      ['concierge-facilities'],
+      ['concierge-slots'],
+      ['member-benefit-credits'],
     ],
   });
   useEffect(() => {
