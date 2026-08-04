@@ -4,14 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -126,18 +124,19 @@ export function RecordBenefitUsageDrawer({
   );
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent>
-        <div className="mx-auto w-full max-w-md">
-          <DrawerHeader>
-            <DrawerTitle>Record Benefit Usage</DrawerTitle>
-            <DrawerDescription>
-              Record a benefit usage for {memberName}
-            </DrawerDescription>
-          </DrawerHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+        <SheetHeader className="border-b px-6 py-5 text-left">
+          <SheetTitle>Record Benefit Usage</SheetTitle>
+          <SheetDescription>Record a benefit usage for {memberName}</SheetDescription>
+        </SheetHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="px-4 space-y-4">
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
               <FormField
                 control={form.control}
                 name="benefit_type"
@@ -146,14 +145,17 @@ export function RecordBenefitUsageDrawer({
                     <FormLabel>Benefit Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 rounded-xl">
                           <SelectValue placeholder="Select benefit..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {recordableBenefits.map((benefit) => (
-                          <SelectItem key={benefit.benefit_type_id || benefit.benefit_type} value={benefit.benefit_type_id || benefit.benefit_type}>
-                            <div className="flex items-center justify-between w-full gap-4">
+                          <SelectItem
+                            key={benefit.benefit_type_id || benefit.benefit_type}
+                            value={benefit.benefit_type_id || benefit.benefit_type}
+                          >
+                            <div className="flex w-full items-center justify-between gap-4">
                               <span>{benefit.label}</span>
                               {!benefit.isUnlimited && (
                                 <span className="text-xs text-muted-foreground">
@@ -171,12 +173,12 @@ export function RecordBenefitUsageDrawer({
               />
 
               {selectedBalance && !selectedBalance.isUnlimited && (
-                <div className="text-sm bg-muted p-3 rounded-md">
+                <div className="rounded-xl bg-muted p-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Used this period:</span>
                     <span className="font-medium">{selectedBalance.used}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="mt-1 flex justify-between">
                     <span className="text-muted-foreground">Remaining:</span>
                     <span className="font-medium text-primary">{selectedBalance.remaining}</span>
                   </div>
@@ -190,16 +192,15 @@ export function RecordBenefitUsageDrawer({
                   <FormItem>
                     <FormLabel>Usage Count</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        min={1} 
-                        max={selectedBalance?.remaining ?? 10} 
-                        {...field} 
+                      <Input
+                        type="number"
+                        min={1}
+                        max={selectedBalance?.remaining ?? 10}
+                        className="h-11 rounded-xl"
+                        {...field}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Number of times this benefit is being used
-                    </FormDescription>
+                    <FormDescription>Number of times this benefit is being used</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -212,31 +213,38 @@ export function RecordBenefitUsageDrawer({
                   <FormItem>
                     <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
                         placeholder="Add any notes about this usage..."
-                        {...field} 
+                        className="rounded-xl"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
 
-              <DrawerFooter className="px-0">
-                <Button 
-                  type="submit" 
-                  disabled={isValidating || recordMutation.isPending}
-                >
-                  {isValidating ? 'Validating...' : recordMutation.isPending ? 'Recording...' : 'Record Usage'}
-                </Button>
-                <DrawerClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DrawerClose>
-              </DrawerFooter>
-            </form>
-          </Form>
-        </div>
-      </DrawerContent>
-    </Drawer>
+            <div className="flex gap-3 border-t bg-background px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 cursor-pointer rounded-xl"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 cursor-pointer rounded-xl"
+                disabled={isValidating || recordMutation.isPending}
+              >
+                {isValidating ? 'Validating...' : recordMutation.isPending ? 'Recording...' : 'Record Usage'}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </SheetContent>
+    </Sheet>
   );
 }
