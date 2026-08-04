@@ -80,6 +80,8 @@ export function RecordBenefitUsageDrawer({
     defaultValues: {
       benefit_type: preselectedBenefit || '',
       usage_count: 1,
+      usage_date: todayStr(),
+      usage_time: '',
       notes: '',
     },
   });
@@ -87,10 +89,17 @@ export function RecordBenefitUsageDrawer({
   // Keep the preselected card in sync when the drawer is reopened from a card
   useEffect(() => {
     if (open) {
-      form.reset({ benefit_type: preselectedBenefit || '', usage_count: 1, notes: '' });
+      form.reset({
+        benefit_type: preselectedBenefit || '',
+        usage_count: 1,
+        usage_date: todayStr(),
+        usage_time: '',
+        notes: '',
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, preselectedBenefit]);
+
 
 
 
