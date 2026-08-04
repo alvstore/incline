@@ -1,3 +1,8 @@
+// v2.4.0 — zero-decode photo pipeline. The edge worker NEVER decodes an image
+// again (that was the 546 "not enough compute resources" kill): oversized
+// sources are re-fetched through Supabase Storage's server-side image
+// transformer at a device-safe 720px / q80, and anything that still will not
+// fit 400KB is reported as `needs_better_source` for a client-side retake.
 // v2.2.0 — transport-aware: a slow / rebooting MIPS server is now an outage
 // (503 retryable + shared circuit breaker) instead of an unhandled 500/546, and
 // the CRM row stays `pending` so the queue re-drives it rather than reading as
@@ -8,7 +13,6 @@
 // photo assign, and retryable per-device delivery so one healthy gate cannot
 // hide another gate's failure.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { decode as decodeImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
   classifyFailure,
   isTripped,
