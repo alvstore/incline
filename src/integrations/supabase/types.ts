@@ -1612,6 +1612,7 @@ export type Database = {
           recorded_by: string | null
           usage_count: number | null
           usage_date: string
+          usage_time: string | null
         }
         Insert: {
           benefit_type: Database["public"]["Enums"]["benefit_type"]
@@ -1623,6 +1624,7 @@ export type Database = {
           recorded_by?: string | null
           usage_count?: number | null
           usage_date?: string
+          usage_time?: string | null
         }
         Update: {
           benefit_type?: Database["public"]["Enums"]["benefit_type"]
@@ -1634,6 +1636,7 @@ export type Database = {
           recorded_by?: string | null
           usage_count?: number | null
           usage_date?: string
+          usage_time?: string | null
         }
         Relationships: [
           {
@@ -14957,6 +14960,8 @@ export type Database = {
           p_membership_id: string
           p_notes?: string
           p_usage_count?: number
+          p_usage_date?: string
+          p_usage_time?: string
         }
         Returns: Json
       }
