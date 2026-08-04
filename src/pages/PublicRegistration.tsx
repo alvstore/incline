@@ -30,6 +30,8 @@ import {
   useRegistrationDraftAutosave,
   clearRegistrationDraft,
 } from "@/lib/registration/useRegistrationDraft";
+import { uploadAndSyncPersonPhoto } from "@/lib/media/syncPersonPhoto";
+
 import {
   PARQ_QUESTIONS,
   PRIMARY_GOALS,
