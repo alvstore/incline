@@ -249,7 +249,7 @@ export default function MemberCheckout() {
 
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Invoice {invoice.invoice_number}</CardTitle>
+            <h2 className="text-base font-semibold leading-none tracking-tight">Invoice {invoice.invoice_number}</h2>
             <Badge variant={isPaid ? 'default' : 'secondary'} className={isPaid ? 'bg-success text-primary-foreground' : ''}>
               {isPaid ? (
                 <><CheckCircle className="h-3 w-3 mr-1" /> Paid</>
