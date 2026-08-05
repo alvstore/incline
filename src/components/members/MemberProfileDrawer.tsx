@@ -399,11 +399,11 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
   const giftOnlyRows = Object.entries(compMap)
     .filter(([btId]) => !planBenefitTypeIds.has(btId))
     .map(([btId, c]) => ({
-      benefit_type: 'other',
+      benefit_type: 'other' as const,
       benefit_type_id: btId,
       label: c.name || 'Gift Benefit',
       name: c.name || 'Gift Benefit',
-      frequency: 'per_membership',
+      frequency: 'per_membership' as const,
       limit_count: c.total,
       description: 'Complimentary sessions',
       used: c.used,
@@ -416,6 +416,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
       totalUsed: c.used,
       totalRemaining: c.remaining,
       isGiftOnly: true,
+      grantedBy: c.grantedBy,
     }));
 
   const availableBenefits = [...planRows, ...giftOnlyRows];
