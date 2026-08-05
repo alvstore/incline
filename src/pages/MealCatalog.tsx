@@ -126,6 +126,7 @@ export default function MealCatalog() {
       carbs: m.carbs,
       fats: m.fats,
       fiber: m.fiber,
+      micronutrients: m.micronutrients || '',
       tags: m.tags,
       notes: m.notes || '',
     });
@@ -144,11 +145,30 @@ export default function MealCatalog() {
             </h2>
             <p className="text-sm text-muted-foreground">Master list of meals used by the diet builder's swap modal</p>
           </div>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Meal
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => downloadCsvFile('meal_catalog_template.csv', mealTemplateCsv())}>
+              <Download className="h-4 w-4 mr-2" />
+              Template
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!meals.length}
+              onClick={() => downloadCsvFile(`meal_catalog_${new Date().toISOString().slice(0, 10)}.csv`, mealsToCsv(meals))}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download CSV
+            </Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload CSV
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Meal
+            </Button>
+          </div>
         </div>
+
 
         <Card>
           <CardHeader className="pb-3">
