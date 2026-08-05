@@ -125,7 +125,7 @@ export function EligibleAddOns({
                   <div className="min-w-0">
                     <p className="font-semibold text-sm truncate">{p.name}</p>
                     {p.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line">{p.description}</p>
                     )}
                   </div>
                   <Badge variant="outline" className="text-[10px] shrink-0">
