@@ -949,9 +949,20 @@ Deno.serve(async (req) => {
               const defaults = templateName === 'gym_closure_update' ? gymClosureDefaultValues(keys) : {};
               const baseValues = { ...defaults, ...inferred, ...(input.payload.variables ?? {}) };
               const hasMediaHeader = ['document', 'image', 'video'].includes(templateHeaderType);
+              // Body-only template + a PDF → paste a SHORT branded link rather
+              // than a 400-char signed storage URL.
+              const shortAttachmentUrl = hasMediaHeader
+                ? input.attachment?.url
+                : await shortenDocumentLink(
+                    supabase,
+                    input.attachment?.url,
+                    `whatsapp:${templateName}`,
+                    input.branch_id,
+                  );
               const templateValues = hasMediaHeader
                 ? baseValues
-                : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
+                : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, shortAttachmentUrl);
+
               // Pre-flight: refuse to burn a Meta send when a required
               // name-like variable is missing. Prevents 132018 loops when
               // leads have no captured full_name.
