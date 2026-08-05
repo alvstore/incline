@@ -396,6 +396,13 @@ export default function MealCatalog() {
           )}
         </ResponsiveSheetFooter>
       </ResponsiveSheet>
+
+      <MealCatalogImportSheet
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        existingMeals={meals}
+      />
     </AppLayout>
+
   );
 }
