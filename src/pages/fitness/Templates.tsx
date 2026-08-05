@@ -246,17 +246,26 @@ export default function FitnessTemplatesPage() {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => handleAssignTemplate(template)}>
+            <Button size="sm" className="h-9 flex-1 min-w-[120px] cursor-pointer" onClick={() => handleAssignTemplate(template)}>
               <UserPlus className="h-3.5 w-3.5 mr-1" /> Assign
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setViewing(template)} title="Preview plan">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 w-9 cursor-pointer p-0"
+              onClick={() => setViewing(template)}
+              title="Preview plan"
+              aria-label={`Preview ${template.name}`}
+            >
               <Eye className="h-3.5 w-3.5" />
             </Button>
             <Button
               size="sm"
               variant="outline"
+              className="h-9 w-9 cursor-pointer p-0"
               onClick={() => handleDownloadTemplate(template)}
               title={isPdf ? 'Open PDF' : 'Download PDF'}
+              aria-label={`${isPdf ? 'Open' : 'Download'} PDF for ${template.name}`}
             >
               <Download className="h-3.5 w-3.5" />
             </Button>
@@ -264,11 +273,13 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => {
                   const t = template.type === "workout" ? "workout" : "diet";
                   navigate(`/fitness/create/manual?type=${t}&template=${template.id}`);
                 }}
                 title="Use as starting point"
+                aria-label={`Use ${template.name} as a starting point`}
               >
                 <FilePlus className="h-3.5 w-3.5" />
               </Button>
@@ -277,11 +288,13 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => {
                   const t = template.type === "workout" ? "workout" : "diet";
                   navigate(`/fitness/create/manual?type=${t}&template=${template.id}&edit=1`);
                 }}
                 title={isSystem ? "Customize a copy" : "Edit template content"}
+                aria-label={`Edit ${template.name}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -290,8 +303,10 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => setTargetingTemplate(template)}
                 title="Audience targeting (age/weight/goal)"
+                aria-label={`Audience targeting for ${template.name}`}
               >
                 <Target className="h-3.5 w-3.5" />
               </Button>
@@ -300,13 +315,16 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="ghost"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => setDeleteTarget(template)}
                 title="Delete template"
+                aria-label={`Delete ${template.name}`}
               >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             )}
           </div>
+
         </CardContent>
       </Card>
     );
