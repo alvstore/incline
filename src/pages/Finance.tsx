@@ -14,6 +14,7 @@ import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import { useActorNames } from '@/hooks/useActorNames';
 import { 
   TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Clock, CheckCircle, XCircle, Download,
@@ -181,12 +182,23 @@ export default function FinancePage() {
     },
   });
 
+  // Resolve staff ids on expenses into names for the audit trail
+  const { nameOf: expenseActorName } = useActorNames([
+    ...(expenseData as any[]).flatMap((e) => [e.submitted_by, e.approved_by]),
+    ...(pendingExpenses as any[]).flatMap((e) => [e.submitted_by, e.approved_by]),
+  ]);
+
   // Approve/Reject expense mutations
   const approveExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
+      const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('expenses')
-        .update({ status: 'approved', approved_at: new Date().toISOString() })
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: auth?.user?.id ?? null,
+        })
         .eq('id', expenseId);
       if (error) throw error;
     },
@@ -202,9 +214,14 @@ export default function FinancePage() {
 
   const rejectExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
+      const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('expenses')
-        .update({ status: 'rejected' })
+        .update({
+          status: 'rejected',
+          approved_at: new Date().toISOString(),
+          approved_by: auth?.user?.id ?? null,
+        })
         .eq('id', expenseId);
       if (error) throw error;
     },
@@ -689,11 +706,13 @@ export default function FinancePage() {
                             <TableHead>Category</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Vendor</TableHead>
+                            <TableHead>Submitted by</TableHead>
+                            <TableHead>Approved by</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {expenseData.slice(0, 20).map((expense) => (
+                          {expenseData.slice(0, 20).map((expense: any) => (
                             <TableRow key={expense.id}>
                               <TableCell>{format(new Date(expense.expense_date), 'MMM d, yyyy')}</TableCell>
                               <TableCell>
@@ -701,6 +720,12 @@ export default function FinancePage() {
                               </TableCell>
                               <TableCell>{expense.description}</TableCell>
                               <TableCell>{expense.vendor || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {expenseActorName(expense.submitted_by) || 'System'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {expenseActorName(expense.approved_by) || '—'}
+                              </TableCell>
                               <TableCell className="text-right font-medium text-destructive">
                                 -{formatCurrency(expense.amount)}
                               </TableCell>
@@ -708,11 +733,12 @@ export default function FinancePage() {
                           ))}
                           {expenseData.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                 No expense transactions found
                               </TableCell>
                             </TableRow>
                           )}
+
                         </TableBody>
                       </Table>
                     )}
