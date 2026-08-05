@@ -99,6 +99,7 @@ export function PurchaseAddOnDrawer({
   branchId,
   mode = 'staff',
   defaultTab = 'benefits',
+  defaultPackageId = null,
 }: PurchaseAddOnDrawerProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
