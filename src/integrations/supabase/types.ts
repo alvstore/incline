@@ -6036,18 +6036,21 @@ export type Database = {
         Row: {
           branch_id: string
           last_seq: number
+          series: string
           updated_at: string
           year_yy: string
         }
         Insert: {
           branch_id: string
           last_seq?: number
+          series?: string
           updated_at?: string
           year_yy: string
         }
         Update: {
           branch_id?: string
           last_seq?: number
+          series?: string
           updated_at?: string
           year_yy?: string
         }
@@ -6064,6 +6067,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           discount_amount: number | null
+          document_series: string | null
           due_date: string | null
           gst_rate: number | null
           id: string
@@ -6097,6 +6101,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount_amount?: number | null
+          document_series?: string | null
           due_date?: string | null
           gst_rate?: number | null
           id?: string
@@ -6130,6 +6135,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount_amount?: number | null
+          document_series?: string | null
           due_date?: string | null
           gst_rate?: number | null
           id?: string
@@ -6843,6 +6849,7 @@ export type Database = {
           id: string
           is_active: boolean
           meal_type: string
+          micronutrients: string | null
           name: string
           notes: string | null
           protein: number
@@ -6863,6 +6870,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           meal_type: string
+          micronutrients?: string | null
           name: string
           notes?: string | null
           protein?: number
@@ -6883,6 +6891,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           meal_type?: string
+          micronutrients?: string | null
           name?: string
           notes?: string | null
           protein?: number
