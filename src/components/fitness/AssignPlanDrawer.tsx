@@ -222,6 +222,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   type: plan!.type,
                   description: plan!.description,
                   data: plan!.content,
+                  valid_from: startDate,
                   valid_until: validUntil,
                 },
                 branchId: branchId || m.branch_id || undefined,
