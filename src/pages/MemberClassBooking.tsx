@@ -278,10 +278,11 @@ export default function MemberClassBooking() {
       return result;
     },
     onSuccess: () => {
-      toast.success('Slot booked!');
+      toast.success('Slot booked!', { description: '1 session has been deducted from your balance.' });
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
       queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['my-entitlements'] });
+      invalidateBenefitData(queryClient);
     },
     onError: (e: any) => {
       const msg = e.message || 'Failed to book slot';
