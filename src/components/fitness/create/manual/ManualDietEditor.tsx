@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
+import { DayRail } from '@/components/fitness/create/DayRail';
+
 import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
 import { cn } from '@/lib/utils';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
