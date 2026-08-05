@@ -1843,6 +1843,9 @@ export function MemberProfileDrawer({
                               <span>
                                 <span className="font-semibold text-foreground">+{row.days_added}d</span>{' '}
                                 — {row.reason || 'No reason recorded'}
+                                <span className="block text-[11px] text-muted-foreground">
+                                  Granted by: {actorName(row.added_by) || 'System'}
+                                </span>
                               </span>
                               <span className="whitespace-nowrap">
                                 {row.created_at ? format(new Date(row.created_at), 'dd MMM yyyy') : ''}
