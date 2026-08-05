@@ -392,6 +392,40 @@ function appendAttachmentLinkForBodyOnlyTemplate(
   };
 }
 
+/** Convert a long signed storage URL into a short branded redirect
+ *  (`…/functions/v1/doc?c=abc12345`). Falls back to the original URL if the
+ *  short link can't be created — never blocks a send. */
+async function shortenDocumentLink(
+  supabase: any,
+  url: string | undefined,
+  purpose: string,
+  branchId?: string | null,
+): Promise<string | undefined> {
+  if (!url) return url;
+  const base = Deno.env.get('SUPABASE_URL');
+  if (!base) return url;
+  if (url.includes('/functions/v1/doc?c=')) return url;
+  try {
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+      .map((b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32])
+      .join('');
+    const { error } = await supabase.from('short_links').insert({
+      code,
+      target_url: url,
+      purpose,
+      branch_id: branchId ?? null,
+      // Signed storage URLs are time-limited anyway; keep the short link alive
+      // for 30 days so members can re-open recent documents.
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (error) return url;
+    return `${base}/functions/v1/doc?c=${code}`;
+  } catch {
+    return url;
+  }
+}
+
+
 
 function inferTemplateValues(templateContent: string, renderedBody: string, keys: string[]): Record<string, string> {
   if (keys.length === 0) return {};
