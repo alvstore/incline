@@ -274,7 +274,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
               <span className="font-medium text-foreground">{plan.name}</span> — {plan.type} plan
               {!results && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium">
-                  {planWeeks} {planWeeks === 1 ? 'week' : 'weeks'}
+                  {selectedDays > 0 ? `${selectedDays} days` : `${planWeeks} ${planWeeks === 1 ? 'week' : 'weeks'}`}
                 </span>
               )}
             </SheetDescription>
