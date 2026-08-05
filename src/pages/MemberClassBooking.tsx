@@ -920,10 +920,24 @@ function AgendaCard({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            ) : isLocked ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs cursor-pointer border-primary/40 text-primary hover:bg-primary/5"
+                disabled={isFull || !activeMembership}
+                onClick={() => onUnlock(item.unlockPackage?.id ?? null)}
+                aria-label={`Unlock ${item.title}`}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+                {item.unlockPackage
+                  ? `Unlock ₹${Number(item.unlockPackage.price).toLocaleString('en-IN')}`
+                  : 'Unlock'}
+              </Button>
             ) : (
               <Button
                 size="sm"
-                className="h-8 text-xs"
+                className="h-8 text-xs cursor-pointer"
                 disabled={isFull || !activeMembership || isBooking}
                 onClick={() => {
                   if (item.type === 'class') onBookClass(item.id);
