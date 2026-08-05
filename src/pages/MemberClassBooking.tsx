@@ -825,6 +825,7 @@ function AgendaCard({
   onCancelClass,
   onBookSlot,
   onCancelSlot,
+  onUnlock,
   isBooking,
   isCancelling,
 }: {
@@ -834,13 +835,15 @@ function AgendaCard({
   onCancelClass: (bookingId: string) => void;
   onBookSlot: (id: string) => void;
   onCancelSlot: (bookingId: string) => void;
+  onUnlock: (packageId?: string | null) => void;
   isBooking: boolean;
   isCancelling: boolean;
 }) {
   const isFull = item.spotsLeft !== undefined && item.spotsLeft <= 0;
+  const isLocked = !!item.locked;
 
   return (
-    <Card className={`border-border/50 transition-colors ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''}`}>
+    <Card className={`rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
       <CardContent className="py-3 px-4">
         <div className="flex items-center gap-4">
           {/* Time Column */}
