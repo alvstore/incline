@@ -265,16 +265,29 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
         p_force_reason: forceAdd ? forceReason.trim() : null,
       });
       if (error) throw error;
-      const result = data as { success: boolean; error?: string; force_added?: boolean };
+      const result = data as {
+        success: boolean;
+        error?: string;
+        force_added?: boolean;
+        deduction?: { from_plan?: number; gift?: unknown[]; credit?: unknown[] };
+      };
       if (!result.success) {
         toast.error(result.error || 'Booking failed');
         return;
       }
 
+      const source = result.deduction?.from_plan
+        ? 'plan allowance'
+        : (result.deduction?.credit?.length ? 'purchased credits' : (result.deduction?.gift?.length ? 'complimentary sessions' : null));
+
+      queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
+      invalidateBenefitData(queryClient);
+
       toast.success(
         forceAdd
           ? `Slot force-booked for ${selectedMember.full_name}`
           : `Slot booked for ${selectedMember.full_name}`,
+        source ? { description: `1 session deducted from ${source}.` } : undefined,
       );
       onSuccess?.();
       onOpenChange(false);
