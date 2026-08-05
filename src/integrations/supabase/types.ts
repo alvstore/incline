@@ -1559,6 +1559,8 @@ export type Database = {
           is_active: boolean | null
           is_bookable: boolean | null
           name: string
+          safety_notes: string | null
+          terms: string | null
           updated_at: string
         }
         Insert: {
@@ -1574,6 +1576,8 @@ export type Database = {
           is_active?: boolean | null
           is_bookable?: boolean | null
           name: string
+          safety_notes?: string | null
+          terms?: string | null
           updated_at?: string
         }
         Update: {
@@ -1589,6 +1593,8 @@ export type Database = {
           is_active?: boolean | null
           is_bookable?: boolean | null
           name?: string
+          safety_notes?: string | null
+          terms?: string | null
           updated_at?: string
         }
         Relationships: [
