@@ -10659,6 +10659,7 @@ export type Database = {
       }
       rcs_inbound_events: {
         Row: {
+          branch_id: string | null
           event_type: string
           id: string
           message_id: string | null
@@ -10668,6 +10669,7 @@ export type Database = {
           sender_phone: string
         }
         Insert: {
+          branch_id?: string | null
           event_type: string
           id?: string
           message_id?: string | null
@@ -10677,6 +10679,7 @@ export type Database = {
           sender_phone: string
         }
         Update: {
+          branch_id?: string | null
           event_type?: string
           id?: string
           message_id?: string | null
@@ -10685,7 +10688,15 @@ export type Database = {
           record_id?: string | null
           sender_phone?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rcs_inbound_events_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rcs_templates: {
         Row: {
