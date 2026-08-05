@@ -11,7 +11,7 @@ import {
   Sparkles,
   Dumbbell,
   Utensils,
-  Loader2,
+  
   Library,
   Trash2,
   UserPlus,
