@@ -1,9 +1,14 @@
-// notify-booking-event v2.0.0
+// notify-booking-event v3.0.0
 // Dispatches booking confirmations / cancellations / reminders for benefit
 // (facility) slot bookings through the canonical `dispatch-communication`
 // funnel — WhatsApp, Email, SMS, RCS and in-app, honouring member channel
 // preferences, quiet hours and dedupe. Called fire-and-forget from
 // book_facility_slot / cancel_facility_slot RPCs and by the reminder sweep.
+//
+// v3.0.0 — the caller now declares the exact `event_key` so the dispatcher
+// resolves a universal FACILITY template instead of silently falling back to
+// a class template (which produced "your booking for the class on at").
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
