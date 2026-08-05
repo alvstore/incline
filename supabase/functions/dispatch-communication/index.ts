@@ -1,4 +1,8 @@
-// dispatch-communication v1.24.0
+// dispatch-communication v1.26.0
+// v1.26.0: Template picker only considers APPROVED Meta templates and prefers a
+//          DOCUMENT-header template when the send carries a PDF. Body-only
+//          fallbacks now paste a SHORT branded link (/functions/v1/doc?c=…)
+//          instead of a 400-character signed storage URL.
 // v1.23.0: FIX — document attachments on body-only approved templates are no
 //          longer silently dropped. Meta templates like `invoice_generated_pdf`
 //          say "attached" but have NO HEADER component, so the PDF URL is now
@@ -350,13 +354,20 @@ function requiredKeysMissing(
     const raw = resolveVarValue(keys[i], values, i);
     if (String(raw ?? '').trim()) continue;
     const k = String(keys[i] || '').toLowerCase();
-    // Name is the only key we treat as *required*; other slots fall back safely.
+    // Name-like slots.
     if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') {
+      missing.push(keys[i]);
+      continue;
+    }
+    // v1.25.0: date/time slots are required too. An empty one produces
+    // half-written sends like "your booking for the class on at is confirmed".
+    if (/(^|_)(date|time|datetime|slot_date|slot_time|start|when)(_|$)/.test(k)) {
       missing.push(keys[i]);
     }
   }
   return missing;
 }
+
 
 function appendAttachmentLinkForBodyOnlyTemplate(
   keys: string[],
@@ -384,6 +395,40 @@ function appendAttachmentLinkForBodyOnlyTemplate(
     [normalizedKey]: current ? `${current} — PDF: ${attachmentUrl}` : attachmentUrl,
   };
 }
+
+/** Convert a long signed storage URL into a short branded redirect
+ *  (`…/functions/v1/doc?c=abc12345`). Falls back to the original URL if the
+ *  short link can't be created — never blocks a send. */
+async function shortenDocumentLink(
+  supabase: any,
+  url: string | undefined,
+  purpose: string,
+  branchId?: string | null,
+): Promise<string | undefined> {
+  if (!url) return url;
+  const base = Deno.env.get('SUPABASE_URL');
+  if (!base) return url;
+  if (url.includes('/functions/v1/doc?c=')) return url;
+  try {
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+      .map((b) => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32])
+      .join('');
+    const { error } = await supabase.from('short_links').insert({
+      code,
+      target_url: url,
+      purpose,
+      branch_id: branchId ?? null,
+      // Signed storage URLs are time-limited anyway; keep the short link alive
+      // for 30 days so members can re-open recent documents.
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (error) return url;
+    return `${base}/functions/v1/doc?c=${code}`;
+  } catch {
+    return url;
+  }
+}
+
 
 
 function inferTemplateValues(templateContent: string, renderedBody: string, keys: string[]): Record<string, string> {
@@ -713,6 +758,31 @@ Deno.serve(async (req) => {
           // that key is far more precise than the coarse category map and fixes
           // retention nudges being suppressed with no_template_for_closed_session
           // while approved retention_stage_1/2/3 templates existed.
+          // v1.25.0: candidate picker — only APPROVED Meta templates are
+          // eligible, and when the send carries a PDF we prefer a template
+          // that actually has a document header (native attachment) over a
+          // body-only one (which degrades to a pasted link).
+          const pickTemplate = async (events: string[]) => {
+            if (events.length === 0) return null;
+            const { data: rows } = await supabase
+              .from('templates')
+              .select('id, branch_id, header_type, meta_template_status')
+              .in('trigger_event', events)
+              .eq('type', 'whatsapp')
+              .not('meta_template_name', 'is', null)
+              .or(`branch_id.eq.${input.branch_id},branch_id.is.null`);
+            const list = (rows ?? []).filter(
+              (r: any) => String(r.meta_template_status || '').toUpperCase() === 'APPROVED',
+            );
+            if (list.length === 0) return null;
+            const wantsDoc = !!input.attachment?.url;
+            const score = (r: any) =>
+              (r.branch_id ? 2 : 0) +
+              (wantsDoc && String(r.header_type || '') === 'document' ? 4 : 0);
+            list.sort((a: any, b: any) => score(b) - score(a));
+            return list[0];
+          };
+
           if (!input.template_id) {
             const eventKey = String(
               (input.payload as any)?.variables?.event_key ??
@@ -720,15 +790,7 @@ Deno.serve(async (req) => {
                 '',
             ).trim();
             if (eventKey) {
-              const { data: eventTpl } = await supabase
-                .from('templates')
-                .select('id, branch_id')
-                .eq('trigger_event', eventKey)
-                .not('meta_template_name', 'is', null)
-                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
-                .order('branch_id', { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
+              const eventTpl = await pickTemplate([eventKey]);
               if (eventTpl?.id) {
                 input.template_id = eventTpl.id;
                 (input as any).__auto_resolved_template = 'event_key';
@@ -753,21 +815,12 @@ Deno.serve(async (req) => {
               announcement: ['announcement', 'broadcast'],
             };
             const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
-            if (events.length > 0) {
-              const { data: fallbackTpl } = await supabase
-                .from('templates')
-                .select('id, branch_id')
-                .in('trigger_event', events)
-                .not('meta_template_name', 'is', null)
-                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
-                .order('branch_id', { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (fallbackTpl?.id) {
-                input.template_id = fallbackTpl.id;
-                (input as any).__auto_resolved_template = true;
-              }
+            const fallbackTpl = await pickTemplate(events);
+            if (fallbackTpl?.id) {
+              input.template_id = fallbackTpl.id;
+              (input as any).__auto_resolved_template = true;
             }
+
             // Settings-level global fallback (last resort, admin-configured).
             if (!input.template_id) {
               const { data: fb } = await supabase
@@ -900,9 +953,20 @@ Deno.serve(async (req) => {
               const defaults = templateName === 'gym_closure_update' ? gymClosureDefaultValues(keys) : {};
               const baseValues = { ...defaults, ...inferred, ...(input.payload.variables ?? {}) };
               const hasMediaHeader = ['document', 'image', 'video'].includes(templateHeaderType);
+              // Body-only template + a PDF → paste a SHORT branded link rather
+              // than a 400-char signed storage URL.
+              const shortAttachmentUrl = hasMediaHeader
+                ? input.attachment?.url
+                : await shortenDocumentLink(
+                    supabase,
+                    input.attachment?.url,
+                    `whatsapp:${templateName}`,
+                    input.branch_id,
+                  );
               const templateValues = hasMediaHeader
                 ? baseValues
-                : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, input.attachment?.url);
+                : appendAttachmentLinkForBodyOnlyTemplate(keys, baseValues, shortAttachmentUrl);
+
               // Pre-flight: refuse to burn a Meta send when a required
               // name-like variable is missing. Prevents 132018 loops when
               // leads have no captured full_name.
@@ -920,7 +984,11 @@ Deno.serve(async (req) => {
                 }
               }
               const missingRequired = requiredKeysMissing(keys, templateValues);
-              if (missingRequired.length > 0 && String(wt?.category || '').toUpperCase() === 'MARKETING') {
+              // v1.25.0: fail closed for ALL categories (was MARKETING-only).
+              // A utility template with an empty name/date/time slot reads as
+              // broken to the member and is worse than not sending.
+              if (missingRequired.length > 0) {
+
 
                 const reason = `template_param_empty:${missingRequired.join(',')}`;
                 await supabase

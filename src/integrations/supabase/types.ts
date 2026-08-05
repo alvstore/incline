@@ -11519,6 +11519,50 @@ export type Database = {
           },
         ]
       }
+      short_links: {
+        Row: {
+          branch_id: string | null
+          clicks: number
+          code: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          purpose: string | null
+          target_url: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          clicks?: number
+          code: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          purpose?: string | null
+          target_url: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          clicks?: number
+          code?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          purpose?: string | null
+          target_url?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "short_links_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sms_logs: {
         Row: {
           branch_id: string | null

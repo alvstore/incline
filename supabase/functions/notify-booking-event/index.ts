@@ -1,9 +1,14 @@
-// notify-booking-event v2.0.0
+// notify-booking-event v3.0.0
 // Dispatches booking confirmations / cancellations / reminders for benefit
 // (facility) slot bookings through the canonical `dispatch-communication`
 // funnel — WhatsApp, Email, SMS, RCS and in-app, honouring member channel
 // preferences, quiet hours and dedupe. Called fire-and-forget from
 // book_facility_slot / cancel_facility_slot RPCs and by the reminder sweep.
+//
+// v3.0.0 — the caller now declares the exact `event_key` so the dispatcher
+// resolves a universal FACILITY template instead of silently falling back to
+// a class template (which produced "your booking for the class on at").
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -131,18 +136,57 @@ Deno.serve(async (req) => {
 
     const benefitName =
       benefitType?.name || facility?.name || slot.benefit_type || "your session";
+
+    // Human-readable date/time (IST) so the message never reads "on at".
+    const prettyDate = (() => {
+      try {
+        return new Date(`${slot.slot_date}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+          weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Kolkata",
+        });
+      } catch { return String(slot.slot_date ?? ""); }
+    })();
+    const prettyTime = (() => {
+      const hhmm = String(slot.start_time || "").slice(0, 5);
+      if (!/^\d{2}:\d{2}$/.test(hhmm)) return hhmm;
+      const [h, m] = hhmm.split(":").map(Number);
+      const suffix = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      return `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
+    })();
+
+    // The dispatcher resolves the approved universal FACILITY templates via
+    // trigger_event. Reminders reuse the confirmation template copy.
+    const EVENT_KEYS: Record<EventName, string> = {
+      facility_slot_booked: "facility_booked",
+      facility_slot_cancelled: "facility_cancelled",
+      facility_slot_reminder: "facility_reminder",
+    };
+
     const vars: Record<string, string> = {
+      event_key: EVENT_KEYS[eventName],
       member_name: profile?.full_name || "Member",
+      // Canonical slots used by the approved facility templates.
+      facility_name: benefitName,
+      booking_date: prettyDate,
+      booking_time: prettyTime,
+      // Aliases kept so any other template shape still renders real values
+      // instead of "the class on at".
       benefit_name: benefitName,
-      slot_date: slot.slot_date,
-      slot_time: (slot.start_time || "").slice(0, 5),
+      slot_date: prettyDate,
+      slot_time: prettyTime,
+      session_name: benefitName,
+      class_name: benefitName,
+      class_date: prettyDate,
+      class_time: prettyTime,
       branch_name: branch?.name || "Incline",
       cancellation_policy: cancellationPolicy,
     };
+
     for (const [k, v] of Object.entries(vars)) {
       body = body.split(`{{${k}}}`).join(v);
     }
     body = body.replace(/\s{2,}/g, " ").trim();
+
 
     const subject = SUBJECTS[eventName];
     const results: any[] = [];
@@ -172,7 +216,7 @@ Deno.serve(async (req) => {
           body: {
             branch_id: branchId,
             channel,
-            category: "class_notification",
+            category: "transactional",
             recipient,
             member_id: booking.member_id,
             user_id: member.user_id,
