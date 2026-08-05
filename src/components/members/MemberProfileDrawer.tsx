@@ -1828,7 +1828,7 @@ export function MemberProfileDrawer({
                       <div>Start: {format(new Date(activeMembership.start_date), 'dd MMM yyyy')}</div>
                       <div>End: {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}</div>
                       <div>Paid: ₹{activeMembership.price_paid}</div>
-                      <div>By: N/A</div>
+                      <div>Sold by: {actorName((activeMembership as any).created_by) || 'System'}</div>
                     </div>
 
                     {freeDaysTotal > 0 && (
