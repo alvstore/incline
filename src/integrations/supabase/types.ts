@@ -14061,6 +14061,7 @@ export type Database = {
         Args: { _path: string; _user_id: string }
         Returns: boolean
       }
+      can_read_policy_pdf: { Args: { _object_name: string }; Returns: boolean }
       can_write_biometric_photo: {
         Args: { _path: string; _user_id: string }
         Returns: boolean
