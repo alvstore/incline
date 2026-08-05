@@ -56,6 +56,7 @@ import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { useNavigate } from 'react-router-dom';
 import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
+import { useActorNames } from '@/hooks/useActorNames';
 
 
 // ─── Pending Invoices Section ───
