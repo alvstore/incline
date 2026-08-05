@@ -70,22 +70,60 @@ export function exportHsnSummary(
   ]);
 }
 
-export function exportSalesRegister(lines: GstLine[]) {
-  downloadCsv(`Sales_Register_${stamp()}.csv`, [
-    ['Date', 'Invoice #', 'Customer', 'GSTIN', 'Source', 'HSN', 'Taxable', 'Tax', 'Total'],
+export function exportExemptSupplies(lines: GstLine[]) {
+  downloadCsv(`GSTR1_Table8_Exempt_Nil_${stamp()}.csv`, [
+    ['Invoice #', 'Date', 'Customer', 'GSTIN', 'Source', 'Nature of Supply', 'Value'],
     ...lines.map(l => [
-      fmtDate(l.date), l.invoice_number, l.customer_name, l.customer_gstin || '',
-      l.source, l.hsn, l.taxable.toFixed(2), (l.cgst + l.sgst + l.igst).toFixed(2), l.total.toFixed(2),
+      l.invoice_number, fmtDate(l.date), l.customer_name, l.customer_gstin || '',
+      l.source, 'Exempted / Nil rated', l.total.toFixed(2),
     ]),
   ]);
 }
 
-export function exportAccountantPack(lines: GstLine[], hsnBuckets: Parameters<typeof exportHsnSummary>[0]) {
+export function exportDocumentsIssued(
+  rows: Array<{ series: string; from: string; to: string; issued: number; cancelled: number }>,
+) {
+  downloadCsv(`GSTR1_Table13_Documents_Issued_${stamp()}.csv`, [
+    ['Series', 'From', 'To', 'Total Issued', 'Cancelled', 'Net Issued'],
+    ...rows.map(r => [r.series, r.from, r.to, r.issued, r.cancelled, r.issued - r.cancelled]),
+  ]);
+}
+
+export function exportSalesRegister(
+  lines: GstLine[],
+  exemptLines: GstLine[] = [],
+) {
+  const row = (l: GstLine, bucket: string) => [
+    fmtDate(l.date), l.invoice_number, bucket, l.customer_name, l.customer_gstin || '',
+    l.customer_gstin ? 'B2B' : 'B2C', l.source, l.hsn,
+    l.taxable.toFixed(2), l.rate, l.cgst.toFixed(2), l.sgst.toFixed(2), l.igst.toFixed(2),
+    (l.cgst + l.sgst + l.igst).toFixed(2), l.total.toFixed(2),
+  ];
+  const all = [
+    ...lines.map(l => row(l, 'Taxable')),
+    ...exemptLines.map(l => row(l, 'Exempt')),
+  ];
+  downloadCsv(`Sales_Register_${stamp()}.csv`, [
+    ['Date', 'Invoice #', 'Bucket', 'Customer', 'GSTIN', 'Type', 'Stream', 'HSN',
+      'Taxable', 'Rate %', 'CGST', 'SGST', 'IGST', 'Total Tax', 'Invoice Total'],
+    ...all,
+  ]);
+}
+
+export function exportAccountantPack(
+  lines: GstLine[],
+  hsnBuckets: Parameters<typeof exportHsnSummary>[0],
+  exemptLines: GstLine[] = [],
+  documentsIssued: Parameters<typeof exportDocumentsIssued>[0] = [],
+) {
   exportGstr1B2B(lines);
   exportGstr1B2C(lines);
   exportHsnSummary(hsnBuckets);
-  exportSalesRegister(lines);
+  if (exemptLines.length) exportExemptSupplies(exemptLines);
+  if (documentsIssued.length) exportDocumentsIssued(documentsIssued);
+  exportSalesRegister(lines, exemptLines);
 }
+
 
 export function exportDailySales(rows: Array<{ date: string; txns: number; gross: number; tax: number; net: number; refunds: number }>) {
   downloadCsv(`Daily_Sales_${stamp()}.csv`, [

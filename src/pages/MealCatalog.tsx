@@ -12,7 +12,7 @@ import {
   ResponsiveSheetTitle,
   ResponsiveSheetFooter,
 } from '@/components/ui/ResponsiveSheet';
-import { Plus, Trash2, Edit, UtensilsCrossed, Loader2, Search, Eye } from 'lucide-react';
+import { Plus, Trash2, Edit, UtensilsCrossed, Loader2, Search, Eye, Upload, Download } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMealCatalog,
@@ -25,6 +25,9 @@ import {
 import { DIETARY_PREFERENCES, CUISINE_PREFERENCES } from '@/types/fitnessPlan';
 import { toast } from 'sonner';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
+import { MealCatalogImportSheet } from '@/components/fitness/MealCatalogImportSheet';
+import { mealsToCsv, downloadCsvFile, mealTemplateCsv } from '@/lib/nutrition/mealCatalogCsv';
+
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: 'Breakfast' },
@@ -47,6 +50,7 @@ const EMPTY: Omit<MealCatalogEntry, 'id' | 'created_at' | 'updated_at' | 'is_act
   carbs: 0,
   fats: 0,
   fiber: 0,
+  micronutrients: '',
   tags: [],
   notes: '',
 };
@@ -59,7 +63,9 @@ export default function MealCatalog() {
   const [editing, setEditing] = useState<MealCatalogEntry | null>(null);
   const [viewing, setViewing] = useState<MealCatalogEntry | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [draft, setDraft] = useState<typeof EMPTY>(EMPTY);
+
 
   const { data: meals = [], isLoading } = useQuery({
     queryKey: ['meal-catalog-admin', search, filterDiet, filterCuisine],
@@ -120,6 +126,7 @@ export default function MealCatalog() {
       carbs: m.carbs,
       fats: m.fats,
       fiber: m.fiber,
+      micronutrients: m.micronutrients || '',
       tags: m.tags,
       notes: m.notes || '',
     });
@@ -138,11 +145,30 @@ export default function MealCatalog() {
             </h2>
             <p className="text-sm text-muted-foreground">Master list of meals used by the diet builder's swap modal</p>
           </div>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Meal
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => downloadCsvFile('meal_catalog_template.csv', mealTemplateCsv())}>
+              <Download className="h-4 w-4 mr-2" />
+              Template
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!meals.length}
+              onClick={() => downloadCsvFile(`meal_catalog_${new Date().toISOString().slice(0, 10)}.csv`, mealsToCsv(meals))}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download CSV
+            </Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload CSV
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Meal
+            </Button>
+          </div>
         </div>
+
 
         <Card>
           <CardHeader className="pb-3">
@@ -210,6 +236,12 @@ export default function MealCatalog() {
                         <span>C {m.carbs}g</span>
                         <span>F {m.fats}g</span>
                       </div>
+                      {m.micronutrients && (
+                        <p className="text-[11px] text-muted-foreground truncate" title={m.micronutrients}>
+                          <span className="font-medium text-foreground">Micros:</span> {m.micronutrients}
+                        </p>
+                      )}
+
                     </CardContent>
                   </Card>
                 ))}
@@ -274,12 +306,21 @@ export default function MealCatalog() {
             ))}
           </div>
           <div className="space-y-1">
+            <Label>Key micronutrients</Label>
+            <Input
+              value={draft.micronutrients || ''}
+              onChange={(e) => setDraft({ ...draft, micronutrients: e.target.value })}
+              placeholder="e.g. Calcium, Iron, B12"
+            />
+          </div>
+          <div className="space-y-1">
             <Label>Tags (comma-separated)</Label>
             <Input
               value={draft.tags.join(', ')}
               onChange={(e) => setDraft({ ...draft, tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
             />
           </div>
+
         </div>
         <ResponsiveSheetFooter>
           <Button variant="outline" onClick={() => setDraftOpen(false)}>Cancel</Button>
@@ -321,6 +362,12 @@ export default function MealCatalog() {
                 </div>
               ))}
             </div>
+            {viewing.micronutrients && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Key micronutrients</p>
+                <p className="text-sm">{viewing.micronutrients}</p>
+              </div>
+            )}
             {viewing.tags?.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Tags</p>
@@ -331,6 +378,7 @@ export default function MealCatalog() {
                 </div>
               </div>
             )}
+
             {viewing.notes && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
@@ -348,6 +396,13 @@ export default function MealCatalog() {
           )}
         </ResponsiveSheetFooter>
       </ResponsiveSheet>
+
+      <MealCatalogImportSheet
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        existingMeals={meals}
+      />
     </AppLayout>
+
   );
 }
