@@ -48,8 +48,10 @@ Today `/meal-catalog` only supports one-at-a-time entry through the Add Meal she
 - Columns: date, series, invoice #, customer, GSTIN, place of supply, supply type badge (Taxable / Exempt / Non-GST), HSN-SAC, taxable, rate, CGST, SGST, IGST, total, status.
 - Column totals in a sticky footer row, colour-coded supply-type badges, and a CSV that mirrors the on-screen columns exactly.
 
-### Document series — a decision for you
-Separating GST and exempt invoices into two number series (e.g. `INV-…` and `BOS-…`, a bill-of-supply series) is the correct GST practice and makes Table 13 clean. It changes invoice numbering going forward and cannot be applied retroactively to the 78 invoices already issued. See the question below.
+### Document series — confirmed decisions
+- **Separate bill-of-supply series.** From now on, exempt / non-GST invoices are numbered `BOS-INC-26-####` from their own counter, while taxable invoices continue on `INV-INC-26-####`. The 78 invoices already issued keep their numbers and are classified in reports by supply type; Table 13 therefore declares three series (taxable, exempt, and the legacy mixed range) with honest from/to and cancelled counts.
+- **POS rate: per-product only, no fallback.** The hard-coded 18% is removed. A POS line without a resolvable tax rate is not silently taxed — it lands in a "Rate missing — needs attention" bucket at the top of the GST tab with a direct link to the sale, and is excluded from the filing CSVs until fixed, so nothing wrong is ever sent to the CA.
+
 
 ---
 
