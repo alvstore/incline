@@ -94,6 +94,13 @@ export default function MemberClassBooking() {
   const [showMyBookings, setShowMyBookings] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [timeBucket, setTimeBucket] = useState<'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('all');
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const [upsellPackageId, setUpsellPackageId] = useState<string | null>(null);
+
+  const openUpsell = (packageId?: string | null) => {
+    setUpsellPackageId(packageId ?? null);
+    setUpsellOpen(true);
+  };
 
   const today = startOfDay(new Date());
   const endDate = addDays(today, 13); // 2 weeks
