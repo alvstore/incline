@@ -205,7 +205,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
     queryFn: async () => {
       const { data, error } = await supabase
         .from('member_comps')
-        .select('id, comp_sessions, used_sessions, benefit_type_id, benefit_types(id, name, code)')
+        .select('id, comp_sessions, used_sessions, benefit_type_id, granted_by, created_at, benefit_types(id, name, code)')
         .eq('member_id', memberId);
       if (error) throw error;
       return data || [];
