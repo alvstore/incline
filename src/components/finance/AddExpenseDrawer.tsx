@@ -87,6 +87,7 @@ export function AddExpenseDrawer({ open, onOpenChange, branchId }: AddExpenseDra
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase.from('expenses').insert({
         branch_id: branchId,
         category_id: formData.category_id || null,
@@ -96,6 +97,7 @@ export function AddExpenseDrawer({ open, onOpenChange, branchId }: AddExpenseDra
         expense_date: formData.expense_date,
         receipt_url: formData.receipt_url || null,
         status: 'pending',
+        submitted_by: auth?.user?.id ?? null,
       });
       if (error) throw error;
     },
