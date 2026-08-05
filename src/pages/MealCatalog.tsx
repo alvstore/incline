@@ -12,7 +12,7 @@ import {
   ResponsiveSheetTitle,
   ResponsiveSheetFooter,
 } from '@/components/ui/ResponsiveSheet';
-import { Plus, Trash2, Edit, UtensilsCrossed, Loader2, Search, Eye } from 'lucide-react';
+import { Plus, Trash2, Edit, UtensilsCrossed, Loader2, Search, Eye, Upload, Download } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMealCatalog,
@@ -25,6 +25,9 @@ import {
 import { DIETARY_PREFERENCES, CUISINE_PREFERENCES } from '@/types/fitnessPlan';
 import { toast } from 'sonner';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
+import { MealCatalogImportSheet } from '@/components/fitness/MealCatalogImportSheet';
+import { mealsToCsv, downloadCsvFile, mealTemplateCsv } from '@/lib/nutrition/mealCatalogCsv';
+
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: 'Breakfast' },
