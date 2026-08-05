@@ -992,6 +992,12 @@ export function MemberProfileDrawer({
 
   const freeDaysTotal = (freeDaysList as any[]).reduce((s, r) => s + Number(r.days_added || 0), 0);
 
+  // Audit attribution: resolve staff ids used across the membership tab
+  const { nameOf: actorName } = useActorNames([
+    ...(memberDetails?.memberships || []).map((m: any) => m.created_by),
+    ...(freeDaysList as any[]).map((r) => r.added_by),
+  ]);
+
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
     const membershipItems = (memberDetails?.memberships || []).map((membership: any) => ({
       id: `membership-${membership.id}`,
