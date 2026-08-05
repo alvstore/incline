@@ -374,35 +374,60 @@ export default function FitnessTemplatesPage() {
           </div>
         </div>
 
-        {/* Common-plan filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { key: "all", label: "All plans" },
-              { key: "common", label: "Common (no PT)" },
-              { key: "pt_only", label: "PT-specific" },
-            ] as { key: CommonFilter; label: string }[]
-          ).map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setCommonFilter(f.key)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                commonFilter === f.key
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background hover:bg-muted border-border"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* Search + common-plan filter chips */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { key: "all", label: "All plans" },
+                { key: "common", label: "Common (no PT)" },
+                { key: "pt_only", label: "PT-specific" },
+              ] as { key: CommonFilter; label: string }[]
+            ).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setCommonFilter(f.key)}
+                className={`cursor-pointer text-xs px-3 py-1.5 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                  commonFilter === f.key
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-muted border-border"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <label htmlFor="template-search" className="sr-only">Search templates</label>
+            <Input
+              id="template-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search templates…"
+              className="h-9 rounded-xl pl-9"
+            />
+          </div>
         </div>
 
         {/* Templates */}
         {templatesLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-card p-5 shadow-lg shadow-muted/30 space-y-3">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <div className="flex gap-2 pt-2">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-9 w-full rounded-xl" />
+              </div>
+            ))}
           </div>
         ) : !hasAnyTemplate ? (
+
           <Card className="rounded-2xl">
             <CardContent className="py-12 text-center">
               <Library className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
