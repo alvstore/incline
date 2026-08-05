@@ -262,8 +262,19 @@ serve(async (req: Request) => {
 
         if (referenceId && isValidUUID(referenceId)) {
           const { data: invoice } = await supabase
-            .from("invoices").select("id, member_id, branch_id").eq("id", referenceId).maybeSingle();
+            .from("invoices")
+            .select("id, member_id, branch_id, total_amount, amount_paid")
+            .eq("id", referenceId).maybeSingle();
           if (invoice) {
+            // The charged amount may include an online convenience surcharge.
+            // Only the base portion may be credited to the invoice; the rest is
+            // recorded as a fee so invoice totals never move.
+            const dueNow = Math.max(
+              0,
+              Number(invoice.total_amount || 0) - Number(invoice.amount_paid || 0),
+            );
+            const baseAmount = dueNow > 0 ? Math.min(rzpAmount, dueNow) : rzpAmount;
+            const convenienceFee = Math.round((rzpAmount - baseAmount) * 100) / 100;
             const { data: canonicalTx } = await supabase
               .from("payment_transactions")
               .select("id")
@@ -277,7 +288,7 @@ serve(async (req: Request) => {
               p_branch_id: invoice.branch_id,
               p_invoice_id: invoice.id,
               p_member_id: invoice.member_id,
-              p_amount: rzpAmount,
+              p_amount: baseAmount,
               p_payment_method: paymentEntity?.method === 'upi' ? 'upi' : paymentEntity?.method === 'netbanking' ? 'bank_transfer' : 'card',
               p_transaction_id: paymentId,
               p_notes: "Auto-recorded via Razorpay Payment Link",
@@ -293,6 +304,8 @@ serve(async (req: Request) => {
                 gateway_captured_at: capturedAt,
                 gateway_fee: gatewayFee,
                 gateway_tax: gatewayTax,
+                charged_amount: rzpAmount,
+                convenience_fee: convenienceFee,
                 net_settlement_amount: Math.max(0, rzpAmount - gatewayFee - gatewayTax),
               },
             });
@@ -515,6 +528,17 @@ serve(async (req: Request) => {
           // Idempotency key so retried webhook deliveries don't double-settle.
           const idemKey = `webhook:${gateway}:${transactionData.gateway_payment_id ?? transactionData.gateway_order_id}`;
 
+          // Split off any online convenience surcharge — the invoice is only
+          // ever credited with its own outstanding balance.
+          const dueNow = Math.max(
+            0,
+            Number(invoice.total_amount || 0) - Number(invoice.amount_paid || 0),
+          );
+          const baseAmount = dueNow > 0
+            ? Math.min(transactionData.amount, dueNow)
+            : transactionData.amount;
+          const convenienceFee = Math.round((transactionData.amount - baseAmount) * 100) / 100;
+
           const { data: settleResult, error: settleError } = await supabase.rpc("settle_payment", {
             p_branch_id: invoice.branch_id,
             p_invoice_id: existingTxn.invoice_id,
@@ -539,6 +563,8 @@ serve(async (req: Request) => {
                 : new Date().toISOString(),
               gateway_fee: gateway === 'razorpay' ? Number(paymentEntity?.fee ?? 0) / 100 : 0,
               gateway_tax: gateway === 'razorpay' ? Number(paymentEntity?.tax ?? 0) / 100 : 0,
+              charged_amount: transactionData.amount,
+              convenience_fee: convenienceFee,
               net_settlement_amount: gateway === 'razorpay'
                 ? Math.max(0, transactionData.amount - Number(paymentEntity?.fee ?? 0) / 100 - Number(paymentEntity?.tax ?? 0) / 100)
                 : transactionData.amount,
