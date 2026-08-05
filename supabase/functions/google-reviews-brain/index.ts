@@ -1156,7 +1156,11 @@ async function requestMemberReview(feedback_id: string, channel?: string) {
   if (!recipient) return json({ error: `No recipient for channel ${ch}` }, 412);
 
   const link = `${SUPABASE_URL}/functions/v1/google-review-redirect?f=${fb.id}`;
-  const message = `Hi ${memberName ?? "there"}, thanks for the ${fb.rating}★ feedback at ${branch.name}! If we earned it, would you mind sharing a quick Google review? It helps us a lot 🙏 ${link}`;
+  const message =
+    `Hi ${memberName ?? "there"}, thank you for training with us at ${branch.name}. ` +
+    `If your experience has been good so far, would you mind sharing a few honest words on Google? ` +
+    `It genuinely helps our small team grow: ${link} ` +
+    `And if anything fell short, please reply here — we would rather fix it first.`;
 
   const dispatchRes = await sb.functions.invoke("dispatch-communication", {
     body: {
@@ -1166,10 +1170,20 @@ async function requestMemberReview(feedback_id: string, channel?: string) {
       recipient,
       member_id: fb.member_id,
       payload: {
-        subject: `Quick favor — share your experience at ${branch.name}?`,
+        subject: `A small favour, ${memberName ?? "there"}?`,
         body: message,
-        variables: { branch_name: branch.name, rating: fb.rating, link },
+        variables: {
+          // Lets the dispatcher resolve the approved review template instead of
+          // falling back to a plain-text send (blocked outside the 24h window).
+          event_key: "review_request",
+          member_name: memberName ?? "there",
+          branch_name: branch.name,
+          rating: fb.rating,
+          review_link: link,
+          link,
+        },
       },
+
       dedupe_key: `greview:${fb.id}:${ch}`,
       ttl_seconds: 7 * 24 * 3600,
     },
