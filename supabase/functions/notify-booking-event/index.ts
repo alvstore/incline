@@ -137,17 +137,25 @@ Deno.serve(async (req) => {
     const benefitName =
       benefitType?.name || facility?.name || slot.benefit_type || "your session";
     const vars: Record<string, string> = {
+      event_key: eventName,
       member_name: profile?.full_name || "Member",
       benefit_name: benefitName,
       slot_date: slot.slot_date,
       slot_time: (slot.start_time || "").slice(0, 5),
       branch_name: branch?.name || "Incline",
       cancellation_policy: cancellationPolicy,
+      // Aliases: if an older class-shaped template is ever resolved, the slots
+      // still render real values instead of "the class on at".
+      class_name: benefitName,
+      class_date: slot.slot_date,
+      class_time: (slot.start_time || "").slice(0, 5),
+      session_name: benefitName,
     };
     for (const [k, v] of Object.entries(vars)) {
       body = body.split(`{{${k}}}`).join(v);
     }
     body = body.replace(/\s{2,}/g, " ").trim();
+
 
     const subject = SUBJECTS[eventName];
     const results: any[] = [];
