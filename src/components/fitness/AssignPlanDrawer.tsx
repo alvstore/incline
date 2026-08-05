@@ -31,7 +31,13 @@ import {
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 
 import { toast } from 'sonner';
-import { format, addWeeks } from 'date-fns';
+import { format } from 'date-fns';
+import {
+  PLAN_DURATION_PRESETS,
+  planEndDateISO,
+  recommendedPresetDays,
+  todayISO,
+} from '@/lib/fitness/planDuration';
 
 interface MemberLite {
   id: string;
