@@ -1,3 +1,4 @@
+// v2.6.0 — Sweep now restores dues-cleared members; revokes tagged with a reason code
 // v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
@@ -114,6 +115,7 @@ async function applyMemberAction(
   action: "revoke" | "restore",
   reason: string | undefined,
   branch_id_override: string | undefined,
+  reasonCode?: "dues" | "expired" | "frozen" | "manual",
 ): Promise<ActionResult> {
   const { data: member, error: memberError } = await supabase
     .from("members")
@@ -174,7 +176,10 @@ async function applyMemberAction(
     console.log(`Person ${personSn} not found in MIPS — nothing to ${action}`);
     await supabase
       .from("members")
-      .update({ hardware_access_status: action === "revoke" ? "revoked" : "none" })
+      .update({
+        hardware_access_status: action === "revoke" ? "revoked" : "none",
+        hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
+      })
       .eq("id", member_id);
     return { success: true, action, message: "Person not found in MIPS, status updated locally" };
   }
@@ -226,7 +231,13 @@ async function applyMemberAction(
   }
 
   const newStatus = action === "revoke" ? "revoked" : "active";
-  await supabase.from("members").update({ hardware_access_status: newStatus }).eq("id", member_id);
+  await supabase
+    .from("members")
+    .update({
+      hardware_access_status: newStatus,
+      hardware_access_reason: action === "revoke" ? (reasonCode || "manual") : null,
+    })
+    .eq("id", member_id);
 
   await supabase.from("access_logs").insert({
     device_sn: "CRM-SYSTEM",
@@ -251,9 +262,15 @@ async function sweepExpired(supabase: any) {
   const revoked: string[] = [];
   const errors: string[] = [];
 
-  const safeRevoke = async (m: any, reason: string) => {
+  const restored: string[] = [];
+
+  const safeRevoke = async (
+    m: any,
+    reason: string,
+    code: "dues" | "expired" | "frozen" = "expired",
+  ) => {
     try {
-      const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id);
+      const result = await applyMemberAction(supabase, m.id, "revoke", reason, m.branch_id, code);
       if (result.success) {
         revoked.push(m.member_code || m.id);
       } else {
@@ -282,7 +299,7 @@ async function sweepExpired(supabase: any) {
       .limit(1)
       .maybeSingle();
     if (!activeMembership) {
-      await safeRevoke(member, "Auto-revoked: membership expired or inactive");
+      await safeRevoke(member, "Auto-revoked: membership expired or inactive", "expired");
     }
   }
 
@@ -296,7 +313,7 @@ async function sweepExpired(supabase: any) {
     const m = (ms as any).members;
     if (!m?.mips_person_sn) continue;
     if (revoked.includes(m.member_code || m.id)) continue;
-    await safeRevoke(m, "Auto-revoked: membership frozen");
+    await safeRevoke(m, "Auto-revoked: membership frozen", "frozen");
   }
 
   // 3. Overdue dues (payment due date passed + branch grace period)
@@ -311,11 +328,35 @@ async function sweepExpired(supabase: any) {
     await safeRevoke(
       { id: row.member_id, member_code: row.member_code, branch_id: row.branch_id },
       `Auto-revoked: dues Rs. ${row.outstanding_amount} overdue by ${row.days_overdue} day(s)`,
+      "dues",
     );
   }
 
+  // 4. Restore: dues cleared and membership still live
+  const { data: restorable, error: restoreError } = await supabase.rpc("members_restorable_after_dues");
+  if (restoreError) {
+    errors.push(`dues_restore_check: ${restoreError.message}`);
+  }
+  for (const row of restorable || []) {
+    try {
+      const result = await applyMemberAction(
+        supabase,
+        row.member_id,
+        "restore",
+        "Auto-restored: dues cleared",
+        row.branch_id,
+      );
+      if (result.success) {
+        restored.push(row.member_code || row.member_id);
+      } else {
+        errors.push(`${row.member_code || row.member_id}: ${result.error}`);
+      }
+    } catch (e) {
+      errors.push(`${row.member_code || row.member_id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
-  return { revoked, errors };
+  return { revoked, restored, errors };
 }
 
 const PERMANENT_END = "2099-12-31 23:59:59";
@@ -498,12 +539,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === "sweep_expired") {
-      const { revoked, errors } = await sweepExpired(supabase);
+      const { revoked, restored, errors } = await sweepExpired(supabase);
       return new Response(
         JSON.stringify({
           success: true,
           revoked_count: revoked.length,
           revoked,
+          restored_count: restored.length,
+          restored,
           errors,
           checked_at: new Date().toISOString(),
         }),
