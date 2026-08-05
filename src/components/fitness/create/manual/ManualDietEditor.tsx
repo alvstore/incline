@@ -382,144 +382,157 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="lg:col-span-2 space-y-4">
-        <Card>
-          <CardHeader><CardTitle className="text-base">Plan Details</CardTitle></CardHeader>
+    <div className="grid gap-5 lg:grid-cols-12">
+      {/* Left: plan details, targets, day rail */}
+      <div className="space-y-4 lg:col-span-3">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Plan Details
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Plan Name *</Label>
-                <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Cutting diet — phase 1" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Dietary Type *</Label>
-                <Select value={dietaryType} onValueChange={setDietaryType}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vegetarian">Vegetarian</SelectItem>
-                    <SelectItem value="vegan">Vegan</SelectItem>
-                    <SelectItem value="non_vegetarian">Non-Vegetarian</SelectItem>
-                    <SelectItem value="eggetarian">Eggetarian</SelectItem>
-                    <SelectItem value="pescatarian">Pescatarian</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Cuisine *</Label>
-                <Select value={cuisine} onValueChange={setCuisine}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="indian">Indian</SelectItem>
-                    <SelectItem value="continental">Continental</SelectItem>
-                    <SelectItem value="mediterranean">Mediterranean</SelectItem>
-                    <SelectItem value="asian">Asian</SelectItem>
-                    <SelectItem value="mixed">Mixed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dt-name">Plan Name *</Label>
+              <Input id="dt-name" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Cutting diet — phase 1" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dt-desc">Description</Label>
+              <Input id="dt-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Dietary Type *</Label>
+              <Select value={dietaryType} onValueChange={setDietaryType}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vegetarian">Vegetarian</SelectItem>
+                  <SelectItem value="vegan">Vegan</SelectItem>
+                  <SelectItem value="non_vegetarian">Non-Vegetarian</SelectItem>
+                  <SelectItem value="eggetarian">Eggetarian</SelectItem>
+                  <SelectItem value="pescatarian">Pescatarian</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cuisine *</Label>
+              <Select value={cuisine} onValueChange={setCuisine}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="indian">Indian</SelectItem>
+                  <SelectItem value="continental">Continental</SelectItem>
+                  <SelectItem value="mediterranean">Mediterranean</SelectItem>
+                  <SelectItem value="asian">Asian</SelectItem>
+                  <SelectItem value="mixed">Mixed</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Daily Targets</CardTitle></CardHeader>
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Daily Targets
+            </CardTitle>
+          </CardHeader>
           <CardContent>
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Calories</Label>
-                <Input type="number" value={calTarget} onChange={(e) => setCalTarget(parseInt(e.target.value) || 0)} />
+                <Label className="text-xs" htmlFor="t-cal">Calories</Label>
+                <Input id="t-cal" type="number" value={calTarget} onChange={(e) => setCalTarget(parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Protein (g)</Label>
-                <Input type="number" value={proteinTarget} onChange={(e) => setProteinTarget(parseInt(e.target.value) || 0)} />
+                <Label className="text-xs" htmlFor="t-pro">Protein (g)</Label>
+                <Input id="t-pro" type="number" value={proteinTarget} onChange={(e) => setProteinTarget(parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Carbs (g)</Label>
-                <Input type="number" value={carbsTarget} onChange={(e) => setCarbsTarget(parseInt(e.target.value) || 0)} />
+                <Label className="text-xs" htmlFor="t-carb">Carbs (g)</Label>
+                <Input id="t-carb" type="number" value={carbsTarget} onChange={(e) => setCarbsTarget(parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Fats (g)</Label>
-                <Input type="number" value={fatTarget} onChange={(e) => setFatTarget(parseInt(e.target.value) || 0)} />
+                <Label className="text-xs" htmlFor="t-fat">Fats (g)</Label>
+                <Input id="t-fat" type="number" value={fatTarget} onChange={(e) => setFatTarget(parseInt(e.target.value) || 0)} />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Day rail — weekly plans keep all their days */}
         {weekly && days.length > 1 && (
-          <Card>
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {days.length}-day plan
-                </p>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1">
-                      <Copy className="h-3.5 w-3.5" /> Copy this day
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => copyDayTo(days.map((_, i) => i).filter((i) => i !== activeDay))}
-                    >
-                      Copy to all other days
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {days.map((d, i) =>
-                      i === activeDay ? null : (
-                        <DropdownMenuItem key={d.day + i} onClick={() => copyDayTo([i])}>
-                          Copy to {d.day}
-                        </DropdownMenuItem>
-                      ),
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {days.map((d, i) => {
+          <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                {days.length}-day plan
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DayRail
+                ariaLabel="Select plan day"
+                activeIndex={activeDay}
+                onSelect={setActiveDay}
+                days={days.map((d) => {
                   const t = dayTotals(d);
-                  const active = i === activeDay;
-                  return (
-                    <button
-                      key={d.day + i}
-                      type="button"
-                      onClick={() => setActiveDay(i)}
-                      className={cn(
-                        'shrink-0 rounded-xl border px-3 py-2 text-left transition-all duration-200 cursor-pointer',
-                        'focus:outline-none focus:ring-2 focus:ring-primary min-w-[104px]',
-                        active ? 'border-primary bg-primary/10' : 'hover:bg-muted/60',
-                      )}
-                      aria-pressed={active}
-                    >
-                      <p className={cn('text-sm font-semibold', active && 'text-primary')}>{d.day}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {Math.round(t.calories)} kcal · {Math.round(t.protein)}g P
-                      </p>
-                    </button>
-                  );
+                  return {
+                    label: d.day,
+                    meta: `${Math.round(t.calories)} kcal · ${Math.round(t.protein)}g P`,
+                    muted: t.calories === 0,
+                  };
                 })}
-              </div>
+                action={
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 w-full cursor-pointer gap-1">
+                        <Copy className="h-3.5 w-3.5" /> Copy this day
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => copyDayTo(days.map((_, i) => i).filter((i) => i !== activeDay))}
+                      >
+                        Copy to all other days
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {days.map((d, i) =>
+                        i === activeDay ? null : (
+                          <DropdownMenuItem key={d.day + i} onClick={() => copyDayTo([i])}>
+                            Copy to {d.day}
+                          </DropdownMenuItem>
+                        ),
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                }
+              />
             </CardContent>
           </Card>
+        )}
+      </div>
+
+      {/* Middle: meal slots for the active day */}
+      <div className="space-y-4 lg:col-span-6">
+        {weekly && days.length > 1 && (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="rounded-full bg-primary/10 text-primary">
+              {days[activeDay]?.day}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {Math.round(dayTotals(days[activeDay] || { day: '', slots: [] }).calories)} kcal planned
+            </span>
+          </div>
         )}
 
         {slots.map((slot, sIdx) => {
           const attachOpen = !!openAttach[sIdx] || !!slot.recipe_link || !!slot.prep_video_url || !!slot.prep_video_file_path;
           return (
-            <Card key={sIdx}>
+            <Card key={sIdx} className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10 transition-shadow duration-200 hover:shadow-lg">
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <UtensilsCrossed className="h-4 w-4 text-accent" />
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
+                      <UtensilsCrossed className="h-4 w-4" />
+                    </span>
                     <Input
-                      className="h-8 w-44"
+                      className="h-9 w-44"
                       value={slot.name}
                       onChange={(e) => updateSlot(sIdx, { name: e.target.value })}
                       aria-label="Meal slot name"
@@ -529,7 +542,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="time"
-                      className="h-8 w-28"
+                      className="h-9 w-28"
                       value={slot.time}
                       onChange={(e) => updateSlot(sIdx, { time: e.target.value })}
                       aria-label="Meal time"
@@ -538,7 +551,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 gap-1"
+                      className="h-9 cursor-pointer gap-1"
                       onClick={() => {
                         if (!dietaryType || !cuisine) {
                           toast.error('Set dietary type & cuisine first');
@@ -554,11 +567,13 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
               </CardHeader>
               <CardContent className="space-y-2">
                 {slot.items.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-1">No items yet — add one or swap in a catalog meal.</p>
+                  <p className="rounded-xl border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                    No items yet — add one or swap in a catalog meal.
+                  </p>
                 )}
                 {slot.items.map((item, iIdx) => (
-                  <div key={iIdx} className="grid grid-cols-12 gap-2 items-end p-2 bg-muted/30 rounded-md">
-                    <div className="col-span-12 sm:col-span-3">
+                  <div key={iIdx} className="grid grid-cols-12 items-end gap-2 rounded-xl border bg-muted/30 p-2">
+                    <div className="col-span-12 sm:col-span-4">
                       <Label className="text-xs">Food</Label>
                       <Input value={item.food} onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)} placeholder="Oats" />
                     </div>
@@ -582,11 +597,11 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                       <Label className="text-xs">F</Label>
                       <Input type="number" value={item.fats} onChange={(e) => updateItem(sIdx, iIdx, 'fats', parseFloat(e.target.value) || 0)} />
                     </div>
-                    <div className="col-span-12 sm:col-span-3 flex justify-end">
+                    <div className="col-span-12 flex justify-end sm:col-span-2">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive"
+                        className="h-9 w-9 cursor-pointer text-destructive"
                         onClick={() => removeItem(sIdx, iIdx)}
                         aria-label="Remove item"
                       >
@@ -597,14 +612,14 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                 ))}
 
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 border-dashed" onClick={() => addItem(sIdx)}>
-                    <Plus className="h-4 w-4 mr-1" /> Add Item
+                  <Button variant="outline" size="sm" className="h-9 flex-1 cursor-pointer border-dashed" onClick={() => addItem(sIdx)}>
+                    <Plus className="mr-1 h-4 w-4" /> Add Item
                   </Button>
                   {!attachOpen && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="gap-1 text-muted-foreground"
+                      className="h-9 cursor-pointer gap-1 text-muted-foreground"
                       onClick={() => setOpenAttach((p) => ({ ...p, [sIdx]: true }))}
                     >
                       <Paperclip className="h-3.5 w-3.5" /> Attach recipe / video
@@ -613,11 +628,11 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                 </div>
 
                 {attachOpen && (
-                  <div className="grid gap-2 pt-2 border-t">
+                  <div className="grid gap-2 border-t pt-2">
                     <div className="flex items-center gap-2">
                       <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
                       <Input
-                        className="h-8 text-xs"
+                        className="h-9 text-xs"
                         placeholder="Recipe link (optional)"
                         value={slot.recipe_link || ''}
                         onChange={(e) => updateSlot(sIdx, { recipe_link: e.target.value })}
@@ -654,8 +669,9 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
         />
       </div>
 
-      <div className="space-y-4 lg:sticky lg:top-24 self-start">
-        <Card>
+      {/* Right: live macros + assignment */}
+      <div className="space-y-4 self-start lg:col-span-3 lg:sticky lg:top-40">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base">Live Macros</CardTitle>
@@ -667,7 +683,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                       type="button"
                       onClick={() => setMacroScope(s)}
                       className={cn(
-                        'px-2 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer',
+                        'cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors duration-200',
                         macroScope === s ? 'bg-background shadow-sm' : 'text-muted-foreground',
                       )}
                     >
@@ -678,7 +694,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
               )}
             </div>
             {weekly && days.length > 1 && (
-              <Badge variant="secondary" className="w-fit text-[10px] mt-1">
+              <Badge variant="secondary" className="mt-1 w-fit text-[10px]">
                 {macroScope === 'day' ? days[activeDay]?.day : `Average of ${days.length} days`}
               </Badge>
             )}
@@ -689,42 +705,60 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
               { label: 'Protein', val: totals.protein, target: proteinTarget, unit: 'g' },
               { label: 'Carbs', val: totals.carbs, target: carbsTarget, unit: 'g' },
               { label: 'Fats', val: totals.fats, target: fatTarget, unit: 'g' },
-            ].map(row => (
-              <div key={row.label} className={cn(
-                'flex items-center justify-between rounded-md border p-2',
-                exceeds(row.val, row.target) && 'border-destructive/50 bg-destructive/5'
-              )}>
-                <div>
-                  <p className="text-xs text-muted-foreground">{row.label}</p>
-                  <p className={cn('text-lg font-bold', exceeds(row.val, row.target) && 'text-destructive')}>
-                    {Math.round(row.val)}{row.unit}
-                  </p>
+            ].map(row => {
+              const pct = row.target > 0 ? Math.min(100, Math.round((row.val / row.target) * 100)) : 0;
+              const over = exceeds(row.val, row.target);
+              return (
+                <div
+                  key={row.label}
+                  className={cn(
+                    'rounded-xl border p-2.5',
+                    over && 'border-destructive/50 bg-destructive/5',
+                  )}
+                >
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{row.label}</p>
+                      <p className={cn('text-lg font-bold leading-tight', over && 'text-destructive')}>
+                        {Math.round(row.val)}{row.unit}
+                      </p>
+                    </div>
+                    <p className="text-right text-xs text-muted-foreground">
+                      target<br />
+                      <span className="font-medium text-foreground">{row.target}{row.unit}</span>
+                    </p>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn('h-full rounded-full transition-all duration-300', over ? 'bg-destructive' : 'bg-primary')}
+                      style={{ width: `${over ? 100 : pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  target<br />
-                  <span className="font-medium text-foreground">{row.target}{row.unit}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {(exceeds(totals.calories, calTarget) || exceeds(totals.protein, proteinTarget) || exceeds(totals.carbs, carbsTarget) || exceeds(totals.fats, fatTarget)) && (
-              <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-xs">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 p-2 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 Totals exceed one or more targets.
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Optional: Pre-Assign Member</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Optional: Pre-Assign Member
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <MemberSearchPicker value={member} onChange={setMember} label="Member" />
-            <p className="text-xs text-muted-foreground mt-2">You can also assign on the next step.</p>
+            <p className="mt-2 text-xs text-muted-foreground">You can also assign on the next step.</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
