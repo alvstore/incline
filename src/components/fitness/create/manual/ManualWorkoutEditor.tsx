@@ -475,119 +475,187 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     onMetaChange?.({ canSubmit, submit, primaryLabel });
   }, [canSubmit, submit, primaryLabel, onMetaChange]);
 
+  const activeDays = days.filter((d) => d.exercises.length > 0).length;
+  const totalSets = days.reduce((s, d) => s + d.exercises.reduce((n, e) => n + (Number(e.sets) || 0), 0), 0);
+
+  const copyDayTo = (targets: number[]) => {
+    const source = days[activeIdx];
+    if (!source) return;
+    setDays((prev) =>
+      prev.map((d, i) =>
+        targets.includes(i)
+          ? { ...d, focus: source.focus, warmup: source.warmup, cooldown: source.cooldown, exercises: source.exercises.map((e) => ({ ...e })) }
+          : d,
+      ),
+    );
+    toast.success(targets.length > 1 ? 'Copied to all other days' : 'Day copied');
+  };
+
+  const clearDay = () => {
+    updateDay(activeIdx, { exercises: [], warmup: '', cooldown: '' });
+    toast.success(`${days[activeIdx].day} cleared`);
+  };
+
+  const active = days[activeIdx];
+
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="lg:col-span-2 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Plan Details</CardTitle>
+    <div className="grid gap-5 lg:grid-cols-12">
+      {/* Left: plan details + day rail */}
+      <div className="space-y-4 lg:col-span-3">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Plan Details
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Plan Name *</Label>
-                <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Push/Pull/Legs Hypertrophy" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Goal</Label>
-                <Select value={goal} onValueChange={setGoal}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Weight Loss">Weight Loss</SelectItem>
-                    <SelectItem value="Muscle Gain">Muscle Gain</SelectItem>
-                    <SelectItem value="General Fitness">General Fitness</SelectItem>
-                    <SelectItem value="Endurance">Endurance</SelectItem>
-                    <SelectItem value="Flexibility">Flexibility</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Difficulty</Label>
-                <Select value={difficulty} onValueChange={setDifficulty}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wk-name">Plan Name *</Label>
+              <Input id="wk-name" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Push/Pull/Legs Hypertrophy" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Goal</Label>
+              <Select value={goal} onValueChange={setGoal}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Weight Loss">Weight Loss</SelectItem>
+                  <SelectItem value="Muscle Gain">Muscle Gain</SelectItem>
+                  <SelectItem value="General Fitness">General Fitness</SelectItem>
+                  <SelectItem value="Endurance">Endurance</SelectItem>
+                  <SelectItem value="Flexibility">Flexibility</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Difficulty</Label>
+              <Select value={difficulty} onValueChange={setDifficulty}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wk-desc">Description</Label>
+              <Input id="wk-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Dumbbell className="h-4 w-4" /> Weekly Schedule
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <CalendarDays className="h-4 w-4" /> Week
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {days.map((d, idx) => (
+          <CardContent>
+            <DayRail
+              ariaLabel="Select training day"
+              activeIndex={activeIdx}
+              onSelect={setActiveIdx}
+              days={days.map((d) => ({
+                label: d.day,
+                meta: d.exercises.length ? `${d.exercises.length} exercises` : 'Rest / empty',
+                muted: d.exercises.length === 0,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Middle: the day workbench */}
+      <div className="space-y-4 lg:col-span-6">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Dumbbell className="h-4 w-4 text-primary" /> {active.day}
+                <Badge variant="secondary" className="rounded-full text-[11px]">
+                  {active.exercises.length} exercises
+                </Badge>
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 cursor-pointer gap-1">
+                      <Copy className="h-3.5 w-3.5" /> Copy day
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => copyDayTo(days.map((_, i) => i).filter((i) => i !== activeIdx))}>
+                      Copy to all other days
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {days.map((d, i) =>
+                      i === activeIdx ? null : (
+                        <DropdownMenuItem key={d.day + i} onClick={() => copyDayTo([i])}>
+                          Copy to {d.day}
+                        </DropdownMenuItem>
+                      ),
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
-                  key={idx}
+                  variant="ghost"
                   size="sm"
-                  variant={activeIdx === idx ? 'default' : 'outline'}
-                  onClick={() => setActiveIdx(idx)}
-                  className="gap-1.5"
+                  className="h-9 cursor-pointer text-muted-foreground"
+                  onClick={clearDay}
                 >
-                  {d.day}
-                  {d.exercises.length > 0 && (
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">{d.exercises.length}</Badge>
-                  )}
+                  Clear
                 </Button>
-              ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="wk-focus">Focus</Label>
+              <Input
+                id="wk-focus"
+                placeholder="Focus (e.g. Chest & Triceps)"
+                value={active.focus}
+                onChange={(e) => updateDay(activeIdx, { focus: e.target.value })}
+              />
             </div>
 
-            <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-              <div className="flex items-center gap-3">
-                <span className="font-semibold text-sm w-20">{days[activeIdx].day}</span>
-                <Input
-                  className="h-8 max-w-xs"
-                  placeholder="Focus (e.g. Chest & Triceps)"
-                  value={days[activeIdx].focus}
-                  onChange={(e) => updateDay(activeIdx, { focus: e.target.value })}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Warm-up</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
+                  value={active.warmup}
+                  onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
                 />
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Warm-up</Label>
-                  <Textarea
-                    rows={2}
-                    placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
-                    value={days[activeIdx].warmup}
-                    onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Cool-down</Label>
-                  <Textarea
-                    rows={2}
-                    placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
-                    value={days[activeIdx].cooldown}
-                    onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cool-down</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
+                  value={active.cooldown}
+                  onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
+                />
               </div>
+            </div>
 
+            {active.exercises.length === 0 && (
+              <div className="rounded-2xl border border-dashed p-6 text-center">
+                <Dumbbell className="mx-auto h-6 w-6 text-muted-foreground" />
+                <p className="mt-2 text-sm font-medium">No exercises on {active.day}</p>
+                <p className="text-xs text-muted-foreground">Add one below, or leave this day as rest.</p>
+              </div>
+            )}
 
-
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleExerciseDragEnd}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExerciseDragEnd}>
+              <SortableContext
+                items={active.exercises.map((_, i) => String(i))}
+                strategy={verticalListSortingStrategy}
               >
-                <SortableContext
-                  items={days[activeIdx].exercises.map((_, i) => String(i))}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {days[activeIdx].exercises.map((ex, exIdx) => (
+                <div className="space-y-2">
+                  {active.exercises.map((ex, exIdx) => (
                     <SortableExerciseRow
                       key={exIdx}
                       id={String(exIdx)}
@@ -596,46 +664,47 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                       onUpdate={updateExercise}
                       onRemove={removeExercise}
                       onVideoChange={(next) => {
-                        const updated = days[activeIdx].exercises.map((e, i) =>
-                          i === exIdx ? { ...e, video_url: next.video_url, video_file_path: next.video_file_path } : e
+                        const updated = active.exercises.map((e, i) =>
+                          i === exIdx ? { ...e, video_url: next.video_url, video_file_path: next.video_file_path } : e,
                         );
                         updateDay(activeIdx, { exercises: updated });
                       }}
                     />
                   ))}
-                </SortableContext>
-              </DndContext>
+                </div>
+              </SortableContext>
+            </DndContext>
 
-              <Button variant="outline" size="sm" className="w-full border-dashed" onClick={addExercise}>
-                <Plus className="h-4 w-4 mr-1" /> Add Exercise
-              </Button>
-            </div>
+            <Button variant="outline" className="w-full cursor-pointer border-dashed" onClick={addExercise}>
+              <Plus className="mr-1 h-4 w-4" /> Add Exercise
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      <div className="space-y-4">
-        <Card>
+      {/* Right: insight panel */}
+      <div className="space-y-4 self-start lg:col-span-3 lg:sticky lg:top-40">
+        <PlanStatCard
+          label="Total exercises"
+          value={totalExercises}
+          hint={`across ${activeDays} active ${activeDays === 1 ? 'day' : 'days'}`}
+          icon={<Dumbbell className="h-4 w-4" />}
+          tone="primary"
+        />
+        <PlanStatCard label="Weekly sets" value={totalSets} hint="Sum of all sets in the week" />
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Optional: Pre-Assign Member</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Optional: Pre-Assign Member
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <MemberSearchPicker value={member} onChange={setMember} label="Member" />
-            <p className="text-xs text-muted-foreground mt-2">
-              You can also assign on the next step.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/30">
-          <CardContent className="pt-4 space-y-1.5">
-            <p className="text-xs text-muted-foreground">Total exercises</p>
-            <p className="text-2xl font-bold">{totalExercises}</p>
-            <p className="text-xs text-muted-foreground">
-              across {days.filter(d => d.exercises.length > 0).length} active days
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">You can also assign on the next step.</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
