@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
           body: {
             branch_id: branchId,
             channel,
-            category: "class_notification",
+            category: "transactional",
             recipient,
             member_id: booking.member_id,
             user_id: member.user_id,
