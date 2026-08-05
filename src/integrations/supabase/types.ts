@@ -13801,7 +13801,6 @@ export type Database = {
           sessions_total: number
         }[]
       }
-      apply_convenience_fee: { Args: { p_invoice_id: string }; Returns: Json }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
@@ -15023,6 +15022,10 @@ export type Database = {
         Returns: Json
       }
       purge_expired_otp_verifications: { Args: never; Returns: undefined }
+      quote_convenience_fee: {
+        Args: { p_invoice_id: string; p_method?: string }
+        Returns: Json
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {

@@ -1,4 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
+
+
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +27,7 @@ import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPayment } from '@/services/billingService';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
-import { gatewayDeduction, paymentChannelLabel } from '@/lib/payments/paymentDisplay';
+import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -213,10 +215,15 @@ export default function PaymentsPage() {
     });
   }, [payments, searchTerm, methodFilter, statusFilter, dateRange]);
 
-  const todayTotal = filteredPayments.filter((p: any) => p.status !== 'voided' && new Date(p.payment_date).toDateString() === new Date().toDateString()).reduce((sum: number, p: any) => sum + p.amount, 0);
-  const monthTotal = filteredPayments.filter((p: any) => p.status !== 'voided').reduce((sum: number, p: any) => sum + p.amount, 0);
-  const completedTotal = filteredPayments.filter((p: any) => p.status === 'completed').reduce((sum: number, p: any) => sum + p.amount, 0);
-  const pendingTotal = filteredPayments.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
+  // Reversed rows (voided / refunded) stay visible for audit but never count
+  // as money collected.
+  const countable = filteredPayments.filter((p: any) => !isReversedPayment(p));
+  const todayTotal = countable.filter((p: any) => new Date(p.payment_date).toDateString() === new Date().toDateString()).reduce((sum: number, p: any) => sum + p.amount, 0);
+  const monthTotal = countable.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const completedTotal = countable.filter((p: any) => p.status === 'completed').reduce((sum: number, p: any) => sum + p.amount, 0);
+  const pendingTotal = countable.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
+  const reversedTotal = filteredPayments.filter((p: any) => isReversedPayment(p)).reduce((sum: number, p: any) => sum + p.amount, 0);
+
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = { cash: 'bg-success/10 text-success', card: 'bg-info/10 text-info', upi: 'bg-primary/10 text-primary', wallet: 'bg-warning/10 text-warning', bank_transfer: 'bg-info/10 text-info', online: 'bg-primary/10 text-primary' };
@@ -401,10 +408,16 @@ export default function PaymentsPage() {
 
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard title="Today's Collection" value={`₹${todayTotal.toLocaleString()}`} icon={CreditCard} variant="accent" />
-          <StatCard title="Filtered Total" value={`₹${monthTotal.toLocaleString()}`} icon={TrendingUp} variant="success" />
+          <StatCard title="Filtered Total (net)" value={`₹${monthTotal.toLocaleString()}`} icon={TrendingUp} variant="success" />
           <StatCard title="Completed" value={`₹${completedTotal.toLocaleString()}`} icon={Receipt} variant="default" />
           <StatCard title="Pending" value={`₹${pendingTotal.toLocaleString()}`} icon={Wallet} variant="info" />
         </div>
+        {reversedTotal > 0 && (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Excludes ₹{reversedTotal.toLocaleString('en-IN')} in reversed entries (voided or refunded), which stay listed for audit.
+          </p>
+        )}
+
 
         <Card className="rounded-2xl border-border/50 shadow-lg">
           <CardHeader><CardTitle>{hasActiveFilters ? `Filtered Payments (${filteredPayments.length})` : `Recent Payments (${payments.length})`}</CardTitle></CardHeader>
@@ -415,28 +428,45 @@ export default function PaymentsPage() {
                 <TableBody>
                   {filteredPayments.map((payment: any) => {
                     const isVoided = payment.status === 'voided';
+                    const isReversed = isReversedPayment(payment);
                     const d = resolveMemberDisplay(payment.members);
                     return (
-                      <TableRow key={payment.id} className={isVoided ? 'opacity-50' : ''}>
+                      <TableRow key={payment.id} className={isReversed ? 'opacity-60' : ''}>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{d.name}</span>
+                            <span className={`font-medium ${isReversed ? 'line-through' : ''}`}>{d.name}</span>
                             {d.code && <span className="text-xs text-muted-foreground">{d.code}</span>}
                           </div>
                         </TableCell>
-                        <TableCell className={`font-medium ${isVoided ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
+                        <TableCell className={`font-medium ${isReversed ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
                         <TableCell><Badge className={getMethodColor(payment.payment_method)}>{paymentChannelLabel(payment)}</Badge></TableCell>
                         <TableCell className="text-xs">
-                          {payment.payment_source === 'razorpay' ? (
+                          {isReversed ? (
+                            <span className="text-muted-foreground">Not collected</span>
+                          ) : payment.payment_source === 'razorpay' ? (
                             <div><p>Net ₹{Number(payment.net_settlement_amount ?? payment.amount).toLocaleString('en-IN')}</p><p className="text-muted-foreground">Fee + tax ₹{gatewayDeduction(payment).toLocaleString('en-IN')}</p></div>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell><Badge className={getStatusColor(payment.status)}>{payment.status}</Badge></TableCell>
-                        <TableCell className="font-mono text-sm">{payment.invoices?.invoice_number || '-'}</TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(payment.status)}>{payment.status}</Badge>
+                          {isReversed && (
+                            <p className="mt-1 text-[11px] italic text-muted-foreground">{reversalCaption(payment)}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {payment.invoices?.invoice_number ? (
+                            <Link
+                              to={`/invoices?focus=${payment.invoice_id}`}
+                              className="text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                            >
+                              {payment.invoices.invoice_number}
+                            </Link>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy HH:mm')}</TableCell>
                         {isAdminOrOwner && (
                           <TableCell>
-                            {!isVoided && payment.status !== 'failed' && (
+                            {!isReversed && payment.status !== 'failed' && (
                               <Button
                                 variant="ghost"
                                 size="sm"

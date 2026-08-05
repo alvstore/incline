@@ -1,4 +1,4 @@
-// v2.0.0 — Hardened payment order creation with branch-then-global gateway lookup.
+// v2.1.0 — Convenience fee quoted at gateway only (invoice never mutated). Hardened payment order creation with branch-then-global gateway lookup.
 // Returns enough data for embedded checkout (Razorpay Standard Checkout modal /
 // PhonePe IFRAME PayPage). Records the canonical payment_transactions row with
 // source='order' so payment-webhook can match and settle it idempotently.
@@ -40,19 +40,21 @@ serve(async (req) => {
       );
     }
 
-    // Apply (or refresh) the online convenience fee before pricing the order.
-    // Server-side only; POS/store invoices are rejected inside the RPC.
+    // Quote the online convenience fee. It is NEVER written to the invoice —
+    // it is only added on top of the amount charged at the gateway.
     let feeInfo: Record<string, unknown> | null = null;
-    const { data: feeResult, error: feeError } = await supabase.rpc("apply_convenience_fee", {
+    const { data: feeResult, error: feeError } = await supabase.rpc("quote_convenience_fee", {
       p_invoice_id: invoiceId,
+      p_method: "online",
     });
     if (feeError) {
-      console.warn("create-payment-order: convenience fee skipped:", feeError.message);
+      console.warn("create-payment-order: convenience fee quote skipped:", feeError.message);
     } else if ((feeResult as any)?.applied) {
       feeInfo = feeResult as Record<string, unknown>;
     }
+    const surcharge = Number((feeInfo as any)?.fee_total ?? 0);
 
-    // Invoice lookup (after fee application so totals are final)
+    // Invoice lookup
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .select("id, invoice_number, total_amount, amount_paid, branch_id, member_id, status")
@@ -110,9 +112,11 @@ serve(async (req) => {
 
     const credentials = (gatewayRow.credentials || {}) as Record<string, string>;
 
+    const chargeAmount = Math.round((amountDue + surcharge) * 100) / 100;
+
     const orderResponse: any = {
       orderId: `ORD-${Date.now()}`,
-      amount: amountDue,
+      amount: chargeAmount,
       currency: "INR",
       invoiceId,
       gateway,
@@ -135,10 +139,15 @@ serve(async (req) => {
           Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`,
         },
         body: JSON.stringify({
-          amount: Math.round(amountDue * 100),
+          amount: Math.round(chargeAmount * 100),
           currency: "INR",
           receipt: invoice.invoice_number || invoiceId.slice(0, 30),
-          notes: { invoice_id: invoiceId, branch_id: branchId },
+          notes: {
+            invoice_id: invoiceId,
+            branch_id: branchId,
+            base_amount: String(amountDue),
+            convenience_fee: String(surcharge),
+          },
         }),
       });
 
@@ -184,13 +193,16 @@ serve(async (req) => {
       member_id: invoice.member_id,
       gateway,
       gateway_order_id: orderResponse.gatewayOrderId,
-      amount: amountDue,
+      amount: chargeAmount,
       currency: "INR",
       status: "created",
       source: "order",
     });
 
-    return jsonResponse({ ...orderResponse, convenienceFee: feeInfo, amountDue }, 200);
+    return jsonResponse(
+      { ...orderResponse, convenienceFee: feeInfo, amountDue, chargeAmount },
+      200,
+    );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Internal server error";
     console.error("create-payment-order error:", errorMessage);

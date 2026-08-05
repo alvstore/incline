@@ -1,4 +1,4 @@
-// v1.1.0 — Razorpay Payment Link Generator (hardened)
+// v2.0.0 — Convenience fee is quoted and charged at the gateway only; the invoice is never mutated.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -88,15 +88,21 @@ serve(async (req: Request) => {
     const keyId = integration.credentials.key_id as string;
     const keySecret = integration.credentials.key_secret as string;
 
-    // Apply (or refresh) the online convenience fee before pricing the link.
-    const { error: feeError } = await supabase.rpc("apply_convenience_fee", {
+    // Quote the online convenience fee. It is NEVER written to the invoice —
+    // it is only added on top of the amount charged at the gateway.
+    let feeQuote: Record<string, unknown> | null = null;
+    const { data: feeResult, error: feeError } = await supabase.rpc("quote_convenience_fee", {
       p_invoice_id: invoiceId,
+      p_method: "online",
     });
     if (feeError) {
-      console.warn("create-razorpay-link: convenience fee skipped:", feeError.message);
+      console.warn("create-razorpay-link: convenience fee quote skipped:", feeError.message);
+    } else if ((feeResult as any)?.applied) {
+      feeQuote = feeResult as Record<string, unknown>;
     }
+    const surcharge = Number((feeQuote as any)?.fee_total ?? 0);
 
-    // Fetch invoice + member details (after fee application so totals are final)
+    // Fetch invoice + member details
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .select("id, invoice_number, total_amount, amount_paid, member_id, branch_id")
@@ -137,8 +143,9 @@ serve(async (req: Request) => {
       }
     }
 
-    // Call Razorpay Payment Links API
-    const amountInPaise = Math.round(amount * 100);
+    // Call Razorpay Payment Links API — charge base due + surcharge.
+    const chargeAmount = Math.round((amount + surcharge) * 100) / 100;
+    const amountInPaise = Math.round(chargeAmount * 100);
     const authHeader = btoa(`${keyId}:${keySecret}`);
 
     const razorpayPayload: any = {
@@ -146,7 +153,14 @@ serve(async (req: Request) => {
       currency: "INR",
       accept_partial: false,
       reference_id: invoiceId,
-      description: `Payment for Invoice ${invoice.invoice_number || invoiceId}`,
+      description: surcharge > 0
+        ? `Payment for Invoice ${invoice.invoice_number || invoiceId} (incl. ₹${surcharge} online convenience fee)`
+        : `Payment for Invoice ${invoice.invoice_number || invoiceId}`,
+      notes: {
+        invoice_id: invoiceId,
+        base_amount: String(amount),
+        convenience_fee: String(surcharge),
+      },
       customer: {
         name: customerName,
       },
@@ -188,17 +202,24 @@ serve(async (req: Request) => {
       invoice_id: invoiceId,
       gateway: "razorpay",
       gateway_order_id: rzpResult.id,
-      amount: amount,
+      amount: chargeAmount,
       status: "created",
       source: "order",
-      webhook_data: { short_url: rzpResult.short_url, plink_id: rzpResult.id },
+      webhook_data: {
+        short_url: rzpResult.short_url,
+        plink_id: rzpResult.id,
+        base_amount: amount,
+        convenience_fee: surcharge,
+      },
     });
 
     return new Response(
       JSON.stringify({
         short_url: rzpResult.short_url,
         plink_id: rzpResult.id,
-        amount: amount,
+        amount: chargeAmount,
+        baseAmount: amount,
+        convenienceFee: feeQuote,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

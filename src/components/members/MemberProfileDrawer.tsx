@@ -54,7 +54,9 @@ import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
-import { gatewayDeduction, paymentChannelLabel } from '@/lib/payments/paymentDisplay';
+import { useNavigate } from 'react-router-dom';
+import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
+
 
 // ─── Pending Invoices Section ───
 function PendingInvoicesSection({ memberId, branchId }: { memberId: string; branchId: string }) {
@@ -640,6 +642,8 @@ export function MemberProfileDrawer({
   onPurchasePT
 }: MemberProfileDrawerProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
   const { hasAnyRole } = useAuth();
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
   const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
@@ -1938,23 +1942,50 @@ export function MemberProfileDrawer({
                 <CardContent>
                   {payments.length > 0 ? (
                     <div className="space-y-2">
-                      {payments.map((payment: any) => (
-                        <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      {payments.map((payment: any) => {
+                        const reversed = isReversedPayment(payment);
+                        return (
+                        <div
+                          key={payment.id}
+                          className={`flex items-center justify-between p-3 rounded-lg bg-muted/50 ${reversed ? 'opacity-60' : ''}`}
+                        >
                           <div>
-                            <p className="font-medium text-sm">₹{payment.amount}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {payment.invoices?.invoice_number || 'No invoice'}
+                            <p className={`font-medium text-sm ${reversed ? 'line-through text-muted-foreground' : ''}`}>
+                              ₹{payment.amount}
                             </p>
+                            {payment.invoices?.invoice_number ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenChange(false);
+                                  navigate(`/invoices?focus=${payment.invoice_id}`);
+                                }}
+                                className="text-xs text-primary hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                              >
+                                {payment.invoices.invoice_number}
+                              </button>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">No invoice</p>
+                            )}
+                            {reversed && (
+                              <Badge className="mt-1 bg-destructive/10 text-destructive text-[10px] capitalize">
+                                {payment.status === 'refunded' ? 'Refunded' : 'Voided'}
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-right">
                             <Badge variant="outline" className="capitalize text-xs">
                               {paymentChannelLabel(payment)}
                             </Badge>
-                            {payment.payment_source === 'razorpay' && (
+                            {reversed ? (
+                              <p className="mt-1 text-[11px] italic text-muted-foreground">
+                                {reversalCaption(payment)}
+                              </p>
+                            ) : payment.payment_source === 'razorpay' ? (
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Net ₹{Number(payment.net_settlement_amount ?? payment.amount).toLocaleString('en-IN')} · Deduction ₹{gatewayDeduction(payment).toLocaleString('en-IN')}
                               </p>
-                            )}
+                            ) : null}
                             <p className="text-xs text-muted-foreground mt-1">
                               {format(new Date(payment.payment_date), 'dd MMM yyyy')}
                             </p>
@@ -1965,7 +1996,9 @@ export function MemberProfileDrawer({
                             )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
+
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">No payment history</p>
