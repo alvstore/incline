@@ -362,6 +362,12 @@ export default function MealCatalog() {
                 </div>
               ))}
             </div>
+            {viewing.micronutrients && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Key micronutrients</p>
+                <p className="text-sm">{viewing.micronutrients}</p>
+              </div>
+            )}
             {viewing.tags?.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Tags</p>
@@ -372,6 +378,7 @@ export default function MealCatalog() {
                 </div>
               </div>
             )}
+
             {viewing.notes && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
