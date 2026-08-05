@@ -457,6 +457,11 @@ export default function MemberClassBooking() {
         } catch { return 30; }
       })();
 
+      const benefitType = String(
+        slot.benefit_type || slot.benefit_type_info?.code || '',
+      ).toLowerCase();
+      const locked = !isBooked && benefitType !== '' && !entitledTypes.has(benefitType);
+
       items.push({
         id: slot.id,
         type: 'recovery',
@@ -468,9 +473,13 @@ export default function MemberClassBooking() {
         capacity: slot.capacity,
         isBooked,
         bookingId: slotBookingMap[slot.id],
+        benefitType,
+        locked,
+        unlockPackage: packageByType.get(benefitType) ?? null,
         rawData: slot,
       });
     });
+
 
     // PT sessions
     ptSessions.forEach((s: any) => {
