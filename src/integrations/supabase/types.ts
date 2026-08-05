@@ -4423,6 +4423,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          prep_lead_minutes: number
           under_maintenance: boolean | null
           updated_at: string | null
         }
@@ -4437,6 +4438,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          prep_lead_minutes?: number
           under_maintenance?: boolean | null
           updated_at?: string | null
         }
@@ -4451,6 +4453,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          prep_lead_minutes?: number
           under_maintenance?: boolean | null
           updated_at?: string | null
         }
@@ -14367,6 +14370,10 @@ export type Database = {
       current_active_branch: { Args: never; Returns: string }
       current_branch: { Args: never; Returns: string }
       daily_reconcile_member_access: { Args: never; Returns: undefined }
+      decide_booking_reschedule: {
+        Args: { p_approve: boolean; p_notes?: string; p_request_id: string }
+        Returns: Json
+      }
       decide_role_change_request: {
         Args: {
           p_approve: boolean
@@ -15331,6 +15338,16 @@ export type Database = {
         }
         Returns: Json
       }
+      request_booking_reschedule: {
+        Args: {
+          p_blame?: string
+          p_booking_id: string
+          p_new_slot_id: string
+          p_reason: string
+          p_restore_credit?: boolean
+        }
+        Returns: Json
+      }
       reset_campaign_to_draft: {
         Args: { p_campaign_id: string }
         Returns: boolean
@@ -15774,6 +15791,7 @@ export type Database = {
         | "comp_gift"
         | "branch_transfer"
         | "locker_request"
+        | "booking_reschedule"
       attendance_shift_type: "morning" | "evening" | "night" | "full_day"
       benefit_booking_status:
         | "booked"
@@ -16058,6 +16076,7 @@ export const Constants = {
         "comp_gift",
         "branch_transfer",
         "locker_request",
+        "booking_reschedule",
       ],
       attendance_shift_type: ["morning", "evening", "night", "full_day"],
       benefit_booking_status: [
