@@ -85,8 +85,11 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<MemberLite[]>([]);
   const planWeeks = getPlanDurationWeeks(plan);
-  const [validUntil, setValidUntil] = useState(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
-  const [validityOverridden, setValidityOverridden] = useState(false);
+  const recommendedDays = recommendedPresetDays(planWeeks);
+  const [startDate, setStartDate] = useState(todayISO());
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [durationDays, setDurationDays] = useState<number | 'custom'>(recommendedDays);
+  const [customValidUntil, setCustomValidUntil] = useState(planEndDateISO(todayISO(), recommendedDays));
   // Deliver everywhere by default — members should get the plan instantly on
   // in-app, WhatsApp and Email (with the PDF attached).
   const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
@@ -94,6 +97,20 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const [isCommon, setIsCommon] = useState(false);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
+
+  const validUntil =
+    durationDays === 'custom' ? customValidUntil : planEndDateISO(startDate, durationDays);
+
+  const selectedDays = useMemo(() => {
+    if (durationDays !== 'custom') return durationDays;
+    const start = new Date(startDate).getTime();
+    const end = new Date(customValidUntil).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+    return Math.max(0, Math.round((end - start) / 86400000) + 1);
+  }, [durationDays, startDate, customValidUntil]);
+
+  const contentDays = planWeeks * 7;
+  const isShortWindow = selectedDays > 0 && selectedDays < contentDays;
 
   // Reset every time the drawer is reopened. Pre-fill the Common toggle from
   // the incoming template (so common templates default to common assignments).
@@ -104,11 +121,13 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
       setResults(null);
       setSearchQuery('');
       setIsCommon(!!plan?.is_common);
-      setValidityOverridden(false);
-      setValidUntil(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
+      setStartDate(todayISO());
+      setShowStartPicker(false);
+      setDurationDays(recommendedDays);
+      setCustomValidUntil(planEndDateISO(todayISO(), recommendedDays));
     }
      
-  }, [open, plan?.is_common, planWeeks]);
+  }, [open, plan?.is_common, recommendedDays]);
 
   const { data: searchResults = [], isLoading: isSearching } = useQuery({
     queryKey: ['member-search-multi', searchQuery, branchId],
