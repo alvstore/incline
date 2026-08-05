@@ -1,13 +1,17 @@
+import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Download, FileSpreadsheet, Package, FileText } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Download, FileSpreadsheet, Package, FileText, Search, ReceiptText, BookOpen } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGstReport } from '@/lib/finance/useGstReport';
 import {
   exportAccountantPack, exportGstr1B2B, exportGstr1B2C, exportHsnSummary, exportSalesRegister,
+  exportExemptSupplies, exportDocumentsIssued,
 } from '@/lib/finance/csvExports';
 import { toast } from 'sonner';
 
@@ -28,6 +32,23 @@ const STREAM_LABELS: Record<string, string> = {
 
 export function GstReportTab({ branchId, range, formatCurrency }: Props) {
   const { data, isLoading } = useGstReport(branchId, range);
+  const [registerSearch, setRegisterSearch] = useState('');
+  const [registerBucket, setRegisterBucket] = useState<'all' | 'taxable' | 'exempt'>('all');
+  const [registerStream, setRegisterStream] = useState<string>('all');
+
+  const registerRows = useMemo(() => {
+    if (!data) return [] as any[];
+    const tagged = [
+      ...data.lines.map(l => ({ ...l, bucket: 'taxable' as const })),
+      ...data.exemptLines.map(l => ({ ...l, bucket: 'exempt' as const })),
+    ];
+    const q = registerSearch.trim().toLowerCase();
+    return tagged
+      .filter(r => registerBucket === 'all' || r.bucket === registerBucket)
+      .filter(r => registerStream === 'all' || r.source === registerStream)
+      .filter(r => !q || r.invoice_number.toLowerCase().includes(q) || r.customer_name.toLowerCase().includes(q))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [data, registerSearch, registerBucket, registerStream]);
 
   if (isLoading || !data) {
     return (
@@ -38,9 +59,10 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
     );
   }
 
-  const { totals, byRate, streams, lines, hsnBuckets, nonGstInvoices, posSales } = data;
+  const { totals, byRate, streams, lines, exemptLines, hsnBuckets, documentsIssued, cancelledInvoices, posSales } = data;
   const b2b = lines.filter(l => !!l.customer_gstin);
   const b2c = lines.filter(l => !l.customer_gstin);
+
 
   return (
     <div className="space-y-6">
