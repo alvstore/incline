@@ -19,6 +19,8 @@ import {
   Bell,
   Users,
   FileText,
+  CalendarDays,
+  AlertTriangle,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -31,7 +33,13 @@ import {
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 
 import { toast } from 'sonner';
-import { format, addWeeks } from 'date-fns';
+import { format } from 'date-fns';
+import {
+  PLAN_DURATION_PRESETS,
+  planEndDateISO,
+  recommendedPresetDays,
+  todayISO,
+} from '@/lib/fitness/planDuration';
 
 interface MemberLite {
   id: string;
@@ -75,12 +83,25 @@ function getPlanDurationWeeks(plan: AssignPlanDrawerProps['plan']): number {
   return 4;
 }
 
+function safeFmt(iso: string, pattern = 'dd MMM yyyy'): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso || '—';
+    return format(d, pattern);
+  } catch {
+    return iso || '—';
+  }
+}
+
 export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignPlanDrawerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<MemberLite[]>([]);
   const planWeeks = getPlanDurationWeeks(plan);
-  const [validUntil, setValidUntil] = useState(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
-  const [validityOverridden, setValidityOverridden] = useState(false);
+  const recommendedDays = recommendedPresetDays(planWeeks);
+  const [startDate, setStartDate] = useState(todayISO());
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [durationDays, setDurationDays] = useState<number | 'custom'>(recommendedDays);
+  const [customValidUntil, setCustomValidUntil] = useState(planEndDateISO(todayISO(), recommendedDays));
   // Deliver everywhere by default — members should get the plan instantly on
   // in-app, WhatsApp and Email (with the PDF attached).
   const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
@@ -88,6 +109,20 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const [isCommon, setIsCommon] = useState(false);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
+
+  const validUntil =
+    durationDays === 'custom' ? customValidUntil : planEndDateISO(startDate, durationDays);
+
+  const selectedDays = useMemo(() => {
+    if (durationDays !== 'custom') return durationDays;
+    const start = new Date(startDate).getTime();
+    const end = new Date(customValidUntil).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+    return Math.max(0, Math.round((end - start) / 86400000) + 1);
+  }, [durationDays, startDate, customValidUntil]);
+
+  const contentDays = planWeeks * 7;
+  const isShortWindow = selectedDays > 0 && selectedDays < contentDays;
 
   // Reset every time the drawer is reopened. Pre-fill the Common toggle from
   // the incoming template (so common templates default to common assignments).
@@ -98,11 +133,13 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
       setResults(null);
       setSearchQuery('');
       setIsCommon(!!plan?.is_common);
-      setValidityOverridden(false);
-      setValidUntil(format(addWeeks(new Date(), planWeeks), 'yyyy-MM-dd'));
+      setStartDate(todayISO());
+      setShowStartPicker(false);
+      setDurationDays(recommendedDays);
+      setCustomValidUntil(planEndDateISO(todayISO(), recommendedDays));
     }
      
-  }, [open, plan?.is_common, planWeeks]);
+  }, [open, plan?.is_common, recommendedDays]);
 
   const { data: searchResults = [], isLoading: isSearching } = useQuery({
     queryKey: ['member-search-multi', searchQuery, branchId],
@@ -148,6 +185,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
         description: plan!.description,
         plan_data: plan!.content,
         is_custom: true,
+        valid_from: startDate,
         valid_until: validUntil,
         branch_id: branchId,
         channels,
@@ -184,6 +222,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   type: plan!.type,
                   description: plan!.description,
                   data: plan!.content,
+                  valid_from: startDate,
                   valid_until: validUntil,
                 },
                 branchId: branchId || m.branch_id || undefined,
@@ -235,7 +274,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
               <span className="font-medium text-foreground">{plan.name}</span> — {plan.type} plan
               {!results && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-medium">
-                  {planWeeks} {planWeeks === 1 ? 'week' : 'weeks'}
+                  {selectedDays > 0 ? `${selectedDays} days` : `${planWeeks} ${planWeeks === 1 ? 'week' : 'weeks'}`}
                 </span>
               )}
             </SheetDescription>
@@ -309,42 +348,143 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
               <Separator />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="flex items-center justify-between">
-                    <span>Valid Until</span>
-                    {!validityOverridden && (
-                      <span className="text-[10px] font-normal text-muted-foreground">Auto · {planWeeks}w</span>
-                    )}
-                  </Label>
-                  <Input
-                    type="date"
-                    value={validUntil}
-                    onChange={(e) => { setValidUntil(e.target.value); setValidityOverridden(true); }}
-                  />
+              {/* Duration presets — staff pick a length, we compute the dates */}
+              <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Plan Duration
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Recommended · {recommendedDays} days
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  <Label>Notify on</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {CHANNEL_META.map(({ value, label, Icon }) => {
-                      const active = channels.includes(value);
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => toggleChannel(value)}
-                          className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border transition ${
-                            active
-                              ? 'bg-primary text-primary-foreground border-primary'
-                              : 'bg-background border-border hover:bg-muted'
-                          }`}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {label}
-                        </button>
-                      );
-                    })}
+
+                <div className="flex flex-wrap gap-2">
+                  {PLAN_DURATION_PRESETS.map((p) => {
+                    const active = durationDays === p.days;
+                    return (
+                      <button
+                        key={p.days}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setDurationDays(p.days)}
+                        className={`min-h-[44px] cursor-pointer rounded-full border px-3.5 py-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-muted'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold leading-tight">{p.days} days</span>
+                        <span className={`block text-[10px] leading-tight ${active ? 'opacity-80' : 'text-muted-foreground'}`}>
+                          {p.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    aria-pressed={durationDays === 'custom'}
+                    onClick={() => {
+                      setCustomValidUntil(validUntil);
+                      setDurationDays('custom');
+                    }}
+                    className={`min-h-[44px] cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                      durationDays === 'custom'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-muted'
+                    }`}
+                  >
+                    Custom date
+                  </button>
+                </div>
+
+                {durationDays === 'custom' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-valid-until">Valid until</Label>
+                    <Input
+                      id="custom-valid-until"
+                      type="date"
+                      min={startDate}
+                      value={customValidUntil}
+                      onChange={(e) => setCustomValidUntil(e.target.value)}
+                    />
                   </div>
+                )}
+
+                <div className="rounded-xl bg-muted/40 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span>
+                      Starts{' '}
+                      <span className="font-medium text-foreground">
+                        {startDate === todayISO() ? 'today' : safeFmt(startDate)}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowStartPicker((v) => !v)}
+                      className="ml-auto cursor-pointer text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
+                    >
+                      {showStartPicker ? 'Done' : 'Change'}
+                    </button>
+                  </div>
+
+                  {showStartPicker && (
+                    <div className="space-y-1.5 pt-1">
+                      <Label htmlFor="plan-start-date">Start date</Label>
+                      <Input
+                        id="plan-start-date"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Ends </span>
+                    <span className="font-bold text-foreground">{safeFmt(validUntil, 'EEE, dd MMM yyyy')}</span>
+                    {selectedDays > 0 && (
+                      <span className="ml-2 text-xs text-muted-foreground">({selectedDays} days)</span>
+                    )}
+                  </div>
+                </div>
+
+                {isShortWindow && (
+                  <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
+                    <p className="text-xs text-foreground/80">
+                      This plan contains {planWeeks} {planWeeks === 1 ? 'week' : 'weeks'} of content — members
+                      will lose access before finishing it.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Notify on
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {CHANNEL_META.map(({ value, label, Icon }) => {
+                    const active = channels.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleChannel(value)}
+                        className={`flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-muted'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
