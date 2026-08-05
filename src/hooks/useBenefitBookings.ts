@@ -124,6 +124,8 @@ export function useBookSlot() {
       queryClient.invalidateQueries({ queryKey: ["benefit-slots"] });
       queryClient.invalidateQueries({ queryKey: ["slot-bookings"] });
       queryClient.invalidateQueries({ queryKey: ["member-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["member-credits"] });
+      invalidateBenefitData(queryClient);
     },
   });
 }
@@ -138,6 +140,8 @@ export function useCancelBooking() {
       queryClient.invalidateQueries({ queryKey: ["benefit-slots"] });
       queryClient.invalidateQueries({ queryKey: ["slot-bookings"] });
       queryClient.invalidateQueries({ queryKey: ["member-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["member-credits"] });
+      invalidateBenefitData(queryClient);
     },
   });
 }
