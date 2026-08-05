@@ -97,18 +97,16 @@ export default function CreateModePickerPage() {
         {/* Context bar — one line of orientation, no competing CTAs */}
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Fitness Studio
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
               Create a plan
-            </h1>
+            </h2>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {isAdmin
                 ? 'Pick who it is for, then generate with AI, start from a template, or build it by hand.'
                 : 'Pick a client, then build a workout or diet plan.'}
             </p>
           </div>
+
           <Button
             variant="outline"
             onClick={() => navigate('/fitness/member-plans')}
