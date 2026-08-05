@@ -386,6 +386,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
       totalUsed,
       totalRemaining,
       isGiftOnly: false,
+      grantedBy: comp?.grantedBy || [],
     };
   }).filter((b: any) => {
     if (!memberGender) return true;
