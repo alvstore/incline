@@ -14,6 +14,7 @@ import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import { useActorNames } from '@/hooks/useActorNames';
 import { 
   TrendingUp, TrendingDown,
   ArrowUpRight, ArrowDownRight, Plus, Clock, CheckCircle, XCircle, Download,
