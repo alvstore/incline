@@ -284,15 +284,19 @@ export default function FinancePage() {
 
   // Recent transactions for timeline
   const recentTransactions = [
-    ...combinedIncomeData.slice(0, 8).map((p: any) => ({
-      id: p.id,
-      type: 'income' as const,
-      description: p.type,
-      method: p.payment_method || 'cash',
-      amount: p.amount,
-      date: p.date,
-      member: p.member?.member_code,
-    })),
+    ...combinedIncomeData.slice(0, 8).map((p: any) => {
+      const d = resolveMemberDisplay(p.member, p.invoice?.customer_name);
+      return {
+        id: p.id,
+        type: 'income' as const,
+        description: d.name,
+        method: p.payment_method || 'cash',
+        amount: p.amount,
+        date: p.date,
+        member: [p.type, d.code].filter(Boolean).join(' · '),
+        avatar: d.avatar_url,
+      };
+    }),
     ...expenseData.slice(0, 5).map((e: any) => ({
       id: e.id,
       type: 'expense' as const,
@@ -300,9 +304,11 @@ export default function FinancePage() {
       method: e.category?.name || 'Other',
       amount: e.amount,
       date: e.expense_date,
-      member: null,
+      member: e.category?.name || 'Expense',
+      avatar: null as string | null,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+
 
   const getPaymentIcon = (method: string) => {
     if (method?.includes('card') || method?.includes('credit') || method?.includes('debit')) return CreditCard;
