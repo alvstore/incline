@@ -54,7 +54,9 @@ import { AdjustMembershipDatesDrawer } from './AdjustMembershipDatesDrawer';
 import { TransferMembershipDrawer } from './TransferMembershipDrawer';
 import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
-import { gatewayDeduction, paymentChannelLabel } from '@/lib/payments/paymentDisplay';
+import { useNavigate } from 'react-router-dom';
+import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
+
 
 // ─── Pending Invoices Section ───
 function PendingInvoicesSection({ memberId, branchId }: { memberId: string; branchId: string }) {
