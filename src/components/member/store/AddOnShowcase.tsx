@@ -202,7 +202,8 @@ export function AddOnShowcase({ memberId, memberName, membershipId, branchId }: 
 
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">{meta.label}</p>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                  <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">
+
                     {pkg.description || `${pkg.quantity} session${pkg.quantity > 1 ? 's' : ''} · valid ${pkg.validity_days} days`}
                   </p>
                 </div>
