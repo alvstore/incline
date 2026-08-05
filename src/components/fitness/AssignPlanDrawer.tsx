@@ -83,6 +83,16 @@ function getPlanDurationWeeks(plan: AssignPlanDrawerProps['plan']): number {
   return 4;
 }
 
+function safeFmt(iso: string, pattern = 'dd MMM yyyy'): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso || '—';
+    return format(d, pattern);
+  } catch {
+    return iso || '—';
+  }
+}
+
 export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignPlanDrawerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<MemberLite[]>([]);
