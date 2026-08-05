@@ -181,6 +181,12 @@ export default function FinancePage() {
     },
   });
 
+  // Resolve staff ids on expenses into names for the audit trail
+  const { nameOf: expenseActorName } = useActorNames([
+    ...(expenseData as any[]).flatMap((e) => [e.submitted_by, e.approved_by]),
+    ...(pendingExpenses as any[]).flatMap((e) => [e.submitted_by, e.approved_by]),
+  ]);
+
   // Approve/Reject expense mutations
   const approveExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
