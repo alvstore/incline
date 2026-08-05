@@ -136,21 +136,52 @@ Deno.serve(async (req) => {
 
     const benefitName =
       benefitType?.name || facility?.name || slot.benefit_type || "your session";
+
+    // Human-readable date/time (IST) so the message never reads "on at".
+    const prettyDate = (() => {
+      try {
+        return new Date(`${slot.slot_date}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+          weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Kolkata",
+        });
+      } catch { return String(slot.slot_date ?? ""); }
+    })();
+    const prettyTime = (() => {
+      const hhmm = String(slot.start_time || "").slice(0, 5);
+      if (!/^\d{2}:\d{2}$/.test(hhmm)) return hhmm;
+      const [h, m] = hhmm.split(":").map(Number);
+      const suffix = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      return `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
+    })();
+
+    // The dispatcher resolves the approved universal FACILITY templates via
+    // trigger_event. Reminders reuse the confirmation template copy.
+    const EVENT_KEYS: Record<EventName, string> = {
+      facility_slot_booked: "facility_booked",
+      facility_slot_cancelled: "facility_cancelled",
+      facility_slot_reminder: "facility_reminder",
+    };
+
     const vars: Record<string, string> = {
-      event_key: eventName,
+      event_key: EVENT_KEYS[eventName],
       member_name: profile?.full_name || "Member",
+      // Canonical slots used by the approved facility templates.
+      facility_name: benefitName,
+      booking_date: prettyDate,
+      booking_time: prettyTime,
+      // Aliases kept so any other template shape still renders real values
+      // instead of "the class on at".
       benefit_name: benefitName,
-      slot_date: slot.slot_date,
-      slot_time: (slot.start_time || "").slice(0, 5),
+      slot_date: prettyDate,
+      slot_time: prettyTime,
+      session_name: benefitName,
+      class_name: benefitName,
+      class_date: prettyDate,
+      class_time: prettyTime,
       branch_name: branch?.name || "Incline",
       cancellation_policy: cancellationPolicy,
-      // Aliases: if an older class-shaped template is ever resolved, the slots
-      // still render real values instead of "the class on at".
-      class_name: benefitName,
-      class_date: slot.slot_date,
-      class_time: (slot.start_time || "").slice(0, 5),
-      session_name: benefitName,
     };
+
     for (const [k, v] of Object.entries(vars)) {
       body = body.split(`{{${k}}}`).join(v);
     }
