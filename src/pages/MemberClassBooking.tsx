@@ -496,7 +496,7 @@ export default function MemberClassBooking() {
     });
 
     return items.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  }, [classes, recoverySlots, ptSessions, classBookingMap, slotBookingMap]);
+  }, [classes, recoverySlots, ptSessions, classBookingMap, slotBookingMap, entitledTypes, packageByType]);
 
   // ─── Filter to selected day + active filter ───
   const dayItems = useMemo(() => {
