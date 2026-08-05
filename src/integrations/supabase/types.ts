@@ -13704,6 +13704,10 @@ export type Database = {
           m_start: string
         }[]
       }
+      activate_benefit_credits_for_invoice: {
+        Args: { _invoice_id: string }
+        Returns: Json
+      }
       activate_pt_package: {
         Args: { _member_package_id: string; _payment_id?: string }
         Returns: Json
@@ -14763,6 +14767,10 @@ export type Database = {
           template_id: string
         }[]
       }
+      member_access_status: {
+        Args: { _branch_id?: string; _member_id: string }
+        Returns: Json
+      }
       member_branch_id: { Args: { _member_id: string }; Returns: string }
       member_check_in: {
         Args: { _branch_id: string; _member_id: string; _method?: string }
@@ -14777,6 +14785,18 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      members_blocked_for_dues: {
+        Args: never
+        Returns: {
+          branch_id: string
+          days_overdue: number
+          hardware_access_status: string
+          member_code: string
+          member_id: string
+          mips_person_sn: string
+          outstanding_amount: number
+        }[]
       }
       membership_end_date: {
         Args: { p_duration_days: number; p_start: string }
@@ -14928,18 +14948,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      purchase_benefit_credits: {
-        Args: {
-          p_branch_id?: string
-          p_idempotency_key?: string
-          p_member_id: string
-          p_membership_id: string
-          p_package_id: string
-          p_payment_method?: string
-          p_received_by?: string
-        }
-        Returns: Json
-      }
+      purchase_benefit_credits:
+        | {
+            Args: {
+              p_branch_id?: string
+              p_idempotency_key?: string
+              p_member_id: string
+              p_membership_id: string
+              p_package_id: string
+              p_payment_method?: string
+              p_received_by?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_branch_id?: string
+              p_defer_settlement?: boolean
+              p_idempotency_key?: string
+              p_member_id: string
+              p_membership_id: string
+              p_package_id: string
+              p_payment_method?: string
+              p_received_by?: string
+            }
+            Returns: Json
+          }
       purchase_benefit_topup: {
         Args: {
           p_benefit_type_id: string

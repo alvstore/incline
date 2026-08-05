@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { useTrainers } from '@/hooks/useTrainers';
+import { initializePayment, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/paymentService';
+
 
 interface PurchaseAddOnDrawerProps {
   open: boolean;
@@ -247,18 +249,50 @@ export function PurchaseAddOnDrawer({
     }
     setSubmitting(true);
     try {
+      const online = paymentMethod === 'online';
       const { data, error } = await supabase.rpc('purchase_benefit_credits', {
         p_member_id: memberId,
         p_membership_id: membershipId,
         p_package_id: selectedBenefitPkg,
         p_branch_id: branchId,
-        p_payment_method: paymentMethod,
+        p_payment_method: online ? 'upi' : paymentMethod,
         p_idempotency_key: benefitIdemKey,
-      });
+        p_defer_settlement: online,
+      } as any);
       if (error) throw error;
-      const result = data as { success?: boolean; error?: string } | null;
+      const result = data as { success?: boolean; error?: string; invoice_id?: string } | null;
       if (!result?.success) throw new Error(result?.error || 'Purchase failed');
-      toast.success('Add-on credits added');
+
+      if (online && result.invoice_id) {
+        const order = await initializePayment(result.invoice_id, branchId);
+        await new Promise<void>((resolve, reject) => {
+          openRazorpayCheckout(
+            order,
+            { name: memberName || 'Member', email: '', phone: '' },
+            async (response) => {
+              try {
+                await verifyRazorpayPayment({
+                  invoiceId: result.invoice_id!,
+                  branchId,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                });
+                await supabase.rpc('activate_benefit_credits_for_invoice' as any, {
+                  _invoice_id: result.invoice_id,
+                });
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            },
+            (err) => reject(err instanceof Error ? err : new Error('Payment cancelled')),
+          );
+        });
+      }
+
+      toast.success(online ? 'Payment successful — credits added' : 'Add-on credits added');
+
       setLastPurchase({ credits: selectedPackage.quantity, validityDays: selectedPackage.validity_days });
       queryClient.invalidateQueries({ queryKey: ['member-benefit-credits'] });
       queryClient.invalidateQueries({ queryKey: ['my-benefit-credits'] });

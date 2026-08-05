@@ -132,6 +132,22 @@ async function applyMemberAction(
     return { success: false, action, error: "Member has no MIPS sync identifier" };
   }
 
+  // Never restore hardware access while dues are overdue past the branch grace period.
+  if (action === "restore") {
+    const { data: access } = await supabase.rpc("member_access_status", {
+      _member_id: member_id,
+      _branch_id: effectiveBranchId || null,
+    });
+    if (access && access.allowed === false) {
+      return {
+        success: false,
+        action,
+        error: `Cannot restore access: dues Rs. ${access.outstanding_amount} overdue by ${access.days_overdue} day(s)`,
+      };
+    }
+  }
+
+
   // Branch-specific MIPS connection if any
   let mipsBaseUrl: string | undefined;
   let mipsUsername: string | undefined;
@@ -283,18 +299,21 @@ async function sweepExpired(supabase: any) {
     await safeRevoke(m, "Auto-revoked: membership frozen");
   }
 
-  // 3. Overdue invoices
-  const { data: overdueInvoices } = await supabase
-    .from("invoices")
-    .select("member_id, members!inner(id, member_code, hardware_access_status, mips_person_sn, branch_id)")
-    .in("status", ["overdue"])
-    .eq("members.hardware_access_status", "active");
-  for (const inv of overdueInvoices || []) {
-    const m = (inv as any).members;
-    if (!m?.mips_person_sn) continue;
-    if (revoked.includes(m.member_code || m.id)) continue;
-    await safeRevoke(m, "Auto-revoked: overdue invoice");
+  // 3. Overdue dues (payment due date passed + branch grace period)
+  const { data: duesBlocked, error: duesError } = await supabase.rpc("members_blocked_for_dues");
+  if (duesError) {
+    errors.push(`dues_check: ${duesError.message}`);
   }
+  for (const row of duesBlocked || []) {
+    if (!row.mips_person_sn) continue;
+    if (row.hardware_access_status !== "active") continue;
+    if (revoked.includes(row.member_code || row.member_id)) continue;
+    await safeRevoke(
+      { id: row.member_id, member_code: row.member_code, branch_id: row.branch_id },
+      `Auto-revoked: dues Rs. ${row.outstanding_amount} overdue by ${row.days_overdue} day(s)`,
+    );
+  }
+
 
   return { revoked, errors };
 }
