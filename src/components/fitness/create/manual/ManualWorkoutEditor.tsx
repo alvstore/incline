@@ -130,6 +130,7 @@ interface SortableExerciseRowProps {
 
 function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange }: SortableExerciseRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const [open, setOpen] = useState(!!(ex.form_tips || ex.equipment || ex.video_url || ex.video_file_path));
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -137,75 +138,103 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
     zIndex: isDragging ? 10 : 'auto',
   };
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md border bg-background p-3 space-y-2">
-      <div className="grid gap-2 grid-cols-12">
-        <div className="col-span-12 sm:col-span-1 flex items-end justify-center">
-          <button
-            type="button"
-            aria-label="Drag to reorder"
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-2 -m-2 touch-none"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="col-span-12 sm:col-span-3">
-          <Label className="text-xs">Exercise *</Label>
-          <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
-        </div>
-        
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-2xl border bg-card p-3 shadow-sm transition-shadow duration-200 hover:shadow-md"
+    >
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          aria-label="Drag to reorder"
+          className="mt-7 shrink-0 cursor-grab touch-none p-2 text-muted-foreground transition-colors hover:text-foreground active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
 
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="grid grid-cols-12 gap-2">
+            <div className="col-span-12 sm:col-span-5">
+              <Label className="text-xs">Exercise *</Label>
+              <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Sets</Label>
+              <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Reps</Label>
+              <Input value={ex.reps} onChange={(e) => onUpdate(exIdx, 'reps', e.target.value)} placeholder="8-10" />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Rest (s)</Label>
+              <Input type="number" min={0} value={ex.rest_seconds} onChange={(e) => onUpdate(exIdx, 'rest_seconds', parseInt(e.target.value) || 0)} />
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <Label className="text-xs">Weight</Label>
+              <Input value={ex.weight} onChange={(e) => onUpdate(exIdx, 'weight', e.target.value)} placeholder="60kg" />
+            </div>
+          </div>
 
-        <div className="col-span-3 sm:col-span-1">
-          <Label className="text-xs">Sets</Label>
-          <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Reps</Label>
-          <Input value={ex.reps} onChange={(e) => onUpdate(exIdx, 'reps', e.target.value)} placeholder="8-10" />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Rest (s)</Label>
-          <Input type="number" min={0} value={ex.rest_seconds} onChange={(e) => onUpdate(exIdx, 'rest_seconds', parseInt(e.target.value) || 0)} />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Weight</Label>
-          <Input value={ex.weight} onChange={(e) => onUpdate(exIdx, 'weight', e.target.value)} placeholder="60kg" />
-        </div>
-        <div className="col-span-12 sm:col-span-1 flex sm:items-end">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive ml-auto" onClick={() => onRemove(exIdx)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      <div>
-        <Label className="text-xs">Equipment / Machine</Label>
-        <Input
-          value={ex.equipment}
-          onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
-          placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
-        />
-      </div>
-      <div>
-        <Label className="text-xs">Form Tips</Label>
-        <Textarea
-          rows={2}
-          value={ex.form_tips}
-          onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
-          placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
-        />
-      </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 cursor-pointer gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-180')} />
+              {open ? 'Hide details' : 'Equipment, form tips & video'}
+            </Button>
+          </div>
 
-      <VideoAttachmentControl
-        folder="exercises"
-        label="Demo video (URL or upload)"
-        value={{ video_url: ex.video_url, video_file_path: ex.video_file_path }}
-        onChange={onVideoChange}
-      />
+          {open && (
+            <div className="space-y-2 border-t pt-2">
+              <div>
+                <Label className="text-xs">Equipment / Machine</Label>
+                <Input
+                  value={ex.equipment}
+                  onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
+                  placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Form Tips</Label>
+                <Textarea
+                  rows={2}
+                  value={ex.form_tips}
+                  onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
+                  placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
+                />
+              </div>
+              <VideoAttachmentControl
+                folder="exercises"
+                label="Demo video (URL or upload)"
+                value={{ video_url: ex.video_url, video_file_path: ex.video_file_path }}
+                onChange={onVideoChange}
+              />
+            </div>
+          )}
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-6 h-9 w-9 shrink-0 cursor-pointer text-destructive"
+          onClick={() => onRemove(exIdx)}
+          aria-label="Remove exercise"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
+
 
 export interface ManualEditorRef {
   canSubmit: boolean;
