@@ -13962,31 +13962,18 @@ export type Database = {
         Args: { _class_id: string; _member_id: string }
         Returns: Json
       }
-      book_facility_slot:
-        | {
-            Args: {
-              p_force?: boolean
-              p_force_reason?: string
-              p_member_id: string
-              p_membership_id: string
-              p_slot_id: string
-              p_source?: string
-              p_staff_id?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_force?: boolean
-              p_force_reason?: string
-              p_member_id: string
-              p_membership_id: string
-              p_slot_id: string
-              p_source?: string
-              p_staff_id?: string
-            }
-            Returns: Json
-          }
+      book_facility_slot: {
+        Args: {
+          p_force?: boolean
+          p_force_reason?: string
+          p_member_id: string
+          p_membership_id: string
+          p_slot_id: string
+          p_source?: string
+          p_staff_id?: string
+        }
+        Returns: Json
+      }
       bump_dynamic_memory_hit: {
         Args: { _rule_id: string }
         Returns: undefined
