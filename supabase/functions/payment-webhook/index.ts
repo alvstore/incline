@@ -1,4 +1,4 @@
-// v2.1.0 — canonical settlement with capture time, fees and rejected-delivery audit.
+// v2.2.0 — convenience surcharge split out of invoice credit; canonical settlement with capture time, fees and rejected-delivery audit.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
