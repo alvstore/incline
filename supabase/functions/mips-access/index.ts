@@ -132,6 +132,22 @@ async function applyMemberAction(
     return { success: false, action, error: "Member has no MIPS sync identifier" };
   }
 
+  // Never restore hardware access while dues are overdue past the branch grace period.
+  if (action === "restore") {
+    const { data: access } = await supabase.rpc("member_access_status", {
+      _member_id: member_id,
+      _branch_id: effectiveBranchId || null,
+    });
+    if (access && access.allowed === false) {
+      return {
+        success: false,
+        action,
+        error: `Cannot restore access: dues Rs. ${access.outstanding_amount} overdue by ${access.days_overdue} day(s)`,
+      };
+    }
+  }
+
+
   // Branch-specific MIPS connection if any
   let mipsBaseUrl: string | undefined;
   let mipsUsername: string | undefined;
