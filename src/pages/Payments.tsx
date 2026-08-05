@@ -213,10 +213,15 @@ export default function PaymentsPage() {
     });
   }, [payments, searchTerm, methodFilter, statusFilter, dateRange]);
 
-  const todayTotal = filteredPayments.filter((p: any) => p.status !== 'voided' && new Date(p.payment_date).toDateString() === new Date().toDateString()).reduce((sum: number, p: any) => sum + p.amount, 0);
-  const monthTotal = filteredPayments.filter((p: any) => p.status !== 'voided').reduce((sum: number, p: any) => sum + p.amount, 0);
-  const completedTotal = filteredPayments.filter((p: any) => p.status === 'completed').reduce((sum: number, p: any) => sum + p.amount, 0);
-  const pendingTotal = filteredPayments.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
+  // Reversed rows (voided / refunded) stay visible for audit but never count
+  // as money collected.
+  const countable = filteredPayments.filter((p: any) => !isReversedPayment(p));
+  const todayTotal = countable.filter((p: any) => new Date(p.payment_date).toDateString() === new Date().toDateString()).reduce((sum: number, p: any) => sum + p.amount, 0);
+  const monthTotal = countable.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const completedTotal = countable.filter((p: any) => p.status === 'completed').reduce((sum: number, p: any) => sum + p.amount, 0);
+  const pendingTotal = countable.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
+  const reversedTotal = filteredPayments.filter((p: any) => isReversedPayment(p)).reduce((sum: number, p: any) => sum + p.amount, 0);
+
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = { cash: 'bg-success/10 text-success', card: 'bg-info/10 text-info', upi: 'bg-primary/10 text-primary', wallet: 'bg-warning/10 text-warning', bank_transfer: 'bg-info/10 text-info', online: 'bg-primary/10 text-primary' };
