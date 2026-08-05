@@ -313,10 +313,11 @@ export default function MemberClassBooking() {
       return result;
     },
     onSuccess: () => {
-      toast.success('Booking cancelled');
+      toast.success('Booking cancelled', { description: 'Your session has been returned to your balance.' });
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
       queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['my-entitlements'] });
+      invalidateBenefitData(queryClient);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel'),
   });
