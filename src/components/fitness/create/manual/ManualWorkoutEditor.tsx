@@ -10,11 +10,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Dumbbell, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { DayRail } from '@/components/fitness/create/DayRail';
+import { PlanStatCard } from '@/components/fitness/create/PlanStatCard';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
 import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
+
 import {
   DndContext,
   closestCenter,
