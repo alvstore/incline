@@ -3,12 +3,15 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+
 import {
   Sparkles,
   Dumbbell,
   Utensils,
-  Loader2,
+  
   Library,
   Trash2,
   UserPlus,
@@ -22,6 +25,8 @@ import {
   Target,
   FileUp,
   FileText,
+  Search,
+
 } from "lucide-react";
 import { downloadPlanPdf } from "@/utils/pdfBlob";
 import { useBrandContext } from "@/lib/brand/useBrandContext";
@@ -107,6 +112,7 @@ export default function FitnessTemplatesPage() {
   const [targetingTemplate, setTargetingTemplate] = useState<FitnessPlanTemplate | null>(null);
   const [uploadPdfOpen, setUploadPdfOpen] = useState(false);
   const [assignmentsTemplate, setAssignmentsTemplate] = useState<FitnessPlanTemplate | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["fitness-templates", planType],
@@ -114,10 +120,21 @@ export default function FitnessTemplatesPage() {
   });
 
   const templates = useMemo(() => {
-    if (commonFilter === "all") return allTemplates;
-    if (commonFilter === "common") return allTemplates.filter((t) => t.is_common);
-    return allTemplates.filter((t) => !t.is_common);
-  }, [allTemplates, commonFilter]);
+    const byCommon =
+      commonFilter === "all"
+        ? allTemplates
+        : commonFilter === "common"
+          ? allTemplates.filter((t) => t.is_common)
+          : allTemplates.filter((t) => !t.is_common);
+    const q = search.trim().toLowerCase();
+    if (!q) return byCommon;
+    return byCommon.filter((t) =>
+      [t.name, t.description, t.goal, t.difficulty]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [allTemplates, commonFilter, search]);
+
 
   const templateIds = useMemo(() => templates.map((t) => t.id), [templates]);
   const { data: usageCounts = {} } = useQuery({
@@ -234,17 +251,26 @@ export default function FitnessTemplatesPage() {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" className="flex-1 min-w-[120px]" onClick={() => handleAssignTemplate(template)}>
+            <Button size="sm" className="h-9 flex-1 min-w-[120px] cursor-pointer" onClick={() => handleAssignTemplate(template)}>
               <UserPlus className="h-3.5 w-3.5 mr-1" /> Assign
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setViewing(template)} title="Preview plan">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 w-9 cursor-pointer p-0"
+              onClick={() => setViewing(template)}
+              title="Preview plan"
+              aria-label={`Preview ${template.name}`}
+            >
               <Eye className="h-3.5 w-3.5" />
             </Button>
             <Button
               size="sm"
               variant="outline"
+              className="h-9 w-9 cursor-pointer p-0"
               onClick={() => handleDownloadTemplate(template)}
               title={isPdf ? 'Open PDF' : 'Download PDF'}
+              aria-label={`${isPdf ? 'Open' : 'Download'} PDF for ${template.name}`}
             >
               <Download className="h-3.5 w-3.5" />
             </Button>
@@ -252,11 +278,13 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => {
                   const t = template.type === "workout" ? "workout" : "diet";
                   navigate(`/fitness/create/manual?type=${t}&template=${template.id}`);
                 }}
                 title="Use as starting point"
+                aria-label={`Use ${template.name} as a starting point`}
               >
                 <FilePlus className="h-3.5 w-3.5" />
               </Button>
@@ -265,11 +293,13 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => {
                   const t = template.type === "workout" ? "workout" : "diet";
                   navigate(`/fitness/create/manual?type=${t}&template=${template.id}&edit=1`);
                 }}
                 title={isSystem ? "Customize a copy" : "Edit template content"}
+                aria-label={`Edit ${template.name}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -278,8 +308,10 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => setTargetingTemplate(template)}
                 title="Audience targeting (age/weight/goal)"
+                aria-label={`Audience targeting for ${template.name}`}
               >
                 <Target className="h-3.5 w-3.5" />
               </Button>
@@ -288,13 +320,16 @@ export default function FitnessTemplatesPage() {
               <Button
                 size="sm"
                 variant="ghost"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => setDeleteTarget(template)}
                 title="Delete template"
+                aria-label={`Delete ${template.name}`}
               >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             )}
           </div>
+
         </CardContent>
       </Card>
     );
@@ -344,35 +379,60 @@ export default function FitnessTemplatesPage() {
           </div>
         </div>
 
-        {/* Common-plan filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { key: "all", label: "All plans" },
-              { key: "common", label: "Common (no PT)" },
-              { key: "pt_only", label: "PT-specific" },
-            ] as { key: CommonFilter; label: string }[]
-          ).map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setCommonFilter(f.key)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                commonFilter === f.key
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background hover:bg-muted border-border"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* Search + common-plan filter chips */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { key: "all", label: "All plans" },
+                { key: "common", label: "Common (no PT)" },
+                { key: "pt_only", label: "PT-specific" },
+              ] as { key: CommonFilter; label: string }[]
+            ).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setCommonFilter(f.key)}
+                className={`cursor-pointer text-xs px-3 py-1.5 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                  commonFilter === f.key
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-muted border-border"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <label htmlFor="template-search" className="sr-only">Search templates</label>
+            <Input
+              id="template-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search templates…"
+              className="h-9 rounded-xl pl-9"
+            />
+          </div>
         </div>
 
         {/* Templates */}
         {templatesLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-card p-5 shadow-lg shadow-muted/30 space-y-3">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <div className="flex gap-2 pt-2">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-9 w-full rounded-xl" />
+              </div>
+            ))}
           </div>
         ) : !hasAnyTemplate ? (
+
           <Card className="rounded-2xl">
             <CardContent className="py-12 text-center">
               <Library className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

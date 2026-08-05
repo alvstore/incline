@@ -10,11 +10,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Dumbbell, GripVertical } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy } from 'lucide-react';
+
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { DayRail } from '@/components/fitness/create/DayRail';
+import { PlanStatCard } from '@/components/fitness/create/PlanStatCard';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
 import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
+
 import {
   DndContext,
   closestCenter,
@@ -130,6 +142,7 @@ interface SortableExerciseRowProps {
 
 function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange }: SortableExerciseRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const [open, setOpen] = useState(!!(ex.form_tips || ex.equipment || ex.video_url || ex.video_file_path));
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -137,75 +150,103 @@ function SortableExerciseRow({ id, ex, exIdx, onUpdate, onRemove, onVideoChange 
     zIndex: isDragging ? 10 : 'auto',
   };
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md border bg-background p-3 space-y-2">
-      <div className="grid gap-2 grid-cols-12">
-        <div className="col-span-12 sm:col-span-1 flex items-end justify-center">
-          <button
-            type="button"
-            aria-label="Drag to reorder"
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-2 -m-2 touch-none"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="col-span-12 sm:col-span-3">
-          <Label className="text-xs">Exercise *</Label>
-          <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
-        </div>
-        
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-2xl border bg-card p-3 shadow-sm transition-shadow duration-200 hover:shadow-md"
+    >
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          aria-label="Drag to reorder"
+          className="mt-7 shrink-0 cursor-grab touch-none p-2 text-muted-foreground transition-colors hover:text-foreground active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
 
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="grid grid-cols-12 gap-2">
+            <div className="col-span-12 sm:col-span-5">
+              <Label className="text-xs">Exercise *</Label>
+              <Input value={ex.name} onChange={(e) => onUpdate(exIdx, 'name', e.target.value)} placeholder="Bench Press" />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Sets</Label>
+              <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Reps</Label>
+              <Input value={ex.reps} onChange={(e) => onUpdate(exIdx, 'reps', e.target.value)} placeholder="8-10" />
+            </div>
+            <div className="col-span-3 sm:col-span-2">
+              <Label className="text-xs">Rest (s)</Label>
+              <Input type="number" min={0} value={ex.rest_seconds} onChange={(e) => onUpdate(exIdx, 'rest_seconds', parseInt(e.target.value) || 0)} />
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <Label className="text-xs">Weight</Label>
+              <Input value={ex.weight} onChange={(e) => onUpdate(exIdx, 'weight', e.target.value)} placeholder="60kg" />
+            </div>
+          </div>
 
-        <div className="col-span-3 sm:col-span-1">
-          <Label className="text-xs">Sets</Label>
-          <Input type="number" min={1} value={ex.sets} onChange={(e) => onUpdate(exIdx, 'sets', parseInt(e.target.value) || 1)} />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Reps</Label>
-          <Input value={ex.reps} onChange={(e) => onUpdate(exIdx, 'reps', e.target.value)} placeholder="8-10" />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Rest (s)</Label>
-          <Input type="number" min={0} value={ex.rest_seconds} onChange={(e) => onUpdate(exIdx, 'rest_seconds', parseInt(e.target.value) || 0)} />
-        </div>
-        <div className="col-span-3 sm:col-span-2">
-          <Label className="text-xs">Weight</Label>
-          <Input value={ex.weight} onChange={(e) => onUpdate(exIdx, 'weight', e.target.value)} placeholder="60kg" />
-        </div>
-        <div className="col-span-12 sm:col-span-1 flex sm:items-end">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive ml-auto" onClick={() => onRemove(exIdx)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      <div>
-        <Label className="text-xs">Equipment / Machine</Label>
-        <Input
-          value={ex.equipment}
-          onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
-          placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
-        />
-      </div>
-      <div>
-        <Label className="text-xs">Form Tips</Label>
-        <Textarea
-          rows={2}
-          value={ex.form_tips}
-          onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
-          placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
-        />
-      </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 cursor-pointer gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-180')} />
+              {open ? 'Hide details' : 'Equipment, form tips & video'}
+            </Button>
+          </div>
 
-      <VideoAttachmentControl
-        folder="exercises"
-        label="Demo video (URL or upload)"
-        value={{ video_url: ex.video_url, video_file_path: ex.video_file_path }}
-        onChange={onVideoChange}
-      />
+          {open && (
+            <div className="space-y-2 border-t pt-2">
+              <div>
+                <Label className="text-xs">Equipment / Machine</Label>
+                <Input
+                  value={ex.equipment}
+                  onChange={(e) => onUpdate(exIdx, 'equipment', e.target.value)}
+                  placeholder="e.g. Flat bench press machine, Smith machine, Cable stack"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Form Tips</Label>
+                <Textarea
+                  rows={2}
+                  value={ex.form_tips}
+                  onChange={(e) => onUpdate(exIdx, 'form_tips', e.target.value)}
+                  placeholder="Cues for proper form, breathing, tempo… (one cue per line)"
+                />
+              </div>
+              <VideoAttachmentControl
+                folder="exercises"
+                label="Demo video (URL or upload)"
+                value={{ video_url: ex.video_url, video_file_path: ex.video_file_path }}
+                onChange={onVideoChange}
+              />
+            </div>
+          )}
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-6 h-9 w-9 shrink-0 cursor-pointer text-destructive"
+          onClick={() => onRemove(exIdx)}
+          aria-label="Remove exercise"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
+
 
 export interface ManualEditorRef {
   canSubmit: boolean;
@@ -442,119 +483,187 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     onMetaChange?.({ canSubmit, submit, primaryLabel });
   }, [canSubmit, submit, primaryLabel, onMetaChange]);
 
+  const activeDays = days.filter((d) => d.exercises.length > 0).length;
+  const totalSets = days.reduce((s, d) => s + d.exercises.reduce((n, e) => n + (Number(e.sets) || 0), 0), 0);
+
+  const copyDayTo = (targets: number[]) => {
+    const source = days[activeIdx];
+    if (!source) return;
+    setDays((prev) =>
+      prev.map((d, i) =>
+        targets.includes(i)
+          ? { ...d, focus: source.focus, warmup: source.warmup, cooldown: source.cooldown, exercises: source.exercises.map((e) => ({ ...e })) }
+          : d,
+      ),
+    );
+    toast.success(targets.length > 1 ? 'Copied to all other days' : 'Day copied');
+  };
+
+  const clearDay = () => {
+    updateDay(activeIdx, { exercises: [], warmup: '', cooldown: '' });
+    toast.success(`${days[activeIdx].day} cleared`);
+  };
+
+  const active = days[activeIdx];
+
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="lg:col-span-2 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Plan Details</CardTitle>
+    <div className="grid gap-5 lg:grid-cols-12">
+      {/* Left: plan details + day rail */}
+      <div className="space-y-4 lg:col-span-3">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Plan Details
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Plan Name *</Label>
-                <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Push/Pull/Legs Hypertrophy" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Goal</Label>
-                <Select value={goal} onValueChange={setGoal}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Weight Loss">Weight Loss</SelectItem>
-                    <SelectItem value="Muscle Gain">Muscle Gain</SelectItem>
-                    <SelectItem value="General Fitness">General Fitness</SelectItem>
-                    <SelectItem value="Endurance">Endurance</SelectItem>
-                    <SelectItem value="Flexibility">Flexibility</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Difficulty</Label>
-                <Select value={difficulty} onValueChange={setDifficulty}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wk-name">Plan Name *</Label>
+              <Input id="wk-name" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Push/Pull/Legs Hypertrophy" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Goal</Label>
+              <Select value={goal} onValueChange={setGoal}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Weight Loss">Weight Loss</SelectItem>
+                  <SelectItem value="Muscle Gain">Muscle Gain</SelectItem>
+                  <SelectItem value="General Fitness">General Fitness</SelectItem>
+                  <SelectItem value="Endurance">Endurance</SelectItem>
+                  <SelectItem value="Flexibility">Flexibility</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Difficulty</Label>
+              <Select value={difficulty} onValueChange={setDifficulty}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wk-desc">Description</Label>
+              <Input id="wk-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Dumbbell className="h-4 w-4" /> Weekly Schedule
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <CalendarDays className="h-4 w-4" /> Week
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {days.map((d, idx) => (
+          <CardContent>
+            <DayRail
+              ariaLabel="Select training day"
+              activeIndex={activeIdx}
+              onSelect={setActiveIdx}
+              days={days.map((d) => ({
+                label: d.day,
+                meta: d.exercises.length ? `${d.exercises.length} exercises` : 'Rest / empty',
+                muted: d.exercises.length === 0,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Middle: the day workbench */}
+      <div className="space-y-4 lg:col-span-6">
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Dumbbell className="h-4 w-4 text-primary" /> {active.day}
+                <Badge variant="secondary" className="rounded-full text-[11px]">
+                  {active.exercises.length} exercises
+                </Badge>
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 cursor-pointer gap-1">
+                      <Copy className="h-3.5 w-3.5" /> Copy day
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => copyDayTo(days.map((_, i) => i).filter((i) => i !== activeIdx))}>
+                      Copy to all other days
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {days.map((d, i) =>
+                      i === activeIdx ? null : (
+                        <DropdownMenuItem key={d.day + i} onClick={() => copyDayTo([i])}>
+                          Copy to {d.day}
+                        </DropdownMenuItem>
+                      ),
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
-                  key={idx}
+                  variant="ghost"
                   size="sm"
-                  variant={activeIdx === idx ? 'default' : 'outline'}
-                  onClick={() => setActiveIdx(idx)}
-                  className="gap-1.5"
+                  className="h-9 cursor-pointer text-muted-foreground"
+                  onClick={clearDay}
                 >
-                  {d.day}
-                  {d.exercises.length > 0 && (
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">{d.exercises.length}</Badge>
-                  )}
+                  Clear
                 </Button>
-              ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="wk-focus">Focus</Label>
+              <Input
+                id="wk-focus"
+                placeholder="Focus (e.g. Chest & Triceps)"
+                value={active.focus}
+                onChange={(e) => updateDay(activeIdx, { focus: e.target.value })}
+              />
             </div>
 
-            <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-              <div className="flex items-center gap-3">
-                <span className="font-semibold text-sm w-20">{days[activeIdx].day}</span>
-                <Input
-                  className="h-8 max-w-xs"
-                  placeholder="Focus (e.g. Chest & Triceps)"
-                  value={days[activeIdx].focus}
-                  onChange={(e) => updateDay(activeIdx, { focus: e.target.value })}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Warm-up</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
+                  value={active.warmup}
+                  onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
                 />
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Warm-up</Label>
-                  <Textarea
-                    rows={2}
-                    placeholder="e.g. 5 min treadmill walk, shoulder dislocates x15, band pull-aparts x20"
-                    value={days[activeIdx].warmup}
-                    onChange={(e) => updateDay(activeIdx, { warmup: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Cool-down</Label>
-                  <Textarea
-                    rows={2}
-                    placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
-                    value={days[activeIdx].cooldown}
-                    onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cool-down</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="e.g. 5 min easy cycle, chest & lat stretch 30s each side"
+                  value={active.cooldown}
+                  onChange={(e) => updateDay(activeIdx, { cooldown: e.target.value })}
+                />
               </div>
+            </div>
 
+            {active.exercises.length === 0 && (
+              <div className="rounded-2xl border border-dashed p-6 text-center">
+                <Dumbbell className="mx-auto h-6 w-6 text-muted-foreground" />
+                <p className="mt-2 text-sm font-medium">No exercises on {active.day}</p>
+                <p className="text-xs text-muted-foreground">Add one below, or leave this day as rest.</p>
+              </div>
+            )}
 
-
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleExerciseDragEnd}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExerciseDragEnd}>
+              <SortableContext
+                items={active.exercises.map((_, i) => String(i))}
+                strategy={verticalListSortingStrategy}
               >
-                <SortableContext
-                  items={days[activeIdx].exercises.map((_, i) => String(i))}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {days[activeIdx].exercises.map((ex, exIdx) => (
+                <div className="space-y-2">
+                  {active.exercises.map((ex, exIdx) => (
                     <SortableExerciseRow
                       key={exIdx}
                       id={String(exIdx)}
@@ -563,46 +672,47 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                       onUpdate={updateExercise}
                       onRemove={removeExercise}
                       onVideoChange={(next) => {
-                        const updated = days[activeIdx].exercises.map((e, i) =>
-                          i === exIdx ? { ...e, video_url: next.video_url, video_file_path: next.video_file_path } : e
+                        const updated = active.exercises.map((e, i) =>
+                          i === exIdx ? { ...e, video_url: next.video_url, video_file_path: next.video_file_path } : e,
                         );
                         updateDay(activeIdx, { exercises: updated });
                       }}
                     />
                   ))}
-                </SortableContext>
-              </DndContext>
+                </div>
+              </SortableContext>
+            </DndContext>
 
-              <Button variant="outline" size="sm" className="w-full border-dashed" onClick={addExercise}>
-                <Plus className="h-4 w-4 mr-1" /> Add Exercise
-              </Button>
-            </div>
+            <Button variant="outline" className="w-full cursor-pointer border-dashed" onClick={addExercise}>
+              <Plus className="mr-1 h-4 w-4" /> Add Exercise
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      <div className="space-y-4">
-        <Card>
+      {/* Right: insight panel */}
+      <div className="space-y-4 self-start lg:col-span-3 lg:sticky lg:top-40">
+        <PlanStatCard
+          label="Total exercises"
+          value={totalExercises}
+          hint={`across ${activeDays} active ${activeDays === 1 ? 'day' : 'days'}`}
+          icon={<Dumbbell className="h-4 w-4" />}
+          tone="primary"
+        />
+        <PlanStatCard label="Weekly sets" value={totalSets} hint="Sum of all sets in the week" />
+        <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Optional: Pre-Assign Member</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Optional: Pre-Assign Member
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <MemberSearchPicker value={member} onChange={setMember} label="Member" />
-            <p className="text-xs text-muted-foreground mt-2">
-              You can also assign on the next step.
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/30">
-          <CardContent className="pt-4 space-y-1.5">
-            <p className="text-xs text-muted-foreground">Total exercises</p>
-            <p className="text-2xl font-bold">{totalExercises}</p>
-            <p className="text-xs text-muted-foreground">
-              across {days.filter(d => d.exercises.length > 0).length} active days
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">You can also assign on the next step.</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+

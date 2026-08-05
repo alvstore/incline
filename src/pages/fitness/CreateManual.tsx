@@ -47,19 +47,25 @@ export default function CreateManualPage() {
       title={editMode ? 'Edit Plan Template' : draftId ? 'Edit Plan' : 'Manual Plan Builder'}
       subtitle={subtitle}
       step="build"
+      showSteps={!editMode}
+      chips={[
+        { label: type === 'workout' ? 'Workout' : 'Diet', tone: 'primary' },
+        ...(editMode ? [{ label: 'Editing template', tone: 'muted' as const }] : []),
+      ]}
       backTo={editMode ? '/fitness/templates' : draftId ? `/fitness/preview/${draftId}` : '/fitness/create'}
       actions={
         editMode ? (
-          <div className="flex gap-2">
+          <>
             <Button variant="outline" onClick={() => navigate('/fitness/templates')}>
               Cancel
             </Button>
             <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
-          </div>
+          </>
         ) : (
           <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
         )
       }
+
 
     >
       <div className="space-y-4">

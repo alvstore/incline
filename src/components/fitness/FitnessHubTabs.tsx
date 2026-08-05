@@ -51,7 +51,7 @@ const TABS: TabDef[] = [
   },
 ];
 
-export function FitnessHubTabs() {
+export function FitnessHubTabs({ compact = false }: { compact?: boolean } = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { hasAnyRole } = useAuth();
@@ -63,6 +63,30 @@ export function FitnessHubTabs() {
     visibleTabs.find((t) =>
       t.matchPaths.some((p) => location.pathname.startsWith(p))
     )?.key ?? "create";
+
+  // Compact mode is used inside the builder shell, where the page already has
+  // its own title bar — a single breadcrumb row avoids stacked headers.
+  if (compact) {
+    const activeTab = visibleTabs.find((t) => t.key === activeKey);
+    return (
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Dumbbell className="h-3.5 w-3.5 text-primary" />
+        <button
+          type="button"
+          onClick={() => navigate("/fitness/create")}
+          className="cursor-pointer rounded transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        >
+          Diet &amp; Workout
+        </button>
+        {activeTab && (
+          <>
+            <span aria-hidden>/</span>
+            <span className="font-medium text-foreground">{activeTab.label}</span>
+          </>
+        )}
+      </nav>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -79,6 +103,7 @@ export function FitnessHubTabs() {
           </p>
         </div>
       </div>
+
 
       <div className="border-b">
         <nav
