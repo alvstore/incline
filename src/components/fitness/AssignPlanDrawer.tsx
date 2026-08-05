@@ -185,6 +185,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
         description: plan!.description,
         plan_data: plan!.content,
         is_custom: true,
+        valid_from: startDate,
         valid_until: validUntil,
         branch_id: branchId,
         channels,
