@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStableIdempotencyKey } from '@/hooks/useStableIdempotencyKey';
 import { useTrainers } from '@/hooks/useTrainers';
+import { initializePayment, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/paymentService';
+
 
 interface PurchaseAddOnDrawerProps {
   open: boolean;
