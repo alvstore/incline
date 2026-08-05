@@ -16,12 +16,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ensureSlotsForDateRange } from '@/services/benefitBookingService';
 import {
   Calendar, Users, Loader2, AlertCircle, Dumbbell,
-  Droplets, Gift, Check, X, CalendarDays,
+  Droplets, Gift, Check, X, CalendarDays, Lock, Sparkles, IndianRupee, ShieldCheck,
 } from 'lucide-react';
 import { format, addDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
+import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 
 type FilterType = 'all' | 'recovery' | 'classes' | 'pt';
+
+interface AddOnPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  benefit_type: string;
+  quantity: number;
+  price: number;
+  validity_days: number;
+}
 
 interface AgendaItem {
   id: string;
@@ -34,6 +45,12 @@ interface AgendaItem {
   capacity?: number;
   isBooked: boolean;
   bookingId?: string;
+  /** Recovery only — benefit code used to resolve entitlement / upsell package. */
+  benefitType?: string;
+  /** True when the member has no plan benefit and no credits for this facility. */
+  locked?: boolean;
+  /** Cheapest add-on package that unlocks this facility. */
+  unlockPackage?: AddOnPackage | null;
   rawData: any;
 }
 
