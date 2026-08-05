@@ -180,6 +180,14 @@ export default function MemberClassBooking() {
     return map;
   }, [addOnPackages]);
 
+  /** Packages for facilities the member is not currently entitled to — the upsell rail. */
+  const upsellPackages = useMemo(
+    () => addOnPackages.filter((p) => !entitledTypes.has(String(p.benefit_type || '').toLowerCase())),
+    [addOnPackages, entitledTypes],
+  );
+
+
+
 
 
 
