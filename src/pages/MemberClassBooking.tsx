@@ -16,12 +16,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ensureSlotsForDateRange } from '@/services/benefitBookingService';
 import {
   Calendar, Users, Loader2, AlertCircle, Dumbbell,
-  Droplets, Gift, Check, X, CalendarDays,
+  Droplets, Gift, Check, X, CalendarDays, Lock, Sparkles, IndianRupee, ShieldCheck,
 } from 'lucide-react';
 import { format, addDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
+import { PurchaseAddOnDrawer } from '@/components/benefits/PurchaseAddOnDrawer';
 
 type FilterType = 'all' | 'recovery' | 'classes' | 'pt';
+
+interface AddOnPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  benefit_type: string;
+  quantity: number;
+  price: number;
+  validity_days: number;
+}
 
 interface AgendaItem {
   id: string;
@@ -34,6 +45,12 @@ interface AgendaItem {
   capacity?: number;
   isBooked: boolean;
   bookingId?: string;
+  /** Recovery only — benefit code used to resolve entitlement / upsell package. */
+  benefitType?: string;
+  /** True when the member has no plan benefit and no credits for this facility. */
+  locked?: boolean;
+  /** Cheapest add-on package that unlocks this facility. */
+  unlockPackage?: AddOnPackage | null;
   rawData: any;
 }
 
@@ -77,6 +94,13 @@ export default function MemberClassBooking() {
   const [showMyBookings, setShowMyBookings] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [timeBucket, setTimeBucket] = useState<'all' | 'Morning' | 'Afternoon' | 'Evening' | 'Night'>('all');
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const [upsellPackageId, setUpsellPackageId] = useState<string | null>(null);
+
+  const openUpsell = (packageId?: string | null) => {
+    setUpsellPackageId(packageId ?? null);
+    setUpsellOpen(true);
+  };
 
   const today = startOfDay(new Date());
   const endDate = addDays(today, 13); // 2 weeks
@@ -95,6 +119,76 @@ export default function MemberClassBooking() {
   });
   // Profile is "resolved" once the query settled (or there is no user to look up).
   const profileResolved = !user?.id || profileFetched;
+
+  // ─── Entitlements: plan benefits + purchased/gifted credits ───
+  const { data: planBenefitTypes = [] } = useQuery({
+    queryKey: ['my-plan-benefit-types', activeMembership?.plan_id],
+    enabled: !!activeMembership?.plan_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plan_benefits')
+        .select('benefit_type')
+        .eq('plan_id', activeMembership!.plan_id);
+      if (error) throw error;
+      return (data || []).map((r: any) => String(r.benefit_type || '').toLowerCase());
+    },
+  });
+
+  const { data: creditTypes = [] } = useQuery({
+    queryKey: ['my-entitlements', member?.id],
+    enabled: !!member?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_benefit_credits')
+        .select('benefit_type, credits_remaining, expires_at')
+        .eq('member_id', member!.id)
+        .gt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      return (data || [])
+        .filter((c: any) => (c.credits_remaining ?? 0) > 0)
+        .map((c: any) => String(c.benefit_type || '').toLowerCase());
+    },
+  });
+
+  const entitledTypes = useMemo(
+    () => new Set<string>([...planBenefitTypes, ...creditTypes]),
+    [planBenefitTypes, creditTypes],
+  );
+
+  // ─── Add-on packages available at this branch (marketing surface) ───
+  const { data: addOnPackages = [] } = useQuery({
+    queryKey: ['booking-addon-packages', member?.branch_id],
+    enabled: !!member?.branch_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('benefit_packages')
+        .select('id, name, description, benefit_type, quantity, price, validity_days')
+        .eq('is_active', true)
+        .or(`branch_id.eq.${member!.branch_id},branch_id.is.null`)
+        .order('price', { ascending: true });
+      if (error) throw error;
+      return (data || []) as AddOnPackage[];
+    },
+  });
+
+  const packageByType = useMemo(() => {
+    const map = new Map<string, AddOnPackage>();
+    for (const p of addOnPackages) {
+      const key = String(p.benefit_type || '').toLowerCase();
+      if (!map.has(key)) map.set(key, p); // cheapest first (ordered by price)
+    }
+    return map;
+  }, [addOnPackages]);
+
+  /** Packages for facilities the member is not currently entitled to — the upsell rail. */
+  const upsellPackages = useMemo(
+    () => addOnPackages.filter((p) => !entitledTypes.has(String(p.benefit_type || '').toLowerCase())),
+    [addOnPackages, entitledTypes],
+  );
+
+
+
+
 
 
   // ─── Auto-generate recovery slots ───
@@ -371,6 +465,11 @@ export default function MemberClassBooking() {
         } catch { return 30; }
       })();
 
+      const benefitType = String(
+        slot.benefit_type || slot.benefit_type_info?.code || '',
+      ).toLowerCase();
+      const locked = !isBooked && benefitType !== '' && !entitledTypes.has(benefitType);
+
       items.push({
         id: slot.id,
         type: 'recovery',
@@ -382,9 +481,13 @@ export default function MemberClassBooking() {
         capacity: slot.capacity,
         isBooked,
         bookingId: slotBookingMap[slot.id],
+        benefitType,
+        locked,
+        unlockPackage: packageByType.get(benefitType) ?? null,
         rawData: slot,
       });
     });
+
 
     // PT sessions
     ptSessions.forEach((s: any) => {
@@ -401,7 +504,7 @@ export default function MemberClassBooking() {
     });
 
     return items.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  }, [classes, recoverySlots, ptSessions, classBookingMap, slotBookingMap]);
+  }, [classes, recoverySlots, ptSessions, classBookingMap, slotBookingMap, entitledTypes, packageByType]);
 
   // ─── Filter to selected day + active filter ───
   const dayItems = useMemo(() => {
@@ -581,20 +684,74 @@ export default function MemberClassBooking() {
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
         )}
 
-        {/* ─── Empty state ─── */}
+        {/* ─── Empty state — always sells the next session ─── */}
         {!isLoading && totalForDay === 0 && (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/10">
+            <CardContent className="py-10 text-center space-y-2">
+              <Calendar className="h-10 w-10 mx-auto text-muted-foreground" />
+              <h3 className="font-semibold">
                 {showMyBookings ? 'No bookings on this day' : 'Nothing scheduled for this day'}
               </h3>
               <p className="text-sm text-muted-foreground">
-                {showMyBookings ? 'Pick another date or book a session.' : 'Try another date from the strip above.'}
+                {showMyBookings ? 'Pick another date or book a session.' : 'Pick another date — or unlock a recovery session below.'}
               </p>
             </CardContent>
           </Card>
         )}
+
+        {/* ─── Recovery upsell — shown whenever add-ons the member lacks exist ─── */}
+        {!isLoading && !showMyBookings && upsellPackages.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Not in your plan — add it instantly
+              </h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {upsellPackages.map((p) => (
+                <Card
+                  key={p.id}
+                  className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{p.name}</p>
+                        {p.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line mt-0.5">
+                            {p.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{p.quantity}x</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ShieldCheck className="h-3 w-3" /> {p.validity_days}d validity
+                      </span>
+                      <span className="text-base font-bold text-primary flex items-center">
+                        <IndianRupee className="h-3.5 w-3.5" />
+                        {Number(p.price).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full cursor-pointer"
+                      onClick={() => openUpsell(p.id)}
+                      disabled={!activeMembership}
+                      aria-label={`Unlock ${p.name}`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      Unlock now
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
 
         {/* ─── Time-bucket sub-tabs ─── */}
         {!isLoading && totalForDay > 0 && (
@@ -633,6 +790,7 @@ export default function MemberClassBooking() {
                         onCancelClass={(id) => cancelClassBooking.mutate(id)}
                         onBookSlot={(id) => bookSlot.mutate(id)}
                         onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                        onUnlock={(pkgId) => openUpsell(pkgId)}
                         isBooking={bookClass.isPending || bookSlot.isPending}
                         isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
                       />
@@ -644,6 +802,17 @@ export default function MemberClassBooking() {
           </Tabs>
         )}
       </div>
+
+      <PurchaseAddOnDrawer
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        memberId={member.id}
+        membershipId={activeMembership?.id ?? null}
+        branchId={member.branch_id}
+        mode="member"
+        defaultTab="benefits"
+        defaultPackageId={upsellPackageId}
+      />
     </AppLayout>
   );
 }
@@ -656,6 +825,7 @@ function AgendaCard({
   onCancelClass,
   onBookSlot,
   onCancelSlot,
+  onUnlock,
   isBooking,
   isCancelling,
 }: {
@@ -665,13 +835,15 @@ function AgendaCard({
   onCancelClass: (bookingId: string) => void;
   onBookSlot: (id: string) => void;
   onCancelSlot: (bookingId: string) => void;
+  onUnlock: (packageId?: string | null) => void;
   isBooking: boolean;
   isCancelling: boolean;
 }) {
   const isFull = item.spotsLeft !== undefined && item.spotsLeft <= 0;
+  const isLocked = !!item.locked;
 
   return (
-    <Card className={`border-border/50 transition-colors ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''}`}>
+    <Card className={`rounded-2xl border-border/50 transition-all duration-200 hover:shadow-md ${item.isBooked ? 'bg-accent/10 border-l-4 border-l-accent border-accent/30' : ''} ${isLocked ? 'bg-muted/30' : ''}`}>
       <CardContent className="py-3 px-4">
         <div className="flex items-center gap-4">
           {/* Time Column */}
@@ -697,6 +869,11 @@ function AgendaCard({
             <div className="flex items-center gap-2 flex-wrap">
               {getTypeBadge(item.type)}
               <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+              {isLocked && (
+                <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5 py-0 rounded-full">
+                  <Lock className="h-2.5 w-2.5 mr-0.5" />Not in your plan
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -743,10 +920,24 @@ function AgendaCard({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            ) : isLocked ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs cursor-pointer border-primary/40 text-primary hover:bg-primary/5"
+                disabled={isFull || !activeMembership}
+                onClick={() => onUnlock(item.unlockPackage?.id ?? null)}
+                aria-label={`Unlock ${item.title}`}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+                {item.unlockPackage
+                  ? `Unlock ₹${Number(item.unlockPackage.price).toLocaleString('en-IN')}`
+                  : 'Unlock'}
+              </Button>
             ) : (
               <Button
                 size="sm"
-                className="h-8 text-xs"
+                className="h-8 text-xs cursor-pointer"
                 disabled={isFull || !activeMembership || isBooking}
                 onClick={() => {
                   if (item.type === 'class') onBookClass(item.id);

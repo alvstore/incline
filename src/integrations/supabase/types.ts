@@ -15080,32 +15080,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      purchase_benefit_credits:
-        | {
-            Args: {
-              p_branch_id?: string
-              p_idempotency_key?: string
-              p_member_id: string
-              p_membership_id: string
-              p_package_id: string
-              p_payment_method?: string
-              p_received_by?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_branch_id?: string
-              p_defer_settlement?: boolean
-              p_idempotency_key?: string
-              p_member_id: string
-              p_membership_id: string
-              p_package_id: string
-              p_payment_method?: string
-              p_received_by?: string
-            }
-            Returns: Json
-          }
+      purchase_benefit_credits: {
+        Args: {
+          p_branch_id?: string
+          p_defer_settlement?: boolean
+          p_idempotency_key?: string
+          p_member_id: string
+          p_membership_id: string
+          p_package_id: string
+          p_payment_method?: string
+          p_received_by?: string
+        }
+        Returns: Json
+      }
       purchase_benefit_topup: {
         Args: {
           p_benefit_type_id: string

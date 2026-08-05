@@ -29,6 +29,8 @@ interface PurchaseAddOnDrawerProps {
   /** 'staff' allows cash/card/upi; 'member' restricts to wallet/online (creates pending invoice). */
   mode?: 'staff' | 'member';
   defaultTab?: 'benefits' | 'pt';
+  /** Preselect a specific benefit package when the drawer opens (upsell deep-links). */
+  defaultPackageId?: string | null;
 }
 
 type BenefitPackage = {
@@ -97,6 +99,7 @@ export function PurchaseAddOnDrawer({
   branchId,
   mode = 'staff',
   defaultTab = 'benefits',
+  defaultPackageId = null,
 }: PurchaseAddOnDrawerProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -109,6 +112,16 @@ export function PurchaseAddOnDrawer({
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [lastPurchase, setLastPurchase] = useState<{ credits: number; validityDays: number } | null>(null);
+
+  // Upsell deep-link: preselect the package the member tapped on.
+  useEffect(() => {
+    if (open && defaultPackageId) {
+      setTab('benefits');
+      setSelectedBenefitPkg(defaultPackageId);
+    }
+  }, [open, defaultPackageId]);
+
+
 
   // Stable idempotency keys per selected package — same selection retries reuse key.
   const benefitIdemKey = useStableIdempotencyKey(memberId, 'addon_benefit', selectedBenefitPkg ?? null);
