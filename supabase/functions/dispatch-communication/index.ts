@@ -350,13 +350,20 @@ function requiredKeysMissing(
     const raw = resolveVarValue(keys[i], values, i);
     if (String(raw ?? '').trim()) continue;
     const k = String(keys[i] || '').toLowerCase();
-    // Name is the only key we treat as *required*; other slots fall back safely.
+    // Name-like slots.
     if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') {
+      missing.push(keys[i]);
+      continue;
+    }
+    // v1.25.0: date/time slots are required too. An empty one produces
+    // half-written sends like "your booking for the class on at is confirmed".
+    if (/(^|_)(date|time|datetime|slot_date|slot_time|start|when)(_|$)/.test(k)) {
       missing.push(keys[i]);
     }
   }
   return missing;
 }
+
 
 function appendAttachmentLinkForBodyOnlyTemplate(
   keys: string[],
