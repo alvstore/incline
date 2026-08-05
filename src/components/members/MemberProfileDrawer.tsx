@@ -523,6 +523,11 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                             )}
                           </div>
                         </div>
+                        {((b as any).grantedBy?.length ?? 0) > 0 && (
+                          <p className="text-[10px] text-muted-foreground mb-1">
+                            Gift granted by: {(b as any).grantedBy.join(', ')}
+                          </p>
+                        )}
                         {!b.isUnlimited && totalLimit > 0 && (
                           <div className="h-2 bg-muted rounded-full overflow-hidden">
                             <div
