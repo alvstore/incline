@@ -334,42 +334,143 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
 
               <Separator />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="flex items-center justify-between">
-                    <span>Valid Until</span>
-                    {!validityOverridden && (
-                      <span className="text-[10px] font-normal text-muted-foreground">Auto · {planWeeks}w</span>
-                    )}
-                  </Label>
-                  <Input
-                    type="date"
-                    value={validUntil}
-                    onChange={(e) => { setValidUntil(e.target.value); setValidityOverridden(true); }}
-                  />
+              {/* Duration presets — staff pick a length, we compute the dates */}
+              <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Plan Duration
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Recommended · {recommendedDays} days
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  <Label>Notify on</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {CHANNEL_META.map(({ value, label, Icon }) => {
-                      const active = channels.includes(value);
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => toggleChannel(value)}
-                          className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border transition ${
-                            active
-                              ? 'bg-primary text-primary-foreground border-primary'
-                              : 'bg-background border-border hover:bg-muted'
-                          }`}
-                        >
-                          <Icon className="h-3 w-3" />
-                          {label}
-                        </button>
-                      );
-                    })}
+
+                <div className="flex flex-wrap gap-2">
+                  {PLAN_DURATION_PRESETS.map((p) => {
+                    const active = durationDays === p.days;
+                    return (
+                      <button
+                        key={p.days}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setDurationDays(p.days)}
+                        className={`min-h-[44px] cursor-pointer rounded-full border px-3.5 py-1.5 text-left transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-muted'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold leading-tight">{p.days} days</span>
+                        <span className={`block text-[10px] leading-tight ${active ? 'opacity-80' : 'text-muted-foreground'}`}>
+                          {p.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    aria-pressed={durationDays === 'custom'}
+                    onClick={() => {
+                      setCustomValidUntil(validUntil);
+                      setDurationDays('custom');
+                    }}
+                    className={`min-h-[44px] cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                      durationDays === 'custom'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-muted'
+                    }`}
+                  >
+                    Custom date
+                  </button>
+                </div>
+
+                {durationDays === 'custom' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-valid-until">Valid until</Label>
+                    <Input
+                      id="custom-valid-until"
+                      type="date"
+                      min={startDate}
+                      value={customValidUntil}
+                      onChange={(e) => setCustomValidUntil(e.target.value)}
+                    />
                   </div>
+                )}
+
+                <div className="rounded-xl bg-muted/40 p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span>
+                      Starts{' '}
+                      <span className="font-medium text-foreground">
+                        {startDate === todayISO() ? 'today' : safeFmt(startDate)}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowStartPicker((v) => !v)}
+                      className="ml-auto cursor-pointer text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
+                    >
+                      {showStartPicker ? 'Done' : 'Change'}
+                    </button>
+                  </div>
+
+                  {showStartPicker && (
+                    <div className="space-y-1.5 pt-1">
+                      <Label htmlFor="plan-start-date">Start date</Label>
+                      <Input
+                        id="plan-start-date"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Ends </span>
+                    <span className="font-bold text-foreground">{safeFmt(validUntil, 'EEE, dd MMM yyyy')}</span>
+                    {selectedDays > 0 && (
+                      <span className="ml-2 text-xs text-muted-foreground">({selectedDays} days)</span>
+                    )}
+                  </div>
+                </div>
+
+                {isShortWindow && (
+                  <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
+                    <p className="text-xs text-foreground/80">
+                      This plan contains {planWeeks} {planWeeks === 1 ? 'week' : 'weeks'} of content — members
+                      will lose access before finishing it.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Notify on
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {CHANNEL_META.map(({ value, label, Icon }) => {
+                    const active = channels.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleChannel(value)}
+                        className={`flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-muted'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
