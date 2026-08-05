@@ -50,6 +50,7 @@ const EMPTY: Omit<MealCatalogEntry, 'id' | 'created_at' | 'updated_at' | 'is_act
   carbs: 0,
   fats: 0,
   fiber: 0,
+  micronutrients: '',
   tags: [],
   notes: '',
 };
@@ -62,7 +63,9 @@ export default function MealCatalog() {
   const [editing, setEditing] = useState<MealCatalogEntry | null>(null);
   const [viewing, setViewing] = useState<MealCatalogEntry | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [draft, setDraft] = useState<typeof EMPTY>(EMPTY);
+
 
   const { data: meals = [], isLoading } = useQuery({
     queryKey: ['meal-catalog-admin', search, filterDiet, filterCuisine],
