@@ -484,10 +484,6 @@ export default function PaymentsPage() {
                       </TableRow>
                     );
                   })}
-
-                      </TableRow>
-                    );
-                  })}
                   {filteredPayments.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={isAdminOrOwner ? 8 : 7} className="text-center py-16 text-muted-foreground">
