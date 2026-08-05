@@ -426,28 +426,45 @@ export default function PaymentsPage() {
                 <TableBody>
                   {filteredPayments.map((payment: any) => {
                     const isVoided = payment.status === 'voided';
+                    const isReversed = isReversedPayment(payment);
                     const d = resolveMemberDisplay(payment.members);
                     return (
-                      <TableRow key={payment.id} className={isVoided ? 'opacity-50' : ''}>
+                      <TableRow key={payment.id} className={isReversed ? 'opacity-60' : ''}>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className={`font-medium ${isVoided ? 'line-through' : ''}`}>{d.name}</span>
+                            <span className={`font-medium ${isReversed ? 'line-through' : ''}`}>{d.name}</span>
                             {d.code && <span className="text-xs text-muted-foreground">{d.code}</span>}
                           </div>
                         </TableCell>
-                        <TableCell className={`font-medium ${isVoided ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
+                        <TableCell className={`font-medium ${isReversed ? 'line-through' : ''}`}>₹{payment.amount.toLocaleString()}</TableCell>
                         <TableCell><Badge className={getMethodColor(payment.payment_method)}>{paymentChannelLabel(payment)}</Badge></TableCell>
                         <TableCell className="text-xs">
-                          {payment.payment_source === 'razorpay' ? (
+                          {isReversed ? (
+                            <span className="text-muted-foreground">Not collected</span>
+                          ) : payment.payment_source === 'razorpay' ? (
                             <div><p>Net ₹{Number(payment.net_settlement_amount ?? payment.amount).toLocaleString('en-IN')}</p><p className="text-muted-foreground">Fee + tax ₹{gatewayDeduction(payment).toLocaleString('en-IN')}</p></div>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell><Badge className={getStatusColor(payment.status)}>{payment.status}</Badge></TableCell>
-                        <TableCell className="font-mono text-sm">{payment.invoices?.invoice_number || '-'}</TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(payment.status)}>{payment.status}</Badge>
+                          {isReversed && (
+                            <p className="mt-1 text-[11px] italic text-muted-foreground">{reversalCaption(payment)}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {payment.invoices?.invoice_number ? (
+                            <Link
+                              to={`/invoices?focus=${payment.invoice_id}`}
+                              className="text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                            >
+                              {payment.invoices.invoice_number}
+                            </Link>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell>{format(new Date(payment.payment_date), 'dd MMM yyyy HH:mm')}</TableCell>
                         {isAdminOrOwner && (
                           <TableCell>
-                            {!isVoided && payment.status !== 'failed' && (
+                            {!isReversed && payment.status !== 'failed' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -464,6 +481,10 @@ export default function PaymentsPage() {
                             )}
                           </TableCell>
                         )}
+                      </TableRow>
+                    );
+                  })}
+
                       </TableRow>
                     );
                   })}
