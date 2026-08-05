@@ -869,6 +869,11 @@ function AgendaCard({
             <div className="flex items-center gap-2 flex-wrap">
               {getTypeBadge(item.type)}
               <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+              {isLocked && (
+                <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] px-1.5 py-0 rounded-full">
+                  <Lock className="h-2.5 w-2.5 mr-0.5" />Not in your plan
+                </Badge>
+              )}
             </div>
           </div>
 
