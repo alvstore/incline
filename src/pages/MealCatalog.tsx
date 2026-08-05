@@ -236,6 +236,12 @@ export default function MealCatalog() {
                         <span>C {m.carbs}g</span>
                         <span>F {m.fats}g</span>
                       </div>
+                      {m.micronutrients && (
+                        <p className="text-[11px] text-muted-foreground truncate" title={m.micronutrients}>
+                          <span className="font-medium text-foreground">Micros:</span> {m.micronutrients}
+                        </p>
+                      )}
+
                     </CardContent>
                   </Card>
                 ))}
