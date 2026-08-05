@@ -790,6 +790,7 @@ export default function MemberClassBooking() {
                         onCancelClass={(id) => cancelClassBooking.mutate(id)}
                         onBookSlot={(id) => bookSlot.mutate(id)}
                         onCancelSlot={(id) => cancelSlotBooking.mutate(id)}
+                        onUnlock={(pkgId) => openUpsell(pkgId)}
                         isBooking={bookClass.isPending || bookSlot.isPending}
                         isCancelling={cancelClassBooking.isPending || cancelSlotBooking.isPending}
                       />
@@ -801,6 +802,17 @@ export default function MemberClassBooking() {
           </Tabs>
         )}
       </div>
+
+      <PurchaseAddOnDrawer
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        memberId={member.id}
+        membershipId={activeMembership?.id ?? null}
+        branchId={member.branch_id}
+        mode="member"
+        defaultTab="benefits"
+        defaultPackageId={upsellPackageId}
+      />
     </AppLayout>
   );
 }
