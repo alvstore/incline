@@ -676,20 +676,74 @@ export default function MemberClassBooking() {
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
         )}
 
-        {/* ─── Empty state ─── */}
+        {/* ─── Empty state — always sells the next session ─── */}
         {!isLoading && totalForDay === 0 && (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">
+          <Card className="rounded-2xl border-0 shadow-lg shadow-primary/10">
+            <CardContent className="py-10 text-center space-y-2">
+              <Calendar className="h-10 w-10 mx-auto text-muted-foreground" />
+              <h3 className="font-semibold">
                 {showMyBookings ? 'No bookings on this day' : 'Nothing scheduled for this day'}
               </h3>
               <p className="text-sm text-muted-foreground">
-                {showMyBookings ? 'Pick another date or book a session.' : 'Try another date from the strip above.'}
+                {showMyBookings ? 'Pick another date or book a session.' : 'Pick another date — or unlock a recovery session below.'}
               </p>
             </CardContent>
           </Card>
         )}
+
+        {/* ─── Recovery upsell — shown whenever add-ons the member lacks exist ─── */}
+        {!isLoading && !showMyBookings && upsellPackages.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Not in your plan — add it instantly
+              </h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {upsellPackages.map((p) => (
+                <Card
+                  key={p.id}
+                  className="rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-primary/10"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{p.name}</p>
+                        {p.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line mt-0.5">
+                            {p.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{p.quantity}x</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ShieldCheck className="h-3 w-3" /> {p.validity_days}d validity
+                      </span>
+                      <span className="text-base font-bold text-primary flex items-center">
+                        <IndianRupee className="h-3.5 w-3.5" />
+                        {Number(p.price).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full cursor-pointer"
+                      onClick={() => openUpsell(p.id)}
+                      disabled={!activeMembership}
+                      aria-label={`Unlock ${p.name}`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      Unlock now
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
 
         {/* ─── Time-bucket sub-tabs ─── */}
         {!isLoading && totalForDay > 0 && (
