@@ -1906,6 +1906,7 @@ export function MemberProfileDrawer({
                               <p className="font-medium text-sm truncate">{m.membership_plans?.name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(m.start_date), 'dd MMM yy')} - {format(new Date(m.end_date), 'dd MMM yy')}
+                                {' · '}Sold by: {actorName(m.created_by) || 'System'}
                               </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
