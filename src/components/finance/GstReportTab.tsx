@@ -74,23 +74,29 @@ export function GstReportTab({ branchId, range, formatCurrency }: Props) {
           <Kpi label="SGST" value={formatCurrency(totals.sgst)} />
           <Kpi label="IGST" value={formatCurrency(totals.igst)} />
           <Kpi label="Total Tax" value={formatCurrency(totals.tax)} highlight />
-          <Kpi label="Gross GST Sales" value={formatCurrency(totals.gross)} highlight />
+          <Kpi label="Exempt / Nil Supply" value={formatCurrency(totals.exempt)} highlight />
         </CardContent>
       </Card>
+
+      <p className="text-xs text-muted-foreground">
+        Taxable supplies only include GST invoices with a rate above 0%. Exempt / nil-rated invoices are reported separately in Table 8 and
+        {cancelledInvoices.length > 0 ? ` ${cancelledInvoices.length} cancelled/draft document(s) are excluded from all tax buckets.` : ' cancelled documents are excluded from all tax buckets.'}
+      </p>
 
       {/* Accountant pack export */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 shadow-lg shadow-primary/10">
         <div>
           <p className="text-sm font-semibold text-foreground">Accountant Export Pack</p>
-          <p className="text-xs text-muted-foreground">One click — downloads B2B + B2C + HSN summary + sales register for selected period.</p>
+          <p className="text-xs text-muted-foreground">One click — B2B + B2C + HSN summary + Table 8 exempt + Table 13 documents + sales register.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => { exportAccountantPack(lines, hsnBuckets); toast.success('Accountant pack downloaded'); }}>
+          <Button onClick={() => { exportAccountantPack(lines, hsnBuckets, exemptLines, documentsIssued); toast.success('Accountant pack downloaded'); }}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Download Accountant Pack
           </Button>
         </div>
       </div>
+
 
       {/* Revenue by stream */}
       <Card className="rounded-2xl border-none shadow-lg shadow-primary/10">
