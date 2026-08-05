@@ -1,3 +1,5 @@
+// google-reviews-brain v5.1.0 — Humble, template-resolvable review requests
+// (event_key=review_request, member_name/branch_name/review_link variables).
 // v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
 // persistence, Places→GBP duplicate promotion, draft persistence, real Google errors.
 // v4.1.0 — Author matching without FK aliases + token-aware name scoring; AI
