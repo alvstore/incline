@@ -699,11 +699,13 @@ export default function FinancePage() {
                             <TableHead>Category</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Vendor</TableHead>
+                            <TableHead>Submitted by</TableHead>
+                            <TableHead>Approved by</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {expenseData.slice(0, 20).map((expense) => (
+                          {expenseData.slice(0, 20).map((expense: any) => (
                             <TableRow key={expense.id}>
                               <TableCell>{format(new Date(expense.expense_date), 'MMM d, yyyy')}</TableCell>
                               <TableCell>
@@ -711,6 +713,12 @@ export default function FinancePage() {
                               </TableCell>
                               <TableCell>{expense.description}</TableCell>
                               <TableCell>{expense.vendor || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {expenseActorName(expense.submitted_by) || 'System'}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {expenseActorName(expense.approved_by) || '—'}
+                              </TableCell>
                               <TableCell className="text-right font-medium text-destructive">
                                 -{formatCurrency(expense.amount)}
                               </TableCell>
@@ -718,11 +726,12 @@ export default function FinancePage() {
                           ))}
                           {expenseData.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                 No expense transactions found
                               </TableCell>
                             </TableRow>
                           )}
+
                         </TableBody>
                       </Table>
                     )}
