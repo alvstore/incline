@@ -1,4 +1,8 @@
-// dispatch-communication v1.24.0
+// dispatch-communication v1.26.0
+// v1.26.0: Template picker only considers APPROVED Meta templates and prefers a
+//          DOCUMENT-header template when the send carries a PDF. Body-only
+//          fallbacks now paste a SHORT branded link (/functions/v1/doc?c=…)
+//          instead of a 400-character signed storage URL.
 // v1.23.0: FIX — document attachments on body-only approved templates are no
 //          longer silently dropped. Meta templates like `invoice_generated_pdf`
 //          say "attached" but have NO HEADER component, so the PDF URL is now
