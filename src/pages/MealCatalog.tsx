@@ -306,12 +306,21 @@ export default function MealCatalog() {
             ))}
           </div>
           <div className="space-y-1">
+            <Label>Key micronutrients</Label>
+            <Input
+              value={draft.micronutrients || ''}
+              onChange={(e) => setDraft({ ...draft, micronutrients: e.target.value })}
+              placeholder="e.g. Calcium, Iron, B12"
+            />
+          </div>
+          <div className="space-y-1">
             <Label>Tags (comma-separated)</Label>
             <Input
               value={draft.tags.join(', ')}
               onChange={(e) => setDraft({ ...draft, tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
             />
           </div>
+
         </div>
         <ResponsiveSheetFooter>
           <Button variant="outline" onClick={() => setDraftOpen(false)}>Cancel</Button>
