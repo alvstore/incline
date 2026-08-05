@@ -56,6 +56,7 @@ import { RewardsWalletCard } from './RewardsWalletCard';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { useNavigate } from 'react-router-dom';
 import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
+import { useActorNames } from '@/hooks/useActorNames';
 
 
 // ─── Pending Invoices Section ───
@@ -204,7 +205,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
     queryFn: async () => {
       const { data, error } = await supabase
         .from('member_comps')
-        .select('id, comp_sessions, used_sessions, benefit_type_id, benefit_types(id, name, code)')
+        .select('id, comp_sessions, used_sessions, benefit_type_id, granted_by, created_at, benefit_types(id, name, code)')
         .eq('member_id', memberId);
       if (error) throw error;
       return data || [];
@@ -333,20 +334,25 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
     return map;
   }, [usageSummary]);
 
+  // Who granted the gifts (audit trail)
+  const { nameOf: compActorName } = useActorNames((comps as any[]).map((c) => c.granted_by));
+
   // Aggregate active comps by benefit_type_id
   const compMap = useMemo(() => {
-    const map: Record<string, { total: number; used: number; remaining: number; name?: string }> = {};
+    const map: Record<string, { total: number; used: number; remaining: number; name?: string; grantedBy: string[] }> = {};
     (comps as any[]).forEach((c) => {
       if (!c.benefit_type_id) return;
-      const m = map[c.benefit_type_id] || { total: 0, used: 0, remaining: 0, name: c.benefit_types?.name };
+      const m = map[c.benefit_type_id] || { total: 0, used: 0, remaining: 0, name: c.benefit_types?.name, grantedBy: [] };
       m.total += c.comp_sessions || 0;
       m.used += c.used_sessions || 0;
       m.remaining += Math.max(0, (c.comp_sessions || 0) - (c.used_sessions || 0));
       m.name = m.name || c.benefit_types?.name;
+      const who = compActorName(c.granted_by) || 'System';
+      if (!m.grantedBy.includes(who)) m.grantedBy.push(who);
       map[c.benefit_type_id] = m;
     });
     return map;
-  }, [comps]);
+  }, [comps, compActorName]);
 
   const planBenefitTypeIds = new Set<string>();
   const planRows = planBenefits.map((b: any) => {
@@ -380,6 +386,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
       totalUsed,
       totalRemaining,
       isGiftOnly: false,
+      grantedBy: comp?.grantedBy || [],
     };
   }).filter((b: any) => {
     if (!memberGender) return true;
@@ -392,11 +399,11 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
   const giftOnlyRows = Object.entries(compMap)
     .filter(([btId]) => !planBenefitTypeIds.has(btId))
     .map(([btId, c]) => ({
-      benefit_type: 'other',
+      benefit_type: 'other' as const,
       benefit_type_id: btId,
       label: c.name || 'Gift Benefit',
       name: c.name || 'Gift Benefit',
-      frequency: 'per_membership',
+      frequency: 'per_membership' as const,
       limit_count: c.total,
       description: 'Complimentary sessions',
       used: c.used,
@@ -409,6 +416,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
       totalUsed: c.used,
       totalRemaining: c.remaining,
       isGiftOnly: true,
+      grantedBy: c.grantedBy,
     }));
 
   const availableBenefits = [...planRows, ...giftOnlyRows];
@@ -515,6 +523,11 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                             )}
                           </div>
                         </div>
+                        {((b as any).grantedBy?.length ?? 0) > 0 && (
+                          <p className="text-[10px] text-muted-foreground mb-1">
+                            Gift granted by: {(b as any).grantedBy.join(', ')}
+                          </p>
+                        )}
                         {!b.isUnlimited && totalLimit > 0 && (
                           <div className="h-2 bg-muted rounded-full overflow-hidden">
                             <div
@@ -982,7 +995,7 @@ export function MemberProfileDrawer({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('membership_free_days')
-        .select('id, days_added, reason, created_at')
+        .select('id, days_added, reason, created_at, added_by')
         .eq('membership_id', currentMembership!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -991,6 +1004,12 @@ export function MemberProfileDrawer({
   });
 
   const freeDaysTotal = (freeDaysList as any[]).reduce((s, r) => s + Number(r.days_added || 0), 0);
+
+  // Audit attribution: resolve staff ids used across the membership tab
+  const { nameOf: actorName } = useActorNames([
+    ...(memberDetails?.memberships || []).map((m: any) => m.created_by),
+    ...(freeDaysList as any[]).map((r) => r.added_by),
+  ]);
 
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
     const membershipItems = (memberDetails?.memberships || []).map((membership: any) => ({
@@ -1821,7 +1840,7 @@ export function MemberProfileDrawer({
                       <div>Start: {format(new Date(activeMembership.start_date), 'dd MMM yyyy')}</div>
                       <div>End: {format(new Date(activeMembership.end_date), 'dd MMM yyyy')}</div>
                       <div>Paid: ₹{activeMembership.price_paid}</div>
-                      <div>By: N/A</div>
+                      <div>Sold by: {actorName((activeMembership as any).created_by) || 'System'}</div>
                     </div>
 
                     {freeDaysTotal > 0 && (
@@ -1836,6 +1855,9 @@ export function MemberProfileDrawer({
                               <span>
                                 <span className="font-semibold text-foreground">+{row.days_added}d</span>{' '}
                                 — {row.reason || 'No reason recorded'}
+                                <span className="block text-[11px] text-muted-foreground">
+                                  Granted by: {actorName(row.added_by) || 'System'}
+                                </span>
                               </span>
                               <span className="whitespace-nowrap">
                                 {row.created_at ? format(new Date(row.created_at), 'dd MMM yyyy') : ''}
@@ -1896,6 +1918,7 @@ export function MemberProfileDrawer({
                               <p className="font-medium text-sm truncate">{m.membership_plans?.name}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(m.start_date), 'dd MMM yy')} - {format(new Date(m.end_date), 'dd MMM yy')}
+                                {' · '}Sold by: {actorName(m.created_by) || 'System'}
                               </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
