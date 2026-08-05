@@ -29,6 +29,8 @@ interface PurchaseAddOnDrawerProps {
   /** 'staff' allows cash/card/upi; 'member' restricts to wallet/online (creates pending invoice). */
   mode?: 'staff' | 'member';
   defaultTab?: 'benefits' | 'pt';
+  /** Preselect a specific benefit package when the drawer opens (upsell deep-links). */
+  defaultPackageId?: string | null;
 }
 
 type BenefitPackage = {
