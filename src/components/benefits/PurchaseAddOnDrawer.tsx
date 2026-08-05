@@ -268,7 +268,7 @@ export function PurchaseAddOnDrawer({
         await new Promise<void>((resolve, reject) => {
           openRazorpayCheckout(
             order,
-            { name: memberName || 'Member' },
+            { name: memberName || 'Member', email: '', phone: '' },
             async (response) => {
               try {
                 await verifyRazorpayPayment({
