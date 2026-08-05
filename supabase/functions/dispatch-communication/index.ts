@@ -927,7 +927,11 @@ Deno.serve(async (req) => {
                 }
               }
               const missingRequired = requiredKeysMissing(keys, templateValues);
-              if (missingRequired.length > 0 && String(wt?.category || '').toUpperCase() === 'MARKETING') {
+              // v1.25.0: fail closed for ALL categories (was MARKETING-only).
+              // A utility template with an empty name/date/time slot reads as
+              // broken to the member and is worse than not sending.
+              if (missingRequired.length > 0) {
+
 
                 const reason = `template_param_empty:${missingRequired.join(',')}`;
                 await supabase
