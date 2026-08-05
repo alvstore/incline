@@ -642,6 +642,8 @@ export function MemberProfileDrawer({
   onPurchasePT
 }: MemberProfileDrawerProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
   const { hasAnyRole } = useAuth();
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
   const isOwnerOrAdmin = hasAnyRole(['owner', 'admin']);
