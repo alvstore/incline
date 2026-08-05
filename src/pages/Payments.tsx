@@ -406,10 +406,16 @@ export default function PaymentsPage() {
 
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <StatCard title="Today's Collection" value={`₹${todayTotal.toLocaleString()}`} icon={CreditCard} variant="accent" />
-          <StatCard title="Filtered Total" value={`₹${monthTotal.toLocaleString()}`} icon={TrendingUp} variant="success" />
+          <StatCard title="Filtered Total (net)" value={`₹${monthTotal.toLocaleString()}`} icon={TrendingUp} variant="success" />
           <StatCard title="Completed" value={`₹${completedTotal.toLocaleString()}`} icon={Receipt} variant="default" />
           <StatCard title="Pending" value={`₹${pendingTotal.toLocaleString()}`} icon={Wallet} variant="info" />
         </div>
+        {reversedTotal > 0 && (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Excludes ₹{reversedTotal.toLocaleString('en-IN')} in reversed entries (voided or refunded), which stay listed for audit.
+          </p>
+        )}
+
 
         <Card className="rounded-2xl border-border/50 shadow-lg">
           <CardHeader><CardTitle>{hasActiveFilters ? `Filtered Payments (${filteredPayments.length})` : `Recent Payments (${payments.length})`}</CardTitle></CardHeader>
