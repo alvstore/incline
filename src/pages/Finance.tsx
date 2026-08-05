@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
+
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,7 +56,7 @@ export default function FinancePage() {
     queryFn: async () => {
       let query = supabase
         .from('payments')
-        .select('*, member:members(member_code), invoice:invoices(invoice_number, pos_sale_id), income_category:income_categories(name)')
+        .select('*, member:members(member_code, profiles:user_id(full_name, avatar_url), lead:lead_id(full_name)), invoice:invoices(invoice_number, pos_sale_id, customer_name), income_category:income_categories(name)')
         .eq('status', 'completed');
 
       if (selectedBranch && selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
@@ -284,15 +287,19 @@ export default function FinancePage() {
 
   // Recent transactions for timeline
   const recentTransactions = [
-    ...combinedIncomeData.slice(0, 8).map((p: any) => ({
-      id: p.id,
-      type: 'income' as const,
-      description: p.type,
-      method: p.payment_method || 'cash',
-      amount: p.amount,
-      date: p.date,
-      member: p.member?.member_code,
-    })),
+    ...combinedIncomeData.slice(0, 8).map((p: any) => {
+      const d = resolveMemberDisplay(p.member, p.invoice?.customer_name);
+      return {
+        id: p.id,
+        type: 'income' as const,
+        description: d.name,
+        method: p.payment_method || 'cash',
+        amount: p.amount,
+        date: p.date,
+        member: [p.type, d.code].filter(Boolean).join(' · '),
+        avatar: d.avatar_url,
+      };
+    }),
     ...expenseData.slice(0, 5).map((e: any) => ({
       id: e.id,
       type: 'expense' as const,
@@ -300,9 +307,11 @@ export default function FinancePage() {
       method: e.category?.name || 'Other',
       amount: e.amount,
       date: e.expense_date,
-      member: null,
+      member: e.category?.name || 'Expense',
+      avatar: null as string | null,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+
 
   const getPaymentIcon = (method: string) => {
     if (method?.includes('card') || method?.includes('credit') || method?.includes('debit')) return CreditCard;
@@ -487,18 +496,27 @@ export default function FinancePage() {
                 {recentTransactions.map((tx) => {
                   const Icon = getPaymentIcon(tx.method);
                   return (
-                    <div key={tx.id} className="flex items-center gap-3">
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tx.type === 'income' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
-                        <Icon className="h-4 w-4" />
+                    <div key={tx.id} className="flex items-center gap-3 rounded-xl p-1.5 -mx-1.5 transition-colors duration-150 hover:bg-muted/60">
+                      <div className="relative shrink-0">
+                        <Avatar className="h-9 w-9 rounded-xl">
+                          {tx.avatar ? <AvatarImage src={tx.avatar} alt={tx.description} /> : null}
+                          <AvatarFallback className="rounded-xl bg-primary/10 text-[11px] font-semibold text-primary">
+                            {tx.description?.slice(0, 2).toUpperCase() || '--'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-background ${tx.type === 'income' ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive'}`}>
+                          <Icon className="h-3 w-3" />
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground">{tx.member || tx.method}</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{tx.description}</p>
+                        <p className="text-xs text-muted-foreground truncate">{tx.member || tx.method}</p>
                       </div>
-                      <span className={`text-sm font-bold ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
+                      <span className={`text-sm font-bold tabular-nums ${tx.type === 'income' ? 'text-success' : 'text-destructive'}`}>
                         {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                       </span>
                     </div>
+
                   );
                 })}
                 {recentTransactions.length === 0 && (

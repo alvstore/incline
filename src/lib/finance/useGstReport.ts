@@ -11,14 +11,17 @@ export type StreamKey = 'membership' | 'pt_package' | 'addon' | 'class' | 'pos' 
 const EXCLUDED_STATUSES = new Set(['cancelled', 'draft', 'refunded']);
 
 function classifyInvoice(inv: any): StreamKey {
-  const src = (inv.source || inv.invoice_type || '').toLowerCase();
-  if (src.includes('member')) return 'membership';
+  // invoice_type is the domain classifier; `source` only says how it was raised
+  // (manual / payment_link) so it must never win over invoice_type.
+  const src = `${inv.invoice_type || ''} ${inv.source || ''}`.toLowerCase();
+  if (inv.pos_sale_id || src.includes('pos')) return 'pos';
   if (src.includes('pt') || src.includes('trainer')) return 'pt_package';
-  if (src.includes('addon')) return 'addon';
+  if (src.includes('addon') || src.includes('add_on') || src.includes('benefit')) return 'addon';
   if (src.includes('class')) return 'class';
-  if (src.includes('pos') || inv.pos_sale_id) return 'pos';
+  if (src.includes('member')) return 'membership';
   return 'other';
 }
+
 
 const stateCode = (gstin?: string | null) =>
   gstin && gstin.length >= 2 ? gstin.slice(0, 2) : null;
