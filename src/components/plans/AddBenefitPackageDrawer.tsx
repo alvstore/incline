@@ -12,8 +12,10 @@ import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Package } from 'lucide-react';
+import { Loader2, Package, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { safeBenefitEnum } from '@/lib/benefitEnums';
+
 
 interface BenefitPackageRow {
   id: string;
