@@ -184,9 +184,14 @@ export default function FinancePage() {
   // Approve/Reject expense mutations
   const approveExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
+      const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('expenses')
-        .update({ status: 'approved', approved_at: new Date().toISOString() })
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: auth?.user?.id ?? null,
+        })
         .eq('id', expenseId);
       if (error) throw error;
     },
@@ -202,9 +207,14 @@ export default function FinancePage() {
 
   const rejectExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
+      const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('expenses')
-        .update({ status: 'rejected' })
+        .update({
+          status: 'rejected',
+          approved_at: new Date().toISOString(),
+          approved_by: auth?.user?.id ?? null,
+        })
         .eq('id', expenseId);
       if (error) throw error;
     },
