@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database } from "@/integrations/supabase/types";
 import * as bookingService from "@/services/benefitBookingService";
+import { invalidateBenefitData } from "@/lib/benefits/invalidateBenefitData";
 
 type BenefitType = Database["public"]["Enums"]["benefit_type"];
 type BenefitBookingStatus = Database["public"]["Enums"]["benefit_booking_status"];
