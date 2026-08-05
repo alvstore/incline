@@ -334,20 +334,25 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
     return map;
   }, [usageSummary]);
 
+  // Who granted the gifts (audit trail)
+  const { nameOf: compActorName } = useActorNames((comps as any[]).map((c) => c.granted_by));
+
   // Aggregate active comps by benefit_type_id
   const compMap = useMemo(() => {
-    const map: Record<string, { total: number; used: number; remaining: number; name?: string }> = {};
+    const map: Record<string, { total: number; used: number; remaining: number; name?: string; grantedBy: string[] }> = {};
     (comps as any[]).forEach((c) => {
       if (!c.benefit_type_id) return;
-      const m = map[c.benefit_type_id] || { total: 0, used: 0, remaining: 0, name: c.benefit_types?.name };
+      const m = map[c.benefit_type_id] || { total: 0, used: 0, remaining: 0, name: c.benefit_types?.name, grantedBy: [] };
       m.total += c.comp_sessions || 0;
       m.used += c.used_sessions || 0;
       m.remaining += Math.max(0, (c.comp_sessions || 0) - (c.used_sessions || 0));
       m.name = m.name || c.benefit_types?.name;
+      const who = compActorName(c.granted_by) || 'System';
+      if (!m.grantedBy.includes(who)) m.grantedBy.push(who);
       map[c.benefit_type_id] = m;
     });
     return map;
-  }, [comps]);
+  }, [comps, compActorName]);
 
   const planBenefitTypeIds = new Set<string>();
   const planRows = planBenefits.map((b: any) => {
