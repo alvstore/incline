@@ -120,6 +120,68 @@ export default function MemberClassBooking() {
   // Profile is "resolved" once the query settled (or there is no user to look up).
   const profileResolved = !user?.id || profileFetched;
 
+  // ─── Entitlements: plan benefits + purchased/gifted credits ───
+  const { data: planBenefitTypes = [] } = useQuery({
+    queryKey: ['my-plan-benefit-types', activeMembership?.plan_id],
+    enabled: !!activeMembership?.plan_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plan_benefits')
+        .select('benefit_type')
+        .eq('plan_id', activeMembership!.plan_id);
+      if (error) throw error;
+      return (data || []).map((r: any) => String(r.benefit_type || '').toLowerCase());
+    },
+  });
+
+  const { data: creditTypes = [] } = useQuery({
+    queryKey: ['my-entitlements', member?.id],
+    enabled: !!member?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('member_benefit_credits')
+        .select('benefit_type, credits_remaining, expires_at')
+        .eq('member_id', member!.id)
+        .gt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      return (data || [])
+        .filter((c: any) => (c.credits_remaining ?? 0) > 0)
+        .map((c: any) => String(c.benefit_type || '').toLowerCase());
+    },
+  });
+
+  const entitledTypes = useMemo(
+    () => new Set<string>([...planBenefitTypes, ...creditTypes]),
+    [planBenefitTypes, creditTypes],
+  );
+
+  // ─── Add-on packages available at this branch (marketing surface) ───
+  const { data: addOnPackages = [] } = useQuery({
+    queryKey: ['booking-addon-packages', member?.branch_id],
+    enabled: !!member?.branch_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('benefit_packages')
+        .select('id, name, description, benefit_type, quantity, price, validity_days')
+        .eq('is_active', true)
+        .or(`branch_id.eq.${member!.branch_id},branch_id.is.null`)
+        .order('price', { ascending: true });
+      if (error) throw error;
+      return (data || []) as AddOnPackage[];
+    },
+  });
+
+  const packageByType = useMemo(() => {
+    const map = new Map<string, AddOnPackage>();
+    for (const p of addOnPackages) {
+      const key = String(p.benefit_type || '').toLowerCase();
+      if (!map.has(key)) map.set(key, p); // cheapest first (ordered by price)
+    }
+    return map;
+  }, [addOnPackages]);
+
+
+
 
   // ─── Auto-generate recovery slots ───
   // Auto-generate recovery slots in background (fire-and-forget style)
