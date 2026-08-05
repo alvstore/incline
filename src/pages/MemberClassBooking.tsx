@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateBenefitData } from '@/lib/benefits/invalidateBenefitData';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -278,10 +279,11 @@ export default function MemberClassBooking() {
       return result;
     },
     onSuccess: () => {
-      toast.success('Slot booked!');
+      toast.success('Slot booked!', { description: '1 session has been deducted from your balance.' });
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
       queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['my-entitlements'] });
+      invalidateBenefitData(queryClient);
     },
     onError: (e: any) => {
       const msg = e.message || 'Failed to book slot';
@@ -311,10 +313,11 @@ export default function MemberClassBooking() {
       return result;
     },
     onSuccess: () => {
-      toast.success('Booking cancelled');
+      toast.success('Booking cancelled', { description: 'Your session has been returned to your balance.' });
       queryClient.invalidateQueries({ queryKey: ['agenda-slots'] });
       queryClient.invalidateQueries({ queryKey: ['my-benefit-bookings-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['my-entitlements'] });
+      invalidateBenefitData(queryClient);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to cancel'),
   });

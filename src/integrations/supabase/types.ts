@@ -1611,11 +1611,13 @@ export type Database = {
         Row: {
           benefit_type: Database["public"]["Enums"]["benefit_type"]
           benefit_type_id: string | null
+          booking_id: string | null
           created_at: string
           id: string
           membership_id: string
           notes: string | null
           recorded_by: string | null
+          source_meta: Json | null
           usage_count: number | null
           usage_date: string
           usage_time: string | null
@@ -1623,11 +1625,13 @@ export type Database = {
         Insert: {
           benefit_type: Database["public"]["Enums"]["benefit_type"]
           benefit_type_id?: string | null
+          booking_id?: string | null
           created_at?: string
           id?: string
           membership_id: string
           notes?: string | null
           recorded_by?: string | null
+          source_meta?: Json | null
           usage_count?: number | null
           usage_date?: string
           usage_time?: string | null
@@ -1635,11 +1639,13 @@ export type Database = {
         Update: {
           benefit_type?: Database["public"]["Enums"]["benefit_type"]
           benefit_type_id?: string | null
+          booking_id?: string | null
           created_at?: string
           id?: string
           membership_id?: string
           notes?: string | null
           recorded_by?: string | null
+          source_meta?: Json | null
           usage_count?: number | null
           usage_date?: string
           usage_time?: string | null
@@ -1650,6 +1656,13 @@ export type Database = {
             columns: ["benefit_type_id"]
             isOneToOne: false
             referencedRelation: "benefit_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefit_usage_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "benefit_bookings"
             referencedColumns: ["id"]
           },
           {
@@ -10646,6 +10659,7 @@ export type Database = {
       }
       rcs_inbound_events: {
         Row: {
+          branch_id: string | null
           event_type: string
           id: string
           message_id: string | null
@@ -10655,6 +10669,7 @@ export type Database = {
           sender_phone: string
         }
         Insert: {
+          branch_id?: string | null
           event_type: string
           id?: string
           message_id?: string | null
@@ -10664,6 +10679,7 @@ export type Database = {
           sender_phone: string
         }
         Update: {
+          branch_id?: string | null
           event_type?: string
           id?: string
           message_id?: string | null
@@ -10672,7 +10688,15 @@ export type Database = {
           record_id?: string | null
           sender_phone?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rcs_inbound_events_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rcs_templates: {
         Row: {
@@ -13670,10 +13694,19 @@ export type Database = {
       }
     }
     Functions: {
-      _notify_booking_event: {
-        Args: { p_booking_id: string; p_event: string }
-        Returns: undefined
+      _consume_benefit_for_booking: {
+        Args: { p_allow_shortfall?: boolean; p_booking_id: string }
+        Returns: Json
       }
+      _notify_booking_event:
+        | {
+            Args: { p_booking_id: string; p_event: string }
+            Returns: undefined
+          }
+        | {
+            Args: { p_booking_id: string; p_event: string }
+            Returns: undefined
+          }
       _purchase_pt_package_impl: {
         Args: {
           _branch_id: string
@@ -13688,6 +13721,10 @@ export type Database = {
           _start_date?: string
           _trainer_id: string
         }
+        Returns: Json
+      }
+      _release_benefit_for_booking: {
+        Args: { p_booking_id: string }
         Returns: Json
       }
       _resolve_audit_target_name: {
@@ -13851,6 +13888,25 @@ export type Database = {
       auto_close_stale_staff_attendance: { Args: never; Returns: number }
       auto_expire_memberships: { Args: never; Returns: undefined }
       award_group_bonus: { Args: { p_group_id: string }; Returns: Json }
+      benefit_available_units: {
+        Args: {
+          p_benefit_type: Database["public"]["Enums"]["benefit_type"]
+          p_benefit_type_id: string
+          p_date?: string
+          p_member_id: string
+          p_membership_id: string
+        }
+        Returns: number
+      }
+      benefit_plan_remaining: {
+        Args: {
+          p_benefit_type: Database["public"]["Enums"]["benefit_type"]
+          p_benefit_type_id: string
+          p_date: string
+          p_membership_id: string
+        }
+        Returns: number
+      }
       bill_locker_period: {
         Args: { p_amount: number; p_assignment_id: string; p_months?: number }
         Returns: Json
@@ -13859,18 +13915,31 @@ export type Database = {
         Args: { _class_id: string; _member_id: string }
         Returns: Json
       }
-      book_facility_slot: {
-        Args: {
-          p_force?: boolean
-          p_force_reason?: string
-          p_member_id: string
-          p_membership_id: string
-          p_slot_id: string
-          p_source?: string
-          p_staff_id?: string
-        }
-        Returns: Json
-      }
+      book_facility_slot:
+        | {
+            Args: {
+              p_force?: boolean
+              p_force_reason?: string
+              p_member_id: string
+              p_membership_id: string
+              p_slot_id: string
+              p_source?: string
+              p_staff_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_force?: boolean
+              p_force_reason?: string
+              p_member_id: string
+              p_membership_id: string
+              p_slot_id: string
+              p_source?: string
+              p_staff_id?: string
+            }
+            Returns: Json
+          }
       bump_dynamic_memory_hit: {
         Args: { _rule_id: string }
         Returns: undefined
