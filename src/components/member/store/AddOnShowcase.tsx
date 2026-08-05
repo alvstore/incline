@@ -252,7 +252,7 @@ export function AddOnShowcase({ memberId, memberName, membershipId, branchId }: 
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">Personal Training</p>
-                <p className="line-clamp-2 text-xs text-muted-foreground">
+                <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">
                   {cheapestPt.description || `${cheapestPt.total_sessions} sessions with a certified coach`}
                 </p>
               </div>
