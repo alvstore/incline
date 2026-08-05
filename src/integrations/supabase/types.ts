@@ -8105,6 +8105,7 @@ export type Database = {
           fitness_level: string | null
           gstin: string | null
           hardware_access_enabled: boolean | null
+          hardware_access_reason: string | null
           hardware_access_status: string | null
           health_conditions: string | null
           howbody_third_uid: string | null
@@ -8154,6 +8155,7 @@ export type Database = {
           fitness_level?: string | null
           gstin?: string | null
           hardware_access_enabled?: boolean | null
+          hardware_access_reason?: string | null
           hardware_access_status?: string | null
           health_conditions?: string | null
           howbody_third_uid?: string | null
@@ -8203,6 +8205,7 @@ export type Database = {
           fitness_level?: string | null
           gstin?: string | null
           hardware_access_enabled?: boolean | null
+          hardware_access_reason?: string | null
           hardware_access_status?: string | null
           health_conditions?: string | null
           howbody_third_uid?: string | null
@@ -14796,6 +14799,15 @@ export type Database = {
           member_id: string
           mips_person_sn: string
           outstanding_amount: number
+        }[]
+      }
+      members_restorable_after_dues: {
+        Args: never
+        Returns: {
+          branch_id: string
+          member_code: string
+          member_id: string
+          mips_person_sn: string
         }[]
       }
       membership_end_date: {

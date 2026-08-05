@@ -282,7 +282,36 @@ async function handleMemberCheckin(
     });
     if (checkinResult && !(checkinResult as any).valid) {
       result = "member_denied";
+      const reason = (checkinResult as any).reason as string | undefined;
       message = `${personName}: ${(checkinResult as any).message || "Check-in denied"}`;
+
+      // Dues-blocked punch → alert the front desk so staff can intervene at the gate.
+      if (reason === "dues_overdue") {
+        try {
+          const { data: access } = await supabase.rpc("member_access_status", {
+            _member_id: memberId,
+            _branch_id: branchId,
+          });
+          const { data: staff } = await supabase
+            .from("user_roles")
+            .select("user_id, role")
+            .in("role", ["owner", "admin", "manager", "staff"]);
+          const rows = (staff || []).map((s: any) => ({
+            user_id: s.user_id,
+            branch_id: branchId,
+            title: "Gate entry denied — dues overdue",
+            message: `${personName} was denied at the gate. Outstanding Rs. ${
+              access?.outstanding_amount ?? "-"
+            }, overdue by ${access?.days_overdue ?? "-"} day(s).`,
+            type: "warning",
+            category: "access",
+            action_url: "/members",
+          }));
+          if (rows.length) await supabase.from("notifications").insert(rows);
+        } catch (notifyErr) {
+          console.warn("dues denial notification failed:", notifyErr);
+        }
+      }
     }
   } catch (e) {
     console.warn("Check-in RPC failed:", e);
