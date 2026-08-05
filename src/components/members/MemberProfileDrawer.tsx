@@ -982,7 +982,7 @@ export function MemberProfileDrawer({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('membership_free_days')
-        .select('id, days_added, reason, created_at')
+        .select('id, days_added, reason, created_at, added_by')
         .eq('membership_id', currentMembership!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
