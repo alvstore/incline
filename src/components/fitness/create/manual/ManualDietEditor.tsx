@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanTemplate, updatePlanTemplate } from '@/services/fitnessService';
@@ -7,8 +7,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, UtensilsCrossed, Clock, AlertTriangle, ArrowLeftRight, Link as LinkIcon } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Plus,
+  Trash2,
+  UtensilsCrossed,
+  Clock,
+  AlertTriangle,
+  ArrowLeftRight,
+  Link as LinkIcon,
+  Copy,
+  Paperclip,
+  ChevronDown,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
 import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
@@ -16,23 +36,18 @@ import { cn } from '@/lib/utils';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
 import { MealSwapModal } from '@/components/fitness/MealSwapModal';
 import { MealCatalogEntry, MealType } from '@/services/mealCatalogService';
-
-interface MealItem {
-  food: string;
-  quantity: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-}
-interface MealSlot {
-  name: string;
-  time: string;
-  items: MealItem[];
-  recipe_link?: string;
-  prep_video_url?: string;
-  prep_video_file_path?: string;
-}
+import {
+  DEFAULT_SLOTS,
+  EMPTY_ITEM,
+  DietDay,
+  DietItem,
+  DietSlot,
+  dayTotals,
+  inferDietMeta,
+  normalizeDietContent,
+  serializeDietDays,
+  weeklyAverageTotals,
+} from '@/lib/fitness/dietContent';
 
 const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   const k = name.toLowerCase();
@@ -43,15 +58,7 @@ const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   return undefined;
 };
 
-const DEFAULT_SLOTS: MealSlot[] = [
-  { name: 'Breakfast', time: '07:30', items: [] },
-  { name: 'Mid-Morning Snack', time: '10:30', items: [] },
-  { name: 'Lunch', time: '13:00', items: [] },
-  { name: 'Evening Snack', time: '16:30', items: [] },
-  { name: 'Dinner', time: '20:00', items: [] },
-];
-
-const EMPTY_ITEM: MealItem = { food: '', quantity: '', calories: 0, protein: 0, carbs: 0, fats: 0 };
+const singleDay = (): DietDay[] => [{ day: 'Daily', slots: DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) }];
 
 interface Props {
   onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => void;
@@ -85,8 +92,51 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   const [proteinTarget, setProteinTarget] = useState(120);
   const [carbsTarget, setCarbsTarget] = useState(220);
   const [fatTarget, setFatTarget] = useState(60);
-  const [slots, setSlots] = useState<MealSlot[]>(DEFAULT_SLOTS);
+
+  const [days, setDays] = useState<DietDay[]>(singleDay);
+  const [weekly, setWeekly] = useState(false);
+  const [activeDay, setActiveDay] = useState(0);
+  const [macroScope, setMacroScope] = useState<'day' | 'week'>('day');
   const [swapSlotIdx, setSwapSlotIdx] = useState<number | null>(null);
+  const [openAttach, setOpenAttach] = useState<Record<number, boolean>>({});
+  // 'loading' blocks saving so an unloaded template can never overwrite a good one.
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    templateId ? 'loading' : 'idle',
+  );
+  const hydratedRef = useRef(false);
+
+  const macroNum = (v: unknown) => parseInt(String(v ?? '').replace(/\D/g, ''), 10);
+
+  const hydrateFromContent = useCallback((content: any) => {
+    if (content?.dietaryType) setDietaryType(content.dietaryType);
+    if (content?.cuisine) setCuisine(content.cuisine);
+    if (content?.dailyCalories) setCalTarget(Number(content.dailyCalories) || 2000);
+    if (content?.macros?.protein) setProteinTarget(macroNum(content.macros.protein) || 120);
+    if (content?.macros?.carbs) setCarbsTarget(macroNum(content.macros.carbs) || 220);
+    if (content?.macros?.fat) setFatTarget(macroNum(content.macros.fat) || 60);
+
+    const normalized = normalizeDietContent(content);
+    if (normalized) {
+      setDays(normalized.days);
+      setWeekly(normalized.weekly);
+      setActiveDay(0);
+      setMacroScope(normalized.weekly ? 'week' : 'day');
+      // Older content often lacks these — infer instead of leaving required selects blank.
+      const inferred = inferDietMeta(normalized.days);
+      if (!content?.dietaryType) setDietaryType(inferred.dietaryType);
+      if (!content?.cuisine) setCuisine(inferred.cuisine);
+      if (!content?.dailyCalories) {
+        const avg = weeklyAverageTotals(normalized.days);
+        if (avg.calories > 0) {
+          setCalTarget(Math.round(avg.calories));
+          if (!content?.macros?.protein) setProteinTarget(Math.round(avg.protein));
+          if (!content?.macros?.carbs) setCarbsTarget(Math.round(avg.carbs));
+          if (!content?.macros?.fat) setFatTarget(Math.round(avg.fats));
+        }
+      }
+    }
+    return !!normalized;
+  }, []);
 
   useEffect(() => {
     if (!draftId) return;
@@ -103,67 +153,23 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     if (d.memberId) {
       setMember({ id: d.memberId, full_name: d.memberName || '', member_code: d.memberCode || '' } as PickedMember);
     }
-    const content: any = d.content || {};
-    const macroNum = (v: any) => parseInt(String(v ?? '').replace(/\D/g, ''), 10);
-    if (content.macros?.protein) setProteinTarget(macroNum(content.macros.protein) || 120);
-    if (content.macros?.carbs) setCarbsTarget(macroNum(content.macros.carbs) || 220);
-    if (content.macros?.fat) setFatTarget(macroNum(content.macros.fat) || 60);
-
-    let sourceSlots: any[] | null = null;
-    if (Array.isArray(content.slots) && content.slots.length) {
-      sourceSlots = content.slots;
-    } else if (Array.isArray(content.meals) && content.meals.length) {
-      const day0 = content.meals[0] || {};
-      const KEYS: { key: string; name: string; time?: string }[] = [
-        { key: 'breakfast', name: 'Breakfast', time: '07:30' },
-        { key: 'snack1', name: 'Mid-Morning Snack', time: '10:30' },
-        { key: 'lunch', name: 'Lunch', time: '13:00' },
-        { key: 'snack2', name: 'Evening Snack', time: '16:30' },
-        { key: 'dinner', name: 'Dinner', time: '20:00' },
-      ];
-      sourceSlots = KEYS.filter((k) => day0[k.key]).map((k) => {
-        const e = day0[k.key];
-        return {
-          name: k.name,
-          time: k.time,
-          items: [{
-            food: e?.meal || e?.name || e?.food || '',
-            quantity: e?.quantity || '',
-            calories: Number(e?.calories) || 0,
-            protein: Number(e?.protein) || 0,
-            carbs: Number(e?.carbs) || 0,
-            fats: Number(e?.fats ?? e?.fat) || 0,
-          }],
-        };
-      });
-    }
-    if (sourceSlots && sourceSlots.length) {
-      setSlots(sourceSlots.map((s: any) => ({
-        name: s.name || '',
-        time: s.time || '',
-        items: (s.items || []).map((i: any) => ({
-          food: i.food || '',
-          quantity: i.quantity || '',
-          calories: Number(i.calories) || 0,
-          protein: Number(i.protein) || 0,
-          carbs: Number(i.carbs) || 0,
-          fats: Number(i.fats) || 0,
-        })),
-        recipe_link: s.recipe_link,
-        prep_video_url: s.prep_video_url,
-        prep_video_file_path: s.prep_video_file_path,
-      })));
-    }
-  }, [draftId]);
+    hydrateFromContent(d.content || {});
+    hydratedRef.current = true;
+  }, [draftId, hydrateFromContent]);
 
   useEffect(() => {
     if (!templateId) return;
     let cancelled = false;
+    setLoadState('loading');
     (async () => {
       try {
         const tpl = await getPlanTemplate(templateId);
         if (cancelled) return;
-        if (!tpl) { toast.error('Template not found'); return; }
+        if (!tpl) {
+          toast.error('Template not found');
+          setLoadState('error');
+          return;
+        }
         if (tpl.type !== 'diet') {
           toast.error('That template is a workout plan — opening the workout builder instead');
           navigate(`/fitness/create/manual?type=workout&template=${templateId}${editMode ? '&edit=1' : ''}`, { replace: true });
@@ -171,62 +177,52 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
         }
         setPlanName(tpl.name);
         setDescription(tpl.description || '');
-        const content: any = tpl.content || {};
-        if (content.dietaryType) setDietaryType(content.dietaryType);
-        if (content.cuisine) setCuisine(content.cuisine);
-        if (content.dailyCalories) setCalTarget(Number(content.dailyCalories) || 2000);
-        const macroNum = (v: any) => parseInt(String(v ?? '').replace(/\D/g, ''), 10);
-        if (content.macros?.protein) setProteinTarget(macroNum(content.macros.protein) || 120);
-        if (content.macros?.carbs) setCarbsTarget(macroNum(content.macros.carbs) || 220);
-        if (content.macros?.fat) setFatTarget(macroNum(content.macros.fat) || 60);
-        if (Array.isArray(content.slots) && content.slots.length) {
-          setSlots(content.slots.map((s: any) => ({
-            name: s.name || '',
-            time: s.time || '',
-            items: (s.items || []).map((i: any) => ({
-              food: i.food || '',
-              quantity: i.quantity || '',
-              calories: Number(i.calories) || 0,
-              protein: Number(i.protein) || 0,
-              carbs: Number(i.carbs) || 0,
-              fats: Number(i.fats) || 0,
-            })),
-            recipe_link: s.recipe_link,
-            prep_video_url: s.prep_video_url,
-            prep_video_file_path: s.prep_video_file_path,
-          })));
-        }
-        toast.success(`Loaded template: ${tpl.name}`);
+        const ok = hydrateFromContent(tpl.content || {});
+        setLoadState('ready');
+        hydratedRef.current = true;
+        toast.success(
+          ok ? `Loaded template: ${tpl.name}` : `Loaded template: ${tpl.name} (no meals stored yet)`,
+        );
       } catch (err: any) {
+        if (cancelled) return;
+        setLoadState('error');
         toast.error(err?.message || 'Failed to load template');
       }
     })();
     return () => { cancelled = true; };
-  }, [templateId, navigate, editMode]);
+  }, [templateId, navigate, editMode, hydrateFromContent]);
 
-  const totals = useMemo(() => slots.reduce((acc, s) => {
-    s.items.forEach(i => {
-      acc.calories += Number(i.calories) || 0;
-      acc.protein += Number(i.protein) || 0;
-      acc.carbs += Number(i.carbs) || 0;
-      acc.fats += Number(i.fats) || 0;
-    });
-    return acc;
-  }, { calories: 0, protein: 0, carbs: 0, fats: 0 }), [slots]);
+  const slots = days[activeDay]?.slots ?? [];
+
+  const totals = useMemo(
+    () => (macroScope === 'week' && weekly
+      ? weeklyAverageTotals(days)
+      : dayTotals(days[activeDay] || { day: '', slots: [] })),
+    [days, activeDay, macroScope, weekly],
+  );
 
   const exceeds = (val: number, target: number) => target > 0 && val > target;
 
-  const updateSlot = (idx: number, patch: Partial<MealSlot>) =>
-    setSlots(prev => prev.map((s, i) => i === idx ? { ...s, ...patch } : s));
+  const updateDaySlots = (updater: (prev: DietSlot[]) => DietSlot[]) =>
+    setDays((prev) => prev.map((d, i) => (i === activeDay ? { ...d, slots: updater(d.slots) } : d)));
+
+  const updateSlot = (idx: number, patch: Partial<DietSlot>) =>
+    updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
 
   const addItem = (idx: number) =>
-    updateSlot(idx, { items: [...slots[idx].items, { ...EMPTY_ITEM }] });
+    updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, items: [...s.items, { ...EMPTY_ITEM }] } : s)));
 
-  const updateItem = (sIdx: number, iIdx: number, field: keyof MealItem, value: any) =>
-    updateSlot(sIdx, { items: slots[sIdx].items.map((it, i) => i === iIdx ? { ...it, [field]: value } : it) });
+  const updateItem = (sIdx: number, iIdx: number, field: keyof DietItem, value: any) =>
+    updateDaySlots((prev) =>
+      prev.map((s, i) =>
+        i === sIdx ? { ...s, items: s.items.map((it, j) => (j === iIdx ? { ...it, [field]: value } : it)) } : s,
+      ),
+    );
 
   const removeItem = (sIdx: number, iIdx: number) =>
-    updateSlot(sIdx, { items: slots[sIdx].items.filter((_, i) => i !== iIdx) });
+    updateDaySlots((prev) =>
+      prev.map((s, i) => (i === sIdx ? { ...s, items: s.items.filter((_, j) => j !== iIdx) } : s)),
+    );
 
   const applySwap = (sIdx: number, entry: MealCatalogEntry) => {
     const anyEntry = entry as any;
@@ -238,12 +234,26 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
         protein: entry.protein,
         carbs: entry.carbs,
         fats: entry.fats,
+        catalog_id: entry.id,
       }],
       recipe_link: anyEntry.recipe_link || slots[sIdx].recipe_link,
       prep_video_url: anyEntry.prep_video_url || slots[sIdx].prep_video_url,
     });
     setSwapSlotIdx(null);
     toast.success(`Swapped to ${entry.name}`);
+  };
+
+  const copyDayTo = (targets: number[]) => {
+    const source = days[activeDay];
+    if (!source) return;
+    setDays((prev) =>
+      prev.map((d, i) =>
+        targets.includes(i)
+          ? { ...d, slots: source.slots.map((s) => ({ ...s, items: s.items.map((it) => ({ ...it })) })) }
+          : d,
+      ),
+    );
+    toast.success(targets.length > 1 ? 'Copied to all other days' : 'Day copied');
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,30 +265,23 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     dietaryType,
     cuisine,
     macros: { protein: `${proteinTarget}g`, carbs: `${carbsTarget}g`, fat: `${fatTarget}g` },
-    slots: slots.map(s => ({
-      name: s.name,
-      time: s.time,
-      items: s.items.filter(i => i.food),
-      recipe_link: s.recipe_link || undefined,
-      prep_video_url: s.prep_video_url || undefined,
-      prep_video_file_path: s.prep_video_file_path || undefined,
-      totals: s.items.reduce((a, i) => ({
-        calories: a.calories + (Number(i.calories) || 0),
-        protein: a.protein + (Number(i.protein) || 0),
-        carbs: a.carbs + (Number(i.carbs) || 0),
-        fats: a.fats + (Number(i.fats) || 0),
-      }), { calories: 0, protein: 0, carbs: 0, fats: 0 }),
-    })),
-    totals,
-  });
+    ...serializeDietDays(days, weekly),
+    totals: dayTotals(days[0] || { day: '', slots: [] }),
+  } as DietPlanContent);
+
+  const filledItems = useMemo(
+    () => days.reduce((n, d) => n + d.slots.reduce((m, s) => m + s.items.filter((i) => i.food).length, 0), 0),
+    [days],
+  );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const validateContent = (): string | null => {
+    if (loadState === 'loading') return 'Still loading the saved plan — please wait';
+    if (loadState === 'error') return 'The saved plan could not be loaded — reload before saving';
     if (!planName.trim()) return 'Plan name is required';
     if (!dietaryType) return 'Dietary type is required';
     if (!cuisine) return 'Cuisine is required';
-    const totalItems = slots.reduce((s, m) => s + m.items.filter(i => i.food).length, 0);
-    if (totalItems === 0) return 'Add at least one meal item';
+    if (filledItems === 0) return 'Add at least one meal item';
     return null;
   };
 
@@ -349,8 +352,9 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     navigate(`/fitness/preview/${id}`);
   }, [planName, description, calTarget, dietaryType, cuisine, member, draftId, templateId, navigate, validateContent, buildContent]);
 
-  const canSubmit = !!planName.trim() && !!dietaryType && !!cuisine
-    && slots.reduce((s, m) => s + m.items.filter(i => i.food).length, 0) > 0;
+  const canSubmit =
+    loadState !== 'loading' && loadState !== 'error'
+    && !!planName.trim() && !!dietaryType && !!cuisine && filledItems > 0;
   const submit = useMemo(
     () => (editMode ? handleSaveTemplate : handlePreview),
     [editMode, handleSaveTemplate, handlePreview],
@@ -363,6 +367,19 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   useEffect(() => {
     onMetaChange?.({ canSubmit, submit, primaryLabel });
   }, [canSubmit, submit, primaryLabel, onMetaChange]);
+
+  if (loadState === 'loading') {
+    return (
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-4">
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-12 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
+        </div>
+        <Skeleton className="h-72 rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -433,110 +450,200 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
           </CardContent>
         </Card>
 
-        {slots.map((slot, sIdx) => (
-          <Card key={sIdx}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <UtensilsCrossed className="h-4 w-4 text-accent" />
-                  <Input
-                    className="h-8 w-44"
-                    value={slot.name}
-                    onChange={(e) => updateSlot(sIdx, { name: e.target.value })}
-                  />
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="time"
-                    className="h-8 w-28"
-                    value={slot.time}
-                    onChange={(e) => updateSlot(sIdx, { time: e.target.value })}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1"
-                    onClick={() => {
-                      if (!dietaryType || !cuisine) {
-                        toast.error('Set dietary type & cuisine first');
-                        return;
-                      }
-                      setSwapSlotIdx(sIdx);
-                    }}
-                  >
-                    <ArrowLeftRight className="h-3.5 w-3.5" /> Swap
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {slot.items.map((item, iIdx) => (
-                <div key={iIdx} className="grid grid-cols-12 gap-2 items-end p-2 bg-muted/30 rounded-md">
-                  <div className="col-span-12 sm:col-span-3">
-                    <Label className="text-xs">Food</Label>
-                    <Input value={item.food} onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)} placeholder="Oats" />
-                  </div>
-                  <div className="col-span-6 sm:col-span-2">
-                    <Label className="text-xs">Qty</Label>
-                    <Input value={item.quantity} onChange={(e) => updateItem(sIdx, iIdx, 'quantity', e.target.value)} placeholder="100g" />
-                  </div>
-                  <div className="col-span-3 sm:col-span-1">
-                    <Label className="text-xs">Cal</Label>
-                    <Input type="number" value={item.calories} onChange={(e) => updateItem(sIdx, iIdx, 'calories', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="col-span-3 sm:col-span-1">
-                    <Label className="text-xs">P</Label>
-                    <Input type="number" value={item.protein} onChange={(e) => updateItem(sIdx, iIdx, 'protein', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="col-span-3 sm:col-span-1">
-                    <Label className="text-xs">C</Label>
-                    <Input type="number" value={item.carbs} onChange={(e) => updateItem(sIdx, iIdx, 'carbs', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="col-span-3 sm:col-span-1">
-                    <Label className="text-xs">F</Label>
-                    <Input type="number" value={item.fats} onChange={(e) => updateItem(sIdx, iIdx, 'fats', parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="col-span-12 sm:col-span-3 flex justify-end">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(sIdx, iIdx)}>
-                      <Trash2 className="h-4 w-4" />
+        {/* Day rail — weekly plans keep all their days */}
+        {weekly && days.length > 1 && (
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {days.length}-day plan
+                </p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 gap-1">
+                      <Copy className="h-3.5 w-3.5" /> Copy this day
+                      <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
-                  </div>
-                </div>
-              ))}
-              <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => addItem(sIdx)}>
-                <Plus className="h-4 w-4 mr-1" /> Add Item
-              </Button>
-
-              <div className="grid gap-2 pt-2 border-t">
-                <div className="flex items-center gap-2">
-                  <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="h-8 text-xs"
-                    placeholder="Recipe link (optional)"
-                    value={slot.recipe_link || ''}
-                    onChange={(e) => updateSlot(sIdx, { recipe_link: e.target.value })}
-                  />
-                </div>
-                <VideoAttachmentControl
-                  folder="meals"
-                  label="Prep video (URL or upload)"
-                  value={{ video_url: slot.prep_video_url, video_file_path: slot.prep_video_file_path }}
-                  onChange={(next) => updateSlot(sIdx, {
-                    prep_video_url: next.video_url,
-                    prep_video_file_path: next.video_file_path,
-                  })}
-                />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => copyDayTo(days.map((_, i) => i).filter((i) => i !== activeDay))}
+                    >
+                      Copy to all other days
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {days.map((d, i) =>
+                      i === activeDay ? null : (
+                        <DropdownMenuItem key={d.day + i} onClick={() => copyDayTo([i])}>
+                          Copy to {d.day}
+                        </DropdownMenuItem>
+                      ),
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {days.map((d, i) => {
+                  const t = dayTotals(d);
+                  const active = i === activeDay;
+                  return (
+                    <button
+                      key={d.day + i}
+                      type="button"
+                      onClick={() => setActiveDay(i)}
+                      className={cn(
+                        'shrink-0 rounded-xl border px-3 py-2 text-left transition-all duration-200 cursor-pointer',
+                        'focus:outline-none focus:ring-2 focus:ring-primary min-w-[104px]',
+                        active ? 'border-primary bg-primary/10' : 'hover:bg-muted/60',
+                      )}
+                      aria-pressed={active}
+                    >
+                      <p className={cn('text-sm font-semibold', active && 'text-primary')}>{d.day}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {Math.round(t.calories)} kcal · {Math.round(t.protein)}g P
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
-        ))}
+        )}
+
+        {slots.map((slot, sIdx) => {
+          const attachOpen = !!openAttach[sIdx] || !!slot.recipe_link || !!slot.prep_video_url || !!slot.prep_video_file_path;
+          return (
+            <Card key={sIdx}>
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <UtensilsCrossed className="h-4 w-4 text-accent" />
+                    <Input
+                      className="h-8 w-44"
+                      value={slot.name}
+                      onChange={(e) => updateSlot(sIdx, { name: e.target.value })}
+                      aria-label="Meal slot name"
+                    />
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="time"
+                      className="h-8 w-28"
+                      value={slot.time}
+                      onChange={(e) => updateSlot(sIdx, { time: e.target.value })}
+                      aria-label="Meal time"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1"
+                      onClick={() => {
+                        if (!dietaryType || !cuisine) {
+                          toast.error('Set dietary type & cuisine first');
+                          return;
+                        }
+                        setSwapSlotIdx(sIdx);
+                      }}
+                    >
+                      <ArrowLeftRight className="h-3.5 w-3.5" /> Swap
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {slot.items.length === 0 && (
+                  <p className="text-xs text-muted-foreground px-1">No items yet — add one or swap in a catalog meal.</p>
+                )}
+                {slot.items.map((item, iIdx) => (
+                  <div key={iIdx} className="grid grid-cols-12 gap-2 items-end p-2 bg-muted/30 rounded-md">
+                    <div className="col-span-12 sm:col-span-3">
+                      <Label className="text-xs">Food</Label>
+                      <Input value={item.food} onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)} placeholder="Oats" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <Label className="text-xs">Qty</Label>
+                      <Input value={item.quantity} onChange={(e) => updateItem(sIdx, iIdx, 'quantity', e.target.value)} placeholder="100g" />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1">
+                      <Label className="text-xs">Cal</Label>
+                      <Input type="number" value={item.calories} onChange={(e) => updateItem(sIdx, iIdx, 'calories', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1">
+                      <Label className="text-xs">P</Label>
+                      <Input type="number" value={item.protein} onChange={(e) => updateItem(sIdx, iIdx, 'protein', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1">
+                      <Label className="text-xs">C</Label>
+                      <Input type="number" value={item.carbs} onChange={(e) => updateItem(sIdx, iIdx, 'carbs', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1">
+                      <Label className="text-xs">F</Label>
+                      <Input type="number" value={item.fats} onChange={(e) => updateItem(sIdx, iIdx, 'fats', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="col-span-12 sm:col-span-3 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => removeItem(sIdx, iIdx)}
+                        aria-label="Remove item"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="flex-1 border-dashed" onClick={() => addItem(sIdx)}>
+                    <Plus className="h-4 w-4 mr-1" /> Add Item
+                  </Button>
+                  {!attachOpen && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1 text-muted-foreground"
+                      onClick={() => setOpenAttach((p) => ({ ...p, [sIdx]: true }))}
+                    >
+                      <Paperclip className="h-3.5 w-3.5" /> Attach recipe / video
+                    </Button>
+                  )}
+                </div>
+
+                {attachOpen && (
+                  <div className="grid gap-2 pt-2 border-t">
+                    <div className="flex items-center gap-2">
+                      <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="Recipe link (optional)"
+                        value={slot.recipe_link || ''}
+                        onChange={(e) => updateSlot(sIdx, { recipe_link: e.target.value })}
+                        aria-label="Recipe link"
+                      />
+                    </div>
+                    <VideoAttachmentControl
+                      folder="meals"
+                      label="Prep video (URL or upload)"
+                      value={{ video_url: slot.prep_video_url, video_file_path: slot.prep_video_file_path }}
+                      onChange={(next) => updateSlot(sIdx, {
+                        prep_video_url: next.video_url,
+                        prep_video_file_path: next.video_file_path,
+                      })}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
 
         <MealSwapModal
           open={swapSlotIdx !== null}
           onOpenChange={(o) => !o && setSwapSlotIdx(null)}
-          context={swapSlotIdx === null ? null : {
+          context={swapSlotIdx === null || !slots[swapSlotIdx] ? null : {
             name: slots[swapSlotIdx].name,
             mealType: SLOT_TO_MEAL_TYPE(slots[swapSlotIdx].name),
             dietaryType,
@@ -547,9 +654,35 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
         />
       </div>
 
-      <div className="space-y-4 lg:sticky lg:top-4 self-start">
+      <div className="space-y-4 lg:sticky lg:top-24 self-start">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Live Macros</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Live Macros</CardTitle>
+              {weekly && days.length > 1 && (
+                <div className="flex rounded-lg bg-muted p-0.5">
+                  {(['day', 'week'] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setMacroScope(s)}
+                      className={cn(
+                        'px-2 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer',
+                        macroScope === s ? 'bg-background shadow-sm' : 'text-muted-foreground',
+                      )}
+                    >
+                      {s === 'day' ? 'This day' : 'Weekly avg'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {weekly && days.length > 1 && (
+              <Badge variant="secondary" className="w-fit text-[10px] mt-1">
+                {macroScope === 'day' ? days[activeDay]?.day : `Average of ${days.length} days`}
+              </Badge>
+            )}
+          </CardHeader>
           <CardContent className="space-y-2">
             {[
               { label: 'Calories', val: totals.calories, target: calTarget, unit: '' },
@@ -576,7 +709,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
             {(exceeds(totals.calories, calTarget) || exceeds(totals.protein, proteinTarget) || exceeds(totals.carbs, carbsTarget) || exceeds(totals.fats, fatTarget)) && (
               <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-xs">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                Daily totals exceed one or more targets.
+                Totals exceed one or more targets.
               </div>
             )}
           </CardContent>

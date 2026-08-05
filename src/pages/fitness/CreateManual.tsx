@@ -51,13 +51,7 @@ export default function CreateManualPage() {
       actions={
         editMode ? (
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (window.history.length > 1) navigate(-1);
-                else navigate('/fitness/templates');
-              }}
-            >
+            <Button variant="outline" onClick={() => navigate('/fitness/templates')}>
               Cancel
             </Button>
             <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
@@ -66,6 +60,7 @@ export default function CreateManualPage() {
           <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
         )
       }
+
     >
       <div className="space-y-4">
         {/* Hide tab switcher in edit/draft modes — type is fixed. */}

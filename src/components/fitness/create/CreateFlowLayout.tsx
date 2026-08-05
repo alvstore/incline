@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
 
 export type FlowStep = 'build' | 'preview' | 'assign';
 
@@ -30,27 +31,40 @@ export function CreateFlowLayout({ title, subtitle, step, buildLabel = 'Build', 
     assign: 'Assign',
   };
 
+  // Always resolve to an explicit destination when one is given — relying on
+  // history.back() breaks after replace-navigations inside the builder.
+  const goBack = () => {
+    if (onBack) return onBack();
+    if (backTo) return navigate(backTo);
+    navigate('/fitness/create');
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => (onBack ? onBack() : backTo ? navigate(backTo) : navigate(-1))}
-              className="mt-1 h-8 w-8 shrink-0"
-              aria-label="Back"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight truncate">{title}</h1>
-              {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+        <FitnessHubTabs />
+
+        <div className="sticky top-0 z-30 -mx-2 px-2 py-3 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={goBack}
+                className="h-9 w-9 shrink-0"
+                aria-label="Back"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{title}</h1>
+                {subtitle && <p className="text-sm text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
+              </div>
             </div>
+            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
           </div>
-          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
+
 
         {/* Step indicator */}
         <div className="rounded-xl border bg-card p-3">
