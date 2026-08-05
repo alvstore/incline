@@ -36,6 +36,7 @@ interface MemberResult {
 
 export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess }: ConciergeBookingDrawerProps) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<MemberResult | null>(null);
   const [memberGender, setMemberGender] = useState<string | null>(null);
