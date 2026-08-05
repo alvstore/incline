@@ -107,6 +107,7 @@ export default function FitnessTemplatesPage() {
   const [targetingTemplate, setTargetingTemplate] = useState<FitnessPlanTemplate | null>(null);
   const [uploadPdfOpen, setUploadPdfOpen] = useState(false);
   const [assignmentsTemplate, setAssignmentsTemplate] = useState<FitnessPlanTemplate | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: allTemplates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["fitness-templates", planType],
@@ -114,10 +115,21 @@ export default function FitnessTemplatesPage() {
   });
 
   const templates = useMemo(() => {
-    if (commonFilter === "all") return allTemplates;
-    if (commonFilter === "common") return allTemplates.filter((t) => t.is_common);
-    return allTemplates.filter((t) => !t.is_common);
-  }, [allTemplates, commonFilter]);
+    const byCommon =
+      commonFilter === "all"
+        ? allTemplates
+        : commonFilter === "common"
+          ? allTemplates.filter((t) => t.is_common)
+          : allTemplates.filter((t) => !t.is_common);
+    const q = search.trim().toLowerCase();
+    if (!q) return byCommon;
+    return byCommon.filter((t) =>
+      [t.name, t.description, t.goal, t.difficulty]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [allTemplates, commonFilter, search]);
+
 
   const templateIds = useMemo(() => templates.map((t) => t.id), [templates]);
   const { data: usageCounts = {} } = useQuery({
