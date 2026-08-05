@@ -113,6 +113,16 @@ export function PurchaseAddOnDrawer({
   const [done, setDone] = useState(false);
   const [lastPurchase, setLastPurchase] = useState<{ credits: number; validityDays: number } | null>(null);
 
+  // Upsell deep-link: preselect the package the member tapped on.
+  useEffect(() => {
+    if (open && defaultPackageId) {
+      setTab('benefits');
+      setSelectedBenefitPkg(defaultPackageId);
+    }
+  }, [open, defaultPackageId]);
+
+
+
   // Stable idempotency keys per selected package — same selection retries reuse key.
   const benefitIdemKey = useStableIdempotencyKey(memberId, 'addon_benefit', selectedBenefitPkg ?? null);
   const ptIdemKey = useStableIdempotencyKey(
