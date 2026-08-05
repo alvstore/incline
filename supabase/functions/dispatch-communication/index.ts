@@ -720,6 +720,31 @@ Deno.serve(async (req) => {
           // that key is far more precise than the coarse category map and fixes
           // retention nudges being suppressed with no_template_for_closed_session
           // while approved retention_stage_1/2/3 templates existed.
+          // v1.25.0: candidate picker — only APPROVED Meta templates are
+          // eligible, and when the send carries a PDF we prefer a template
+          // that actually has a document header (native attachment) over a
+          // body-only one (which degrades to a pasted link).
+          const pickTemplate = async (events: string[]) => {
+            if (events.length === 0) return null;
+            const { data: rows } = await supabase
+              .from('templates')
+              .select('id, branch_id, header_type, meta_template_status')
+              .in('trigger_event', events)
+              .eq('type', 'whatsapp')
+              .not('meta_template_name', 'is', null)
+              .or(`branch_id.eq.${input.branch_id},branch_id.is.null`);
+            const list = (rows ?? []).filter(
+              (r: any) => String(r.meta_template_status || '').toUpperCase() === 'APPROVED',
+            );
+            if (list.length === 0) return null;
+            const wantsDoc = !!input.attachment?.url;
+            const score = (r: any) =>
+              (r.branch_id ? 2 : 0) +
+              (wantsDoc && String(r.header_type || '') === 'document' ? 4 : 0);
+            list.sort((a: any, b: any) => score(b) - score(a));
+            return list[0];
+          };
+
           if (!input.template_id) {
             const eventKey = String(
               (input.payload as any)?.variables?.event_key ??
@@ -727,15 +752,7 @@ Deno.serve(async (req) => {
                 '',
             ).trim();
             if (eventKey) {
-              const { data: eventTpl } = await supabase
-                .from('templates')
-                .select('id, branch_id')
-                .eq('trigger_event', eventKey)
-                .not('meta_template_name', 'is', null)
-                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
-                .order('branch_id', { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
+              const eventTpl = await pickTemplate([eventKey]);
               if (eventTpl?.id) {
                 input.template_id = eventTpl.id;
                 (input as any).__auto_resolved_template = 'event_key';
@@ -760,21 +777,12 @@ Deno.serve(async (req) => {
               announcement: ['announcement', 'broadcast'],
             };
             const events = CATEGORY_TO_TRIGGER_EVENTS[input.category] ?? [];
-            if (events.length > 0) {
-              const { data: fallbackTpl } = await supabase
-                .from('templates')
-                .select('id, branch_id')
-                .in('trigger_event', events)
-                .not('meta_template_name', 'is', null)
-                .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
-                .order('branch_id', { ascending: false, nullsFirst: false })
-                .limit(1)
-                .maybeSingle();
-              if (fallbackTpl?.id) {
-                input.template_id = fallbackTpl.id;
-                (input as any).__auto_resolved_template = true;
-              }
+            const fallbackTpl = await pickTemplate(events);
+            if (fallbackTpl?.id) {
+              input.template_id = fallbackTpl.id;
+              (input as any).__auto_resolved_template = true;
             }
+
             // Settings-level global fallback (last resort, admin-configured).
             if (!input.template_id) {
               const { data: fb } = await supabase
