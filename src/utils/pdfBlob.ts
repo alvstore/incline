@@ -686,14 +686,15 @@ export interface PlanPdfInput {
 
 // Async — fetches DB logo if `brand.logoUrl` not provided.
 export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): Promise<Blob> {
-  // Owner-locked document: readers deny editing, copying, annotating and
-  // assembly; printing stays allowed. No user password, so it opens normally.
-  const ownerPassword = `INCLINE-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  // NOTE: no PDF encryption here. jsPDF only supports legacy RC4 encryption,
+  // which WhatsApp's in-app viewer and Gmail's preview cannot decode — they
+  // render a blank document. Protection is handled by the diagonal brand
+  // watermark + tamper-evident footer instead.
   const doc = new jsPDF({
     unit: 'mm',
     format: 'a4',
-    encryption: { ownerPassword, userPermissions: ['print'] },
   } as any);
+
   const isWorkout = input.type === 'workout';
   const title = isWorkout ? 'YOUR WORKOUT PLAN' : 'YOUR PERSONALIZED DIET PLAN';
   const resolvedBrand: BrandContext =
