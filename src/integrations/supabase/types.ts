@@ -11627,14 +11627,18 @@ export type Database = {
           branch_id: string
           check_in: string
           check_out: string | null
+          corrected_at: string | null
+          corrected_by: string | null
           created_at: string
           id: string
           is_late: boolean
           late_minutes: number | null
           notes: string | null
+          recorded_by: string | null
           scheduled_start: string | null
           shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          source: string
           total_hours: number | null
           user_id: string
         }
@@ -11642,14 +11646,18 @@ export type Database = {
           branch_id: string
           check_in?: string
           check_out?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
           created_at?: string
           id?: string
           is_late?: boolean
           late_minutes?: number | null
           notes?: string | null
+          recorded_by?: string | null
           scheduled_start?: string | null
           shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
+          source?: string
           total_hours?: number | null
           user_id: string
         }
@@ -11657,14 +11665,18 @@ export type Database = {
           branch_id?: string
           check_in?: string
           check_out?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
           created_at?: string
           id?: string
           is_late?: boolean
           late_minutes?: number | null
           notes?: string | null
+          recorded_by?: string | null
           scheduled_start?: string | null
           shift_date?: string | null
           shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
+          source?: string
           total_hours?: number | null
           user_id?: string
         }
@@ -15059,14 +15071,18 @@ export type Database = {
           branch_id: string
           check_in: string
           check_out: string | null
+          corrected_at: string | null
+          corrected_by: string | null
           created_at: string
           id: string
           is_late: boolean
           late_minutes: number | null
           notes: string | null
+          recorded_by: string | null
           scheduled_start: string | null
           shift_date: string | null
           shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          source: string
           total_hours: number | null
           user_id: string
         }
@@ -15659,6 +15675,21 @@ export type Database = {
         Returns: string
       }
       staff_check_out: { Args: { p_user_id: string }; Returns: Json }
+      staff_correct_attendance: {
+        Args: { p_check_in?: string; p_id: string; p_notes?: string }
+        Returns: string
+      }
+      staff_delete_attendance: { Args: { p_id: string }; Returns: boolean }
+      staff_record_punch: {
+        Args: {
+          p_branch_id: string
+          p_check_in?: string
+          p_notes?: string
+          p_source?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       start_membership_now: {
         Args: { p_membership_id: string; p_reason?: string }
         Returns: Json

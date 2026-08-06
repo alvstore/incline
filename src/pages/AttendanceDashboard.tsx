@@ -29,6 +29,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
 import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
 import { Dumbbell } from 'lucide-react';
+import { StaffAttendanceBoard } from '@/components/attendance/StaffAttendanceBoard';
+
 
 type FlashState = {
   type: 'success' | 'denied';
@@ -1068,16 +1070,15 @@ export default function AttendanceDashboard() {
                               <TableCell>
                                 {!decision.allowed ? (
                                   <span className="text-xs text-muted-foreground italic" title={decision.reason}>{decision.reason}</span>
-                                ) : isCheckedIn ? (
-                                  <Button size="sm" variant="outline" className="gap-1.5" disabled={isStaffCheckingOut} onClick={() => handleStaffCheckOut(staff)}>
-                                    <LogOut className="h-3.5 w-3.5" />Check Out
-                                  </Button>
+                                ) : today ? (
+                                  <span className="text-xs text-muted-foreground italic">Recorded for this shift</span>
                                 ) : (
                                   <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground" disabled={isStaffCheckingIn} onClick={() => handleStaffCheckIn(staff)}>
                                     <LogIn className="h-3.5 w-3.5" />Check In
                                   </Button>
                                 )}
                               </TableCell>
+
                             </TableRow>
                           );
                         })}
@@ -1090,49 +1091,11 @@ export default function AttendanceDashboard() {
                 )}
               </TabsContent>
 
-              {/* Staff Log Tab */}
+              {/* Staff Log Tab — shift-aware board */}
               <TabsContent value="staff-log">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Check-in</TableHead>
-                      <TableHead>Check-out</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredStaffAttendance.map((attendance: any) => (
-                      <TableRow key={attendance.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={attendance.profiles?.avatar_url} />
-                              <AvatarFallback className="bg-success/10 text-success text-xs">{getInitials(attendance.profiles?.full_name)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{attendance.profiles?.full_name || 'Unknown'}</p>
-                              <p className="text-xs text-muted-foreground">{attendance.profiles?.email}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{format(new Date(attendance.check_in), 'HH:mm')}</TableCell>
-                        <TableCell>{attendance.check_out ? format(new Date(attendance.check_out), 'HH:mm') : '-'}</TableCell>
-                        <TableCell>{formatDuration(attendance.check_in, attendance.check_out)}</TableCell>
-                        <TableCell>
-                          <Badge className={`border ${attendance.check_out ? 'bg-muted text-muted-foreground border-border' : 'bg-success/10 text-success border-success/20'}`}>
-                            {attendance.check_out ? 'Completed' : 'Active'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filteredStaffAttendance.length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No staff attendance records</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                <StaffAttendanceBoard branchId={effectiveBranchId} canManage={canRecordStaff} />
               </TabsContent>
+
 
               {/* History Tab with WO */}
               <TabsContent value="history">

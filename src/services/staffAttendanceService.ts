@@ -17,23 +17,44 @@ export interface StaffAttendanceWithDetails extends StaffAttendance {
 }
 
 export const staffAttendanceService = {
-  // Race-safe check-in via backend RPC (partial unique index enforces one active session per user).
+  // Check-in-only model: one row per roster shift block per day.
+  // The RPC resolves the block from the staff roster and ignores repeat punches.
   async checkIn(userId: string, branchId: string, _method: string = 'manual') {
-    const { data, error } = await supabase.rpc('staff_check_in', {
+    const { data, error } = await supabase.rpc('staff_record_punch', {
       p_user_id: userId,
       p_branch_id: branchId,
+      p_check_in: new Date().toISOString(),
+      p_source: 'manual',
       p_notes: null,
     });
     if (error) throw error;
     return { success: true, attendance_id: data as unknown as string };
   },
 
-  // Race-safe check-out via backend RPC (locks the active row).
+  // Legacy check-out (kept for existing open rows; check-out is not part of the flow).
   async checkOut(userId: string) {
     const { data, error } = await supabase.rpc('staff_check_out', { p_user_id: userId });
     if (error) throw error;
     return { success: true, attendance_id: data as unknown as string };
   },
+
+  // Correct a wrong punch (owner / admin / manager only).
+  async correctPunch(id: string, checkIn?: string, notes?: string) {
+    const { error } = await supabase.rpc('staff_correct_attendance', {
+      p_id: id,
+      p_check_in: checkIn ?? null,
+      p_notes: notes ?? null,
+    });
+    if (error) throw error;
+    return { success: true };
+  },
+
+  async deletePunch(id: string) {
+    const { error } = await supabase.rpc('staff_delete_attendance', { p_id: id });
+    if (error) throw error;
+    return { success: true };
+  },
+
 
   // Get today's staff attendance
   async getTodayAttendance(branchId: string) {
