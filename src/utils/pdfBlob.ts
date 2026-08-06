@@ -686,14 +686,15 @@ export interface PlanPdfInput {
 
 // Async — fetches DB logo if `brand.logoUrl` not provided.
 export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): Promise<Blob> {
-  // Owner-locked document: readers deny editing, copying, annotating and
-  // assembly; printing stays allowed. No user password, so it opens normally.
-  const ownerPassword = `INCLINE-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  // NOTE: no PDF encryption here. jsPDF only supports legacy RC4 encryption,
+  // which WhatsApp's in-app viewer and Gmail's preview cannot decode — they
+  // render a blank document. Protection is handled by the diagonal brand
+  // watermark + tamper-evident footer instead.
   const doc = new jsPDF({
     unit: 'mm',
     format: 'a4',
-    encryption: { ownerPassword, userPermissions: ['print'] },
   } as any);
+
   const isWorkout = input.type === 'workout';
   const title = isWorkout ? 'YOUR WORKOUT PLAN' : 'YOUR PERSONALIZED DIET PLAN';
   const resolvedBrand: BrandContext =
@@ -1252,7 +1253,6 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   const docId = `${(input.member_code || input.member_name || 'INCLINE').toString().replace(/\s+/g, '').slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
   const issued = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const footerLeft = [
-    input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
     `Issued ${issued}`,
     `Doc ${docId}`,
@@ -1267,10 +1267,15 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
-    if (footerLeft) doc.text(footerLeft, 14, fy - 2.5, { maxWidth: 130 });
-    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 2.5, { align: 'right' });
+    if (footerLeft) {
+      // Single line only — wrapping used to collide with the legal line below.
+      const clipped = doc.splitTextToSize(footerLeft, 128)[0] as string;
+      doc.text(clipped, 14, fy - 3.5);
+    }
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 3.5, { align: 'right' });
     doc.setFontSize(6);
-    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy + 1);
+    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy);
+
   }
 
 
