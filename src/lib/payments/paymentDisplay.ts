@@ -7,7 +7,10 @@ export interface PaymentDisplayRecord {
   gateway_fee?: number | null;
   gateway_tax?: number | null;
   net_settlement_amount?: number | null;
+  lifecycle_metadata?: Record<string, unknown> | null;
 }
+
+export type ReversalKind = 'void' | 'refund' | null;
 
 /**
  * A reversed payment (voided or refunded) is an audit-trail row, not money in
@@ -22,11 +25,33 @@ export function isReversedPayment(payment: PaymentDisplayRecord): boolean {
   );
 }
 
-export function reversalCaption(payment: PaymentDisplayRecord): string | null {
+/**
+ * A VOID is an internal correction — the money was never actually returned to
+ * the member (wrong amount, wrong method, duplicate entry). A REFUND is real
+ * cash going back out of the business. They must never share a label.
+ */
+export function reversalKind(payment: PaymentDisplayRecord): ReversalKind {
   if (!isReversedPayment(payment)) return null;
-  const label = payment.status === 'refunded' ? 'Refunded' : 'Voided';
-  return payment.void_reason ? `${label} — ${payment.void_reason}` : `${label} — reversed entry`;
+  const tagged = (payment.lifecycle_metadata as { reversal_kind?: string } | null)?.reversal_kind;
+  if (tagged === 'void' || tagged === 'refund') return tagged;
+  if (payment.status === 'voided') return 'void';
+  if (payment.voided_at) return 'void';
+  return 'refund';
 }
+
+export function reversalLabel(payment: PaymentDisplayRecord): string | null {
+  const kind = reversalKind(payment);
+  if (!kind) return null;
+  return kind === 'refund' ? 'Refunded' : 'Voided';
+}
+
+export function reversalCaption(payment: PaymentDisplayRecord): string | null {
+  const label = reversalLabel(payment);
+  if (!label) return null;
+  const suffix = label === 'Refunded' ? 'money returned to member' : 'correction, no money returned';
+  return payment.void_reason ? `${label} — ${payment.void_reason}` : `${label} — ${suffix}`;
+}
+
 
 
 const titleCase = (value?: string | null) =>
