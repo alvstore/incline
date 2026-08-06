@@ -29,6 +29,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify';
 import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
 import { Dumbbell } from 'lucide-react';
+import { StaffAttendanceBoard } from '@/components/attendance/StaffAttendanceBoard';
+
 
 type FlashState = {
   type: 'success' | 'denied';
