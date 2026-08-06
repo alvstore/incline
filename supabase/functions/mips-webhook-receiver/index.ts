@@ -1,4 +1,4 @@
-// v2.2.0 - Roster-aware staff attendance + alias resolution by MIPS person id & name
+// v2.3.0 - Check-in-only staff attendance via staff_record_punch (one row per roster shift block)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
