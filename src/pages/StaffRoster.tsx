@@ -665,9 +665,13 @@ function DayView({
               </TableCell>
               <TableCell>
                 {off ? <Badge className="bg-info/15 text-info rounded-full">Off</Badge>
-                  : s ? <Badge className="bg-success/15 text-success rounded-full">Scheduled</Badge>
+                  : s && s.morning_start && s.evening_start
+                    ? <Badge className="bg-primary/15 text-primary rounded-full">Dual shift</Badge>
+                  : s && (s.morning_start || s.evening_start)
+                    ? <Badge className="bg-success/15 text-success rounded-full">Single shift</Badge>
                   : <Badge variant="outline" className="rounded-full text-muted-foreground">Unscheduled</Badge>}
               </TableCell>
+
               <TableCell className="text-right">
                 <div className="inline-flex gap-1">
                   {canEditFor(t.user_id) ? (
