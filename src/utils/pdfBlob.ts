@@ -686,13 +686,43 @@ export interface PlanPdfInput {
 
 // Async — fetches DB logo if `brand.logoUrl` not provided.
 export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): Promise<Blob> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  // Owner-locked document: readers deny editing, copying, annotating and
+  // assembly; printing stays allowed. No user password, so it opens normally.
+  const ownerPassword = `INCLINE-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    encryption: { ownerPassword, userPermissions: ['print'] },
+  } as any);
   const isWorkout = input.type === 'workout';
   const title = isWorkout ? 'YOUR WORKOUT PLAN' : 'YOUR PERSONALIZED DIET PLAN';
   const resolvedBrand: BrandContext =
     brand ?? (await resolveBrandAsync(input.branch_id, input.branch_name));
   const logo = await loadLogoDataUrl(resolvedBrand.logoUrl);
   const accent: [number, number, number] = isWorkout ? [99, 102, 241] : [16, 185, 129]; // indigo or emerald
+
+  // Watermark is painted as the first thing on every page, so all content
+  // (tables, bands, text) sits on top of it and stays fully legible.
+  const watermarkText = `INCLINE — ${(resolvedBrand.tagline || 'Rise. Reflect. Repeat.').toUpperCase()}`;
+  const paintWatermark = () => {
+    const GS = (doc as any).GState;
+    doc.saveGraphicsState?.();
+    try { if (GS) (doc as any).setGState(new GS({ opacity: 0.06 })); } catch { /* no alpha support */ }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(26);
+    doc.setTextColor(100, 116, 139);
+    doc.text(watermarkText, 118, 178, { align: 'center', angle: 38 } as any);
+    doc.restoreGraphicsState?.();
+    doc.setTextColor(30, 41, 59);
+  };
+  const nativeAddPage = doc.addPage.bind(doc);
+  (doc as any).addPage = (...args: any[]) => {
+    const r = (nativeAddPage as any)(...args);
+    paintWatermark();
+    return r;
+  };
+  paintWatermark();
+
 
   // ---- HERO BAND (dark) ----
   doc.setFillColor(15, 23, 42); // slate-900
