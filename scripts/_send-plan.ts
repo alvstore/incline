@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 (globalThis as any).window = dom.window;
 (globalThis as any).document = dom.window.document;
-(globalThis as any).navigator = dom.window.navigator;
+try { Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true }); } catch {}
 (globalThis as any).HTMLCanvasElement = dom.window.HTMLCanvasElement;
 (globalThis as any).Image = dom.window.Image;
 (globalThis as any).FileReader = dom.window.FileReader;

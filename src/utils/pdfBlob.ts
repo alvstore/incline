@@ -6,6 +6,8 @@ import autoTable from 'jspdf-autotable';
 import { DEFAULT_BRAND, type BrandContext } from '@/lib/brand/useBrandContext';
 import { supabase } from '@/integrations/supabase/client';
 import inclineLogoAsset from '@/assets/incline-logo.png';
+import { normalizeDietContent, dayTotals, slotTotals } from '@/lib/fitness/dietContent';
+
 
 const BRAND = {
   primary: [99, 102, 241] as [number, number, number], // indigo
@@ -684,13 +686,43 @@ export interface PlanPdfInput {
 
 // Async — fetches DB logo if `brand.logoUrl` not provided.
 export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): Promise<Blob> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  // Owner-locked document: readers deny editing, copying, annotating and
+  // assembly; printing stays allowed. No user password, so it opens normally.
+  const ownerPassword = `INCLINE-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    encryption: { ownerPassword, userPermissions: ['print'] },
+  } as any);
   const isWorkout = input.type === 'workout';
   const title = isWorkout ? 'YOUR WORKOUT PLAN' : 'YOUR PERSONALIZED DIET PLAN';
   const resolvedBrand: BrandContext =
     brand ?? (await resolveBrandAsync(input.branch_id, input.branch_name));
   const logo = await loadLogoDataUrl(resolvedBrand.logoUrl);
   const accent: [number, number, number] = isWorkout ? [99, 102, 241] : [16, 185, 129]; // indigo or emerald
+
+  // Watermark is painted as the first thing on every page, so all content
+  // (tables, bands, text) sits on top of it and stays fully legible.
+  const watermarkText = `INCLINE — ${(resolvedBrand.tagline || 'Rise. Reflect. Repeat.').toUpperCase()}`;
+  const paintWatermark = () => {
+    const GS = (doc as any).GState;
+    doc.saveGraphicsState?.();
+    try { if (GS) (doc as any).setGState(new GS({ opacity: 0.06 })); } catch { /* no alpha support */ }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(26);
+    doc.setTextColor(100, 116, 139);
+    doc.text(watermarkText, 118, 178, { align: 'center', angle: 38 } as any);
+    doc.restoreGraphicsState?.();
+    doc.setTextColor(30, 41, 59);
+  };
+  const nativeAddPage = doc.addPage.bind(doc);
+  (doc as any).addPage = (...args: any[]) => {
+    const r = (nativeAddPage as any)(...args);
+    paintWatermark();
+    return r;
+  };
+  paintWatermark();
+
 
   // ---- HERO BAND (dark) ----
   doc.setFillColor(15, 23, 42); // slate-900
@@ -929,84 +961,153 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     });
   } else {
 
-    // Diet body
-    const meals = input.data?.meals || input.data?.days?.[0]?.meals || [];
-    if (meals.length) {
-      const itemsToString = (m: any) => {
-        if (!m.items) return m.description || '';
-        if (!Array.isArray(m.items)) return String(m.items);
-        return m.items.map((it: any) => typeof it === 'string' ? it : (it.food || it.name || '')).filter(Boolean).join(', ');
-      };
-      let totC = 0, totP = 0, totCa = 0, totF = 0, totFi = 0, totS = 0, totSu = 0;
-      const rows = meals.map((m: any) => {
-        const cal = Number(m.calories) || 0;
-        const p = Number(m.protein) || 0;
-        const c = Number(m.carbs) || 0;
-        const f = Number(m.fats ?? m.fat) || 0;
-        const fi = Number(m.fiber) || 0;
-        const so = Number(m.sodium) || 0;
-        const su = Number(m.sugar) || 0;
-        totC += cal; totP += p; totCa += c; totF += f; totFi += fi; totS += so; totSu += su;
-        return [
-          { content: m.meal || m.name || '-', styles: { fontStyle: 'bold' as const } },
-          m.time || '—',
-          itemsToString(m) || '—',
-          cal ? `${cal}` : '—',
-          p ? `${p}g` : '—',
-          c ? `${c}g` : '—',
-          f ? `${f}g` : '—',
-        ];
-      });
-      // Totals row
-      rows.push([
-        { content: 'DAY TOTAL', styles: { fontStyle: 'bold' as const, fillColor: [241, 245, 249] as any, textColor: [15, 23, 42] as any } },
-        { content: '', styles: { fillColor: [241, 245, 249] as any } },
-        { content: '', styles: { fillColor: [241, 245, 249] as any } },
-        { content: `${totC} kcal`, styles: { fontStyle: 'bold' as const, fillColor: [241, 245, 249] as any } },
-        { content: `${totP}g`, styles: { fontStyle: 'bold' as const, fillColor: [241, 245, 249] as any } },
-        { content: `${totCa}g`, styles: { fontStyle: 'bold' as const, fillColor: [241, 245, 249] as any } },
-        { content: `${totF}g`, styles: { fontStyle: 'bold' as const, fillColor: [241, 245, 249] as any } },
-      ]);
-      autoTable(doc, {
-        startY: y,
-        head: [['Meal', 'Time', 'Items', 'Calories', 'Protein', 'Carbs', 'Fats']],
-        body: rows,
-        theme: 'striped',
-        headStyles: { fillColor: accent as any, textColor: 255, fontSize: 9 },
-        bodyStyles: { fontSize: 8.5, textColor: BRAND.text, valign: 'middle' },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 32 },
-          1: { cellWidth: 24, halign: 'center' },
-          2: { cellWidth: 'auto', fontSize: 8, textColor: BRAND.muted },
-          3: { cellWidth: 18, halign: 'right' },
-          4: { cellWidth: 16, halign: 'right' },
-          5: { cellWidth: 14, halign: 'right' },
-          6: { cellWidth: 14, halign: 'right' },
-        },
-        margin: { left: 14, right: 14 },
-      });
-      y = (doc as any).lastAutoTable.finalY + 6;
+    // Diet body — handles both stored shapes (weekly `meals[]` of day objects
+    // and the legacy single-day `slots[]`) via the canonical normalizer.
+    const normalized = normalizeDietContent(input.data);
+    const dietDays = normalized?.days ?? [];
 
-      // Micros strip
-      if (totFi || totS || totSu) {
-        doc.setFillColor(238, 242, 255);
-        doc.rect(14, y, 182, 12, 'F');
-        setColor(doc, BRAND.primary);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.text('MICRONUTRIENTS (DAILY)', 18, y + 5);
-        setColor(doc, BRAND.text);
+    const ensureDietSpace = (needed: number) => {
+      if (y + needed > 282) { doc.addPage(); y = 20; }
+    };
+
+    if (dietDays.length) {
+      // ---- Weekly summary card (averages across days that have food) ----
+      const perDay = dietDays.map((d) => dayTotals(d));
+      const active = perDay.filter((t) => t.calories > 0);
+      const denom = Math.max(1, active.length);
+      const avg = {
+        calories: Math.round(active.reduce((a, t) => a + t.calories, 0) / denom),
+        protein: Math.round(active.reduce((a, t) => a + t.protein, 0) / denom),
+        carbs: Math.round(active.reduce((a, t) => a + t.carbs, 0) / denom),
+        fats: Math.round(active.reduce((a, t) => a + t.fats, 0) / denom),
+      };
+
+      ensureDietSpace(30);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, y, 182, 24, 2, 2, 'F');
+      doc.setDrawColor(...accent);
+      doc.setLineWidth(0.8);
+      doc.line(14, y, 14, y + 24);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      setColor(doc, accent);
+      doc.text(normalized?.weekly ? 'WEEKLY SNAPSHOT (DAILY AVERAGE)' : 'DAILY SNAPSHOT', 19, y + 6);
+
+      const cards: Array<[string, string]> = [
+        ['Calories', `${avg.calories} kcal`],
+        ['Protein', `${avg.protein} g`],
+        ['Carbs', `${avg.carbs} g`],
+        ['Fats', `${avg.fats} g`],
+      ];
+      if (input.caloriesTarget) cards.push(['Target', `${input.caloriesTarget} kcal`]);
+      const cw = 168 / cards.length;
+      cards.forEach(([label, value], i) => {
+        const cx = 19 + i * cw;
+        setColor(doc, BRAND.muted);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        const micros = [
-          totFi ? `Fiber ${totFi}g` : null,
-          totSu ? `Sugar ${totSu}g` : null,
-          totS ? `Sodium ${totS}mg` : null,
-        ].filter(Boolean).join('   •   ');
-        doc.text(micros, 18, y + 10);
-        y += 16;
+        doc.setFontSize(7);
+        doc.text(label.toUpperCase(), cx, y + 13);
+        setColor(doc, BRAND.text);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text(value, cx, y + 19);
+      });
+      y += 30;
+
+      const meta = [
+        input.data?.dietaryType ? `Type: ${String(input.data.dietaryType).replace(/_/g, ' ')}` : null,
+        input.data?.cuisine ? `Cuisine: ${input.data.cuisine}` : null,
+        normalized?.weekly ? `${dietDays.length}-day rotation` : null,
+      ].filter(Boolean).join('   •   ');
+      if (meta) {
+        setColor(doc, BRAND.muted);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text(meta, 14, y);
+        y += 6;
       }
+
+      // ---- One table per day ----
+      dietDays.forEach((day, di) => {
+        const totals = perDay[di];
+        const rows: any[] = [];
+        day.slots.forEach((slot) => {
+          const st = slotTotals(slot);
+          const items = slot.items
+            .map((it) => [it.food, it.quantity].filter(Boolean).join(' — '))
+            .filter(Boolean)
+            .join(', ');
+          if (!items && !st.calories) return;
+          rows.push([
+            { content: slot.name || '—', styles: { fontStyle: 'bold' as const } },
+            slot.time || '—',
+            items || '—',
+            st.calories ? `${Math.round(st.calories)}` : '—',
+            st.protein ? `${Math.round(st.protein)}g` : '—',
+            st.carbs ? `${Math.round(st.carbs)}g` : '—',
+            st.fats ? `${Math.round(st.fats)}g` : '—',
+          ]);
+        });
+
+        // Day header band
+        ensureDietSpace(rows.length ? 46 : 22);
+        doc.setFillColor(15, 23, 42);
+        doc.roundedRect(14, y, 182, 9, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(day.day || `Day ${di + 1}`).toUpperCase(), 18, y + 6);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(
+          totals.calories ? `${Math.round(totals.calories)} kcal  •  P ${Math.round(totals.protein)}g  •  C ${Math.round(totals.carbs)}g  •  F ${Math.round(totals.fats)}g` : 'No meals logged',
+          192,
+          y + 6,
+          { align: 'right' },
+        );
+        y += 12;
+
+        if (!rows.length) {
+          setColor(doc, BRAND.muted);
+          doc.setFontSize(8.5);
+          doc.text('Rest / flexible day — follow your usual balanced meals and stay hydrated.', 18, y);
+          y += 8;
+          return;
+        }
+
+        const shade = [241, 245, 249] as any;
+        rows.push([
+          { content: 'DAY TOTAL', styles: { fontStyle: 'bold' as const, fillColor: shade, textColor: [15, 23, 42] as any } },
+          { content: '', styles: { fillColor: shade } },
+          { content: '', styles: { fillColor: shade } },
+          { content: `${Math.round(totals.calories)} kcal`, styles: { fontStyle: 'bold' as const, fillColor: shade } },
+          { content: `${Math.round(totals.protein)}g`, styles: { fontStyle: 'bold' as const, fillColor: shade } },
+          { content: `${Math.round(totals.carbs)}g`, styles: { fontStyle: 'bold' as const, fillColor: shade } },
+          { content: `${Math.round(totals.fats)}g`, styles: { fontStyle: 'bold' as const, fillColor: shade } },
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Meal', 'Time', 'Items', 'Calories', 'Protein', 'Carbs', 'Fats']],
+          body: rows,
+          theme: 'striped',
+          headStyles: { fillColor: accent as any, textColor: 255, fontSize: 9 },
+          bodyStyles: { fontSize: 8.5, textColor: BRAND.text, valign: 'middle' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { cellWidth: 32 },
+            1: { cellWidth: 18, halign: 'center' },
+            2: { cellWidth: 'auto', fontSize: 8, textColor: BRAND.muted },
+            3: { cellWidth: 20, halign: 'right' },
+            4: { cellWidth: 18, halign: 'right' },
+            5: { cellWidth: 16, halign: 'right' },
+            6: { cellWidth: 14, halign: 'right' },
+          },
+          margin: { left: 14, right: 14, top: 20 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 8;
+      });
 
       // Hydration / supplements
       const extras: string[] = [];
@@ -1015,6 +1116,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
         extras.push(`Supplements: ${input.data.supplements.join(', ')}`);
       }
       if (extras.length) {
+        ensureDietSpace(12);
         setColor(doc, BRAND.muted);
         doc.setFontSize(9);
         extras.forEach((line) => {
@@ -1027,6 +1129,7 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
       doc.text('No meals defined.', 14, y);
       y += 6;
     }
+
   }
 
   if (input.notes) {
@@ -1144,36 +1247,32 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   doc.setFontSize(7);
   doc.text('THE INCLINE LIFE BY INCLINE', 105, py + 24, { align: 'center' });
 
-  // Page footers + diagonal brand watermark
+  // Tamper-evident page footers (watermark already painted under content).
   const pageCount = doc.getNumberOfPages();
+  const docId = `${(input.member_code || input.member_name || 'INCLINE').toString().replace(/\s+/g, '').slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  const issued = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const footerLeft = [
     input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
+    `Issued ${issued}`,
+    `Doc ${docId}`,
   ].filter(Boolean).join('  •  ');
   const footerRight = [resolvedBrand.website, `Page ${'{n}'} of ${pageCount}`].filter(Boolean).join('  •  ');
-  const watermark = `INCLINE — ${(resolvedBrand.tagline || 'Rise. Reflect. Repeat.').toUpperCase()}`;
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-
-    // Watermark — light, rotated, centred; drawn first so content stays legible.
-    const gs = (doc as any).GState ? (doc as any).GState({ opacity: 0.07 }) : null;
-    if (gs) (doc as any).setGState(gs);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(26);
-    doc.setTextColor(100, 116, 139);
-    doc.text(watermark, 118, 178, { align: 'center', angle: 38 } as any);
-    if (gs) (doc as any).setGState((doc as any).GState({ opacity: 1 }));
-
     const fy = doc.internal.pageSize.height - 5;
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.2);
-    doc.line(14, fy - 4, 196, fy - 4);
+    doc.line(14, fy - 6, 196, fy - 6);
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
-    if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 110 });
-    doc.text(footerRight.replace('{n}', String(i)), 196, fy, { align: 'right' });
+    if (footerLeft) doc.text(footerLeft, 14, fy - 2.5, { maxWidth: 130 });
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 2.5, { align: 'right' });
+    doc.setFontSize(6);
+    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy + 1);
   }
+
 
 
 
