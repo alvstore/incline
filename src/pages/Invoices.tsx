@@ -19,7 +19,7 @@ import { SetInvoiceDueDateDrawer } from '@/components/invoices/SetInvoiceDueDate
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
   ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
-  IndianRupee, Pencil, CalendarRange
+  IndianRupee, Pencil, CalendarRange, CalendarClock
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { can } from '@/lib/auth/permissions';

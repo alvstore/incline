@@ -27,7 +27,7 @@ import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPayment } from '@/services/billingService';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
-import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption } from '@/lib/payments/paymentDisplay';
+import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption, reversalLabel } from '@/lib/payments/paymentDisplay';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -448,7 +448,7 @@ export default function PaymentsPage() {
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
-                          <Badge className={getStatusColor(payment.status)}>{payment.status}</Badge>
+                          <Badge className={getStatusColor(payment.status)}>{reversalLabel(payment) ?? payment.status}</Badge>
                           {isReversed && (
                             <p className="mt-1 text-[11px] italic text-muted-foreground">{reversalCaption(payment)}</p>
                           )}
