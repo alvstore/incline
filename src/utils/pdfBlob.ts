@@ -6,6 +6,8 @@ import autoTable from 'jspdf-autotable';
 import { DEFAULT_BRAND, type BrandContext } from '@/lib/brand/useBrandContext';
 import { supabase } from '@/integrations/supabase/client';
 import inclineLogoAsset from '@/assets/incline-logo.png';
+import { normalizeDietContent, dayTotals, slotTotals } from '@/lib/fitness/dietContent';
+
 
 const BRAND = {
   primary: [99, 102, 241] as [number, number, number], // indigo
