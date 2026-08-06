@@ -15,6 +15,7 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { InvoiceShareDrawer } from '@/components/invoices/InvoiceShareDrawer';
 import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
 import { CorrectInvoiceDrawer } from '@/components/invoices/CorrectInvoiceDrawer';
+import { SetInvoiceDueDateDrawer } from '@/components/invoices/SetInvoiceDueDateDrawer';
 import {
   FileText, Plus, Users, DollarSign, TrendingUp, Clock, Search, MoreHorizontal, Eye, Download, Send, Mail,
   ChevronLeft, ChevronRight, ShoppingCart, ClipboardList, Dumbbell, PlusCircle, ReceiptText, Undo2, XCircle,
@@ -48,6 +49,7 @@ export default function InvoicesPage() {
   const [shareInvoice, setShareInvoice] = useState<any>(null);
   const [cancelInvoice, setCancelInvoiceTarget] = useState<any>(null);
   const [correctInvoice, setCorrectInvoiceTarget] = useState<any>(null);
+  const [dueDateInvoice, setDueDateInvoice] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [periodFilter, setPeriodFilter] = useState<string>('this_month');
   const [customFrom, setCustomFrom] = useState<string>('');
@@ -589,6 +591,12 @@ export default function InvoicesPage() {
                                       Record Payment
                                     </DropdownMenuItem>
                                   )}
+                                  {canCorrect && invoice.status !== 'cancelled' && balance > 0 && (
+                                    <DropdownMenuItem onClick={() => setDueDateInvoice(invoice)}>
+                                      <CalendarClock className="mr-2 h-4 w-4" />
+                                      Set Due Date
+                                    </DropdownMenuItem>
+                                  )}
                                   {canCorrect && invoice.status !== 'cancelled' && invoice.status !== 'refunded' && (
                                     <DropdownMenuItem onClick={() => setCorrectInvoiceTarget(invoice)}>
                                       <Pencil className="mr-2 h-4 w-4" />
@@ -716,6 +724,12 @@ export default function InvoicesPage() {
         open={!!cancelInvoice}
         onOpenChange={(open) => !open && setCancelInvoiceTarget(null)}
         invoice={cancelInvoice}
+      />
+
+      <SetInvoiceDueDateDrawer
+        open={!!dueDateInvoice}
+        onOpenChange={(open) => !open && setDueDateInvoice(null)}
+        invoice={dueDateInvoice}
       />
 
       <CorrectInvoiceDrawer
