@@ -1253,7 +1253,6 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   const docId = `${(input.member_code || input.member_name || 'INCLINE').toString().replace(/\s+/g, '').slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
   const issued = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const footerLeft = [
-    input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
     `Issued ${issued}`,
     `Doc ${docId}`,
