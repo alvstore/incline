@@ -1247,36 +1247,32 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
   doc.setFontSize(7);
   doc.text('THE INCLINE LIFE BY INCLINE', 105, py + 24, { align: 'center' });
 
-  // Page footers + diagonal brand watermark
+  // Tamper-evident page footers (watermark already painted under content).
   const pageCount = doc.getNumberOfPages();
+  const docId = `${(input.member_code || input.member_name || 'INCLINE').toString().replace(/\s+/g, '').slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  const issued = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const footerLeft = [
     input.name,
     input.member_name ? `${input.member_name}${input.member_code ? ` (${input.member_code})` : ''}` : null,
+    `Issued ${issued}`,
+    `Doc ${docId}`,
   ].filter(Boolean).join('  •  ');
   const footerRight = [resolvedBrand.website, `Page ${'{n}'} of ${pageCount}`].filter(Boolean).join('  •  ');
-  const watermark = `INCLINE — ${(resolvedBrand.tagline || 'Rise. Reflect. Repeat.').toUpperCase()}`;
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-
-    // Watermark — light, rotated, centred; drawn first so content stays legible.
-    const gs = (doc as any).GState ? (doc as any).GState({ opacity: 0.07 }) : null;
-    if (gs) (doc as any).setGState(gs);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(26);
-    doc.setTextColor(100, 116, 139);
-    doc.text(watermark, 118, 178, { align: 'center', angle: 38 } as any);
-    if (gs) (doc as any).setGState((doc as any).GState({ opacity: 1 }));
-
     const fy = doc.internal.pageSize.height - 5;
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.2);
-    doc.line(14, fy - 4, 196, fy - 4);
+    doc.line(14, fy - 6, 196, fy - 6);
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
-    if (footerLeft) doc.text(footerLeft, 14, fy, { maxWidth: 110 });
-    doc.text(footerRight.replace('{n}', String(i)), 196, fy, { align: 'right' });
+    if (footerLeft) doc.text(footerLeft, 14, fy - 2.5, { maxWidth: 130 });
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 2.5, { align: 'right' });
+    doc.setFontSize(6);
+    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy + 1);
   }
+
 
 
 
