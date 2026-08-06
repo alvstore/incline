@@ -15610,6 +15610,10 @@ export type Database = {
             }
             Returns: Json
           }
+      set_invoice_due_date: {
+        Args: { p_due_date: string; p_invoice_id: string; p_reason?: string }
+        Returns: Json
+      }
       settle_payment: {
         Args: {
           p_amount: number
