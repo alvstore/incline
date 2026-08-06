@@ -15897,7 +15897,7 @@ export type Database = {
         | "upi"
         | "cheque"
         | "other"
-      payment_status: "pending" | "completed" | "failed" | "refunded"
+      payment_status: "pending" | "completed" | "failed" | "refunded" | "voided"
       payment_transaction_status:
         | "created"
         | "pending_confirmation"
@@ -16193,7 +16193,7 @@ export const Constants = {
         "cheque",
         "other",
       ],
-      payment_status: ["pending", "completed", "failed", "refunded"],
+      payment_status: ["pending", "completed", "failed", "refunded", "voided"],
       payment_transaction_status: [
         "created",
         "pending_confirmation",
