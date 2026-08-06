@@ -1070,16 +1070,15 @@ export default function AttendanceDashboard() {
                               <TableCell>
                                 {!decision.allowed ? (
                                   <span className="text-xs text-muted-foreground italic" title={decision.reason}>{decision.reason}</span>
-                                ) : isCheckedIn ? (
-                                  <Button size="sm" variant="outline" className="gap-1.5" disabled={isStaffCheckingOut} onClick={() => handleStaffCheckOut(staff)}>
-                                    <LogOut className="h-3.5 w-3.5" />Check Out
-                                  </Button>
+                                ) : today ? (
+                                  <span className="text-xs text-muted-foreground italic">Recorded for this shift</span>
                                 ) : (
                                   <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground" disabled={isStaffCheckingIn} onClick={() => handleStaffCheckIn(staff)}>
                                     <LogIn className="h-3.5 w-3.5" />Check In
                                   </Button>
                                 )}
                               </TableCell>
+
                             </TableRow>
                           );
                         })}
