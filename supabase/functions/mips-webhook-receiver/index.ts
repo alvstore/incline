@@ -326,60 +326,19 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
   let message = `${label} ${personName} checked in`;
 
   try {
-    const now = new Date();
-    // Overnight shifts (e.g. 21:00 -> 10:00 next day) mean the matching open row
-    // can be on the previous calendar day. Look back 18h instead of midnight.
-    const lookbackStart = new Date(now.getTime() - 18 * 60 * 60_000);
-
-    // Branch late/punch policy (min gap between gate scans)
-    let minGapMin = 60;
-    try {
-      const { data: hr } = await supabase
-        .from("hr_settings")
-        .select("min_punch_gap_min")
-        .eq("branch_id", branchId)
-        .maybeSingle();
-      if (hr?.min_punch_gap_min != null) minGapMin = Number(hr.min_punch_gap_min);
-    } catch (_) { /* defaults */ }
-
-    const { data: openRows } = await supabase
-      .from("staff_attendance")
-      .select("id, check_in")
-      .eq("user_id", userId)
-      .gte("check_in", lookbackStart.toISOString())
-      .is("check_out", null)
-      .order("check_in", { ascending: false })
-      .limit(1);
-
-    const openRow = openRows?.[0];
-    if (openRow) {
-      await supabase.from("staff_attendance").update({ check_out: now.toISOString() }).eq("id", openRow.id);
-      message = `${label} ${personName} checked out`;
-      return message;
-    }
-
-    // Repeat scan guard: don't open a new attendance row (and don't raise a new
-    // late alert) when the person already punched within the policy window.
-    const { data: recent } = await supabase
-      .from("staff_attendance")
-      .select("id, check_in")
-      .eq("user_id", userId)
-      .gte("check_in", new Date(now.getTime() - minGapMin * 60_000).toISOString())
-      .order("check_in", { ascending: false })
-      .limit(1);
-
-    if (recent && recent.length > 0) {
-      message = `${label} ${personName} scan recorded (duplicate within ${minGapMin} min)`;
-      return message;
-    }
-
-    // shift_type / scheduled_start / late_minutes are stamped server-side by
-    // tg_stamp_staff_attendance_shift using the staff roster.
-    await supabase.from("staff_attendance").insert({
-      user_id: userId,
-      branch_id: branchId,
-      check_in: now.toISOString(),
+    // Check-in-only model: the RPC resolves the roster block for this punch and
+    // records at most one attendance row per shift block per day. Repeat gate
+    // scans inside the same block are ignored (no false check-outs, no dup alerts).
+    const { data, error } = await supabase.rpc("staff_record_punch", {
+      p_user_id: userId,
+      p_branch_id: branchId,
+      p_check_in: new Date().toISOString(),
+      p_source: "gate",
+      p_notes: null,
     });
+
+    if (error) throw error;
+    if (!data) message = `${label} ${personName} scan recorded (already checked in for this shift)`;
   } catch (e) {
     console.warn("Staff attendance failed:", e);
     message = `${label} ${personName} attendance error: ${e}`;
@@ -387,6 +346,7 @@ async function handleStaffCheckin(supabase: any, userId: string, branchId: strin
 
   return message;
 }
+
 
 
 async function handleImgRegCallback(supabase: any, payload: Record<string, unknown>) {
