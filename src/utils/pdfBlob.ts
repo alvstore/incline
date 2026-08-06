@@ -1268,10 +1268,15 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
     setColor(doc, BRAND.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
-    if (footerLeft) doc.text(footerLeft, 14, fy - 2.5, { maxWidth: 130 });
-    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 2.5, { align: 'right' });
+    if (footerLeft) {
+      // Single line only — wrapping used to collide with the legal line below.
+      const clipped = doc.splitTextToSize(footerLeft, 128)[0] as string;
+      doc.text(clipped, 14, fy - 3.5);
+    }
+    doc.text(footerRight.replace('{n}', String(i)), 196, fy - 3.5, { align: 'right' });
     doc.setFontSize(6);
-    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy + 1);
+    doc.text('Issued by The Incline Life by Incline — not for resale or redistribution.', 14, fy);
+
   }
 
 
