@@ -15610,6 +15610,10 @@ export type Database = {
             }
             Returns: Json
           }
+      set_invoice_due_date: {
+        Args: { p_due_date: string; p_invoice_id: string; p_reason?: string }
+        Returns: Json
+      }
       settle_payment: {
         Args: {
           p_amount: number
@@ -15897,7 +15901,7 @@ export type Database = {
         | "upi"
         | "cheque"
         | "other"
-      payment_status: "pending" | "completed" | "failed" | "refunded"
+      payment_status: "pending" | "completed" | "failed" | "refunded" | "voided"
       payment_transaction_status:
         | "created"
         | "pending_confirmation"
@@ -16193,7 +16197,7 @@ export const Constants = {
         "cheque",
         "other",
       ],
-      payment_status: ["pending", "completed", "failed", "refunded"],
+      payment_status: ["pending", "completed", "failed", "refunded", "voided"],
       payment_transaction_status: [
         "created",
         "pending_confirmation",
