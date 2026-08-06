@@ -39,6 +39,25 @@ export function renderTemplate(input: string | null | undefined, vars: Record<st
 export function stripUnrendered(input: string): string {
   return input.replace(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g, '').replace(/[ \t]{2,}/g, ' ').trim();
 }
+/** True when the approved Meta template really carries a DOCUMENT header. */
+export async function hasLiveDocumentHeader(metaTemplateName?: string | null): Promise<boolean> {
+  if (!metaTemplateName) return false;
+  const { data } = await supabase
+    .from('whatsapp_templates')
+    .select('status, is_stale, components')
+    .eq('name', metaTemplateName)
+    .limit(1)
+    .maybeSingle();
+  if (!data) return false;
+  if (String((data as any).status || '').toUpperCase() !== 'APPROVED' || (data as any).is_stale) return false;
+  const comps = Array.isArray((data as any).components) ? (data as any).components : [];
+  return comps.some(
+    (c: any) =>
+      String(c?.type || '').toUpperCase() === 'HEADER' &&
+      String(c?.format || '').toUpperCase() === 'DOCUMENT',
+  );
+}
+
 
 /** Find the most relevant template for a (branch, type, trigger_event) combination.
  *  Falls back to a name-match if no trigger_event is set yet. */
