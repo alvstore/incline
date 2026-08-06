@@ -67,12 +67,20 @@ export async function findTemplate(opts: {
         .eq('header_type', 'document')
         .not('meta_template_name', 'is', null)
         .order('updated_at', { ascending: false })
-        .limit(1);
+        .limit(5);
       q = scope === 'branch' ? q.eq('branch_id', branchId) : q.is('branch_id', null);
-      const { data } = await q.maybeSingle();
-      if (data) return data as unknown as CommunicationTemplate;
+      const { data } = await q;
+      for (const row of (data ?? []) as any[]) {
+        // Local `header_type` can drift from Meta's approved components. Only
+        // treat this as a document template when the LIVE Meta template really
+        // has a DOCUMENT header — otherwise the dispatcher downgrades to a link.
+        if (await hasLiveDocumentHeader(row.meta_template_name)) {
+          return row as unknown as CommunicationTemplate;
+        }
+      }
     }
   }
+
 
   // Standard order: branch text → global text → branch with-header → global with-header.
   if (triggerEvent) {
