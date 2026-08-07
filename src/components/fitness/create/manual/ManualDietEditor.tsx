@@ -308,6 +308,67 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       prev.map((s, i) => (i === sIdx ? { ...s, items: s.items.filter((_, j) => j !== iIdx) } : s)),
     );
 
+  // ---- Live macro calculator -------------------------------------------
+  // Whole catalog (small, cached) so typed food names resolve to real macros.
+  const { data: catalogAll = [] } = useQuery({
+    queryKey: ['meal-catalog', 'macro-lookup'],
+    queryFn: () => fetchMealCatalog({}),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const catalogByName = useMemo(() => {
+    const map = new Map<string, MealCatalogEntry>();
+    for (const e of catalogAll) map.set(e.name.trim().toLowerCase(), e);
+    return map;
+  }, [catalogAll]);
+
+  const macrosFromCatalog = (item: DietItem): DietItem | null => {
+    const hit = catalogByName.get((item.food || '').trim().toLowerCase());
+    if (!hit) return null;
+    return {
+      ...item,
+      calories: hit.calories,
+      protein: hit.protein,
+      carbs: hit.carbs,
+      fats: hit.fats,
+      catalog_id: hit.id,
+    };
+  };
+
+  /** Fill macros for one item when its typed name matches a catalog meal. */
+  const autofillItem = (sIdx: number, iIdx: number) => {
+    const item = days[activeDay]?.slots[sIdx]?.items[iIdx];
+    if (!item?.food) return;
+    if ((item.calories || 0) > 0 || (item.protein || 0) > 0) return;
+    const filled = macrosFromCatalog(item);
+    if (!filled) return;
+    updateDaySlots((prev) =>
+      prev.map((s, i) =>
+        i === sIdx ? { ...s, items: s.items.map((it, j) => (j === iIdx ? filled : it)) } : s,
+      ),
+    );
+  };
+
+  /** Recalculate every item on the active day from the catalog. */
+  const recalcDayMacros = () => {
+    let matched = 0;
+    updateDaySlots((prev) =>
+      prev.map((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          const filled = macrosFromCatalog(it);
+          if (filled) matched += 1;
+          return filled ?? it;
+        }),
+      })),
+    );
+    if (matched) toast.success(`Recalculated ${matched} item${matched > 1 ? 's' : ''}`);
+    else toast.info('No catalog matches found');
+  };
+
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+
   const applySwap = (sIdx: number, entry: MealCatalogEntry) => {
     const anyEntry = entry as any;
     updateSlot(sIdx, {
