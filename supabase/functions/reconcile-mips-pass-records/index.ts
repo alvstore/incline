@@ -231,24 +231,40 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
   ];
 
   const errors: string[] = [];
+  let transportFailures = 0;
   for (const endpoint of endpoints) {
     const searchParams = new URLSearchParams(endpoint.params);
     const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
     console.log(`[reconcile-mips-pass-records] GET ${url}`);
 
-    const { res, text } = await mipsFetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "TENANT-ID": "1",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-    }, 20_000);
+    let res: Response;
+    let text: string;
+    try {
+      ({ res, text } = await mipsFetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "TENANT-ID": "1",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      }, 20_000));
+    } catch (e) {
+      // One endpoint being unreachable can still mean another answers, so keep
+      // going; only a clean sweep of transport failures is a real outage.
+      if (e instanceof MipsTransportError) {
+        transportFailures++;
+        errors.push(`${endpoint.path}: ${e.message}`);
+        continue;
+      }
+      throw e;
+    }
+
     let json: Record<string, unknown>;
     try {
       json = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      transportFailures++; // a booting Tomcat serves an HTML error page
       errors.push(`${endpoint.path}: non-JSON ${text.slice(0, 160)}`);
       continue;
     }
@@ -259,7 +275,9 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
     errors.push(`${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}`);
   }
 
-  throw new Error(`MIPS records failed: ${errors.join(" | ")}`.slice(0, 500));
+  const summary = `MIPS records failed: ${errors.join(" | ")}`.slice(0, 500);
+  if (transportFailures === endpoints.length) throw new MipsTransportError(summary);
+  throw new Error(summary);
 }
 
 async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
