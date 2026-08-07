@@ -615,14 +615,14 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   });
   if (sessErr) await captureEdgeError("register-member", sessErr, { route: "session_signin" });
 
-  // 11) Staff notification — background
+  // 11) Staff notification — background.
+  // notify-staff-handoff requires `member_phone` + `reason`; sending `phone`
+  // made every self-registration log a 400 from this background task.
   backgroundTask(admin.functions.invoke("notify-staff-handoff", {
     body: {
-      kind: "member_self_registered",
-      member_id: member.id,
+      member_phone: phone,
       branch_id: reg.branch_id,
-      full_name: reg.full_name,
-      phone,
+      reason: `New self-registration: ${reg.full_name}`,
     },
   }).then((r) => {
     if ((r as { error?: unknown })?.error) {
