@@ -160,26 +160,33 @@ const AI_DAY_KEYS: { key: string; name: string; time?: string }[] = [
 ];
 
 function aiMealEntryToSlot(entry: any, def: { key: string; name: string; time?: string }): NormalizedMealSlot {
-  const item = normalizeItem({
-    food: entry?.meal || entry?.name || entry?.food || def.name,
-    quantity: entry?.quantity,
-    calories: entry?.calories,
-    protein: entry?.protein,
-    carbs: entry?.carbs,
-    fats: entry?.fats ?? entry?.fat,
-    fiber: entry?.fiber,
-    catalog_id: entry?.catalog_id,
-    unmatched: entry?.unmatched,
-  });
+  // Newer writes keep a full `items` array; older ones only a `meal` string.
+  const items: NormalizedMealItem[] = Array.isArray(entry?.items) && entry.items.length
+    ? entry.items.map(normalizeItem)
+    : [
+        normalizeItem({
+          food: entry?.meal || entry?.name || entry?.food || def.name,
+          quantity: entry?.quantity,
+          calories: entry?.calories,
+          protein: entry?.protein,
+          carbs: entry?.carbs,
+          fats: entry?.fats ?? entry?.fat,
+          fiber: entry?.fiber,
+          catalog_id: entry?.catalog_id,
+          unmatched: entry?.unmatched,
+        }),
+      ];
   return {
     name: def.name,
     time: def.time,
-    items: [item],
-    totals: sumTotals([item]),
+    items,
+    totals: sumTotals(items),
     recipe_link: entry?.recipe_link,
     prep_video_url: entry?.prep_video_url,
+    prep_video_file_path: entry?.prep_video_file_path,
   };
 }
+
 
 /**
  * Normalize a diet plan content payload (manual `slots` shape, AI `meals` shape,
