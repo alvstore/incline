@@ -277,13 +277,23 @@ export function serializeDietDays(
 
   const meals = days.map((d) => {
     const out: Record<string, any> = { day: d.day };
+    const used = new Set<string>();
     d.slots.forEach((s, idx) => {
       const items = s.items.filter((i) => i.food);
       if (!items.length) return;
       const t = slotTotals({ ...s, items });
-      out[slotKeyFor(s.name, idx)] = {
+      let key = slotKeyFor(s.name, idx);
+      // Two custom meals can map to the same key — keep both.
+      while (used.has(key)) key = `${key}_${idx + 1}`;
+      used.add(key);
+      out[key] = {
+        // `name` + `order` are what make custom meals (Pre-Workout, Bedtime…)
+        // survive a save/load round-trip in the exact order the trainer set.
+        name: s.name,
+        order: idx,
         meal: items.map((i) => i.food).join(' + '),
         quantity: items.map((i) => i.quantity).filter(Boolean).join(' + '),
+        items: items.map((i) => ({ ...i })),
         time: s.time,
         calories: t.calories,
         protein: t.protein,
@@ -299,6 +309,7 @@ export function serializeDietDays(
     out.totals = dayTotals(d);
     return out;
   });
+
 
   return { meals };
 }
