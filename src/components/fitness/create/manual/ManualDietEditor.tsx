@@ -222,6 +222,45 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   const updateSlot = (idx: number, patch: Partial<DietSlot>) =>
     updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
 
+  /** Append a meal slot (preset or custom) to the active day, kept in time order. */
+  const addSlot = (preset?: { name: string; time: string }) => {
+    const next: DietSlot = {
+      name: preset?.name || `Meal ${(days[activeDay]?.slots.length ?? 0) + 1}`,
+      time: preset?.time || '12:00',
+      items: [],
+    };
+    updateDaySlots((prev) =>
+      [...prev, next].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
+    );
+    toast.success(`${next.name} added`);
+  };
+
+  const removeSlot = (idx: number) => {
+    const name = days[activeDay]?.slots[idx]?.name || 'Meal';
+    updateDaySlots((prev) => prev.filter((_, i) => i !== idx));
+    setOpenAttach({});
+    toast.success(`${name} removed`);
+  };
+
+  /** Copy the active day's slot layout (names/times, no items) to every other day. */
+  const applySlotLayoutToAllDays = () => {
+    const source = days[activeDay];
+    if (!source) return;
+    setDays((prev) =>
+      prev.map((d, i) => {
+        if (i === activeDay) return d;
+        const byName = new Map(d.slots.map((s) => [s.name.toLowerCase(), s]));
+        return {
+          ...d,
+          slots: source.slots.map(
+            (s) => byName.get(s.name.toLowerCase()) ?? { name: s.name, time: s.time, items: [] },
+          ),
+        };
+      }),
+    );
+    toast.success('Meal structure applied to all days');
+  };
+
   const addItem = (idx: number) =>
     updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, items: [...s.items, { ...EMPTY_ITEM }] } : s)));
 
