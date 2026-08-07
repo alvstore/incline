@@ -674,11 +674,36 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
         {slots.map((slot, sIdx) => {
           const attachOpen = !!openAttach[sIdx] || !!slot.recipe_link || !!slot.prep_video_url || !!slot.prep_video_file_path;
+          const st = slotTotals(slot);
           return (
-            <Card key={sIdx} className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10 transition-shadow duration-200 hover:shadow-lg">
+            <Card
+              key={sIdx}
+              onDragOver={(e) => {
+                if (dragIdx !== null) e.preventDefault();
+              }}
+              onDrop={() => {
+                if (dragIdx !== null) reorderSlot(dragIdx, sIdx);
+                setDragIdx(null);
+              }}
+              className={cn(
+                'rounded-2xl border-0 shadow-md shadow-muted-foreground/10 transition-shadow duration-200 hover:shadow-lg',
+                dragIdx === sIdx && 'opacity-60 ring-2 ring-primary',
+              )}
+            >
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-base">
+                    <span
+                      draggable
+                      onDragStart={() => setDragIdx(sIdx)}
+                      onDragEnd={() => setDragIdx(null)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Drag to reorder ${slot.name}`}
+                      className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </span>
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
                       <UtensilsCrossed className="h-4 w-4" />
                     </span>
@@ -690,6 +715,30 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     />
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-7 cursor-pointer"
+                        disabled={sIdx === 0}
+                        onClick={() => reorderSlot(sIdx, sIdx - 1)}
+                        aria-label={`Move ${slot.name} up`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-7 cursor-pointer"
+                        disabled={sIdx === slots.length - 1}
+                        onClick={() => reorderSlot(sIdx, sIdx + 1)}
+                        aria-label={`Move ${slot.name} down`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="time"
@@ -725,7 +774,17 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     </Button>
                   </div>
                 </div>
+                {/* Live per-meal subtotal */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <Badge variant="secondary" className="rounded-full font-medium">
+                    {Math.round(st.calories)} kcal
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full">P {Math.round(st.protein)}g</Badge>
+                  <Badge variant="outline" className="rounded-full">C {Math.round(st.carbs)}g</Badge>
+                  <Badge variant="outline" className="rounded-full">F {Math.round(st.fats)}g</Badge>
+                </div>
               </CardHeader>
+
               <CardContent className="space-y-2">
                 {slot.items.length === 0 && (
                   <p className="rounded-xl border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
