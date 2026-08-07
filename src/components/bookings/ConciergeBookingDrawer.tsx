@@ -134,7 +134,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
     queryFn: async () => {
       const { data, error } = await supabase
         .from('facilities')
-        .select('id, name, benefit_type_id, capacity, gender_access')
+        .select('id, name, benefit_type_id, capacity, gender_access, available_days, under_maintenance')
         .eq('branch_id', branchId)
         .eq('is_active', true);
       if (error) throw error;
@@ -158,9 +158,17 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
     }
   }, [facilities, selectedFacility]);
 
+  // Weekly schedule gate — a facility can only be booked on the days it runs.
+  const selectedFacilityRow = allFacilities.find((f: any) => f.id === selectedFacility) as
+    | { name: string; available_days?: string[] | null }
+    | undefined;
+  const runsOnSelectedDate = selectedFacilityRow
+    ? facilityRunsOn(selectedFacilityRow.available_days, selectedDate)
+    : true;
+
   const { data: slots = [] } = useQuery({
     queryKey: ['concierge-slots', branchId, selectedDate, selectedFacility],
-    enabled: !!selectedMember && serviceType === 'recovery' && !!selectedFacility,
+    enabled: !!selectedMember && serviceType === 'recovery' && !!selectedFacility && runsOnSelectedDate,
     queryFn: async () => {
       await supabase.rpc('ensure_facility_slots', {
         p_branch_id: branchId,
