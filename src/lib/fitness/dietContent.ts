@@ -160,14 +160,14 @@ export function normalizeDietContent(content: unknown): NormalizedDiet | null {
         .filter((k) => !RESERVED.includes(k) && rawDay[k] && typeof rawDay[k] === 'object')
         .map((k) => {
           const e = rawDay[k];
-          const known = WEEKLY_SLOT_KEYS.find((w) => w.key === k);
+          const known = KNOWN_SLOT_KEYS.find((w) => w.key === k);
           const fallbackName =
             known?.name || k.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
           const order =
             Number.isFinite(Number(e?.order))
               ? Number(e.order)
               : known
-                ? WEEKLY_SLOT_KEYS.findIndex((w) => w.key === k)
+                ? KNOWN_SLOT_KEYS.findIndex((w) => w.key === k)
                 : 100;
           const slot: DietSlot = {
             name: e?.name || fallbackName,
