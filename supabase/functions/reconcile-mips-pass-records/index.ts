@@ -485,7 +485,45 @@ Deno.serve(async (req) => {
     );
     if (!resolvedConnection) return jsonResponse({ success: false, error: "No active MIPS connection configured", imported: 0, skipped: 0 }, 200);
 
-    const records = await fetchPassRecords(resolvedConnection, limit);
+    // The MIPS VPS reboots / restarts Tomcat. A brief outage is not a failed
+    // automation run: hold off while the shared breaker is open and report a
+    // healthy skip instead of a 500 that the Automation Brain logs as an error.
+    const breakerBranch = resolvedConnection.branch_id || null;
+    const breaker = await readBreaker(supabase, breakerBranch);
+    if (isTripped(breaker)) {
+      return jsonResponse({
+        success: true,
+        skipped_reason: "mips_breaker_open",
+        breaker_open_until: breaker.open_until,
+        last_error: breaker.last_error,
+        fetched: 0,
+        imported: 0,
+        skipped: 0,
+      });
+    }
+
+    let records: MipsPassRecord[];
+    try {
+      records = await fetchPassRecords(resolvedConnection, limit);
+      await recordSuccess(supabase, breakerBranch);
+    } catch (e) {
+      if (e instanceof MipsTransportError) {
+        const state = await recordTransportFailure(supabase, breakerBranch, e.message);
+        console.warn(`[reconcile-mips-pass-records] MIPS unreachable: ${e.message}`);
+        return jsonResponse({
+          success: true,
+          skipped_reason: "mips_unreachable",
+          transport_error: e.message,
+          breaker_open: state.open,
+          breaker_open_until: state.open_until,
+          fetched: 0,
+          imported: 0,
+          skipped: 0,
+        });
+      }
+      throw e;
+    }
+
     let imported = 0;
     let skipped = 0;
     let attendanceUpdated = 0;
