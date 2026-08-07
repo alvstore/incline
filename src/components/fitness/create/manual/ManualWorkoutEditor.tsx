@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy } from 'lucide-react';
+import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy, AlertCircle } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
