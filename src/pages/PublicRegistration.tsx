@@ -152,9 +152,19 @@ export default function PublicRegistration() {
 
   const sendOtp = useMutation({
     mutationFn: async (phone: string) => {
-      const { data, error } = await supabase.functions.invoke("register-member", {
-        body: { mode: "send_otp", phone, email: details?.email ?? form.getValues("email") ?? null },
-      });
+      const email = details?.email ?? form.getValues("email") ?? null;
+      // Fast path: a lightweight function without the waiver-PDF dependency.
+      // Falls back to register-member if it is unavailable.
+      let data: { error?: string; status?: string; channels?: string[] } | null = null;
+      let error: unknown = null;
+      ({ data, error } = await supabase.functions.invoke("send-registration-otp", {
+        body: { phone, email },
+      }));
+      if (error) {
+        ({ data, error } = await supabase.functions.invoke("register-member", {
+          body: { mode: "send_otp", phone, email },
+        }));
+      }
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.status === "rate_limited") throw new Error("rate_limited");
