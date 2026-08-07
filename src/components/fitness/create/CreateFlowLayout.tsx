@@ -41,7 +41,6 @@ export function CreateFlowLayout({
   isDirty = false,
   children,
 
-  children,
 }: Props) {
   const navigate = useNavigate();
   const currentIdx = STEP_ORDER.indexOf(step);
