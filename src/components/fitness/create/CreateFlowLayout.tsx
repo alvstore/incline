@@ -54,10 +54,12 @@ export function CreateFlowLayout({
   // Always resolve to an explicit destination when one is given — relying on
   // history.back() breaks after replace-navigations inside the builder.
   const goBack = () => {
+    if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
     if (onBack) return onBack();
     if (backTo) return navigate(backTo);
     navigate('/fitness/create');
   };
+
 
   return (
     <AppLayout>
