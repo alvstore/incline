@@ -62,11 +62,27 @@ export const WEEKLY_SLOT_KEYS: SlotKeyDef[] = [
   { key: 'dinner', name: 'Dinner', time: '20:00' },
 ];
 
+/**
+ * Every meal key the reader understands, in natural day order.
+ * Pre/post-workout and bedtime are first-class — they are not "slot_N".
+ */
+export const KNOWN_SLOT_KEYS: SlotKeyDef[] = [
+  { key: 'pre_workout', name: 'Pre-Workout', time: '06:00' },
+  { key: 'post_workout', name: 'Post-Workout', time: '08:00' },
+  { key: 'breakfast', name: 'Breakfast', time: '07:30' },
+  { key: 'snack1', name: 'Mid-Morning Snack', time: '10:30' },
+  { key: 'lunch', name: 'Lunch', time: '13:00' },
+  { key: 'snack2', name: 'Evening Snack', time: '16:30' },
+  { key: 'dinner', name: 'Dinner', time: '20:00' },
+  { key: 'bedtime', name: 'Bedtime', time: '22:00' },
+];
+
 export const DEFAULT_SLOTS: DietSlot[] = WEEKLY_SLOT_KEYS.map((k) => ({
   name: k.name,
   time: k.time,
   items: [],
 }));
+
 
 export const EMPTY_ITEM: DietItem = {
   food: '',
