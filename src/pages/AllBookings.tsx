@@ -851,24 +851,27 @@ ${rows.map((r) => `<tr>
                                       </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                      {canReschedule && !pendingReschedules[b.id] && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="rounded-xl gap-1.5"
-                                          onClick={() => setRescheduleTarget({
-                                            id: b.id,
-                                            member_name: b.member_name,
-                                            member_code: b.member_code,
-                                            benefit_name: b.benefit_name,
-                                            slot_time: b.slot_time,
-                                            slot_date: b.slot_date,
-                                            slot_id: b.slot_id,
-                                          })}
-                                        >
-                                          <CalendarClock className="h-3.5 w-3.5" /> Reschedule
-                                        </Button>
-                                      )}
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <AttendanceActions bookingId={b.id} status={b.status} compact />
+                                        {canReschedule && !pendingReschedules[b.id] && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="rounded-xl gap-1.5 cursor-pointer"
+                                            onClick={() => setRescheduleTarget({
+                                              id: b.id,
+                                              member_name: b.member_name,
+                                              member_code: b.member_code,
+                                              benefit_name: b.benefit_name,
+                                              slot_time: b.slot_time,
+                                              slot_date: b.slot_date,
+                                              slot_id: b.slot_id,
+                                            })}
+                                          >
+                                            <CalendarClock className="h-3.5 w-3.5" /> Reschedule
+                                          </Button>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   </TableRow>
                                   {isOpen && (
