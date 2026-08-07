@@ -535,8 +535,18 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   return (
     <div className="grid gap-5 lg:grid-cols-12">
       {/* Left: plan details, targets, day rail */}
-      <div className="space-y-4 lg:col-span-3">
+      <div className="space-y-4 lg:col-span-3" ref={detailsRef}>
+        {validationError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-2xl bg-destructive/10 p-3 text-sm font-medium text-destructive"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{validationError}</span>
+          </div>
+        )}
         <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Plan Details
