@@ -236,9 +236,15 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       time: preset?.time || '12:00',
       items: [],
     };
-    updateDaySlots((prev) =>
-      [...prev, next].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
-    );
+    // Smart insert: drop the new meal at the first position whose time is
+    // later, so a 06:00 Pre-Workout lands at the top instead of the bottom.
+    updateDaySlots((prev) => {
+      const at = prev.findIndex((s) => (s.time || '') > (next.time || ''));
+      const out = [...prev];
+      out.splice(at === -1 ? out.length : at, 0, next);
+      return out;
+    });
+
     toast.success(`${next.name} added`);
   };
 
