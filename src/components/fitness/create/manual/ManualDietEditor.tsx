@@ -115,6 +115,9 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
   const [days, setDays] = useState<DietDay[]>(singleDay);
   const [weekly, setWeekly] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const detailsRef = useRef<HTMLDivElement | null>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [macroScope, setMacroScope] = useState<'day' | 'week'>('day');
   const [swapSlotIdx, setSwapSlotIdx] = useState<number | null>(null);
