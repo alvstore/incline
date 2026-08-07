@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { BookingStatusTimeline } from './BookingStatusTimeline';
+import { AttendanceActions } from './AttendanceActions';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, ShieldAlert, User } from 'lucide-react';
 
