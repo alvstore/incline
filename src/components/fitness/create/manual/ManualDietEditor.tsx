@@ -723,6 +723,53 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
           );
         })}
 
+        {/* Add a meal slot — presets cover pre/post-workout and other extras */}
+        <Card className="rounded-2xl border-0 bg-muted/30 shadow-none">
+          <CardContent className="flex flex-wrap items-center gap-2 p-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Add meal
+            </span>
+            {SLOT_PRESETS.map((p) => {
+              const exists = slots.some((s) => s.name.toLowerCase() === p.name.toLowerCase());
+              return (
+                <Button
+                  key={p.name}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={exists}
+                  className="h-8 cursor-pointer rounded-full border-dashed"
+                  onClick={() => addSlot(p)}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {p.name}
+                </Button>
+              );
+            })}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 cursor-pointer rounded-full"
+              onClick={() => addSlot()}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" /> Custom meal
+            </Button>
+            {weekly && days.length > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={applySlotLayoutToAllDays}
+              >
+                <Copy className="h-3.5 w-3.5" /> Use this structure all week
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+
         <MealSwapModal
           open={swapSlotIdx !== null}
           onOpenChange={(o) => !o && setSwapSlotIdx(null)}
