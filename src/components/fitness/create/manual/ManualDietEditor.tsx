@@ -249,6 +249,25 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     toast.success(`${name} removed`);
   };
 
+  /** Manual ordering — meals keep the trainer's order, not the clock's. */
+  const reorderSlot = (from: number, to: number) => {
+    if (from === to || to < 0) return;
+    updateDaySlots((prev) => {
+      if (to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setOpenAttach({});
+  };
+
+  const sortSlotsByTime = () => {
+    updateDaySlots((prev) => [...prev].sort((a, b) => (a.time || '').localeCompare(b.time || '')));
+    toast.success('Meals sorted by time');
+  };
+
+
   /** Copy the active day's slot layout (names/times, no items) to every other day. */
   const applySlotLayoutToAllDays = () => {
     const source = days[activeDay];
