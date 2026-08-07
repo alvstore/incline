@@ -157,7 +157,7 @@ export default function FitnessTemplatesPage() {
         goal: template.goal ?? undefined,
         content: template.content,
         is_common: !!template.is_common,
-        source_kind: template.source_kind,
+        source_kind: template.source_kind === 'pdf' ? 'pdf' : 'structured',
         pdf_url: template.pdf_url ?? null,
         pdf_filename: template.pdf_filename ?? null,
         pdf_size_bytes: template.pdf_size_bytes ?? null,
