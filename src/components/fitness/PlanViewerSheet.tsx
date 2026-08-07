@@ -17,6 +17,8 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target } from 'lucide-react';
+import { normalizeDietPlan } from '@/lib/planNormalizer';
+
 
 interface PlanViewerSheetProps {
   open: boolean;
