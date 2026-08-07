@@ -16,17 +16,24 @@ export default function CreateManualPage() {
   const editMode = searchParams.get('edit') === '1' && !!templateId;
   const draftId = searchParams.get('draft');
 
-  const [meta, setMeta] = useState<{ canSubmit: boolean; submit: () => void; primaryLabel: string }>({
+  type EditorMeta = {
+    canSubmit: boolean;
+    submit: () => void;
+    primaryLabel: string;
+    dirty: boolean;
+    saving: boolean;
+  };
+
+  const [meta, setMeta] = useState<EditorMeta>({
     canSubmit: false,
     submit: () => {},
     primaryLabel: 'Continue to Preview',
+    dirty: false,
+    saving: false,
   });
 
   // Stable callback so child effect doesn't loop on every parent render.
-  const handleMeta = useCallback(
-    (m: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => setMeta(m),
-    [],
-  );
+  const handleMeta = useCallback((m: EditorMeta) => setMeta(m), []);
 
   const handleTabChange = (next: string) => {
     const t = next as 'workout' | 'diet';
@@ -52,17 +59,25 @@ export default function CreateManualPage() {
         { label: type === 'workout' ? 'Workout' : 'Diet', tone: 'primary' },
         ...(editMode ? [{ label: 'Editing template', tone: 'muted' as const }] : []),
       ]}
+      isDirty={meta.dirty}
+      showSaveState
       backTo={editMode ? '/fitness/templates' : draftId ? `/fitness/preview/${draftId}` : '/fitness/create'}
       actions={
         editMode ? (
           <>
-            <Button variant="outline" onClick={() => navigate('/fitness/templates')}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (meta.dirty && !window.confirm('Discard unsaved changes?')) return;
+                navigate('/fitness/templates');
+              }}
+            >
               Cancel
             </Button>
-            <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
+            <Button onClick={meta.submit} disabled={meta.saving}>{meta.saving ? 'Saving…' : meta.primaryLabel}</Button>
           </>
         ) : (
-          <Button onClick={meta.submit} disabled={!meta.canSubmit}>{meta.primaryLabel}</Button>
+          <Button onClick={meta.submit} disabled={meta.saving}>{meta.saving ? 'Saving…' : meta.primaryLabel}</Button>
         )
       }
 

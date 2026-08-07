@@ -3,7 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, Check } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronLeft, Check, CircleDot } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { FitnessHubTabs } from '@/components/fitness/FitnessHubTabs';
 
@@ -23,6 +34,8 @@ interface Props {
   showSteps?: boolean;
   /** When true, leaving via Back asks for confirmation first. */
   isDirty?: boolean;
+  /** Shows a Saved / Unsaved changes indicator next to the title chips. */
+  showSaveState?: boolean;
   children: ReactNode;
 }
 
@@ -39,10 +52,12 @@ export function CreateFlowLayout({
   chips,
   showSteps = true,
   isDirty = false,
+  showSaveState = false,
   children,
 
 }: Props) {
   const navigate = useNavigate();
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const currentIdx = STEP_ORDER.indexOf(step);
 
   const labels: Record<FlowStep, string> = {
@@ -53,11 +68,15 @@ export function CreateFlowLayout({
 
   // Always resolve to an explicit destination when one is given — relying on
   // history.back() breaks after replace-navigations inside the builder.
-  const goBack = () => {
-    if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+  const leave = () => {
     if (onBack) return onBack();
     if (backTo) return navigate(backTo);
     navigate('/fitness/create');
+  };
+
+  const goBack = () => {
+    if (isDirty) return setConfirmLeave(true);
+    leave();
   };
 
 
@@ -97,6 +116,19 @@ export function CreateFlowLayout({
                       {c.label}
                     </Badge>
                   ))}
+                  {showSaveState && (
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        isDirty
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700',
+                      )}
+                    >
+                      {isDirty ? <CircleDot className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                      {isDirty ? 'Unsaved changes' : 'All changes saved'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -151,6 +183,22 @@ export function CreateFlowLayout({
           {actions}
         </div>
       )}
+      <AlertDialog open={confirmLeave} onOpenChange={setConfirmLeave}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This plan has changes that haven't been saved yet. If you leave now they will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">Keep editing</AlertDialogCancel>
+            <AlertDialogAction className="cursor-pointer" onClick={leave}>
+              Discard and leave
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

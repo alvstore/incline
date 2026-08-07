@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanTemplate, updatePlanTemplate } from '@/services/fitnessService';
@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy } from 'lucide-react';
+import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy, AlertCircle } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -254,7 +254,7 @@ export interface ManualEditorRef {
 }
 
 interface ManualWorkoutEditorProps {
-  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => void;
+  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string; dirty: boolean; saving: boolean }) => void;
 }
 
 export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEditorProps) {
@@ -283,6 +283,15 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
 
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const dirtySeedRef = useRef(false);
+
+  useEffect(() => {
+    if (!dirtySeedRef.current) { dirtySeedRef.current = true; return; }
+    setDirty(true);
+  }, [days, planName, description, difficulty, goal]);
 
   useEffect(() => {
     if (!draftId) return;
@@ -400,10 +409,23 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     }],
   });
 
+  const validate = (): string | null => {
+    if (!planName.trim()) return 'Plan name is required';
+    if (totalExercises === 0) return 'Add at least one exercise';
+    return null;
+  };
+
+  const failValidation = (err: string) => {
+    setValidationError(err);
+    toast.error(err);
+  };
+
   const handleSaveTemplate = useCallback(async () => {
-    if (!planName.trim()) { toast.error('Plan name is required'); return; }
-    if (totalExercises === 0) { toast.error('Add at least one exercise'); return; }
+    const err = validate();
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
     if (!templateId) return;
+    setSaving(true);
     try {
       await updatePlanTemplate(templateId, {
         name: planName.trim(),
@@ -415,73 +437,64 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
       queryClient.invalidateQueries({ queryKey: ['fitness-templates'] });
       queryClient.invalidateQueries({ queryKey: ['fitness-template-usage'] });
       toast.success('Template updated');
+      setDirty(false);
       navigate('/fitness/templates');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update template');
+    } catch (err2: any) {
+      toast.error(err2?.message || 'Failed to update template');
+    } finally {
+      setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, templateId, navigate, queryClient, days]);
 
   const handlePreview = useCallback(() => {
-    if (!planName.trim()) { toast.error('Plan name is required'); return; }
-    if (totalExercises === 0) { toast.error('Add at least one exercise'); return; }
+    const err = validate();
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
 
-    if (draftId) {
-      const existing = loadDraft(draftId);
-      saveDraft({
-        ...(existing || {} as any),
-        id: draftId,
-        source: existing?.source || 'manual-workout',
-        templateId: existing?.templateId || templateId || undefined,
-        type: 'workout',
-        name: planName,
-        description,
-        goal,
-        difficulty,
-        memberId: existing?.memberId || member?.id,
-        memberName: existing?.memberName || member?.full_name,
-        memberCode: existing?.memberCode || member?.member_code,
-        memberProfile: existing?.memberProfile,
-        content: buildContent(),
-        createdAt: existing?.createdAt || new Date().toISOString(),
-      });
-      navigate(`/fitness/preview/${draftId}`);
-      return;
-    }
-
-    const id = newDraftId();
-    saveDraft({
+    const id = draftId || newDraftId();
+    const existing = draftId ? loadDraft(draftId) : null;
+    const ok = saveDraft({
+      ...(existing || ({} as any)),
       id,
-      source: 'manual-workout',
-      templateId: templateId || undefined,
+      source: existing?.source || 'manual-workout',
+      templateId: existing?.templateId || templateId || undefined,
       type: 'workout',
       name: planName,
       description,
       goal,
       difficulty,
-      memberId: member?.id,
-      memberName: member?.full_name,
-      memberCode: member?.member_code,
+      memberId: existing?.memberId || member?.id,
+      memberName: existing?.memberName || member?.full_name,
+      memberCode: existing?.memberCode || member?.member_code,
+      memberProfile: existing?.memberProfile,
       content: buildContent(),
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
     });
+
+    if (!ok) {
+      toast.error('Could not save this draft in the browser — please retry');
+      return;
+    }
+    setDirty(false);
     navigate(`/fitness/preview/${id}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, draftId, templateId, member, navigate, days]);
 
-  const canSubmit = !!planName.trim() && totalExercises > 0;
+  const canSubmit = !saving;
   const submit = useMemo(
     () => (editMode ? handleSaveTemplate : handlePreview),
     [editMode, handleSaveTemplate, handlePreview],
   );
   const primaryLabel = useMemo(
-    () => (editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
-    [editMode, draftId],
+    () => (saving ? 'Saving…' : editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
+    [editMode, draftId, saving],
   );
 
   useEffect(() => {
-    onMetaChange?.({ canSubmit, submit, primaryLabel });
-  }, [canSubmit, submit, primaryLabel, onMetaChange]);
+    onMetaChange?.({ canSubmit, submit, primaryLabel, dirty, saving });
+  }, [canSubmit, submit, primaryLabel, dirty, saving, onMetaChange]);
+
 
   const activeDays = days.filter((d) => d.exercises.length > 0).length;
   const totalSets = days.reduce((s, d) => s + d.exercises.reduce((n, e) => n + (Number(e.sets) || 0), 0), 0);
@@ -510,6 +523,15 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     <div className="grid gap-5 lg:grid-cols-12">
       {/* Left: plan details + day rail */}
       <div className="space-y-4 lg:col-span-3">
+        {validationError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-2xl bg-destructive/10 p-3 text-sm font-medium text-destructive"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{validationError}</span>
+          </div>
+        )}
         <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">

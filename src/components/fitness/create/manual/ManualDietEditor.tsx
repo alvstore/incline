@@ -33,6 +33,7 @@ import {
   ArrowUp,
   ArrowDown,
   Calculator,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
@@ -81,7 +82,7 @@ const SLOT_PRESETS: { name: string; time: string }[] = [
 const singleDay = (): DietDay[] => [{ day: 'Daily', slots: DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) }];
 
 interface Props {
-  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => void;
+  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string; dirty: boolean; saving: boolean }) => void;
 }
 
 export default function ManualDietEditor({ onMetaChange }: Props) {
@@ -115,6 +116,10 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
   const [days, setDays] = useState<DietDay[]>(singleDay);
   const [weekly, setWeekly] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const detailsRef = useRef<HTMLDivElement | null>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [macroScope, setMacroScope] = useState<'day' | 'week'>('day');
   const [swapSlotIdx, setSwapSlotIdx] = useState<number | null>(null);
@@ -211,6 +216,13 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     })();
     return () => { cancelled = true; };
   }, [templateId, navigate, editMode, hydrateFromContent]);
+
+  // Dirty tracking — powers the unsaved-changes guard and the save-state chip.
+  const dirtySeedRef = useRef(false);
+  useEffect(() => {
+    if (!dirtySeedRef.current) { dirtySeedRef.current = true; return; }
+    setDirty(true);
+  }, [days, weekly, planName, description, dietaryType, cuisine, calTarget, proteinTarget, carbsTarget, fatTarget]);
 
   const slots = days[activeDay]?.slots ?? [];
 
@@ -430,10 +442,19 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     return null;
   };
 
+  /** Surfaces the blocking reason instead of silently disabling the button. */
+  const failValidation = (err: string) => {
+    setValidationError(err);
+    toast.error(err);
+    detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const handleSaveTemplate = useCallback(async () => {
     const err = validateContent();
-    if (err) { toast.error(err); return; }
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
     if (!templateId) return;
+    setSaving(true);
     try {
       await updatePlanTemplate(templateId, {
         name: planName.trim(),
@@ -443,75 +464,65 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ['fitness-templates'] });
       queryClient.invalidateQueries({ queryKey: ['fitness-template-usage'] });
       toast.success('Template updated');
+      setDirty(false);
       navigate('/fitness/templates');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update template');
+    } finally {
+      setSaving(false);
     }
   }, [planName, description, templateId, navigate, queryClient, validateContent, buildContent]);
 
   const handlePreview = useCallback(() => {
     const err = validateContent();
-    if (err) { toast.error(err); return; }
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
 
-    if (draftId) {
-      const existing = loadDraft(draftId);
-      saveDraft({
-        ...(existing || {} as any),
-        id: draftId,
-        source: existing?.source || 'manual-diet',
-        templateId: existing?.templateId || templateId || undefined,
-        type: 'diet',
-        name: planName,
-        description,
-        caloriesTarget: calTarget,
-        memberId: existing?.memberId || member?.id,
-        memberName: existing?.memberName || member?.full_name,
-        memberCode: existing?.memberCode || member?.member_code,
-        memberProfile: existing?.memberProfile,
-        dietaryType,
-        cuisine,
-        content: buildContent(),
-        createdAt: existing?.createdAt || new Date().toISOString(),
-      });
-      navigate(`/fitness/preview/${draftId}`);
-      return;
-    }
-
-    const id = newDraftId();
-    saveDraft({
+    const id = draftId || newDraftId();
+    const existing = draftId ? loadDraft(draftId) : null;
+    const ok = saveDraft({
+      ...(existing || ({} as any)),
       id,
-      source: 'manual-diet',
-      templateId: templateId || undefined,
+      source: existing?.source || 'manual-diet',
+      templateId: existing?.templateId || templateId || undefined,
       type: 'diet',
       name: planName,
       description,
       caloriesTarget: calTarget,
-      memberId: member?.id,
-      memberName: member?.full_name,
-      memberCode: member?.member_code,
+      memberId: existing?.memberId || member?.id,
+      memberName: existing?.memberName || member?.full_name,
+      memberCode: existing?.memberCode || member?.member_code,
+      memberProfile: existing?.memberProfile,
       dietaryType,
       cuisine,
       content: buildContent(),
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
     });
+
+    // Never navigate to a preview that would render a stale draft.
+    if (!ok) {
+      toast.error('Could not save this draft in the browser — please retry');
+      return;
+    }
+    setDirty(false);
     navigate(`/fitness/preview/${id}`);
   }, [planName, description, calTarget, dietaryType, cuisine, member, draftId, templateId, navigate, validateContent, buildContent]);
 
-  const canSubmit =
-    loadState !== 'loading' && loadState !== 'error'
-    && !!planName.trim() && !!dietaryType && !!cuisine && filledItems > 0;
+  // Keep the action clickable — validation now explains what is missing.
+  const canSubmit = loadState !== 'loading' && !saving;
   const submit = useMemo(
     () => (editMode ? handleSaveTemplate : handlePreview),
     [editMode, handleSaveTemplate, handlePreview],
   );
   const primaryLabel = useMemo(
-    () => (editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
-    [editMode, draftId],
+    () => (saving ? 'Saving…' : editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
+    [editMode, draftId, saving],
   );
 
   useEffect(() => {
-    onMetaChange?.({ canSubmit, submit, primaryLabel });
-  }, [canSubmit, submit, primaryLabel, onMetaChange]);
+    onMetaChange?.({ canSubmit, submit, primaryLabel, dirty, saving });
+  }, [canSubmit, submit, primaryLabel, dirty, saving, onMetaChange]);
+
 
   if (loadState === 'loading') {
     return (
@@ -535,8 +546,18 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   return (
     <div className="grid gap-5 lg:grid-cols-12">
       {/* Left: plan details, targets, day rail */}
-      <div className="space-y-4 lg:col-span-3">
+      <div className="space-y-4 lg:col-span-3" ref={detailsRef}>
+        {validationError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-2xl bg-destructive/10 p-3 text-sm font-medium text-destructive"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{validationError}</span>
+          </div>
+        )}
         <Card className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10">
+
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Plan Details
