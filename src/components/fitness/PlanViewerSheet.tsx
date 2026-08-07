@@ -55,11 +55,13 @@ export function PlanViewerSheet({
     return Array.isArray(w) ? w : [];
   }, [plan]);
 
+  // Diet plans come in three stored shapes (weekly `meals`, manual `slots`,
+  // pre-normalized `days`) — the shared normalizer handles all of them.
   const meals = useMemo(() => {
     if (!plan || plan.type !== 'diet') return [];
-    const days = plan.data?.days ?? plan.data?.weeks?.[0]?.days;
-    return Array.isArray(days) ? days : [];
+    return normalizeDietPlan(plan.data || {}).days;
   }, [plan]);
+
 
   if (!plan) return null;
 
