@@ -450,7 +450,24 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                       </SelectContent>
                     </Select>
 
-                    {selectedFacility && (
+                    {selectedFacility && selectedFacilityRow && (
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Runs {scheduleLabel(selectedFacilityRow.available_days)}
+                      </p>
+                    )}
+
+                    {selectedFacility && !runsOnSelectedDate && (
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-warning/10 border border-warning/25 text-sm text-warning">
+                        <CalendarOff className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span>
+                          {selectedFacilityRow?.name} does not run on{' '}
+                          {format(new Date(`${selectedDate}T00:00:00`), 'EEEE dd MMM')}. Scheduled days:{' '}
+                          {scheduleLabel(selectedFacilityRow?.available_days)}. Pick another date.
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedFacility && runsOnSelectedDate && (
                       <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
                         {slots.length === 0 ? (
                           <p className="col-span-3 text-sm text-muted-foreground text-center py-4">No slots available</p>
@@ -464,7 +481,7 @@ export function ConciergeBookingDrawer({ open, onOpenChange, branchId, onSuccess
                                 size="sm"
                                 disabled={booking || (!available && !forceAdd)}
                                 onClick={() => handleBookSlot(s.id)}
-                                className="text-xs"
+                                className="text-xs cursor-pointer"
                               >
                                 {s.start_time?.slice(0, 5)}
                                 {!available && <span className="ml-1 text-destructive">•</span>}
