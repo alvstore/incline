@@ -1,4 +1,4 @@
-// v2.1.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
+// v2.2.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
 // v2 fixes: staff check_in is stamped with the real hardware scan time (was
 // the cron run time, which made every lateness figure wrong), repeat scans
 // inside the branch punch-gap no longer open a second attendance row, and a
@@ -8,6 +8,14 @@
 // terminal webhooks are not landing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import {
+  mipsFetch,
+  MipsTransportError,
+  readBreaker,
+  isTripped,
+  recordTransportFailure,
+  recordSuccess,
+} from "../_shared/mipsHealth.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -170,12 +178,11 @@ function mapEventType(record: MipsPassRecord): string {
 async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiry && cachedBaseUrl === `${baseUrl}:${username}`) return cachedToken;
 
-  const res = await fetch(`${baseUrl}/login`, {
+  const { text } = await mipsFetch(`${baseUrl}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username, password }),
-  });
-  const text = await res.text();
+  }, 12_000);
   let json: Record<string, unknown>;
   try {
     json = JSON.parse(text) as Record<string, unknown>;
@@ -229,7 +236,7 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
     const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
     console.log(`[reconcile-mips-pass-records] GET ${url}`);
 
-    const res = await fetch(url, {
+    const { res, text } = await mipsFetch(url, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -237,8 +244,7 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-    });
-    const text = await res.text();
+    }, 20_000);
     let json: Record<string, unknown>;
     try {
       json = JSON.parse(text) as Record<string, unknown>;
