@@ -21,6 +21,8 @@ interface Props {
   chips?: { label: string; tone?: 'default' | 'primary' | 'muted' }[];
   /** Hide the Build/Preview/Assign rail — template editing is a single-step flow. */
   showSteps?: boolean;
+  /** When true, leaving via Back asks for confirmation first. */
+  isDirty?: boolean;
   children: ReactNode;
 }
 
@@ -36,6 +38,9 @@ export function CreateFlowLayout({
   actions,
   chips,
   showSteps = true,
+  isDirty = false,
+  children,
+
   children,
 }: Props) {
   const navigate = useNavigate();
