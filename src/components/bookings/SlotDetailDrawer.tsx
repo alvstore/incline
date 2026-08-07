@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { BookingStatusTimeline } from './BookingStatusTimeline';
+import { AttendanceActions } from './AttendanceActions';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, ShieldAlert, User } from 'lucide-react';
 
@@ -126,7 +127,11 @@ export function SlotDetailDrawer({ slotId, onClose }: SlotDetailDrawerProps) {
                     </div>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-3 pt-1 border-t border-border">
+                    <div className="px-4 pb-3 pt-1 border-t border-border space-y-3">
+                      <div className="pt-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Attendance</p>
+                        <AttendanceActions bookingId={b.id} status={b.status} />
+                      </div>
                       <BookingStatusTimeline bookingId={b.id} />
                     </div>
                   )}

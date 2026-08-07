@@ -1,4 +1,4 @@
-// v2.1.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
+// v2.2.0 — Reconcile recent MIPS pass records into access_logs + attendance (alias by id/name).
 // v2 fixes: staff check_in is stamped with the real hardware scan time (was
 // the cron run time, which made every lateness figure wrong), repeat scans
 // inside the branch punch-gap no longer open a second attendance row, and a
@@ -8,6 +8,14 @@
 // terminal webhooks are not landing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import {
+  mipsFetch,
+  MipsTransportError,
+  readBreaker,
+  isTripped,
+  recordTransportFailure,
+  recordSuccess,
+} from "../_shared/mipsHealth.ts";
 
 type Role = "owner" | "admin" | "manager" | "staff" | "trainer" | "member";
 
@@ -170,12 +178,11 @@ function mapEventType(record: MipsPassRecord): string {
 async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiry && cachedBaseUrl === `${baseUrl}:${username}`) return cachedToken;
 
-  const res = await fetch(`${baseUrl}/login`, {
+  const { text } = await mipsFetch(`${baseUrl}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username, password }),
-  });
-  const text = await res.text();
+  }, 12_000);
   let json: Record<string, unknown>;
   try {
     json = JSON.parse(text) as Record<string, unknown>;
@@ -224,25 +231,40 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
   ];
 
   const errors: string[] = [];
+  let transportFailures = 0;
   for (const endpoint of endpoints) {
     const searchParams = new URLSearchParams(endpoint.params);
     const url = `${baseUrl}${endpoint.path}?${searchParams.toString()}`;
     console.log(`[reconcile-mips-pass-records] GET ${url}`);
 
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "TENANT-ID": "1",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-    });
-    const text = await res.text();
+    let res: Response;
+    let text: string;
+    try {
+      ({ res, text } = await mipsFetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "TENANT-ID": "1",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      }, 20_000));
+    } catch (e) {
+      // One endpoint being unreachable can still mean another answers, so keep
+      // going; only a clean sweep of transport failures is a real outage.
+      if (e instanceof MipsTransportError) {
+        transportFailures++;
+        errors.push(`${endpoint.path}: ${e.message}`);
+        continue;
+      }
+      throw e;
+    }
+
     let json: Record<string, unknown>;
     try {
       json = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      transportFailures++; // a booting Tomcat serves an HTML error page
       errors.push(`${endpoint.path}: non-JSON ${text.slice(0, 160)}`);
       continue;
     }
@@ -253,7 +275,9 @@ async function fetchPassRecords(connection: MipsConnection, limit: number): Prom
     errors.push(`${endpoint.path}: ${getString(json.msg ?? json.message) || text.slice(0, 160)}`);
   }
 
-  throw new Error(`MIPS records failed: ${errors.join(" | ")}`.slice(0, 500));
+  const summary = `MIPS records failed: ${errors.join(" | ")}`.slice(0, 500);
+  if (transportFailures === endpoints.length) throw new MipsTransportError(summary);
+  throw new Error(summary);
 }
 
 async function findPersonByCode(supabase: ReturnType<typeof createClient>, personCode: string, personName?: string): Promise<PersonMatch | null> {
@@ -479,7 +503,45 @@ Deno.serve(async (req) => {
     );
     if (!resolvedConnection) return jsonResponse({ success: false, error: "No active MIPS connection configured", imported: 0, skipped: 0 }, 200);
 
-    const records = await fetchPassRecords(resolvedConnection, limit);
+    // The MIPS VPS reboots / restarts Tomcat. A brief outage is not a failed
+    // automation run: hold off while the shared breaker is open and report a
+    // healthy skip instead of a 500 that the Automation Brain logs as an error.
+    const breakerBranch = resolvedConnection.branch_id || null;
+    const breaker = await readBreaker(supabase, breakerBranch);
+    if (isTripped(breaker)) {
+      return jsonResponse({
+        success: true,
+        skipped_reason: "mips_breaker_open",
+        breaker_open_until: breaker.open_until,
+        last_error: breaker.last_error,
+        fetched: 0,
+        imported: 0,
+        skipped: 0,
+      });
+    }
+
+    let records: MipsPassRecord[];
+    try {
+      records = await fetchPassRecords(resolvedConnection, limit);
+      await recordSuccess(supabase, breakerBranch);
+    } catch (e) {
+      if (e instanceof MipsTransportError) {
+        const state = await recordTransportFailure(supabase, breakerBranch, e.message);
+        console.warn(`[reconcile-mips-pass-records] MIPS unreachable: ${e.message}`);
+        return jsonResponse({
+          success: true,
+          skipped_reason: "mips_unreachable",
+          transport_error: e.message,
+          breaker_open: state.open,
+          breaker_open_until: state.open_until,
+          fetched: 0,
+          imported: 0,
+          skipped: 0,
+        });
+      }
+      throw e;
+    }
+
     let imported = 0;
     let skipped = 0;
     let attendanceUpdated = 0;

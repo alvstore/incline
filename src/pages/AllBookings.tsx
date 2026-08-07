@@ -29,6 +29,7 @@ import { SlotAvailabilityTimeline } from '@/components/bookings/SlotAvailability
 import { SlotDetailDrawer } from '@/components/bookings/SlotDetailDrawer';
 import { BookingStatusTimeline } from '@/components/bookings/BookingStatusTimeline';
 import { RescheduleBookingDrawer, type RescheduleTarget } from '@/components/bookings/RescheduleBookingDrawer';
+import { AttendanceActions } from '@/components/bookings/AttendanceActions';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { cn } from '@/lib/utils';
 
@@ -486,15 +487,18 @@ ${rows.map((r) => `<tr>
             </p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className={cn('text-sm font-semibold', due ? 'text-warning' : 'text-foreground')}>
-            {countdownLabel(b.prep_start_at)}
-          </p>
-          {!compact && (
-            <p className="text-xs text-muted-foreground">
-              prep from {format(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className={cn('text-sm font-semibold', due ? 'text-warning' : 'text-foreground')}>
+              {countdownLabel(b.prep_start_at)}
             </p>
-          )}
+            {!compact && (
+              <p className="text-xs text-muted-foreground">
+                prep from {format(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
+              </p>
+            )}
+          </div>
+          <AttendanceActions bookingId={b.id} status={b.status} compact />
         </div>
       </div>
     );
@@ -847,24 +851,27 @@ ${rows.map((r) => `<tr>
                                       </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                      {canReschedule && !pendingReschedules[b.id] && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="rounded-xl gap-1.5"
-                                          onClick={() => setRescheduleTarget({
-                                            id: b.id,
-                                            member_name: b.member_name,
-                                            member_code: b.member_code,
-                                            benefit_name: b.benefit_name,
-                                            slot_time: b.slot_time,
-                                            slot_date: b.slot_date,
-                                            slot_id: b.slot_id,
-                                          })}
-                                        >
-                                          <CalendarClock className="h-3.5 w-3.5" /> Reschedule
-                                        </Button>
-                                      )}
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <AttendanceActions bookingId={b.id} status={b.status} compact />
+                                        {canReschedule && !pendingReschedules[b.id] && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="rounded-xl gap-1.5 cursor-pointer"
+                                            onClick={() => setRescheduleTarget({
+                                              id: b.id,
+                                              member_name: b.member_name,
+                                              member_code: b.member_code,
+                                              benefit_name: b.benefit_name,
+                                              slot_time: b.slot_time,
+                                              slot_date: b.slot_date,
+                                              slot_id: b.slot_id,
+                                            })}
+                                          >
+                                            <CalendarClock className="h-3.5 w-3.5" /> Reschedule
+                                          </Button>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   </TableRow>
                                   {isOpen && (
