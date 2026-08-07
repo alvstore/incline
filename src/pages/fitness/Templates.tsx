@@ -145,7 +145,43 @@ export default function FitnessTemplatesPage() {
     enabled: templateIds.length > 0,
   });
 
+  /** Clone a template (content + targeting) as "<name> (Copy)" so it can be renamed freely. */
+  const duplicateTemplateMutation = useMutation({
+    mutationFn: (template: FitnessPlanTemplate) =>
+      createPlanTemplate({
+        branch_id: template.branch_id ?? null,
+        name: `${template.name} (Copy)`,
+        type: template.type,
+        description: template.description ?? undefined,
+        difficulty: template.difficulty ?? undefined,
+        goal: template.goal ?? undefined,
+        content: template.content,
+        is_common: !!template.is_common,
+        source_kind: template.source_kind,
+        pdf_url: template.pdf_url ?? null,
+        pdf_filename: template.pdf_filename ?? null,
+        pdf_size_bytes: template.pdf_size_bytes ?? null,
+        target_age_min: template.target_age_min ?? null,
+        target_age_max: template.target_age_max ?? null,
+        target_gender: (template.target_gender as any) ?? 'any',
+        target_weight_min_kg: template.target_weight_min_kg ?? null,
+        target_weight_max_kg: template.target_weight_max_kg ?? null,
+        target_bmi_min: template.target_bmi_min ?? null,
+        target_bmi_max: template.target_bmi_max ?? null,
+        target_goal: template.target_goal ?? null,
+        target_experience: template.target_experience ?? [],
+        duration_weeks: template.duration_weeks ?? null,
+        days_per_week: template.days_per_week ?? null,
+      }),
+    onSuccess: (created) => {
+      sonnerToast.success(`Duplicated as "${created.name}"`);
+      queryClient.invalidateQueries({ queryKey: ["fitness-templates"] });
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to duplicate template"),
+  });
+
   const deleteTemplateMutation = useMutation({
+
     mutationFn: (templateId: string) => softDeletePlanTemplate(templateId),
     onSuccess: () => {
       toast.success("Template deleted");
