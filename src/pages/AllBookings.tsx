@@ -29,6 +29,7 @@ import { SlotAvailabilityTimeline } from '@/components/bookings/SlotAvailability
 import { SlotDetailDrawer } from '@/components/bookings/SlotDetailDrawer';
 import { BookingStatusTimeline } from '@/components/bookings/BookingStatusTimeline';
 import { RescheduleBookingDrawer, type RescheduleTarget } from '@/components/bookings/RescheduleBookingDrawer';
+import { AttendanceActions } from '@/components/bookings/AttendanceActions';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { cn } from '@/lib/utils';
 
