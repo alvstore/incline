@@ -400,10 +400,23 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     }],
   });
 
+  const validate = (): string | null => {
+    if (!planName.trim()) return 'Plan name is required';
+    if (totalExercises === 0) return 'Add at least one exercise';
+    return null;
+  };
+
+  const failValidation = (err: string) => {
+    setValidationError(err);
+    toast.error(err);
+  };
+
   const handleSaveTemplate = useCallback(async () => {
-    if (!planName.trim()) { toast.error('Plan name is required'); return; }
-    if (totalExercises === 0) { toast.error('Add at least one exercise'); return; }
+    const err = validate();
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
     if (!templateId) return;
+    setSaving(true);
     try {
       await updatePlanTemplate(templateId, {
         name: planName.trim(),
@@ -416,72 +429,61 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
       queryClient.invalidateQueries({ queryKey: ['fitness-template-usage'] });
       toast.success('Template updated');
       navigate('/fitness/templates');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update template');
+    } catch (err2: any) {
+      toast.error(err2?.message || 'Failed to update template');
+    } finally {
+      setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, templateId, navigate, queryClient, days]);
 
   const handlePreview = useCallback(() => {
-    if (!planName.trim()) { toast.error('Plan name is required'); return; }
-    if (totalExercises === 0) { toast.error('Add at least one exercise'); return; }
+    const err = validate();
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
 
-    if (draftId) {
-      const existing = loadDraft(draftId);
-      saveDraft({
-        ...(existing || {} as any),
-        id: draftId,
-        source: existing?.source || 'manual-workout',
-        templateId: existing?.templateId || templateId || undefined,
-        type: 'workout',
-        name: planName,
-        description,
-        goal,
-        difficulty,
-        memberId: existing?.memberId || member?.id,
-        memberName: existing?.memberName || member?.full_name,
-        memberCode: existing?.memberCode || member?.member_code,
-        memberProfile: existing?.memberProfile,
-        content: buildContent(),
-        createdAt: existing?.createdAt || new Date().toISOString(),
-      });
-      navigate(`/fitness/preview/${draftId}`);
-      return;
-    }
-
-    const id = newDraftId();
-    saveDraft({
+    const id = draftId || newDraftId();
+    const existing = draftId ? loadDraft(draftId) : null;
+    const ok = saveDraft({
+      ...(existing || ({} as any)),
       id,
-      source: 'manual-workout',
-      templateId: templateId || undefined,
+      source: existing?.source || 'manual-workout',
+      templateId: existing?.templateId || templateId || undefined,
       type: 'workout',
       name: planName,
       description,
       goal,
       difficulty,
-      memberId: member?.id,
-      memberName: member?.full_name,
-      memberCode: member?.member_code,
+      memberId: existing?.memberId || member?.id,
+      memberName: existing?.memberName || member?.full_name,
+      memberCode: existing?.memberCode || member?.member_code,
+      memberProfile: existing?.memberProfile,
       content: buildContent(),
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
     });
+
+    if (!ok) {
+      toast.error('Could not save this draft in the browser — please retry');
+      return;
+    }
     navigate(`/fitness/preview/${id}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, draftId, templateId, member, navigate, days]);
 
-  const canSubmit = !!planName.trim() && totalExercises > 0;
+  const canSubmit = !saving;
   const submit = useMemo(
     () => (editMode ? handleSaveTemplate : handlePreview),
     [editMode, handleSaveTemplate, handlePreview],
   );
   const primaryLabel = useMemo(
-    () => (editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
-    [editMode, draftId],
+    () => (saving ? 'Saving…' : editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
+    [editMode, draftId, saving],
   );
 
   useEffect(() => {
     onMetaChange?.({ canSubmit, submit, primaryLabel });
   }, [canSubmit, submit, primaryLabel, onMetaChange]);
+
 
   const activeDays = days.filter((d) => d.exercises.length > 0).length;
   const totalSets = days.reduce((s, d) => s + d.exercises.reduce((n, e) => n + (Number(e.sets) || 0), 0), 0);
