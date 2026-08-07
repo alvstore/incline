@@ -309,6 +309,20 @@ export default function FitnessTemplatesPage() {
                 size="sm"
                 variant="outline"
                 className="h-9 w-9 cursor-pointer p-0"
+                disabled={duplicateTemplateMutation.isPending}
+                onClick={() => duplicateTemplateMutation.mutate(template)}
+                title="Duplicate template"
+                aria-label={`Duplicate ${template.name}`}
+              >
+                <CopyIcon className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {canCreate && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 w-9 cursor-pointer p-0"
                 onClick={() => setTargetingTemplate(template)}
                 title="Audience targeting (age/weight/goal)"
                 aria-label={`Audience targeting for ${template.name}`}
