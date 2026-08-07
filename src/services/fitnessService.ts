@@ -210,6 +210,7 @@ export async function createPlanTemplate(template: {
   // insert, so normalise them here for every caller.
   const insertRow: Record<string, unknown> = {
     ...rest,
+    difficulty: normalizeDifficulty(rest.difficulty) ?? 'intermediate',
     target_gender: rest.target_gender ?? 'any',
     target_experience: rest.target_experience ?? [],
     content: toJsonContent(content ?? ({} as FitnessPlanContent)),
@@ -266,6 +267,7 @@ export async function updatePlanTemplate(
 ): Promise<FitnessPlanTemplate> {
   const dbPatch: Record<string, unknown> = { ...patch };
   if (patch.content) dbPatch.content = toJsonContent(patch.content);
+  if ('difficulty' in patch) dbPatch.difficulty = normalizeDifficulty(patch.difficulty);
   const { data, error } = await supabase
     .from('fitness_plan_templates')
     .update(dbPatch)
