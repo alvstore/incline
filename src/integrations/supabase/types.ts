@@ -14847,6 +14847,10 @@ export type Database = {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
       }
+      mark_benefit_booking_attendance: {
+        Args: { p_booking_id: string; p_staff_id?: string; p_state: string }
+        Returns: Json
+      }
       mark_class_attendance: {
         Args: { _attended: boolean; _booking_id: string }
         Returns: Json
@@ -15059,6 +15063,10 @@ export type Database = {
       }
       promote_announcement_to_campaign: {
         Args: { p_announcement_id: string }
+        Returns: Json
+      }
+      prune_off_schedule_slots: {
+        Args: { p_facility_id?: string }
         Returns: Json
       }
       pt_calendar_expiry: {
