@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getPlanTemplate, updatePlanTemplate } from '@/services/fitnessService';
 import type { DietPlanContent } from '@/types/fitnessPlan';
@@ -28,6 +29,10 @@ import {
   Copy,
   Paperclip,
   ChevronDown,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Calculator,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
@@ -37,7 +42,7 @@ import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
 import { cn } from '@/lib/utils';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
 import { MealSwapModal } from '@/components/fitness/MealSwapModal';
-import { MealCatalogEntry, MealType } from '@/services/mealCatalogService';
+import { MealCatalogEntry, MealType, fetchMealCatalog } from '@/services/mealCatalogService';
 import {
   DEFAULT_SLOTS,
   EMPTY_ITEM,
@@ -48,8 +53,10 @@ import {
   inferDietMeta,
   normalizeDietContent,
   serializeDietDays,
+  slotTotals,
   weeklyAverageTotals,
 } from '@/lib/fitness/dietContent';
+
 
 const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   const k = name.toLowerCase();
@@ -229,9 +236,15 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       time: preset?.time || '12:00',
       items: [],
     };
-    updateDaySlots((prev) =>
-      [...prev, next].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
-    );
+    // Smart insert: drop the new meal at the first position whose time is
+    // later, so a 06:00 Pre-Workout lands at the top instead of the bottom.
+    updateDaySlots((prev) => {
+      const at = prev.findIndex((s) => (s.time || '') > (next.time || ''));
+      const out = [...prev];
+      out.splice(at === -1 ? out.length : at, 0, next);
+      return out;
+    });
+
     toast.success(`${next.name} added`);
   };
 
@@ -241,6 +254,25 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     setOpenAttach({});
     toast.success(`${name} removed`);
   };
+
+  /** Manual ordering — meals keep the trainer's order, not the clock's. */
+  const reorderSlot = (from: number, to: number) => {
+    if (from === to || to < 0) return;
+    updateDaySlots((prev) => {
+      if (to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setOpenAttach({});
+  };
+
+  const sortSlotsByTime = () => {
+    updateDaySlots((prev) => [...prev].sort((a, b) => (a.time || '').localeCompare(b.time || '')));
+    toast.success('Meals sorted by time');
+  };
+
 
   /** Copy the active day's slot layout (names/times, no items) to every other day. */
   const applySlotLayoutToAllDays = () => {
@@ -275,6 +307,67 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     updateDaySlots((prev) =>
       prev.map((s, i) => (i === sIdx ? { ...s, items: s.items.filter((_, j) => j !== iIdx) } : s)),
     );
+
+  // ---- Live macro calculator -------------------------------------------
+  // Whole catalog (small, cached) so typed food names resolve to real macros.
+  const { data: catalogAll = [] } = useQuery({
+    queryKey: ['meal-catalog', 'macro-lookup'],
+    queryFn: () => fetchMealCatalog({}),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const catalogByName = useMemo(() => {
+    const map = new Map<string, MealCatalogEntry>();
+    for (const e of catalogAll) map.set(e.name.trim().toLowerCase(), e);
+    return map;
+  }, [catalogAll]);
+
+  const macrosFromCatalog = (item: DietItem): DietItem | null => {
+    const hit = catalogByName.get((item.food || '').trim().toLowerCase());
+    if (!hit) return null;
+    return {
+      ...item,
+      calories: hit.calories,
+      protein: hit.protein,
+      carbs: hit.carbs,
+      fats: hit.fats,
+      catalog_id: hit.id,
+    };
+  };
+
+  /** Fill macros for one item when its typed name matches a catalog meal. */
+  const autofillItem = (sIdx: number, iIdx: number) => {
+    const item = days[activeDay]?.slots[sIdx]?.items[iIdx];
+    if (!item?.food) return;
+    if ((item.calories || 0) > 0 || (item.protein || 0) > 0) return;
+    const filled = macrosFromCatalog(item);
+    if (!filled) return;
+    updateDaySlots((prev) =>
+      prev.map((s, i) =>
+        i === sIdx ? { ...s, items: s.items.map((it, j) => (j === iIdx ? filled : it)) } : s,
+      ),
+    );
+  };
+
+  /** Recalculate every item on the active day from the catalog. */
+  const recalcDayMacros = () => {
+    let matched = 0;
+    updateDaySlots((prev) =>
+      prev.map((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          const filled = macrosFromCatalog(it);
+          if (filled) matched += 1;
+          return filled ?? it;
+        }),
+      })),
+    );
+    if (matched) toast.success(`Recalculated ${matched} item${matched > 1 ? 's' : ''}`);
+    else toast.info('No catalog matches found');
+  };
+
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
 
   const applySwap = (sIdx: number, entry: MealCatalogEntry) => {
     const anyEntry = entry as any;
@@ -581,11 +674,36 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
         {slots.map((slot, sIdx) => {
           const attachOpen = !!openAttach[sIdx] || !!slot.recipe_link || !!slot.prep_video_url || !!slot.prep_video_file_path;
+          const st = slotTotals(slot);
           return (
-            <Card key={sIdx} className="rounded-2xl border-0 shadow-md shadow-muted-foreground/10 transition-shadow duration-200 hover:shadow-lg">
+            <Card
+              key={sIdx}
+              onDragOver={(e) => {
+                if (dragIdx !== null) e.preventDefault();
+              }}
+              onDrop={() => {
+                if (dragIdx !== null) reorderSlot(dragIdx, sIdx);
+                setDragIdx(null);
+              }}
+              className={cn(
+                'rounded-2xl border-0 shadow-md shadow-muted-foreground/10 transition-shadow duration-200 hover:shadow-lg',
+                dragIdx === sIdx && 'opacity-60 ring-2 ring-primary',
+              )}
+            >
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-base">
+                    <span
+                      draggable
+                      onDragStart={() => setDragIdx(sIdx)}
+                      onDragEnd={() => setDragIdx(null)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Drag to reorder ${slot.name}`}
+                      className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </span>
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
                       <UtensilsCrossed className="h-4 w-4" />
                     </span>
@@ -597,6 +715,30 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     />
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-7 cursor-pointer"
+                        disabled={sIdx === 0}
+                        onClick={() => reorderSlot(sIdx, sIdx - 1)}
+                        aria-label={`Move ${slot.name} up`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-7 cursor-pointer"
+                        disabled={sIdx === slots.length - 1}
+                        onClick={() => reorderSlot(sIdx, sIdx + 1)}
+                        aria-label={`Move ${slot.name} down`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="time"
@@ -632,7 +774,17 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     </Button>
                   </div>
                 </div>
+                {/* Live per-meal subtotal */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <Badge variant="secondary" className="rounded-full font-medium">
+                    {Math.round(st.calories)} kcal
+                  </Badge>
+                  <Badge variant="outline" className="rounded-full">P {Math.round(st.protein)}g</Badge>
+                  <Badge variant="outline" className="rounded-full">C {Math.round(st.carbs)}g</Badge>
+                  <Badge variant="outline" className="rounded-full">F {Math.round(st.fats)}g</Badge>
+                </div>
               </CardHeader>
+
               <CardContent className="space-y-2">
                 {slot.items.length === 0 && (
                   <p className="rounded-xl border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
@@ -643,7 +795,14 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                   <div key={iIdx} className="grid grid-cols-12 items-end gap-2 rounded-xl border bg-muted/30 p-2">
                     <div className="col-span-12 sm:col-span-4">
                       <Label className="text-xs">Food</Label>
-                      <Input value={item.food} onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)} placeholder="Oats" />
+                      <Input
+                        value={item.food}
+                        onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)}
+                        onBlur={() => autofillItem(sIdx, iIdx)}
+                        placeholder="Oats"
+                        list="meal-catalog-names"
+                      />
+
                     </div>
                     <div className="col-span-6 sm:col-span-2">
                       <Label className="text-xs">Qty</Label>
@@ -755,19 +914,47 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
             >
               <Plus className="mr-1 h-3.5 w-3.5" /> Custom meal
             </Button>
-            {weekly && days.length > 1 && (
+            <span className="ml-auto flex flex-wrap items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="ml-auto h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
-                onClick={applySlotLayoutToAllDays}
+                className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={recalcDayMacros}
               >
-                <Copy className="h-3.5 w-3.5" /> Use this structure all week
+                <Calculator className="h-3.5 w-3.5" /> Recalculate macros
               </Button>
-            )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={sortSlotsByTime}
+              >
+                <Clock className="h-3.5 w-3.5" /> Sort by time
+              </Button>
+              {weekly && days.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                  onClick={applySlotLayoutToAllDays}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Use this structure all week
+                </Button>
+              )}
+            </span>
           </CardContent>
         </Card>
+
+        {/* Name suggestions for the Food inputs — powers macro auto-fill. */}
+        <datalist id="meal-catalog-names">
+          {catalogAll.slice(0, 500).map((m) => (
+            <option key={m.id} value={m.name} />
+          ))}
+        </datalist>
+
 
 
         <MealSwapModal

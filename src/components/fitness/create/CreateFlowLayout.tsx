@@ -21,6 +21,8 @@ interface Props {
   chips?: { label: string; tone?: 'default' | 'primary' | 'muted' }[];
   /** Hide the Build/Preview/Assign rail — template editing is a single-step flow. */
   showSteps?: boolean;
+  /** When true, leaving via Back asks for confirmation first. */
+  isDirty?: boolean;
   children: ReactNode;
 }
 
@@ -36,7 +38,9 @@ export function CreateFlowLayout({
   actions,
   chips,
   showSteps = true,
+  isDirty = false,
   children,
+
 }: Props) {
   const navigate = useNavigate();
   const currentIdx = STEP_ORDER.indexOf(step);
@@ -50,10 +54,12 @@ export function CreateFlowLayout({
   // Always resolve to an explicit destination when one is given — relying on
   // history.back() breaks after replace-navigations inside the builder.
   const goBack = () => {
+    if (isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
     if (onBack) return onBack();
     if (backTo) return navigate(backTo);
     navigate('/fitness/create');
   };
+
 
   return (
     <AppLayout>

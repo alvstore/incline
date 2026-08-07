@@ -160,26 +160,33 @@ const AI_DAY_KEYS: { key: string; name: string; time?: string }[] = [
 ];
 
 function aiMealEntryToSlot(entry: any, def: { key: string; name: string; time?: string }): NormalizedMealSlot {
-  const item = normalizeItem({
-    food: entry?.meal || entry?.name || entry?.food || def.name,
-    quantity: entry?.quantity,
-    calories: entry?.calories,
-    protein: entry?.protein,
-    carbs: entry?.carbs,
-    fats: entry?.fats ?? entry?.fat,
-    fiber: entry?.fiber,
-    catalog_id: entry?.catalog_id,
-    unmatched: entry?.unmatched,
-  });
+  // Newer writes keep a full `items` array; older ones only a `meal` string.
+  const items: NormalizedMealItem[] = Array.isArray(entry?.items) && entry.items.length
+    ? entry.items.map(normalizeItem)
+    : [
+        normalizeItem({
+          food: entry?.meal || entry?.name || entry?.food || def.name,
+          quantity: entry?.quantity,
+          calories: entry?.calories,
+          protein: entry?.protein,
+          carbs: entry?.carbs,
+          fats: entry?.fats ?? entry?.fat,
+          fiber: entry?.fiber,
+          catalog_id: entry?.catalog_id,
+          unmatched: entry?.unmatched,
+        }),
+      ];
   return {
     name: def.name,
     time: def.time,
-    items: [item],
-    totals: sumTotals([item]),
+    items,
+    totals: sumTotals(items),
     recipe_link: entry?.recipe_link,
     prep_video_url: entry?.prep_video_url,
+    prep_video_file_path: entry?.prep_video_file_path,
   };
 }
+
 
 /**
  * Normalize a diet plan content payload (manual `slots` shape, AI `meals` shape,
@@ -237,18 +244,49 @@ export function normalizeDietPlan(content: any): NormalizedDietPlan {
     return base;
   }
 
-  // AI-generated diet shape: array of days with named meal keys.
+  // AI / builder weekly shape: array of days holding named meal keys. Any key
+  // is accepted (pre_workout, bedtime, slot_3…) so custom meals never vanish.
   if (Array.isArray(content?.meals)) {
+    const RESERVED = ['day', 'slots', 'totals', 'notes', 'items', 'totalCalories'];
     base.days = content.meals.map((day: any) => {
-      const slots: NormalizedMealSlot[] = [];
-      for (const def of AI_DAY_KEYS) {
-        const entry = day?.[def.key];
-        if (entry) slots.push(aiMealEntryToSlot(entry, def));
+      let slots: NormalizedMealSlot[] = [];
+
+      if (Array.isArray(day?.slots) && day.slots.length) {
+        slots = day.slots.map((s: any) => normalizeSlot(s));
+      } else {
+        const collected = Object.keys(day || {})
+          .filter((k) => !RESERVED.includes(k) && day[k] && typeof day[k] === 'object')
+          .map((k, i) => {
+            const entry = day[k];
+            const known = AI_DAY_KEYS.find((d) => d.key === k);
+            const def = {
+              key: k,
+              name:
+                entry?.name ||
+                known?.name ||
+                k.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+              time: entry?.time || known?.time,
+            };
+            const order = Number.isFinite(Number(entry?.order))
+              ? Number(entry.order)
+              : known
+                ? AI_DAY_KEYS.findIndex((d) => d.key === k)
+                : 100 + i;
+            return { order, slot: aiMealEntryToSlot(entry, def) };
+          })
+          .sort((a, b) =>
+            a.order !== b.order
+              ? a.order - b.order
+              : (a.slot.time || '').localeCompare(b.slot.time || ''),
+          );
+        slots = collected.map((c) => c.slot);
       }
-      // Some AI variants put items into a generic `meals` array per day.
+
+      // Some AI variants put items into a generic `items` array per day.
       if (Array.isArray(day?.items) && slots.length === 0) {
         slots.push(normalizeSlot({ name: 'Meals', items: day.items }, 'Meals'));
       }
+
       return {
         day: day?.day || 'Day',
         slots,

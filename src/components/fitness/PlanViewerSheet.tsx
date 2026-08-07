@@ -17,6 +17,8 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { Dumbbell, Utensils, Download, Calendar, User, Flame, Apple, Target } from 'lucide-react';
+import { normalizeDietPlan } from '@/lib/planNormalizer';
+
 
 interface PlanViewerSheetProps {
   open: boolean;
@@ -55,11 +57,13 @@ export function PlanViewerSheet({
     return Array.isArray(w) ? w : [];
   }, [plan]);
 
+  // Diet plans come in three stored shapes (weekly `meals`, manual `slots`,
+  // pre-normalized `days`) — the shared normalizer handles all of them.
   const meals = useMemo(() => {
     if (!plan || plan.type !== 'diet') return [];
-    const days = plan.data?.days ?? plan.data?.weeks?.[0]?.days;
-    return Array.isArray(days) ? days : [];
+    return normalizeDietPlan(plan.data || {}).days;
   }, [plan]);
+
 
   if (!plan) return null;
 
@@ -189,46 +193,46 @@ export function PlanViewerSheet({
             )
           ) : meals.length > 0 ? (
             <div className="space-y-3">
-              {meals.map((day: any, di: number) => (
+              {meals.map((day, di) => (
                 <div key={di} className="rounded-xl border bg-card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="font-semibold text-sm">{day.day || `Day ${di + 1}`}</p>
-                    {day.totalCalories && (
+                    {day.totals.calories > 0 && (
                       <Badge variant="secondary" className="text-xs gap-1">
                         <Flame className="h-3 w-3" />
-                        {day.totalCalories} kcal
+                        {Math.round(day.totals.calories)} kcal · P {Math.round(day.totals.protein)}g ·
+                        C {Math.round(day.totals.carbs)}g · F {Math.round(day.totals.fats)}g
                       </Badge>
                     )}
                   </div>
                   <div className="space-y-2">
-                    {(day.meals || []).map((meal: any, mi: number) => (
+                    {day.slots.map((meal, mi) => (
                       <div key={mi} className="rounded-lg bg-muted/40 p-3">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium flex items-center gap-2">
                             <Apple className="h-3.5 w-3.5 text-success" />
-                            {meal.name || meal.meal || `Meal ${mi + 1}`}
+                            {meal.name || `Meal ${mi + 1}`}
                           </p>
                           {meal.time && (
                             <span className="text-xs text-muted-foreground">{meal.time}</span>
                           )}
                         </div>
-                        {Array.isArray(meal.items) && meal.items.length > 0 && (
+                        {meal.items.length > 0 && (
                           <ul className="mt-1 ml-5 list-disc text-xs text-muted-foreground space-y-0.5">
-                            {meal.items.map((it: any, ii: number) => (
+                            {meal.items.map((it, ii) => (
                               <li key={ii}>
-                                {typeof it === 'string'
-                                  ? it
-                                  : `${it.food || it.name || ''}${it.quantity ? ` — ${it.quantity}` : ''}`}
+                                {it.food}
+                                {it.quantity ? ` — ${it.quantity}` : ''}
                               </li>
                             ))}
                           </ul>
                         )}
-                        {(meal.calories || meal.protein) && (
+                        {(meal.totals.calories > 0 || meal.totals.protein > 0) && (
                           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                            {meal.calories && <span><b className="text-foreground">{meal.calories}</b> kcal</span>}
-                            {meal.protein && <span>P {meal.protein}g</span>}
-                            {meal.carbs && <span>C {meal.carbs}g</span>}
-                            {meal.fats && <span>F {meal.fats}g</span>}
+                            <span><b className="text-foreground">{Math.round(meal.totals.calories)}</b> kcal</span>
+                            <span>P {Math.round(meal.totals.protein)}g</span>
+                            <span>C {Math.round(meal.totals.carbs)}g</span>
+                            <span>F {Math.round(meal.totals.fats)}g</span>
                           </div>
                         )}
                       </div>
@@ -236,6 +240,7 @@ export function PlanViewerSheet({
                   </div>
                 </div>
               ))}
+
             </div>
           ) : (
             <p className="text-sm text-muted-foreground py-8 text-center">

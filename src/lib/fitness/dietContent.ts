@@ -136,37 +136,44 @@ export function normalizeDietContent(content: unknown): NormalizedDiet | null {
         return { day: dayName, slots: rawDay.slots.map((s: any) => slotFromRaw(s)) };
       }
 
-      const knownSlots = WEEKLY_SLOT_KEYS.filter((k) => rawDay?.[k.key]).map((k) => {
-        const e = rawDay[k.key];
-        return {
-          name: k.name,
-          time: normalizeTime(e?.time, k.time),
-          items: [itemFromRaw(e)],
-          recipe_link: e?.recipe_link || undefined,
-          prep_video_url: e?.prep_video_url || undefined,
-          prep_video_file_path: e?.prep_video_file_path || undefined,
-        } as DietSlot;
-      });
+      // Collect every meal-bearing key: the five known ones plus any custom
+      // key (pre_workout, post_workout, bedtime, slot_N…). The stored `name`
+      // always wins so custom meal names survive a save/load round-trip.
+      const RESERVED = ['day', 'slots', 'totals', 'notes'];
+      const entries = Object.keys(rawDay || {})
+        .filter((k) => !RESERVED.includes(k) && rawDay[k] && typeof rawDay[k] === 'object')
+        .map((k) => {
+          const e = rawDay[k];
+          const known = WEEKLY_SLOT_KEYS.find((w) => w.key === k);
+          const fallbackName =
+            known?.name || k.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+          const order =
+            Number.isFinite(Number(e?.order))
+              ? Number(e.order)
+              : known
+                ? WEEKLY_SLOT_KEYS.findIndex((w) => w.key === k)
+                : 100;
+          const slot: DietSlot = {
+            name: e?.name || fallbackName,
+            time: normalizeTime(e?.time, known?.time || ''),
+            items: Array.isArray(e?.items) && e.items.length
+              ? e.items.map(itemFromRaw)
+              : [itemFromRaw(e)],
+            recipe_link: e?.recipe_link || undefined,
+            prep_video_url: e?.prep_video_url || undefined,
+            prep_video_file_path: e?.prep_video_file_path || undefined,
+          };
+          return { order, slot };
+        })
+        .sort((a, b) =>
+          a.order !== b.order
+            ? a.order - b.order
+            : (a.slot.time || '').localeCompare(b.slot.time || ''),
+        );
 
-      // Any additional custom meal keys on the day object.
-      const extraKeys = Object.keys(rawDay || {}).filter(
-        (k) =>
-          !['day', 'slots', 'totals', 'notes'].includes(k) &&
-          !WEEKLY_SLOT_KEYS.some((w) => w.key === k) &&
-          rawDay[k] &&
-          typeof rawDay[k] === 'object',
-      );
-      const extraSlots = extraKeys.map((k) => {
-        const e = rawDay[k];
-        return {
-          name: k.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-          time: normalizeTime(e?.time, ''),
-          items: [itemFromRaw(e)],
-        } as DietSlot;
-      });
-
-      const slots = [...knownSlots, ...extraSlots];
+      const slots = entries.map((e) => e.slot);
       return { day: dayName, slots: slots.length ? slots : DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) };
+
     });
 
     return { days, weekly: true };
@@ -234,13 +241,17 @@ export function weeklyAverageTotals(days: DietDay[]) {
 
 const slotKeyFor = (name: string, idx: number): string => {
   const k = name.toLowerCase();
+  if (k.includes('pre') && k.includes('workout')) return 'pre_workout';
+  if ((k.includes('post') || k.includes('after')) && k.includes('workout')) return 'post_workout';
   if (k.includes('breakfast')) return 'breakfast';
   if (k.includes('lunch')) return 'lunch';
   if (k.includes('dinner')) return 'dinner';
+  if (k.includes('bed')) return 'bedtime';
   if (k.includes('mid') || k.includes('morning')) return 'snack1';
   if (k.includes('evening') || k.includes('snack')) return 'snack2';
   return `slot_${idx + 1}`;
 };
+
 
 /**
  * Writes canonical days back to stored content.
@@ -266,13 +277,23 @@ export function serializeDietDays(
 
   const meals = days.map((d) => {
     const out: Record<string, any> = { day: d.day };
+    const used = new Set<string>();
     d.slots.forEach((s, idx) => {
       const items = s.items.filter((i) => i.food);
       if (!items.length) return;
       const t = slotTotals({ ...s, items });
-      out[slotKeyFor(s.name, idx)] = {
+      let key = slotKeyFor(s.name, idx);
+      // Two custom meals can map to the same key — keep both.
+      while (used.has(key)) key = `${key}_${idx + 1}`;
+      used.add(key);
+      out[key] = {
+        // `name` + `order` are what make custom meals (Pre-Workout, Bedtime…)
+        // survive a save/load round-trip in the exact order the trainer set.
+        name: s.name,
+        order: idx,
         meal: items.map((i) => i.food).join(' + '),
         quantity: items.map((i) => i.quantity).filter(Boolean).join(' + '),
+        items: items.map((i) => ({ ...i })),
         time: s.time,
         calories: t.calories,
         protein: t.protein,
@@ -288,6 +309,7 @@ export function serializeDietDays(
     out.totals = dayTotals(d);
     return out;
   });
+
 
   return { meals };
 }
