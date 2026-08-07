@@ -53,12 +53,23 @@ import {
 
 const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   const k = name.toLowerCase();
+  if (k.includes('pre') && k.includes('workout')) return 'pre_workout';
+  if ((k.includes('post') || k.includes('after')) && k.includes('workout')) return 'post_workout';
   if (k.includes('breakfast')) return 'breakfast';
   if (k.includes('lunch')) return 'lunch';
   if (k.includes('dinner')) return 'dinner';
-  if (k.includes('snack') || k.includes('mid')) return 'snack';
+  if (k.includes('snack') || k.includes('mid') || k.includes('bedtime')) return 'snack';
   return undefined;
 };
+
+/** Extra meal slots a trainer can append to any day (beyond the 5 defaults). */
+const SLOT_PRESETS: { name: string; time: string }[] = [
+  { name: 'Pre-Workout', time: '06:00' },
+  { name: 'Post-Workout', time: '09:00' },
+  { name: 'Mid-Morning Snack', time: '10:30' },
+  { name: 'Evening Snack', time: '16:30' },
+  { name: 'Bedtime', time: '22:00' },
+];
 
 const singleDay = (): DietDay[] => [{ day: 'Daily', slots: DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) }];
 
@@ -210,6 +221,45 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
 
   const updateSlot = (idx: number, patch: Partial<DietSlot>) =>
     updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+
+  /** Append a meal slot (preset or custom) to the active day, kept in time order. */
+  const addSlot = (preset?: { name: string; time: string }) => {
+    const next: DietSlot = {
+      name: preset?.name || `Meal ${(days[activeDay]?.slots.length ?? 0) + 1}`,
+      time: preset?.time || '12:00',
+      items: [],
+    };
+    updateDaySlots((prev) =>
+      [...prev, next].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
+    );
+    toast.success(`${next.name} added`);
+  };
+
+  const removeSlot = (idx: number) => {
+    const name = days[activeDay]?.slots[idx]?.name || 'Meal';
+    updateDaySlots((prev) => prev.filter((_, i) => i !== idx));
+    setOpenAttach({});
+    toast.success(`${name} removed`);
+  };
+
+  /** Copy the active day's slot layout (names/times, no items) to every other day. */
+  const applySlotLayoutToAllDays = () => {
+    const source = days[activeDay];
+    if (!source) return;
+    setDays((prev) =>
+      prev.map((d, i) => {
+        if (i === activeDay) return d;
+        const byName = new Map(d.slots.map((s) => [s.name.toLowerCase(), s]));
+        return {
+          ...d,
+          slots: source.slots.map(
+            (s) => byName.get(s.name.toLowerCase()) ?? { name: s.name, time: s.time, items: [] },
+          ),
+        };
+      }),
+    );
+    toast.success('Meal structure applied to all days');
+  };
 
   const addItem = (idx: number) =>
     updateDaySlots((prev) => prev.map((s, i) => (i === idx ? { ...s, items: [...s.items, { ...EMPTY_ITEM }] } : s)));
@@ -570,6 +620,16 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     >
                       <ArrowLeftRight className="h-3.5 w-3.5" /> Swap
                     </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 cursor-pointer text-destructive"
+                      onClick={() => removeSlot(sIdx)}
+                      aria-label={`Remove ${slot.name} slot`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -662,6 +722,53 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
             </Card>
           );
         })}
+
+        {/* Add a meal slot — presets cover pre/post-workout and other extras */}
+        <Card className="rounded-2xl border-0 bg-muted/30 shadow-none">
+          <CardContent className="flex flex-wrap items-center gap-2 p-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Add meal
+            </span>
+            {SLOT_PRESETS.map((p) => {
+              const exists = slots.some((s) => s.name.toLowerCase() === p.name.toLowerCase());
+              return (
+                <Button
+                  key={p.name}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={exists}
+                  className="h-8 cursor-pointer rounded-full border-dashed"
+                  onClick={() => addSlot(p)}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {p.name}
+                </Button>
+              );
+            })}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 cursor-pointer rounded-full"
+              onClick={() => addSlot()}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" /> Custom meal
+            </Button>
+            {weekly && days.length > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={applySlotLayoutToAllDays}
+              >
+                <Copy className="h-3.5 w-3.5" /> Use this structure all week
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
 
         <MealSwapModal
           open={swapSlotIdx !== null}
