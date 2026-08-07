@@ -486,15 +486,18 @@ ${rows.map((r) => `<tr>
             </p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className={cn('text-sm font-semibold', due ? 'text-warning' : 'text-foreground')}>
-            {countdownLabel(b.prep_start_at)}
-          </p>
-          {!compact && (
-            <p className="text-xs text-muted-foreground">
-              prep from {format(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className={cn('text-sm font-semibold', due ? 'text-warning' : 'text-foreground')}>
+              {countdownLabel(b.prep_start_at)}
             </p>
-          )}
+            {!compact && (
+              <p className="text-xs text-muted-foreground">
+                prep from {format(b.prep_start_at, 'dd MMM HH:mm')} · {Math.round(b.prep_minutes / 60)}h lead
+              </p>
+            )}
+          </div>
+          <AttendanceActions bookingId={b.id} status={b.status} compact />
         </div>
       </div>
     );
