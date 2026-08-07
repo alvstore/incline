@@ -33,6 +33,7 @@ import {
   ArrowUp,
   ArrowDown,
   Calculator,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
