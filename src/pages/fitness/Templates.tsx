@@ -26,7 +26,7 @@ import {
   FileUp,
   FileText,
   Search,
-
+  Copy as CopyIcon,
 } from "lucide-react";
 import { downloadPlanPdf } from "@/utils/pdfBlob";
 import { useBrandContext } from "@/lib/brand/useBrandContext";
@@ -37,7 +37,9 @@ import {
   FitnessPlanTemplate,
   softDeletePlanTemplate,
   getTemplateUsageCounts,
+  createPlanTemplate,
 } from "@/services/fitnessService";
+
 import {
   AlertDialog,
   AlertDialogAction,
