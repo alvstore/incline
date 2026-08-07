@@ -254,7 +254,7 @@ export interface ManualEditorRef {
 }
 
 interface ManualWorkoutEditorProps {
-  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => void;
+  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string; dirty: boolean; saving: boolean }) => void;
 }
 
 export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEditorProps) {
@@ -285,6 +285,13 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
   const [activeIdx, setActiveIdx] = useState(0);
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const dirtySeedRef = useRef(false);
+
+  useEffect(() => {
+    if (!dirtySeedRef.current) { dirtySeedRef.current = true; return; }
+    setDirty(true);
+  }, [days, planName, description, difficulty, goal]);
 
   useEffect(() => {
     if (!draftId) return;
@@ -430,6 +437,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
       queryClient.invalidateQueries({ queryKey: ['fitness-templates'] });
       queryClient.invalidateQueries({ queryKey: ['fitness-template-usage'] });
       toast.success('Template updated');
+      setDirty(false);
       navigate('/fitness/templates');
     } catch (err2: any) {
       toast.error(err2?.message || 'Failed to update template');
@@ -468,6 +476,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
       toast.error('Could not save this draft in the browser — please retry');
       return;
     }
+    setDirty(false);
     navigate(`/fitness/preview/${id}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planName, description, difficulty, goal, totalExercises, draftId, templateId, member, navigate, days]);
@@ -483,8 +492,8 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
   );
 
   useEffect(() => {
-    onMetaChange?.({ canSubmit, submit, primaryLabel });
-  }, [canSubmit, submit, primaryLabel, onMetaChange]);
+    onMetaChange?.({ canSubmit, submit, primaryLabel, dirty, saving });
+  }, [canSubmit, submit, primaryLabel, dirty, saving, onMetaChange]);
 
 
   const activeDays = days.filter((d) => d.exercises.length > 0).length;

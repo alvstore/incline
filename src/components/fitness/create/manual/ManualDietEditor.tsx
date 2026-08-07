@@ -82,7 +82,7 @@ const SLOT_PRESETS: { name: string; time: string }[] = [
 const singleDay = (): DietDay[] => [{ day: 'Daily', slots: DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) }];
 
 interface Props {
-  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string }) => void;
+  onMetaChange?: (meta: { canSubmit: boolean; submit: () => void; primaryLabel: string; dirty: boolean; saving: boolean }) => void;
 }
 
 export default function ManualDietEditor({ onMetaChange }: Props) {
@@ -118,6 +118,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   const [weekly, setWeekly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
   const detailsRef = useRef<HTMLDivElement | null>(null);
   const [activeDay, setActiveDay] = useState(0);
   const [macroScope, setMacroScope] = useState<'day' | 'week'>('day');
@@ -215,6 +216,13 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     })();
     return () => { cancelled = true; };
   }, [templateId, navigate, editMode, hydrateFromContent]);
+
+  // Dirty tracking — powers the unsaved-changes guard and the save-state chip.
+  const dirtySeedRef = useRef(false);
+  useEffect(() => {
+    if (!dirtySeedRef.current) { dirtySeedRef.current = true; return; }
+    setDirty(true);
+  }, [days, weekly, planName, description, dietaryType, cuisine, calTarget, proteinTarget, carbsTarget, fatTarget]);
 
   const slots = days[activeDay]?.slots ?? [];
 
@@ -456,6 +464,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ['fitness-templates'] });
       queryClient.invalidateQueries({ queryKey: ['fitness-template-usage'] });
       toast.success('Template updated');
+      setDirty(false);
       navigate('/fitness/templates');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update template');
@@ -495,6 +504,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       toast.error('Could not save this draft in the browser — please retry');
       return;
     }
+    setDirty(false);
     navigate(`/fitness/preview/${id}`);
   }, [planName, description, calTarget, dietaryType, cuisine, member, draftId, templateId, navigate, validateContent, buildContent]);
 
@@ -510,8 +520,8 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
   );
 
   useEffect(() => {
-    onMetaChange?.({ canSubmit, submit, primaryLabel });
-  }, [canSubmit, submit, primaryLabel, onMetaChange]);
+    onMetaChange?.({ canSubmit, submit, primaryLabel, dirty, saving });
+  }, [canSubmit, submit, primaryLabel, dirty, saving, onMetaChange]);
 
 
   if (loadState === 'loading') {
