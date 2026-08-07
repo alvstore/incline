@@ -914,19 +914,47 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
             >
               <Plus className="mr-1 h-3.5 w-3.5" /> Custom meal
             </Button>
-            {weekly && days.length > 1 && (
+            <span className="ml-auto flex flex-wrap items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="ml-auto h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
-                onClick={applySlotLayoutToAllDays}
+                className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={recalcDayMacros}
               >
-                <Copy className="h-3.5 w-3.5" /> Use this structure all week
+                <Calculator className="h-3.5 w-3.5" /> Recalculate macros
               </Button>
-            )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                onClick={sortSlotsByTime}
+              >
+                <Clock className="h-3.5 w-3.5" /> Sort by time
+              </Button>
+              {weekly && days.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 cursor-pointer gap-1 rounded-full text-muted-foreground"
+                  onClick={applySlotLayoutToAllDays}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Use this structure all week
+                </Button>
+              )}
+            </span>
           </CardContent>
         </Card>
+
+        {/* Name suggestions for the Food inputs — powers macro auto-fill. */}
+        <datalist id="meal-catalog-names">
+          {catalogAll.slice(0, 500).map((m) => (
+            <option key={m.id} value={m.name} />
+          ))}
+        </datalist>
+
 
 
         <MealSwapModal
