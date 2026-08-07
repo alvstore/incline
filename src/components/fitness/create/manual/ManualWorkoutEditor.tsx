@@ -283,6 +283,8 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
 
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draftId) return;
