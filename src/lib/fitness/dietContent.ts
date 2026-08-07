@@ -241,13 +241,17 @@ export function weeklyAverageTotals(days: DietDay[]) {
 
 const slotKeyFor = (name: string, idx: number): string => {
   const k = name.toLowerCase();
+  if (k.includes('pre') && k.includes('workout')) return 'pre_workout';
+  if ((k.includes('post') || k.includes('after')) && k.includes('workout')) return 'post_workout';
   if (k.includes('breakfast')) return 'breakfast';
   if (k.includes('lunch')) return 'lunch';
   if (k.includes('dinner')) return 'dinner';
+  if (k.includes('bed')) return 'bedtime';
   if (k.includes('mid') || k.includes('morning')) return 'snack1';
   if (k.includes('evening') || k.includes('snack')) return 'snack2';
   return `slot_${idx + 1}`;
 };
+
 
 /**
  * Writes canonical days back to stored content.
