@@ -620,6 +620,16 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                     >
                       <ArrowLeftRight className="h-3.5 w-3.5" /> Swap
                     </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 cursor-pointer text-destructive"
+                      onClick={() => removeSlot(sIdx)}
+                      aria-label={`Remove ${slot.name} slot`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
