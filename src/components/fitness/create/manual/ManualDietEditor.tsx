@@ -53,12 +53,23 @@ import {
 
 const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   const k = name.toLowerCase();
+  if (k.includes('pre') && k.includes('workout')) return 'pre_workout';
+  if ((k.includes('post') || k.includes('after')) && k.includes('workout')) return 'post_workout';
   if (k.includes('breakfast')) return 'breakfast';
   if (k.includes('lunch')) return 'lunch';
   if (k.includes('dinner')) return 'dinner';
-  if (k.includes('snack') || k.includes('mid')) return 'snack';
+  if (k.includes('snack') || k.includes('mid') || k.includes('bedtime')) return 'snack';
   return undefined;
 };
+
+/** Extra meal slots a trainer can append to any day (beyond the 5 defaults). */
+const SLOT_PRESETS: { name: string; time: string }[] = [
+  { name: 'Pre-Workout', time: '06:00' },
+  { name: 'Post-Workout', time: '09:00' },
+  { name: 'Mid-Morning Snack', time: '10:30' },
+  { name: 'Evening Snack', time: '16:30' },
+  { name: 'Bedtime', time: '22:00' },
+];
 
 const singleDay = (): DietDay[] => [{ day: 'Daily', slots: DEFAULT_SLOTS.map((s) => ({ ...s, items: [] })) }];
 
