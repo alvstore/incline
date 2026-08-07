@@ -19,6 +19,23 @@ function narrowPlanContent(json: Json): FitnessPlanContent {
   return json as unknown as FitnessPlanContent;
 }
 
+/**
+ * The `fitness_plan_templates_difficulty_check` constraint only allows
+ * 'beginner' | 'intermediate' | 'advanced'. AI-generated plans and imported
+ * templates often supply free text ("Beginner to Intermediate", "novice",
+ * "Level 2"…), which used to fail the insert. Normalise every write here.
+ */
+export function normalizeDifficulty(
+  value?: string | null,
+): 'beginner' | 'intermediate' | 'advanced' | null {
+  if (!value) return null;
+  const v = String(value).toLowerCase();
+  if (/advanc|expert|elite|pro\b|level\s*3/.test(v)) return 'advanced';
+  if (/begin|novice|starter|entry|easy|level\s*1/.test(v)) return 'beginner';
+  if (/intermediate|moderate|medium|level\s*2/.test(v)) return 'intermediate';
+  return 'intermediate';
+}
+
 export interface FitnessPlanTemplate {
   id: string;
   branch_id: string | null;
@@ -193,6 +210,7 @@ export async function createPlanTemplate(template: {
   // insert, so normalise them here for every caller.
   const insertRow: Record<string, unknown> = {
     ...rest,
+    difficulty: normalizeDifficulty(rest.difficulty) ?? 'intermediate',
     target_gender: rest.target_gender ?? 'any',
     target_experience: rest.target_experience ?? [],
     content: toJsonContent(content ?? ({} as FitnessPlanContent)),
@@ -249,6 +267,7 @@ export async function updatePlanTemplate(
 ): Promise<FitnessPlanTemplate> {
   const dbPatch: Record<string, unknown> = { ...patch };
   if (patch.content) dbPatch.content = toJsonContent(patch.content);
+  if ('difficulty' in patch) dbPatch.difficulty = normalizeDifficulty(patch.difficulty);
   const { data, error } = await supabase
     .from('fitness_plan_templates')
     .update(dbPatch)
