@@ -430,10 +430,19 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     return null;
   };
 
+  /** Surfaces the blocking reason instead of silently disabling the button. */
+  const failValidation = (err: string) => {
+    setValidationError(err);
+    toast.error(err);
+    detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const handleSaveTemplate = useCallback(async () => {
     const err = validateContent();
-    if (err) { toast.error(err); return; }
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
     if (!templateId) return;
+    setSaving(true);
     try {
       await updatePlanTemplate(templateId, {
         name: planName.trim(),
@@ -446,72 +455,60 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
       navigate('/fitness/templates');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update template');
+    } finally {
+      setSaving(false);
     }
   }, [planName, description, templateId, navigate, queryClient, validateContent, buildContent]);
 
   const handlePreview = useCallback(() => {
     const err = validateContent();
-    if (err) { toast.error(err); return; }
+    if (err) { failValidation(err); return; }
+    setValidationError(null);
 
-    if (draftId) {
-      const existing = loadDraft(draftId);
-      saveDraft({
-        ...(existing || {} as any),
-        id: draftId,
-        source: existing?.source || 'manual-diet',
-        templateId: existing?.templateId || templateId || undefined,
-        type: 'diet',
-        name: planName,
-        description,
-        caloriesTarget: calTarget,
-        memberId: existing?.memberId || member?.id,
-        memberName: existing?.memberName || member?.full_name,
-        memberCode: existing?.memberCode || member?.member_code,
-        memberProfile: existing?.memberProfile,
-        dietaryType,
-        cuisine,
-        content: buildContent(),
-        createdAt: existing?.createdAt || new Date().toISOString(),
-      });
-      navigate(`/fitness/preview/${draftId}`);
-      return;
-    }
-
-    const id = newDraftId();
-    saveDraft({
+    const id = draftId || newDraftId();
+    const existing = draftId ? loadDraft(draftId) : null;
+    const ok = saveDraft({
+      ...(existing || ({} as any)),
       id,
-      source: 'manual-diet',
-      templateId: templateId || undefined,
+      source: existing?.source || 'manual-diet',
+      templateId: existing?.templateId || templateId || undefined,
       type: 'diet',
       name: planName,
       description,
       caloriesTarget: calTarget,
-      memberId: member?.id,
-      memberName: member?.full_name,
-      memberCode: member?.member_code,
+      memberId: existing?.memberId || member?.id,
+      memberName: existing?.memberName || member?.full_name,
+      memberCode: existing?.memberCode || member?.member_code,
+      memberProfile: existing?.memberProfile,
       dietaryType,
       cuisine,
       content: buildContent(),
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
     });
+
+    // Never navigate to a preview that would render a stale draft.
+    if (!ok) {
+      toast.error('Could not save this draft in the browser — please retry');
+      return;
+    }
     navigate(`/fitness/preview/${id}`);
   }, [planName, description, calTarget, dietaryType, cuisine, member, draftId, templateId, navigate, validateContent, buildContent]);
 
-  const canSubmit =
-    loadState !== 'loading' && loadState !== 'error'
-    && !!planName.trim() && !!dietaryType && !!cuisine && filledItems > 0;
+  // Keep the action clickable — validation now explains what is missing.
+  const canSubmit = loadState !== 'loading' && !saving;
   const submit = useMemo(
     () => (editMode ? handleSaveTemplate : handlePreview),
     [editMode, handleSaveTemplate, handlePreview],
   );
   const primaryLabel = useMemo(
-    () => (editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
-    [editMode, draftId],
+    () => (saving ? 'Saving…' : editMode ? 'Save Template' : draftId ? 'Save & Back to Preview' : 'Continue to Preview'),
+    [editMode, draftId, saving],
   );
 
   useEffect(() => {
     onMetaChange?.({ canSubmit, submit, primaryLabel });
   }, [canSubmit, submit, primaryLabel, onMetaChange]);
+
 
   if (loadState === 'loading') {
     return (
