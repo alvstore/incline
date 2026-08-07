@@ -795,7 +795,14 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
                   <div key={iIdx} className="grid grid-cols-12 items-end gap-2 rounded-xl border bg-muted/30 p-2">
                     <div className="col-span-12 sm:col-span-4">
                       <Label className="text-xs">Food</Label>
-                      <Input value={item.food} onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)} placeholder="Oats" />
+                      <Input
+                        value={item.food}
+                        onChange={(e) => updateItem(sIdx, iIdx, 'food', e.target.value)}
+                        onBlur={() => autofillItem(sIdx, iIdx)}
+                        placeholder="Oats"
+                        list="meal-catalog-names"
+                      />
+
                     </div>
                     <div className="col-span-6 sm:col-span-2">
                       <Label className="text-xs">Qty</Label>
