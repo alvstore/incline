@@ -95,7 +95,7 @@ function validatePlanShape(type: "workout" | "diet", plan: any): string | null {
     const meals = Array.isArray(plan.meals) ? plan.meals : [];
     if (meals.length === 0) return "AI returned no meal days";
     const hasSlots = meals.some((d: any) =>
-      ["breakfast", "lunch", "dinner", "snack1", "snack2"].some((k) => d?.[k])
+      ["breakfast", "lunch", "dinner", "snack1", "snack2", "pre_workout", "post_workout"].some((k) => d?.[k])
     );
     if (!hasSlots) return "AI returned meal days without any meals";
   }
@@ -475,7 +475,9 @@ serve(async (req) => {
          }
          CRITICAL: "weeks" must contain EXACTLY ONE entry (week 1) — a single template week covering all 7 calendar days. The system expands it into the full program with progressive overload afterwards. Never emit week 2+.
          IMPORTANT: Only include the "rotation" key if the user explicitly requested rotation. Otherwise omit it entirely.`
-      : `OUTPUT CONTRACT — For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
+      : `MEAL COVERAGE CONTRACT (highest priority): EVERY training day MUST include BOTH "pre_workout" and "post_workout" meals in addition to breakfast/snack1/lunch/snack2/dinner. Time pre_workout 45-60 min before the session and post_workout within 45 min after it. Omit these two keys ONLY on rest days. Never merge them into breakfast or a snack.
+
+         OUTPUT CONTRACT — For EACH meal, return: meal name, a TIME RANGE (e.g. "8:00–9:00 AM" — eating times vary per person), calories, and macros (protein/carbs/fat in grams). When possible also include micros: fiber, sodium (mg), sugar (g).
          Return a JSON object with the following structure (no prose, no markdown):
          {
            "name": "Diet plan name",
@@ -490,7 +492,9 @@ serve(async (req) => {
                "snack1":    {"meal": "Greek yogurt",         "time": "11:00–11:30 AM", "calories": 150, "protein": 15, "carbs": 12, "fat": 4, "fiber": 0, "sodium": 60, "sugar": 8},
                "lunch":     {"meal": "Grilled chicken salad","time": "1:00–2:00 PM",  "calories": 450, "protein": 38, "carbs": 30, "fat": 18, "fiber": 7, "sodium": 480, "sugar": 6},
                "snack2":    {"meal": "Almonds",              "time": "4:30–5:00 PM",  "calories": 160, "protein": 6,  "carbs": 6,  "fat": 14, "fiber": 3, "sodium": 0,  "sugar": 1},
-               "dinner":    {"meal": "Salmon with vegetables","time": "8:00–9:00 PM", "calories": 550, "protein": 40, "carbs": 35, "fat": 22, "fiber": 8, "sodium": 380, "sugar": 4}
+               "dinner":    {"meal": "Salmon with vegetables","time": "8:00–9:00 PM", "calories": 550, "protein": 40, "carbs": 35, "fat": 22, "fiber": 8, "sodium": 380, "sugar": 4},
+               "pre_workout":  {"meal": "Banana + black coffee", "time": "5:30–6:00 AM", "calories": 120, "protein": 2, "carbs": 27, "fat": 0, "fiber": 3, "sodium": 5, "sugar": 14},
+               "post_workout": {"meal": "Whey shake + 2 egg whites", "time": "7:15–7:45 AM", "calories": 220, "protein": 30, "carbs": 12, "fat": 4, "fiber": 0, "sodium": 90, "sugar": 6}
              }
            ],
            "hydration": "8-10 glasses of water daily",
