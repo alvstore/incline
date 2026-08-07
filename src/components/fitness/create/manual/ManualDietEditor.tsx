@@ -29,6 +29,10 @@ import {
   Copy,
   Paperclip,
   ChevronDown,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Calculator,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MemberSearchPicker, PickedMember } from '@/components/fitness/create/MemberSearchPicker';
@@ -38,7 +42,7 @@ import { newDraftId, saveDraft, loadDraft } from '@/lib/planDraft';
 import { cn } from '@/lib/utils';
 import { VideoAttachmentControl } from '@/components/fitness/VideoAttachmentControl';
 import { MealSwapModal } from '@/components/fitness/MealSwapModal';
-import { MealCatalogEntry, MealType } from '@/services/mealCatalogService';
+import { MealCatalogEntry, MealType, fetchMealCatalog } from '@/services/mealCatalogService';
 import {
   DEFAULT_SLOTS,
   EMPTY_ITEM,
@@ -49,8 +53,10 @@ import {
   inferDietMeta,
   normalizeDietContent,
   serializeDietDays,
+  slotTotals,
   weeklyAverageTotals,
 } from '@/lib/fitness/dietContent';
+
 
 const SLOT_TO_MEAL_TYPE = (name: string): MealType | undefined => {
   const k = name.toLowerCase();
