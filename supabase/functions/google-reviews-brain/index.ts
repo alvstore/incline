@@ -509,7 +509,7 @@ async function fetchPlaceRecord(
   textQuery: string,
 ): Promise<{ ok: true; place: any } | { ok: false; status: number; body: string }> {
   const details = await placesFetch(key, `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`, {
-    fieldMask: "id,displayName,rating,userRatingCount,reviews",
+    fieldMask: "id,displayName,rating,userRatingCount,googleMapsUri,reviews",
   });
   if (details.ok) return { ok: true, place: await details.json() };
   const detailsBody = await details.text();
@@ -517,9 +517,11 @@ async function fetchPlaceRecord(
   if (textQuery) {
     const search = await placesFetch(key, "/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.rating,places.userRatingCount,places.reviews",
+      fieldMask:
+        "places.id,places.displayName,places.rating,places.userRatingCount,places.googleMapsUri,places.reviews",
       body: { textQuery, maxResultCount: 5, languageCode: "en" },
     });
+
     if (search.ok) {
       const j = await search.json();
       const list = (j.places ?? []) as any[];
@@ -561,6 +563,9 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   const j = result.place;
 
   const reviews = (j.reviews ?? []) as any[];
+  // Deep link staff can open to reply manually while GBP quota is pending.
+  const placeUri: string | null =
+    j.googleMapsUri ?? (placeId ? `https://search.google.com/local/reviews?placeid=${placeId}` : null);
   let upserted = 0;
   for (const r of reviews) {
     const row = {
@@ -571,6 +576,8 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
       rating: typeof r.rating === "number" ? Math.round(r.rating) : null,
       review_text: r.originalText?.text ?? r.text?.text ?? null,
       posted_at: r.publishTime ?? null,
+      relative_time: r.relativePublishTimeDescription ?? null,
+      review_permalink: r.googleMapsUri ?? placeUri,
       source: "places",
       raw: r,
     };
@@ -587,6 +594,7 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     place_name: j.displayName?.text ?? (cfg as any)?.place_name ?? null,
     place_rating: j.rating ?? null,
     place_rating_count: j.userRatingCount ?? null,
+    place_uri: placeUri,
     last_places_sync: new Date().toISOString(),
   });
 
@@ -597,7 +605,9 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     rating: j.rating ?? null,
     total_ratings: j.userRatingCount ?? null,
     place_id: placeId,
+    place_uri: placeUri,
   };
+
 }
 
 async function recordFetchError(branch_id: string, reason: string | null) {
@@ -1096,9 +1106,11 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
     .from("google_reviews_inbound")
     .update({
       reply_status: "sent",
+      reply_mode: "api",
       reply_text,
       draft_reply: null,
       replied_at: new Date().toISOString(),
+
       replied_by: user_id ?? null,
       google_reply_text: reply_text,
       google_reply_updated_at: new Date().toISOString(),
@@ -1117,6 +1129,30 @@ async function saveDraft(inbound_id: string, draft: string) {
   if (error) return json({ ok: false, error: error.message }, 500);
   return json({ ok: true });
 }
+
+/**
+ * Assisted reply: while Business Profile quota is pending, staff copy the draft,
+ * post it on Google themselves, then mark the row as handled here so the queue
+ * stays honest. Recorded as `reply_mode = 'manual_google'` — never as an API post.
+ */
+async function markRepliedExternally(inbound_id: string, reply_text: string, user_id?: string) {
+  const sb = supa();
+  const { error } = await sb
+    .from("google_reviews_inbound")
+    .update({
+      reply_status: "sent",
+      reply_mode: "manual_google",
+      reply_text: reply_text || null,
+      draft_reply: null,
+      replied_at: new Date().toISOString(),
+      replied_by: user_id ?? null,
+    })
+    .eq("id", inbound_id);
+  if (error) return json({ ok: false, error: error.message }, 500);
+  return json({ ok: true, mode: "manual_google" });
+}
+
+
 
 
 // ─── Action: request_member_review (legacy compatibility) ───
@@ -1346,7 +1382,11 @@ Deno.serve(async (req) => {
         return json({ ok: placesOk || gbpOk, places_ok: placesOk, gbp_ok: gbpOk, checks, gbp, places });
       }
 
-      case "request_member_review":
+      case "mark_replied_externally": {
+        if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
+        return await markRepliedExternally(body.inbound_id, body.reply_text ?? "", userId);
+      }
+
 
       case "classify": {
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);

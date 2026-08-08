@@ -43,9 +43,10 @@ const COPY: Record<
     icon: PlugZap,
   },
   read_only: {
-    title: 'Read-only mode — replies are disabled',
-    body: 'Reviews are being read from the public Places lane. Posting replies needs Business Profile access, which requires signing in with the Google account that owns the listing.',
+    title: 'Reading reviews live — replies are posted by hand',
+    body: 'Ratings and recent reviews sync automatically from Google. Posting replies from here needs Business Profile API access from Google; until that is granted, use "Copy & open on Google" on each review and mark it replied.',
     cta: 'Finish connection',
+
     tone: 'border-warning/25 bg-warning/10 text-warning',
     icon: Lock,
   },

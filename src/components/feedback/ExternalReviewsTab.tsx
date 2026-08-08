@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatCard } from '@/components/ui/stat-card';
-import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2, Stethoscope, CheckCircle2, XCircle } from 'lucide-react';
+import { Star, RefreshCw, Send, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, ExternalLink, Loader2, Stethoscope, CheckCircle2, XCircle, Copy } from 'lucide-react';
+import { copyToClipboard } from '@/lib/utils/clipboard';
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/contexts/BranchContext';
@@ -51,6 +53,10 @@ interface InboundRow {
   replied_at: string | null;
   source?: string | null;
   draft_reply?: string | null;
+  review_permalink?: string | null;
+  relative_time?: string | null;
+  reply_mode?: string | null;
+
 }
 
 export default function ExternalReviewsTab() {
@@ -204,6 +210,22 @@ export default function ExternalReviewsTab() {
     },
   });
 
+  // Assisted reply — used while Business Profile posting access is pending.
+  const markReplied = useMutation({
+    mutationFn: async ({ id, text }: { id: string; text: string }) => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'mark_replied_externally', inbound_id: id, reply_text: text },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => { toast.success('Marked as replied on Google'); refetch(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not update the review'),
+  });
+
+
+
   const updateRow = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
       const { error } = await supabase.from('google_reviews_inbound').update(patch).eq('id', id);
@@ -231,6 +253,12 @@ export default function ExternalReviewsTab() {
         : 'not_configured';
   const canReply = connState === 'live';
   const notConfigured = connState === 'not_configured';
+  // Fallback deep link when a single review has no permalink of its own.
+  const cfg = (integration?.config ?? {}) as Record<string, any>;
+  const placeUri: string | null =
+    cfg.place_uri ??
+    (cfg.place_id ? `https://search.google.com/local/reviews?placeid=${cfg.place_id}` : null);
+
 
   return (
     <div className="space-y-6">
@@ -404,23 +432,47 @@ export default function ExternalReviewsTab() {
                         {draftValue.length}/4000 characters · drafts save automatically
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                          disabled={!draftValue.trim() || sendReply.isPending || !canReply}
-                          title={
-                            canReply
-                              ? undefined
-                              : connState === 'read_only'
-                                ? 'Read-only mode: connect Business Profile to post replies. Your draft is saved.'
-                                : 'Connect Google Business Profile to post replies.'
-                          }
-                        >
-                          {sendReply.isPending
-                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                            : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                          Post reply to Google
-                        </Button>
+                        {canReply ? (
+                          <Button
+                            size="sm"
+                            onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
+                            disabled={!draftValue.trim() || sendReply.isPending}
+                          >
+                            {sendReply.isPending
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5" />
+                              : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                            Post reply to Google
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={!draftValue.trim()}
+                              onClick={async () => {
+                                const ok = await copyToClipboard(draftValue);
+                                saveDraft.mutate({ id: r.id, draft: draftValue });
+                                toast[ok ? 'success' : 'error'](
+                                  ok ? 'Reply copied — paste it on Google' : 'Could not copy the reply',
+                                );
+                                const url = r.review_permalink ?? placeUri;
+                                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                              }}
+                              title="Copies your reply and opens this review on Google so you can paste it there"
+                            >
+                              <Copy className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                              Copy &amp; open on Google
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markReplied.mutate({ id: r.id, text: draftValue })}
+                              disabled={markReplied.isPending}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                              Mark as replied on Google
+                            </Button>
+                          </>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => reclassify.mutate(r.id)} disabled={reclassify.isPending}>
                           <Sparkles className="h-3.5 w-3.5 mr-1.5" />Re-analyse with AI
                         </Button>
@@ -431,17 +483,26 @@ export default function ExternalReviewsTab() {
                           Dismiss
                         </Button>
                       </div>
+                      {!canReply && (
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          Google has not granted this project reply-posting access yet, so replies are posted by hand:
+                          copy the draft, paste it on Google, then mark it replied here to clear the queue.
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {r.reply_status === 'sent' && r.google_reply_text && (
+                  {r.reply_status === 'sent' && (r.google_reply_text || r.reply_text) && (
                     <div className="rounded-xl bg-success/10 p-3 text-sm">
                       <p className="text-xs font-semibold text-success uppercase tracking-wider mb-1 flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" /> Replied on Google {r.replied_at ? `· ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
+                        <ExternalLink className="h-3 w-3" />
+                        {r.reply_mode === 'manual_google' ? 'Replied manually on Google' : 'Replied on Google'}
+                        {r.replied_at ? ` · ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
                       </p>
-                      <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text ?? r.reply_text}</p>
                     </div>
                   )}
+
                 </CardContent>
               </Card>
             );
