@@ -141,8 +141,12 @@ Deno.serve(async (req) => {
       // Resolve original log to recover category/attachment when present
       let category: string | null = null;
       let attachment: any = null;
-      const payloadVariables: Record<string, unknown> | undefined = undefined;
+      // v2.4.0: replay the ORIGINAL variable bag (incl. `event_key`). Dropping
+      // it made every retry unresolvable to a template, so welcome/plan
+      // messages died with `no_template_for_closed_session`.
+      let payloadVariables: Record<string, unknown> | undefined = undefined;
       const useBranded = true;
+
 
       if (row.original_log_id) {
         const { data: log } = await supabase
