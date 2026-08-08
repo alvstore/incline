@@ -158,6 +158,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // `?preview=1` computes the numbers without sending anything — used to
+    // verify the report without burning the once-per-day dedupe key.
+    const preview = new URL(req.url).searchParams.get("preview") === "1";
+    if (preview) {
+      return new Response(
+        JSON.stringify({ ok: true, preview: true, date: isoDate, body }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const defaultBranch = (branches ?? [])[0]?.id ?? null;
     const results: Record<string, string> = {};
 
