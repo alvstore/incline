@@ -4902,11 +4902,14 @@ export type Database = {
           posted_at: string | null
           rating: number | null
           raw: Json | null
+          relative_time: string | null
           replied_at: string | null
           replied_by: string | null
+          reply_mode: string | null
           reply_status: string | null
           reply_text: string | null
           reported_to_google_at: string | null
+          review_permalink: string | null
           review_text: string | null
           source: string
           updated_at: string
@@ -4935,11 +4938,14 @@ export type Database = {
           posted_at?: string | null
           rating?: number | null
           raw?: Json | null
+          relative_time?: string | null
           replied_at?: string | null
           replied_by?: string | null
+          reply_mode?: string | null
           reply_status?: string | null
           reply_text?: string | null
           reported_to_google_at?: string | null
+          review_permalink?: string | null
           review_text?: string | null
           source?: string
           updated_at?: string
@@ -4968,11 +4974,14 @@ export type Database = {
           posted_at?: string | null
           rating?: number | null
           raw?: Json | null
+          relative_time?: string | null
           replied_at?: string | null
           replied_by?: string | null
+          reply_mode?: string | null
           reply_status?: string | null
           reply_text?: string | null
           reported_to_google_at?: string | null
+          review_permalink?: string | null
           review_text?: string | null
           source?: string
           updated_at?: string
