@@ -509,7 +509,7 @@ async function fetchPlaceRecord(
   textQuery: string,
 ): Promise<{ ok: true; place: any } | { ok: false; status: number; body: string }> {
   const details = await placesFetch(key, `/v1/places/${encodeURIComponent(placeId)}?languageCode=en`, {
-    fieldMask: "id,displayName,rating,userRatingCount,reviews",
+    fieldMask: "id,displayName,rating,userRatingCount,googleMapsUri,reviews",
   });
   if (details.ok) return { ok: true, place: await details.json() };
   const detailsBody = await details.text();
@@ -517,9 +517,11 @@ async function fetchPlaceRecord(
   if (textQuery) {
     const search = await placesFetch(key, "/v1/places:searchText", {
       method: "POST",
-      fieldMask: "places.id,places.displayName,places.rating,places.userRatingCount,places.reviews",
+      fieldMask:
+        "places.id,places.displayName,places.rating,places.userRatingCount,places.googleMapsUri,places.reviews",
       body: { textQuery, maxResultCount: 5, languageCode: "en" },
     });
+
     if (search.ok) {
       const j = await search.json();
       const list = (j.places ?? []) as any[];
