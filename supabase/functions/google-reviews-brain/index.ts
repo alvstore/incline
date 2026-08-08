@@ -1128,6 +1128,30 @@ async function saveDraft(inbound_id: string, draft: string) {
   return json({ ok: true });
 }
 
+/**
+ * Assisted reply: while Business Profile quota is pending, staff copy the draft,
+ * post it on Google themselves, then mark the row as handled here so the queue
+ * stays honest. Recorded as `reply_mode = 'manual_google'` — never as an API post.
+ */
+async function markRepliedExternally(inbound_id: string, reply_text: string, user_id?: string) {
+  const sb = supa();
+  const { error } = await sb
+    .from("google_reviews_inbound")
+    .update({
+      reply_status: "sent",
+      reply_mode: "manual_google",
+      reply_text: reply_text || null,
+      draft_reply: null,
+      replied_at: new Date().toISOString(),
+      replied_by: user_id ?? null,
+    })
+    .eq("id", inbound_id);
+  if (error) return json({ ok: false, error: error.message }, 500);
+  return json({ ok: true, mode: "manual_google" });
+}
+
+
+
 
 // ─── Action: request_member_review (legacy compatibility) ───
 async function requestMemberReview(feedback_id: string, channel?: string) {
