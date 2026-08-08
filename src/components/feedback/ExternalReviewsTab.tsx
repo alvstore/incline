@@ -51,6 +51,10 @@ interface InboundRow {
   replied_at: string | null;
   source?: string | null;
   draft_reply?: string | null;
+  review_permalink?: string | null;
+  relative_time?: string | null;
+  reply_mode?: string | null;
+
 }
 
 export default function ExternalReviewsTab() {
