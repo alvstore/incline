@@ -320,6 +320,7 @@ Deno.serve(async (req) => {
           : "membership",
         due_date: dueDateStr,
         payment_link: paymentLink || "https://theincline.in/my-invoices",
+        event_key: triggerEvent,
       };
 
       // Never mail a half-written reminder ("₹" with no number, no date).
