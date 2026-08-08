@@ -253,6 +253,12 @@ export default function ExternalReviewsTab() {
         : 'not_configured';
   const canReply = connState === 'live';
   const notConfigured = connState === 'not_configured';
+  // Fallback deep link when a single review has no permalink of its own.
+  const cfg = (integration?.config ?? {}) as Record<string, any>;
+  const placeUri: string | null =
+    cfg.place_uri ??
+    (cfg.place_id ? `https://search.google.com/local/reviews?placeid=${cfg.place_id}` : null);
+
 
   return (
     <div className="space-y-6">
