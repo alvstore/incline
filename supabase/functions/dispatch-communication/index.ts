@@ -696,7 +696,19 @@ Deno.serve(async (req) => {
         dedupe_key: input.dedupe_key,
         status: 'sending',
         delivery_status: 'sending',
-        delivery_metadata: input.attachment ? { attachment: input.attachment } : {},
+        // v1.27.0: persist the variable bag + event key so the retry worker can
+        // replay an identical send (previously variables were dropped and the
+        // retry fell through to `no_template_for_closed_session`).
+        delivery_metadata: {
+          ...(input.attachment ? { attachment: input.attachment } : {}),
+          ...((input.payload as any)?.variables
+            ? { variables: (input.payload as any).variables }
+            : {}),
+          ...((input.payload as any)?.variables?.event_key
+            ? { event_key: (input.payload as any).variables.event_key }
+            : {}),
+        },
+
       })
       .select('id')
       .single();
