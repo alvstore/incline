@@ -158,16 +158,29 @@ Deno.serve(async (req) => {
           category = (log as any).category ?? null;
           const meta = ((log as any).delivery_metadata ?? {}) as Record<string, any>;
           if (meta.attachment) attachment = meta.attachment;
+          if (meta.variables && typeof meta.variables === "object") {
+            payloadVariables = { ...(meta.variables as Record<string, unknown>) };
+          }
+          if (meta.event_key && payloadVariables && !payloadVariables.event_key) {
+            payloadVariables.event_key = meta.event_key;
+          }
         }
       }
       // Fallback to retry-queue.metadata copy of delivery_metadata
       const meta = (row.metadata ?? {}) as Record<string, any>;
       if (!category && meta.category) category = meta.category;
       if (!attachment && meta.attachment) attachment = meta.attachment;
+      if (!payloadVariables && meta.variables && typeof meta.variables === "object") {
+        payloadVariables = { ...(meta.variables as Record<string, unknown>) };
+      }
+      if (meta.event_key) {
+        payloadVariables = { ...(payloadVariables ?? {}), event_key: meta.event_key };
+      }
 
       if (!category) {
         category = "transactional";
       }
+
 
       const dispatchPayload: Record<string, unknown> = {
         branch_id: row.branch_id,
