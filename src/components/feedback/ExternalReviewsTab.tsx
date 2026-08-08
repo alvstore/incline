@@ -208,6 +208,22 @@ export default function ExternalReviewsTab() {
     },
   });
 
+  // Assisted reply — used while Business Profile posting access is pending.
+  const markReplied = useMutation({
+    mutationFn: async ({ id, text }: { id: string; text: string }) => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'mark_replied_externally', inbound_id: id, reply_text: text },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => { toast.success('Marked as replied on Google'); refetch(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not update the review'),
+  });
+
+
+
   const updateRow = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: any }) => {
       const { error } = await supabase.from('google_reviews_inbound').update(patch).eq('id', id);
