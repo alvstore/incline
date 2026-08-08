@@ -715,7 +715,15 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
       max_retries: 3,
       next_retry_at: new Date(Date.now() + 60_000).toISOString(),
       last_error: reason.slice(0, 500),
-      metadata: { category: "transactional", event_key: "member_created", source: "register-member" },
+      metadata: {
+        category: "transactional",
+        event_key: "member_created",
+        source: "register-member",
+        // Replayed verbatim by process-comm-retry-queue v2.4.0 so the retry
+        // resolves the same approved template as the first attempt.
+        variables: { ...welcomeVars, event_key: "member_created" },
+      },
+
     });
   })));
 
