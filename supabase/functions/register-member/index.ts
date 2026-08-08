@@ -634,14 +634,21 @@ async function verifyAndRegisterHandler(req: Request, body: Record<string, unkno
   // handles ONE channel per call, so WhatsApp, SMS and Email go out as separate
   // invocations. Every message carries the member code AND the portal login link.
   const LOGIN_URL = "https://theincline.in/auth";
+  // v1.4.0: the approved welcome templates carry a `{{membership_plan}}` slot.
+  // It used to be omitted, so Meta filled it positionally with the member name
+  // ("Your <name> membership is now active"). Registration happens BEFORE a
+  // plan is bought, so we send an honest value instead of a false claim.
   const welcomeVars = {
     name: reg.full_name,
     member_name: reg.full_name,
     member_code: member.member_code ?? "",
+    membership_plan: "Incline",
+    plan_name: "Incline",
     branch_name: branch.name,
     login_url: LOGIN_URL,
     login_link: LOGIN_URL,
   };
+
   const welcomeFallback =
     `Hi ${reg.full_name}, welcome to The Incline Life by Incline! ` +
     `Your member code is ${member.member_code ?? ""}. ` +
