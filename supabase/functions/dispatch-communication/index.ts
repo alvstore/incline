@@ -667,13 +667,33 @@ Deno.serve(async (req) => {
             .select('id')
             .single();
           // Producer-side retry queue insert; process-comm-retry-queue will pick it up.
+          // v1.27.0: use the real column names (the previous insert referenced
+          // `retry_after`/`attempt_count`, which do not exist, so quiet-hours
+          // messages were silently never retried) and carry the variables.
           if (log) {
             await supabase.from('communication_retry_queue').insert({
               original_log_id: log.id,
-              retry_after: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-              attempt_count: 0,
+              branch_id: input.branch_id,
+              member_id: input.member_id ?? null,
+              type: input.channel,
+              recipient: input.recipient,
+              subject: input.payload.subject ?? null,
+              content: input.payload.body,
+              template_id: input.template_id ?? null,
+              status: 'pending',
+              retry_count: 0,
+              max_retries: 3,
+              next_retry_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              last_error: 'quiet_hours_deferred',
+              metadata: {
+                category: input.category,
+                variables: (input.payload as any)?.variables ?? null,
+                event_key: (input.payload as any)?.variables?.event_key ?? null,
+                attachment: input.attachment ?? null,
+              },
             }).then(() => {}, () => {});
           }
+
           return ok({ status: 'queued', log_id: log?.id, reason: 'quiet_hours' });
         }
       }
