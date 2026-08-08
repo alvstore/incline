@@ -1106,9 +1106,11 @@ async function replyToReview(inbound_id: string, reply_text: string, user_id?: s
     .from("google_reviews_inbound")
     .update({
       reply_status: "sent",
+      reply_mode: "api",
       reply_text,
       draft_reply: null,
       replied_at: new Date().toISOString(),
+
       replied_by: user_id ?? null,
       google_reply_text: reply_text,
       google_reply_updated_at: new Date().toISOString(),
