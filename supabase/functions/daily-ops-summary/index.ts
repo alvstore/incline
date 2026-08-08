@@ -1,0 +1,241 @@
+// daily-ops-summary v1.0.0
+// Sends the end-of-day owner report at 23:00 IST (17:30 UTC), driven by the
+// master cron. Reports, for the IST calendar day:
+//   • new memberships enrolled
+//   • total sales invoiced
+//   • amount received, broken down by payment mode
+//   • dues collected today vs total dues still outstanding
+//
+// Recipients come from settings(branch_id IS NULL, key='daily_ops_summary_recipients'),
+// falling back to every owner/admin profile that has a phone number.
+// All sends go through `dispatch-communication` — never a send-* function.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+/** Start/end of "today" in IST, expressed as UTC instants. */
+function istDayBounds(now = new Date()) {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  const y = ist.getUTCFullYear();
+  const m = ist.getUTCMonth();
+  const d = ist.getUTCDate();
+  const startUtc = new Date(Date.UTC(y, m, d) - IST_OFFSET_MS);
+  const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+  const dateLabel = new Date(Date.UTC(y, m, d)).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+  });
+  const isoDate = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  return { startUtc, endUtc, dateLabel, isoDate };
+}
+
+const inr = (n: number) =>
+  Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+const MODE_LABEL: Record<string, string> = {
+  cash: "Cash", upi: "UPI", card: "Card", bank_transfer: "Bank transfer",
+  wallet: "Wallet", cheque: "Cheque", other: "Other",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { startUtc, endUtc, dateLabel, isoDate } = istDayBounds();
+
+  try {
+    const [
+      { data: memberships },
+      { data: invoices },
+      { data: payments },
+      { data: openInvoices },
+      { data: branches },
+    ] = await Promise.all([
+      supabase
+        .from("memberships")
+        .select("id, branch_id, price_paid, status")
+        .gte("created_at", startUtc.toISOString())
+        .lt("created_at", endUtc.toISOString())
+        .neq("status", "cancelled"),
+      supabase
+        .from("invoices")
+        .select("id, branch_id, total_amount, status")
+        .gte("created_at", startUtc.toISOString())
+        .lt("created_at", endUtc.toISOString())
+        .not("status", "in", "(cancelled,draft)"),
+      supabase
+        .from("payments")
+        .select("id, branch_id, amount, payment_method, status, invoice_id")
+        .gte("payment_date", startUtc.toISOString())
+        .lt("payment_date", endUtc.toISOString())
+        .eq("status", "completed"),
+      supabase
+        .from("invoices")
+        .select("total_amount, amount_paid, refund_amount")
+        .in("status", ["pending", "partial", "overdue"]),
+      supabase.from("branches").select("id, name"),
+    ]);
+
+    const branchName = new Map((branches ?? []).map((b: any) => [b.id, b.name]));
+
+    const newMemberships = (memberships ?? []).length;
+    const invoicedTotal = (invoices ?? []).reduce(
+      (s: number, i: any) => s + Number(i.total_amount || 0), 0,
+    );
+
+    const byMode = new Map<string, number>();
+    let receivedTotal = 0;
+    for (const p of payments ?? []) {
+      const amt = Number(p.amount || 0);
+      receivedTotal += amt;
+      const key = String(p.payment_method || "other");
+      byMode.set(key, (byMode.get(key) ?? 0) + amt);
+    }
+
+    // Dues collected today = payments booked today against an invoice.
+    const duesCollected = (payments ?? [])
+      .filter((p: any) => p.invoice_id)
+      .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+
+    const duesPending = (openInvoices ?? []).reduce(
+      (s: number, i: any) =>
+        s + Math.max(0, Number(i.total_amount || 0) - Number(i.amount_paid || 0) - Number(i.refund_amount || 0)),
+      0,
+    );
+
+    const modeLines = [...byMode.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `  • ${MODE_LABEL[k] ?? k}: ₹${inr(v)}`)
+      .join("\n") || "  • No payments recorded";
+
+    const perBranch = (branches ?? [])
+      .map((b: any) => {
+        const mCount = (memberships ?? []).filter((m: any) => m.branch_id === b.id).length;
+        const rec = (payments ?? [])
+          .filter((p: any) => p.branch_id === b.id)
+          .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+        return mCount || rec ? `  • ${b.name}: ${mCount} new, ₹${inr(rec)} received` : null;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    const body =
+      `The Incline — Daily Report (${dateLabel})\n\n` +
+      `New memberships enrolled: ${newMemberships}\n` +
+      `Total sales invoiced: ₹${inr(invoicedTotal)}\n` +
+      `Amount received: ₹${inr(receivedTotal)}\n${modeLines}\n\n` +
+      `Dues collected today: ₹${inr(duesCollected)}\n` +
+      `Dues still outstanding: ₹${inr(duesPending)}` +
+      (perBranch ? `\n\nBy branch:\n${perBranch}` : "");
+
+    // ── recipients ──
+    let recipients: Array<{ name?: string; phone?: string; email?: string }> = [];
+    const { data: cfg } = await supabase
+      .from("settings")
+      .select("value")
+      .is("branch_id", null)
+      .eq("key", "daily_ops_summary_recipients")
+      .maybeSingle();
+    const cfgVal = (cfg as any)?.value;
+    if (Array.isArray(cfgVal)) recipients = cfgVal;
+
+    if (recipients.length === 0) {
+      const { data: roleRows } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .in("role", ["owner", "admin"]);
+      const ids = [...new Set((roleRows ?? []).map((r: any) => r.user_id))];
+      if (ids.length) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("full_name, phone, email")
+          .in("id", ids);
+        recipients = (profs ?? []).map((p: any) => ({
+          name: p.full_name, phone: p.phone, email: p.email,
+        }));
+      }
+    }
+
+    // `?preview=1` computes the numbers without sending anything — used to
+    // verify the report without burning the once-per-day dedupe key.
+    const preview = new URL(req.url).searchParams.get("preview") === "1";
+    if (preview) {
+      return new Response(
+        JSON.stringify({ ok: true, preview: true, date: isoDate, body }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const defaultBranch = (branches ?? [])[0]?.id ?? null;
+    const results: Record<string, string> = {};
+
+    for (const r of recipients) {
+      const variables = {
+        recipient_name: r.name ?? "there",
+        member_name: r.name ?? "there",
+        report_date: dateLabel,
+        new_memberships: String(newMemberships),
+        total_sales: inr(invoicedTotal),
+        amount_received: inr(receivedTotal),
+        dues_collected: inr(duesCollected),
+        dues_pending: inr(duesPending),
+        event_key: "daily_ops_summary",
+      };
+
+      for (const channel of ["whatsapp", "email"] as const) {
+        const recipient = channel === "email" ? r.email : r.phone;
+        if (!recipient) continue;
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/dispatch-communication`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+            },
+            body: JSON.stringify({
+              branch_id: defaultBranch,
+              channel,
+              category: "transactional",
+              recipient,
+              payload: {
+                subject: `Daily report — ${dateLabel}`,
+                body: channel === "email" ? body.replace(/\n/g, "<br/>") : body,
+                variables,
+                use_branded_template: channel === "email",
+              },
+              // One report per recipient per IST day, whatever the retries.
+              dedupe_key: `daily_ops_summary:${isoDate}:${recipient}:${channel}`,
+              force: true,
+            }),
+          });
+          const j = await res.json().catch(() => ({}));
+          results[`${recipient}:${channel}`] = j?.status ?? (res.ok ? "sent" : "failed");
+        } catch (e) {
+          results[`${recipient}:${channel}`] = `failed:${e instanceof Error ? e.message : "unknown"}`;
+        }
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true, date: isoDate, newMemberships, invoicedTotal,
+        receivedTotal, duesCollected, duesPending, results,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    console.error("[daily-ops-summary]", msg);
+    await supabase.rpc("log_error_event", {
+      p_source: "daily-ops-summary",
+      p_severity: "error",
+      p_message: msg,
+    }).then(() => {}, () => {});
+    return new Response(JSON.stringify({ ok: false, error: msg }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

@@ -297,15 +297,45 @@ Deno.serve(async (req) => {
         }
       }
 
-      const dueDateStr = invoice?.payment_due_date || invoice?.due_date || "";
+      // The approved Meta templates use {{amount_due}}, {{due_date}} and
+      // {{item_description}} and already print "₹" in the body — so values must
+      // be symbol-free and named exactly. Sending `pending_amount` instead left
+      // the slots blank ("clear the outstanding amount of ₹").
+      const rawDue = invoice?.payment_due_date || invoice?.due_date || "";
+      const dueDateStr = rawDue
+        ? new Date(rawDue).toLocaleDateString("en-IN", {
+            day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata",
+          })
+        : "";
+      const amountPlain = pendingAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 });
       const variables: Record<string, string> = {
         member_name: name,
         invoice_number: invoice?.invoice_number || "",
-        pending_amount: `₹${pendingAmt.toFixed(0)}`,
-        total_amount: `₹${totalAmt.toFixed(0)}`,
+        amount_due: amountPlain,
+        amount: amountPlain,
+        pending_amount: amountPlain,
+        total_amount: totalAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 }),
+        item_description: invoice?.invoice_number
+          ? `invoice ${invoice.invoice_number}`
+          : "membership",
         due_date: dueDateStr,
-        payment_link: paymentLink || "https://incline.lovable.app/my-invoices",
+        payment_link: paymentLink || "https://theincline.in/my-invoices",
+        event_key: triggerEvent,
       };
+
+      // Never mail a half-written reminder ("₹" with no number, no date).
+      if (!amountPlain || Number(pendingAmt) <= 0 || !dueDateStr) {
+        await adminClient
+          .from("payment_reminders")
+          .update({
+            status: "skipped",
+            skipped_reason: !dueDateStr ? "missing_due_date" : "missing_amount",
+          })
+          .eq("id", reminder.id);
+        results.payment_reminders_skipped = (results.payment_reminders_skipped || 0) + 1;
+        continue;
+      }
+
 
       notifications.push({
         user_id: member.user_id, branch_id: reminder.branch_id, title: "Payment Reminder",

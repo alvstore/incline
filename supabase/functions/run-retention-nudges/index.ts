@@ -146,13 +146,24 @@ Deno.serve(async (req) => {
           .limit(1);
 
         if (lastNudge?.length) {
-          const { count: attendanceAfterNudge } = await adminClient
-            .from("member_attendance")
-            .select("id", { count: "exact", head: true })
-            .eq("member_id", member.member_id)
-            .gte("check_in", lastNudge[0].sent_at);
+          // v2.4.0: a gate/turnstile entry counts as a visit too. Checking only
+          // `member_attendance` meant members who badge in at the door kept
+          // receiving "we miss you" nudges.
+          const [{ count: attendanceAfterNudge }, { count: gateAfterNudge }] =
+            await Promise.all([
+              adminClient
+                .from("member_attendance")
+                .select("id", { count: "exact", head: true })
+                .eq("member_id", member.member_id)
+                .gte("check_in", lastNudge[0].sent_at),
+              adminClient
+                .from("access_logs")
+                .select("id", { count: "exact", head: true })
+                .eq("member_id", member.member_id)
+                .gte("captured_at", lastNudge[0].sent_at),
+            ]);
 
-          if ((attendanceAfterNudge || 0) > 0) {
+          if ((attendanceAfterNudge || 0) > 0 || (gateAfterNudge || 0) > 0) {
             results.skipped_returned++;
             continue;
           }

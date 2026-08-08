@@ -141,8 +141,12 @@ Deno.serve(async (req) => {
       // Resolve original log to recover category/attachment when present
       let category: string | null = null;
       let attachment: any = null;
-      const payloadVariables: Record<string, unknown> | undefined = undefined;
+      // v2.4.0: replay the ORIGINAL variable bag (incl. `event_key`). Dropping
+      // it made every retry unresolvable to a template, so welcome/plan
+      // messages died with `no_template_for_closed_session`.
+      let payloadVariables: Record<string, unknown> | undefined = undefined;
       const useBranded = true;
+
 
       if (row.original_log_id) {
         const { data: log } = await supabase
@@ -154,16 +158,29 @@ Deno.serve(async (req) => {
           category = (log as any).category ?? null;
           const meta = ((log as any).delivery_metadata ?? {}) as Record<string, any>;
           if (meta.attachment) attachment = meta.attachment;
+          if (meta.variables && typeof meta.variables === "object") {
+            payloadVariables = { ...(meta.variables as Record<string, unknown>) };
+          }
+          if (meta.event_key && payloadVariables && !payloadVariables.event_key) {
+            payloadVariables.event_key = meta.event_key;
+          }
         }
       }
       // Fallback to retry-queue.metadata copy of delivery_metadata
       const meta = (row.metadata ?? {}) as Record<string, any>;
       if (!category && meta.category) category = meta.category;
       if (!attachment && meta.attachment) attachment = meta.attachment;
+      if (!payloadVariables && meta.variables && typeof meta.variables === "object") {
+        payloadVariables = { ...(meta.variables as Record<string, unknown>) };
+      }
+      if (meta.event_key) {
+        payloadVariables = { ...(payloadVariables ?? {}), event_key: meta.event_key };
+      }
 
       if (!category) {
         category = "transactional";
       }
+
 
       const dispatchPayload: Record<string, unknown> = {
         branch_id: row.branch_id,
