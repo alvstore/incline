@@ -563,6 +563,9 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   const j = result.place;
 
   const reviews = (j.reviews ?? []) as any[];
+  // Deep link staff can open to reply manually while GBP quota is pending.
+  const placeUri: string | null =
+    j.googleMapsUri ?? (placeId ? `https://search.google.com/local/reviews?placeid=${placeId}` : null);
   let upserted = 0;
   for (const r of reviews) {
     const row = {
@@ -573,6 +576,8 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
       rating: typeof r.rating === "number" ? Math.round(r.rating) : null,
       review_text: r.originalText?.text ?? r.text?.text ?? null,
       posted_at: r.publishTime ?? null,
+      relative_time: r.relativePublishTimeDescription ?? null,
+      review_permalink: r.googleMapsUri ?? placeUri,
       source: "places",
       raw: r,
     };
@@ -589,6 +594,7 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     place_name: j.displayName?.text ?? (cfg as any)?.place_name ?? null,
     place_rating: j.rating ?? null,
     place_rating_count: j.userRatingCount ?? null,
+    place_uri: placeUri,
     last_places_sync: new Date().toISOString(),
   });
 
@@ -599,7 +605,9 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     rating: j.rating ?? null,
     total_ratings: j.userRatingCount ?? null,
     place_id: placeId,
+    place_uri: placeUri,
   };
+
 }
 
 async function recordFetchError(branch_id: string, reason: string | null) {
