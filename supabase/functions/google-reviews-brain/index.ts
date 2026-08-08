@@ -1346,7 +1346,11 @@ Deno.serve(async (req) => {
         return json({ ok: placesOk || gbpOk, places_ok: placesOk, gbp_ok: gbpOk, checks, gbp, places });
       }
 
-      case "request_member_review":
+      case "mark_replied_externally": {
+        if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
+        return await markRepliedExternally(body.inbound_id, body.reply_text ?? "", userId);
+      }
+
 
       case "classify": {
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
