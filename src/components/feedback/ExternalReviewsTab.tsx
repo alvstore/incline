@@ -424,23 +424,47 @@ export default function ExternalReviewsTab() {
                         {draftValue.length}/4000 characters · drafts save automatically
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
-                          disabled={!draftValue.trim() || sendReply.isPending || !canReply}
-                          title={
-                            canReply
-                              ? undefined
-                              : connState === 'read_only'
-                                ? 'Read-only mode: connect Business Profile to post replies. Your draft is saved.'
-                                : 'Connect Google Business Profile to post replies.'
-                          }
-                        >
-                          {sendReply.isPending
-                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                            : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                          Post reply to Google
-                        </Button>
+                        {canReply ? (
+                          <Button
+                            size="sm"
+                            onClick={() => sendReply.mutate({ id: r.id, text: draftValue })}
+                            disabled={!draftValue.trim() || sendReply.isPending}
+                          >
+                            {sendReply.isPending
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5" />
+                              : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                            Post reply to Google
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={!draftValue.trim()}
+                              onClick={async () => {
+                                const ok = await copyToClipboard(draftValue);
+                                saveDraft.mutate({ id: r.id, draft: draftValue });
+                                toast[ok ? 'success' : 'error'](
+                                  ok ? 'Reply copied — paste it on Google' : 'Could not copy the reply',
+                                );
+                                const url = r.review_permalink ?? placeUri;
+                                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                              }}
+                              title="Copies your reply and opens this review on Google so you can paste it there"
+                            >
+                              <Copy className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                              Copy &amp; open on Google
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markReplied.mutate({ id: r.id, text: draftValue })}
+                              disabled={markReplied.isPending}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+                              Mark as replied on Google
+                            </Button>
+                          </>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => reclassify.mutate(r.id)} disabled={reclassify.isPending}>
                           <Sparkles className="h-3.5 w-3.5 mr-1.5" />Re-analyse with AI
                         </Button>
@@ -451,17 +475,26 @@ export default function ExternalReviewsTab() {
                           Dismiss
                         </Button>
                       </div>
+                      {!canReply && (
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          Google has not granted this project reply-posting access yet, so replies are posted by hand:
+                          copy the draft, paste it on Google, then mark it replied here to clear the queue.
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {r.reply_status === 'sent' && r.google_reply_text && (
+                  {r.reply_status === 'sent' && (r.google_reply_text || r.reply_text) && (
                     <div className="rounded-xl bg-success/10 p-3 text-sm">
                       <p className="text-xs font-semibold text-success uppercase tracking-wider mb-1 flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" /> Replied on Google {r.replied_at ? `· ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
+                        <ExternalLink className="h-3 w-3" />
+                        {r.reply_mode === 'manual_google' ? 'Replied manually on Google' : 'Replied on Google'}
+                        {r.replied_at ? ` · ${format(new Date(r.replied_at), 'dd MMM yyyy')}` : ''}
                       </p>
-                      <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{r.google_reply_text ?? r.reply_text}</p>
                     </div>
                   )}
+
                 </CardContent>
               </Card>
             );
