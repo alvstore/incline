@@ -762,11 +762,16 @@ Deno.serve(async (req) => {
           // eligible, and when the send carries a PDF we prefer a template
           // that actually has a document header (native attachment) over a
           // body-only one (which degrades to a pasted link).
+          // v1.27.0: MARKETING templates are de-prioritised for operational
+          // sends. Meta pacing-blocks marketing traffic to fresh numbers with
+          // error 131049 ("healthy ecosystem engagement"), which is exactly
+          // what killed the welcome messages. A UTILITY template with the same
+          // trigger_event always wins.
           const pickTemplate = async (events: string[]) => {
             if (events.length === 0) return null;
             const { data: rows } = await supabase
               .from('templates')
-              .select('id, branch_id, header_type, meta_template_status')
+              .select('id, branch_id, header_type, meta_template_status, meta_template_name')
               .in('trigger_event', events)
               .eq('type', 'whatsapp')
               .not('meta_template_name', 'is', null)
@@ -775,13 +780,36 @@ Deno.serve(async (req) => {
               (r: any) => String(r.meta_template_status || '').toUpperCase() === 'APPROVED',
             );
             if (list.length === 0) return null;
+
+            // Resolve live Meta categories so we can avoid MARKETING.
+            const names = list.map((r: any) => r.meta_template_name).filter(Boolean);
+            const catByName = new Map<string, string>();
+            if (names.length > 0) {
+              const { data: wtRows } = await supabase
+                .from('whatsapp_templates')
+                .select('name, category, status, is_stale')
+                .in('name', names);
+              for (const w of wtRows ?? []) {
+                if (String((w as any).status || '').toUpperCase() !== 'APPROVED') continue;
+                if ((w as any).is_stale) continue;
+                catByName.set((w as any).name, String((w as any).category || '').toUpperCase());
+              }
+            }
+
             const wantsDoc = !!input.attachment?.url;
-            const score = (r: any) =>
-              (r.branch_id ? 2 : 0) +
-              (wantsDoc && String(r.header_type || '') === 'document' ? 4 : 0);
+            const score = (r: any) => {
+              const cat = catByName.get(r.meta_template_name) ?? '';
+              return (
+                (r.branch_id ? 2 : 0) +
+                (wantsDoc && String(r.header_type || '') === 'document' ? 8 : 0) +
+                (cat === 'MARKETING' ? -6 : 0) +
+                (cat === 'UTILITY' ? 3 : 0)
+              );
+            };
             list.sort((a: any, b: any) => score(b) - score(a));
             return list[0];
           };
+
 
           if (!input.template_id) {
             const eventKey = String(
