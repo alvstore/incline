@@ -330,7 +330,6 @@ Deno.serve(async (req) => {
           .update({
             status: "skipped",
             skipped_reason: !dueDateStr ? "missing_due_date" : "missing_amount",
-            updated_at: new Date().toISOString(),
           })
           .eq("id", reminder.id);
         results.payment_reminders_skipped = (results.payment_reminders_skipped || 0) + 1;
