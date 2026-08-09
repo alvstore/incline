@@ -77,7 +77,7 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
   const [searchText, setSearchText] = useState('');
   const [results, setResults] = useState<PlaceItem[]>([]);
   const [searching, setSearching] = useState(false);
-  const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  
   const [diag, setDiag] = useState<DiagnoseCheck[] | null>(null);
   const [diagRunning, setDiagRunning] = useState(false);
 
