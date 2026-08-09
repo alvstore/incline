@@ -1082,152 +1082,19 @@ export function IntegrationSettings() {
         </TabsContent>
 
         <TabsContent value="google" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Google Business Profile
-              </CardTitle>
-              <CardDescription>
-                Sync approved reviews to your Google Maps listing
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                {GOOGLE_PROVIDERS.map((provider) => {
-                  const config = getIntegrationsByType('google_business').find(
-                    (i: any) => i.provider === provider.id
-                  );
-                  return (
-                    <Card key={provider.id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <Globe className="h-8 w-8 text-info" />
-                            <div>
-                              <h3 className="font-semibold">{provider.name}</h3>
-                              <p className="text-sm text-muted-foreground">{provider.description}</p>
-                            </div>
-                          </div>
-                          <Badge variant={config?.is_active ? 'default' : 'secondary'}>
-                            {config?.is_active ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                            {config?.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                        <div className="mt-4 p-3 bg-muted/50 rounded-md">
-                          <p className="text-sm text-muted-foreground">
-                            Configure Google Business Profile API to automatically sync approved reviews from the Feedback page to your Google Maps listing.
-                          </p>
-                        </div>
-                        <Button 
-                          className="w-full mt-4" 
-                          variant={config?.is_active ? 'outline' : 'default'}
-                          onClick={() => openConfig('google_business', provider.id)}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          {config ? 'Configure' : 'Setup'}
-                        </Button>
-                        {config?.is_active && config?.branch_id && (
-                          <Button
-                            className="w-full mt-2"
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              const t = toast.loading('Testing Google connection…');
-                              try {
-                                const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
-                                  body: { action: 'test_connection', branch_id: config.branch_id },
-                                });
-                                if (error) throw error;
-                                if ((data as any)?.ok) toast.success('Connected to Google Business', { id: t });
-                                else toast.error((data as any)?.reason ?? 'Test failed', { id: t });
-                              } catch (e: any) {
-                                toast.error(e?.message ?? 'Test failed', { id: t });
-                              }
-                            }}
-                          >
-                            Test connection
-                          </Button>
-                        )}
-                        {config?.branch_id && (
-                          <Button
-                            className="w-full mt-2"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setDiscoverOpen({
-                              branchId: config.branch_id,
-                              branchName: (config as any)?.branch_name,
-                              accountId: (config.config as any)?.account_id,
-                              locationId: (config.config as any)?.location_id,
-                            })}
-                          >
-                            <Search className="h-4 w-4 mr-2" />
-                            Auto-discover IDs
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Google Business Setup Guide — Collapsible */}
-          <Collapsible>
-            <Card>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-t-xl">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Setup Guide</span>
-                    <ChevronRight className="h-4 w-4 transition-transform duration-200 [[data-state=open]_&]:rotate-90" />
-                  </CardTitle>
-                  <CardDescription>How to connect Google Business Profile for review syncing</CardDescription>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="space-y-5">
-                  <div className="space-y-4">
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">1</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Enable Google API Library services</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">In Google Cloud Console → APIs & Services → Library, enable <strong>My Business Account Management API</strong>, <strong>My Business Business Information API</strong>, and <strong>Google My Business API</strong>.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">2</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Create OAuth Client (Web application)</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Go to <strong>Google Auth Platform → Clients → Create Client → Web application</strong>. Add this exact <strong>Authorized redirect URI</strong> (no trailing slash): <code className="font-mono text-primary break-all">{SUPABASE_FUNCTION_BASE}/google-reviews-brain</code>. Authorized JavaScript origins are optional for this server-side flow but you can add your app domain if Google warns you.</p>
-                        <p className="text-xs text-muted-foreground mt-1">Seeing <code className="font-mono">Error 401: deleted_client</code>? The client was removed in Google Cloud — create a fresh Web application client and use its new ID + Secret here.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">3</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Save credentials and connect OAuth</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Paste Client ID + Client Secret, save, then click <strong>Connect Google</strong>. The app requests <code className="font-mono">business.manage</code> with offline access so it can store a refresh token.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">4</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Auto-discover IDs and test</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Click <strong>Auto-discover IDs</strong> to call Google's current Account Management and Business Information APIs, save the selected location, then test the connection.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <p className="text-xs text-warning dark:text-warning">
-                      <strong>Note:</strong> Your Google Business listing must be verified before reviews can be synced.
-                    </p>
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+          <GoogleListingCard
+            branchId={branchFilter}
+            integration={getIntegrationsByType('google_business')[0]}
+            onConfigure={() => {
+              if (!branchFilter) {
+                toast.error('Select a branch first — the Google listing is linked per branch.');
+                return;
+              }
+              setGoogleDrawerOpen(true);
+            }}
+          />
         </TabsContent>
+
 
         <TabsContent value="leads" className="space-y-4">
           <LeadCaptureTab />
