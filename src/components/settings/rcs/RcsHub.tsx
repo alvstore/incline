@@ -75,7 +75,7 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const branchId = (selectedBranch as any)?.id ?? null;
   const [tab, setTab] = useState('overview');
 
-  // Probe BOTH providers; pick the active one (Smartping preferred if active).
+  // Probe BOTH providers; pick the one that can actually send (credentials + active).
   const { data: cfg, isLoading: cfgLoading } = useQuery({
     queryKey: ['rcs-cfg', branchId],
     queryFn: async () => {
@@ -87,11 +87,12 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
         ? await q.or(`branch_id.eq.${branchId},branch_id.is.null`).order('branch_id', { ascending: false, nullsFirst: false })
         : await q.is('branch_id', null);
       const list = ((data as any[]) ?? []);
-      // Prefer active Smartping, then active Telinfy, then any Smartping, then any Telinfy.
+      const credsOf = (r: any) => !!(r?.credentials?.api_key || r?.credentials?.has_key || r?.credentials?.token || r?.credentials?.password);
+      // A provider only counts as "connected" when it has credentials AND is active.
       return (
-        list.find((r) => r.provider === 'smartping' && r.is_active) ||
-        list.find((r) => r.provider === 'telinfy' && r.is_active) ||
-        list.find((r) => r.provider === 'smartping') ||
+        list.find((r) => credsOf(r) && r.is_active) ||
+        list.find((r) => credsOf(r)) ||
+        list.find((r) => r.is_active) ||
         list[0] || null
       );
     },
@@ -101,7 +102,8 @@ export function RcsHub({ onConfigure }: { onConfigure?: () => void } = {}) {
   const hasCreds = !!(cfg && (
     (cfg as any).credentials?.api_key ||
     (cfg as any).credentials?.has_key ||
-    ((cfg as any).credentials?.user_id && (cfg as any).credentials?.api_key)
+    (cfg as any).credentials?.token ||
+    (cfg as any).credentials?.password
   ));
   const isActive = !!cfg?.is_active;
   const state: 'unconfigured' | 'inactive' | 'active' =
