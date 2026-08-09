@@ -856,22 +856,40 @@ async function classifyOne(inbound_id: string) {
   let reasoning = "";
   let draft = "";
   {
-    // v3 — persona ("you are a customer-service AI…") comes from
-    // ai_purposes.review_reply.system_prompt (Settings → AI Brain). Only
-    // the output-contract for this call lives here.
-    const sysOverride =
-      "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
-      "Then draft a polite, professional reply (≤500 chars). " +
-      "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}. " +
-      "Never accuse the reviewer of being a competitor.";
+    // v6 — persona comes from ai_purposes.review_reply.system_prompt. This block
+    // only carries the output contract plus the "sound like a human" rules that
+    // stop the model producing obvious AI boilerplate.
+    const sysOverride = [
+      "You classify a Google review and write the owner's reply.",
+      "classification must be exactly one of: genuine, unhappy_member, suspected_fake, spam.",
+      "",
+      "REPLY RULES — write like the gym's founder typing on her phone, not like an AI:",
+      "1. Open by referring to something SPECIFIC the reviewer actually mentioned (a trainer, the ice bath, the sauna, cleanliness, timings, staff, equipment). If the review has no text, react to the star rating honestly instead of inventing details.",
+      "2. Use the reviewer's first name only if it reads naturally.",
+      "3. 2 to 4 short sentences. Under 400 characters. Plain everyday English; light Indian-English/Hinglish warmth is fine ('really glad', 'do drop by', 'see you at the club').",
+      "4. BANNED phrases: 'We appreciate your feedback', 'valued customer', 'we strive to', 'at our facility', 'thank you for taking the time', 'we are delighted', 'rest assured', 'kindly', 'esteemed', em dashes, exclamation-mark spam, emojis, hashtags.",
+      "5. Never repeat the same opener across reviews. Vary sentence rhythm.",
+      "6. For 1-3 star reviews: acknowledge the specific problem in plain words, own it without excuses, say the one concrete thing being done, and invite them to reach the team directly. Do not offer refunds, free months, or anything financial.",
+      "7. For 4-5 star reviews: keep it short and personal, name what they liked, no sales pitch.",
+      "8. Never accuse the reviewer of being fake or a competitor, even when the classification says suspected_fake — in that case write a calm, neutral, factual reply.",
+      "9. No promises the gym cannot keep, no pricing, no opening dates.",
+      "",
+      "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}.",
+      "reasoning is internal staff-facing: 1-2 lines on why this classification, citing evidence.",
+    ].join("\n");
     const userPrompt = JSON.stringify({
       branch_name: (row.branches as any)?.name ?? "our gym",
       rating: row.rating,
       review_text: row.review_text,
+      has_text: !!(row.review_text && String(row.review_text).trim()),
       author_name: row.author_name,
+      author_first_name: String(row.author_name ?? "").trim().split(/\s+/)[0] || null,
+      posted_at: row.posted_at,
+      is_known_member: match.match_type && match.match_type !== "none",
       match_type: match.match_type,
       match_evidence: match.evidence,
     });
+
 
     const extractJson = (text: string | undefined | null): any => {
       if (!text) return null;
