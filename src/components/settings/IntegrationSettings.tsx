@@ -110,9 +110,8 @@ export function IntegrationSettings() {
   }>({ open: false, type: 'payment_gateway', provider: '' });
   const [diagnostics, setDiagnostics] = useState<{ ok: boolean; checks: any[] } | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
-  const [discoverOpen, setDiscoverOpen] = useState<{ branchId: string; branchName?: string; accountId?: string; locationId?: string } | null>(null);
+  const [googleDrawerOpen, setGoogleDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
-  const razorpayWebhookInfo = getWebhookInfoForProvider('payment_gateway', 'razorpay', branchFilter);
 
   const runMetaDiagnostics = async () => {
     const igInteg = (integrations as any[]).find(
