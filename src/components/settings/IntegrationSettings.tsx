@@ -29,9 +29,6 @@ import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
-const GOOGLE_PROVIDERS = [
-  { id: 'google_business', name: 'Google Business Profile', description: 'Track Google Reviews & reply (review requests use the per-branch link)' },
-];
 
 const PAYMENT_PROVIDERS = [
   { id: 'razorpay', name: 'Razorpay' },
