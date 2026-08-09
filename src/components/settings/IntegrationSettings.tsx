@@ -1432,78 +1432,12 @@ function IntegrationConfigSheet({
             </div>
           )}
 
-          {type === 'google_business' && (() => {
-            const savedClientId = (existing?.credentials as any)?.client_id as string | undefined;
-            const hasRefreshToken = !!(existing?.credentials as any)?.refresh_token;
-            const maskedSaved = savedClientId
-              ? `${savedClientId.slice(0, 8)}…${savedClientId.slice(-16)}`
-              : null;
-            return (
-              <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
-                <div className="space-y-2">
-                  <p className="text-xs text-foreground">
-                    <strong>Step 1:</strong> Save OAuth Client ID + Client Secret, then click Connect Google to create the refresh token used for API discovery.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Step 2:</strong> Use Auto-discover, OR paste <strong>Account ID</strong> and <strong>Location ID</strong> manually below. Find them in the Google Business Profile URL: <code className="font-mono">business.google.com/n/&lt;ACCOUNT_ID&gt;/profile?fid=&lt;LOCATION_ID&gt;</code>.
-                  </p>
-                </div>
-
-                <div className="text-[11px] p-2 rounded-lg bg-info/10 border border-info/20 text-info dark:text-info">
-                  Seeing <code className="font-mono">Google API 403 ... has not been used in project ... or it is disabled</code>? Open Google Cloud Console → APIs &amp; Services → Library and enable <strong>Google My Business API</strong>, <strong>My Business Account Management API</strong>, and <strong>My Business Business Information API</strong> for the same project as your OAuth client. Wait ~1 minute, then click Test Connection.
-                </div>
-
-                {maskedSaved && (
-                  <div className="text-xs p-2 rounded-lg bg-background/60 border border-border space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">Saved Client ID</span>
-                      <code className="font-mono text-[11px] break-all text-foreground">{maskedSaved}</code>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">OAuth refresh token</span>
-                      <span className={hasRefreshToken ? 'text-success font-medium' : 'text-warning font-medium'}>
-                        {hasRefreshToken ? 'Connected' : 'Not connected'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="text-[11px] p-2 rounded-lg bg-warning/10 border border-warning/20 text-warning dark:text-warning">
-                  Seeing <code className="font-mono">Error 401: deleted_client</code> from Google? The OAuth client was removed in Google Cloud. Open Google Auth Platform → Clients, create a new <strong>Web application</strong> client, paste the new Client ID + Secret here, save, then Connect Google.
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      const t = toast.loading('Opening Google authorization…');
-                      try {
-                        await connectGoogleBusiness();
-                      } catch (e: any) {
-                        toast.error(e?.message || 'Could not connect Google', { id: t });
-                      }
-                    }}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    Connect Google
-                  </Button>
-                  {onRequestDiscover && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => { onOpenChange(false); setTimeout(() => onRequestDiscover(), 150); }}
-                    >
-                      <Search className="h-3.5 w-3.5 mr-1.5" />
-                      Auto-discover IDs
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          {type === 'google_business' && (
+            <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 text-xs text-muted-foreground">
+              Google Business Profile is configured from the <strong>Google</strong> tab — it links this branch to its
+              Google listing through the Places API.
+            </div>
+          )}
 
           {configFields.length > 0 && (
             <div className="space-y-4">
