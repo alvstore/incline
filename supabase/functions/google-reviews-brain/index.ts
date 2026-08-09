@@ -370,7 +370,7 @@ function friendlyGoogleError(status: number, body: string): string {
     return "Google has not granted review-API quota to your Cloud project yet. Submit the Business Profile API quota request form — approval usually takes a few days.";
   }
   if (status === 403) return "Google returned 403 Forbidden. The connected Google account may not manage this location, or the APIs are not enabled.";
-  if (status === 429) return "Google rate-limited the request. Reviews will retry automatically on the next sync.";
+  if (status === 429) return "Google rate-limited this Business Profile call. Reading reviews still works through Places — only posting replies is affected.";
   if (status === 401) return "Google rejected the access token. Reconnect the Google account.";
   return `Google returned HTTP ${status}.`;
 }
