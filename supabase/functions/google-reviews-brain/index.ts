@@ -1315,7 +1315,7 @@ Deno.serve(async (req) => {
           lane: "business_profile",
           ok: !!(cfg?.account_id && cfg?.location_id),
           label: "Business location selected",
-          hint: "Pick the account and location this branch maps to.",
+          hint: "Only needed to post replies via the API. Reading reviews already works through Places.",
         });
         let gbp: { ok: boolean; status?: number; error?: string } = { ok: false };
         if (cfg?.account_id && cfg?.location_id) {
