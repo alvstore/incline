@@ -1,4 +1,5 @@
-// google-reviews-brain v5.1.0 — Humble, template-resolvable review requests
+// google-reviews-brain v6.0.0 — Places-only discovery (legacy list_accounts /
+// list_locations removed), honest rate-limit copy, human-sounding reply drafts
 // (event_key=review_request, member_name/branch_name/review_link variables).
 // v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
 // persistence, Places→GBP duplicate promotion, draft persistence, real Google errors.
