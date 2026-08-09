@@ -23,6 +23,7 @@ import {
   Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
 import GoogleBusinessDrawer from './GoogleBusinessDrawer';
+import GoogleListingCard from './GoogleListingCard';
 import { RcsHub } from './rcs/RcsHub';
 import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
 
