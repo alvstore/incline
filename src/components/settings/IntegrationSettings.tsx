@@ -381,7 +381,10 @@ export function IntegrationSettings() {
               <div className="grid gap-4 md:grid-cols-2">
                 {RCS_PROVIDERS.map((provider) => {
                   const config = getIntegrationsByType('rcs').find((i: any) => i.provider === provider.id);
-                  const isActive = !!config?.is_active;
+                  const creds = (config?.credentials ?? {}) as Record<string, any>;
+                  const hasCreds = !!(creds.api_key || creds.has_key || creds.token || creds.password);
+                  const isActive = !!config?.is_active && hasCreds;
+                  const label = !hasCreds ? 'Not configured' : config?.is_active ? 'Connected' : 'Disabled';
                   return (
                     <Card key={provider.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
                       <CardContent className="pt-6">
@@ -395,12 +398,38 @@ export function IntegrationSettings() {
                               <p className="text-xs text-muted-foreground line-clamp-2">{provider.description}</p>
                             </div>
                           </div>
-                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
+                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : hasCreds ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}>
                             {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                            {isActive ? 'Active' : 'Inactive'}
+                            {label}
                           </Badge>
                         </div>
-                        <Button className="w-full mt-4" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
+                        {!hasCreds && config?.is_active && (
+                          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            Marked active but no credentials are saved — sending falls back to the other provider.
+                          </p>
+                        )}
+                        <div className="mt-4 space-y-1.5 rounded-xl bg-primary/5 p-3">
+                          <div className="flex items-center gap-1.5">
+                            <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
+                            <span className="text-xs font-semibold">Inbound webhook URL</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
+                              {`${RCS_WEBHOOK_URL}?provider=${provider.id}`}
+                            </code>
+                            <Button
+                              variant="outline" size="sm" className="cursor-pointer shrink-0"
+                              aria-label={`Copy ${provider.name} webhook URL`}
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${RCS_WEBHOOK_URL}?provider=${provider.id}`);
+                                toast.success(`${provider.name} webhook URL copied`);
+                              }}
+                            >
+                              <Copy className="h-3.5 w-3.5" aria-hidden />
+                            </Button>
+                          </div>
+                        </div>
+                        <Button className="w-full mt-4 cursor-pointer" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
                           <Settings className="h-4 w-4 mr-2" />{config ? 'Configure' : 'Setup'}
                         </Button>
                       </CardContent>
