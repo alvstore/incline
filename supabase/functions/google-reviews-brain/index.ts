@@ -1,4 +1,5 @@
-// google-reviews-brain v5.1.0 — Humble, template-resolvable review requests
+// google-reviews-brain v6.0.0 — Places-only discovery (legacy list_accounts /
+// list_locations removed), honest rate-limit copy, human-sounding reply drafts
 // (event_key=review_request, member_name/branch_name/review_link variables).
 // v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
 // persistence, Places→GBP duplicate promotion, draft persistence, real Google errors.
@@ -301,63 +302,10 @@ async function testConnection(branch_id: string) {
   });
 }
 
+// v6 — legacy `list_accounts` / `list_locations` discovery removed. Account and
+// location IDs are only needed for the reply lane and are set during OAuth; the
+// read lane is Places-only.
 
-
-async function listAccounts(branch_id: string) {
-  const cfg = await getGoogleConfig(branch_id);
-  if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.refresh_token) return json({ ok: false, reason: "OAuth not connected. Connect Google first." }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Re-connect Google." }, 200);
-  const res = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: friendlyGoogleError(res.status, txt) }, 200);
-  }
-  const j = await res.json();
-  const items = ((j.accounts ?? []) as any[]).map((a) => ({
-    account_id: String(a.name ?? "").replace(/^accounts\//, ""),
-    name: a.accountName ?? a.name,
-    type: a.type,
-    role: a.role,
-    verification_state: a.verificationState,
-  })).filter((a) => a.account_id);
-  return json({ ok: true, items });
-}
-
-// ─── Action: list_locations ───
-async function listLocations(branch_id: string, account_id: string) {
-  const cfg = await getGoogleConfig(branch_id);
-  if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.refresh_token) return json({ ok: false, reason: "OAuth not connected. Connect Google first." }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Re-connect Google." }, 200);
-  const cleanAcc = account_id.replace(/^accounts\//, "");
-  const url = `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${cleanAcc}/locations?readMask=name,title,storefrontAddress,storeCode,websiteUri&pageSize=100`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: friendlyGoogleError(res.status, txt) }, 200);
-  }
-  const j = await res.json();
-  const items = ((j.locations ?? []) as any[]).map((l) => {
-    const addr = l.storefrontAddress;
-    const addrLine = addr ? [
-      ...(addr.addressLines ?? []),
-      addr.locality, addr.administrativeArea, addr.postalCode,
-    ].filter(Boolean).join(", ") : "";
-    return {
-      location_id: String(l.name ?? "").replace(/^locations\//, ""),
-      title: l.title,
-      address: addrLine,
-      store_code: l.storeCode,
-      website: l.websiteUri,
-    };
-  }).filter((l) => l.location_id);
-  return json({ ok: true, items });
-}
 // ─── Places API (New) fallback ───────────────────────────────────────────────
 // The Business Profile v4 reviews endpoint requires an *approved* quota request
 // and the legacy "Google My Business API" enabled on the Cloud project. Until
@@ -423,7 +371,7 @@ function friendlyGoogleError(status: number, body: string): string {
     return "Google has not granted review-API quota to your Cloud project yet. Submit the Business Profile API quota request form — approval usually takes a few days.";
   }
   if (status === 403) return "Google returned 403 Forbidden. The connected Google account may not manage this location, or the APIs are not enabled.";
-  if (status === 429) return "Google rate-limited the request. Reviews will retry automatically on the next sync.";
+  if (status === 429) return "Google rate-limited this Business Profile call. Reading reviews still works through Places — only posting replies is affected.";
   if (status === 401) return "Google rejected the access token. Reconnect the Google account.";
   return `Google returned HTTP ${status}.`;
 }
@@ -909,22 +857,40 @@ async function classifyOne(inbound_id: string) {
   let reasoning = "";
   let draft = "";
   {
-    // v3 — persona ("you are a customer-service AI…") comes from
-    // ai_purposes.review_reply.system_prompt (Settings → AI Brain). Only
-    // the output-contract for this call lives here.
-    const sysOverride =
-      "Classify the review as exactly one of: genuine, unhappy_member, suspected_fake, spam. " +
-      "Then draft a polite, professional reply (≤500 chars). " +
-      "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}. " +
-      "Never accuse the reviewer of being a competitor.";
+    // v6 — persona comes from ai_purposes.review_reply.system_prompt. This block
+    // only carries the output contract plus the "sound like a human" rules that
+    // stop the model producing obvious AI boilerplate.
+    const sysOverride = [
+      "You classify a Google review and write the owner's reply.",
+      "classification must be exactly one of: genuine, unhappy_member, suspected_fake, spam.",
+      "",
+      "REPLY RULES — write like the gym's founder typing on her phone, not like an AI:",
+      "1. Open by referring to something SPECIFIC the reviewer actually mentioned (a trainer, the ice bath, the sauna, cleanliness, timings, staff, equipment). If the review has no text, react to the star rating honestly instead of inventing details.",
+      "2. Use the reviewer's first name only if it reads naturally.",
+      "3. 2 to 4 short sentences. Under 400 characters. Plain everyday English; light Indian-English/Hinglish warmth is fine ('really glad', 'do drop by', 'see you at the club').",
+      "4. BANNED phrases: 'We appreciate your feedback', 'valued customer', 'we strive to', 'at our facility', 'thank you for taking the time', 'we are delighted', 'rest assured', 'kindly', 'esteemed', em dashes, exclamation-mark spam, emojis, hashtags.",
+      "5. Never repeat the same opener across reviews. Vary sentence rhythm.",
+      "6. For 1-3 star reviews: acknowledge the specific problem in plain words, own it without excuses, say the one concrete thing being done, and invite them to reach the team directly. Do not offer refunds, free months, or anything financial.",
+      "7. For 4-5 star reviews: keep it short and personal, name what they liked, no sales pitch.",
+      "8. Never accuse the reviewer of being fake or a competitor, even when the classification says suspected_fake — in that case write a calm, neutral, factual reply.",
+      "9. No promises the gym cannot keep, no pricing, no opening dates.",
+      "",
+      "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}.",
+      "reasoning is internal staff-facing: 1-2 lines on why this classification, citing evidence.",
+    ].join("\n");
     const userPrompt = JSON.stringify({
       branch_name: (row.branches as any)?.name ?? "our gym",
       rating: row.rating,
       review_text: row.review_text,
+      has_text: !!(row.review_text && String(row.review_text).trim()),
       author_name: row.author_name,
+      author_first_name: String(row.author_name ?? "").trim().split(/\s+/)[0] || null,
+      posted_at: row.posted_at,
+      is_known_member: match.match_type && match.match_type !== "none",
       match_type: match.match_type,
       match_evidence: match.evidence,
     });
+
 
     const extractJson = (text: string | undefined | null): any => {
       if (!text) return null;
@@ -1287,12 +1253,8 @@ Deno.serve(async (req) => {
         if (!body.branch_id) return json({ error: "branch_id required" }, 400);
         return await startGoogleOAuth(body.branch_id);
       case "list_accounts":
-        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
-        return await listAccounts(body.branch_id);
       case "list_locations":
-        if (!body.branch_id) return json({ error: "branch_id required" }, 400);
-        if (!body.account_id) return json({ error: "account_id required" }, 400);
-        return await listLocations(body.branch_id, body.account_id);
+        return json({ ok: false, reason: "Legacy Business Profile discovery was removed. Link the branch with “Find my listing” (Places API) instead." }, 200);
       case "fetch_reviews":
         return await fetchReviews(body.branch_id);
       case "fetch_reviews_places":
@@ -1353,7 +1315,7 @@ Deno.serve(async (req) => {
           lane: "business_profile",
           ok: !!(cfg?.account_id && cfg?.location_id),
           label: "Business location selected",
-          hint: "Pick the account and location this branch maps to.",
+          hint: "Only needed to post replies via the API. Reading reviews already works through Places.",
         });
         let gbp: { ok: boolean; status?: number; error?: string } = { ok: false };
         if (cfg?.account_id && cfg?.location_id) {

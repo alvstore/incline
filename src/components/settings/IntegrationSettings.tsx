@@ -22,15 +22,13 @@ import {
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
   Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
-import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
+import GoogleBusinessDrawer from './GoogleBusinessDrawer';
+import GoogleListingCard from './GoogleListingCard';
 import { RcsHub } from './rcs/RcsHub';
 import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
 
 type IntegrationType = 'payment_gateway' | 'sms' | 'email' | 'whatsapp' | 'google_business' | 'instagram' | 'messenger' | 'rcs';
 
-const GOOGLE_PROVIDERS = [
-  { id: 'google_business', name: 'Google Business Profile', description: 'Track Google Reviews & reply (review requests use the per-branch link)' },
-];
 
 const PAYMENT_PROVIDERS = [
   { id: 'razorpay', name: 'Razorpay' },
@@ -110,9 +108,8 @@ export function IntegrationSettings() {
   }>({ open: false, type: 'payment_gateway', provider: '' });
   const [diagnostics, setDiagnostics] = useState<{ ok: boolean; checks: any[] } | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
-  const [discoverOpen, setDiscoverOpen] = useState<{ branchId: string; branchName?: string; accountId?: string; locationId?: string } | null>(null);
+  const [googleDrawerOpen, setGoogleDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
-  const razorpayWebhookInfo = getWebhookInfoForProvider('payment_gateway', 'razorpay', branchFilter);
 
   const runMetaDiagnostics = async () => {
     const igInteg = (integrations as any[]).find(
@@ -249,36 +246,14 @@ export function IntegrationSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Webhook URL Info Box */}
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/10 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4 text-primary" />
-                  <h4 className="font-semibold text-sm">Payment Webhook URL</h4>
-                </div>
-                <p className="text-xs text-muted-foreground">Paste this URL in your payment gateway's webhook settings to receive real-time payment confirmations.</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
-                    {razorpayWebhookInfo?.url || 'Select a branch to generate the webhook URL'}
-                  </code>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    if (!razorpayWebhookInfo?.url || !branchFilter) {
-                      toast.error('Select a branch before copying the webhook URL');
-                      return;
-                    }
-                    navigator.clipboard.writeText(razorpayWebhookInfo.url);
-                    toast.success('Webhook URL copied!');
-                  }}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 {PAYMENT_PROVIDERS.map((provider) => {
                   const config = getIntegrationsByType('payment_gateway').find(
                     (i: any) => i.provider === provider.id
                   );
+                  const webhook = getWebhookInfoForProvider('payment_gateway', provider.id, branchFilter);
                   return (
-                    <Card key={provider.id} className="relative">
+                    <Card key={provider.id} className="relative rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
@@ -295,8 +270,39 @@ export function IntegrationSettings() {
                             {config?.is_active ? 'Active' : 'Inactive'}
                           </Badge>
                         </div>
+
+                        {webhook && (
+                          <div className="mt-4 space-y-1.5 rounded-xl bg-primary/5 p-3">
+                            <div className="flex items-center gap-1.5">
+                              <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
+                              <span className="text-xs font-semibold">{webhook.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
+                                {branchFilter ? webhook.url : 'Select a branch to generate this URL'}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="cursor-pointer shrink-0"
+                                aria-label={`Copy ${provider.name} webhook URL`}
+                                onClick={() => {
+                                  if (!branchFilter) {
+                                    toast.error('Select a branch before copying the webhook URL');
+                                    return;
+                                  }
+                                  navigator.clipboard.writeText(webhook.url);
+                                  toast.success(`${provider.name} webhook URL copied`);
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" aria-hidden />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
                         <Button 
-                          className="w-full mt-4" 
+                          className="w-full mt-4 cursor-pointer" 
                           variant={config?.is_active ? 'outline' : 'default'}
                           onClick={() => openConfig('payment_gateway', provider.id)}
                         >
@@ -375,7 +381,10 @@ export function IntegrationSettings() {
               <div className="grid gap-4 md:grid-cols-2">
                 {RCS_PROVIDERS.map((provider) => {
                   const config = getIntegrationsByType('rcs').find((i: any) => i.provider === provider.id);
-                  const isActive = !!config?.is_active;
+                  const creds = (config?.credentials ?? {}) as Record<string, any>;
+                  const hasCreds = !!(creds.api_key || creds.has_key || creds.token || creds.password);
+                  const isActive = !!config?.is_active && hasCreds;
+                  const label = !hasCreds ? 'Not configured' : config?.is_active ? 'Connected' : 'Disabled';
                   return (
                     <Card key={provider.id} className="rounded-2xl shadow-md shadow-slate-200/50 border-0 hover:shadow-xl hover:shadow-indigo-500/10 transition-all">
                       <CardContent className="pt-6">
@@ -389,12 +398,38 @@ export function IntegrationSettings() {
                               <p className="text-xs text-muted-foreground line-clamp-2">{provider.description}</p>
                             </div>
                           </div>
-                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
+                          <Badge className={isActive ? 'bg-emerald-100 text-emerald-700' : hasCreds ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}>
                             {isActive ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                            {isActive ? 'Active' : 'Inactive'}
+                            {label}
                           </Badge>
                         </div>
-                        <Button className="w-full mt-4" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
+                        {!hasCreds && config?.is_active && (
+                          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            Marked active but no credentials are saved — sending falls back to the other provider.
+                          </p>
+                        )}
+                        <div className="mt-4 space-y-1.5 rounded-xl bg-primary/5 p-3">
+                          <div className="flex items-center gap-1.5">
+                            <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
+                            <span className="text-xs font-semibold">Inbound webhook URL</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
+                              {`${RCS_WEBHOOK_URL}?provider=${provider.id}`}
+                            </code>
+                            <Button
+                              variant="outline" size="sm" className="cursor-pointer shrink-0"
+                              aria-label={`Copy ${provider.name} webhook URL`}
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${RCS_WEBHOOK_URL}?provider=${provider.id}`);
+                                toast.success(`${provider.name} webhook URL copied`);
+                              }}
+                            >
+                              <Copy className="h-3.5 w-3.5" aria-hidden />
+                            </Button>
+                          </div>
+                        </div>
+                        <Button className="w-full mt-4 cursor-pointer" variant={isActive ? 'outline' : 'default'} onClick={() => openConfig('rcs', provider.id)}>
                           <Settings className="h-4 w-4 mr-2" />{config ? 'Configure' : 'Setup'}
                         </Button>
                       </CardContent>
@@ -1074,152 +1109,19 @@ export function IntegrationSettings() {
         </TabsContent>
 
         <TabsContent value="google" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Google Business Profile
-              </CardTitle>
-              <CardDescription>
-                Sync approved reviews to your Google Maps listing
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                {GOOGLE_PROVIDERS.map((provider) => {
-                  const config = getIntegrationsByType('google_business').find(
-                    (i: any) => i.provider === provider.id
-                  );
-                  return (
-                    <Card key={provider.id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <Globe className="h-8 w-8 text-info" />
-                            <div>
-                              <h3 className="font-semibold">{provider.name}</h3>
-                              <p className="text-sm text-muted-foreground">{provider.description}</p>
-                            </div>
-                          </div>
-                          <Badge variant={config?.is_active ? 'default' : 'secondary'}>
-                            {config?.is_active ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                            {config?.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                        <div className="mt-4 p-3 bg-muted/50 rounded-md">
-                          <p className="text-sm text-muted-foreground">
-                            Configure Google Business Profile API to automatically sync approved reviews from the Feedback page to your Google Maps listing.
-                          </p>
-                        </div>
-                        <Button 
-                          className="w-full mt-4" 
-                          variant={config?.is_active ? 'outline' : 'default'}
-                          onClick={() => openConfig('google_business', provider.id)}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          {config ? 'Configure' : 'Setup'}
-                        </Button>
-                        {config?.is_active && config?.branch_id && (
-                          <Button
-                            className="w-full mt-2"
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              const t = toast.loading('Testing Google connection…');
-                              try {
-                                const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
-                                  body: { action: 'test_connection', branch_id: config.branch_id },
-                                });
-                                if (error) throw error;
-                                if ((data as any)?.ok) toast.success('Connected to Google Business', { id: t });
-                                else toast.error((data as any)?.reason ?? 'Test failed', { id: t });
-                              } catch (e: any) {
-                                toast.error(e?.message ?? 'Test failed', { id: t });
-                              }
-                            }}
-                          >
-                            Test connection
-                          </Button>
-                        )}
-                        {config?.branch_id && (
-                          <Button
-                            className="w-full mt-2"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setDiscoverOpen({
-                              branchId: config.branch_id,
-                              branchName: (config as any)?.branch_name,
-                              accountId: (config.config as any)?.account_id,
-                              locationId: (config.config as any)?.location_id,
-                            })}
-                          >
-                            <Search className="h-4 w-4 mr-2" />
-                            Auto-discover IDs
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Google Business Setup Guide — Collapsible */}
-          <Collapsible>
-            <Card>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-t-xl">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Setup Guide</span>
-                    <ChevronRight className="h-4 w-4 transition-transform duration-200 [[data-state=open]_&]:rotate-90" />
-                  </CardTitle>
-                  <CardDescription>How to connect Google Business Profile for review syncing</CardDescription>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="space-y-5">
-                  <div className="space-y-4">
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">1</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Enable Google API Library services</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">In Google Cloud Console → APIs & Services → Library, enable <strong>My Business Account Management API</strong>, <strong>My Business Business Information API</strong>, and <strong>Google My Business API</strong>.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">2</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Create OAuth Client (Web application)</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Go to <strong>Google Auth Platform → Clients → Create Client → Web application</strong>. Add this exact <strong>Authorized redirect URI</strong> (no trailing slash): <code className="font-mono text-primary break-all">{SUPABASE_FUNCTION_BASE}/google-reviews-brain</code>. Authorized JavaScript origins are optional for this server-side flow but you can add your app domain if Google warns you.</p>
-                        <p className="text-xs text-muted-foreground mt-1">Seeing <code className="font-mono">Error 401: deleted_client</code>? The client was removed in Google Cloud — create a fresh Web application client and use its new ID + Secret here.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">3</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Save credentials and connect OAuth</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Paste Client ID + Client Secret, save, then click <strong>Connect Google</strong>. The app requests <code className="font-mono">business.manage</code> with offline access so it can store a refresh token.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm">4</div>
-                      <div>
-                        <h4 className="font-semibold text-sm">Auto-discover IDs and test</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">Click <strong>Auto-discover IDs</strong> to call Google's current Account Management and Business Information APIs, save the selected location, then test the connection.</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <p className="text-xs text-warning dark:text-warning">
-                      <strong>Note:</strong> Your Google Business listing must be verified before reviews can be synced.
-                    </p>
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+          <GoogleListingCard
+            branchId={branchFilter}
+            integration={getIntegrationsByType('google_business')[0]}
+            onConfigure={() => {
+              if (!branchFilter) {
+                toast.error('Select a branch first — the Google listing is linked per branch.');
+                return;
+              }
+              setGoogleDrawerOpen(true);
+            }}
+          />
         </TabsContent>
+
 
         <TabsContent value="leads" className="space-y-4">
           <LeadCaptureTab />
@@ -1230,26 +1132,17 @@ export function IntegrationSettings() {
         {...configSheet} 
         onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
         branchId={branchFilter}
-        onRequestDiscover={
-          configSheet.type === 'google_business' && branchFilter
-            ? () => setDiscoverOpen({
-                branchId: branchFilter,
-                accountId: (configSheet.existing?.config as any)?.account_id,
-                locationId: (configSheet.existing?.config as any)?.location_id,
-              })
-            : undefined
-        }
       />
 
-      {discoverOpen && (
-        <GoogleBusinessDiscovery
-          open={!!discoverOpen}
-          onOpenChange={(v) => !v && setDiscoverOpen(null)}
-          branchId={discoverOpen.branchId}
-          branchName={discoverOpen.branchName}
-          initialAccountId={discoverOpen.accountId}
-          initialLocationId={discoverOpen.locationId}
-          onSaved={() => queryClient.invalidateQueries({ queryKey: ['integrations'] })}
+      {branchFilter && (
+        <GoogleBusinessDrawer
+          open={googleDrawerOpen}
+          onOpenChange={(v) => {
+            setGoogleDrawerOpen(v);
+            if (!v) queryClient.invalidateQueries({ queryKey: ['integrations'] });
+          }}
+          branchId={branchFilter}
+          branchName={undefined}
         />
       )}
     </div>
@@ -1263,7 +1156,6 @@ function IntegrationConfigSheet({
   provider, 
   existing,
   branchId,
-  onRequestDiscover,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1271,7 +1163,6 @@ function IntegrationConfigSheet({
   provider: string;
   existing?: any;
   branchId?: string;
-  onRequestDiscover?: () => void;
 }) {
   const [isActive, setIsActive] = useState(existing?.is_active || false);
   const [config, setConfig] = useState<Record<string, string>>(existing?.config || {});
@@ -1310,20 +1201,6 @@ function IntegrationConfigSheet({
     copyToClipboard(token, 'API key copied');
   };
 
-  const connectGoogleBusiness = async () => {
-    if (!branchId) {
-      toast.error('Please select a branch before connecting Google.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
-      body: { action: 'oauth_start', branch_id: branchId },
-    });
-    if (error) throw error;
-    if (!(data as any)?.ok || !(data as any)?.auth_url) {
-      throw new Error((data as any)?.reason || 'Could not start Google authorization');
-    }
-    window.location.assign((data as any).auth_url);
-  };
 
   // Sync state when existing prop changes (e.g., opening sheet for different provider)
   useEffect(() => {
@@ -1565,78 +1442,12 @@ function IntegrationConfigSheet({
             </div>
           )}
 
-          {type === 'google_business' && (() => {
-            const savedClientId = (existing?.credentials as any)?.client_id as string | undefined;
-            const hasRefreshToken = !!(existing?.credentials as any)?.refresh_token;
-            const maskedSaved = savedClientId
-              ? `${savedClientId.slice(0, 8)}…${savedClientId.slice(-16)}`
-              : null;
-            return (
-              <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
-                <div className="space-y-2">
-                  <p className="text-xs text-foreground">
-                    <strong>Step 1:</strong> Save OAuth Client ID + Client Secret, then click Connect Google to create the refresh token used for API discovery.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Step 2:</strong> Use Auto-discover, OR paste <strong>Account ID</strong> and <strong>Location ID</strong> manually below. Find them in the Google Business Profile URL: <code className="font-mono">business.google.com/n/&lt;ACCOUNT_ID&gt;/profile?fid=&lt;LOCATION_ID&gt;</code>.
-                  </p>
-                </div>
-
-                <div className="text-[11px] p-2 rounded-lg bg-info/10 border border-info/20 text-info dark:text-info">
-                  Seeing <code className="font-mono">Google API 403 ... has not been used in project ... or it is disabled</code>? Open Google Cloud Console → APIs &amp; Services → Library and enable <strong>Google My Business API</strong>, <strong>My Business Account Management API</strong>, and <strong>My Business Business Information API</strong> for the same project as your OAuth client. Wait ~1 minute, then click Test Connection.
-                </div>
-
-                {maskedSaved && (
-                  <div className="text-xs p-2 rounded-lg bg-background/60 border border-border space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">Saved Client ID</span>
-                      <code className="font-mono text-[11px] break-all text-foreground">{maskedSaved}</code>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground">OAuth refresh token</span>
-                      <span className={hasRefreshToken ? 'text-success font-medium' : 'text-warning font-medium'}>
-                        {hasRefreshToken ? 'Connected' : 'Not connected'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="text-[11px] p-2 rounded-lg bg-warning/10 border border-warning/20 text-warning dark:text-warning">
-                  Seeing <code className="font-mono">Error 401: deleted_client</code> from Google? The OAuth client was removed in Google Cloud. Open Google Auth Platform → Clients, create a new <strong>Web application</strong> client, paste the new Client ID + Secret here, save, then Connect Google.
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      const t = toast.loading('Opening Google authorization…');
-                      try {
-                        await connectGoogleBusiness();
-                      } catch (e: any) {
-                        toast.error(e?.message || 'Could not connect Google', { id: t });
-                      }
-                    }}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    Connect Google
-                  </Button>
-                  {onRequestDiscover && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => { onOpenChange(false); setTimeout(() => onRequestDiscover(), 150); }}
-                    >
-                      <Search className="h-3.5 w-3.5 mr-1.5" />
-                      Auto-discover IDs
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          {type === 'google_business' && (
+            <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 text-xs text-muted-foreground">
+              Google Business Profile is configured from the <strong>Google</strong> tab — it links this branch to its
+              Google listing through the Places API.
+            </div>
+          )}
 
           {configFields.length > 0 && (
             <div className="space-y-4">
