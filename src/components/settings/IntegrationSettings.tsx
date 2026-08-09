@@ -248,36 +248,14 @@ export function IntegrationSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Webhook URL Info Box */}
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/10 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4 text-primary" />
-                  <h4 className="font-semibold text-sm">Payment Webhook URL</h4>
-                </div>
-                <p className="text-xs text-muted-foreground">Paste this URL in your payment gateway's webhook settings to receive real-time payment confirmations.</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
-                    {razorpayWebhookInfo?.url || 'Select a branch to generate the webhook URL'}
-                  </code>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    if (!razorpayWebhookInfo?.url || !branchFilter) {
-                      toast.error('Select a branch before copying the webhook URL');
-                      return;
-                    }
-                    navigator.clipboard.writeText(razorpayWebhookInfo.url);
-                    toast.success('Webhook URL copied!');
-                  }}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 {PAYMENT_PROVIDERS.map((provider) => {
                   const config = getIntegrationsByType('payment_gateway').find(
                     (i: any) => i.provider === provider.id
                   );
+                  const webhook = getWebhookInfoForProvider('payment_gateway', provider.id, branchFilter);
                   return (
-                    <Card key={provider.id} className="relative">
+                    <Card key={provider.id} className="relative rounded-2xl border-0 shadow-lg shadow-slate-200/50 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/10">
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
@@ -294,8 +272,39 @@ export function IntegrationSettings() {
                             {config?.is_active ? 'Active' : 'Inactive'}
                           </Badge>
                         </div>
+
+                        {webhook && (
+                          <div className="mt-4 space-y-1.5 rounded-xl bg-primary/5 p-3">
+                            <div className="flex items-center gap-1.5">
+                              <Webhook className="h-3.5 w-3.5 text-primary" aria-hidden />
+                              <span className="text-xs font-semibold">{webhook.label}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 break-all rounded bg-muted px-2 py-1.5 font-mono text-[11px]">
+                                {branchFilter ? webhook.url : 'Select a branch to generate this URL'}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="cursor-pointer shrink-0"
+                                aria-label={`Copy ${provider.name} webhook URL`}
+                                onClick={() => {
+                                  if (!branchFilter) {
+                                    toast.error('Select a branch before copying the webhook URL');
+                                    return;
+                                  }
+                                  navigator.clipboard.writeText(webhook.url);
+                                  toast.success(`${provider.name} webhook URL copied`);
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" aria-hidden />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
                         <Button 
-                          className="w-full mt-4" 
+                          className="w-full mt-4 cursor-pointer" 
                           variant={config?.is_active ? 'outline' : 'default'}
                           onClick={() => openConfig('payment_gateway', provider.id)}
                         >
