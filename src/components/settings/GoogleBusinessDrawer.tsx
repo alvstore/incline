@@ -485,16 +485,6 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
           </div>
         </SheetContent>
       </Sheet>
-
-      <GoogleBusinessDiscovery
-        open={discoveryOpen}
-        onOpenChange={setDiscoveryOpen}
-        branchId={branchId}
-        branchName={branchName}
-        initialAccountId={cfg.account_id}
-        initialLocationId={cfg.location_id}
-        onSaved={() => qc.invalidateQueries({ queryKey: ['gbp-settings', branchId] })}
-      />
     </>
   );
 }
