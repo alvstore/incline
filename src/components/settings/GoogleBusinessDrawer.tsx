@@ -412,24 +412,16 @@ export default function GoogleBusinessDrawer({ open, onOpenChange, branchId, bra
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button type="button" variant="outline" className="cursor-pointer rounded-xl" onClick={connectGoogle}>
-                      <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden />
-                      {hasOAuth ? 'Re-connect' : 'Connect Google'}
-                    </Button>
-                    <Button
-                      type="button" variant="outline" className="cursor-pointer rounded-xl"
-                      onClick={() => setDiscoveryOpen(true)} disabled={!hasOAuth}
-                    >
-                      <Search className="mr-1.5 h-4 w-4" aria-hidden />
-                      Pick location
-                    </Button>
-                  </div>
-                  {hasLocation && (
-                    <p className="text-xs text-slate-500 font-mono">
-                      {cfg.account_id} / {cfg.location_id}
-                    </p>
-                  )}
+                  <Button type="button" variant="outline" className="w-full cursor-pointer rounded-xl" onClick={connectGoogle}>
+                    <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden />
+                    {hasOAuth ? 'Re-connect Google' : 'Connect Google'}
+                  </Button>
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Replying from inside the app unlocks only after Google approves Business Profile API quota for your
+                    Cloud project. Until then, use <strong>Copy &amp; open on Google</strong> on each review in
+                    Feedback &amp; Reviews.
+                  </p>
+
                 </section>
 
                 {/* Diagnostics */}
