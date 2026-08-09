@@ -22,7 +22,7 @@ import {
   RefreshCw, ChevronDown, ChevronRight, Clock, PauseCircle, Send,
   Instagram, Facebook, Search, Radio,
 } from 'lucide-react';
-import GoogleBusinessDiscovery from './GoogleBusinessDiscovery';
+import GoogleBusinessDrawer from './GoogleBusinessDrawer';
 import { RcsHub } from './rcs/RcsHub';
 import { WhatsAppMarketingApiToggle } from './WhatsAppMarketingApiToggle';
 
