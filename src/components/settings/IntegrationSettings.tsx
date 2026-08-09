@@ -1238,26 +1238,17 @@ export function IntegrationSettings() {
         {...configSheet} 
         onOpenChange={(open) => setConfigSheet({ ...configSheet, open })}
         branchId={branchFilter}
-        onRequestDiscover={
-          configSheet.type === 'google_business' && branchFilter
-            ? () => setDiscoverOpen({
-                branchId: branchFilter,
-                accountId: (configSheet.existing?.config as any)?.account_id,
-                locationId: (configSheet.existing?.config as any)?.location_id,
-              })
-            : undefined
-        }
       />
 
-      {discoverOpen && (
-        <GoogleBusinessDiscovery
-          open={!!discoverOpen}
-          onOpenChange={(v) => !v && setDiscoverOpen(null)}
-          branchId={discoverOpen.branchId}
-          branchName={discoverOpen.branchName}
-          initialAccountId={discoverOpen.accountId}
-          initialLocationId={discoverOpen.locationId}
-          onSaved={() => queryClient.invalidateQueries({ queryKey: ['integrations'] })}
+      {branchFilter && (
+        <GoogleBusinessDrawer
+          open={googleDrawerOpen}
+          onOpenChange={(v) => {
+            setGoogleDrawerOpen(v);
+            if (!v) queryClient.invalidateQueries({ queryKey: ['integrations'] });
+          }}
+          branchId={branchFilter}
+          branchName={undefined}
         />
       )}
     </div>
