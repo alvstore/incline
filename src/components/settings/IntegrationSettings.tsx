@@ -1177,20 +1177,6 @@ function IntegrationConfigSheet({
     copyToClipboard(token, 'API key copied');
   };
 
-  const connectGoogleBusiness = async () => {
-    if (!branchId) {
-      toast.error('Please select a branch before connecting Google.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
-      body: { action: 'oauth_start', branch_id: branchId },
-    });
-    if (error) throw error;
-    if (!(data as any)?.ok || !(data as any)?.auth_url) {
-      throw new Error((data as any)?.reason || 'Could not start Google authorization');
-    }
-    window.location.assign((data as any).auth_url);
-  };
 
   // Sync state when existing prop changes (e.g., opening sheet for different provider)
   useEffect(() => {
