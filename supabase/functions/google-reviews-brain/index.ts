@@ -301,63 +301,10 @@ async function testConnection(branch_id: string) {
   });
 }
 
+// v6 — legacy `list_accounts` / `list_locations` discovery removed. Account and
+// location IDs are only needed for the reply lane and are set during OAuth; the
+// read lane is Places-only.
 
-
-async function listAccounts(branch_id: string) {
-  const cfg = await getGoogleConfig(branch_id);
-  if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.refresh_token) return json({ ok: false, reason: "OAuth not connected. Connect Google first." }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Re-connect Google." }, 200);
-  const res = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: friendlyGoogleError(res.status, txt) }, 200);
-  }
-  const j = await res.json();
-  const items = ((j.accounts ?? []) as any[]).map((a) => ({
-    account_id: String(a.name ?? "").replace(/^accounts\//, ""),
-    name: a.accountName ?? a.name,
-    type: a.type,
-    role: a.role,
-    verification_state: a.verificationState,
-  })).filter((a) => a.account_id);
-  return json({ ok: true, items });
-}
-
-// ─── Action: list_locations ───
-async function listLocations(branch_id: string, account_id: string) {
-  const cfg = await getGoogleConfig(branch_id);
-  if (!cfg) return json({ ok: false, reason: "Google Business integration not configured for this branch" }, 200);
-  if (!cfg.refresh_token) return json({ ok: false, reason: "OAuth not connected. Connect Google first." }, 200);
-  const token = await refreshAccessToken(branch_id, cfg);
-  if (!token) return json({ ok: false, reason: "Could not obtain access token. Re-connect Google." }, 200);
-  const cleanAcc = account_id.replace(/^accounts\//, "");
-  const url = `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${cleanAcc}/locations?readMask=name,title,storefrontAddress,storeCode,websiteUri&pageSize=100`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const txt = await res.text();
-    return json({ ok: false, reason: friendlyGoogleError(res.status, txt) }, 200);
-  }
-  const j = await res.json();
-  const items = ((j.locations ?? []) as any[]).map((l) => {
-    const addr = l.storefrontAddress;
-    const addrLine = addr ? [
-      ...(addr.addressLines ?? []),
-      addr.locality, addr.administrativeArea, addr.postalCode,
-    ].filter(Boolean).join(", ") : "";
-    return {
-      location_id: String(l.name ?? "").replace(/^locations\//, ""),
-      title: l.title,
-      address: addrLine,
-      store_code: l.storeCode,
-      website: l.websiteUri,
-    };
-  }).filter((l) => l.location_id);
-  return json({ ok: true, items });
-}
 // ─── Places API (New) fallback ───────────────────────────────────────────────
 // The Business Profile v4 reviews endpoint requires an *approved* quota request
 // and the legacy "Google My Business API" enabled on the Cloud project. Until
