@@ -22,6 +22,7 @@ import { upgradeMembership } from '@/services/membershipActionsService';
 import { membershipEndDate, daysRemaining } from '@/lib/memberships/duration';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
+import { MemberIdentityHeader } from '@/components/members/MemberIdentityHeader';
 
 interface UpgradeMembershipDrawerProps {
   open: boolean;
