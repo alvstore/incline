@@ -19,6 +19,7 @@ import { CreditCard, IndianRupee, Calendar, User, Gift, AlertTriangle, CheckCirc
 import { useGstRates } from '@/hooks/useGstRates';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
+import { MemberIdentityHeader } from '@/components/members/MemberIdentityHeader';
 
 interface PurchaseMembershipDrawerProps {
   open: boolean;
