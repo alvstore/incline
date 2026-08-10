@@ -412,7 +412,26 @@ export interface BulkAssignParams {
   pdf_url?: string | null;
   pdf_filename?: string | null;
   pdf_size_bytes?: number | null;
+  /** Weekday shift per member (0-6) so one plan doesn't crowd the same machines
+   *  on the same day. Keyed by member id; missing members default to 0. */
+  schedule_offsets?: Record<string, number>;
+  /** Cycle through `plan_data.rotation.variants` every N days (0 = off). */
+  rotation_interval_days?: number;
 }
+
+/** Active workout plans currently sitting on each weekday shift (0-6). */
+export async function fetchScheduleOffsetLoad(branchId?: string | null): Promise<Record<number, number>> {
+  const { data, error } = await supabase.rpc('workout_schedule_offset_load', {
+    _branch_id: branchId ?? null,
+  });
+  if (error) throw error;
+  const load: Record<number, number> = {};
+  for (const row of (data as any[]) || []) {
+    load[Number(row.offset_days)] = Number(row.active_plans) || 0;
+  }
+  return load;
+}
+
 
 export interface MemberContact {
   id: string;
