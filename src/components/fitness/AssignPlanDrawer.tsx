@@ -230,6 +230,8 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
         pdf_url: plan?.pdf_url ?? null,
         pdf_filename: plan?.pdf_filename ?? null,
         pdf_size_bytes: plan?.pdf_size_bytes ?? null,
+        schedule_offsets: scheduleOffsets,
+        rotation_interval_days: isWorkout ? rotationInterval : 0,
       });
 
       // If "Send PDF on assign" is enabled, dispatch PDFs to whichever
