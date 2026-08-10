@@ -224,7 +224,7 @@ export function CommunicationTemplatesHub() {
               </Card>
             )}
 
-            {section === 'coverage' && <TemplateCoverageMatrix channel={channel} onMap={handleMap} />}
+            {section === 'coverage' && <TemplateCoverageMatrix channel={channel} />}
 
             {section === 'automations' && (
               <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
