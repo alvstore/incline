@@ -41,6 +41,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
   const [compReason, setCompReason] = useState('');
   const [compNotes, setCompNotes] = useState('');
   const [compExpiresAt, setCompExpiresAt] = useState('');
+  // Complimentary benefits normally expire with the membership itself.
+  const [syncExpiryToMembership, setSyncExpiryToMembership] = useState(true);
 
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
 
