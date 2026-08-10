@@ -964,6 +964,10 @@ export function MemberProfileDrawer({
     gender: leadFallback.gender,
     date_of_birth: leadFallback.date_of_birth,
   } : null);
+  // Cached identity keeps the avatar on screen across refreshes instead of
+  // blanking while the heavy member-details query resolves.
+  const { data: identity, isLoading: identityLoading } = useMemberIdentity(member?.id);
+  const avatarSrc = profile?.avatar_url || identity?.avatar_url || undefined;
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
   // Scheduled plan that has not started yet — still needs gift days / date edits / early start
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
