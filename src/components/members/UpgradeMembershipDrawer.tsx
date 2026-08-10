@@ -465,6 +465,18 @@ export function UpgradeMembershipDrawer({
                   </div>
                 </div>
               )}
+              {(!payNow || amountPaying < balanceDue) && (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                  <div>
+                    <Label htmlFor="upgrade-reminders" className="flex items-center gap-2 text-sm">
+                      <BellRing className="h-4 w-4 text-indigo-600" />
+                      Send payment reminders
+                    </Label>
+                    <p className="text-xs text-slate-500">WhatsApp, SMS and email nudges for the balance</p>
+                  </div>
+                  <Switch id="upgrade-reminders" checked={sendReminders} onCheckedChange={setSendReminders} />
+                </div>
+              )}
             </div>
           )}
 
