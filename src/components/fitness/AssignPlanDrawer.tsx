@@ -107,8 +107,35 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
   const [sendPdf, setSendPdf] = useState(true);
   const [isCommon, setIsCommon] = useState(false);
+  // Floor load balancing (workout plans only): stagger each member's week so the
+  // same plan doesn't send everyone to the same machine on the same day.
+  const [autoStagger, setAutoStagger] = useState(true);
+  const [manualOffset, setManualOffset] = useState(0);
+  const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
+
+  const isWorkout = plan?.type === 'workout';
+
+  const { data: offsetLoad = {} } = useQuery({
+    queryKey: ['workout-offset-load', branchId],
+    queryFn: () => fetchScheduleOffsetLoad(branchId),
+    enabled: open && isWorkout,
+    staleTime: 60_000,
+  });
+
+  const hasVariants = rotationVariants(plan?.content).length > 0;
+
+  /** member_id → weekday shift for this assignment. */
+  const scheduleOffsets = useMemo(() => {
+    if (!isWorkout) return {};
+    const ids = selected.map((m) => m.id);
+    const picks = autoStagger
+      ? suggestOffsets(offsetLoad as Record<number, number>, ids.length)
+      : ids.map(() => normalizeOffset(manualOffset));
+    return Object.fromEntries(ids.map((id, i) => [id, picks[i] ?? 0]));
+  }, [isWorkout, selected, autoStagger, manualOffset, offsetLoad]);
+
 
   const validUntil =
     durationDays === 'custom' ? customValidUntil : planEndDateISO(startDate, durationDays);
