@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { Gift, Calendar, Heart, Clock, ArrowRight, Sparkles, ShieldCheck, CheckCircle } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,6 +41,8 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
   const [compReason, setCompReason] = useState('');
   const [compNotes, setCompNotes] = useState('');
   const [compExpiresAt, setCompExpiresAt] = useState('');
+  // Complimentary benefits normally expire with the membership itself.
+  const [syncExpiryToMembership, setSyncExpiryToMembership] = useState(true);
 
   const isManagerOrAbove = hasAnyRole(['owner', 'admin', 'manager']);
 
@@ -123,6 +126,13 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
       return data || [];
     },
   });
+
+  // Keep the comp expiry pinned to the membership end date while the toggle is on.
+  useEffect(() => {
+    if (syncExpiryToMembership && currentMembership?.end_date) {
+      setCompExpiresAt(format(parseISO(String(currentMembership.end_date)), 'yyyy-MM-dd'));
+    }
+  }, [syncExpiryToMembership, currentMembership?.end_date]);
 
   const newExpiryPreview = currentMembership && days
     ? format(addDays(parseISO(currentMembership.end_date), parseInt(days) || 0), 'dd MMM yyyy')
@@ -494,8 +504,31 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                 <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Expires on</Label>
-                <Input type="date" value={compExpiresAt} onChange={e => setCompExpiresAt(e.target.value)} />
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="comp-expiry">Expires on</Label>
+                  {currentMembership?.end_date && (
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+                      <Switch
+                        id="comp-sync-membership"
+                        checked={syncExpiryToMembership}
+                        onCheckedChange={setSyncExpiryToMembership}
+                      />
+                      Match membership
+                    </label>
+                  )}
+                </div>
+                <Input
+                  id="comp-expiry"
+                  type="date"
+                  value={compExpiresAt}
+                  disabled={syncExpiryToMembership}
+                  onChange={e => setCompExpiresAt(e.target.value)}
+                />
+                {syncExpiryToMembership && currentMembership?.end_date && (
+                  <p className="text-xs text-slate-500">
+                    Auto-set to the membership end date ({format(parseISO(String(currentMembership.end_date)), 'dd MMM yyyy')}).
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-2">

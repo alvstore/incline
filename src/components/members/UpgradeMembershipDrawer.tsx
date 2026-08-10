@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
-import { ArrowUpCircle, IndianRupee, Loader2, Calendar, Info } from 'lucide-react';
+import { ArrowUpCircle, IndianRupee, Loader2, Calendar, Info, Lock, BellRing } from 'lucide-react';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { upgradeMembership } from '@/services/membershipActionsService';
 import { membershipEndDate, daysRemaining } from '@/lib/memberships/duration';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
+import { MemberIdentityHeader } from '@/components/members/MemberIdentityHeader';
 
 interface UpgradeMembershipDrawerProps {
   open: boolean;
@@ -52,9 +53,14 @@ export function UpgradeMembershipDrawer({
   const [reason, setReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [includeGst, setIncludeGst] = useState(false);
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(5);
   const [payNow, setPayNow] = useState(true);
   const [amountPaying, setAmountPaying] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountReason, setDiscountReason] = useState('');
+  const [sendReminders, setSendReminders] = useState(true);
+  const [selectedLockerId, setSelectedLockerId] = useState('');
+
 
   // Mirrors the server: the invoice that carries this membership + its gifted days.
   const { data: ledger } = useQuery({
@@ -103,7 +109,28 @@ export function UpgradeMembershipDrawer({
   );
 
   const newPlan = upgradablePlans.find((p) => p.id === newPlanId);
-  const newGross = Number(newPlan?.discounted_price ?? newPlan?.price ?? 0);
+  const listPrice = Number(newPlan?.discounted_price ?? newPlan?.price ?? 0);
+  const maxDiscount = Math.max(listPrice - credit, 0);
+  const newGross = Math.max(listPrice - Math.min(Math.max(discountAmount, 0), listPrice), 0);
+
+  // Locker parity with the purchase flow: only offered when the new plan includes one.
+  const hasLockerBenefit = newPlan?.plan_benefits?.some(
+    (b: any) => b.benefit_type === 'locker_access' || String(b.benefit_type || '').includes('locker'),
+  );
+  const { data: availableLockers = [] } = useQuery({
+    queryKey: ['available-lockers', branchId],
+    enabled: open && !!branchId && !!hasLockerBenefit,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lockers')
+        .select('id, locker_number, size')
+        .eq('branch_id', branchId)
+        .eq('status', 'available')
+        .order('locker_number');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const taxAmount = useMemo(() => {
     if (!includeGst || !newPlan || !gstRate) return 0;
@@ -141,11 +168,22 @@ export function UpgradeMembershipDrawer({
       setReason('');
       setPaymentMethod('cash');
       setIncludeGst(false);
-      setGstRate(18);
+      setGstRate(5);
       setPayNow(true);
       setAmountPaying(0);
+      setDiscountAmount(0);
+      setDiscountReason('');
+      setSendReminders(true);
+      setSelectedLockerId('');
     }
   }, [open]);
+
+  // Default the GST rate to whatever the chosen plan is configured with (5% for
+  // most fitness plans) instead of a hardcoded 18%.
+  useEffect(() => {
+    if (newPlan?.gst_rate) setGstRate(Number(newPlan.gst_rate));
+  }, [newPlan?.gst_rate]);
+
 
   useEffect(() => {
     setAmountPaying(balanceDue);
@@ -154,6 +192,12 @@ export function UpgradeMembershipDrawer({
   const upgrade = useMutation({
     mutationFn: async () => {
       if (!newPlanId) throw new Error('Select the plan to upgrade to');
+      if (discountAmount > maxDiscount) {
+        throw new Error(`Discount cannot exceed ${inr(maxDiscount)} — the new plan must stay above the credit already paid`);
+      }
+      if (discountAmount > 0 && !discountReason.trim()) {
+        throw new Error('Add a reason for the discount');
+      }
       if (payNow && amountPaying > balanceDue) {
         throw new Error('Amount collected cannot exceed the balance due');
       }
@@ -165,6 +209,10 @@ export function UpgradeMembershipDrawer({
         amountPaying: payNow ? amountPaying : 0,
         includeGst,
         gstRate: includeGst ? gstRate : 0,
+        discountAmount,
+        discountReason: discountReason.trim() || undefined,
+        sendReminders,
+        assignLockerId: hasLockerBenefit && selectedLockerId ? selectedLockerId : null,
         idempotencyKey: `upgrade:${membership?.id}:${newPlanId}:${newTotal}`,
       });
     },
@@ -178,6 +226,8 @@ export function UpgradeMembershipDrawer({
       queryClient.invalidateQueries({ queryKey: ['member-pending-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['member-details', memberId] });
       queryClient.invalidateQueries({ queryKey: ['active-membership'] });
+      queryClient.invalidateQueries({ queryKey: ['lockers'] });
+      queryClient.invalidateQueries({ queryKey: ['available-lockers'] });
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message || 'Upgrade failed'),
@@ -198,6 +248,12 @@ export function UpgradeMembershipDrawer({
         </SheetHeader>
 
         <div className="mt-6 space-y-5">
+          <MemberIdentityHeader
+            memberId={memberId}
+            memberName={memberName}
+            subtitle={currentPlan?.name ? `On ${currentPlan.name}` : undefined}
+          />
+
           {/* Current plan */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
             <CardContent className="pt-5 space-y-2">
@@ -245,6 +301,71 @@ export function UpgradeMembershipDrawer({
             )}
           </div>
 
+          {/* Discount — same controls as the purchase flow */}
+          {newPlan && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="upgrade-discount">Discount</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="upgrade-discount"
+                    type="number"
+                    min={0}
+                    max={maxDiscount}
+                    className="pl-9 min-h-[44px]"
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(Math.max(Number(e.target.value) || 0, 0))}
+                  />
+                </div>
+                <p className="text-xs text-slate-500">Max {inr(maxDiscount)} (must stay above the paid credit)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upgrade-discount-reason">Discount reason</Label>
+                <Input
+                  id="upgrade-discount-reason"
+                  className="min-h-[44px]"
+                  placeholder="e.g. Festive offer"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  disabled={discountAmount <= 0}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Complimentary locker (plan must include one) */}
+          {newPlan && hasLockerBenefit && (
+            <div className="space-y-2 rounded-xl bg-slate-50 px-4 py-3">
+              <Label htmlFor="upgrade-locker" className="flex items-center gap-2 text-sm">
+                <Lock className="h-4 w-4 text-indigo-600" />
+                Complimentary locker
+              </Label>
+              <Select
+                value={selectedLockerId || 'none'}
+                onValueChange={(v) => setSelectedLockerId(v === 'none' ? '' : v)}
+              >
+                <SelectTrigger id="upgrade-locker" className="min-h-[44px] bg-white">
+                  <SelectValue placeholder="Select a locker (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No locker needed</SelectItem>
+                  {availableLockers.map((l: any) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.locker_number}
+                      {l.size ? ` (${l.size})` : ''}
+                    </SelectItem>
+                  ))}
+                  {availableLockers.length === 0 && (
+                    <SelectItem value="no-lockers" disabled>
+                      No lockers available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* GST */}
           <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
             <div>
@@ -272,8 +393,14 @@ export function UpgradeMembershipDrawer({
               <CardContent className="pt-5 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-white/80">{newPlan.name} ({newPlan.duration_days} days)</span>
-                  <span className="font-semibold">{inr(newGross)}</span>
+                  <span className="font-semibold">{inr(listPrice)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-200">
+                    <span>Discount{discountReason ? ` (${discountReason})` : ''}</span>
+                    <span>− {inr(Math.min(discountAmount, listPrice))}</span>
+                  </div>
+                )}
                 {includeGst && taxAmount > 0 && (
                   <div className="flex justify-between text-white/80">
                     <span>GST @ {gstRate}%{newPlan.is_gst_inclusive !== false ? ' (inclusive)' : ''}</span>
@@ -342,6 +469,18 @@ export function UpgradeMembershipDrawer({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              )}
+              {(!payNow || amountPaying < balanceDue) && (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                  <div>
+                    <Label htmlFor="upgrade-reminders" className="flex items-center gap-2 text-sm">
+                      <BellRing className="h-4 w-4 text-indigo-600" />
+                      Send payment reminders
+                    </Label>
+                    <p className="text-xs text-slate-500">WhatsApp, SMS and email nudges for the balance</p>
+                  </div>
+                  <Switch id="upgrade-reminders" checked={sendReminders} onCheckedChange={setSendReminders} />
                 </div>
               )}
             </div>

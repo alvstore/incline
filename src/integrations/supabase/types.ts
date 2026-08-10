@@ -15740,6 +15740,9 @@ export type Database = {
       upgrade_membership: {
         Args: {
           p_amount_paying?: number
+          p_assign_locker_id?: string
+          p_discount_amount?: number
+          p_discount_reason?: string
           p_gst_rate?: number
           p_idempotency_key?: string
           p_include_gst?: boolean
@@ -15747,6 +15750,7 @@ export type Database = {
           p_new_plan_id: string
           p_payment_method?: string
           p_reason?: string
+          p_send_reminders?: boolean
         }
         Returns: Json
       }

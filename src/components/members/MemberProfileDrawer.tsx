@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useMemberIdentity } from '@/components/members/MemberIdentityHeader';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
@@ -125,7 +127,7 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
                       setPaymentDrawerOpen(true);
                     }}
                   >
-                    <IndianRupee className="h-3 w-3 mr-1" />Pay
+                    <IndianRupee className="h-3 w-3 mr-1" />Collect
                   </Button>
                   {canAmend && (
                     <>
@@ -962,6 +964,10 @@ export function MemberProfileDrawer({
     gender: leadFallback.gender,
     date_of_birth: leadFallback.date_of_birth,
   } : null);
+  // Cached identity keeps the avatar on screen across refreshes instead of
+  // blanking while the heavy member-details query resolves.
+  const { data: identity, isLoading: identityLoading } = useMemberIdentity(member?.id);
+  const avatarSrc = profile?.avatar_url || identity?.avatar_url || undefined;
   const activeMembership = memberDetails?.memberships?.find((m: any) => m.status === 'active' || m.status === 'frozen');
   // Scheduled plan that has not started yet — still needs gift days / date edits / early start
   const pendingMembership = memberDetails?.memberships?.find((m: any) => m.status === 'pending');
@@ -1159,12 +1165,22 @@ export function MemberProfileDrawer({
         <div className="mt-6 space-y-6">
           {/* Profile Header */}
           <div className="flex items-start gap-3">
-            <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
-              <AvatarImage src={profile?.avatar_url} />
-              <AvatarFallback className="text-lg">
-                {profile?.full_name?.charAt(0) || 'M'}
-              </AvatarFallback>
-            </Avatar>
+            {avatarSrc ? (
+              <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
+                <AvatarImage src={avatarSrc} />
+                <AvatarFallback className="text-lg">
+                  {(profile?.full_name || identity?.full_name)?.charAt(0) || 'M'}
+                </AvatarFallback>
+              </Avatar>
+            ) : identityLoading ? (
+              <Skeleton className="h-14 w-14 sm:h-20 sm:w-20 rounded-full shrink-0" />
+            ) : (
+              <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
+                <AvatarFallback className="text-lg">
+                  {(profile?.full_name || identity?.full_name)?.charAt(0) || 'M'}
+                </AvatarFallback>
+              </Avatar>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-nowrap">
                 <h2 className="text-lg sm:text-xl font-semibold truncate min-w-0 flex-1">{profile?.full_name || 'N/A'}</h2>
@@ -1462,7 +1478,7 @@ export function MemberProfileDrawer({
                   </TabsTrigger>
                   <TabsTrigger value="payments" className="flex items-center gap-1.5 shrink-0 px-3 py-2">
                     <IndianRupee className="h-3.5 w-3.5" />
-                    <span className="text-xs whitespace-nowrap">Pay</span>
+                    <span className="text-xs whitespace-nowrap">Payments</span>
                   </TabsTrigger>
                   <TabsTrigger value="rewards" className="flex items-center gap-1.5 shrink-0 px-3 py-2">
                     <Award className="h-3.5 w-3.5" />
