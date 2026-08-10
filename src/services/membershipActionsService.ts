@@ -69,6 +69,10 @@ export interface UpgradeMembershipInput {
   includeGst?: boolean;
   gstRate?: number;
   idempotencyKey?: string;
+  discountAmount?: number;
+  discountReason?: string;
+  sendReminders?: boolean;
+  assignLockerId?: string | null;
 }
 
 export interface UpgradeMembershipResult {
