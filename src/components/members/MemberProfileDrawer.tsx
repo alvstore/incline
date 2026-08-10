@@ -125,7 +125,7 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
                       setPaymentDrawerOpen(true);
                     }}
                   >
-                    <IndianRupee className="h-3 w-3 mr-1" />Pay
+                    <IndianRupee className="h-3 w-3 mr-1" />Collect
                   </Button>
                   {canAmend && (
                     <>
