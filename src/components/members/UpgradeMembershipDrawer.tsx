@@ -52,9 +52,14 @@ export function UpgradeMembershipDrawer({
   const [reason, setReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [includeGst, setIncludeGst] = useState(false);
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(5);
   const [payNow, setPayNow] = useState(true);
   const [amountPaying, setAmountPaying] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountReason, setDiscountReason] = useState('');
+  const [sendReminders, setSendReminders] = useState(true);
+  const [selectedLockerId, setSelectedLockerId] = useState('');
+
 
   // Mirrors the server: the invoice that carries this membership + its gifted days.
   const { data: ledger } = useQuery({
