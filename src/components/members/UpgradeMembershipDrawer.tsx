@@ -108,7 +108,28 @@ export function UpgradeMembershipDrawer({
   );
 
   const newPlan = upgradablePlans.find((p) => p.id === newPlanId);
-  const newGross = Number(newPlan?.discounted_price ?? newPlan?.price ?? 0);
+  const listPrice = Number(newPlan?.discounted_price ?? newPlan?.price ?? 0);
+  const maxDiscount = Math.max(listPrice - credit, 0);
+  const newGross = Math.max(listPrice - Math.min(Math.max(discountAmount, 0), listPrice), 0);
+
+  // Locker parity with the purchase flow: only offered when the new plan includes one.
+  const hasLockerBenefit = newPlan?.plan_benefits?.some(
+    (b: any) => b.benefit_type === 'locker_access' || String(b.benefit_type || '').includes('locker'),
+  );
+  const { data: availableLockers = [] } = useQuery({
+    queryKey: ['available-lockers', branchId],
+    enabled: open && !!branchId && !!hasLockerBenefit,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lockers')
+        .select('id, locker_number, size')
+        .eq('branch_id', branchId)
+        .eq('status', 'available')
+        .order('locker_number');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const taxAmount = useMemo(() => {
     if (!includeGst || !newPlan || !gstRate) return 0;
@@ -146,11 +167,22 @@ export function UpgradeMembershipDrawer({
       setReason('');
       setPaymentMethod('cash');
       setIncludeGst(false);
-      setGstRate(18);
+      setGstRate(5);
       setPayNow(true);
       setAmountPaying(0);
+      setDiscountAmount(0);
+      setDiscountReason('');
+      setSendReminders(true);
+      setSelectedLockerId('');
     }
   }, [open]);
+
+  // Default the GST rate to whatever the chosen plan is configured with (5% for
+  // most fitness plans) instead of a hardcoded 18%.
+  useEffect(() => {
+    if (newPlan?.gst_rate) setGstRate(Number(newPlan.gst_rate));
+  }, [newPlan?.gst_rate]);
+
 
   useEffect(() => {
     setAmountPaying(balanceDue);
