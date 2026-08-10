@@ -559,7 +559,16 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
     pdf_url: params.pdf_url ?? null,
     pdf_filename: params.pdf_filename ?? null,
     pdf_size_bytes: params.pdf_size_bytes ?? null,
+    // Load-balancing: each member can sit on a different weekday shift, and an
+    // optional rotation seed keeps two members on the same shift from doing the
+    // identical exercise block at the same time.
+    schedule_offset_days:
+      params.plan_type === 'workout' ? (params.schedule_offsets?.[member_id] ?? 0) : 0,
+    rotation_interval_days:
+      params.plan_type === 'workout' ? (params.rotation_interval_days ?? 0) : 0,
+    rotation_seed: params.plan_type === 'workout' ? idx % 7 : 0,
   }));
+
 
   const { data: inserted, error } = await supabase
     .from('member_fitness_plans')
