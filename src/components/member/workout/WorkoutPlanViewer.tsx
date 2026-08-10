@@ -1,17 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dumbbell, Moon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Dumbbell, Moon, Repeat, Shuffle } from 'lucide-react';
 import { DaySessionCard } from './DaySessionCard';
 import { WeekGrid } from './WeekGrid';
 import { PlanSegmentedTabs } from '@/components/member/plan/PlanSegmentedTabs';
 import { PlanDayRail } from '@/components/member/plan/PlanDayRail';
 import { normalizeWorkoutPlan, type WorkoutDay } from './planNormalize';
+import {
+  daysUntilNextVariant,
+  describeOffset,
+  normalizeOffset,
+  resolveRotatedPlan,
+} from '@/lib/fitness/planRotation';
 
 type ViewMode = 'today' | 'day' | 'week';
 
 interface WorkoutPlanViewerProps {
   planId: string;
   planData: unknown;
+  /** Member-specific weekday shift (0-6) so gym machines stay spread out. */
+  offsetDays?: number;
+  /** Exercise rotation interval in days (0 = off). */
+  rotationIntervalDays?: number;
+  /** Per-member rotation seed. */
+  rotationSeed?: number;
+  /** Plan start date (yyyy-MM-dd) — rotation anchor. */
+  startDate?: string | null;
 }
 
 const todayIndex = () => new Date().getDay();
@@ -22,9 +37,36 @@ const storageKey = (planId: string) =>
  * Member-facing plan viewer: focused Today / Day view plus the full-week grid.
  * Tick-offs are local to the current date and never touch the stored plan.
  */
-export function WorkoutPlanViewer({ planId, planData }: WorkoutPlanViewerProps) {
-  const plan = useMemo(() => normalizeWorkoutPlan(planData), [planData]);
+export function WorkoutPlanViewer({
+  planId,
+  planData,
+  offsetDays = 0,
+  rotationIntervalDays = 0,
+  rotationSeed = 0,
+  startDate,
+}: WorkoutPlanViewerProps) {
+  const offset = normalizeOffset(offsetDays);
+
+  const rotated = useMemo(
+    () =>
+      resolveRotatedPlan(planData, {
+        intervalDays: rotationIntervalDays,
+        seed: rotationSeed,
+        startDate,
+      }),
+    [planData, rotationIntervalDays, rotationSeed, startDate],
+  );
+
+  const plan = useMemo(
+    () => normalizeWorkoutPlan(rotated.data, { offsetDays: offset }),
+    [rotated.data, offset],
+  );
   const days: WorkoutDay[] = plan?.days ?? [];
+
+  const nextSwitchIn = daysUntilNextVariant({
+    intervalDays: rotationIntervalDays,
+    startDate,
+  });
 
   const defaultDayId = useMemo(() => {
     if (!days.length) return '';
@@ -37,6 +79,7 @@ export function WorkoutPlanViewer({ planId, planData }: WorkoutPlanViewerProps) 
   const [doneKeys, setDoneKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => setActiveId(defaultDayId), [defaultDayId]);
+
 
   useEffect(() => {
     try {
