@@ -1462,7 +1462,7 @@ export function MemberProfileDrawer({
                   </TabsTrigger>
                   <TabsTrigger value="payments" className="flex items-center gap-1.5 shrink-0 px-3 py-2">
                     <IndianRupee className="h-3.5 w-3.5" />
-                    <span className="text-xs whitespace-nowrap">Pay</span>
+                    <span className="text-xs whitespace-nowrap">Payments</span>
                   </TabsTrigger>
                   <TabsTrigger value="rewards" className="flex items-center gap-1.5 shrink-0 px-3 py-2">
                     <Award className="h-3.5 w-3.5" />
