@@ -3,6 +3,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Database } from '@/integrations/supabase/types';
+import { reportError } from '@/lib/errorReporter';
+
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -65,32 +67,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastActivityRef = useRef<number>(Date.now());
   const warningIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, avatar_url, phone, must_set_password, emergency_contact_name, emergency_contact_phone, updated_at')
-      .eq('id', userId)
-      .single();
+  // Safari/iOS aborts in-flight fetches when the tab is backgrounded or the
+  // network flips; supabase-js surfaces that as `TypeError: Load failed` with an
+  // empty `code`. Those are transient, so retry briefly and log at warning level
+  // instead of polluting error_logs with a false failure.
+  const isTransientNetworkError = (error: any): boolean => {
+    if (!error) return false;
+    if (error.code) return false; // real PostgREST/permission error
+    return /load failed|failed to fetch|network|aborted/i.test(String(error.message || ''));
+  };
 
-    if (error) {
-      console.error('Error fetching profile:', error);
-      return null;
+  const withRetry = async <T,>(
+    label: string,
+    run: () => Promise<{ data: T | null; error: any }>,
+  ): Promise<T | null> => {
+    const delays = [300, 900];
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      const { data, error } = await run();
+      if (!error) return data;
+      if (!isTransientNetworkError(error) || attempt === delays.length) {
+        if (isTransientNetworkError(error)) {
+          reportError(`${label}: transient network failure after retries`, {
+            severity: 'warning',
+            context: { message: String(error?.message || '') },
+          });
+        } else {
+          console.error(`${label}:`, error);
+        }
+        return null;
+      }
+      await new Promise((r) => setTimeout(r, delays[attempt]));
     }
-    return data as UserProfile;
+    return null;
+  };
+
+  const fetchProfile = async (userId: string) => {
+    const data = await withRetry<UserProfile>('Error fetching profile', () =>
+      supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url, phone, must_set_password, emergency_contact_name, emergency_contact_phone, updated_at')
+        .eq('id', userId)
+        .single() as any,
+    );
+    return data;
   };
 
   const fetchRoles = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error fetching roles:', error);
-      return [];
-    }
-    return data.map(r => ({ role: r.role as AppRole }));
+    const data = await withRetry<{ role: AppRole }[]>('Error fetching roles', () =>
+      supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId) as any,
+    );
+    return (data || []).map((r) => ({ role: r.role as AppRole }));
   };
+
 
   const refreshProfile = async () => {
     if (user) {

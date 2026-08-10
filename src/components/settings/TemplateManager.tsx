@@ -20,6 +20,7 @@ import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'luci
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetaSyncControls } from './MetaSyncControls';
+import { TemplateTable } from './TemplateTable';
 import DOMPurify from 'isomorphic-dompurify';
 
 const TEMPLATE_TYPES = [
@@ -721,180 +722,58 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
 
 
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-card shadow-lg shadow/50 p-4">
-              <Skeleton className="h-5 w-1/3 mb-2" />
-              <Skeleton className="h-4 w-2/3 mb-2" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-        <Tabs defaultValue={visibleTypes[0]?.value || 'whatsapp'} className="w-full">
-          {visibleTypes.length > 1 && (
-          <TabsList className="w-full grid grid-cols-3">
-            {visibleTypes.map(({ value, label, icon: Icon }) => (
-              <TabsTrigger key={value} value={value} className="flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                {label}
-                {groupedTemplates[value]?.length ? (
-                  <Badge variant="secondary" className="ml-1 text-xs h-5 px-1.5">
-                    {groupedTemplates[value].length}
-                  </Badge>
-                ) : null}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          )}
-          {visibleTypes.map(({ value, label }) => (
-            <TabsContent key={value} value={value}>
-              {/* WhatsApp-only approval status filter chips */}
-              {value === 'whatsapp' && (
-                <div className="flex flex-wrap items-center gap-2 mt-4 mb-3 px-1">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mr-1">Status:</span>
-                  {([
-                    { v: 'all',      label: 'All',       cls: 'bg-muted text-foreground' },
-                    { v: 'approved', label: '✅ Approved', cls: 'bg-success/10 text-success border-success/25' },
-                    { v: 'pending',  label: '⏳ Pending',  cls: 'bg-warning/10 text-warning border-warning/25' },
-                    { v: 'rejected', label: '❌ Rejected', cls: 'bg-destructive/10 text-destructive border-destructive/25' },
-                    { v: 'draft',    label: '⚪ Draft',    cls: 'bg-muted text-foreground border-border' },
-                  ] as const).map((s) => (
-                    <button
-                      key={s.v}
-                      type="button"
-                      onClick={() => setStatusFilter(s.v as any)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${statusFilter === s.v ? 'ring-2 ring-primary/40 ' : ''}${s.cls}`}
-                      title={s.v === 'draft' ? 'Local-only template — not sent to Meta yet. WhatsApp send will be blocked.' : ''}
-                    >
-                      {s.label}
-                      <span className="ml-1.5 opacity-70">{statusCounts[s.v] ?? 0}</span>
-                    </button>
-                  ))}
-                  <MetaSyncControls />
-                </div>
-              )}
-              <Card className="rounded-2xl bg-card shadow-lg shadow/50 border-0">
-                <CardContent className="pt-4">
-                  {!groupedTemplates[value]?.length ? (
-                    <div className="py-12 text-center">
-                      <div className="inline-flex bg-primary/10 text-primary p-3 rounded-2xl mb-3">
-                        <FileText className="h-6 w-6" />
-                      </div>
-                      <p className="text-sm font-medium text-foreground">No {label} templates yet</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click "Add Template" to create one.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {groupedTemplates[value].map((template) => (
-                        <div
-                          key={template.id}
-                          className="flex items-center justify-between p-4 rounded-xl border border-border/70 bg-card hover:bg-muted hover:shadow-md hover:shadow-primary/20 transition-all duration-200"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium truncate">{template.name}</p>
-                              {!template.is_active && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Inactive
-                                </Badge>
-                              )}
-                              {value === 'whatsapp' && metaStatusBadge(template.meta_template_status)}
-                              {mediaBadge(template)}
-                              {deliveryModeBadge(template)}
-                            </div>
-                            {value === 'whatsapp' && template.meta_template_name && (
-                              <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                                Meta: {template.meta_template_name}
-                              </p>
-                            )}
-                            {value === 'whatsapp' && template.meta_template_status === 'REJECTED' && template.meta_rejection_reason && (
-                              <p className="text-xs text-destructive mt-0.5">
-                                Reason: {template.meta_rejection_reason}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground truncate mt-1">
-                              {template.content.slice(0, 80)}...
-                            </p>
-                            {(() => {
-                              const ds = deliveryStats[template.id];
-                              if (!ds || (ds.sent + ds.failed + ds.queued) === 0) return null;
-                              return (
-                                <div className="flex items-center gap-2 mt-1.5 text-[10px]">
-                                  <span className="text-muted-foreground uppercase tracking-wider font-semibold">7d:</span>
-                                  <span className="px-1.5 py-0.5 rounded-full bg-success/10 text-success font-medium">{ds.sent} sent</span>
-                                  {ds.delivered > 0 && <span className="px-1.5 py-0.5 rounded-full bg-info/10 text-info font-medium">{ds.delivered} delivered</span>}
-                                  {ds.read > 0 && <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{ds.read} read</span>}
-                                  {ds.failed > 0 && <span className="px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive font-medium">{ds.failed} failed</span>}
-                                  {ds.queued > 0 && <span className="px-1.5 py-0.5 rounded-full bg-warning/10 text-warning font-medium">{ds.queued} queued</span>}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                          <div className="flex items-center gap-1 ml-3 flex-shrink-0">
-                            {value === 'whatsapp' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs gap-1.5"
-                                onClick={() => openMetaDialog(template)}
-                                title={
-                                  template.meta_template_status === 'REJECTED'
-                                    ? 'Edit & resubmit this template to Meta'
-                                    : template.meta_template_name
-                                      ? 'Already submitted — opens edit form'
-                                      : 'Submit to Meta for approval'
-                                }
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">
-                                  {template.meta_template_status === 'REJECTED'
-                                    ? 'Submit for Edit'
-                                    : template.meta_template_name
-                                      ? 'Edit & Resubmit'
-                                      : 'Submit to Meta'}
-                                </span>
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setPreviewTemplate(template)}
-                              aria-label="Preview template"
-                              title="Preview"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditor(template)}
-                              aria-label="Edit template"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => deleteMutation.mutate(template.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
-        </>
-      )}
+      <div className="space-y-5">
+        {visibleTypes.map(({ value, label, icon: Icon }) => (
+          <div key={value} className="space-y-3">
+            {visibleTypes.length > 1 && (
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-primary" />
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {label} · {groupedTemplates[value]?.length || 0}
+                </h4>
+              </div>
+            )}
+
+            {value === 'whatsapp' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mr-1">Status:</span>
+                {([
+                  { v: 'all', label: 'All', cls: 'bg-muted text-foreground border-border' },
+                  { v: 'approved', label: 'Approved', cls: 'bg-success/10 text-success border-success/25' },
+                  { v: 'pending', label: 'Pending', cls: 'bg-warning/10 text-warning border-warning/25' },
+                  { v: 'rejected', label: 'Rejected', cls: 'bg-destructive/10 text-destructive border-destructive/25' },
+                  { v: 'draft', label: 'Draft', cls: 'bg-muted text-foreground border-border' },
+                ] as const).map((s) => (
+                  <button
+                    key={s.v}
+                    type="button"
+                    onClick={() => setStatusFilter(s.v as any)}
+                    className={`cursor-pointer text-xs px-3 py-1 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary ${statusFilter === s.v ? 'ring-2 ring-primary/40 ' : ''}${s.cls}`}
+                    title={s.v === 'draft' ? 'Local-only template — not sent to Meta yet.' : ''}
+                  >
+                    {s.label}
+                    <span className="ml-1.5 opacity-70">{statusCounts[s.v] ?? 0}</span>
+                  </button>
+                ))}
+                <MetaSyncControls />
+              </div>
+            )}
+
+            <TemplateTable
+              channel={value as 'whatsapp' | 'sms' | 'email'}
+              templates={(groupedTemplates[value] || []) as any}
+              deliveryStats={deliveryStats as any}
+              isLoading={isLoading}
+              onPreview={(t) => setPreviewTemplate(t as any)}
+              onEdit={(t) => openEditor(t as any)}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onSubmitMeta={(t) => openMetaDialog(t as any)}
+              onCreate={() => openEditor()}
+            />
+          </div>
+        ))}
+      </div>
+
 
       {/* Template Editor Drawer */}
       <Sheet open={showEditor} onOpenChange={setShowEditor}>

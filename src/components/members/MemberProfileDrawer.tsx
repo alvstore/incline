@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -709,12 +709,15 @@ export function MemberProfileDrawer({
     }
   };
 
-  // Fetch full member details with all relations
-  const { data: memberDetails, refetch: refetchMemberDetails } = useQuery({
-    queryKey: ['member-details', member?.id],
+  // Fetch member core + light relations. The heavy embeds (memberships,
+  // PT packages) are fetched separately — PostgREST resolves every embed as a
+  // correlated query that re-runs the profiles RLS policy, which was pushing
+  // the combined request past the statement timeout.
+  const { data: memberCore, refetch: refetchMemberCore } = useQuery({
+    queryKey: ['member-details', member?.id, 'core'],
     queryFn: async () => {
       if (!member?.id) return null;
-      
+
       const { data, error } = await supabase
         .from('members')
         .select(`
@@ -725,24 +728,14 @@ export function MemberProfileDrawer({
             government_id_type, government_id_verified,
             emergency_contact_name, emergency_contact_phone
           ),
-
           lead:lead_id(full_name, email, phone, avatar_url, gender, date_of_birth),
           branch:branch_id(name, code),
           created_by_profile:created_by(full_name, email),
-          memberships(
-            *,
-            membership_plans(name, duration_days, price, is_transferable)
-          ),
-          member_pt_packages(
-            *,
-            pt_packages(name, total_sessions),
-            trainers(user_id)
-          ),
           referrer:referred_by(member_code, user_id)
         `)
         .eq('id', member.id)
         .single();
-      
+
       if (error) throw error;
 
       // Government ID number is column-restricted; fetch via the gated RPC.
@@ -754,6 +747,41 @@ export function MemberProfileDrawer({
     },
     enabled: !!member?.id && open,
   });
+
+  const { data: memberPlans, refetch: refetchMemberPlans } = useQuery({
+    queryKey: ['member-details', member?.id, 'plans'],
+    queryFn: async () => {
+      if (!member?.id) return { memberships: [], member_pt_packages: [] };
+      const [ms, pt] = await Promise.all([
+        supabase
+          .from('memberships')
+          .select('*, membership_plans(name, duration_days, price, is_transferable)')
+          .eq('member_id', member.id),
+        supabase
+          .from('member_pt_packages')
+          .select('*, pt_packages(name, total_sessions), trainers(user_id)')
+          .eq('member_id', member.id),
+      ]);
+      if (ms.error) throw ms.error;
+      if (pt.error) throw pt.error;
+      return { memberships: ms.data || [], member_pt_packages: pt.data || [] };
+    },
+    enabled: !!member?.id && open,
+  });
+
+  const memberDetails = useMemo(() => {
+    if (!memberCore) return null;
+    return {
+      ...(memberCore as any),
+      memberships: memberPlans?.memberships || [],
+      member_pt_packages: memberPlans?.member_pt_packages || [],
+    } as any;
+  }, [memberCore, memberPlans]);
+
+  const refetchMemberDetails = useCallback(async () => {
+    await Promise.all([refetchMemberCore(), refetchMemberPlans()]);
+  }, [refetchMemberCore, refetchMemberPlans]);
+
 
   // Onboarding waiver (only present for self-registered members)
   const { data: onboardingSig } = useQuery({

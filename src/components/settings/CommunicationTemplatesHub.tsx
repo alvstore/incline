@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MessageSquare, Mail, Phone, Sparkles, Workflow, PhoneForwarded, FileText, Wand2 } from 'lucide-react';
 import { TemplateManager } from './TemplateManager';
 import { WhatsAppAutomations } from './WhatsAppAutomations';
@@ -13,6 +14,7 @@ import { WhatsAppRoutingSettings } from './WhatsAppRoutingSettings';
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
 
 type Channel = 'whatsapp' | 'sms' | 'email';
+type SectionId = 'templates' | 'coverage' | 'automations' | 'routing';
 
 interface TemplatePrefill {
   name: string;
@@ -29,33 +31,102 @@ const EVENT_PREFILLS: Record<string, TemplatePrefill> = {
   birthday: { name: 'Birthday Wish', trigger: 'birthday', content: 'Happy birthday, {{member_name}}! Wishing you a strong year from {{branch_name}}.' },
 };
 
-const CHANNEL_HEAD: Record<Channel, { label: string; icon: any; gradient: string; description: string }> = {
-  whatsapp: { label: 'WhatsApp', icon: MessageSquare, gradient: 'from-success to-success', description: 'Author CRM templates, sync the Meta-approved catalog, map them to system events, and audit deliverability — all in one place.' },
-  sms: { label: 'SMS', icon: Phone, gradient: 'from-info to-info', description: 'Manage transactional and promotional SMS templates with DLT-friendly limits and AI-assisted drafting.' },
-  email: { label: 'Email', icon: Mail, gradient: 'from-warning to-warning', description: 'Design transactional and marketing emails with subject, HTML body, attachments and AI generation.' },
+const CHANNELS: { value: Channel; label: string; icon: any; blurb: string }[] = [
+  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, blurb: 'CRM templates, Meta approvals, event mapping and automations.' },
+  { value: 'sms', label: 'SMS', icon: Phone, blurb: 'Transactional and promotional SMS with DLT-friendly limits.' },
+  { value: 'email', label: 'Email', icon: Mail, blurb: 'Subject, HTML body, attachments and AI-assisted drafting.' },
+];
+
+const SECTIONS: Record<Channel, { id: SectionId; label: string; icon: any; hint: string }[]> = {
+  whatsapp: [
+    { id: 'templates', label: 'Templates', icon: FileText, hint: 'Author and edit' },
+    { id: 'coverage', label: 'Coverage & AI', icon: Wand2, hint: 'Event gaps' },
+    { id: 'automations', label: 'Automations', icon: Workflow, hint: 'Triggers' },
+    { id: 'routing', label: 'Number routing', icon: PhoneForwarded, hint: 'Staff numbers' },
+  ],
+  sms: [
+    { id: 'templates', label: 'Templates', icon: FileText, hint: 'Author and edit' },
+    { id: 'coverage', label: 'Coverage & AI', icon: Wand2, hint: 'Event gaps' },
+  ],
+  email: [
+    { id: 'templates', label: 'Templates', icon: FileText, hint: 'Author and edit' },
+    { id: 'coverage', label: 'Coverage & AI', icon: Wand2, hint: 'Event gaps' },
+  ],
 };
 
-function ChannelHero({ channel, onAi }: { channel: Channel; onAi: () => void }) {
-  const meta = CHANNEL_HEAD[channel];
-  const Icon = meta.icon;
-  return (
-    <div className={`rounded-2xl p-5 bg-gradient-to-r ${meta.gradient} text-primary-foreground shadow-lg flex items-start justify-between gap-4`}>
-      <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-card/15 p-2.5"><Icon className="h-6 w-6" /></div>
-        <div>
-          <h3 className="text-lg font-bold">{meta.label} Templates</h3>
-          <p className="text-sm text-primary-foreground/80 max-w-2xl">{meta.description}</p>
-        </div>
+interface HealthCounts {
+  total: number;
+  active: number;
+  approved: number;
+  pending: number;
+  rejected: number;
+  draft: number;
+}
+
+function HealthStrip({ channel }: { channel: Channel }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['template-health-strip'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_template_with_meta_status' as any)
+        .select('type, is_active, approval_status');
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    staleTime: 30_000,
+  });
+
+  const counts = useMemo<HealthCounts>(() => {
+    const rows = (data || []).filter((r: any) => r.type === channel);
+    return {
+      total: rows.length,
+      active: rows.filter((r: any) => r.is_active).length,
+      approved: rows.filter((r: any) => r.approval_status === 'approved').length,
+      pending: rows.filter((r: any) => r.approval_status === 'pending').length,
+      rejected: rows.filter((r: any) => r.approval_status === 'rejected').length,
+      draft: rows.filter((r: any) => !r.approval_status || r.approval_status === 'draft').length,
+    };
+  }, [data, channel]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
       </div>
-      <Button variant="secondary" onClick={onAi} className="gap-2 shrink-0 bg-card/95 text-foreground hover:bg-card">
-        <Sparkles className="h-4 w-4 text-primary" /> AI Generate
-      </Button>
+    );
+  }
+  if (isError) {
+    return <p className="text-xs text-destructive">Couldn't load template health right now.</p>;
+  }
+
+  const tiles = channel === 'whatsapp'
+    ? [
+        { label: 'Total', value: counts.total, cls: 'text-foreground' },
+        { label: 'Approved', value: counts.approved, cls: 'text-success' },
+        { label: 'Pending', value: counts.pending, cls: 'text-warning' },
+        { label: 'Rejected / draft', value: counts.rejected + counts.draft, cls: 'text-destructive' },
+      ]
+    : [
+        { label: 'Total', value: counts.total, cls: 'text-foreground' },
+        { label: 'Active', value: counts.active, cls: 'text-success' },
+        { label: 'Inactive', value: counts.total - counts.active, cls: 'text-muted-foreground' },
+      ];
+
+  return (
+    <div className={`grid gap-3 grid-cols-2 ${tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      {tiles.map((t) => (
+        <div key={t.label} className="rounded-2xl bg-card shadow-lg shadow-primary/5 px-4 py-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t.label}</p>
+          <p className={`text-2xl font-bold ${t.cls}`}>{t.value}</p>
+        </div>
+      ))}
     </div>
   );
 }
 
 export function CommunicationTemplatesHub() {
-  const [tab, setTab] = useState<Channel | 'ai'>('whatsapp');
+  const [channel, setChannel] = useState<Channel>('whatsapp');
+  const [section, setSection] = useState<SectionId>('templates');
   const [aiOpen, setAiOpen] = useState(false);
   const [aiChannel, setAiChannel] = useState<Channel | undefined>(undefined);
   const [prefill, setPrefill] = useState<TemplatePrefill | null>(null);
@@ -70,128 +141,105 @@ export function CommunicationTemplatesHub() {
       type: 'whatsapp' as Channel,
     };
     setPrefill({ ...p, type: 'whatsapp', eventName });
+    setChannel('whatsapp');
+    setSection('templates');
+  };
+
+  const sections = SECTIONS[channel];
+  const activeChannel = CHANNELS.find((c) => c.value === channel)!;
+
+  const switchChannel = (c: Channel) => {
+    setChannel(c);
+    setSection('templates');
   };
 
   return (
     <>
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
-          <TabsTrigger value="whatsapp" className="gap-2"><MessageSquare className="h-4 w-4" /> WhatsApp</TabsTrigger>
-          <TabsTrigger value="sms" className="gap-2"><Phone className="h-4 w-4" /> SMS</TabsTrigger>
-          <TabsTrigger value="email" className="gap-2"><Mail className="h-4 w-4" /> Email</TabsTrigger>
-          <TabsTrigger value="ai" className="gap-2"><Sparkles className="h-4 w-4" /> AI Studio</TabsTrigger>
-        </TabsList>
+      <div className="space-y-5">
+        {/* Header: channel switch + primary action */}
+        <div className="rounded-2xl bg-card shadow-lg shadow-primary/5 p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-1 bg-muted/60 rounded-xl p-1 w-fit">
+            {CHANNELS.map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => switchChannel(value)}
+                aria-pressed={channel === value}
+                className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                  channel === value
+                    ? 'bg-card text-primary shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="hidden xl:block text-xs text-muted-foreground max-w-sm">{activeChannel.blurb}</p>
+            <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl shadow-sm cursor-pointer">
+              <Sparkles className="h-4 w-4" /> AI Generate
+            </Button>
+          </div>
+        </div>
 
-        <TabsContent value="whatsapp" className="mt-4 space-y-5">
-          <ChannelHero channel="whatsapp" onAi={() => openAi('whatsapp')} />
+        <HealthStrip channel={channel} />
 
-          <Tabs defaultValue="crm" className="w-full">
-            <TabsList className="flex flex-wrap gap-1 h-auto bg-muted/50 p-1 rounded-xl">
-              <TabsTrigger value="crm" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> CRM Templates</TabsTrigger>
-              <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
-              <TabsTrigger value="auto" className="gap-1.5"><Workflow className="h-3.5 w-3.5" /> Automations</TabsTrigger>
-              <TabsTrigger value="routing" className="gap-1.5"><PhoneForwarded className="h-3.5 w-3.5" /> Number Routing</TabsTrigger>
-            </TabsList>
+        {/* Workbench: left rail + content */}
+        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <nav aria-label="Template sections" className="lg:sticky lg:top-4 h-fit">
+            <ul className="flex lg:flex-col gap-1 overflow-x-auto">
+              {sections.map(({ id, label, icon: Icon, hint }) => (
+                <li key={id} className="shrink-0 lg:w-full">
+                  <button
+                    type="button"
+                    onClick={() => setSection(id)}
+                    aria-current={section === id ? 'page' : undefined}
+                    className={`cursor-pointer w-full text-left rounded-xl px-3 py-2.5 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary ${
+                      section === id
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-sm"><Icon className="h-4 w-4" /> {label}</span>
+                    <span className="hidden lg:block text-[11px] text-muted-foreground mt-0.5 pl-6">{hint}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-            <TabsContent value="crm" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
+          <div className="min-w-0">
+            {section === 'templates' && (
+              <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
                 <CardContent className="pt-6">
                   <TemplateManager
-                    filterType="whatsapp"
+                    key={channel}
+                    filterType={channel}
                     hideHeader
-                    prefill={prefill ?? undefined}
+                    prefill={channel === 'whatsapp' ? (prefill ?? undefined) : undefined}
                     onPrefillConsumed={() => setPrefill(null)}
                   />
                 </CardContent>
               </Card>
-            </TabsContent>
+            )}
 
-            <TabsContent value="coverage" className="mt-4">
-              <TemplateCoverageMatrix channel="whatsapp" />
-            </TabsContent>
+            {section === 'coverage' && <TemplateCoverageMatrix channel={channel} />}
 
-            <TabsContent value="auto" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
+            {section === 'automations' && (
+              <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
                 <CardContent className="pt-6"><WhatsAppAutomations /></CardContent>
               </Card>
-            </TabsContent>
+            )}
 
-            <TabsContent value="routing" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
+            {section === 'routing' && (
+              <Card className="rounded-2xl shadow-lg shadow-primary/5 border-0">
                 <CardContent className="pt-6"><WhatsAppRoutingSettings /></CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-
-        <TabsContent value="sms" className="mt-4 space-y-5">
-          <ChannelHero channel="sms" onAi={() => openAi('sms')} />
-          <Tabs defaultValue="templates" className="w-full">
-            <TabsList className="flex flex-wrap gap-1 h-auto bg-muted/50 p-1 rounded-xl">
-              <TabsTrigger value="templates" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Templates</TabsTrigger>
-              <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
-            </TabsList>
-            <TabsContent value="templates" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
-                <CardContent className="pt-6"><TemplateManager filterType="sms" hideHeader /></CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="coverage" className="mt-4">
-              <TemplateCoverageMatrix channel="sms" />
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-
-        <TabsContent value="email" className="mt-4 space-y-5">
-          <ChannelHero channel="email" onAi={() => openAi('email')} />
-          <Tabs defaultValue="templates" className="w-full">
-            <TabsList className="flex flex-wrap gap-1 h-auto bg-muted/50 p-1 rounded-xl">
-              <TabsTrigger value="templates" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Templates</TabsTrigger>
-              <TabsTrigger value="coverage" className="gap-1.5"><Wand2 className="h-3.5 w-3.5" /> Coverage & AI</TabsTrigger>
-            </TabsList>
-            <TabsContent value="templates" className="mt-4">
-              <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
-                <CardContent className="pt-6"><TemplateManager filterType="email" hideHeader /></CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="coverage" className="mt-4">
-              <TemplateCoverageMatrix channel="email" />
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-
-        <TabsContent value="ai" className="mt-4 space-y-5">
-          <Card className="rounded-2xl shadow-lg shadow/40 border-primary/20 bg-gradient-to-br from-primary/10 to-white">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> AI Template Studio</CardTitle>
-              <CardDescription>
-                Generate brand-safe, deduplicated templates for any channel. Pick events, review proposals,
-                and save individually or in bulk. WhatsApp proposals are also submitted to Meta automatically.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-3">
-              {(['whatsapp', 'sms', 'email'] as Channel[]).map((c) => {
-                const M = CHANNEL_HEAD[c];
-                const I = M.icon;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => openAi(c)}
-                    className={`group rounded-2xl bg-gradient-to-br ${M.gradient} p-5 text-primary-foreground text-left shadow-md hover:shadow-xl transition-all`}
-                  >
-                    <div className="flex items-center gap-2"><I className="h-5 w-5" /><span className="font-semibold">{M.label}</span></div>
-                    <p className="mt-2 text-xs text-primary-foreground/85">Generate {M.label} templates with AI</p>
-                    <div className="mt-3 inline-flex items-center gap-1 text-xs bg-card/15 rounded-full px-2.5 py-1">
-                      <Sparkles className="h-3 w-3" /> Open generator
-                    </div>
-                  </button>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            )}
+          </div>
+        </div>
+      </div>
 
       <AIGenerateTemplatesDrawer open={aiOpen} onOpenChange={setAiOpen} channel={aiChannel} />
     </>
