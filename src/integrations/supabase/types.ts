@@ -7418,6 +7418,9 @@ export type Database = {
           plan_data: Json
           plan_name: string
           plan_type: string
+          rotation_interval_days: number
+          rotation_seed: number
+          schedule_offset_days: number
           source_kind: string
           template_id: string | null
           updated_at: string | null
@@ -7440,6 +7443,9 @@ export type Database = {
           plan_data?: Json
           plan_name: string
           plan_type: string
+          rotation_interval_days?: number
+          rotation_seed?: number
+          schedule_offset_days?: number
           source_kind?: string
           template_id?: string | null
           updated_at?: string | null
@@ -7462,6 +7468,9 @@ export type Database = {
           plan_data?: Json
           plan_name?: string
           plan_type?: string
+          rotation_interval_days?: number
+          rotation_seed?: number
+          schedule_offset_days?: number
           source_kind?: string
           template_id?: string | null
           updated_at?: string | null
@@ -15811,6 +15820,13 @@ export type Database = {
       void_trainer_commission: {
         Args: { p_payment_id: string; p_reason?: string; p_void_ratio?: number }
         Returns: Json
+      }
+      workout_schedule_offset_load: {
+        Args: { _branch_id?: string }
+        Returns: {
+          active_plans: number
+          offset_days: number
+        }[]
       }
     }
     Enums: {

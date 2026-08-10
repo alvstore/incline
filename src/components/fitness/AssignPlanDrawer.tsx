@@ -26,10 +26,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   searchMembersForAssignment,
   assignPlanToMembers,
+  fetchScheduleOffsetLoad,
   loadMemberContacts,
   BulkAssignResult,
   NotificationChannel,
 } from '@/services/fitnessService';
+import {
+  WEEKDAY_SHORT,
+  describeOffset,
+  normalizeOffset,
+  rotationVariants,
+  suggestOffsets,
+} from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 
 import { toast } from 'sonner';
@@ -107,8 +115,35 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   const [channels, setChannels] = useState<NotificationChannel[]>(['in_app', 'whatsapp', 'email']);
   const [sendPdf, setSendPdf] = useState(true);
   const [isCommon, setIsCommon] = useState(false);
+  // Floor load balancing (workout plans only): stagger each member's week so the
+  // same plan doesn't send everyone to the same machine on the same day.
+  const [autoStagger, setAutoStagger] = useState(true);
+  const [manualOffset, setManualOffset] = useState(0);
+  const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
+
+  const isWorkout = plan?.type === 'workout';
+
+  const { data: offsetLoad = {} } = useQuery({
+    queryKey: ['workout-offset-load', branchId],
+    queryFn: () => fetchScheduleOffsetLoad(branchId),
+    enabled: open && isWorkout,
+    staleTime: 60_000,
+  });
+
+  const hasVariants = rotationVariants(plan?.content).length > 0;
+
+  /** member_id → weekday shift for this assignment. */
+  const scheduleOffsets = useMemo(() => {
+    if (!isWorkout) return {};
+    const ids = selected.map((m) => m.id);
+    const picks = autoStagger
+      ? suggestOffsets(offsetLoad as Record<number, number>, ids.length)
+      : ids.map(() => normalizeOffset(manualOffset));
+    return Object.fromEntries(ids.map((id, i) => [id, picks[i] ?? 0]));
+  }, [isWorkout, selected, autoStagger, manualOffset, offsetLoad]);
+
 
   const validUntil =
     durationDays === 'custom' ? customValidUntil : planEndDateISO(startDate, durationDays);
@@ -195,6 +230,8 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
         pdf_url: plan?.pdf_url ?? null,
         pdf_filename: plan?.pdf_filename ?? null,
         pdf_size_bytes: plan?.pdf_size_bytes ?? null,
+        schedule_offsets: scheduleOffsets,
+        rotation_interval_days: isWorkout ? rotationInterval : 0,
       });
 
       // If "Send PDF on assign" is enabled, dispatch PDFs to whichever
@@ -460,6 +497,110 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   </div>
                 )}
               </div>
+
+              {/* Floor load balancing — same plan, different days per member so
+                  the gym doesn't get a queue on one machine. */}
+              {isWorkout && (
+                <div className="rounded-2xl border bg-card p-4 space-y-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Floor Load Balancing
+                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Same plan, shifted days — keeps machines free at peak hours.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoStagger}
+                      onCheckedChange={setAutoStagger}
+                      aria-label="Auto-stagger schedule across members"
+                    />
+                  </div>
+
+                  {autoStagger ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-7 gap-1">
+                        {WEEKDAY_SHORT.map((label, i) => {
+                          const existing = (offsetLoad as Record<number, number>)[i] ?? 0;
+                          const incoming = Object.values(scheduleOffsets).filter((o) => o === i).length;
+                          return (
+                            <div
+                              key={label}
+                              className={`rounded-lg border px-1 py-1.5 text-center ${
+                                incoming > 0 ? 'border-primary bg-primary/10' : 'bg-muted/40'
+                              }`}
+                            >
+                              <div className="text-[10px] text-muted-foreground">{label}</div>
+                              <div className="text-xs font-semibold">
+                                {existing + incoming}
+                                {incoming > 0 && (
+                                  <span className="text-primary"> (+{incoming})</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Members are spread onto the least-busy shift groups automatically.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="manual-offset">Shift everyone by</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {[0, 1, 2, 3, 4, 5, 6].map((o) => (
+                          <button
+                            key={o}
+                            id={o === 0 ? 'manual-offset' : undefined}
+                            type="button"
+                            aria-pressed={manualOffset === o}
+                            onClick={() => setManualOffset(o)}
+                            className={`min-h-[36px] cursor-pointer rounded-full border px-3 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                              manualOffset === o
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background border-border hover:bg-muted'
+                            }`}
+                          >
+                            {o === 0 ? 'No shift' : `+${o}d`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{describeOffset(manualOffset)}</p>
+                    </div>
+                  )}
+
+                  {hasVariants && (
+                    <div className="space-y-1.5 border-t pt-3">
+                      <Label>Rotate exercise blocks</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {[0, 7, 14, 28].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            aria-pressed={rotationInterval === d}
+                            onClick={() => setRotationInterval(d)}
+                            className={`min-h-[36px] cursor-pointer rounded-full border px-3 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                              rotationInterval === d
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background border-border hover:bg-muted'
+                            }`}
+                          >
+                            {d === 0 ? 'Off' : `Every ${d} days`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        This plan has {rotationVariants(plan?.content).length} equivalent exercise blocks —
+                        members cycle through them so the same machines aren't in demand every week.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+
 
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

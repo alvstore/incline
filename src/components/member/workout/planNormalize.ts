@@ -4,6 +4,10 @@
  * into one day list the member UI can render day-by-day or week-at-a-glance.
  */
 
+import { WEEKDAY_LABELS, normalizeOffset, shiftWeekday } from '@/lib/fitness/planRotation';
+
+
+
 export interface WorkoutExercise {
   name: string;
   sets: number;
@@ -15,8 +19,10 @@ export interface WorkoutExercise {
 export interface WorkoutDay {
   /** Stable key, e.g. "w1-d2" */
   id: string;
-  /** "Monday", "Day 2" … */
+  /** "Monday", "Day 2" … (already shifted when the member has a day shift) */
   dayLabel: string;
+  /** The plan's own label before the member's day shift was applied. */
+  originalDayLabel?: string;
   /** "Week 1" when the plan is periodised */
   weekLabel?: string;
   /** Muscle group / split focus when the plan provides one */
@@ -31,6 +37,12 @@ export interface NormalizedWorkoutPlan {
   days: WorkoutDay[];
   weeks: string[];
 }
+
+export interface NormalizeOptions {
+  /** 0-6 weekday shift applied to this member's copy of the plan. */
+  offsetDays?: number;
+}
+
 
 const WEEKDAYS = [
   'sunday',
@@ -59,7 +71,7 @@ function toExercises(raw: any): WorkoutExercise[] {
   }));
 }
 
-function toDay(raw: any, id: string, weekLabel?: string): WorkoutDay {
+function toDay(raw: any, id: string, weekLabel?: string, offsetDays = 0): WorkoutDay {
   const dayLabel = raw?.day || raw?.name || raw?.title || 'Session';
   const focus = raw?.focus || raw?.muscle_group || raw?.split || undefined;
   const exercises = toExercises(raw);
@@ -68,19 +80,35 @@ function toDay(raw: any, id: string, weekLabel?: string): WorkoutDay {
     /rest|off/i.test(String(dayLabel)) ||
     /rest/i.test(String(focus || ''));
 
+  const baseIndex = weekdayIndexOf(String(dayLabel));
+  const offset = normalizeOffset(offsetDays);
+  const shiftedIndex = baseIndex === null ? null : shiftWeekday(baseIndex, offset);
+  const shiftedLabel =
+    shiftedIndex !== null && offset > 0 ? WEEKDAY_LABELS[shiftedIndex] : String(dayLabel);
+
   return {
     id,
-    dayLabel: String(dayLabel),
+    dayLabel: shiftedLabel,
+    originalDayLabel: shiftedLabel !== String(dayLabel) ? String(dayLabel) : undefined,
     weekLabel,
     focus: focus ? String(focus) : undefined,
     isRest,
     exercises,
-    weekdayIndex: weekdayIndexOf(String(dayLabel)),
+    weekdayIndex: shiftedIndex,
   };
 }
 
-export function normalizeWorkoutPlan(raw: any): NormalizedWorkoutPlan | null {
+export function normalizeWorkoutPlan(
+  raw: any,
+  options: NormalizeOptions = {},
+): NormalizedWorkoutPlan | null {
   if (!raw) return null;
+  const offsetDays = normalizeOffset(options.offsetDays ?? 0);
+
+  const sortByWeekday = (days: WorkoutDay[]) =>
+    days.every((d) => d.weekdayIndex !== null)
+      ? [...days].sort((a, b) => (a.weekdayIndex ?? 0) - (b.weekdayIndex ?? 0))
+      : days;
 
   if (Array.isArray(raw.weeks) && raw.weeks.length > 0) {
     const days: WorkoutDay[] = [];
@@ -88,9 +116,10 @@ export function normalizeWorkoutPlan(raw: any): NormalizedWorkoutPlan | null {
     raw.weeks.forEach((wk: any, wi: number) => {
       const label = `Week ${wk?.week ?? wi + 1}`;
       weeks.push(label);
-      (Array.isArray(wk?.days) ? wk.days : []).forEach((d: any, di: number) => {
-        days.push(toDay(d, `w${wi}-d${di}`, label));
-      });
+      const weekDays = (Array.isArray(wk?.days) ? wk.days : []).map((d: any, di: number) =>
+        toDay(d, `w${wi}-d${di}`, label, offsetDays),
+      );
+      days.push(...sortByWeekday(weekDays));
     });
     if (!days.length) return null;
     return { days, weeks };
@@ -98,13 +127,14 @@ export function normalizeWorkoutPlan(raw: any): NormalizedWorkoutPlan | null {
 
   if (Array.isArray(raw.days) && raw.days.length > 0) {
     return {
-      days: raw.days.map((d: any, di: number) => toDay(d, `d${di}`)),
+      days: sortByWeekday(raw.days.map((d: any, di: number) => toDay(d, `d${di}`, undefined, offsetDays))),
       weeks: [],
     };
   }
 
   return null;
 }
+
 
 /** Total working sets across a day — used for the day summary line. */
 export function totalSets(day: WorkoutDay): number {
