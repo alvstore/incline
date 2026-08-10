@@ -191,6 +191,12 @@ export function UpgradeMembershipDrawer({
   const upgrade = useMutation({
     mutationFn: async () => {
       if (!newPlanId) throw new Error('Select the plan to upgrade to');
+      if (discountAmount > maxDiscount) {
+        throw new Error(`Discount cannot exceed ${inr(maxDiscount)} — the new plan must stay above the credit already paid`);
+      }
+      if (discountAmount > 0 && !discountReason.trim()) {
+        throw new Error('Add a reason for the discount');
+      }
       if (payNow && amountPaying > balanceDue) {
         throw new Error('Amount collected cannot exceed the balance due');
       }
@@ -202,6 +208,10 @@ export function UpgradeMembershipDrawer({
         amountPaying: payNow ? amountPaying : 0,
         includeGst,
         gstRate: includeGst ? gstRate : 0,
+        discountAmount,
+        discountReason: discountReason.trim() || undefined,
+        sendReminders,
+        assignLockerId: hasLockerBenefit && selectedLockerId ? selectedLockerId : null,
         idempotencyKey: `upgrade:${membership?.id}:${newPlanId}:${newTotal}`,
       });
     },
@@ -215,6 +225,8 @@ export function UpgradeMembershipDrawer({
       queryClient.invalidateQueries({ queryKey: ['member-pending-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['member-details', memberId] });
       queryClient.invalidateQueries({ queryKey: ['active-membership'] });
+      queryClient.invalidateQueries({ queryKey: ['lockers'] });
+      queryClient.invalidateQueries({ queryKey: ['available-lockers'] });
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message || 'Upgrade failed'),
