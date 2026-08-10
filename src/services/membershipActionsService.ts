@@ -102,6 +102,10 @@ export async function upgradeMembership(
     p_include_gst: input.includeGst ?? false,
     p_gst_rate: input.gstRate ?? 0,
     p_idempotency_key: input.idempotencyKey ?? null,
+    p_discount_amount: input.discountAmount ?? 0,
+    p_discount_reason: input.discountReason ?? null,
+    p_send_reminders: input.sendReminders ?? true,
+    p_assign_locker_id: input.assignLockerId ?? null,
   });
   if (error) throw error;
   return data as unknown as UpgradeMembershipResult;
