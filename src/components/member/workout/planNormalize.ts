@@ -15,8 +15,10 @@ export interface WorkoutExercise {
 export interface WorkoutDay {
   /** Stable key, e.g. "w1-d2" */
   id: string;
-  /** "Monday", "Day 2" … */
+  /** "Monday", "Day 2" … (already shifted when the member has a day shift) */
   dayLabel: string;
+  /** The plan's own label before the member's day shift was applied. */
+  originalDayLabel?: string;
   /** "Week 1" when the plan is periodised */
   weekLabel?: string;
   /** Muscle group / split focus when the plan provides one */
@@ -31,6 +33,12 @@ export interface NormalizedWorkoutPlan {
   days: WorkoutDay[];
   weeks: string[];
 }
+
+export interface NormalizeOptions {
+  /** 0-6 weekday shift applied to this member's copy of the plan. */
+  offsetDays?: number;
+}
+
 
 const WEEKDAYS = [
   'sunday',
