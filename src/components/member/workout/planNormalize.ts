@@ -4,6 +4,10 @@
  * into one day list the member UI can render day-by-day or week-at-a-glance.
  */
 
+import { WEEKDAY_LABELS, normalizeOffset, shiftWeekday } from '@/lib/fitness/planRotation';
+
+
+
 export interface WorkoutExercise {
   name: string;
   sets: number;
