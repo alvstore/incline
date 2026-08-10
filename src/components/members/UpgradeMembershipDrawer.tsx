@@ -393,8 +393,14 @@ export function UpgradeMembershipDrawer({
               <CardContent className="pt-5 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-white/80">{newPlan.name} ({newPlan.duration_days} days)</span>
-                  <span className="font-semibold">{inr(newGross)}</span>
+                  <span className="font-semibold">{inr(listPrice)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-200">
+                    <span>Discount{discountReason ? ` (${discountReason})` : ''}</span>
+                    <span>− {inr(Math.min(discountAmount, listPrice))}</span>
+                  </div>
+                )}
                 {includeGst && taxAmount > 0 && (
                   <div className="flex justify-between text-white/80">
                     <span>GST @ {gstRate}%{newPlan.is_gst_inclusive !== false ? ' (inclusive)' : ''}</span>
