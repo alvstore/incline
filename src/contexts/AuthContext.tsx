@@ -3,6 +3,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Database } from '@/integrations/supabase/types';
+import { reportError } from '@/lib/errorReporter';
+
 
 type AppRole = Database['public']['Enums']['app_role'];
 
