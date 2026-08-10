@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -714,7 +714,7 @@ export function MemberProfileDrawer({
   // correlated query that re-runs the profiles RLS policy, which was pushing
   // the combined request past the statement timeout.
   const { data: memberCore, refetch: refetchMemberCore } = useQuery({
-    queryKey: ['member-details-core', member?.id],
+    queryKey: ['member-details', member?.id, 'core'],
     queryFn: async () => {
       if (!member?.id) return null;
 
@@ -749,7 +749,7 @@ export function MemberProfileDrawer({
   });
 
   const { data: memberPlans, refetch: refetchMemberPlans } = useQuery({
-    queryKey: ['member-details-plans', member?.id],
+    queryKey: ['member-details', member?.id, 'plans'],
     queryFn: async () => {
       if (!member?.id) return { memberships: [], member_pt_packages: [] };
       const [ms, pt] = await Promise.all([
