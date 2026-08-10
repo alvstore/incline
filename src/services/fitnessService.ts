@@ -541,7 +541,7 @@ export async function assignPlanToMembers(params: BulkAssignParams): Promise<Bul
   const branchFor = (member_id: string) =>
     params.branch_id || contacts.get(member_id)?.branch_id || null;
 
-  const rows = params.member_ids.map((member_id) => ({
+  const rows = params.member_ids.map((member_id, idx) => ({
     member_id,
     plan_name: params.plan_name,
     plan_type: params.plan_type,
