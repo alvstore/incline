@@ -333,6 +333,8 @@ export function PurchaseMembershipDrawer({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
+          <MemberIdentityHeader memberId={memberId} memberName={memberName} />
+
           {/* Active Membership Warning — softened when staff opts into advance booking */}
           {activeMembership && !canRenew && !advanceBooking && (
             <Alert variant="destructive">
