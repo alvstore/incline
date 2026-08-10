@@ -247,6 +247,12 @@ export function UpgradeMembershipDrawer({
         </SheetHeader>
 
         <div className="mt-6 space-y-5">
+          <MemberIdentityHeader
+            memberId={memberId}
+            memberName={memberName}
+            subtitle={currentPlan?.name ? `On ${currentPlan.name}` : undefined}
+          />
+
           {/* Current plan */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
             <CardContent className="pt-5 space-y-2">
