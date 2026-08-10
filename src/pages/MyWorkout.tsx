@@ -148,7 +148,14 @@ export default function MyWorkout() {
                 fallbackTitle="Workout Plan PDF"
               />
             ) : (
-              <WorkoutPlanViewer planId={plan.id} planData={plan.plan_data} />
+              <WorkoutPlanViewer
+                planId={plan.id}
+                planData={plan.plan_data}
+                offsetDays={(plan as any).schedule_offset_days ?? 0}
+                rotationIntervalDays={(plan as any).rotation_interval_days ?? 0}
+                rotationSeed={(plan as any).rotation_seed ?? 0}
+                startDate={plan.valid_from}
+              />
             )}
           </>
         ) : (
