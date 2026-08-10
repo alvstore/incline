@@ -127,6 +127,13 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
     },
   });
 
+  // Keep the comp expiry pinned to the membership end date while the toggle is on.
+  useEffect(() => {
+    if (syncExpiryToMembership && currentMembership?.end_date) {
+      setCompExpiresAt(format(parseISO(String(currentMembership.end_date)), 'yyyy-MM-dd'));
+    }
+  }, [syncExpiryToMembership, currentMembership?.end_date]);
+
   const newExpiryPreview = currentMembership && days
     ? format(addDays(parseISO(currentMembership.end_date), parseInt(days) || 0), 'dd MMM yyyy')
     : null;
