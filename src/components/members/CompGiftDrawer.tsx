@@ -494,8 +494,31 @@ export function CompGiftDrawer({ open, onOpenChange, memberId, memberName, membe
                 <Input type="number" min="1" value={compSessions} onChange={e => setCompSessions(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Expires on</Label>
-                <Input type="date" value={compExpiresAt} onChange={e => setCompExpiresAt(e.target.value)} />
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="comp-expiry">Expires on</Label>
+                  {currentMembership?.end_date && (
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+                      <Switch
+                        id="comp-sync-membership"
+                        checked={syncExpiryToMembership}
+                        onCheckedChange={setSyncExpiryToMembership}
+                      />
+                      Match membership
+                    </label>
+                  )}
+                </div>
+                <Input
+                  id="comp-expiry"
+                  type="date"
+                  value={compExpiresAt}
+                  disabled={syncExpiryToMembership}
+                  onChange={e => setCompExpiresAt(e.target.value)}
+                />
+                {syncExpiryToMembership && currentMembership?.end_date && (
+                  <p className="text-xs text-slate-500">
+                    Auto-set to the membership end date ({format(parseISO(String(currentMembership.end_date)), 'dd MMM yyyy')}).
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
