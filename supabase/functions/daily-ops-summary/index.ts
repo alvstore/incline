@@ -1,4 +1,4 @@
-// daily-ops-summary v1.0.0
+// daily-ops-summary v1.1.0
 // Sends the end-of-day owner report at 23:00 IST (17:30 UTC), driven by the
 // master cron. Reports, for the IST calendar day:
 //   • new memberships enrolled
@@ -169,9 +169,14 @@ Deno.serve(async (req) => {
     }
 
     const defaultBranch = (branches ?? [])[0]?.id ?? null;
-    const results: Record<string, string> = {};
+    const deliveries: Array<{
+      recipient_index: number;
+      channel: "whatsapp" | "email";
+      status: string;
+      reason?: string;
+    }> = [];
 
-    for (const r of recipients) {
+    for (const [recipientIndex, r] of recipients.entries()) {
       const variables = {
         recipient_name: r.name ?? "there",
         member_name: r.name ?? "there",
@@ -208,20 +213,60 @@ Deno.serve(async (req) => {
               // One report per recipient per IST day, whatever the retries.
               dedupe_key: `daily_ops_summary:${isoDate}:${recipient}:${channel}`,
               force: true,
+              source_caller: "daily-ops-summary",
             }),
           });
           const j = await res.json().catch(() => ({}));
-          results[`${recipient}:${channel}`] = j?.status ?? (res.ok ? "sent" : "failed");
+          const rawStatus = String(j?.status ?? (res.ok ? "sent" : "failed"));
+          const reason = typeof j?.reason === "string" ? j.reason : undefined;
+          deliveries.push({
+            recipient_index: recipientIndex + 1,
+            channel,
+            status:
+              rawStatus === "suppressed" && reason === "no_template_for_closed_session"
+                ? "pending_template_approval"
+                : rawStatus,
+            ...(reason ? { reason } : {}),
+          });
         } catch (e) {
-          results[`${recipient}:${channel}`] = `failed:${e instanceof Error ? e.message : "unknown"}`;
+          deliveries.push({
+            recipient_index: recipientIndex + 1,
+            channel,
+            status: "failed",
+            reason: e instanceof Error ? e.message : "unknown",
+          });
         }
       }
+    }
+
+    const incomplete = deliveries.filter(
+      (delivery) => !["sent", "delivered", "queued"].includes(delivery.status),
+    );
+
+    if (incomplete.length > 0) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          partial: true,
+          date: isoDate,
+          summary: {
+            newMemberships,
+            invoicedTotal,
+            receivedTotal,
+            duesCollected,
+            duesPending,
+          },
+          deliveries,
+          error: `${incomplete.length} of ${deliveries.length} channel deliveries incomplete`,
+        }),
+        { status: 424, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(
       JSON.stringify({
         ok: true, date: isoDate, newMemberships, invoicedTotal,
-        receivedTotal, duesCollected, duesPending, results,
+        receivedTotal, duesCollected, duesPending, deliveries,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
