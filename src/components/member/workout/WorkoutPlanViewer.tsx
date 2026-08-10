@@ -122,6 +122,28 @@ export function WorkoutPlanViewer({
 
   return (
     <div className="space-y-4">
+      {(offset > 0 || rotated.variantLabel) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
+          {offset > 0 && (
+            <Badge variant="secondary" className="gap-1 font-normal">
+              <Shuffle className="h-3 w-3" />
+              Your schedule: {describeOffset(offset)}
+            </Badge>
+          )}
+          {rotated.variantLabel && (
+            <Badge variant="secondary" className="gap-1 font-normal">
+              <Repeat className="h-3 w-3" />
+              {rotated.variantLabel}
+              {rotated.variantCount > 1 ? ` of ${rotated.variantCount}` : ''}
+              {nextSwitchIn ? ` · switches in ${nextSwitchIn}d` : ''}
+            </Badge>
+          )}
+          <span className="text-xs text-muted-foreground">
+            Timed to keep the floor and machines free when you train.
+          </span>
+        </div>
+      )}
+
       <PlanSegmentedTabs<ViewMode>
         ariaLabel="Workout plan view"
         value={mode}
