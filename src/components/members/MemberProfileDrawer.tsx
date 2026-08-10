@@ -1159,12 +1159,22 @@ export function MemberProfileDrawer({
         <div className="mt-6 space-y-6">
           {/* Profile Header */}
           <div className="flex items-start gap-3">
-            <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
-              <AvatarImage src={profile?.avatar_url} />
-              <AvatarFallback className="text-lg">
-                {profile?.full_name?.charAt(0) || 'M'}
-              </AvatarFallback>
-            </Avatar>
+            {avatarSrc ? (
+              <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
+                <AvatarImage src={avatarSrc} />
+                <AvatarFallback className="text-lg">
+                  {(profile?.full_name || identity?.full_name)?.charAt(0) || 'M'}
+                </AvatarFallback>
+              </Avatar>
+            ) : identityLoading ? (
+              <Skeleton className="h-14 w-14 sm:h-20 sm:w-20 rounded-full shrink-0" />
+            ) : (
+              <Avatar className="h-14 w-14 sm:h-20 sm:w-20 shrink-0">
+                <AvatarFallback className="text-lg">
+                  {(profile?.full_name || identity?.full_name)?.charAt(0) || 'M'}
+                </AvatarFallback>
+              </Avatar>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-nowrap">
                 <h2 className="text-lg sm:text-xl font-semibold truncate min-w-0 flex-1">{profile?.full_name || 'N/A'}</h2>
