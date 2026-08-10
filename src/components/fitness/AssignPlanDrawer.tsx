@@ -26,10 +26,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   searchMembersForAssignment,
   assignPlanToMembers,
+  fetchScheduleOffsetLoad,
   loadMemberContacts,
   BulkAssignResult,
   NotificationChannel,
 } from '@/services/fitnessService';
+import {
+  WEEKDAY_SHORT,
+  describeOffset,
+  normalizeOffset,
+  rotationVariants,
+  suggestOffsets,
+} from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
 
 import { toast } from 'sonner';
