@@ -301,6 +301,71 @@ export function UpgradeMembershipDrawer({
             )}
           </div>
 
+          {/* Discount — same controls as the purchase flow */}
+          {newPlan && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="upgrade-discount">Discount</Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="upgrade-discount"
+                    type="number"
+                    min={0}
+                    max={maxDiscount}
+                    className="pl-9 min-h-[44px]"
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(Math.max(Number(e.target.value) || 0, 0))}
+                  />
+                </div>
+                <p className="text-xs text-slate-500">Max {inr(maxDiscount)} (must stay above the paid credit)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upgrade-discount-reason">Discount reason</Label>
+                <Input
+                  id="upgrade-discount-reason"
+                  className="min-h-[44px]"
+                  placeholder="e.g. Festive offer"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  disabled={discountAmount <= 0}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Complimentary locker (plan must include one) */}
+          {newPlan && hasLockerBenefit && (
+            <div className="space-y-2 rounded-xl bg-slate-50 px-4 py-3">
+              <Label htmlFor="upgrade-locker" className="flex items-center gap-2 text-sm">
+                <Lock className="h-4 w-4 text-indigo-600" />
+                Complimentary locker
+              </Label>
+              <Select
+                value={selectedLockerId || 'none'}
+                onValueChange={(v) => setSelectedLockerId(v === 'none' ? '' : v)}
+              >
+                <SelectTrigger id="upgrade-locker" className="min-h-[44px] bg-white">
+                  <SelectValue placeholder="Select a locker (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No locker needed</SelectItem>
+                  {availableLockers.map((l: any) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.locker_number}
+                      {l.size ? ` (${l.size})` : ''}
+                    </SelectItem>
+                  ))}
+                  {availableLockers.length === 0 && (
+                    <SelectItem value="no-lockers" disabled>
+                      No lockers available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* GST */}
           <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
             <div>
