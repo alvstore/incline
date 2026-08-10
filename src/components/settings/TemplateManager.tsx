@@ -20,6 +20,7 @@ import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'luci
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetaSyncControls } from './MetaSyncControls';
+import { TemplateTable } from './TemplateTable';
 import DOMPurify from 'isomorphic-dompurify';
 
 const TEMPLATE_TYPES = [
