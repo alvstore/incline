@@ -15,13 +15,22 @@ import { format, addDays, differenceInDays } from 'date-fns';
 import { membershipEndDateISO } from '@/lib/memberships/duration';
 
 import { usePlans } from '@/hooks/usePlans';
-import { CreditCard, IndianRupee, Calendar, User, Gift, AlertTriangle, CheckCircle, Lock, Wallet } from 'lucide-react';
+import { CreditCard, IndianRupee, Calendar, Gift, AlertTriangle, CheckCircle, Lock, Wallet } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { MemberIdentityHeader } from '@/components/members/MemberIdentityHeader';
 
+/** Quick presets for the remaining-balance due date, counted from today. */
+const DUE_DATE_PRESETS = [
+  { label: '3 days', days: 3 },
+  { label: '7 days', days: 7 },
+  { label: '10 days', days: 10 },
+  { label: '15 days', days: 15 },
+];
+
 interface PurchaseMembershipDrawerProps {
+
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memberId: string;
@@ -75,6 +84,8 @@ export function PurchaseMembershipDrawer({
   const [amountPaying, setAmountPaying] = useState(0);
   const [paymentDueDate, setPaymentDueDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
   const [sendReminders, setSendReminders] = useState(true);
+  const [transactionId, setTransactionId] = useState('');
+
   
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
@@ -196,9 +207,17 @@ export function PurchaseMembershipDrawer({
     if (!selectedPlan) return '';
     return membershipEndDateISO(startDate, selectedPlan.duration_days);
   };
+  const todayIso = format(new Date(), 'yyyy-MM-dd');
+  const isBackdated = !isMemberMode && !advanceBooking && startDate < todayIso;
+  const backdatedDays = isBackdated ? differenceInDays(new Date(todayIso), new Date(startDate)) : 0;
 
+  /** Same rule as Record Payment: a reference number is only meaningful for
+   *  non-cash, non-wallet manual settlements. */
+  const showTransactionField =
+    !isMemberMode && ['upi', 'bank_transfer', 'card'].includes(paymentMethod);
 
   const remainingAmount = calculateTotal() - amountPaying;
+
 
   const purchaseMembership = useMutation({
     mutationFn: async () => {
@@ -248,6 +267,8 @@ export function PurchaseMembershipDrawer({
         p_idempotency_key: idempotencyKey,
         p_assign_locker_id: hasLockerBenefit && selectedLockerId ? selectedLockerId : null,
         p_notes: null,
+        p_transaction_id: showTransactionField ? (transactionId.trim() || null) : null,
+
       });
 
       if (rpcErr) throw rpcErr;
@@ -321,7 +342,9 @@ export function PurchaseMembershipDrawer({
     setAmountPaying(0);
     setPaymentDueDate(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
     setSendReminders(true);
+    setTransactionId('');
   };
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -372,20 +395,8 @@ export function PurchaseMembershipDrawer({
             </Alert>
           )}
 
-          {/* Member Info */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">{memberName}</p>
-                  <p className="text-sm text-muted-foreground">Member ID: {memberId.slice(0, 8)}...</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+
+
 
           {/* Plan Selection */}
           <div className="space-y-2">
@@ -548,14 +559,34 @@ export function PurchaseMembershipDrawer({
                 <Input
                   type="date"
                   value={startDate}
-                  min={advanceBooking ? format(addDays(new Date(), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
+                  min={
+                    advanceBooking
+                      ? format(addDays(new Date(), 1), 'yyyy-MM-dd')
+                      : isMemberMode
+                        ? todayIso
+                        : format(addDays(new Date(), -90), 'yyyy-MM-dd')
+                  }
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
                   End Date: {calculateEndDate()}
                   {advanceBooking && ' · Membership stays Scheduled until start date.'}
                 </p>
+                {!isMemberMode && !advanceBooking && (
+                  <p className="text-xs text-muted-foreground">
+                    Staff can backdate up to 90 days for members who started training before registration.
+                  </p>
+                )}
+                {isBackdated && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    Backdated start: this membership counts as already running since{' '}
+                    <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong> —{' '}
+                    <strong>{backdatedDays} day{backdatedDays === 1 ? '' : 's'}</strong> of cover are
+                    already consumed and it will end on <strong>{calculateEndDate() || '—'}</strong>.
+                  </div>
+                )}
               </div>
+
 
               {/* Discount (back-office only) */}
               {!isMemberMode && (
@@ -650,16 +681,40 @@ export function PurchaseMembershipDrawer({
                               onChange={(e) => setAmountPaying(Number(e.target.value))}
                             />
                           </div>
-                          <div className="space-y-2">
-                            <Label>Due Date for Remaining *</Label>
-                            <Input
-                              type="date"
-                              value={paymentDueDate}
-                              min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
-                              onChange={(e) => setPaymentDueDate(e.target.value)}
-                            />
-                          </div>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="purchase-due-date">Due Date for Remaining *</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {DUE_DATE_PRESETS.map((preset) => {
+                              const value = format(addDays(new Date(), preset.days), 'yyyy-MM-dd');
+                              const active = value === paymentDueDate;
+                              return (
+                                <button
+                                  key={preset.days}
+                                  type="button"
+                                  onClick={() => setPaymentDueDate(value)}
+                                  aria-pressed={active}
+                                  className={`min-h-[44px] cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                                    active
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-muted dark:text-muted-foreground'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <Input
+                            id="purchase-due-date"
+                            type="date"
+                            value={paymentDueDate}
+                            min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
+                            onChange={(e) => setPaymentDueDate(e.target.value)}
+                          />
+                        </div>
+
 
                         <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
                           <div className="flex justify-between text-sm">
@@ -704,7 +759,32 @@ export function PurchaseMembershipDrawer({
                       <SelectItem value="razorpay_link">🔗 Send Payment Link</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {showTransactionField && (
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="purchase-transaction-id">
+                        {paymentMethod === 'bank_transfer' ? 'UTR / Reference Number' : 'Transaction / UTR ID'}
+                      </Label>
+                      <Input
+                        id="purchase-transaction-id"
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        placeholder={
+                          paymentMethod === 'upi'
+                            ? 'e.g., 412345678901 (UPI ref)'
+                            : paymentMethod === 'bank_transfer'
+                              ? 'e.g., NEFT/RTGS UTR number'
+                              : 'e.g., card auth / approval code'
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Optional but recommended — this reference shows on the Payments page and the
+                        invoice payment history, exactly like Record Payment.
+                      </p>
+                    </div>
+                  )}
                 </div>
+
               ) : (
                 <Card className="border-primary/30 bg-primary/5">
                   <CardContent className="flex items-center gap-3 pt-4">
