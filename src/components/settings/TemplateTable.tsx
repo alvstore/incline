@@ -110,9 +110,8 @@ export function TemplateTable({
     return templates.filter((t) => {
       if (alignment !== 'all' && alignmentState(t) !== alignment) return false;
       if (!q) return true;
-      return (
-      [t.name, t.trigger, t.content, t.meta_template_name].some((v) =>
-        String(v || '').toLowerCase().includes(q)),
+      return [t.name, t.trigger, t.content, t.meta_template_name].some((v) =>
+        String(v || '').toLowerCase().includes(q),
       );
     });
   }, [templates, search, alignment, channel]);
