@@ -252,6 +252,43 @@ export default function PaymentsPage() {
   const pendingTotal = countable.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
   const reversedTotal = filteredPayments.filter((p: any) => isReversedPayment(p)).reduce((sum: number, p: any) => sum + p.amount, 0);
 
+  // Money out — same filter bar, applied to expenses
+  const filteredExpenses = useMemo(() => {
+    return (expenses as ExpenseRow[]).filter((e) => {
+      if (searchTerm) {
+        const hay = [e.description, e.vendor, e.bill_number, e.category?.name].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(searchTerm.toLowerCase())) return false;
+      }
+      if (methodFilter !== 'all' && e.payment_method !== methodFilter) return false;
+      if (dateRange?.from && dateRange?.to) {
+        const d = new Date(e.expense_date);
+        if (d < dateRange.from || d > dateRange.to) return false;
+      }
+      return true;
+    });
+  }, [expenses, searchTerm, methodFilter, dateRange]);
+
+  const moneyOut = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const todayOut = filteredExpenses
+    .filter((e) => new Date(e.expense_date).toDateString() === new Date().toDateString())
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const netMovement = monthTotal - moneyOut;
+  const unpaidBills = filteredExpenses.filter((e) => e.expense_type === 'vendor_bill' && !e.is_paid);
+
+  const collectionsByMode = useMemo(() => {
+    const map = new Map<string, number>();
+    countable.forEach((p: any) => map.set(p.payment_method, (map.get(p.payment_method) || 0) + Number(p.amount || 0)));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [countable]);
+
+  const spendByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredExpenses.forEach((e) => {
+      const key = e.category?.name || 'Uncategorised';
+      map.set(key, (map.get(key) || 0) + Number(e.amount || 0));
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [filteredExpenses]);
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = { cash: 'bg-success/10 text-success', card: 'bg-info/10 text-info', upi: 'bg-primary/10 text-primary', wallet: 'bg-warning/10 text-warning', bank_transfer: 'bg-info/10 text-info', online: 'bg-primary/10 text-primary' };
@@ -264,19 +301,36 @@ export default function PaymentsPage() {
   const clearFilters = () => { setSearchTerm(''); setMethodFilter('all'); setStatusFilter('all'); setDateRange(undefined); };
   const hasActiveFilters = searchTerm || methodFilter !== 'all' || statusFilter !== 'all' || dateRange;
 
-  const exportToCSV = () => {
-    const headers = ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'];
-    const rows = filteredPayments.map((p: any) => {
-      const d = resolveMemberDisplay(p.members);
-      const inv = p.invoices?.invoice_number || '-';
-      const displayName = d.code ? `${d.name} (${d.code})${inv !== '-' ? ' · ' + inv : ''}` : d.name;
-      return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
-    });
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const downloadCsv = (headers: string[], rows: (string | number)[][], name: string) => {
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `payments-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `${name}-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const exportToCSV = () => {
+    if (activeTab === 'expenses') {
+      downloadCsv(
+        ['Date', 'Description', 'Type', 'Vendor', 'Category', 'Amount', 'Mode', 'Reference', 'Bill No', 'Status'],
+        filteredExpenses.map((e) => [
+          format(new Date(e.expense_date), 'dd/MM/yyyy'), e.description, e.expense_type, e.vendor || '',
+          e.category?.name || '', e.amount, e.payment_method || '', e.payment_reference || '', e.bill_number || '', e.status,
+        ]),
+        'expenses',
+      );
+      return;
+    }
+    downloadCsv(
+      ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'],
+      filteredPayments.map((p: any) => {
+        const d = resolveMemberDisplay(p.members);
+        const inv = p.invoices?.invoice_number || '-';
+        const displayName = d.code ? `${d.name} (${d.code})` : d.name;
+        return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
+      }),
+      'payments',
+    );
   };
 
   const openVoidDialog = (payment: any) => {
