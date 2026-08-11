@@ -48,12 +48,17 @@ export default function PaymentsPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidingPayment, setVoidingPayment] = useState<any>(null);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [expenseDefaultType, setExpenseDefaultType] = useState<ExpenseKind>('general');
+  const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [duesOpen, setDuesOpen] = useState(true);
   const canEditPayments = can.viewFinancials(roles as any) && (roles as any[])?.some((r: any) => ['owner','admin'].includes(typeof r === 'string' ? r : r?.role));
+
+  const openExpenseDrawer = (type: ExpenseKind) => { setExpenseDefaultType(type); setAddExpenseOpen(true); };
 
   useRealtimeInvalidate({
     channel: 'page-payments',
