@@ -1,4 +1,7 @@
-// google-reviews-brain v6.0.0 — Places-only discovery (legacy list_accounts /
+// google-reviews-brain v6.1.0 — Places lane now auto-drafts on arrival (plus a
+// pending backfill), new `draft_reply` action with tone control, opener
+// de-duplication and a style guard that retries robotic/empty drafts.
+// v6.0.0 — Places-only discovery (legacy list_accounts /
 // list_locations removed), honest rate-limit copy, human-sounding reply drafts
 // (event_key=review_request, member_name/branch_name/review_link variables).
 // v5.0.0 — Reply-path hardening: business_profile source tagging, gbp_review_name
