@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/table';
 import {
   Edit, Trash2, Send, Eye, FileText, Image as ImageIcon, Video as VideoIcon,
-  CheckCircle, Clock, XCircle, PauseCircle, Search,
+  CheckCircle, Clock, XCircle, PauseCircle, Search, Plus,
 } from 'lucide-react';
 
 export interface TemplateRow {
@@ -125,27 +125,43 @@ export function TemplateTable({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-      <div className="relative max-w-sm flex-1 min-w-[240px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <label htmlFor={`tpl-search-${channel}`} className="sr-only">Search templates</label>
-        <Input
-          id={`tpl-search-${channel}`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, event or content"
-          className="pl-9 rounded-xl"
-        />
-      </div>
-        {channel === 'whatsapp' && (
-          <div className="flex flex-wrap gap-1">
-            {(['all', 'ready', 'missing', 'mismatch', 'pending'] as const).map((value) => (
-              <Button key={value} type="button" size="sm" variant={alignment === value ? 'default' : 'outline'} onClick={() => setAlignment(value)} className="h-9 rounded-full capitalize">
-                {value === 'missing' ? 'Missing / stale' : value}
-              </Button>
-            ))}
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative max-w-sm flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <label htmlFor={`tpl-search-${channel}`} className="sr-only">Search templates</label>
+            <Input
+              id={`tpl-search-${channel}`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, event or content"
+              className="pl-9 rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500"
+            />
           </div>
+          {channel === 'whatsapp' && (
+            <div className="flex flex-wrap gap-1 p-1 bg-slate-100/50 rounded-2xl border border-slate-200/60">
+              {(['all', 'ready', 'missing', 'mismatch', 'pending'] as const).map((value) => (
+                <Button 
+                  key={value} 
+                  type="button" 
+                  size="sm" 
+                  variant={alignment === value ? 'default' : 'ghost'} 
+                  onClick={() => setAlignment(value)} 
+                  className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-600 hover:bg-slate-200/50'}`}
+                >
+                  {value === 'missing' ? 'Missing / Stale' : value}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {templates.length > 0 && (
+          <Button onClick={onCreate} size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 shrink-0">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Template
+          </Button>
         )}
       </div>
 
@@ -165,10 +181,10 @@ export function TemplateTable({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl bg-card shadow-lg shadow-primary/5 overflow-hidden">
-          <div className="max-h-[560px] overflow-y-auto">
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/40 overflow-hidden">
+          <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableHeader className="sticky top-0 z-20 bg-slate-50/90 backdrop-blur-md border-b border-slate-200">
                 <TableRow>
                   <TableHead>Template</TableHead>
                   <TableHead className="hidden md:table-cell">Event</TableHead>
@@ -229,10 +245,10 @@ export function TemplateTable({
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        <span className="text-xs text-muted-foreground">{formatDate(t.updated_at || t.created_at)}</span>
+                        <span className="text-xs font-medium text-slate-500">{formatDate(t.updated_at || t.created_at)}</span>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <TableCell className="text-right pr-4">
+                        <div className="flex items-center justify-end gap-0.5">
                           {channel === 'whatsapp' && (
                             <Button
                               variant="ghost" size="icon" className="cursor-pointer"

@@ -115,8 +115,21 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
     setGenerating(true);
     try {
       const events = candidates.filter((e) => picked.has(e.event));
+      
+      // Safety check: ensure we're using event details from the catalog
+      const payloadEvents = events.map(e => ({
+        event: e.event,
+        label: e.label,
+        description: e.hint
+      }));
+
       const { data, error } = await supabase.functions.invoke('ai-generate-whatsapp-templates', {
-        body: { branch_id: branchId, channel, events, existing },
+        body: { 
+          branch_id: branchId, 
+          channel, 
+          events: payloadEvents, 
+          existing 
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
