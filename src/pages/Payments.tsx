@@ -191,6 +191,22 @@ export default function PaymentsPage() {
     },
   });
 
+  // Money-out feed — shares its cache key with <ExpensesTable /> so both stay in sync.
+  const { data: expenses = [] } = useQuery({
+    queryKey: ['expenses-console', branchFilter],
+    queryFn: async () => {
+      let query = supabase
+        .from('expenses')
+        .select('*, category:expense_categories(name)')
+        .order('expense_date', { ascending: false })
+        .limit(300);
+      if (branchFilter) query = query.eq('branch_id', branchFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as ExpenseRow[];
+    },
+  });
+
   const voidPaymentMutation = useMutation({
     mutationFn: async ({ paymentId, reason }: { paymentId: string; reason: string }) => {
       await unifiedVoidPayment(paymentId, reason);
