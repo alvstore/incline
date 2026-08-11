@@ -43,6 +43,25 @@ export function DayRail({ days, activeIndex, onSelect, ariaLabel = 'Select day',
               role="tab"
               aria-selected={active}
               onClick={() => onSelect(i)}
+              draggable={!!onMove}
+              onDragStart={
+                onMove
+                  ? (e) => {
+                      e.dataTransfer.setData('text/plain', String(i));
+                      e.dataTransfer.effectAllowed = 'move';
+                    }
+                  : undefined
+              }
+              onDragOver={onMove ? (e) => e.preventDefault() : undefined}
+              onDrop={
+                onMove
+                  ? (e) => {
+                      e.preventDefault();
+                      const from = Number(e.dataTransfer.getData('text/plain'));
+                      if (Number.isFinite(from) && from !== i) onMove(from, i);
+                    }
+                  : undefined
+              }
               className={cn(
                 'min-h-[44px] min-w-[116px] shrink-0 snap-start cursor-pointer rounded-xl border px-3 py-2 text-left',
                 'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary',
@@ -60,6 +79,7 @@ export function DayRail({ days, activeIndex, onSelect, ariaLabel = 'Select day',
             </button>
           );
         })}
+
       </div>
     </div>
   );
