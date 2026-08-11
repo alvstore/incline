@@ -804,8 +804,23 @@ export default function PaymentsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Add Expense Drawer */}
-      {branchFilter && <AddExpenseDrawer open={addExpenseOpen} onOpenChange={setAddExpenseOpen} branchId={branchFilter} />}
+      {/* Add Expense / Pay Advance Drawer */}
+      {branchFilter && (
+        <AddExpenseDrawer
+          open={addExpenseOpen}
+          onOpenChange={setAddExpenseOpen}
+          branchId={branchFilter}
+          defaultType={expenseDefaultType}
+        />
+      )}
+
+      {/* Edit Expense — owner/admin correction with mandatory reason */}
+      <EditExpenseDrawer
+        open={!!editingExpense}
+        onOpenChange={(o) => { if (!o) setEditingExpense(null); }}
+        expense={editingExpense}
+      />
+
     </AppLayout>
   );
 }
