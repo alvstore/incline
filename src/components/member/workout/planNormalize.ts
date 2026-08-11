@@ -4,7 +4,7 @@
  * into one day list the member UI can render day-by-day or week-at-a-glance.
  */
 
-import { WEEKDAY_LABELS, normalizeOffset, shiftWeekday } from '@/lib/fitness/planRotation';
+import { WEEKDAY_LABELS, normalizeOffset, shiftWorkoutPlanDays } from '@/lib/fitness/planRotation';
 
 
 
@@ -71,7 +71,7 @@ function toExercises(raw: any): WorkoutExercise[] {
   }));
 }
 
-function toDay(raw: any, id: string, weekLabel?: string, offsetDays = 0): WorkoutDay {
+function toDay(raw: any, id: string, weekLabel?: string): WorkoutDay {
   const dayLabel = raw?.day || raw?.name || raw?.title || 'Session';
   const focus = raw?.focus || raw?.muscle_group || raw?.split || undefined;
   const exercises = toExercises(raw);
@@ -81,15 +81,13 @@ function toDay(raw: any, id: string, weekLabel?: string, offsetDays = 0): Workou
     /rest/i.test(String(focus || ''));
 
   const baseIndex = weekdayIndexOf(String(dayLabel));
-  const offset = normalizeOffset(offsetDays);
-  const shiftedIndex = baseIndex === null ? null : shiftWeekday(baseIndex, offset);
-  const shiftedLabel =
-    shiftedIndex !== null && offset > 0 ? WEEKDAY_LABELS[shiftedIndex] : String(dayLabel);
+  const shiftedIndex = baseIndex;
+  const shiftedLabel = String(dayLabel);
 
   return {
     id,
     dayLabel: shiftedLabel,
-    originalDayLabel: shiftedLabel !== String(dayLabel) ? String(dayLabel) : undefined,
+    originalDayLabel: raw?.original_day ? String(raw.original_day) : undefined,
     weekLabel,
     focus: focus ? String(focus) : undefined,
     isRest,
@@ -104,20 +102,21 @@ export function normalizeWorkoutPlan(
 ): NormalizedWorkoutPlan | null {
   if (!raw) return null;
   const offsetDays = normalizeOffset(options.offsetDays ?? 0);
+  const shiftedRaw = shiftWorkoutPlanDays(raw, offsetDays) as any;
 
   const sortByWeekday = (days: WorkoutDay[]) =>
     days.every((d) => d.weekdayIndex !== null)
       ? [...days].sort((a, b) => (a.weekdayIndex ?? 0) - (b.weekdayIndex ?? 0))
       : days;
 
-  if (Array.isArray(raw.weeks) && raw.weeks.length > 0) {
+  if (Array.isArray(shiftedRaw.weeks) && shiftedRaw.weeks.length > 0) {
     const days: WorkoutDay[] = [];
     const weeks: string[] = [];
-    raw.weeks.forEach((wk: any, wi: number) => {
+    shiftedRaw.weeks.forEach((wk: any, wi: number) => {
       const label = `Week ${wk?.week ?? wi + 1}`;
       weeks.push(label);
       const weekDays = (Array.isArray(wk?.days) ? wk.days : []).map((d: any, di: number) =>
-        toDay(d, `w${wi}-d${di}`, label, offsetDays),
+        toDay(d, `w${wi}-d${di}`, label),
       );
       days.push(...sortByWeekday(weekDays));
     });
@@ -125,9 +124,9 @@ export function normalizeWorkoutPlan(
     return { days, weeks };
   }
 
-  if (Array.isArray(raw.days) && raw.days.length > 0) {
+  if (Array.isArray(shiftedRaw.days) && shiftedRaw.days.length > 0) {
     return {
-      days: sortByWeekday(raw.days.map((d: any, di: number) => toDay(d, `d${di}`, undefined, offsetDays))),
+      days: sortByWeekday(shiftedRaw.days.map((d: any, di: number) => toDay(d, `d${di}`))),
       weeks: [],
     };
   }

@@ -682,6 +682,7 @@ export interface PlanPdfInput {
   notes?: string | null;
   branch_name?: string | null;
   branch_id?: string | null;
+  schedule_offset_days?: number;
 }
 
 // Async — fetches DB logo if `brand.logoUrl` not provided.
@@ -837,7 +838,8 @@ export async function buildPlanPdf(input: PlanPdfInput, brand?: BrandContext): P
       y += h + 3;
     };
 
-    const weeks = input.data?.weeks || (input.data?.days ? [{ week: 1, days: input.data.days }] : []);
+    const shiftedWorkoutData = shiftWorkoutPlanDays(input.data, input.schedule_offset_days ?? 0) as any;
+    const weeks = shiftedWorkoutData?.weeks || (shiftedWorkoutData?.days ? [{ week: 1, days: shiftedWorkoutData.days }] : []);
     weeks.forEach((week: any, wi: number) => {
       ensureSpace(18);
       doc.setFont('helvetica', 'bold');

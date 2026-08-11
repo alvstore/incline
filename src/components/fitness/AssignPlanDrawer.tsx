@@ -261,6 +261,7 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   data: plan!.content,
                   valid_from: startDate,
                   valid_until: validUntil,
+                  schedule_offset_days: scheduleOffsets[r.member_id] ?? 0,
                 },
                 branchId: branchId || m.branch_id || undefined,
                 channels: pdfChannels,
@@ -545,6 +546,19 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                       <p className="text-[11px] text-muted-foreground">
                         Members are spread onto the least-busy shift groups automatically.
                       </p>
+                      {selected.length > 0 && (
+                        <div className="space-y-1 rounded-xl bg-muted/40 p-2.5">
+                          {selected.slice(0, 6).map((member) => (
+                            <div key={member.id} className="flex items-center justify-between gap-3 text-xs">
+                              <span className="truncate text-foreground">{member.full_name}</span>
+                              <Badge variant="secondary" className="shrink-0 font-normal">
+                                {describeOffset(scheduleOffsets[member.id] ?? 0)}
+                              </Badge>
+                            </div>
+                          ))}
+                          {selected.length > 6 && <p className="text-[11px] text-muted-foreground">+{selected.length - 6} more members</p>}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-1.5">

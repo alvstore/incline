@@ -33,6 +33,7 @@ export interface PlanSendInput {
     valid_from?: string | null;
     valid_until?: string | null;
     trainer_name?: string | null;
+    schedule_offset_days?: number;
   };
   branchId?: string | null;
   channels: PlanSendChannel[];
@@ -62,6 +63,11 @@ function normalisePhone(input: string): string {
 
 export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendResult> {
   const channels: PlanSendResult['channels'] = {};
+  let branchName = 'The Incline';
+  if (input.branchId) {
+    const { data: branch } = await supabase.from('branches').select('name').eq('id', input.branchId).maybeSingle();
+    if (branch?.name) branchName = branch.name;
+  }
 
   // 1. Always build the PDF (cheap, all paths need it).
   const pdfBlob = await buildPlanPdf({
@@ -71,6 +77,8 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
     member_name: input.member.full_name,
     trainer_name: input.plan.trainer_name ?? undefined,
     branch_id: input.branchId ?? undefined,
+    branch_name: branchName,
+    schedule_offset_days: input.plan.schedule_offset_days ?? 0,
     data: input.plan.data,
   });
   const filename = safeFilename(input.plan);
@@ -140,6 +148,8 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
           plan_type: input.plan.type,
           trainer_name: input.plan.trainer_name || 'your trainer',
           valid_until: input.plan.valid_until || '',
+          branch_name: branchName,
+          event_key: triggerEvent,
         };
 
         const send = async (opts: { templateId?: string; caption: string; link?: boolean }) =>
