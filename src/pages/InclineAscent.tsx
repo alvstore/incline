@@ -131,8 +131,15 @@ const InclineAscent = () => {
       '@type': 'PostalAddress',
       streetAddress: b.address,
       addressLocality: b.city,
+      addressRegion: 'Rajasthan',
       addressCountry: 'IN',
     },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: 24.546845,
+      longitude: 73.701003,
+    },
+
     openingHours: b.hours,
     amenityFeature: b.facilities.map(f => ({
       '@type': 'LocationFeatureSpecification',

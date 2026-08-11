@@ -23,7 +23,7 @@ export const PUBLIC_BRANCHES: PublicBranch[] = [
     slug: 'udaipur-flagship',
     name: 'The Incline — Udaipur Flagship',
     city: 'Udaipur',
-    address: 'Udaipur, Rajasthan, India',
+    address: 'Sector 14, Hiran Magri, Udaipur, Rajasthan 313002, India',
     hours: '05:00 – 23:00, all days',
     facilities: [
       'Panatta Strength Floor',
