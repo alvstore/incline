@@ -190,7 +190,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     },
   });
 
-  const { data: liveMetaTemplates = [] } = useQuery({
+  const { data: liveMetaTemplates = [], refetch: refetchMeta } = useQuery({
     queryKey: ['whatsapp-templates-live-alignment'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -271,8 +271,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       if (pendingEventName && inserted?.id) {
         try { await wireWhatsAppTrigger(inserted.id, pendingEventName); } catch (e) { console.error(e); }
       }
-      toast.success('Template created');
       queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-live-alignment'] });
       closeEditor();
     },
     onError: (error: any) => toast.error(error.message),
@@ -288,8 +288,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       if (pendingEventName && id) {
         try { await wireWhatsAppTrigger(id, pendingEventName); } catch (e) { console.error(e); }
       }
-      toast.success('Template updated');
       queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-live-alignment'] });
       closeEditor();
     },
     onError: (error: any) => toast.error(error.message),
@@ -301,8 +301,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Template deleted');
       queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-live-alignment'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-triggers-health'] });
     },
     onError: (error: any) => toast.error(error.message),
@@ -428,7 +428,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     setShowEditor(true);
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill]);
+  }, [prefill?.name, prefill?.trigger, prefill?.content]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
