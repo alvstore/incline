@@ -491,9 +491,14 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
               <Button variant="outline" onClick={() => setStep('pick')}>
                 <AlertCircle className="h-4 w-4 mr-1" /> Re-pick
               </Button>
-              <Button onClick={submitAll} disabled={proposals.length === 0 || !!submitting}>
-                <Send className="h-4 w-4 mr-2" /> {channel === 'whatsapp' ? 'Submit All to Meta' : 'Save All'}
+              <Button onClick={submitAll} disabled={proposals.length === 0 || !!submitting || !!bulk}>
+                {bulk ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting {bulk.done}/{bulk.total}…</>
+                ) : (
+                  <><Send className="h-4 w-4 mr-2" /> {channel === 'whatsapp' ? `Submit all ${proposals.length} to Meta` : `Save all ${proposals.length}`}</>
+                )}
               </Button>
+
             </>
           )}
         </SheetFooter>
