@@ -162,7 +162,7 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
         const role = managers.find(m => m.user_id === p.id)?.role;
         if (role === 'manager') {
           const { data: branchBound } = await supabase
-            .from('staff_branches')
+            .from('staff_branches' as any)
             .select('id')
             .eq('staff_id', p.id)
             .eq('branch_id', notice.branchId)
