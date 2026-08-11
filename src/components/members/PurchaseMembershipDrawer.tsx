@@ -550,14 +550,34 @@ export function PurchaseMembershipDrawer({
                 <Input
                   type="date"
                   value={startDate}
-                  min={advanceBooking ? format(addDays(new Date(), 1), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
+                  min={
+                    advanceBooking
+                      ? format(addDays(new Date(), 1), 'yyyy-MM-dd')
+                      : isMemberMode
+                        ? todayIso
+                        : format(addDays(new Date(), -90), 'yyyy-MM-dd')
+                  }
                   onChange={(e) => setStartDate(e.target.value)}
                 />
                 <p className="text-sm text-muted-foreground">
                   End Date: {calculateEndDate()}
                   {advanceBooking && ' · Membership stays Scheduled until start date.'}
                 </p>
+                {!isMemberMode && !advanceBooking && (
+                  <p className="text-xs text-muted-foreground">
+                    Staff can backdate up to 90 days for members who started training before registration.
+                  </p>
+                )}
+                {isBackdated && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                    Backdated start: this membership counts as already running since{' '}
+                    <strong>{format(new Date(startDate), 'dd MMM yyyy')}</strong> —{' '}
+                    <strong>{backdatedDays} day{backdatedDays === 1 ? '' : 's'}</strong> of cover are
+                    already consumed and it will end on <strong>{calculateEndDate() || '—'}</strong>.
+                  </div>
+                )}
               </div>
+
 
               {/* Discount (back-office only) */}
               {!isMemberMode && (
