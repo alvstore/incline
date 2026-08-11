@@ -113,13 +113,13 @@ export function TemplateCoverageMatrix({ channel }: Props) {
   return (
     <>
       <div className="space-y-4">
-        <Card className="rounded-2xl shadow-lg shadow/40 border-primary/10">
-          <CardContent className="pt-6 space-y-4">
+        <Card className="rounded-3xl shadow-2xl shadow-slate-200/50 border-0 bg-white/70 backdrop-blur-xl">
+          <CardContent className="pt-8 px-6 pb-8 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex-1 min-w-[220px]">
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Coverage</p>
-                  <span className="text-sm font-bold text-foreground">{okCount}/{total} · {pct}%</span>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Coverage Status</p>
+                  <span className="text-sm font-black text-slate-900">{okCount} of {total} Events Protected · {pct}%</span>
                 </div>
                 <Progress value={pct} className="h-2" />
               </div>
