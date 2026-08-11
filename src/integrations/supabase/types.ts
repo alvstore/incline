@@ -4353,45 +4353,75 @@ export type Database = {
           amount: number
           approved_at: string | null
           approved_by: string | null
+          bill_number: string | null
           branch_id: string
           category_id: string | null
           created_at: string
           description: string
+          edit_reason: string | null
+          employee_user_id: string | null
           expense_date: string
+          expense_type: Database["public"]["Enums"]["expense_kind"]
           id: string
+          is_paid: boolean
+          paid_at: string | null
+          paid_by: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference: string | null
           receipt_url: string | null
           status: Database["public"]["Enums"]["approval_status"]
           submitted_by: string | null
+          updated_at: string
           vendor: string | null
         }
         Insert: {
           amount: number
           approved_at?: string | null
           approved_by?: string | null
+          bill_number?: string | null
           branch_id: string
           category_id?: string | null
           created_at?: string
           description: string
+          edit_reason?: string | null
+          employee_user_id?: string | null
           expense_date?: string
+          expense_type?: Database["public"]["Enums"]["expense_kind"]
           id?: string
+          is_paid?: boolean
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
           receipt_url?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
+          updated_at?: string
           vendor?: string | null
         }
         Update: {
           amount?: number
           approved_at?: string | null
           approved_by?: string | null
+          bill_number?: string | null
           branch_id?: string
           category_id?: string | null
           created_at?: string
           description?: string
+          edit_reason?: string | null
+          employee_user_id?: string | null
           expense_date?: string
+          expense_type?: Database["public"]["Enums"]["expense_kind"]
           id?: string
+          is_paid?: boolean
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
           receipt_url?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           submitted_by?: string | null
+          updated_at?: string
           vendor?: string | null
         }
         Relationships: [
@@ -11436,6 +11466,75 @@ export type Database = {
         }
         Relationships: []
       }
+      salary_advances: {
+        Row: {
+          amount: number
+          auto_recover: boolean
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          expense_id: string | null
+          id: string
+          outstanding: number
+          paid_on: string
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference: string | null
+          reason: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          auto_recover?: boolean
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          expense_id?: string | null
+          id?: string
+          outstanding: number
+          paid_on?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
+          reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          auto_recover?: boolean
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          expense_id?: string | null
+          id?: string
+          outstanding?: number
+          paid_on?: string
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_reference?: string | null
+          reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_advances_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salary_advances_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_lead_views: {
         Row: {
           created_at: string
@@ -13937,6 +14036,10 @@ export type Database = {
           sessions_total: number
         }[]
       }
+      apply_advance_recovery: {
+        Args: { _amount: number; _user_id: string }
+        Returns: Json
+      }
       archive_approval_audit_log: { Args: never; Returns: Json }
       assert_measurement_range: {
         Args: { _field: string; _max: number; _min: number; _value: number }
@@ -14432,6 +14535,24 @@ export type Database = {
           row_count: number
           table_name: string
         }[]
+      }
+      edit_expense: {
+        Args: {
+          p_amount?: number
+          p_bill_number?: string
+          p_category_id?: string
+          p_description?: string
+          p_expense_date?: string
+          p_expense_id: string
+          p_is_paid?: boolean
+          p_paid_at?: string
+          p_payment_method?: Database["public"]["Enums"]["payment_method"]
+          p_payment_reference?: string
+          p_reason: string
+          p_receipt_url?: string
+          p_vendor?: string
+        }
+        Returns: Json
       }
       edit_payment: {
         Args: {
@@ -15061,6 +15182,7 @@ export type Database = {
           ot_hours: number
         }[]
       }
+      pending_advance_for_user: { Args: { _user_id: string }; Returns: number }
       pick_next_nurture_angle: {
         Args: { _chat_id: string }
         Returns: {
@@ -15275,6 +15397,26 @@ export type Database = {
           p_new_status: string
           p_provider?: string
           p_provider_message_id?: string
+        }
+        Returns: Json
+      }
+      record_expense: {
+        Args: {
+          p_amount: number
+          p_auto_recover?: boolean
+          p_bill_number?: string
+          p_branch_id: string
+          p_category_id?: string
+          p_description: string
+          p_employee_user_id?: string
+          p_expense_date?: string
+          p_expense_type?: Database["public"]["Enums"]["expense_kind"]
+          p_is_paid?: boolean
+          p_paid_at?: string
+          p_payment_method?: Database["public"]["Enums"]["payment_method"]
+          p_payment_reference?: string
+          p_receipt_url?: string
+          p_vendor?: string
         }
         Returns: Json
       }
@@ -15888,6 +16030,7 @@ export type Database = {
         | "maintenance"
         | "out_of_order"
         | "retired"
+      expense_kind: "general" | "vendor_bill" | "salary_advance"
       frequency_type:
         | "daily"
         | "weekly"
@@ -16178,6 +16321,7 @@ export const Constants = {
         "out_of_order",
         "retired",
       ],
+      expense_kind: ["general", "vendor_bill", "salary_advance"],
       frequency_type: [
         "daily",
         "weekly",
