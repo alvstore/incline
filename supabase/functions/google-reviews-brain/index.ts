@@ -1043,11 +1043,41 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
       }
     }
 
+    draft = sanitizeReply(draft);
+
+    // Attempt 3 — the reply is the deliverable, so never leave it empty or
+    // full of corporate filler. Ask once more for the reply text only.
+    if (violatesStyle(draft)) {
+      try {
+        const r3 = await generateOnce({
+          purpose: "review_reply",
+          branchId: row.branch_id ?? null,
+          userMessage: `${userPrompt}\n\nWrite ONLY the reply text (no JSON, no quotes). 2-4 short sentences, specific to this review, no banned corporate phrases.`,
+          systemOverride: sysOverride,
+          maxTokens: 800,
+        });
+        const retry = sanitizeReply(r3.content ?? "");
+        if (retry && !violatesStyle(retry)) draft = retry;
+        else if (retry && !draft) draft = retry;
+      } catch (e) {
+        console.error("AI draft retry failed", e);
+        lastError = lastError || (e instanceof Error ? e.message : String(e));
+      }
+    }
+
     if (!reasoning) {
       reasoning = `AI unavailable — ${lastError || "unknown error"}. Classification defaulted to heuristic.`;
     }
   }
 
+  if (opts.draftOnly) {
+    if (!draft) return { ok: false, reason: "no_draft" };
+    await sb
+      .from("google_reviews_inbound")
+      .update({ ai_draft_reply: draft })
+      .eq("id", inbound_id);
+    return { ok: true, draft };
+  }
 
   await sb
     .from("google_reviews_inbound")
@@ -1077,7 +1107,7 @@ async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
     });
   }
 
-  return { ok: true, classification };
+  return { ok: true, classification, draft };
 }
 
 // ─── Action: reply ───
