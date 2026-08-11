@@ -384,11 +384,14 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
         )}
 
         {step === 'review' && (
-          <div className="py-4 space-y-4">
+          <div className="py-6 space-y-4 mb-20">
             {proposals.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-success" />
-                All proposals saved.
+              <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in duration-500">
+                <div className="h-20 w-20 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">All Templates Synchronized</h3>
+                <p className="text-slate-500 mt-2 max-w-xs mx-auto">Your system coverage is now complete. Meta will review your WhatsApp templates within 24 hours.</p>
               </div>
             )}
             {proposals.map((p, i) => {
@@ -398,36 +401,44 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
               return (
               <div
                 key={`${p.event}-${i}`}
-                className={`rounded-xl border p-3 space-y-2 bg-card ${
-                  issue?.level === 'error' ? 'border-destructive' : issue ? 'border-warning' : ''
+                className={`rounded-2xl border-2 p-5 space-y-4 bg-white transition-all duration-300 shadow-sm hover:shadow-md ${
+                  issue?.level === 'error' ? 'border-rose-200 bg-rose-50/20' : issue ? 'border-amber-200 bg-amber-50/20' : 'border-slate-100 hover:border-indigo-100'
                 }`}
               >
                 {issue && (
                   <div
-                    className={`flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs ${
-                      issue.level === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                    className={`flex items-start gap-3 rounded-xl px-4 py-3 text-xs font-medium ${
+                      issue.level === 'error' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'
                     }`}
                   >
-                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                    <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{issue.message}</span>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Icon className={`h-4 w-4 ${Meta.color}`} />
-                    <Input
-                      value={p.name}
-                      onChange={(e) => updateProposal(i, { name: e.target.value })}
-                      className="h-8 w-56 font-mono text-xs"
-                    />
-                    {p.dlt_category && <Badge variant="outline" className="text-[10px]">{p.dlt_category}</Badge>}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                      <Icon className={`h-5 w-5 ${Meta.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        value={p.name}
+                        onChange={(e) => updateProposal(i, { name: e.target.value })}
+                        className="h-9 font-bold text-sm bg-transparent border-slate-200 focus:bg-white rounded-lg transition-all"
+                      />
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1 ml-1">Event: {p.event}</p>
+                    </div>
                   </div>
-                  <Button size="sm" onClick={() => submitOne(p)} disabled={submitting === p.name}>
-                    {submitting === p.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  <Button 
+                    size="sm" 
+                    onClick={() => submitOne(p)} 
+                    disabled={submitting === p.name}
+                    className="h-10 w-10 p-0 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all border-0 shadow-none"
+                  >
+                    {submitting === p.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Event: {p.event}</p>
 
                 {channel === 'whatsapp' && (
                   <div className="grid grid-cols-2 gap-2">
