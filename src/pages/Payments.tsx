@@ -62,12 +62,14 @@ export default function PaymentsPage() {
 
   useRealtimeInvalidate({
     channel: 'page-payments',
-    tables: ['payments', 'invoices', 'payment_transactions'],
+    tables: ['payments', 'invoices', 'payment_transactions', 'expenses'],
     invalidateKeys: [
       ['payments'],
       ['invoices'],
       ['all-overdue-invoices'],
       ['member-overdue-invoices'],
+      ['expenses-console'],
+      ['salary-advances'],
     ],
   });
 
