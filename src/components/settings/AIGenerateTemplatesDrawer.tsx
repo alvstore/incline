@@ -137,9 +137,12 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
     setProposals((arr) => arr.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   };
 
-  const submitOne = async (p: Proposal) => {
-    if (!branchId) return;
+  const submitOne = async (p: Proposal): Promise<'ok' | 'draft' | 'error'> => {
+    if (!branchId) return 'error';
+    let outcome: 'ok' | 'draft' | 'error' = 'ok';
     setSubmitting(p.name);
+    setIssues((m) => { const { [p.name]: _drop, ...rest } = m; return rest; });
+
     try {
       const insertRow: any = {
         branch_id: branchId,
