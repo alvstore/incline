@@ -474,9 +474,9 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 )}
 
                 {channel === 'whatsapp' && p.header_type && p.header_type !== 'none' && (
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Sample {p.header_type} URL (used by Meta to approve the template)
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">
+                      Header Media Sample (Required for Meta Approval)
                     </Label>
                     <Input
                       value={p.header_sample_url || ''}
@@ -486,10 +486,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                         p.header_type === 'image' ? 'https://example.com/sample.jpg' :
                         'https://example.com/sample.pdf'
                       }
-                      className="h-8 text-xs font-mono mt-1"
+                      className="h-9 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs transition-all focus:bg-white"
                     />
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Must be a publicly reachable URL. The platform uploads it once to Meta and stores the returned media handle.
+                    <p className="text-[9px] font-medium text-slate-400 ml-1">
+                      Provide a public URL. Meta uploads this once to generate a permanent media handle.
                     </p>
                   </div>
                 )}
