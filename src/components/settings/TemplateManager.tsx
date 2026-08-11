@@ -225,6 +225,12 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
         else if (['failed', 'error', 'bounced', 'rejected'].includes(ds) || wa === 'failed') map[k].failed++;
         else map[k].queued++;
       }
+      // Trigger live Meta sync when accessing this page to ensure UI/UX visibility of submitted templates
+      try {
+        await supabase.functions.invoke('manage-whatsapp-templates', { body: { action: 'list', branch_id: effectiveBranchId } });
+      } catch (e) {
+        console.warn('Silent meta-list background sync failed', e);
+      }
       return map;
     },
     refetchInterval: 60_000,
