@@ -12,6 +12,7 @@ export type EventCategory =
   | 'retention'
   | 'lead'
   | 'marketing'
+  | 'operations'
   | 'document';
 
 export interface SystemEvent {
@@ -85,6 +86,10 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   { event: 'offer_announcement', label: 'Special Offer / Discount', category: 'marketing', description: 'Marketing — promotion / discount', channels: ['whatsapp', 'email'], headerHint: 'image' },
   { event: 'gym_closure_update', label: 'Gym Closure Notice', category: 'marketing', description: 'Operational closure announcement', channels: ALL },
   { event: 'referral_reward', label: 'Referral Reward Earned', category: 'marketing', description: 'Member earned a referral reward', channels: ALL },
+  // ── Internal operations ──────────────────────────────────────
+  { event: 'daily_ops_summary', label: 'Daily Owner Report (11 PM IST)', category: 'operations', description: 'End-of-day business summary to owners/admins. Vars: {{recipient_name}} {{report_date}} {{new_memberships}} {{total_sales}} {{amount_received}} {{cash_received}} {{upi_received}} {{card_received}} {{dues_collected}} {{dues_pending}}.', channels: ALL },
+  { event: 'system_alert', label: 'System Health Alert (Internal)', category: 'operations', description: 'Internal alert when a critical automation or integration fails. Vars: {{alert_title}} {{alert_detail}} {{occurred_at}}.', channels: ['whatsapp', 'email'] },
+
   { event: 'monthly_newsletter', label: 'Monthly Newsletter', category: 'marketing', description: 'Marketing digest', channels: ['email'] },
 ];
 
