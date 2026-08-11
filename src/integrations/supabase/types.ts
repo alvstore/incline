@@ -13748,11 +13748,14 @@ export type Database = {
         Row: {
           avatar_storage_path: string | null
           bio: string | null
+          biometric_enrolled: boolean | null
           branch_id: string | null
           certifications: string[] | null
+          created_at: string | null
           id: string | null
           is_active: boolean | null
           max_clients: number | null
+          mips_sync_status: string | null
           specializations: string[] | null
           trainer_code: string | null
           user_id: string | null
@@ -13761,11 +13764,14 @@ export type Database = {
         Insert: {
           avatar_storage_path?: string | null
           bio?: string | null
+          biometric_enrolled?: boolean | null
           branch_id?: string | null
           certifications?: string[] | null
+          created_at?: string | null
           id?: string | null
           is_active?: boolean | null
           max_clients?: number | null
+          mips_sync_status?: string | null
           specializations?: string[] | null
           trainer_code?: string | null
           user_id?: string | null
@@ -13774,11 +13780,14 @@ export type Database = {
         Update: {
           avatar_storage_path?: string | null
           bio?: string | null
+          biometric_enrolled?: boolean | null
           branch_id?: string | null
           certifications?: string[] | null
+          created_at?: string | null
           id?: string | null
           is_active?: boolean | null
           max_clients?: number | null
+          mips_sync_status?: string | null
           specializations?: string[] | null
           trainer_code?: string | null
           user_id?: string | null
