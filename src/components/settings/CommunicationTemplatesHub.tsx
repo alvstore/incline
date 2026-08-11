@@ -115,9 +115,9 @@ function HealthStrip({ channel }: { channel: Channel }) {
   return (
     <div className={`grid gap-3 grid-cols-2 ${tiles.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-2xl bg-card shadow-lg shadow-primary/5 px-4 py-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t.label}</p>
-          <p className={`text-2xl font-bold ${t.cls}`}>{t.value}</p>
+        <div key={t.label} className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/30 px-5 py-4 transition-all hover:shadow-2xl hover:shadow-slate-200/50">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-1">{t.label}</p>
+          <p className={`text-2xl font-black ${t.cls}`}>{t.value}</p>
         </div>
       ))}
     </div>
@@ -157,28 +157,30 @@ export function CommunicationTemplatesHub() {
     <>
       <div className="space-y-5">
         {/* Header: channel switch + primary action */}
-        <div className="rounded-2xl bg-card shadow-lg shadow-primary/5 p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-1 bg-muted/60 rounded-xl p-1 w-fit">
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-xl shadow-slate-200/40 p-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-1 bg-slate-100/80 rounded-2xl p-1 w-fit border border-slate-200/60">
             {CHANNELS.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => switchChannel(value)}
                 aria-pressed={channel === value}
-                className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                className={`cursor-pointer inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                   channel === value
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-100 border border-slate-100'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'
                 }`}
               >
-                <Icon className="h-4 w-4" /> {label}
+                <Icon className={`h-4.5 w-4.5 ${channel === value ? 'text-indigo-600' : 'text-slate-400'}`} /> {label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-3">
-            <p className="hidden xl:block text-xs text-muted-foreground max-w-sm">{activeChannel.blurb}</p>
-            <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl shadow-sm cursor-pointer">
-              <Sparkles className="h-4 w-4" /> AI Generate
+          <div className="flex items-center gap-4">
+            <p className="hidden xl:block text-xs font-medium text-slate-500 max-w-[320px] leading-relaxed">
+              {activeChannel.blurb}
+            </p>
+            <Button onClick={() => openAi(channel)} className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white font-semibold h-11 px-6 transition-all hover:scale-[1.02] active:scale-[0.98]">
+              <Sparkles className="h-4.5 w-4.5" /> AI Generator Studio
             </Button>
           </div>
         </div>
@@ -195,14 +197,19 @@ export function CommunicationTemplatesHub() {
                     type="button"
                     onClick={() => setSection(id)}
                     aria-current={section === id ? 'page' : undefined}
-                    className={`cursor-pointer w-full text-left rounded-xl px-3 py-2.5 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-primary ${
+                    className={`cursor-pointer w-full text-left rounded-xl px-4 py-3 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-1 group ${
                       section === id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:bg-muted'
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <span className="flex items-center gap-2 text-sm"><Icon className="h-4 w-4" /> {label}</span>
-                    <span className="hidden lg:block text-[11px] text-muted-foreground mt-0.5 pl-6">{hint}</span>
+                    <span className="flex items-center gap-3 text-sm font-semibold tracking-tight">
+                      <Icon className={`h-4.5 w-4.5 ${section === id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`} /> 
+                      {label}
+                    </span>
+                    <span className={`hidden lg:block text-[11px] mt-1 pl-7.5 leading-tight ${section === id ? 'text-indigo-100/90' : 'text-slate-400'}`}>
+                      {hint}
+                    </span>
                   </button>
                 </li>
               ))}
