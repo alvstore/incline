@@ -386,20 +386,8 @@ export function PurchaseMembershipDrawer({
             </Alert>
           )}
 
-          {/* Member Info */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">{memberName}</p>
-                  <p className="text-sm text-muted-foreground">Member ID: {memberId.slice(0, 8)}...</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+
+
 
           {/* Plan Selection */}
           <div className="space-y-2">
