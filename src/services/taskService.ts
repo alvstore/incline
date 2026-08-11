@@ -155,7 +155,8 @@ export async function createTask(task: {
     priority: data.priority,
     dueDate: data.due_date,
     dueTime: data.due_time,
-  });
+    memberCreated: data.member_created,
+  } as any);
 
   return data;
 }

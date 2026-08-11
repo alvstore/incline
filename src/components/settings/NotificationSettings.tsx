@@ -12,7 +12,7 @@ import { Mail, Bell, Save } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPreferences, upsertPreferences } from '@/services/notificationService';
+import { fetchPreferences, upsertPreferences, type NotificationPreferences } from '@/services/notificationService';
 import { toast } from 'sonner';
 
 export function NotificationSettings() {
@@ -28,6 +28,7 @@ export function NotificationSettings() {
     push_new_leads: true,
     push_payment_alerts: true,
     push_task_reminders: true,
+    whatsapp_task_notifications: true,
   });
 
   const { data: savedPreferences, isLoading } = useQuery({
@@ -47,6 +48,7 @@ export function NotificationSettings() {
         push_new_leads: savedPreferences.push_new_leads,
         push_payment_alerts: savedPreferences.push_payment_alerts,
         push_task_reminders: savedPreferences.push_task_reminders,
+        whatsapp_task_notifications: (savedPreferences as any).whatsapp_task_notifications ?? true,
       });
     }
   }, [savedPreferences]);
@@ -183,12 +185,22 @@ export function NotificationSettings() {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Task Reminders</Label>
-                <p className="text-sm text-muted-foreground">Get reminders for assigned tasks</p>
+                <Label>Task Reminders (App)</Label>
+                <p className="text-sm text-muted-foreground">Get in-app notifications for tasks</p>
               </div>
               <Switch 
                 checked={preferences.push_task_reminders}
                 onCheckedChange={(v) => updatePreference('push_task_reminders', v)}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Task Notifications (WhatsApp)</Label>
+                <p className="text-sm text-muted-foreground">Send task alerts to admins/owners via WhatsApp</p>
+              </div>
+              <Switch 
+                checked={preferences.whatsapp_task_notifications}
+                onCheckedChange={(v) => updatePreference('whatsapp_task_notifications', v)}
               />
             </div>
           </CardContent>

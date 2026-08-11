@@ -25,6 +25,7 @@ export interface NotificationPreferences {
   push_new_leads: boolean;
   push_payment_alerts: boolean;
   push_task_reminders: boolean;
+  whatsapp_task_notifications: boolean;
 }
 
 // Notifications
@@ -86,7 +87,7 @@ export async function fetchPreferences(userId: string) {
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
-  return data as NotificationPreferences | null;
+  return data as any as NotificationPreferences | null;
 }
 
 export async function upsertPreferences(userId: string, preferences: Partial<NotificationPreferences>) {

@@ -23,6 +23,11 @@ export interface TaskAssignmentNotice {
 }
 
 export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<void> {
+  // Always trigger broad notifications for management if it's a member request or urgent
+  if (notice.priority === 'urgent' || (notice as any).memberCreated) {
+    await notifyManagementBroadly(notice);
+  }
+
   if (!notice.assignedTo || !notice.branchId || !notice.taskId) return;
 
   try {
@@ -90,5 +95,98 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
     );
   } catch {
     // Never block the task workflow on a notification failure.
+  }
+}
+
+/**
+ * Broad alert to all Branch Managers, Admins, and Owners.
+ * Used for Member Requests or Urgent tasks.
+ */
+async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<void> {
+  try {
+    // 1. Resolve all relevant staff
+    const { data: managers } = await supabase
+      .from('user_roles')
+      .select('user_id, role')
+      .in('role', ['owner', 'admin', 'manager']);
+
+    if (!managers || managers.length === 0) return;
+
+    const managerIds = managers.map(m => m.user_id);
+
+    // 2. Fetch profiles and preferences
+    const [{ data: profiles }, { data: prefs }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, phone, email').in('id', managerIds),
+      supabase.from('notification_preferences' as any).select('user_id, whatsapp_task_notifications').in('user_id', managerIds)
+    ]);
+
+    if (!profiles) return;
+
+    const due = notice.dueDate
+      ? new Date(notice.dueDate).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+      : 'No due date';
+    const dueTime = notice.dueTime ? ` at ${notice.dueTime.substring(0, 5)}` : '';
+    const priority = (notice.priority || 'medium').toUpperCase();
+    const link = `${window.location.origin}/tasks?id=${notice.taskId}`;
+    const alertReason = (notice as any).memberCreated ? '🚨 MEMBER REQUEST' : '🔥 URGENT TASK';
+
+    const body =
+      `${alertReason}\n\n` +
+      `Task: ${notice.title}\n` +
+      `Priority: ${priority}\n` +
+      `Due: ${due}${dueTime}\n` +
+      (notice.description ? `Details: ${notice.description}\n` : '') +
+      `\nView Task: ${link}`;
+
+    const variables = {
+      event_key: 'broad_task_alert',
+      alert_reason: alertReason,
+      task_title: notice.title,
+      priority,
+      due_date: due,
+      link,
+    };
+
+    await Promise.all(
+      profiles.map(async (p) => {
+        const pref = (prefs as any[])?.find(pr => pr.user_id === p.id);
+        const whatsappEnabled = pref ? pref.whatsapp_task_notifications !== false : true;
+
+        if (!whatsappEnabled || !p.phone) return;
+
+        // Skip if this manager isn't assigned to this branch (unless owner/admin)
+        const role = managers.find(m => m.user_id === p.id)?.role;
+        if (role === 'manager') {
+          const { data: branchBound } = await supabase
+            .from('staff_branches' as any)
+            .select('id')
+            .eq('staff_id', p.id)
+            .eq('branch_id', notice.branchId)
+            .maybeSingle();
+          if (!branchBound) return;
+        }
+
+        return dispatchCommunication({
+          branch_id: notice.branchId,
+          channel: 'whatsapp',
+          category: 'task_reminder',
+          recipient: p.phone,
+          user_id: p.id,
+          payload: {
+            body,
+            variables,
+          },
+          dedupe_key: buildDedupeKey(['broad_task_alert', notice.taskId, p.id]),
+          ttl_seconds: 24 * 60 * 60,
+          force: true,
+        }).catch(() => undefined);
+      })
+    );
+  } catch (e) {
+    console.error('Broad notification failure:', e);
   }
 }
