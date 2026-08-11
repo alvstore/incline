@@ -198,9 +198,17 @@ export function PurchaseMembershipDrawer({
     if (!selectedPlan) return '';
     return membershipEndDateISO(startDate, selectedPlan.duration_days);
   };
+  const todayIso = format(new Date(), 'yyyy-MM-dd');
+  const isBackdated = !isMemberMode && !advanceBooking && startDate < todayIso;
+  const backdatedDays = isBackdated ? differenceInDays(new Date(todayIso), new Date(startDate)) : 0;
 
+  /** Same rule as Record Payment: a reference number is only meaningful for
+   *  non-cash, non-wallet manual settlements. */
+  const showTransactionField =
+    !isMemberMode && ['upi', 'bank_transfer', 'card'].includes(paymentMethod);
 
   const remainingAmount = calculateTotal() - amountPaying;
+
 
   const purchaseMembership = useMutation({
     mutationFn: async () => {
