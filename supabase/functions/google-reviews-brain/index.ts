@@ -546,6 +546,34 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
     last_places_sync: new Date().toISOString(),
   });
 
+  // The Places lane has no classification step of its own, so freshly imported
+  // rows used to sit at "AI pending" with an empty draft until someone clicked
+  // Re-analyse. Draft them here (and backfill older pending rows) best-effort.
+  let classified = 0;
+  try {
+    const { data: pending } = await sb
+      .from("google_reviews_inbound")
+      .select("id, ai_draft_reply, ai_classified_at")
+      .eq("branch_id", branch_id)
+      .order("posted_at", { ascending: false })
+      .limit(25);
+    const todo = (pending ?? [])
+      .filter((p: any) => !p.ai_classified_at || !String(p.ai_draft_reply ?? "").trim())
+      .slice(0, 8);
+    for (const p of todo) {
+      try {
+        await classifyOne(p.id);
+        classified++;
+      } catch (e) {
+        console.error("auto-classify failed", p.id, e);
+      }
+    }
+  } catch (e) {
+    console.error("auto-classify sweep failed", e);
+  }
+
+
+
   return {
     branch_id,
     fetched: upserted,
