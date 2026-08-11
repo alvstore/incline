@@ -759,7 +759,32 @@ export function PurchaseMembershipDrawer({
                       <SelectItem value="razorpay_link">🔗 Send Payment Link</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {showTransactionField && (
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="purchase-transaction-id">
+                        {paymentMethod === 'bank_transfer' ? 'UTR / Reference Number' : 'Transaction / UTR ID'}
+                      </Label>
+                      <Input
+                        id="purchase-transaction-id"
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        placeholder={
+                          paymentMethod === 'upi'
+                            ? 'e.g., 412345678901 (UPI ref)'
+                            : paymentMethod === 'bank_transfer'
+                              ? 'e.g., NEFT/RTGS UTR number'
+                              : 'e.g., card auth / approval code'
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Optional but recommended — this reference shows on the Payments page and the
+                        invoice payment history, exactly like Record Payment.
+                      </p>
+                    </div>
+                  )}
                 </div>
+
               ) : (
                 <Card className="border-primary/30 bg-primary/5">
                   <CardContent className="flex items-center gap-3 pt-4">
