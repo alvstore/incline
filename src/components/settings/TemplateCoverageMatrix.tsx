@@ -16,11 +16,11 @@ type Channel = EventChannel;
 type RowState = 'ok' | 'pending' | 'rejected' | 'inactive' | 'missing';
 
 const STATE_META: Record<RowState, { label: string; icon: any; cls: string }> = {
-  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-success/10 text-success border-success/20' },
-  pending: { label: 'Pending Approval', icon: ShieldAlert, cls: 'bg-warning/10 text-warning border-warning/20' },
-  rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-destructive/10 text-destructive border-destructive/20' },
-  inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-muted text-muted-foreground' },
-  missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-destructive/10 text-destructive border-destructive/20' },
+  ok: { label: 'Ready', icon: CheckCircle2, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  pending: { label: 'Pending', icon: ShieldAlert, cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  rejected: { label: 'Rejected', icon: ShieldX, cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  inactive: { label: 'Inactive', icon: AlertCircle, cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  missing: { label: 'Missing', icon: AlertCircle, cls: 'bg-slate-50 text-slate-400 border-slate-200' },
 };
 
 interface Props {
@@ -108,63 +108,74 @@ export function TemplateCoverageMatrix({ channel }: Props) {
     setAiOpen(true);
   };
 
-  if (isLoading) return <Skeleton className="h-72 w-full rounded-2xl" />;
+  if (isLoading) return <Skeleton className="h-72 w-full rounded-3xl shadow-xl" />;
 
   return (
     <>
       <div className="space-y-4">
         <Card className="rounded-3xl shadow-2xl shadow-slate-200/50 border-0 bg-white/70 backdrop-blur-xl">
           <CardContent className="pt-8 px-6 pb-8 space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex-1 min-w-[220px]">
-                <div className="flex items-center justify-between mb-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div className="flex-1 min-w-[280px]">
+                <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Coverage Status</p>
                   <span className="text-sm font-black text-slate-900">{okCount} of {total} Events Protected · {pct}%</span>
                 </div>
-                <Progress value={pct} className="h-2" />
+                <Progress value={pct} className="h-2.5 bg-slate-100 [&>div]:bg-indigo-600 [&>div]:shadow-[0_0_8px_rgba(79,70,229,0.4)] rounded-full" />
               </div>
-              <Button
-                onClick={() => openAi(missingEvents)}
-                disabled={missingEvents.length === 0}
-                className="gap-2"
-              >
-                <Wand2 className="h-4 w-4" />
-                Auto-fill missing with AI ({missingEvents.length})
-              </Button>
-              <Button variant="outline" onClick={() => openAi()} className="gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                Open AI Studio
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => openAi(missingEvents)}
+                  disabled={missingEvents.length === 0}
+                  className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 text-white font-semibold px-5 h-11 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  Auto-fill Missing ({missingEvents.length})
+                </Button>
+                <Button variant="outline" onClick={() => openAi()} className="gap-2 rounded-xl border-slate-200 hover:bg-slate-50 font-semibold px-5 h-11 text-slate-700 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  <Sparkles className="h-4 w-4 text-indigo-500" />
+                  Studio
+                </Button>
+              </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
               {rows.map((r) => {
                 const meta = STATE_META[r.state];
                 const Icon = meta.icon;
                 return (
                   <div
                     key={r.event}
-                    className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/60 transition-colors"
+                    className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-white hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 group"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate text-foreground">{r.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {r.tpl ? `→ ${r.tpl.name}` : '— No template configured —'}
-                        {r.metaName && <span className="ml-2 font-mono">[{r.metaName}]</span>}
-                      </p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="font-bold text-sm tracking-tight text-slate-900 group-hover:text-indigo-700 transition-colors">{r.label}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-medium text-slate-400 truncate max-w-[150px]">
+                          {r.tpl ? `→ ${r.tpl.name}` : 'No active template'}
+                        </p>
+                        {r.metaName && (
+                          <Badge variant="secondary" className="bg-slate-50 text-slate-500 border-0 h-4 text-[9px] px-1.5 font-mono rounded-md">
+                            {r.metaName}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className={`${meta.cls} gap-1 rounded-full`}>
+                      <Badge variant="outline" className={`${meta.cls} gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold border shadow-sm`}>
                         <Icon className="h-3 w-3" /> {meta.label}
                       </Badge>
                       {(r.state === 'missing' || r.state === 'rejected') && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 px-2 text-xs gap-1 text-primary hover:bg-primary/10"
+                          className="h-8 w-8 p-0 rounded-full text-indigo-600 hover:bg-indigo-50 transition-colors"
                           onClick={() => openAi([r.event])}
+                          title="Generate with AI"
                         >
-                          <Sparkles className="h-3 w-3" /> AI Draft
+                          <Sparkles className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
