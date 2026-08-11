@@ -164,7 +164,7 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
           const { data: branchBound } = await supabase
             .from('staff_branches' as any)
             .select('id')
-            .eq('staff_id', p.id)
+            .eq('user_id', p.id)
             .eq('branch_id', notice.branchId)
             .maybeSingle();
           if (!branchBound) return;
