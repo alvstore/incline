@@ -356,8 +356,25 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
             {proposals.map((p, i) => {
               const evIsMarketing = /(offer|promo|promotion|event|birthday|referral|win[_-]?back|re[_-]?engagement|wait[_-]?is[_-]?over|launch|announcement|newsletter|gift|festive|sale|deal)/i.test(p.event || p.name);
               const categoryMismatch = evIsMarketing && p.category !== 'MARKETING';
+              const issue = issues[p.name];
               return (
-              <div key={`${p.event}-${i}`} className="rounded-xl border p-3 space-y-2 bg-card">
+              <div
+                key={`${p.event}-${i}`}
+                className={`rounded-xl border p-3 space-y-2 bg-card ${
+                  issue?.level === 'error' ? 'border-destructive' : issue ? 'border-warning' : ''
+                }`}
+              >
+                {issue && (
+                  <div
+                    className={`flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs ${
+                      issue.level === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                    }`}
+                  >
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>{issue.message}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Icon className={`h-4 w-4 ${Meta.color}`} />
