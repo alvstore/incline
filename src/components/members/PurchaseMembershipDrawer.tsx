@@ -21,7 +21,16 @@ import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { MemberIdentityHeader } from '@/components/members/MemberIdentityHeader';
 
+/** Quick presets for the remaining-balance due date, counted from today. */
+const DUE_DATE_PRESETS = [
+  { label: '3 days', days: 3 },
+  { label: '7 days', days: 7 },
+  { label: '10 days', days: 10 },
+  { label: '15 days', days: 15 },
+];
+
 interface PurchaseMembershipDrawerProps {
+
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memberId: string;
