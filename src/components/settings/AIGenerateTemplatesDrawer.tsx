@@ -187,6 +187,8 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
         if (data?.success === false) {
           const msg = data.meta_error?.user_msg || data.error || 'Meta rejected';
           if (data.saved_as_draft) {
+            outcome = 'draft';
+            setIssues((m) => ({ ...m, [p.name]: { level: 'warning', message: `Saved as draft — ${msg}` } }));
             toast.warning(`"${p.name}" saved as DRAFT — ${msg}. Edit it under WhatsApp → CRM Templates and resubmit.`, { duration: 8000 });
           } else {
             throw new Error(msg);
@@ -221,18 +223,35 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
       qc.invalidateQueries({ queryKey: ['template-coverage'] });
       setProposals((arr) => arr.filter((x) => x.name !== p.name));
     } catch (e: any) {
-      toast.error(`${p.name}: ${e.message}`);
+      outcome = 'error';
+      const message = e?.message || 'Save failed';
+      setIssues((m) => ({ ...m, [p.name]: { level: 'error', message } }));
+      toast.error(`${p.name}: ${message}`);
     } finally {
       setSubmitting(null);
     }
+    return outcome;
   };
 
   const submitAll = async () => {
-    for (const p of proposals.slice()) {
-       
-      await submitOne(p);
+    const queue = proposals.slice();
+    let ok = 0, drafted = 0, failed = 0;
+    setBulk({ done: 0, total: queue.length });
+    for (const [i, p] of queue.entries()) {
+      const res = await submitOne(p);
+      if (res === 'ok') ok += 1;
+      else if (res === 'draft') drafted += 1;
+      else failed += 1;
+      setBulk({ done: i + 1, total: queue.length });
     }
+    setBulk(null);
+    const parts = [`${ok} saved`];
+    if (drafted) parts.push(`${drafted} draft`);
+    if (failed) parts.push(`${failed} failed`);
+    if (failed) toast.error(parts.join(' · ') + ' — see the highlighted cards below');
+    else toast.success(parts.join(' · '));
   };
+
 
   const Icon = Meta.icon;
 
