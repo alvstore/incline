@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Dumbbell, GripVertical, ChevronDown, CalendarDays, Copy, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -512,10 +512,43 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     toast.success(targets.length > 1 ? 'Copied to all other days' : 'Day copied');
   };
 
+  /**
+   * Move a whole session (focus, warm-up, exercises, cool-down) onto another
+   * weekday. Day names stay fixed — only the content moves. When the target
+   * already has content the two days swap so nothing is lost.
+   */
+  const moveDayContent = (from: number, to: number) => {
+    if (from === to) return;
+    setDays((prev) => {
+      const src = prev[from];
+      const dst = prev[to];
+      if (!src || !dst) return prev;
+      const pick = (d: typeof src) => ({
+        focus: d.focus,
+        warmup: d.warmup,
+        cooldown: d.cooldown,
+        exercises: d.exercises.map((e) => ({ ...e })),
+      });
+      return prev.map((d, i) => {
+        if (i === to) return { ...d, ...pick(src) };
+        if (i === from) return { ...d, ...pick(dst) };
+        return d;
+      });
+    });
+    setActiveIdx(to);
+    const swapped = days[to]?.exercises.length > 0;
+    toast.success(
+      swapped
+        ? `Swapped ${days[from].day} and ${days[to].day}`
+        : `Moved ${days[from].day} workout to ${days[to].day}`,
+    );
+  };
+
   const clearDay = () => {
     updateDay(activeIdx, { exercises: [], warmup: '', cooldown: '' });
     toast.success(`${days[activeIdx].day} cleared`);
   };
+
 
   const active = days[activeIdx];
 
@@ -585,12 +618,17 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
               ariaLabel="Select training day"
               activeIndex={activeIdx}
               onSelect={setActiveIdx}
+              onMove={moveDayContent}
               days={days.map((d) => ({
                 label: d.day,
                 meta: d.exercises.length ? `${d.exercises.length} exercises` : 'Rest / empty',
                 muted: d.exercises.length === 0,
               }))}
             />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Drag a day onto another to move that workout — day names stay put, only the session moves.
+            </p>
+
           </CardContent>
         </Card>
       </div>
@@ -628,6 +666,27 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 cursor-pointer gap-1">
+                      <ArrowRightLeft className="h-3.5 w-3.5" /> Move day
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {days.map((d, i) =>
+                      i === activeIdx ? null : (
+                        <DropdownMenuItem key={`mv-${d.day}-${i}`} onClick={() => moveDayContent(activeIdx, i)}>
+                          Move to {d.day}
+                          {d.exercises.length > 0 && (
+                            <span className="ml-2 text-[11px] text-muted-foreground">swap</span>
+                          )}
+                        </DropdownMenuItem>
+                      ),
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button
                   variant="ghost"
                   size="sm"

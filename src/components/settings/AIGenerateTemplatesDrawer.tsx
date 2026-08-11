@@ -66,6 +66,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
   const [generating, setGenerating] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  /** Per-proposal failure/warning text, keyed by proposal name. */
+  const [issues, setIssues] = useState<Record<string, { level: 'error' | 'warning'; message: string }>>({});
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+
 
   const { data: existing = [] } = useQuery({
     queryKey: ['ai-templates-existing', selectedBranch, channel],
@@ -133,9 +137,12 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
     setProposals((arr) => arr.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   };
 
-  const submitOne = async (p: Proposal) => {
-    if (!branchId) return;
+  const submitOne = async (p: Proposal): Promise<'ok' | 'draft' | 'error'> => {
+    if (!branchId) return 'error';
+    let outcome: 'ok' | 'draft' | 'error' = 'ok';
     setSubmitting(p.name);
+    setIssues((m) => { const { [p.name]: _drop, ...rest } = m; return rest; });
+
     try {
       const insertRow: any = {
         branch_id: branchId,
@@ -180,6 +187,8 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
         if (data?.success === false) {
           const msg = data.meta_error?.user_msg || data.error || 'Meta rejected';
           if (data.saved_as_draft) {
+            outcome = 'draft';
+            setIssues((m) => ({ ...m, [p.name]: { level: 'warning', message: `Saved as draft — ${msg}` } }));
             toast.warning(`"${p.name}" saved as DRAFT — ${msg}. Edit it under WhatsApp → CRM Templates and resubmit.`, { duration: 8000 });
           } else {
             throw new Error(msg);
@@ -214,18 +223,35 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
       qc.invalidateQueries({ queryKey: ['template-coverage'] });
       setProposals((arr) => arr.filter((x) => x.name !== p.name));
     } catch (e: any) {
-      toast.error(`${p.name}: ${e.message}`);
+      outcome = 'error';
+      const message = e?.message || 'Save failed';
+      setIssues((m) => ({ ...m, [p.name]: { level: 'error', message } }));
+      toast.error(`${p.name}: ${message}`);
     } finally {
       setSubmitting(null);
     }
+    return outcome;
   };
 
   const submitAll = async () => {
-    for (const p of proposals.slice()) {
-       
-      await submitOne(p);
+    const queue = proposals.slice();
+    let ok = 0, drafted = 0, failed = 0;
+    setBulk({ done: 0, total: queue.length });
+    for (const [i, p] of queue.entries()) {
+      const res = await submitOne(p);
+      if (res === 'ok') ok += 1;
+      else if (res === 'draft') drafted += 1;
+      else failed += 1;
+      setBulk({ done: i + 1, total: queue.length });
     }
+    setBulk(null);
+    const parts = [`${ok} saved`];
+    if (drafted) parts.push(`${drafted} draft`);
+    if (failed) parts.push(`${failed} failed`);
+    if (failed) toast.error(parts.join(' · ') + ' — see the highlighted cards below');
+    else toast.success(parts.join(' · '));
   };
+
 
   const Icon = Meta.icon;
 
@@ -330,8 +356,25 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
             {proposals.map((p, i) => {
               const evIsMarketing = /(offer|promo|promotion|event|birthday|referral|win[_-]?back|re[_-]?engagement|wait[_-]?is[_-]?over|launch|announcement|newsletter|gift|festive|sale|deal)/i.test(p.event || p.name);
               const categoryMismatch = evIsMarketing && p.category !== 'MARKETING';
+              const issue = issues[p.name];
               return (
-              <div key={`${p.event}-${i}`} className="rounded-xl border p-3 space-y-2 bg-card">
+              <div
+                key={`${p.event}-${i}`}
+                className={`rounded-xl border p-3 space-y-2 bg-card ${
+                  issue?.level === 'error' ? 'border-destructive' : issue ? 'border-warning' : ''
+                }`}
+              >
+                {issue && (
+                  <div
+                    className={`flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs ${
+                      issue.level === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
+                    }`}
+                  >
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>{issue.message}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Icon className={`h-4 w-4 ${Meta.color}`} />
@@ -448,9 +491,14 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
               <Button variant="outline" onClick={() => setStep('pick')}>
                 <AlertCircle className="h-4 w-4 mr-1" /> Re-pick
               </Button>
-              <Button onClick={submitAll} disabled={proposals.length === 0 || !!submitting}>
-                <Send className="h-4 w-4 mr-2" /> {channel === 'whatsapp' ? 'Submit All to Meta' : 'Save All'}
+              <Button onClick={submitAll} disabled={proposals.length === 0 || !!submitting || !!bulk}>
+                {bulk ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting {bulk.done}/{bulk.total}…</>
+                ) : (
+                  <><Send className="h-4 w-4 mr-2" /> {channel === 'whatsapp' ? `Submit all ${proposals.length} to Meta` : `Save all ${proposals.length}`}</>
+                )}
               </Button>
+
             </>
           )}
         </SheetFooter>

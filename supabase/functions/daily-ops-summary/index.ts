@@ -247,6 +247,16 @@ Deno.serve(async (req) => {
     );
 
     if (incomplete.length > 0) {
+      // Surface silent suppressions (e.g. missing WhatsApp template, email
+      // provider errors) in System Health instead of failing quietly.
+      await supabase.rpc("log_error_event", {
+        p_source: "daily-ops-summary",
+        p_severity: "warning",
+        p_message: `Daily owner report: ${incomplete.length}/${deliveries.length} deliveries incomplete — ${
+          incomplete.map((d) => `${d.channel}:${d.status}${d.reason ? `(${d.reason})` : ""}`).join(", ")
+        }`,
+      }).then(() => {}, () => {});
+
       return new Response(
         JSON.stringify({
           ok: false,

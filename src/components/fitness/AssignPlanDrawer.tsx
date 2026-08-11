@@ -39,6 +39,8 @@ import {
   suggestOffsets,
 } from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
+import { SchedulePreviewStrip } from '@/components/fitness/SchedulePreviewStrip';
+
 
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -119,6 +121,8 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   // same plan doesn't send everyone to the same machine on the same day.
   const [autoStagger, setAutoStagger] = useState(true);
   const [manualOffset, setManualOffset] = useState(0);
+  const [showAllPreviews, setShowAllPreviews] = useState(false);
+
   const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
@@ -506,10 +510,11 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Floor Load Balancing
+                        Day Shift (Floor Load Balancing)
                       </span>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Same plan, shifted days — keeps machines free at peak hours.
+                        Same plan, same exercises — each member's week starts on a different day so the
+                        floor isn't crowded on Monday.
                       </p>
                     </div>
                     <Switch
@@ -546,19 +551,6 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                       <p className="text-[11px] text-muted-foreground">
                         Members are spread onto the least-busy shift groups automatically.
                       </p>
-                      {selected.length > 0 && (
-                        <div className="space-y-1 rounded-xl bg-muted/40 p-2.5">
-                          {selected.slice(0, 6).map((member) => (
-                            <div key={member.id} className="flex items-center justify-between gap-3 text-xs">
-                              <span className="truncate text-foreground">{member.full_name}</span>
-                              <Badge variant="secondary" className="shrink-0 font-normal">
-                                {describeOffset(scheduleOffsets[member.id] ?? 0)}
-                              </Badge>
-                            </div>
-                          ))}
-                          {selected.length > 6 && <p className="text-[11px] text-muted-foreground">+{selected.length - 6} more members</p>}
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div className="space-y-1.5">
@@ -584,6 +576,43 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
                       <p className="text-[11px] text-muted-foreground">{describeOffset(manualOffset)}</p>
                     </div>
                   )}
+
+                  {/* Preview: exactly what each selected member's week will look like. */}
+                  {selected.length > 0 && (
+                    <div className="space-y-2 border-t pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Preview schedule
+                        </Label>
+                        {selected.length > 4 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllPreviews((v) => !v)}
+                            className="cursor-pointer text-[11px] font-medium text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
+                          >
+                            {showAllPreviews ? 'Show less' : `Show all ${selected.length}`}
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-2.5">
+                        {(showAllPreviews ? selected : selected.slice(0, 4)).map((member) => (
+                          <div key={member.id} className="space-y-1">
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <span className="truncate font-medium text-foreground">{member.full_name}</span>
+                              <Badge variant="secondary" className="shrink-0 font-normal">
+                                {describeOffset(scheduleOffsets[member.id] ?? 0)}
+                              </Badge>
+                            </div>
+                            <SchedulePreviewStrip
+                              content={plan?.content}
+                              offset={scheduleOffsets[member.id] ?? 0}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
 
                   {hasVariants && (
                     <div className="space-y-1.5 border-t pt-3">
