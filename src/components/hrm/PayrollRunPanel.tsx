@@ -301,6 +301,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           </DialogHeader>
           {adjustItem && (
             <div className="grid grid-cols-2 gap-3">
+              {pendingAdvance > 0 && (
+                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-warning/10 px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm text-warning">
+                    <HandCoins className="h-4 w-4" />
+                    <span>Outstanding salary advance: <strong>₹{pendingAdvance.toLocaleString('en-IN')}</strong></span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => setAdjustItem({ ...adjustItem, final_advance: pendingAdvance })}
+                  >
+                    Recover in this run
+                  </Button>
+                </div>
+              )}
               {[
                 ['final_base', 'Base'],
                 ['final_pt_commission', 'PT Commission'],
