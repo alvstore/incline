@@ -323,7 +323,9 @@ export function PurchaseMembershipDrawer({
     setAmountPaying(0);
     setPaymentDueDate(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
     setSendReminders(true);
+    setTransactionId('');
   };
+
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
