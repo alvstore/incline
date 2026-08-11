@@ -666,7 +666,10 @@ export default function PaymentsPage() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
+
 
       {/* Edit / Void Payment — side drawer (no center dialogs for forms) */}
       <PaymentEditDrawer
