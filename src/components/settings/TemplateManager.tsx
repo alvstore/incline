@@ -190,6 +190,18 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     },
   });
 
+  const { data: liveMetaTemplates = [] } = useQuery({
+    queryKey: ['whatsapp-templates-live-alignment'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_templates')
+        .select('name, status, category, components, is_stale, synced_at')
+        .order('synced_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // 7-day delivery counts per template (sent / failed / queued)
   const { data: deliveryStats = {} } = useQuery({
     queryKey: ['template-delivery-stats-7d'],
@@ -604,9 +616,26 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
     }
   };
 
+  const liveMetaByName = new Map<string, any>();
+  for (const row of liveMetaTemplates as any[]) {
+    if (!liveMetaByName.has(row.name)) liveMetaByName.set(row.name, row);
+  }
+  const alignedTemplates = templates.map((template: any) => {
+    const live = liveMetaByName.get(template.meta_template_name);
+    const header = (live?.components || []).find((component: any) => String(component?.type || '').toUpperCase() === 'HEADER');
+    return {
+      ...template,
+      live_meta_status: live?.status ?? null,
+      live_meta_category: live?.category ?? null,
+      live_meta_header_type: String(header?.format || 'none').toLowerCase(),
+      live_meta_stale: live?.is_stale ?? null,
+      live_synced_at: live?.synced_at ?? null,
+    };
+  });
+
   // Status counts — scoped to WhatsApp only (status sub-tabs are WhatsApp-specific).
   // `All` = sum of WhatsApp approval buckets so the chip math reconciles with the filter.
-  const statusCounts = templates.reduce((acc: Record<string, number>, t: any) => {
+  const statusCounts = alignedTemplates.reduce((acc: Record<string, number>, t: any) => {
     if (t.type !== 'whatsapp') return acc;
     const s = (t.approval_status as string) || 'draft';
     acc[s] = (acc[s] || 0) + 1;
@@ -615,7 +644,7 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
   }, {});
 
   // Apply status filter (only restricts WhatsApp templates; SMS/Email always pass)
-  const filteredTemplates = templates.filter((t: any) => {
+  const filteredTemplates = alignedTemplates.filter((t: any) => {
     if (filterType && t.type !== filterType) return false;
     if (statusFilter === 'all') return true;
     if (t.type !== 'whatsapp') return false; // status sub-tabs are WhatsApp-specific
