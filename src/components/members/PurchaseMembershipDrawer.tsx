@@ -15,7 +15,7 @@ import { format, addDays, differenceInDays } from 'date-fns';
 import { membershipEndDateISO } from '@/lib/memberships/duration';
 
 import { usePlans } from '@/hooks/usePlans';
-import { CreditCard, IndianRupee, Calendar, User, Gift, AlertTriangle, CheckCircle, Lock, Wallet } from 'lucide-react';
+import { CreditCard, IndianRupee, Calendar, Gift, AlertTriangle, CheckCircle, Lock, Wallet } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
 import { invalidateMembersData } from '@/lib/memberInvalidation';
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
