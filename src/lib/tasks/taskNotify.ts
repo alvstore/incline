@@ -19,6 +19,7 @@ export interface TaskAssignmentNotice {
   description?: string | null;
   priority?: string | null;
   dueDate?: string | null;
+  dueTime?: string | null;
 }
 
 export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<void> {
