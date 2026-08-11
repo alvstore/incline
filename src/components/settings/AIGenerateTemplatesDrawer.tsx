@@ -441,28 +441,28 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 </div>
 
                 {channel === 'whatsapp' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Meta Category</Label>
                       <select
                         value={p.category}
                         onChange={(e) => updateProposal(i, { category: e.target.value })}
-                        className={`mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs ${categoryMismatch ? 'border-warning' : ''}`}
+                        className={`w-full h-10 rounded-xl border bg-slate-50 px-3 text-xs font-semibold transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none ${categoryMismatch ? 'border-amber-300 text-amber-700' : 'border-slate-200 text-slate-700'}`}
                       >
                         <option value="MARKETING">MARKETING</option>
                         <option value="UTILITY">UTILITY</option>
                         <option value="AUTHENTICATION">AUTHENTICATION</option>
                       </select>
                       {categoryMismatch && (
-                        <p className="text-[10px] text-warning mt-1">Event looks promotional — Meta usually requires MARKETING.</p>
+                        <p className="text-[10px] font-medium text-amber-600 ml-1">Promotional event — Meta requires MARKETING.</p>
                       )}
                     </div>
-                    <div>
-                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Header type</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Header Component</Label>
                       <select
                         value={p.header_type || 'none'}
                         onChange={(e) => updateProposal(i, { header_type: e.target.value as any })}
-                        className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-xs"
+                        className="w-full h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none"
                       >
                         <option value="none">None (text only)</option>
                         <option value="image">Image (JPG/PNG)</option>
