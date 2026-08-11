@@ -1355,6 +1355,14 @@ Deno.serve(async (req) => {
         const r = await classifyOne(body.inbound_id);
         return json(r);
       }
+      case "draft_reply": {
+        if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
+        const r = await classifyOne(body.inbound_id, {
+          tone: body.tone,
+          draftOnly: true,
+        });
+        return json(r);
+      }
       case "save_draft":
         if (!body.inbound_id) return json({ error: "inbound_id required" }, 400);
         return await saveDraft(body.inbound_id, body.draft ?? "");
