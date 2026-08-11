@@ -12,7 +12,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil } from 'lucide-react';
+import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins } from 'lucide-react';
 
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
