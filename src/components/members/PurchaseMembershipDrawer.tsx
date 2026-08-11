@@ -250,6 +250,8 @@ export function PurchaseMembershipDrawer({
         p_idempotency_key: idempotencyKey,
         p_assign_locker_id: hasLockerBenefit && selectedLockerId ? selectedLockerId : null,
         p_notes: null,
+        p_transaction_id: showTransactionField ? (transactionId.trim() || null) : null,
+
       });
 
       if (rpcErr) throw rpcErr;
