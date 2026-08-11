@@ -495,32 +495,52 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                 )}
 
                 {channel === 'email' && (
-                  <Input
-                    value={p.subject || ''}
-                    onChange={(e) => updateProposal(i, { subject: e.target.value })}
-                    placeholder="Subject"
-                    className="h-9 text-sm"
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Email Subject</Label>
+                    <Input
+                      value={p.subject || ''}
+                      onChange={(e) => updateProposal(i, { subject: e.target.value })}
+                      placeholder="Subject"
+                      className="h-10 rounded-xl border-slate-200 bg-slate-50 font-semibold text-sm transition-all focus:bg-white"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Message Content</Label>
+                  <Textarea
+                    value={p.body_text}
+                    onChange={(e) => updateProposal(i, { body_text: e.target.value })}
+                    rows={channel === 'sms' ? 3 : 5}
+                    className="rounded-xl border-slate-200 bg-slate-50 text-sm leading-relaxed transition-all focus:bg-white focus:ring-2 focus:ring-indigo-500/10"
                   />
-                )}
-                <Textarea
-                  value={p.body_text}
-                  onChange={(e) => updateProposal(i, { body_text: e.target.value })}
-                  rows={channel === 'sms' ? 2 : 4}
-                  className="text-sm"
-                />
-                {channel === 'sms' && (
-                  <p className="text-[10px] text-muted-foreground">{p.body_text.length} chars · {Math.ceil(p.body_text.length / 160)} segment(s)</p>
-                )}
+                  {channel === 'sms' && (
+                    <p className="text-[10px] font-bold text-slate-400 ml-1">{p.body_text.length} chars · {Math.ceil(p.body_text.length / 160)} segment(s)</p>
+                  )}
+                </div>
+
                 {channel === 'email' && p.body_html && (
-                  <details className="text-xs">
-                    <summary className="cursor-pointer text-muted-foreground">HTML preview</summary>
-                    <div className="mt-2 rounded border bg-card p-2 max-h-60 overflow-auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
+                  <details className="group">
+                    <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-indigo-500 hover:text-indigo-600 transition-colors ml-1">
+                      View HTML Preview
+                    </summary>
+                    <div className="mt-2 rounded-2xl border border-slate-100 bg-slate-50 p-4 max-h-60 overflow-auto shadow-inner" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.body_html) }} />
                   </details>
                 )}
-                {p.rationale && <p className="text-xs text-muted-foreground italic">{p.rationale}</p>}
-                <div className="flex flex-wrap gap-1">
+
+                {p.rationale && (
+                  <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50">
+                    <p className="text-[11px] text-indigo-700 leading-tight italic font-medium">
+                      <Sparkles className="h-3 w-3 inline-block mr-1 opacity-70" /> {p.rationale}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
                   {p.variables.map((v) => (
-                    <Badge key={v} variant="secondary" className="text-[10px] font-mono">{`{{${v}}}`}</Badge>
+                    <Badge key={v} variant="secondary" className="bg-white text-indigo-600 border border-indigo-100 text-[10px] font-bold tracking-tight rounded-lg px-2 py-0.5 shadow-sm">
+                      {`{{${v}}}`}
+                    </Badge>
                   ))}
                 </div>
               </div>
