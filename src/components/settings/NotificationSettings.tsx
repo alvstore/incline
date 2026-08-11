@@ -12,7 +12,7 @@ import { Mail, Bell, Save } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPreferences, upsertPreferences } from '@/services/notificationService';
+import { fetchPreferences, upsertPreferences, type NotificationPreferences } from '@/services/notificationService';
 import { toast } from 'sonner';
 
 export function NotificationSettings() {

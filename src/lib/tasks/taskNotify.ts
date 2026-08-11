@@ -117,7 +117,7 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
     // 2. Fetch profiles and preferences
     const [{ data: profiles }, { data: prefs }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, phone, email').in('id', managerIds),
-      supabase.from('user_notification_preferences').select('user_id, whatsapp_task_notifications').in('user_id', managerIds)
+      supabase.from('notification_preferences' as any).select('user_id, whatsapp_task_notifications').in('user_id', managerIds)
     ]);
 
     if (!profiles) return;
@@ -153,7 +153,7 @@ async function notifyManagementBroadly(notice: TaskAssignmentNotice): Promise<vo
 
     await Promise.all(
       profiles.map(async (p) => {
-        const pref = prefs?.find(pr => pr.user_id === p.id);
+        const pref = (prefs as any[])?.find(pr => pr.user_id === p.id);
         const whatsappEnabled = pref ? pref.whatsapp_task_notifications !== false : true;
 
         if (!whatsappEnabled || !p.phone) return;
