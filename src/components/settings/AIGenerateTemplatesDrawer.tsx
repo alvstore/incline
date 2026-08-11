@@ -270,18 +270,22 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            AI Template Generator
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0 border-0 bg-slate-50/50 backdrop-blur-3xl">
+        <SheetHeader className="p-8 bg-white border-b border-slate-100 shadow-sm">
+          <SheetTitle className="flex items-center gap-3 text-2xl font-black tracking-tight text-slate-900">
+            <div className="h-10 w-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <Sparkles className="h-6 w-6 text-white" />
+            </div>
+            AI Template Studio
           </SheetTitle>
-          <SheetDescription>
+          <SheetDescription className="text-slate-500 font-medium text-sm leading-relaxed max-w-md">
             {step === 'pick'
-              ? 'Pick a channel and the events you want polished, brand-safe templates for. The AI avoids duplicating existing ones.'
-              : `Review and edit each ${Meta.label} proposal, then save individually or in bulk.`}
+              ? 'Select system events to generate polished, brand-aligned communication templates. Our AI ensures DLT and Meta compliance.'
+              : `Review your generated ${Meta.label} templates. You can refine the content or header settings before batch-submitting to Meta.`}
           </SheetDescription>
         </SheetHeader>
+
+        <div className="px-8 pb-32">
 
         {step === 'pick' && (
           <div className="py-6 space-y-6">
