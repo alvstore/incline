@@ -14,9 +14,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
+import { ExpensesTable } from '@/components/finance/ExpensesTable';
+import { AdvancesTable } from '@/components/finance/AdvancesTable';
 import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
 import { can } from '@/lib/auth/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,6 +32,7 @@ import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPaymen
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption, reversalLabel } from '@/lib/payments/paymentDisplay';
+import type { ExpenseRow, ExpenseKind } from '@/services/expenseService';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
