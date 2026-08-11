@@ -618,12 +618,17 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
               ariaLabel="Select training day"
               activeIndex={activeIdx}
               onSelect={setActiveIdx}
+              onMove={moveDayContent}
               days={days.map((d) => ({
                 label: d.day,
                 meta: d.exercises.length ? `${d.exercises.length} exercises` : 'Rest / empty',
                 muted: d.exercises.length === 0,
               }))}
             />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Drag a day onto another to move that workout — day names stay put, only the session moves.
+            </p>
+
           </CardContent>
         </Card>
       </div>
