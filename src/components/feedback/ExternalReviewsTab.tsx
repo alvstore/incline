@@ -210,6 +210,30 @@ export default function ExternalReviewsTab() {
     },
   });
 
+  // Draft-only AI generation — writes into the editable box without touching
+  // the classification or the match evidence.
+  const [draftingId, setDraftingId] = useState<string | null>(null);
+  const draftWithAI = useMutation({
+    mutationFn: async ({ id, tone }: { id: string; tone?: string }) => {
+      const { data, error } = await supabase.functions.invoke('google-reviews-brain', {
+        body: { action: 'draft_reply', inbound_id: id, tone },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      if (!(data as any)?.draft) throw new Error('The AI did not return a reply — try again.');
+      return { id, draft: (data as any).draft as string };
+    },
+    onMutate: ({ id }) => setDraftingId(id),
+    onSettled: () => setDraftingId(null),
+    onSuccess: ({ id, draft }) => {
+      setDrafts((d) => ({ ...d, [id]: draft }));
+      toast.success('Draft ready — edit it before posting');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Could not draft the reply'),
+  });
+
+
   // Assisted reply — used while Business Profile posting access is pending.
   const markReplied = useMutation({
     mutationFn: async ({ id, text }: { id: string; text: string }) => {
