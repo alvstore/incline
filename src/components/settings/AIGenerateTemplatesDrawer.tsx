@@ -551,9 +551,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
               );
             })}
           </div>
-        </div>
         )}
-
       </div>
 
         <SheetFooter className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-6 z-50">
