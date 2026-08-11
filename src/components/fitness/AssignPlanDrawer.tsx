@@ -121,6 +121,8 @@ export function AssignPlanDrawer({ open, onOpenChange, plan, branchId }: AssignP
   // same plan doesn't send everyone to the same machine on the same day.
   const [autoStagger, setAutoStagger] = useState(true);
   const [manualOffset, setManualOffset] = useState(0);
+  const [showAllPreviews, setShowAllPreviews] = useState(false);
+
   const [rotationInterval, setRotationInterval] = useState(0);
   const [results, setResults] = useState<BulkAssignResult[] | null>(null);
   const queryClient = useQueryClient();
