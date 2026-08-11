@@ -25,6 +25,11 @@ export interface TemplateRow {
   meta_rejection_reason?: string | null;
   header_type?: 'none' | 'image' | 'document' | 'video' | null;
   attachment_source?: 'none' | 'static' | 'dynamic' | null;
+  live_meta_status?: string | null;
+  live_meta_category?: string | null;
+  live_meta_header_type?: string | null;
+  live_meta_stale?: boolean | null;
+  live_synced_at?: string | null;
 }
 
 export interface DeliveryStat {
@@ -90,15 +95,27 @@ export function TemplateTable({
   onPreview, onEdit, onDelete, onSubmitMeta, onCreate,
 }: Props) {
   const [search, setSearch] = useState('');
+  const [alignment, setAlignment] = useState<'all' | 'ready' | 'missing' | 'mismatch' | 'pending'>('all');
+
+  const alignmentState = (t: TemplateRow) => {
+    if (channel !== 'whatsapp') return 'ready';
+    if (!t.meta_template_name || !t.live_meta_status || t.live_meta_stale) return 'missing';
+    if (String(t.live_meta_status).toUpperCase() !== 'APPROVED') return 'pending';
+    if (t.header_type && t.live_meta_header_type && t.header_type !== t.live_meta_header_type) return 'mismatch';
+    return 'ready';
+  };
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return templates;
-    return templates.filter((t) =>
+    return templates.filter((t) => {
+      if (alignment !== 'all' && alignmentState(t) !== alignment) return false;
+      if (!q) return true;
+      return (
       [t.name, t.trigger, t.content, t.meta_template_name].some((v) =>
         String(v || '').toLowerCase().includes(q)),
-    );
-  }, [templates, search]);
+      );
+    });
+  }, [templates, search, alignment, channel]);
 
   if (isLoading) {
     return (
@@ -110,7 +127,8 @@ export function TemplateTable({
 
   return (
     <div className="space-y-3">
-      <div className="relative max-w-sm">
+      <div className="flex flex-wrap items-center gap-2">
+      <div className="relative max-w-sm flex-1 min-w-[240px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <label htmlFor={`tpl-search-${channel}`} className="sr-only">Search templates</label>
         <Input
@@ -120,6 +138,16 @@ export function TemplateTable({
           placeholder="Search by name, event or content"
           className="pl-9 rounded-xl"
         />
+      </div>
+        {channel === 'whatsapp' && (
+          <div className="flex flex-wrap gap-1">
+            {(['all', 'ready', 'missing', 'mismatch', 'pending'] as const).map((value) => (
+              <Button key={value} type="button" size="sm" variant={alignment === value ? 'default' : 'outline'} onClick={() => setAlignment(value)} className="h-9 rounded-full capitalize">
+                {value === 'missing' ? 'Missing / stale' : value}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -179,7 +207,10 @@ export function TemplateTable({
                       </TableCell>
                       {channel === 'whatsapp' && (
                         <TableCell className="hidden lg:table-cell">
-                          {metaStatusBadge(t.meta_template_status)}
+                          {metaStatusBadge(t.live_meta_status || t.meta_template_status)}
+                          <Badge variant="outline" className={`mt-1 rounded-full text-[10px] ${alignmentState(t) === 'ready' ? 'border-success/20 bg-success/10 text-success' : alignmentState(t) === 'pending' ? 'border-warning/20 bg-warning/10 text-warning' : 'border-destructive/20 bg-destructive/10 text-destructive'}`}>
+                            {alignmentState(t) === 'ready' ? 'Ready' : alignmentState(t) === 'missing' ? 'Missing / stale' : alignmentState(t) === 'mismatch' ? 'Header mismatch' : 'Pending / rejected'}
+                          </Badge>
                           {t.meta_template_name && (
                             <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate max-w-[160px]">
                               {t.meta_template_name}

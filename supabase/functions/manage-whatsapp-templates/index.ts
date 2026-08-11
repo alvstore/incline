@@ -269,13 +269,15 @@ serve(async (req) => {
       const liveIds = new Set<string>(templates.map((t: any) => t.id));
       let imported = 0;
       let updatedCount = 0;
+      let existingLocal: Array<{ id: string; meta_template_id: string | null }> = [];
 
       // Mark any locally cached row whose Meta ID is no longer returned as stale.
       try {
-        const { data: existingLocal } = await supabase
+        const { data } = await supabase
           .from("whatsapp_templates")
           .select("id, meta_template_id")
           .eq("waba_id", wabaId);
+        existingLocal = (data || []) as Array<{ id: string; meta_template_id: string | null }>;
         const staleIds = (existingLocal || [])
           .filter((r: any) => r.meta_template_id && !liveIds.has(r.meta_template_id))
           .map((r: any) => r.id);
