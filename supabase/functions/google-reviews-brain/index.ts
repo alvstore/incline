@@ -37,6 +37,8 @@ type Action =
   | "search_places"
   | "diagnose"
   | "classify"
+  | "draft_reply"
+  | "mark_replied_externally"
   | "reply"
   | "save_draft"
   | "request_member_review";
@@ -49,6 +51,8 @@ interface Body {
   inbound_id?: string;
   reply_text?: string;
   draft?: string;
+  /** draft_reply: warm | short | apologetic | professional */
+  tone?: string;
   // for request_member_review (legacy shim)
   feedback_id?: string;
   channel?: "whatsapp" | "sms" | "email" | "in_app";
