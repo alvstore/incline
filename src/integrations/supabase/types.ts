@@ -9064,6 +9064,7 @@ export type Database = {
           whatsapp_membership_reminders: boolean
           whatsapp_payment_receipts: boolean
           whatsapp_retention_nudges: boolean
+          whatsapp_task_notifications: boolean | null
         }
         Insert: {
           created_at?: string | null
@@ -9094,6 +9095,7 @@ export type Database = {
           whatsapp_membership_reminders?: boolean
           whatsapp_payment_receipts?: boolean
           whatsapp_retention_nudges?: boolean
+          whatsapp_task_notifications?: boolean | null
         }
         Update: {
           created_at?: string | null
@@ -9124,6 +9126,7 @@ export type Database = {
           whatsapp_membership_reminders?: boolean
           whatsapp_payment_receipts?: boolean
           whatsapp_retention_nudges?: boolean
+          whatsapp_task_notifications?: boolean | null
         }
         Relationships: []
       }

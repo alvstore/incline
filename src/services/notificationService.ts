@@ -87,7 +87,7 @@ export async function fetchPreferences(userId: string) {
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
-  return data as NotificationPreferences | null;
+  return data as any as NotificationPreferences | null;
 }
 
 export async function upsertPreferences(userId: string, preferences: Partial<NotificationPreferences>) {
