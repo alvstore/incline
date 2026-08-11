@@ -389,7 +389,12 @@ export default function ExternalReviewsTab() {
           {rows.map((r) => {
             const cb = CLASSIFICATION_BADGE[r.ai_classification] ?? CLASSIFICATION_BADGE.pending;
             const rb = REPLY_STATUS_BADGE[r.reply_status] ?? REPLY_STATUS_BADGE.draft;
-            const draftValue = drafts[r.id] ?? r.draft_reply ?? r.reply_text ?? r.ai_draft_reply ?? '';
+            // Precedence: local edits → saved staff draft → sent text → AI draft.
+            // Blank saved values must never mask a usable AI draft.
+            const firstFilled = (...v: (string | null | undefined)[]) =>
+              v.find((x) => typeof x === 'string' && x.trim().length > 0) ?? '';
+            const draftValue = drafts[r.id] ?? firstFilled(r.draft_reply, r.reply_text, r.ai_draft_reply);
+            const isDrafting = draftingId === r.id && draftWithAI.isPending;
             const Icon = cb.icon;
             return (
               <Card key={r.id} className="rounded-2xl shadow-lg shadow/50">
