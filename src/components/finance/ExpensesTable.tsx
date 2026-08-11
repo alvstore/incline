@@ -48,13 +48,13 @@ export function ExpensesTable({ branchId, search, dateRange, methodFilter, statu
     () => Array.from(new Set(expenses.flatMap((e) => [e.employee_user_id, e.submitted_by]).filter(Boolean) as string[])),
     [expenses],
   );
-  const { data: names = {} } = useActorNames(staffIds);
+  const { nameOf } = useActorNames(staffIds);
 
   const rows = useMemo(() => {
     return expenses.filter((e) => {
       if (search) {
         const s = search.toLowerCase();
-        const hay = [e.description, e.vendor, e.bill_number, e.category?.name, names[e.employee_user_id || '']]
+        const hay = [e.description, e.vendor, e.bill_number, e.category?.name, nameOf(e.employee_user_id)]
           .filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(s)) return false;
       }
@@ -66,7 +66,7 @@ export function ExpensesTable({ branchId, search, dateRange, methodFilter, statu
       }
       return true;
     });
-  }, [expenses, search, methodFilter, statusFilter, dateRange, names]);
+  }, [expenses, search, methodFilter, statusFilter, dateRange, nameOf]);
 
   const total = rows.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
@@ -106,7 +106,7 @@ export function ExpensesTable({ branchId, search, dateRange, methodFilter, statu
                       <span className="font-medium">{e.description}</span>
                       <span className="text-xs text-muted-foreground">
                         {[
-                          e.expense_type === 'salary_advance' ? names[e.employee_user_id || ''] || 'Staff' : e.vendor,
+                          e.expense_type === 'salary_advance' ? nameOf(e.employee_user_id) || 'Staff' : e.vendor,
                           e.category?.name,
                           e.bill_number ? `Bill ${e.bill_number}` : null,
                         ].filter(Boolean).join(' · ') || '—'}
