@@ -1,0 +1,2 @@
+DROP FUNCTION IF EXISTS public.purchase_member_membership(uuid,uuid,uuid,date,numeric,text,boolean,numeric,text,numeric,date,boolean,text,text,uuid,text,uuid);
+DROP FUNCTION IF EXISTS public.purchase_member_membership(uuid,uuid,uuid,date,numeric,text,text,numeric,text,boolean,numeric,date,boolean,uuid,text,uuid,text,text);
