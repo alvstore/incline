@@ -518,27 +518,39 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
           </div>
         )}
 
-        <SheetFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          {step === 'pick' ? (
-            <Button onClick={generate} disabled={generating || picked.size === 0}>
-              {generating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…</> : <><Sparkles className="h-4 w-4 mr-2" /> Generate {picked.size}</>}
+        <SheetFooter className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-6 z-50">
+          <div className="flex w-full items-center justify-between gap-4">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl text-slate-500 font-semibold px-6">
+              Cancel
             </Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => setStep('pick')}>
-                <AlertCircle className="h-4 w-4 mr-1" /> Re-pick
-              </Button>
-              <Button onClick={submitAll} disabled={proposals.length === 0 || !!submitting || !!bulk}>
-                {bulk ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting {bulk.done}/{bulk.total}…</>
+            {step === 'pick' ? (
+              <Button
+                onClick={generate}
+                disabled={generating || picked.size === 0}
+                className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 text-white font-bold h-12 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {generating ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Thinking...</>
                 ) : (
-                  <><Send className="h-4 w-4 mr-2" /> {channel === 'whatsapp' ? `Submit all ${proposals.length} to Meta` : `Save all ${proposals.length}`}</>
+                  <><Sparkles className="mr-2 h-5 w-5" /> Generate {picked.size} Templates</>
                 )}
               </Button>
-
-            </>
-          )}
+            ) : (
+              proposals.length > 0 && (
+                <Button
+                  onClick={submitAll}
+                  disabled={!!bulk}
+                  className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 text-white font-bold h-12 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {bulk ? (
+                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Submitting {bulk.done}/{bulk.total}...</>
+                  ) : (
+                    <><Send className="mr-2 h-5 w-5" /> Submit All ({proposals.length})</>
+                  )}
+                </Button>
+              )
+            )}
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>
