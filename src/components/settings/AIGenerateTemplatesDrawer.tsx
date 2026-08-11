@@ -66,6 +66,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
   const [generating, setGenerating] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  /** Per-proposal failure/warning text, keyed by proposal name. */
+  const [issues, setIssues] = useState<Record<string, { level: 'error' | 'warning'; message: string }>>({});
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+
 
   const { data: existing = [] } = useQuery({
     queryKey: ['ai-templates-existing', selectedBranch, channel],
