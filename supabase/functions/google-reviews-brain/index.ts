@@ -577,6 +577,7 @@ async function fetchPlacesReviewsForBranch(branch_id: string) {
   return {
     branch_id,
     fetched: upserted,
+    drafted: classified,
     source: "places",
     rating: j.rating ?? null,
     total_ratings: j.userRatingCount ?? null,
