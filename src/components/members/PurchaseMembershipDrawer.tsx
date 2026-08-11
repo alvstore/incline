@@ -672,16 +672,40 @@ export function PurchaseMembershipDrawer({
                               onChange={(e) => setAmountPaying(Number(e.target.value))}
                             />
                           </div>
-                          <div className="space-y-2">
-                            <Label>Due Date for Remaining *</Label>
-                            <Input
-                              type="date"
-                              value={paymentDueDate}
-                              min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
-                              onChange={(e) => setPaymentDueDate(e.target.value)}
-                            />
-                          </div>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="purchase-due-date">Due Date for Remaining *</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {DUE_DATE_PRESETS.map((preset) => {
+                              const value = format(addDays(new Date(), preset.days), 'yyyy-MM-dd');
+                              const active = value === paymentDueDate;
+                              return (
+                                <button
+                                  key={preset.days}
+                                  type="button"
+                                  onClick={() => setPaymentDueDate(value)}
+                                  aria-pressed={active}
+                                  className={`min-h-[44px] cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                                    active
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-muted dark:text-muted-foreground'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <Input
+                            id="purchase-due-date"
+                            type="date"
+                            value={paymentDueDate}
+                            min={format(addDays(new Date(), 1), 'yyyy-MM-dd')}
+                            onChange={(e) => setPaymentDueDate(e.target.value)}
+                          />
+                        </div>
+
 
                         <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
                           <div className="flex justify-between text-sm">
