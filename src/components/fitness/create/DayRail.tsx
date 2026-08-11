@@ -16,13 +16,16 @@ interface DayRailProps {
   ariaLabel?: string;
   /** Optional actions rendered at the top of the rail (desktop) / right (mobile) */
   action?: React.ReactNode;
+  /** Enables drag-and-drop; swaps the content of two days (labels stay fixed). */
+  onMove?: (from: number, to: number) => void;
 }
 
 /**
  * Day selector for the plan builders.
  * Vertical list on desktop, horizontal scroll-snap rail on mobile.
  */
-export function DayRail({ days, activeIndex, onSelect, ariaLabel = 'Select day', action }: DayRailProps) {
+export function DayRail({ days, activeIndex, onSelect, ariaLabel = 'Select day', action, onMove }: DayRailProps) {
+
   return (
     <div className="space-y-2">
       {action && <div className="flex justify-end lg:justify-start">{action}</div>}
