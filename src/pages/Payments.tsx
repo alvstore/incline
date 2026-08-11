@@ -14,9 +14,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
+import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
+import { ExpensesTable } from '@/components/finance/ExpensesTable';
+import { AdvancesTable } from '@/components/finance/AdvancesTable';
 import { PaymentEditDrawer } from '@/components/payments/PaymentEditDrawer';
 import { can } from '@/lib/auth/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -28,6 +32,7 @@ import { recordPayment as unifiedRecordPayment, voidPayment as unifiedVoidPaymen
 import { normalizePaymentMethod } from '@/lib/payments/normalizePaymentMethod';
 import { resolveMemberDisplay } from '@/lib/members/resolveMemberDisplay';
 import { gatewayDeduction, paymentChannelLabel, isReversedPayment, reversalCaption, reversalLabel } from '@/lib/payments/paymentDisplay';
+import type { ExpenseRow, ExpenseKind } from '@/services/expenseService';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -43,6 +48,9 @@ export default function PaymentsPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidingPayment, setVoidingPayment] = useState<any>(null);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [expenseDefaultType, setExpenseDefaultType] = useState<ExpenseKind>('general');
+  const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
   const [selectedMember, setSelectedMember] = useState<any>(null);
@@ -50,14 +58,18 @@ export default function PaymentsPage() {
   const [duesOpen, setDuesOpen] = useState(true);
   const canEditPayments = can.viewFinancials(roles as any) && (roles as any[])?.some((r: any) => ['owner','admin'].includes(typeof r === 'string' ? r : r?.role));
 
+  const openExpenseDrawer = (type: ExpenseKind) => { setExpenseDefaultType(type); setAddExpenseOpen(true); };
+
   useRealtimeInvalidate({
     channel: 'page-payments',
-    tables: ['payments', 'invoices', 'payment_transactions'],
+    tables: ['payments', 'invoices', 'payment_transactions', 'expenses'],
     invalidateKeys: [
       ['payments'],
       ['invoices'],
       ['all-overdue-invoices'],
       ['member-overdue-invoices'],
+      ['expenses-console'],
+      ['salary-advances'],
     ],
   });
 
@@ -179,6 +191,22 @@ export default function PaymentsPage() {
     },
   });
 
+  // Money-out feed — shares its cache key with <ExpensesTable /> so both stay in sync.
+  const { data: expenses = [] } = useQuery({
+    queryKey: ['expenses-console', branchFilter],
+    queryFn: async () => {
+      let query = supabase
+        .from('expenses')
+        .select('*, category:expense_categories(name)')
+        .order('expense_date', { ascending: false })
+        .limit(300);
+      if (branchFilter) query = query.eq('branch_id', branchFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as ExpenseRow[];
+    },
+  });
+
   const voidPaymentMutation = useMutation({
     mutationFn: async ({ paymentId, reason }: { paymentId: string; reason: string }) => {
       await unifiedVoidPayment(paymentId, reason);
@@ -224,6 +252,43 @@ export default function PaymentsPage() {
   const pendingTotal = countable.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + p.amount, 0);
   const reversedTotal = filteredPayments.filter((p: any) => isReversedPayment(p)).reduce((sum: number, p: any) => sum + p.amount, 0);
 
+  // Money out — same filter bar, applied to expenses
+  const filteredExpenses = useMemo(() => {
+    return (expenses as ExpenseRow[]).filter((e) => {
+      if (searchTerm) {
+        const hay = [e.description, e.vendor, e.bill_number, e.category?.name].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(searchTerm.toLowerCase())) return false;
+      }
+      if (methodFilter !== 'all' && e.payment_method !== methodFilter) return false;
+      if (dateRange?.from && dateRange?.to) {
+        const d = new Date(e.expense_date);
+        if (d < dateRange.from || d > dateRange.to) return false;
+      }
+      return true;
+    });
+  }, [expenses, searchTerm, methodFilter, dateRange]);
+
+  const moneyOut = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const todayOut = filteredExpenses
+    .filter((e) => new Date(e.expense_date).toDateString() === new Date().toDateString())
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const netMovement = monthTotal - moneyOut;
+  const unpaidBills = filteredExpenses.filter((e) => e.expense_type === 'vendor_bill' && !e.is_paid);
+
+  const collectionsByMode = useMemo(() => {
+    const map = new Map<string, number>();
+    countable.forEach((p: any) => map.set(p.payment_method, (map.get(p.payment_method) || 0) + Number(p.amount || 0)));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [countable]);
+
+  const spendByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredExpenses.forEach((e) => {
+      const key = e.category?.name || 'Uncategorised';
+      map.set(key, (map.get(key) || 0) + Number(e.amount || 0));
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [filteredExpenses]);
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = { cash: 'bg-success/10 text-success', card: 'bg-info/10 text-info', upi: 'bg-primary/10 text-primary', wallet: 'bg-warning/10 text-warning', bank_transfer: 'bg-info/10 text-info', online: 'bg-primary/10 text-primary' };
@@ -236,19 +301,36 @@ export default function PaymentsPage() {
   const clearFilters = () => { setSearchTerm(''); setMethodFilter('all'); setStatusFilter('all'); setDateRange(undefined); };
   const hasActiveFilters = searchTerm || methodFilter !== 'all' || statusFilter !== 'all' || dateRange;
 
-  const exportToCSV = () => {
-    const headers = ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'];
-    const rows = filteredPayments.map((p: any) => {
-      const d = resolveMemberDisplay(p.members);
-      const inv = p.invoices?.invoice_number || '-';
-      const displayName = d.code ? `${d.name} (${d.code})${inv !== '-' ? ' · ' + inv : ''}` : d.name;
-      return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
-    });
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const downloadCsv = (headers: string[], rows: (string | number)[][], name: string) => {
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `payments-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `${name}-${format(new Date(), 'yyyy-MM-dd')}.csv`; a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const exportToCSV = () => {
+    if (activeTab === 'expenses') {
+      downloadCsv(
+        ['Date', 'Description', 'Type', 'Vendor', 'Category', 'Amount', 'Mode', 'Reference', 'Bill No', 'Status'],
+        filteredExpenses.map((e) => [
+          format(new Date(e.expense_date), 'dd/MM/yyyy'), e.description, e.expense_type, e.vendor || '',
+          e.category?.name || '', e.amount, e.payment_method || '', e.payment_reference || '', e.bill_number || '', e.status,
+        ]),
+        'expenses',
+      );
+      return;
+    }
+    downloadCsv(
+      ['Date', 'Member', 'Amount', 'Method', 'Status', 'Invoice'],
+      filteredPayments.map((p: any) => {
+        const d = resolveMemberDisplay(p.members);
+        const inv = p.invoices?.invoice_number || '-';
+        const displayName = d.code ? `${d.name} (${d.code})` : d.name;
+        return [format(new Date(p.payment_date), 'dd/MM/yyyy HH:mm'), displayName, p.amount, p.payment_method, p.status, inv];
+      }),
+      'payments',
+    );
   };
 
   const openVoidDialog = (payment: any) => {
@@ -280,113 +362,30 @@ export default function PaymentsPage() {
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-success to-success text-primary-foreground">
                 <CreditCard className="h-6 w-6" />
               </div>
-              Payments
+              Money Movement
             </h1>
-            <p className="text-muted-foreground mt-1">Track and manage all payment transactions</p>
+            <p className="text-muted-foreground mt-1">Collections, expenses, salary advances and outstanding dues in one console</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild className="rounded-xl"><Link to="/integrations/webhooks"><Activity className="h-4 w-4 mr-2" />Webhook Activity</Link></Button>
-            <Button variant="outline" size="sm" onClick={() => setAddExpenseOpen(true)} className="rounded-xl"><Receipt className="h-4 w-4 mr-2" />Add Expense</Button>
+            <Button variant="outline" size="sm" onClick={() => openExpenseDrawer('salary_advance')} className="rounded-xl"><HandCoins className="h-4 w-4 mr-2" />Pay Advance</Button>
+            <Button variant="outline" size="sm" onClick={() => openExpenseDrawer('general')} className="rounded-xl"><Receipt className="h-4 w-4 mr-2" />Add Expense</Button>
             <Button size="sm" onClick={() => setRecordPaymentOpen(true)} className="rounded-xl shadow-lg shadow-primary/20"><CreditCard className="h-4 w-4 mr-2" />Record Payment</Button>
             <Button variant="outline" size="sm" onClick={exportToCSV} className="rounded-xl"><Download className="h-4 w-4 mr-2" />Export</Button>
           </div>
         </div>
 
-        {/* Dues Collection Card */}
-        {overdueInvoices.length > 0 && (
-          <Collapsible open={duesOpen} onOpenChange={setDuesOpen}>
-            <Card className="rounded-2xl border-warning/30 bg-warning/5">
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-warning/10 transition-colors rounded-t-2xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-warning/20">
-                        <AlertTriangle className="h-5 w-5 text-warning" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Dues Collection</CardTitle>
-                        <p className="text-sm text-muted-foreground">{overdueInvoices.length} pending invoices • Total: ₹{totalDues.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${duesOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-0">
-                  <div className="max-h-[300px] overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Member</TableHead>
-                          <TableHead>Invoices</TableHead>
-                          <TableHead>Total Due</TableHead>
-                          <TableHead>Earliest Due Date</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(() => {
-                          // Group invoices by member so a single member with multiple
-                          // pending invoices shows up as one row, not five.
-                          const grouped = new Map<string, { name: string; code: string; invoices: any[]; total: number; earliest: Date | null }>();
-                          for (const inv of overdueInvoices as any[]) {
-                            const key = inv.member_id || inv.id;
-                            const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
-                            const existing = grouped.get(key) || {
-                              name: resolveMemberDisplay(inv.members).name,
-                              code: inv.members?.member_code || '',
-                              invoices: [],
-                              total: 0,
-                              earliest: null,
-                            };
-                            existing.invoices.push(inv);
-                            existing.total += due;
-                            const dueDate = inv.due_date ? new Date(inv.due_date) : null;
-                            if (dueDate && (!existing.earliest || dueDate < existing.earliest)) {
-                              existing.earliest = dueDate;
-                            }
-                            grouped.set(key, existing);
-                          }
-                          return Array.from(grouped.entries()).map(([key, g]) => {
-                            const isOverdue = g.earliest && g.earliest < new Date();
-                            return (
-                              <TableRow key={key}>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-medium">{g.name}</p>
-                                    <p className="text-xs text-muted-foreground">{g.code}</p>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary" className="rounded-full">
-                                    {g.invoices.length} invoice{g.invoices.length > 1 ? 's' : ''}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="font-semibold text-destructive">₹{g.total.toLocaleString()}</TableCell>
-                                <TableCell>
-                                  {g.earliest ? (
-                                    <span className={isOverdue ? 'text-destructive font-medium' : ''}>
-                                      {format(g.earliest, 'dd MMM')}
-                                    </span>
-                                  ) : '-'}
-                                </TableCell>
-                                <TableCell>
-                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleCollectFromDues(g.invoices[0])}>
-                                    <CreditCard className="h-3 w-3" />Collect
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          });
-                        })()}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+        {/* Money in / out / net — always visible, reflects the active filters */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <StatCard title="Money In (filtered)" value={`₹${monthTotal.toLocaleString('en-IN')}`} icon={ArrowUpRight} variant="success" />
+          <StatCard title="Money Out (filtered)" value={`₹${moneyOut.toLocaleString('en-IN')}`} icon={ArrowDownRight} variant="accent" />
+          <StatCard title="Net Movement" value={`₹${netMovement.toLocaleString('en-IN')}`} icon={Scale} variant={netMovement >= 0 ? 'default' : 'info'} />
+          <StatCard title="Outstanding Dues" value={`₹${totalDues.toLocaleString('en-IN')}`} icon={AlertTriangle} variant="info" />
+        </div>
+        {reversedTotal > 0 && (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Excludes ₹{reversedTotal.toLocaleString('en-IN')} in reversed entries (voided or refunded), which stay listed for audit.
+          </p>
         )}
 
         <Card className="rounded-2xl border-border/50 shadow-lg shadow/50">
@@ -398,7 +397,7 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
-              <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search member, code, or invoice..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 rounded-xl" /></div>
+              <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search member, code, invoice, vendor or bill..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 rounded-xl" /></div>
               <DateRangeFilter onChange={(range) => setDateRange(range || undefined)} />
               <Select value={methodFilter} onValueChange={setMethodFilter}><SelectTrigger className="w-[150px] rounded-xl"><SelectValue placeholder="Method" /></SelectTrigger><SelectContent><SelectItem value="all">All Methods</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="card">Card</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="wallet">Wallet</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="online">Online</SelectItem></SelectContent></Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[150px] rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="failed">Failed</SelectItem><SelectItem value="refunded">Refunded</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent></Select>
@@ -406,20 +405,176 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <StatCard title="Today's Collection" value={`₹${todayTotal.toLocaleString()}`} icon={CreditCard} variant="accent" />
-          <StatCard title="Filtered Total (net)" value={`₹${monthTotal.toLocaleString()}`} icon={TrendingUp} variant="success" />
-          <StatCard title="Completed" value={`₹${completedTotal.toLocaleString()}`} icon={Receipt} variant="default" />
-          <StatCard title="Pending" value={`₹${pendingTotal.toLocaleString()}`} icon={Wallet} variant="info" />
-        </div>
-        {reversedTotal > 0 && (
-          <p className="-mt-2 text-xs text-muted-foreground">
-            Excludes ₹{reversedTotal.toLocaleString('en-IN')} in reversed entries (voided or refunded), which stay listed for audit.
-          </p>
-        )}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="rounded-xl">
+            <TabsTrigger value="overview" className="rounded-lg"><LayoutDashboard className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
+            <TabsTrigger value="income" className="rounded-lg"><ArrowUpRight className="h-4 w-4 mr-1.5" />Income</TabsTrigger>
+            <TabsTrigger value="expenses" className="rounded-lg"><Receipt className="h-4 w-4 mr-1.5" />Expenses</TabsTrigger>
+            <TabsTrigger value="advances" className="rounded-lg"><HandCoins className="h-4 w-4 mr-1.5" />Advances</TabsTrigger>
+            <TabsTrigger value="dues" className="rounded-lg"><AlertTriangle className="h-4 w-4 mr-1.5" />Dues{overdueInvoices.length > 0 && <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 text-[10px] font-semibold text-warning">{overdueInvoices.length}</span>}</TabsTrigger>
+          </TabsList>
 
+          {/* ── Overview ─────────────────────────────────────────── */}
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="rounded-2xl border-border/50 shadow-lg">
+                <CardHeader className="pb-3"><CardTitle className="text-base">Collected today · ₹{todayTotal.toLocaleString('en-IN')}</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {collectionsByMode.length === 0 && <p className="text-sm text-muted-foreground">No collections in this range.</p>}
+                  {collectionsByMode.map(([mode, amt]) => (
+                    <div key={mode} className="flex items-center justify-between">
+                      <Badge className={getMethodColor(mode)}>{mode.replace('_', ' ')}</Badge>
+                      <span className="font-semibold">₹{amt.toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 border-t text-sm text-muted-foreground flex justify-between">
+                    <span>Pending / uncleared</span><span>₹{pendingTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                </CardContent>
+              </Card>
 
+              <Card className="rounded-2xl border-border/50 shadow-lg">
+                <CardHeader className="pb-3"><CardTitle className="text-base">Spent today · ₹{todayOut.toLocaleString('en-IN')}</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {spendByCategory.length === 0 && <p className="text-sm text-muted-foreground">No expenses in this range.</p>}
+                  {spendByCategory.map(([cat, amt]) => (
+                    <div key={cat} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{cat}</span>
+                      <span className="font-semibold">₹{amt.toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                  {unpaidBills.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('expenses')}
+                      className="w-full mt-2 flex items-center justify-between rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span>{unpaidBills.length} vendor bill{unpaidBills.length > 1 ? 's' : ''} unpaid</span>
+                      <span className="font-semibold">₹{unpaidBills.reduce((s, b) => s + Number(b.amount || 0), 0).toLocaleString('en-IN')}</span>
+                    </button>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ── Expenses ─────────────────────────────────────────── */}
+          <TabsContent value="expenses">
+            <ExpensesTable
+              branchId={branchFilter}
+              search={searchTerm}
+              dateRange={dateRange}
+              methodFilter={methodFilter}
+              statusFilter={statusFilter}
+              canEdit={canEditPayments}
+              onEdit={(e) => setEditingExpense(e)}
+            />
+          </TabsContent>
+
+          {/* ── Advances ─────────────────────────────────────────── */}
+          <TabsContent value="advances">
+            <AdvancesTable branchId={branchFilter} search={searchTerm} />
+          </TabsContent>
+
+          {/* ── Dues ─────────────────────────────────────────────── */}
+          <TabsContent value="dues">
+            <Card className="rounded-2xl border-warning/30 bg-warning/5">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-warning/20">
+                    <AlertTriangle className="h-5 w-5 text-warning" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Dues Collection</CardTitle>
+                    <p className="text-sm text-muted-foreground">{overdueInvoices.length} pending invoices • Total: ₹{totalDues.toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="max-h-[520px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Member</TableHead>
+                        <TableHead>Invoices</TableHead>
+                        <TableHead>Total Due</TableHead>
+                        <TableHead>Earliest Due Date</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        // Group invoices by member so a single member with multiple
+                        // pending invoices shows up as one row, not five.
+                        const grouped = new Map<string, { name: string; code: string; invoices: any[]; total: number; earliest: Date | null }>();
+                        for (const inv of overdueInvoices as any[]) {
+                          const key = inv.member_id || inv.id;
+                          const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
+                          const existing = grouped.get(key) || {
+                            name: resolveMemberDisplay(inv.members).name,
+                            code: inv.members?.member_code || '',
+                            invoices: [],
+                            total: 0,
+                            earliest: null,
+                          };
+                          existing.invoices.push(inv);
+                          existing.total += due;
+                          const dueDate = inv.due_date ? new Date(inv.due_date) : null;
+                          if (dueDate && (!existing.earliest || dueDate < existing.earliest)) {
+                            existing.earliest = dueDate;
+                          }
+                          grouped.set(key, existing);
+                        }
+                        return Array.from(grouped.entries()).map(([key, g]) => {
+                          const isOverdue = g.earliest && g.earliest < new Date();
+                          return (
+                            <TableRow key={key}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{g.name}</p>
+                                  <p className="text-xs text-muted-foreground">{g.code}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="rounded-full">
+                                  {g.invoices.length} invoice{g.invoices.length > 1 ? 's' : ''}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-semibold text-destructive">₹{g.total.toLocaleString('en-IN')}</TableCell>
+                              <TableCell>
+                                {g.earliest ? (
+                                  <span className={isOverdue ? 'text-destructive font-medium' : ''}>
+                                    {format(g.earliest, 'dd MMM')}
+                                  </span>
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleCollectFromDues(g.invoices[0])}>
+                                  <CreditCard className="h-3 w-3" />Collect
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+                      })()}
+                      {overdueInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
+                            No outstanding dues. Everything is collected.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Income ───────────────────────────────────────────── */}
+          <TabsContent value="income">
         <Card className="rounded-2xl border-border/50 shadow-lg">
+
           <CardHeader><CardTitle>{hasActiveFilters ? `Filtered Payments (${filteredPayments.length})` : `Recent Payments (${payments.length})`}</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (<TableSkeleton rows={8} columns={isAdminOrOwner ? 7 : 6} />) : (
@@ -511,7 +666,10 @@ export default function PaymentsPage() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
+
 
       {/* Edit / Void Payment — side drawer (no center dialogs for forms) */}
       <PaymentEditDrawer
@@ -646,8 +804,23 @@ export default function PaymentsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Add Expense Drawer */}
-      {branchFilter && <AddExpenseDrawer open={addExpenseOpen} onOpenChange={setAddExpenseOpen} branchId={branchFilter} />}
+      {/* Add Expense / Pay Advance Drawer */}
+      {branchFilter && (
+        <AddExpenseDrawer
+          open={addExpenseOpen}
+          onOpenChange={setAddExpenseOpen}
+          branchId={branchFilter}
+          defaultType={expenseDefaultType}
+        />
+      )}
+
+      {/* Edit Expense — owner/admin correction with mandatory reason */}
+      <EditExpenseDrawer
+        open={!!editingExpense}
+        onOpenChange={(o) => { if (!o) setEditingExpense(null); }}
+        expense={editingExpense}
+      />
+
     </AppLayout>
   );
 }

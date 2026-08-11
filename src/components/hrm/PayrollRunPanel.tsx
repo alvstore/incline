@@ -12,7 +12,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil } from 'lucide-react';
+import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
+import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins } from 'lucide-react';
 
 type Status = 'draft' | 'reviewed' | 'approved' | 'processed' | 'paid';
 
@@ -117,17 +118,38 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Pending salary advance for the staff member being adjusted — so payroll
+  // can recover it in this run instead of tracking it on paper.
+  const { data: pendingAdvance = 0 } = useQuery({
+    queryKey: ['pending-advance', adjustItem?.user_id],
+    queryFn: () => pendingAdvanceForUser(adjustItem.user_id),
+    enabled: !!adjustItem?.user_id,
+  });
+
   const payMut = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.rpc('payroll_mark_paid', {
         p_item_ids: selectedIds, p_method: payMethod, p_reference: payRef || null,
       });
       if (error) throw error;
+
+      // Close out the advance ledger for every staff member whose payslip
+      // deducted an advance in this batch.
+      const paidItems = items.filter((i: any) => selectedIds.includes(i.id) && Number(i.final_advance) > 0);
+      for (const item of paidItems) {
+        try {
+          await applyAdvanceRecovery(item.user_id, Number(item.final_advance));
+        } catch (e) {
+          console.warn('[payroll] advance recovery failed', item.user_id, e);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Marked paid');
       setSelectedIds([]); setPayOpen(false); setPayRef('');
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
+      qc.invalidateQueries({ queryKey: ['salary-advances'] });
+      qc.invalidateQueries({ queryKey: ['pending-advance'] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -279,6 +301,23 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
           </DialogHeader>
           {adjustItem && (
             <div className="grid grid-cols-2 gap-3">
+              {pendingAdvance > 0 && (
+                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-warning/10 px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm text-warning">
+                    <HandCoins className="h-4 w-4" />
+                    <span>Outstanding salary advance: <strong>₹{pendingAdvance.toLocaleString('en-IN')}</strong></span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => setAdjustItem({ ...adjustItem, final_advance: pendingAdvance })}
+                  >
+                    Recover in this run
+                  </Button>
+                </div>
+              )}
               {[
                 ['final_base', 'Base'],
                 ['final_pt_commission', 'PT Commission'],
