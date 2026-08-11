@@ -12251,10 +12251,14 @@ export type Database = {
           created_at: string
           description: string | null
           due_date: string | null
+          due_time: string | null
           id: string
           linked_entity_id: string | null
           linked_entity_type: string | null
+          member_created: boolean | null
           priority: Database["public"]["Enums"]["task_priority"]
+          sla_hours: number | null
+          started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -12267,10 +12271,14 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          due_time?: string | null
           id?: string
           linked_entity_id?: string | null
           linked_entity_type?: string | null
+          member_created?: boolean | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          sla_hours?: number | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
@@ -12283,10 +12291,14 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          due_time?: string | null
           id?: string
           linked_entity_id?: string | null
           linked_entity_type?: string | null
+          member_created?: boolean | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          sla_hours?: number | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string
