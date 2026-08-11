@@ -666,6 +666,27 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 cursor-pointer gap-1">
+                      <ArrowRightLeft className="h-3.5 w-3.5" /> Move day
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {days.map((d, i) =>
+                      i === activeIdx ? null : (
+                        <DropdownMenuItem key={`mv-${d.day}-${i}`} onClick={() => moveDayContent(activeIdx, i)}>
+                          Move to {d.day}
+                          {d.exercises.length > 0 && (
+                            <span className="ml-2 text-[11px] text-muted-foreground">swap</span>
+                          )}
+                        </DropdownMenuItem>
+                      ),
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button
                   variant="ghost"
                   size="sm"
