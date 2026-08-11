@@ -20,6 +20,7 @@ export function MetaSyncControls() {
   const [isTesting, setIsTesting] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [lastCount, setLastCount] = useState<number | null>(null);
+  const [lastSummary, setLastSummary] = useState<{ imported: number; updated: number; stale: number } | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
   const { data: integrations = [] } = useQuery({
@@ -98,10 +99,20 @@ export function MetaSyncControls() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const count = data?.templates?.length || 0;
+      const summary = data?.reconciliation;
       setLastCount(count);
+      setLastSummary(summary ? {
+        imported: Number(summary.imported) || 0,
+        updated: Number(summary.updated) || 0,
+        stale: Number(summary.stale) || 0,
+      } : null);
       setLastSynced(new Date().toLocaleTimeString());
-      toast.success(`Synced ${count} template(s) from Meta`);
+      toast.success(summary
+        ? `Reconciled ${count}: ${summary.imported} imported, ${summary.updated} updated, ${summary.stale} stale`
+        : `Synced ${count} template(s) from Meta`);
       queryClient.invalidateQueries({ queryKey: ['communication-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['template-coverage'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates-stale'] });
     } catch (err: any) {
       setLastError(err.message);
       toast.error(err.message || 'Sync failed');
@@ -202,6 +213,13 @@ export function MetaSyncControls() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Registered with Meta</span>
               <span className="font-medium">{lastCount}</span>
+            </div>
+          )}
+          {lastSummary && (
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2 text-center">
+              <div><div className="font-semibold">{lastSummary.imported}</div><div className="text-[10px] text-muted-foreground">Imported</div></div>
+              <div><div className="font-semibold">{lastSummary.updated}</div><div className="text-[10px] text-muted-foreground">Updated</div></div>
+              <div><div className="font-semibold text-warning">{lastSummary.stale}</div><div className="text-[10px] text-muted-foreground">Stale</div></div>
             </div>
           )}
           {lastError && (

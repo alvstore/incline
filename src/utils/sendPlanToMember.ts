@@ -15,6 +15,7 @@ import { buildPlanPdf } from './pdfBlob';
 import { uploadAttachment } from './uploadAttachment';
 import { dispatchCommunication } from '@/services/preferencesService';
 import { findTemplate } from '@/lib/templates/dynamicAttachment';
+import { buildDedupeKey } from '@/lib/comms/dispatch';
 
 export type PlanSendChannel = 'download' | 'whatsapp' | 'email';
 
@@ -33,6 +34,7 @@ export interface PlanSendInput {
     valid_from?: string | null;
     valid_until?: string | null;
     trainer_name?: string | null;
+    schedule_offset_days?: number;
   };
   branchId?: string | null;
   channels: PlanSendChannel[];
@@ -62,15 +64,24 @@ function normalisePhone(input: string): string {
 
 export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendResult> {
   const channels: PlanSendResult['channels'] = {};
+  const memberName = input.member.full_name.trim() || 'Member';
+  const planName = input.plan.name.trim() || `${input.plan.type === 'workout' ? 'Workout' : 'Diet'} plan`;
+  let branchName = 'The Incline';
+  if (input.branchId) {
+    const { data: branch } = await supabase.from('branches').select('name').eq('id', input.branchId).maybeSingle();
+    if (branch?.name) branchName = branch.name;
+  }
 
   // 1. Always build the PDF (cheap, all paths need it).
   const pdfBlob = await buildPlanPdf({
     name: input.plan.name,
     type: input.plan.type,
     description: input.plan.description ?? undefined,
-    member_name: input.member.full_name,
+    member_name: memberName,
     trainer_name: input.plan.trainer_name ?? undefined,
     branch_id: input.branchId ?? undefined,
+    branch_name: branchName,
+    schedule_offset_days: input.plan.schedule_offset_days ?? 0,
     data: input.plan.data,
   });
   const filename = safeFilename(input.plan);
@@ -131,15 +142,17 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
           preferAttachment: true,
         });
         const hasDocHeader = (template?.header_type || 'none') === 'document';
-        const attachCaption = `Hi ${input.member.full_name}, your ${input.plan.type} plan "${input.plan.name}" is attached as a PDF.`;
-        const linkCaption = `Hi ${input.member.full_name}, here is your new ${input.plan.type} plan: ${input.plan.name}\n\nDownload: ${pdfUrl}`;
+        const attachCaption = `Hi ${memberName}, your ${input.plan.type} plan "${planName}" is attached as a PDF.`;
+        const linkCaption = `Hi ${memberName}, here is your new ${input.plan.type} plan: ${planName}\n\nDownload: ${pdfUrl}`;
         const baseVars = {
-          member_name: input.member.full_name,
-          plan_name: input.plan.name,
-          plan_title: input.plan.name, // alias for legacy templates
+          member_name: memberName,
+          plan_name: planName,
+          plan_title: planName, // alias for legacy templates
           plan_type: input.plan.type,
           trainer_name: input.plan.trainer_name || 'your trainer',
           valid_until: input.plan.valid_until || '',
+          branch_name: branchName,
+          event_key: triggerEvent,
         };
 
         const send = async (opts: { templateId?: string; caption: string; link?: boolean }) =>
@@ -154,7 +167,7 @@ export async function sendPlanToMember(input: PlanSendInput): Promise<PlanSendRe
               body: opts.caption,
               variables: { ...baseVars, ...(opts.link ? { document_link: pdfUrl } : {}) },
             },
-            dedupe_key: `plan:${input.member.id}:${input.plan.type}:${input.plan.name}:${Date.now()}`,
+            dedupe_key: buildDedupeKey(['plan', input.member.id, input.plan.type, planName, input.plan.valid_from || 'current', opts.link ? 'link' : 'document']),
             force: true,
             attachment: { url: pdfUrl, filename, content_type: 'application/pdf', kind: 'document' },
           });

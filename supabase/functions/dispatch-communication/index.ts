@@ -803,7 +803,7 @@ Deno.serve(async (req) => {
             if (events.length === 0) return null;
             const { data: rows } = await supabase
               .from('templates')
-              .select('id, branch_id, header_type, meta_template_status, meta_template_name')
+              .select('id, branch_id, header_type, meta_template_status, meta_template_name, content, variables, updated_at')
               .in('trigger_event', events)
               .eq('type', 'whatsapp')
               .not('meta_template_name', 'is', null)
@@ -815,31 +815,45 @@ Deno.serve(async (req) => {
 
             // Resolve live Meta categories so we can avoid MARKETING.
             const names = list.map((r: any) => r.meta_template_name).filter(Boolean);
-            const catByName = new Map<string, string>();
+            const liveByName = new Map<string, any>();
             if (names.length > 0) {
               const { data: wtRows } = await supabase
                 .from('whatsapp_templates')
-                .select('name, category, status, is_stale')
+                .select('name, category, status, is_stale, components, synced_at')
                 .in('name', names);
               for (const w of wtRows ?? []) {
                 if (String((w as any).status || '').toUpperCase() !== 'APPROVED') continue;
                 if ((w as any).is_stale) continue;
-                catByName.set((w as any).name, String((w as any).category || '').toUpperCase());
+                liveByName.set((w as any).name, w);
               }
             }
 
             const wantsDoc = !!input.attachment?.url;
+            const availableValues = (input.payload.variables ?? {}) as Record<string, unknown>;
+            const eligible = list.filter((r: any) => {
+              const live = liveByName.get(r.meta_template_name);
+              if (!live) return false;
+              const keys = orderedTemplateKeys(r.content ?? input.payload.body, r.variables);
+              return requiredKeysMissing(keys, availableValues).length === 0;
+            });
             const score = (r: any) => {
-              const cat = catByName.get(r.meta_template_name) ?? '';
+              const live = liveByName.get(r.meta_template_name);
+              const cat = String(live?.category || '').toUpperCase();
+              const liveHeader = (live?.components || []).find((c: any) => String(c?.type || '').toUpperCase() === 'HEADER');
+              const isDocument = String(liveHeader?.format || '').toUpperCase() === 'DOCUMENT';
               return (
                 (r.branch_id ? 2 : 0) +
-                (wantsDoc && String(r.header_type || '') === 'document' ? 8 : 0) +
+                (wantsDoc && isDocument ? 8 : 0) +
                 (cat === 'MARKETING' ? -6 : 0) +
                 (cat === 'UTILITY' ? 3 : 0)
               );
             };
-            list.sort((a: any, b: any) => score(b) - score(a));
-            return list[0];
+            eligible.sort((a: any, b: any) =>
+              score(b) - score(a) ||
+              String(b.updated_at || '').localeCompare(String(a.updated_at || '')) ||
+              String(a.id).localeCompare(String(b.id)),
+            );
+            return eligible[0] ?? null;
           };
 
 

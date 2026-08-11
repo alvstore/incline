@@ -55,6 +55,59 @@ export function shiftWeekday(index: number, offset: number): number {
   return (index + normalizeOffset(offset)) % 7;
 }
 
+/**
+ * Shift a workout day while preserving the authored Sunday contract. Plans
+ * without an explicit Sunday workout rotate across Monday–Saturday only;
+ * authored seven-day plans rotate across all seven days.
+ */
+export function shiftWorkoutWeekday(index: number, offset: number, includesSunday: boolean): number {
+  const normalized = normalizeOffset(offset);
+  if (includesSunday) return shiftWeekday(index, normalized);
+  if (index === 0) return 0;
+  return ((index - 1 + normalized) % 6) + 1;
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+function rawWeekdayIndex(day: unknown): number | null {
+  const row = day as { day?: unknown; name?: unknown; title?: unknown } | null;
+  const label = String(row?.day ?? row?.name ?? row?.title ?? '').toLowerCase();
+  const index = DAY_NAMES.findIndex((name) => label.includes(name.toLowerCase()) || label.includes(name.slice(0, 3).toLowerCase()));
+  return index >= 0 ? index : null;
+}
+
+function shiftDayRows(days: unknown[], offset: number): unknown[] {
+  const includesSunday = days.some((day) => rawWeekdayIndex(day) === 0);
+  return days
+    .map((day) => {
+      const index = rawWeekdayIndex(day);
+      if (index === null || typeof day !== 'object' || day === null) return day;
+      const shifted = shiftWorkoutWeekday(index, offset, includesSunday);
+      const row = day as Record<string, unknown>;
+      const labelKey = row.day !== undefined ? 'day' : row.name !== undefined ? 'name' : 'title';
+      return { ...row, [labelKey]: DAY_NAMES[shifted], original_day: DAY_NAMES[index] };
+    })
+    .sort((a, b) => (rawWeekdayIndex(a) ?? 99) - (rawWeekdayIndex(b) ?? 99));
+}
+
+/** Move complete workout-day blocks without changing their exercise content. */
+export function shiftWorkoutPlanDays(planData: unknown, offset: number): unknown {
+  const normalized = normalizeOffset(offset);
+  if (normalized === 0 || typeof planData !== 'object' || planData === null) return planData;
+  const plan = planData as Record<string, unknown>;
+  if (Array.isArray(plan.weeks)) {
+    return {
+      ...plan,
+      weeks: plan.weeks.map((week) => {
+        if (typeof week !== 'object' || week === null) return week;
+        const row = week as Record<string, unknown>;
+        return { ...row, days: Array.isArray(row.days) ? shiftDayRows(row.days, normalized) : row.days };
+      }),
+    };
+  }
+  return Array.isArray(plan.days) ? { ...plan, days: shiftDayRows(plan.days, normalized) } : planData;
+}
+
 /** "No shift" / "+2 days (Mon → Wed)" — plain-language offset description. */
 export function describeOffset(offset: number): string {
   const o = normalizeOffset(offset);
