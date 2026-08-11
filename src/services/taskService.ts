@@ -116,6 +116,9 @@ export async function createTask(task: {
   description?: string;
   priority?: TaskPriority;
   dueDate?: string;
+  dueTime?: string;
+  slaHours?: number;
+  memberCreated?: boolean;
   assignedTo?: string;
   assignedBy?: string;
   linkedEntityType?: LinkedEntityType;
@@ -130,6 +133,9 @@ export async function createTask(task: {
       priority: task.priority || 'medium',
       status: 'pending',
       due_date: task.dueDate,
+      due_time: task.dueTime,
+      sla_hours: task.slaHours || 24,
+      member_created: task.memberCreated || false,
       assigned_to: task.assignedTo,
       assigned_by: task.assignedBy,
       linked_entity_type: task.linkedEntityType,
@@ -148,6 +154,7 @@ export async function createTask(task: {
     description: data.description,
     priority: data.priority,
     dueDate: data.due_date,
+    dueTime: data.due_time,
   });
 
   return data;
@@ -180,6 +187,7 @@ export async function assignTask(taskId: string, userId: string | null, assigned
     description: data.description,
     priority: data.priority,
     dueDate: data.due_date,
+    dueTime: data.due_time,
   });
 
   return data;

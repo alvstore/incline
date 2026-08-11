@@ -75,6 +75,9 @@ export function AddTaskDrawer({ open, onOpenChange }: AddTaskDrawerProps) {
       description: formData.get('description') as string,
       priority: formData.get('priority') as TaskPriority,
       dueDate: formData.get('dueDate') as string || undefined,
+      dueTime: formData.get('dueTime') as string || undefined,
+      slaHours: formData.get('slaHours') ? parseInt(formData.get('slaHours') as string) : 24,
+      memberCreated: formData.get('memberCreated') === 'on',
       assignedTo: formData.get('assignedTo') as string || undefined,
       assignedBy: user?.id,
     });
@@ -130,7 +133,21 @@ export function AddTaskDrawer({ open, onOpenChange }: AddTaskDrawerProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="dueDate">Due Date</Label>
-              <Input type="date" name="dueDate" />
+              <div className="flex gap-2">
+                <Input type="date" name="dueDate" className="flex-1" />
+                <Input type="time" name="dueTime" className="w-32" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="slaHours">SLA (Hours)</Label>
+              <Input type="number" name="slaHours" defaultValue={24} min={1} />
+            </div>
+            <div className="space-y-2 flex items-center gap-2 pt-8">
+              <input type="checkbox" name="memberCreated" id="memberCreated" className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+              <Label htmlFor="memberCreated" className="cursor-pointer">Member Request</Label>
             </div>
           </div>
 

@@ -162,6 +162,18 @@ export function TaskDetailDrawer({ task, open, onOpenChange }: TaskDetailDrawerP
               <Badge variant="outline" className="gap-1">
                 <Calendar className="h-3 w-3" />
                 {new Date(task.due_date).toLocaleDateString()}
+                {task.due_time && ` at ${task.due_time.substring(0, 5)}`}
+              </Badge>
+            )}
+            {task.sla_hours && (
+              <Badge variant="secondary" className="gap-1">
+                <Clock className="h-3 w-3" />
+                SLA: {task.sla_hours}h
+              </Badge>
+            )}
+            {task.member_created && (
+              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">
+                Member Request
               </Badge>
             )}
           </div>

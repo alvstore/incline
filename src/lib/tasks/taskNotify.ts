@@ -19,6 +19,7 @@ export interface TaskAssignmentNotice {
   description?: string | null;
   priority?: string | null;
   dueDate?: string | null;
+  dueTime?: string | null;
 }
 
 export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<void> {
@@ -41,6 +42,7 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
           year: 'numeric',
         })
       : 'No due date';
+    const dueTime = notice.dueTime ? ` at ${notice.dueTime.substring(0, 5)}` : '';
     const priority = (notice.priority || 'medium').toUpperCase();
     const link = `${window.location.origin}/tasks?id=${notice.taskId}`;
 
@@ -48,7 +50,7 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
       `Hi ${assigneeName}, a new task has been assigned to you.\n\n` +
       `Task: ${notice.title}\n` +
       `Priority: ${priority}\n` +
-      `Due: ${due}\n` +
+      `Due: ${due}${dueTime}\n` +
       (notice.description ? `Details: ${notice.description}\n` : '') +
       `\nOpen it here: ${link}`;
 
@@ -58,6 +60,7 @@ export async function notifyTaskAssignee(notice: TaskAssignmentNotice): Promise<
       task_title: notice.title,
       priority,
       due_date: due,
+      due_time: notice.dueTime?.substring(0, 5) || '',
       link,
     };
 
