@@ -447,15 +447,48 @@ export default function ExternalReviewsTab() {
                   {/* Reply box */}
                   {r.reply_status !== 'sent' && r.reply_status !== 'dismissed' && (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Draft reply (editable)</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Draft reply (editable)</p>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            onValueChange={(tone) => draftWithAI.mutate({ id: r.id, tone })}
+                            disabled={isDrafting}
+                          >
+                            <SelectTrigger className="h-8 w-[150px] rounded-lg text-xs" aria-label="Adjust the AI reply tone">
+                              <SelectValue placeholder="Adjust tone" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="warm">Warm</SelectItem>
+                              <SelectItem value="short">Short</SelectItem>
+                              <SelectItem value="apologetic">Apologetic</SelectItem>
+                              <SelectItem value="professional">Professional</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            onClick={() => draftWithAI.mutate({ id: r.id })}
+                            disabled={isDrafting}
+                          >
+                            {isDrafting
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden />
+                              : <Sparkles className="h-3.5 w-3.5 mr-1.5" aria-hidden />}
+                            {draftValue.trim() ? 'Regenerate with AI' : 'Draft reply with AI'}
+                          </Button>
+                        </div>
+                      </div>
                       <Textarea
                         value={draftValue}
                         onChange={(e) => setDrafts(d => ({ ...d, [r.id]: e.target.value }))}
-                        onBlur={() => saveDraft.mutate({ id: r.id, draft: draftValue })}
+                        onBlur={() => {
+                          // Never persist an empty box over a stored draft.
+                          if (draftValue.trim()) saveDraft.mutate({ id: r.id, draft: draftValue });
+                        }}
                         rows={3}
                         className="rounded-xl"
                         aria-label={`Reply to the review by ${r.author_name ?? 'Anonymous'}`}
-                        placeholder="Write a reply or click Re-analyse to draft with AI"
+                        placeholder="Write a reply, or click Draft reply with AI"
                       />
                       <p className="text-xs text-muted-foreground">
                         {draftValue.length}/4000 characters · drafts save automatically
