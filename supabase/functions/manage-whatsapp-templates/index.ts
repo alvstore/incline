@@ -1,3 +1,5 @@
+// v2.7.0 — Paginated full-catalog reconciliation; imported Meta rows carry live
+//          variable/header metadata and remain inactive until event-mapped.
 // v2.6.0 — Hard-fail on media-header templates when a Meta handle cannot be
 //          obtained (missing app_id, unreachable sample URL, or upload rejection).
 //          Returns success:false + header_upload_diagnostics so the wizard can
@@ -215,18 +217,22 @@ serve(async (req) => {
 
     // ── ACTION: list ──
     if (action === "list") {
-      const listUrl = appendProof(
+      let listUrl: string | null = appendProof(
         `${META_API_BASE}/${wabaId}/message_templates?fields=id,name,status,category,language,rejected_reason,quality_score,components&limit=100`,
         proof
       );
 
-      let metaRes: Response;
-      let metaData: any;
+      let metaRes: Response | null = null;
+      let metaData: any = null;
+      const templates: any[] = [];
       try {
-        metaRes = await fetch(listUrl, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        metaData = await metaRes.json();
+        for (let page = 0; listUrl && page < 20; page += 1) {
+          metaRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+          metaData = await metaRes.json();
+          if (!metaRes.ok) break;
+          templates.push(...(metaData.data || []));
+          listUrl = metaData?.paging?.next || null;
+        }
       } catch (fetchErr) {
         const errMsg = fetchErr instanceof Error ? fetchErr.message : "Network error";
         await logError(supabase, branch_id, "manage-whatsapp-templates", "Meta API fetch error", errMsg);
@@ -236,7 +242,7 @@ serve(async (req) => {
         );
       }
 
-      if (!metaRes.ok) {
+      if (!metaRes?.ok) {
         const me = metaData?.error || {};
         const errMsg = me.error_user_msg || me.message || "Failed to list templates from Meta";
         console.error("Meta list templates error:", JSON.stringify(metaData));
@@ -260,8 +266,9 @@ serve(async (req) => {
         );
       }
 
-      const templates = metaData.data || [];
       const liveIds = new Set<string>(templates.map((t: any) => t.id));
+      let imported = 0;
+      let updatedCount = 0;
 
       // Mark any locally cached row whose Meta ID is no longer returned as stale.
       try {
@@ -314,12 +321,20 @@ serve(async (req) => {
         const bodyText = (mt.components || []).find((c: any) => c?.type === 'BODY')?.text || '';
         const headerComp = (mt.components || []).find((c: any) => c?.type === 'HEADER');
         const headerType = (headerComp?.format || 'NONE').toLowerCase();
+        const numberedSlots = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g))
+          .map((m: RegExpMatchArray) => Number(m[1]))
+          .filter((n: number) => Number.isFinite(n));
+        const variableCount = numberedSlots.length ? Math.max(...numberedSlots) : 0;
+        const variables = Array.from({ length: variableCount }, (_, i) => `variable_${i + 1}`);
 
         const { data: updated } = await supabase
           .from('templates')
           .update({
             meta_template_status: mt.status,
             meta_rejection_reason: mt.rejected_reason || null,
+            content: bodyText,
+            variables,
+            header_type: headerType,
           })
           .eq('meta_template_name', mt.name)
           .select('id');
@@ -334,13 +349,25 @@ serve(async (req) => {
             meta_template_status: mt.status,
             meta_rejection_reason: mt.rejected_reason || null,
             header_type: headerType,
-            is_active: true,
+            variables,
+            is_active: false,
           });
+          imported += 1;
+        } else {
+          updatedCount += updated.length;
         }
       }
 
       return new Response(
-        JSON.stringify({ templates }),
+        JSON.stringify({
+          templates,
+          reconciliation: {
+            fetched: templates.length,
+            imported,
+            updated: updatedCount,
+            stale: Math.max(0, (existingLocal || []).length - liveIds.size),
+          },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

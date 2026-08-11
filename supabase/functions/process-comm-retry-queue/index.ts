@@ -1,4 +1,6 @@
-// process-comm-retry-queue v2.3.0
+// process-comm-retry-queue v2.5.0
+// v2.5.0: terminal template contract failures never retry; cap each worker run
+//          at 10 rows to avoid nested edge-function compute fan-out.
 // v2.3.0: Soft-terminal Meta codes — 131000 ("something went wrong") is transient
 //          but flaky Meta backends can loop it. Cap after 1 retry: on the SECOND
 //          occurrence for the same queue row we mark exhausted instead of a 3rd try.
@@ -31,6 +33,9 @@ const TERMINAL_REASON_PATTERNS: RegExp[] = [
   /no_template_for_closed_session/i,
   /template_not_approved/i,
   /template_stale/i,
+  /template_param_empty/i,
+  /template_missing/i,
+  /missing_template/i,
   /do_not_contact/i,
   /member_pref_opt_out/i,
   /preference_block/i,
@@ -93,7 +98,7 @@ Deno.serve(async (req) => {
       .eq("status", "pending")
       .lte("next_retry_at", new Date().toISOString())
       .order("next_retry_at", { ascending: true })
-      .limit(50);
+      .limit(10);
 
     if (manualId) {
       query = supabase
@@ -271,7 +276,8 @@ Deno.serve(async (req) => {
 
           // Auto-flag recipient as do_not_contact when they accumulate 3+ terminal
           // failures in 24h. This stops automation from filling the queue again.
-          if (row.recipient && (row.type === "whatsapp" || row.type === "sms")) {
+          const recipientTerminal = /recipient_unreachable|invalid_recipient|\b131026\b|\b131051\b|\b133010\b/i.test(errorMsg);
+          if (recipientTerminal && row.recipient && (row.type === "whatsapp" || row.type === "sms")) {
             try {
               const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
               const { count } = await supabase
