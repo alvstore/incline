@@ -284,11 +284,11 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
         </SheetHeader>
 
         {step === 'pick' && (
-          <div className="py-4 space-y-4">
+          <div className="py-6 space-y-6">
             {!channelProp && (
-              <div>
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Channel</Label>
-                <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="space-y-3">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Target Channel</Label>
+                <div className="grid grid-cols-3 gap-3">
                   {(['whatsapp', 'sms', 'email'] as Channel[]).map((c) => {
                     const M = CHANNEL_META[c];
                     const I = M.icon;
@@ -298,62 +298,87 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                         key={c}
                         type="button"
                         onClick={() => setChannel(c)}
-                        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${active ? 'border-primary bg-primary/5 text-primary font-semibold' : 'border-border hover:bg-muted/40'}`}
+                        className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm transition-all duration-300 ${
+                          active 
+                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700 font-bold shadow-lg shadow-indigo-100 scale-[1.02]' 
+                            : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200 hover:bg-slate-50'
+                        }`}
                       >
-                        <I className={`h-4 w-4 ${active ? '' : M.color}`} /> {M.label}
+                        <I className={`h-4.5 w-4.5 ${active ? 'text-indigo-600' : M.color}`} /> {M.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{missingEvents.length}</span> missing
-                · <span className="font-semibold text-foreground">{picked.size}</span> selected
-                · {candidates.length} total · <span className="text-warning">max 60 per run</span>
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPicked(new Set(missingEvents))}
-                  disabled={missingEvents.length === 0}
-                >
-                  Select all missing
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {candidates.map((e) => {
-                const have = existing.some((t) => t.trigger_event === e.event);
-                return (
-                  <label
-                    key={e.event}
-                    className={`flex items-start gap-2 p-3 rounded-lg border hover:bg-muted/40 cursor-pointer ${have ? 'opacity-60' : ''}`}
+
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-900">Coverage Gaps identified</p>
+                  <p className="text-xs text-slate-500 font-medium">
+                    <span className="text-indigo-600 font-bold">{missingEvents.length}</span> unmapped events · 
+                    <span className="text-indigo-600 font-bold ml-1">{picked.size}</span> to generate
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPicked(new Set(missingEvents))}
+                    disabled={missingEvents.length === 0}
+                    className="h-9 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold px-4"
                   >
-                    <Checkbox
-                      checked={picked.has(e.event)}
-                      onCheckedChange={(v) => {
-                        const next = new Set(picked);
-                        if (v) next.add(e.event); else next.delete(e.event);
-                        setPicked(next);
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{e.label}</p>
-                        {have && <Badge variant="outline" className="text-[10px]">exists</Badge>}
+                    Select Missing
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())} className="h-9 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900">
+                    Clear
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                {candidates.map((e) => {
+                  const have = existing.some((t) => t.trigger_event === e.event);
+                  const isSelected = picked.has(e.event);
+                  return (
+                    <label
+                      key={e.event}
+                      className={`group flex items-start gap-3 p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                        isSelected 
+                          ? 'border-indigo-500 bg-indigo-50/30 shadow-md shadow-indigo-50' 
+                          : 'border-slate-100 bg-white hover:border-slate-200'
+                      } ${have ? 'opacity-70 bg-slate-50/50' : ''}`}
+                    >
+                      <div className="pt-0.5">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(v) => {
+                            const next = new Set(picked);
+                            if (v) next.add(e.event); else next.delete(e.event);
+                            setPicked(next);
+                          }}
+                          className={`rounded-md border-2 transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-200'}`}
+                        />
                       </div>
-                      <p className="text-xs text-muted-foreground font-mono">{e.event}</p>
-                      {e.hint && <p className="text-xs text-muted-foreground mt-0.5">{e.hint}</p>}
-                    </div>
-                  </label>
-                );
-              })}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className={`text-sm font-bold tracking-tight transition-colors ${isSelected ? 'text-indigo-900' : 'text-slate-900'}`}>
+                            {e.label}
+                          </p>
+                          {have && (
+                            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 border-0 text-slate-500 h-4">
+                              Exists
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-mono mb-1">{e.event}</p>
+                        {e.hint && <p className="text-[11px] text-slate-500 leading-tight line-clamp-2">{e.hint}</p>}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
