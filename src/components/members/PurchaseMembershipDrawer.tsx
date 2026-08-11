@@ -75,6 +75,8 @@ export function PurchaseMembershipDrawer({
   const [amountPaying, setAmountPaying] = useState(0);
   const [paymentDueDate, setPaymentDueDate] = useState(format(addDays(new Date(), 7), 'yyyy-MM-dd'));
   const [sendReminders, setSendReminders] = useState(true);
+  const [transactionId, setTransactionId] = useState('');
+
   
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
