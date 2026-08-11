@@ -7,6 +7,7 @@ import { DEFAULT_BRAND, type BrandContext } from '@/lib/brand/useBrandContext';
 import { supabase } from '@/integrations/supabase/client';
 import inclineLogoAsset from '@/assets/incline-logo.png';
 import { normalizeDietContent, dayTotals, slotTotals } from '@/lib/fitness/dietContent';
+import { shiftWorkoutPlanDays } from '@/lib/fitness/planRotation';
 
 
 const BRAND = {
