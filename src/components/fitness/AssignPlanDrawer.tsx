@@ -39,6 +39,8 @@ import {
   suggestOffsets,
 } from '@/lib/fitness/planRotation';
 import { sendPlanToMember } from '@/utils/sendPlanToMember';
+import { SchedulePreviewStrip } from '@/components/fitness/SchedulePreviewStrip';
+
 
 import { toast } from 'sonner';
 import { format } from 'date-fns';
