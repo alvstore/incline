@@ -16,22 +16,29 @@ export async function fetchTrainers(
   branchId: string,
   activeOnly = true
 ): Promise<TrainerWithProfile[]> {
-  let query = supabase
-    .from("trainers")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const runQuery = async (source: "trainers" | "trainers_directory") => {
+    let query = (supabase as any)
+      .from(source)
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  // Only filter by branch if branchId is provided (empty = all branches)
-  if (branchId) {
-    query = query.eq("branch_id", branchId);
-  }
+    if (branchId) query = query.eq("branch_id", branchId);
+    if (activeOnly) query = query.eq("is_active", true);
 
-  if (activeOnly) {
-    query = query.eq("is_active", true);
-  }
+    return query;
+  };
 
-  const { data, error } = await query;
+  let { data, error } = await runQuery("trainers");
   if (error) throw error;
+
+  // Front-desk staff cannot read the trainers table directly (it holds
+  // government ID / biometric / salary columns). Fall back to the safe
+  // directory view so their listings still work.
+  if (!data || data.length === 0) {
+    const fallback = await runQuery("trainers_directory");
+    if (!fallback.error && fallback.data) data = fallback.data;
+  }
+
 
   const trainers = data || [];
   const userIds = trainers.map((t) => t.user_id);
