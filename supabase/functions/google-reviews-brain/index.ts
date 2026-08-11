@@ -841,8 +841,61 @@ function similarity(a: string, b: string): number {
   return (2 * inter) / (a.length - 1 + b.length - 1);
 }
 
+// ─── Reply style helpers ───
+const BANNED_SNIPPETS = [
+  "we appreciate your feedback",
+  "valued customer",
+  "we strive to",
+  "at our facility",
+  "thank you for taking the time",
+  "we are delighted",
+  "rest assured",
+  "esteemed",
+  "as an ai",
+];
+
+/** Strip machine tells that survive prompting (em dashes, emoji, hashtags). */
+function sanitizeReply(text: string): string {
+  return String(text ?? "")
+    .replace(/[\u2014\u2013]/g, "-")
+    .replace(/[#][\w]+/g, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
+    .replace(/!{2,}/g, "!")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function violatesStyle(text: string): boolean {
+  const t = text.toLowerCase();
+  return !text.trim() || BANNED_SNIPPETS.some((b) => t.includes(b));
+}
+
+/** Openers already used on this branch, so replies don't look copy-pasted. */
+async function recentOpeners(branch_id: string, excludeId: string): Promise<string[]> {
+  const sb = supa();
+  const { data } = await sb
+    .from("google_reviews_inbound")
+    .select("ai_draft_reply, reply_text, created_at")
+    .eq("branch_id", branch_id)
+    .neq("id", excludeId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+  return (data ?? [])
+    .map((r: any) => String(r.reply_text || r.ai_draft_reply || "").trim())
+    .filter(Boolean)
+    .map((s: string) => s.split(/[.!?]/)[0].slice(0, 60))
+    .slice(0, 6);
+}
+
+interface DraftOpts {
+  /** warm | short | apologetic | professional */
+  tone?: string;
+  /** Regenerate the reply only, leaving classification/match data untouched. */
+  draftOnly?: boolean;
+}
+
 // ─── Action: classify (one row) ───
-async function classifyOne(inbound_id: string) {
+async function classifyOne(inbound_id: string, opts: DraftOpts = {}) {
   const sb = supa();
   const { data: row, error } = await sb
     .from("google_reviews_inbound")
@@ -852,6 +905,7 @@ async function classifyOne(inbound_id: string) {
   if (error || !row) return { ok: false, reason: "not_found" };
 
   const match = await findAuthorMatch(row.branch_id, row.author_name);
+  const avoidOpeners = await recentOpeners(row.branch_id, inbound_id);
 
   let classification = "genuine";
   let reasoning = "";
@@ -860,6 +914,13 @@ async function classifyOne(inbound_id: string) {
     // v6 — persona comes from ai_purposes.review_reply.system_prompt. This block
     // only carries the output contract plus the "sound like a human" rules that
     // stop the model producing obvious AI boilerplate.
+    const toneLine = ({
+      short: "TONE: keep it to 1-2 sentences, friendly and brief.",
+      warm: "TONE: warm and personal, like a quick note from the founder.",
+      apologetic: "TONE: genuinely apologetic and accountable, no defensiveness.",
+      professional: "TONE: calm and professional, still human, no corporate filler.",
+    } as Record<string, string>)[String(opts.tone ?? "").toLowerCase()] ?? "";
+
     const sysOverride = [
       "You classify a Google review and write the owner's reply.",
       "classification must be exactly one of: genuine, unhappy_member, suspected_fake, spam.",
@@ -874,10 +935,15 @@ async function classifyOne(inbound_id: string) {
       "7. For 4-5 star reviews: keep it short and personal, name what they liked, no sales pitch.",
       "8. Never accuse the reviewer of being fake or a competitor, even when the classification says suspected_fake — in that case write a calm, neutral, factual reply.",
       "9. No promises the gym cannot keep, no pricing, no opening dates.",
+      "10. A draft_reply is ALWAYS required. Never return an empty string.",
+      toneLine,
+      avoidOpeners.length
+        ? `Do NOT start with any of these already-used openers: ${avoidOpeners.map((o) => `"${o}"`).join(", ")}`
+        : "",
       "",
       "Respond ONLY as JSON: {\"classification\":\"…\",\"reasoning\":\"…\",\"draft_reply\":\"…\"}.",
       "reasoning is internal staff-facing: 1-2 lines on why this classification, citing evidence.",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     const userPrompt = JSON.stringify({
       branch_name: (row.branches as any)?.name ?? "our gym",
       rating: row.rating,
@@ -889,6 +955,8 @@ async function classifyOne(inbound_id: string) {
       is_known_member: match.match_type && match.match_type !== "none",
       match_type: match.match_type,
       match_evidence: match.evidence,
+      requested_tone: opts.tone ?? null,
+      regenerate: !!opts.draftOnly,
     });
 
 
