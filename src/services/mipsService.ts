@@ -57,9 +57,12 @@ export interface MIPSPassRecord {
 // Keep backward compat alias
 export type MIPSEmployee = MIPSPerson;
 
+export type MIPSFailureReason = "auth_failed" | "unreachable" | "timeout" | "upstream_error";
+
 interface MIPSProxyResponse {
   success: boolean;
   status: number;
+  reason?: MIPSFailureReason;
   data: {
     code?: number;
     msg?: string;
@@ -87,19 +90,25 @@ async function callMIPSProxy(
 }
 
 // Test connection by fetching device list
-export async function testMIPSConnection(branchId?: string): Promise<{ success: boolean; message: string; raw?: unknown }> {
+export async function testMIPSConnection(
+  branchId?: string
+): Promise<{ success: boolean; message: string; reason?: MIPSFailureReason; raw?: unknown }> {
   try {
     const result = await callMIPSProxy("/through/device/list", "GET", undefined, undefined, branchId);
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
     return {
       success: isOk,
-      message: isOk ? "Connected to MIPS server successfully" : `Connection issue: ${result.data?.msg || JSON.stringify(result.data)}`,
+      reason: isOk ? undefined : (result.reason ?? "upstream_error"),
+      message: isOk
+        ? "Connected to MIPS server successfully"
+        : result.error || `Connection issue: ${result.data?.msg || JSON.stringify(result.data)}`,
       raw: result.data,
     };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : String(e) };
+    return { success: false, reason: "upstream_error", message: e instanceof Error ? e.message : String(e) };
   }
 }
+
 
 // Fetch devices from MIPS
 export async function fetchMIPSDevices(branchId?: string): Promise<MIPSDevice[]> {
