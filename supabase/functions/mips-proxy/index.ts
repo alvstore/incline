@@ -202,7 +202,12 @@ Deno.serve(async (req) => {
 
     console.log(`MIPS proxy: ${upperMethod} ${url}`);
 
-    const mipsRes = await fetch(url, fetchOptions);
+    let mipsRes: Response;
+    try {
+      mipsRes = await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    } catch (e) {
+      throw classifyTransport(e);
+    }
     const responseText = await mipsRes.text();
 
     let responseJson: unknown;
@@ -222,10 +227,20 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("mips-proxy error:", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    const reason = error instanceof MipsError ? error.reason : "upstream_error";
+    console.error(`mips-proxy error [${reason}]:`, message);
+    // Returned as HTTP 200 so the browser SDK surfaces the real reason instead of
+    // the opaque "Edge Function returned a non-2xx status code".
+    return new Response(JSON.stringify({
+      success: false,
+      status: 0,
+      reason,
+      error: message,
+      data: { msg: message },
+    }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
+
