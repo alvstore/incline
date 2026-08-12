@@ -1,58 +1,48 @@
-# Plan: Repair MIPS Credentials and Device Setup
+# Repair MIPS face verification truth
 
 ## Confirmed diagnosis
 
-- The MIPS URL, username, and password are **not hardcoded** in the proxy. `mips-proxy` starts with the runtime secrets, then deliberately replaces them with the active branch record from `mips_connections` when a branch is selected.
-- The active branch record points to the expected MIPS server and username, but its stored password length does not match the credential supplied today. Recent function logs show that this branch credential is being rejected by the MIPS server.
-- Runtime secrets for `MIPS_SERVER_URL`, `MIPS_USERNAME`, and `MIPS_PASSWORD` exist, but they currently act only as a fallback. The branch record takes priority for normal Device Command Center calls.
-- Credential fields exist only inside **Add Device**, while the gear-icon **Device Setup & Diagnostics** drawer has no connection editor despite directing users there.
-- The current Add Device “Test Connection” does not test the URL, username, or password typed into the form. It calls the proxy with only `branch_id`, so the proxy tests the previously saved branch record instead.
-- Saving the connection and adding a device are started independently, so device creation can finish even if credential saving fails.
+- The per-gate enrolment ledger currently records **94 enrolled people on Gate 1 and 94 on Entry 2**; there are no pending, missing, or rejected ledger rows.
+- The branch has **100 members**, **99 linked MIPS person IDs/SNs**, and **94 CRM biometric photos**.
+- Recent person syncs and photo uploads are succeeding and dispatching to both mapped devices.
+- The Personnel Sync screen calls the MIPS person-list helper without the selected branch. That helper therefore omits `branch_id` from every paginated verification request.
+- Recent proxy logs confirm two paths are running: valid branch-scoped requests use `http://212.38.94.228:9000`, while unscoped verification requests fall back to `212.38.94.228:9000` and fail as an invalid URL. The empty result is then rendered as `0/100`, `Not on server`, and `Missing` even though the people and faces exist.
 
 ## Implementation
 
-### 1. Add a secure MIPS Connection section to Device Setup
+1. **Make verification branch-scoped end to end**
+   - Add `branchId` to the complete MIPS roster fetch and pass it through every page request.
+   - Use the selected branch for initial server truth, periodic refresh, Verify All, and individual verification.
+   - Include the branch in query keys so cached results cannot leak between “All branches” and a selected branch.
 
-- Add an owner/admin-only connection editor to the existing right-side Device Setup sheet.
-- Show branch, server URL, username, active status, and a masked password field; never load or reveal the saved password.
-- Treat an empty password as “keep existing password,” while requiring a password for first-time setup.
-- Add explicit **Save & Test** and **Test saved connection** actions with loading, success, credential-rejected, timeout, and unreachable states.
-- Keep the existing callback configuration and diagnostics sections intact.
+2. **Normalize and match MIPS identities reliably**
+   - Use one canonical person-SN normalizer for CRM codes and MIPS responses: trim, remove separators, and compare case-insensitively.
+   - Prefer the stored `mips_person_sn` when available instead of reconstructing every identifier from the display code.
+   - Interpret MIPS photo flags explicitly so string values such as `"0"` are not treated as a valid face merely because they are non-empty.
 
-### 2. Move credential writes and draft testing behind a protected backend function
+3. **Prevent false empty states**
+   - Distinguish “MIPS roster request failed” from a genuine empty roster; do not replace the last verified data with zero counts after a transport/configuration error.
+   - Surface a compact retry/error state in Personnel Sync and disable bulk sync decisions while server truth is unavailable, preventing unnecessary re-syncs of already-enrolled people.
+   - Keep the existing per-gate ledger as the authoritative gate-enrolment signal and label server presence separately from gate face enrolment.
 
-- Add a versioned, strict-CORS MIPS connection-management function for owner/admin users.
-- Support:
-  - reading masked branch configuration,
-  - securely upserting branch URL/username/password,
-  - testing draft credentials before or during save,
-  - testing the saved effective connection.
-- Validate the URL as HTTP/HTTPS, normalize trailing slashes, enforce branch access, never return/log the password, and return classified errors.
-- Use the branch database record as the explicit source of truth when configured; retain runtime secrets only as the documented fallback when no active branch record exists.
+4. **Repair stale CRM sync presentation**
+   - When a live MIPS lookup confirms the same stored SN/person ID, display it as verified even if an old `mips_sync_status='failed'` remains from a previous attempt.
+   - Reconcile stale failed statuses only for exact identity matches; leave the single genuinely unlinked member actionable.
 
-### 3. Correct save/test sequencing and cache behavior
+5. **Harden the proxy fallback**
+   - Normalize configured/fallback MIPS server URLs before use so a missing scheme cannot produce `Invalid URL`.
+   - Keep branch database configuration as the primary source and preserve credential-scoped token caching.
 
-- Update the Device Setup flow to save and verify in one awaited mutation, then invalidate all MIPS connection, fleet, health, and breaker queries.
-- Refactor Add Device to use the same secure connection-management path instead of writing `mips_connections` directly.
-- Make Add Device await connection success before creating the hardware record when connection fields are supplied.
-- Remove the misleading test behavior that silently tests old saved credentials instead of the entered draft.
+## Validation
 
-### 4. Align authorization and database access
+- Test a known linked member through individual Verify and confirm the exact MIPS person ID and face state.
+- Run Verify All and confirm the UI reports the real server roster rather than `0/100`.
+- Confirm Gate 1 and Entry 2 remain at 94 enrolled entries and no unnecessary resync is triggered.
+- Verify selected-branch and all-branch cache isolation, error-state behavior, and photo-flag parsing (`0`, `1`, false, true, null, URL).
+- Check recent proxy, sync, parity, and sweep logs after the change for valid URLs and successful person-list pagination.
 
-- Use the existing device/settings capability model in the UI, with credential editing restricted to owner/admin to match database policy.
-- Preserve service-only access to the raw password and masked reads for the frontend.
-- Remove duplicate/obsolete connection policies if the audit confirms they are still simultaneously active, without widening access.
+## Technical scope
 
-### 5. Validate end to end
-
-- Test the supplied credentials directly against the MIPS `/login` endpoint without exposing them in logs or UI.
-- Save them through the new protected flow for the selected branch.
-- Call the deployed `mips-proxy` with that branch and verify the device-list request succeeds.
-- Verify `sync-to-mips` uses the same branch connection and no longer logs `auth_failed`.
-- Verify the Device Command Center changes from **Credentials rejected** to **Healthy** and that desktop/mobile drawer states remain usable.
-
-## Technical notes
-
-- The password supplied in chat will be used only for the one-time authenticated repair/test and will not be echoed back.
-- No secret value will be placed in frontend code, migrations, logs, or committed files.
-- The UI will retain the project’s Vuexy-style sheet, semantic tokens, accessible labels, focus states, and 44px touch targets.
+- Frontend service and Personnel Sync query/matching logic.
+- MIPS proxy URL normalization and focused verification tests.
+- No destructive face deletion, blanket re-enrolment, or device reset.
