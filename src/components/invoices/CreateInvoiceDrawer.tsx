@@ -12,6 +12,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Plus, Trash2, FileText, IndianRupee } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
+import { InvoiceMemberPicker, type InvoiceMember } from '@/components/invoices/InvoiceMemberPicker';
+import { InvoiceCatalogPicker, type CatalogItem } from '@/components/invoices/InvoiceCatalogPicker';
 
 interface CreateInvoiceDrawerProps {
   open: boolean;
@@ -28,7 +30,7 @@ interface LineItem {
 export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvoiceDrawerProps) {
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
-  const [memberId, setMemberId] = useState<string>('');
+  const [member, setMember] = useState<InvoiceMember | null>(null);
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -38,27 +40,32 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
     { description: '', quantity: 1, unit_price: 0 },
   ]);
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['members-for-invoice', branchId],
+  const memberId = member?.id || '';
+
+  const { data: memberGstinRow } = useQuery({
+    queryKey: ['invoice-member-gstin', memberId],
+    enabled: !!memberId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('members')
-        .select('id, member_code, gstin, profiles:user_id(full_name)')
-        .eq('branch_id', branchId)
-        .eq('status', 'active')
-        .limit(100);
+      const { data, error } = await supabase.from('members').select('gstin').eq('id', memberId).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!branchId,
   });
-
-  // Auto-fill member GSTIN when member is selected
-  const selectedMember = members.find((m: any) => m.id === memberId);
-  const memberGstin = selectedMember?.gstin || '';
+  const memberGstin = (memberGstinRow as any)?.gstin || '';
 
   const addItem = () => {
     setItems([...items, { description: '', quantity: 1, unit_price: 0 }]);
+  };
+
+  const addCatalogItem = (c: CatalogItem) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const blank = next.findIndex((i) => !i.description && !i.unit_price);
+      const row: LineItem = { description: c.name, quantity: 1, unit_price: c.price };
+      if (blank >= 0) next[blank] = row;
+      else next.push(row);
+      return next;
+    });
   };
 
   const removeItem = (index: number) => {
@@ -72,6 +79,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
     updated[index] = { ...updated[index], [field]: value };
     setItems(updated);
   };
+
 
   const calculateSubtotal = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
@@ -129,7 +137,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
   });
 
   const resetForm = () => {
-    setMemberId('');
+    setMember(null);
     setDueDate(format(new Date(), 'yyyy-MM-dd'));
     setNotes('');
     setDiscountAmount(0);
@@ -150,20 +158,9 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           {/* Member Selection */}
           <div className="space-y-2">
             <Label>Member (optional)</Label>
-            <Select value={memberId || "walk-in"} onValueChange={(val) => setMemberId(val === "walk-in" ? "" : val)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select member or leave for walk-in" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                {members.map((member: any) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.profiles?.full_name || member.member_code}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <InvoiceMemberPicker branchId={branchId} value={member} onChange={setMember} />
           </div>
+
 
           {/* Due Date */}
           <div className="space-y-2">
@@ -179,10 +176,13 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <Label>Line Items</Label>
-              <Button variant="outline" size="sm" onClick={addItem}>
+              <Button variant="outline" size="sm" className="cursor-pointer" onClick={addItem}>
                 <Plus className="h-4 w-4 mr-1" /> Add Item
               </Button>
             </div>
+
+            <InvoiceCatalogPicker branchId={branchId} onPick={addCatalogItem} />
+
 
             {items.map((item, index) => (
               <Card key={index}>
