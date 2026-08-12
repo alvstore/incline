@@ -498,7 +498,7 @@ async function dispatchToDevices(
       // instead of losing the dispatch.
       const MAX_ATTEMPTS = 3;
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const deviceNumType = "4"; // Reverting to type 4 (v2) as type 3 (v3) is causing "选择错误" (Selection Error) on this MIPS version
+        const deviceNumType = "4"; // v2 API is required for these devices. type 3 causes "Selection Error".
         const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
           method: "POST",
           headers: authHeaders(token),
