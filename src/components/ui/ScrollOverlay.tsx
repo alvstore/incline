@@ -185,95 +185,26 @@ const ScrollOverlay = () => {
       </section>
 
       {/* Section 5: Waitlist CTA */}
-      <section className="h-[100dvh] flex flex-col justify-between relative px-4 pt-20 pb-[calc(1.5rem+env(safe-area-inset-bottom))] overflow-y-auto">
-        <div className="flex-1 flex items-center">
-          <div className="w-full max-w-7xl mx-auto flex justify-end">
-            <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
-              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Experience Incline</span>
-              <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
-                START YOUR
-                <br />
-                <span className="text-primary">JOURNEY</span>
-              </h2>
-              <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-                Join Udaipur's most exclusive fitness community today. Premium memberships and personal training packages now available.
-              </p>
-              <button
-                className="mt-8 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
-                onClick={() => window.dispatchEvent(new CustomEvent("open-register-modal"))}
-              >
-                Join Now
-              </button>
-            </div>
+      <section className="h-[100dvh] flex flex-col justify-center relative px-4">
+        <div className="w-full max-w-7xl mx-auto flex justify-end">
+          <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
+            <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Experience Incline</span>
+            <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
+              START YOUR
+              <br />
+              <span className="text-primary">JOURNEY</span>
+            </h2>
+            <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+              Join Udaipur's most exclusive fitness community today. Premium memberships and personal training packages now available.
+            </p>
+            <button
+              className="mt-8 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+              onClick={() => window.dispatchEvent(new CustomEvent("open-register-modal"))}
+            >
+              Join Now
+            </button>
           </div>
         </div>
-        <footer className="flex flex-col items-center gap-4 pb-2">
-          <div className="flex items-center gap-2.5">
-            {[
-              {
-                href: "https://www.instagram.com/inclineudaipur/",
-                label: "Instagram @inclineudaipur",
-                Icon: Instagram,
-              },
-              {
-                href: "https://www.facebook.com/profile.php?id=61585677985406",
-                label: "Facebook page",
-                Icon: Facebook,
-              },
-              {
-                href: "https://www.youtube.com/channel/UCwwhk8SiyEJQPSKVyxzA7xg",
-                label: "YouTube channel",
-                Icon: Youtube,
-              },
-              {
-                href: "https://www.google.com/maps/place/Incline+-+Rise.Reflect.Repeat./@24.546845,73.701003,18z",
-                label: "View on Google Maps",
-                Icon: MapPin,
-              },
-            ].map(({ href, label, Icon }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={label}
-                className="flex items-center justify-center w-11 h-11 rounded-full glass border border-primary/20 text-muted-foreground hover:text-primary hover:scale-110 hover:border-primary/50 transition-all duration-200 shadow-lg shadow-primary/5"
-              >
-                <Icon className="w-5 h-5" />
-              </a>
-            ))}
-          </div>
-
-          <nav
-            aria-label="Legal"
-            className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-primary/20 bg-card/40 backdrop-blur-md px-2 py-1.5 shadow-lg shadow-primary/5"
-          >
-            {[
-              { key: "privacy", label: "Privacy" },
-              { key: "terms", label: "Terms" },
-              { key: "deletion", label: "Data Deletion" },
-            ].map((item, i, arr) => (
-              <span key={item.key} className="flex items-center">
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent("open-legal-modal", { detail: item.key }))}
-                  className="px-3 py-1 rounded-full text-xs font-semibold tracking-wide text-muted-foreground hover:text-primary-foreground hover:bg-primary transition-all duration-200 cursor-pointer"
-                >
-                  {item.label}
-                </button>
-                {i < arr.length - 1 && (
-                  <span aria-hidden="true" className="text-primary/30 select-none">
-                    ·
-                  </span>
-                )}
-              </span>
-            ))}
-          </nav>
-
-          <p className="text-muted-foreground/50 text-xs tracking-wider text-center px-4">
-            © 2026 The Incline Life by Incline. All rights reserved.
-          </p>
-        </footer>
       </section>
     </div>
   );
