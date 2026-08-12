@@ -74,7 +74,7 @@ const AddDeviceDrawer = ({ isOpen, onClose, branches, defaultBranchId }: AddDevi
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Add Access Device</SheetTitle>
-          <SheetDescription>Register a device and configure its MIPS server connection</SheetDescription>
+          <SheetDescription>Register a terminal already configured on the MIPS server. Connection credentials are managed from Device Setup.</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-6">

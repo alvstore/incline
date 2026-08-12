@@ -84,7 +84,7 @@ async function getRuoYiToken(baseUrl: string, username: string, password: string
   return cachedToken!;
 }
 
-type ConnectionOperation = "get_connection" | "test_connection" | "save_and_test";
+type ConnectionOperation = "get_connection" | "test_connection" | "save_and_test" | "repair_from_runtime";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -164,6 +164,7 @@ Deno.serve(async (req) => {
 
     const operation = body?.operation as ConnectionOperation | undefined;
     if (operation) {
+      if (operation === "repair_from_runtime" && !isService) return jsonResponse({ error: "Service authorization required." }, 403);
       if (!isService && !roleNames.some((role) => role === "owner" || role === "admin")) return jsonResponse({ error: "Only owners and admins can manage MIPS credentials." }, 403);
       const branchId = typeof body?.branch_id === "string" ? body.branch_id : "";
       if (!branchId) return jsonResponse({ error: "Select a branch first." }, 400);
@@ -175,6 +176,17 @@ Deno.serve(async (req) => {
           branch_id: existing.branch_id, server_url: existing.server_url, username: existing.username,
           is_active: existing.is_active, has_password: Boolean(existing.password),
         } : null });
+      }
+      if (operation === "repair_from_runtime") {
+        const serverUrl = normalizeServerUrl(Deno.env.get("MIPS_SERVER_URL"));
+        const username = String(Deno.env.get("MIPS_USERNAME") || "").trim();
+        const password = String(Deno.env.get("MIPS_PASSWORD") || "");
+        const test = await testCredentials(serverUrl, username, password);
+        const { error: saveError } = await authClient.from("mips_connections").upsert({
+          branch_id: branchId, server_url: serverUrl, username, password, is_active: true, updated_at: new Date().toISOString(),
+        }, { onConflict: "branch_id" });
+        if (saveError) throw saveError;
+        return jsonResponse({ success: true, ...test, message: "Runtime MIPS credentials verified and applied to the branch." });
       }
       const credentials = body?.credentials ?? {};
       const serverUrl = normalizeServerUrl(credentials.server_url || existing?.server_url || Deno.env.get("MIPS_SERVER_URL"));
