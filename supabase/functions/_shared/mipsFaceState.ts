@@ -13,6 +13,10 @@
 //              build a template from this photo; stop re-pushing, ask for a retake
 //   missing  — was enrolled, device counter dropped (reset / re-registration)
 
+//   unverified — the gate's counter suggests a face is present, but no
+//              single-person push ever attributed it to this person. Never
+//              rendered as "enrolled": it is counted, not proven.
+
 export const REJECT_AFTER_ATTEMPTS = 3;
 
 export interface FaceStateRow {
@@ -25,7 +29,7 @@ export interface FaceStateRow {
   person_type: "member" | "employee" | "trainer";
   person_id: string | null;
   person_name: string | null;
-  state: "pending" | "enrolled" | "rejected" | "missing";
+  state: "pending" | "enrolled" | "rejected" | "missing" | "unverified";
   reason: string | null;
   attempts: number;
   last_attempt_at: string | null;
