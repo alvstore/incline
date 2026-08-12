@@ -188,24 +188,11 @@ export async function syncPersonToMIPS(
 // Remote open door
 export async function remoteOpenDoor(deviceId: number, branchId?: string): Promise<{ success: boolean; message: string }> {
   try {
-    // v2.6.1 — Use /through/device/openDoor/{id} (GET) which is confirmed working for Gate 2
     const result = await callMIPSProxy(`/through/device/openDoor/${deviceId}`, "GET", undefined, undefined, branchId);
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
-    
-    if (!isOk) {
-      console.warn(`Direct openDoor failed for device ${deviceId}, trying 'control' (GET)...`);
-      // Some RuoYi versions use GET /through/device/control?deviceId=X&command=open
-      const fallbackRes = await callMIPSProxy(`/through/device/control`, "GET", { deviceId: String(deviceId), command: "open" }, undefined, branchId);
-      const isFallbackOk = fallbackRes.success && (fallbackRes.data?.code === 200 || fallbackRes.data?.code === 0);
-      return {
-        success: isFallbackOk,
-        message: isFallbackOk ? "Door opened successfully (fallback)" : (fallbackRes.data?.msg || "Failed to open door"),
-      };
-    }
-
     return {
-      success: true,
-      message: "Door opened successfully",
+      success: isOk,
+      message: isOk ? "Door opened successfully" : (result.data?.msg || "Failed to open door"),
     };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : String(e) };
