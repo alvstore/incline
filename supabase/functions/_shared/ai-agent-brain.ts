@@ -2245,8 +2245,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     if (profile?.id) {
       const { data: member } = await supabase
         .from("members")
-        .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
+        .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
         .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (member) {
@@ -2255,6 +2256,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         memberEmail = (profile as any).email || undefined;
       }
     }
+
   }
 
   if (!memberMatch) {
