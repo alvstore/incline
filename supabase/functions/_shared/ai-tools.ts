@@ -131,9 +131,9 @@ export function getAllToolDefinitions() {
 
     // Request status & escalation
     tool("escalate_request",
-      "Mark the conversation as needing manual staff review (handoff with optional category).",
+      "Mark the conversation as needing manual staff review (handoff with optional category). Use for complex questions, complaints, or if the member wants something not listed.",
       {
-        category: ["string", "Brief category e.g. 'billing', 'membership', 'complaint'"],
+        category: ["string", "Brief category e.g. 'billing', 'membership', 'complaint', 'diet_workout'"],
         reason: ["string", "Why escalation is needed"],
       }, ["reason"]),
     tool("get_request_status",
@@ -143,6 +143,10 @@ export function getAllToolDefinitions() {
     tool("transfer_to_human",
       "Hand off conversation to gym staff. Use for complaints, manager requests, or repeated errors.",
       { reason: ["string", "Brief reason"] }),
+
+    // Fitness Plans (Self-Service)
+    tool("get_my_fitness_plans",
+      "List the member's current active workout and diet plans."),
   ];
 }
 
