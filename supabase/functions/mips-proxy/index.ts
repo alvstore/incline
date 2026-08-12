@@ -1,9 +1,32 @@
+// mips-proxy v1.3.0
+// v1.3.0 — explicit timeouts + failure classification (auth_failed / unreachable /
+// timeout / upstream_error) so the Device Command Center can tell a rejected
+// password apart from a dead server instead of labelling everything "Unreachable".
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const LOGIN_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 25_000;
+
+export class MipsError extends Error {
+  reason: "auth_failed" | "unreachable" | "timeout" | "upstream_error";
+  constructor(reason: MipsError["reason"], message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
+function classifyTransport(e: unknown): MipsError {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/timed? ?out|AbortError|deadline/i.test(msg)) {
+    return new MipsError("timeout", `MIPS server did not respond in time (${msg})`);
+  }
+  return new MipsError("unreachable", `Cannot reach MIPS server: ${msg}`);
+}
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
@@ -19,30 +42,47 @@ async function getRuoYiToken(baseUrl: string, username: string, password: string
 
   console.log(`RuoYi auth: POST ${baseUrl}/login`);
 
-  const res = await fetch(`${baseUrl}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
-    body: JSON.stringify({ username, password }),
-  });
+  if (!username || !password) {
+    throw new MipsError("auth_failed", "No MIPS username/password configured for this branch.");
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
+      body: JSON.stringify({ username, password }),
+      signal: AbortSignal.timeout(LOGIN_TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw classifyTransport(e);
+  }
 
   const text = await res.text();
   let json: any;
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error(`RuoYi login returned non-JSON: ${text.substring(0, 300)}`);
+    throw new MipsError("upstream_error", `RuoYi login returned non-JSON: ${text.substring(0, 300)}`);
   }
 
   if (json.code !== 200 && json.code !== 0) {
-    throw new Error(`RuoYi login failed (code=${json.code}): ${json.msg || JSON.stringify(json)}`);
+    // The RuoYi gateway answers a bad username/password with code 500 and a
+    // "User does not exist/password error" message — that is a credential
+    // problem, never a connectivity problem.
+    throw new MipsError(
+      "auth_failed",
+      `MIPS login rejected: ${json.msg || JSON.stringify(json)}. Update the MIPS username/password in Device Setup.`,
+    );
   }
 
   cachedToken = json.token || json.data?.token;
-  if (!cachedToken) throw new Error(`No token in RuoYi login response: ${JSON.stringify(json)}`);
+  if (!cachedToken) throw new MipsError("upstream_error", `No token in RuoYi login response: ${JSON.stringify(json)}`);
   tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
   cachedBaseUrl = baseUrl;
   return cachedToken!;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
