@@ -59,6 +59,20 @@ export type MIPSEmployee = MIPSPerson;
 
 export type MIPSFailureReason = "auth_failed" | "unreachable" | "timeout" | "upstream_error";
 
+export interface MIPSConnectionConfig {
+  branch_id: string;
+  server_url: string;
+  username: string;
+  is_active: boolean;
+  has_password: boolean;
+}
+
+export interface MIPSCredentialsDraft {
+  server_url: string;
+  username: string;
+  password?: string;
+}
+
 interface MIPSProxyResponse {
   success: boolean;
   status: number;
@@ -107,6 +121,27 @@ export async function testMIPSConnection(
   } catch (e) {
     return { success: false, reason: "upstream_error", message: e instanceof Error ? e.message : String(e) };
   }
+}
+
+async function manageMIPSConnection<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("mips-proxy", { body });
+  if (error) throw new Error(error.message || "MIPS connection request failed");
+  const response = data as { success?: boolean; error?: string; message?: string };
+  if (!response?.success) throw new Error(response?.error || response?.message || "MIPS connection request failed");
+  return data as T;
+}
+
+export async function getMIPSConnection(branchId: string): Promise<MIPSConnectionConfig | null> {
+  const result = await manageMIPSConnection<{ success: true; connection: MIPSConnectionConfig | null }>({ operation: "get_connection", branch_id: branchId });
+  return result.connection;
+}
+
+export async function testMIPSCredentials(branchId: string, credentials: MIPSCredentialsDraft) {
+  return manageMIPSConnection<{ success: true; message: string; device_count: number }>({ operation: "test_connection", branch_id: branchId, credentials });
+}
+
+export async function saveAndTestMIPSConnection(branchId: string, credentials: MIPSCredentialsDraft) {
+  return manageMIPSConnection<{ success: true; message: string; device_count: number }>({ operation: "save_and_test", branch_id: branchId, credentials });
 }
 
 

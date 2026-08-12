@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Activity, Copy, KeyRound, ServerCog, ShieldCheck } from "lucide-react";
+import { Activity, CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2, Save, ServerCog, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMipsCallbackUrls } from "@/hooks/useMipsCallbackUrls";
-import { testMIPSConnection, verifyPersonOnMIPS } from "@/services/mipsService";
+import { getMIPSConnection, saveAndTestMIPSConnection, testMIPSConnection, testMIPSCredentials, verifyPersonOnMIPS } from "@/services/mipsService";
 
 interface DeviceSetupSheetProps {
   open: boolean;
@@ -75,6 +76,7 @@ const Section = ({ title, icon, children }: { title: string; icon: React.ReactNo
 );
 
 const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) => {
+  const queryClient = useQueryClient();
   const { data: mipsUrls } = useMipsCallbackUrls();
   const recognitionUrl = mipsUrls?.receiver || "";
 
@@ -89,6 +91,39 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
   const [memberCode, setMemberCode] = useState("");
   const [output, setOutput] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [credentials, setCredentials] = useState({ server_url: "", username: "", password: "" });
+
+  const connectionQuery = useQuery({
+    queryKey: ["mips-connection-config", branchId],
+    queryFn: () => getMIPSConnection(branchId as string),
+    enabled: open && Boolean(branchId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    const connection = connectionQuery.data;
+    if (connection) setCredentials({ server_url: connection.server_url, username: connection.username, password: "" });
+  }, [connectionQuery.data]);
+
+  const connectionMutation = useMutation({
+    mutationFn: async (save: boolean) => {
+      if (!branchId) throw new Error("Select a branch before managing its MIPS connection.");
+      if (!credentials.server_url.trim() || !credentials.username.trim()) throw new Error("Server URL and username are required.");
+      const action = save ? saveAndTestMIPSConnection : testMIPSCredentials;
+      return action(branchId, { server_url: credentials.server_url.trim(), username: credentials.username.trim(), password: credentials.password || undefined });
+    },
+    onSuccess: (result, save) => {
+      setConnectionResult({ success: true, message: save ? `Saved. ${result.message}` : result.message });
+      if (save) {
+        setCredentials((current) => ({ ...current, password: "" }));
+        ["mips-connection-config", "mips-connection", "mips-connection-test", "mips-devices", "access-devices-sns"].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+        toast.success("MIPS connection saved and verified");
+      }
+    },
+    onError: (error: Error) => setConnectionResult({ success: false, message: error.message }),
+  });
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
     setRunning(true);
@@ -126,6 +161,32 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
         </SheetHeader>
 
         <div className="mt-6 space-y-4 pb-10">
+          <Section title="MIPS server connection" icon={<ServerCog className="h-3.5 w-3.5" />}>
+            {!branchId ? (
+              <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Select one branch from the header to manage its MIPS connection.</p>
+            ) : connectionQuery.isLoading ? (
+              <div className="flex min-h-24 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-1.5"><Label htmlFor="mips-server-url">Server URL</Label><Input id="mips-server-url" inputMode="url" placeholder="http://server-address:port" value={credentials.server_url} onChange={(event) => { setCredentials((current) => ({ ...current, server_url: event.target.value })); setConnectionResult(null); }} /></div>
+                <div className="space-y-1.5"><Label htmlFor="mips-username">Username</Label><Input id="mips-username" autoComplete="username" value={credentials.username} onChange={(event) => { setCredentials((current) => ({ ...current, username: event.target.value })); setConnectionResult(null); }} /></div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mips-password">Password</Label>
+                  <div className="relative">
+                    <Input id="mips-password" type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder={connectionQuery.data?.has_password ? "Leave blank to keep saved password" : "Enter password"} value={credentials.password} onChange={(event) => { setCredentials((current) => ({ ...current, password: event.target.value })); setConnectionResult(null); }} className="pr-12" />
+                    <Button type="button" variant="ghost" size="icon" aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-0 top-0 h-11 w-11" onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">The saved password is never displayed.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" disabled={connectionMutation.isPending} onClick={() => connectionMutation.mutate(false)} className="min-h-11 rounded-xl">{connectionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}Test entered details</Button>
+                  <Button type="button" disabled={connectionMutation.isPending} onClick={() => connectionMutation.mutate(true)} className="min-h-11 rounded-xl">{connectionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save &amp; test</Button>
+                </div>
+                {connectionResult && <div className={`flex gap-2 rounded-xl p-3 text-xs ${connectionResult.success ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span>{connectionResult.message}</span></div>}
+              </div>
+            )}
+          </Section>
+
           <Section title="MIPS callback configuration" icon={<ServerCog className="h-3.5 w-3.5" />}>
             <p className="text-[11px] text-muted-foreground">
               Enter these in <strong>MIPS Admin Panel → Device Management → Configure → Server Configuration</strong>.
