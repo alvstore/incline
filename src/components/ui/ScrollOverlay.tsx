@@ -189,20 +189,20 @@ const ScrollOverlay = () => {
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-7xl mx-auto flex justify-end">
             <div className="glass-strong p-8 md:p-12 rounded-3xl max-w-sm shadow-2xl border border-primary/20 mr-4 md:mr-16">
-              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Exclusive Access</span>
+              <span className="text-primary text-sm tracking-[0.3em] uppercase font-bold">Experience Incline</span>
               <h2 className="text-3xl md:text-4xl font-black text-foreground mt-4 tracking-tight">
-                JOIN THE
+                START YOUR
                 <br />
-                <span className="text-primary">WAITLIST</span>
+                <span className="text-primary">JOURNEY</span>
               </h2>
               <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-                Be among the first to experience INCLINE. Limited founding memberships with exclusive benefits.
+                Join Udaipur's most exclusive fitness community today. Premium memberships and personal training packages now available.
               </p>
               <button
                 className="mt-8 w-full px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base tracking-wider uppercase rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
                 onClick={() => window.dispatchEvent(new CustomEvent("open-register-modal"))}
               >
-                Join Waitlist
+                Join Now
               </button>
             </div>
           </div>
