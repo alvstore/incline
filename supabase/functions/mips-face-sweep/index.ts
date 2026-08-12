@@ -168,19 +168,23 @@ Deno.serve(async (req) => {
       ].filter((p) => !!p.sn);
 
       await seedLedger(supabase, branchId, branchDevices, roster);
+      const pruned = await pruneLedger(supabase, branchId, branchDevices, roster);
       const ledger = await readLedger(supabase, branchId);
 
       const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
       const rejected = ledger.filter((r) => r.state === "rejected");
+      const unverified = ledger.filter((r) => r.state === "unverified");
 
-      // Nothing to do → do not even touch the MIPS server.
+      // Nothing queued → do not even touch the MIPS server.
       if (outstanding.length === 0 && !force) {
         summary.push({
           branch_id: branchId,
-          at_parity: true,
+          nothing_queued: true,
           expected: roster.length,
-          enrolled: ledger.filter((r) => r.state === "enrolled").length,
+          verified: ledger.filter((r) => r.state === "enrolled").length,
+          unverified: unverified.length,
           rejected: rejected.length,
+          pruned,
           processed: 0,
         });
         continue;
