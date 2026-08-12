@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, CheckCircle2, PauseCircle, ServerCog } from "lucide-react";
+import { AlertTriangle, CheckCircle2, KeyRound, PauseCircle, ServerCog } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
