@@ -280,7 +280,7 @@ Deno.serve(async (req) => {
             const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
               method: "POST",
               headers: authHeaders(token),
-              body: JSON.stringify({ personId: p.id, deviceIds: [t], deviceNumType: "3" }),
+              body: JSON.stringify({ personId: p.id, deviceIds: [t], deviceNumType: "4" }),
             });
             const text = await res.text();
             let j: any;
