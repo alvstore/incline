@@ -31,6 +31,7 @@ import {
   type LedgerPerson,
   markAttempt,
   markEnrolled,
+  pruneLedger,
   readLedger,
   seedLedger,
 } from "../_shared/mipsFaceState.ts";
