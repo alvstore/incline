@@ -1,46 +1,58 @@
-# Plan: Landing Page Launch Updates
+# Plan: Repair MIPS Credentials and Device Setup
 
-Update the landing page to reflect the post-launch status of Incline.
+## Confirmed diagnosis
 
-## User Review Required
+- The MIPS URL, username, and password are **not hardcoded** in the proxy. `mips-proxy` starts with the runtime secrets, then deliberately replaces them with the active branch record from `mips_connections` when a branch is selected.
+- The active branch record points to the expected MIPS server and username, but its stored password length does not match the credential supplied today. Recent function logs show that this branch credential is being rejected by the MIPS server.
+- Runtime secrets for `MIPS_SERVER_URL`, `MIPS_USERNAME`, and `MIPS_PASSWORD` exist, but they currently act only as a fallback. The branch record takes priority for normal Device Command Center calls.
+- Credential fields exist only inside **Add Device**, while the gear-icon **Device Setup & Diagnostics** drawer has no connection editor despite directing users there.
+- The current Add Device “Test Connection” does not test the URL, username, or password typed into the form. It calls the proxy with only `branch_id`, so the proxy tests the previously saved branch record instead.
+- Saving the connection and adding a device are started independently, so device creation can finish even if credential saving fails.
 
-> [!IMPORTANT]
-> The current hero banner text is "WHERE GLOBAL STRENGTH MEETS CLINICAL SERENITY." and the sub-text mentions Rajasthan's new benchmark for excellence. Since you asked to replace the hero banner text, I will update it to a post-launch version. Please confirm if you have specific wording in mind.
+## Implementation
 
-- The footer will be removed from the landing page as requested.
-- The "WE ARE OPEN" countdown/label will be removed.
-- Unused files like `LaunchCountdown.tsx` and `FoundingChip.tsx` will be deleted.
+### 1. Add a secure MIPS Connection section to Device Setup
 
-## Proposed Changes
+- Add an owner/admin-only connection editor to the existing right-side Device Setup sheet.
+- Show branch, server URL, username, active status, and a masked password field; never load or reveal the saved password.
+- Treat an empty password as “keep existing password,” while requiring a password for first-time setup.
+- Add explicit **Save & Test** and **Test saved connection** actions with loading, success, credential-rejected, timeout, and unreachable states.
+- Keep the existing callback configuration and diagnostics sections intact.
 
-### Landing Page & Components
+### 2. Move credential writes and draft testing behind a protected backend function
 
-#### [src/pages/InclineAscent.tsx](src/pages/InclineAscent.tsx)
-- Remove `FoundingChip` import and usage.
-- Update hero `h1` and `p` text in the static SEO layer.
-- Remove the "WE ARE OPEN" text if present.
+- Add a versioned, strict-CORS MIPS connection-management function for owner/admin users.
+- Support:
+  - reading masked branch configuration,
+  - securely upserting branch URL/username/password,
+  - testing draft credentials before or during save,
+  - testing the saved effective connection.
+- Validate the URL as HTTP/HTTPS, normalize trailing slashes, enforce branch access, never return/log the password, and return classified errors.
+- Use the branch database record as the explicit source of truth when configured; retain runtime secrets only as the documented fallback when no active branch record exists.
 
-#### [src/components/ui/ScrollOverlay.tsx](src/components/ui/ScrollOverlay.tsx)
-- Remove `LaunchCountdown` import and usage.
-- Update hero `h2` and `p` text to match the new version.
-- Remove the `footer` section entirely.
-- Remove the "Join Waitlist" section if it's no longer appropriate (replacing with a standard CTA).
+### 3. Correct save/test sequencing and cache behavior
 
-#### [src/components/3d/Scene3D.tsx](src/components/3d/Scene3D.tsx)
-- Remove `FoundingChip` from the render block.
+- Update the Device Setup flow to save and verify in one awaited mutation, then invalidate all MIPS connection, fleet, health, and breaker queries.
+- Refactor Add Device to use the same secure connection-management path instead of writing `mips_connections` directly.
+- Make Add Device await connection success before creating the hardware record when connection fields are supplied.
+- Remove the misleading test behavior that silently tests old saved credentials instead of the entered draft.
 
-### Cleanup
+### 4. Align authorization and database access
 
-#### Deletions
-- Delete `src/components/launch/LaunchCountdown.tsx`.
-- Delete `src/components/launch/FoundingChip.tsx`.
-- Delete `src/lib/launch.ts` if no longer used.
+- Use the existing device/settings capability model in the UI, with credential editing restricted to owner/admin to match database policy.
+- Preserve service-only access to the raw password and masked reads for the frontend.
+- Remove duplicate/obsolete connection policies if the audit confirms they are still simultaneously active, without widening access.
 
-## Technical Details
-- The new hero text will be: "EXPERIENCE THE PINNACLE OF STRENGTH & RECOVERY." (placeholder until confirmed).
-- The sub-text will be updated to: "Now open in Udaipur. Experience Rajasthan's premier fitness destination featuring Italian Panatta biomechanics and clinical recovery suites."
-- Hiding the Lovable badge was already performed in a previous turn via CSS, but I will ensure no layout regressions occur during the footer removal.
+### 5. Validate end to end
 
-## Footnotes
-- All SEO metadata remains optimized for the Sector 14, Udaipur location.
-- 3D performance optimizations (lazy loading, idle mounting) are preserved.
+- Test the supplied credentials directly against the MIPS `/login` endpoint without exposing them in logs or UI.
+- Save them through the new protected flow for the selected branch.
+- Call the deployed `mips-proxy` with that branch and verify the device-list request succeeds.
+- Verify `sync-to-mips` uses the same branch connection and no longer logs `auth_failed`.
+- Verify the Device Command Center changes from **Credentials rejected** to **Healthy** and that desktop/mobile drawer states remain usable.
+
+## Technical notes
+
+- The password supplied in chat will be used only for the one-time authenticated repair/test and will not be echoed back.
+- No secret value will be placed in frontend code, migrations, logs, or committed files.
+- The UI will retain the project’s Vuexy-style sheet, semantic tokens, accessible labels, focus states, and 44px touch targets.
