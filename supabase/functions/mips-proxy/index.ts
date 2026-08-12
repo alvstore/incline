@@ -1,13 +1,11 @@
-// mips-proxy v1.3.0
+// mips-proxy v1.4.0
+// v1.4.0 — secure owner/admin connection management, draft credential testing,
+// and credential-scoped token caching so password rotations take effect immediately.
 // v1.3.0 — explicit timeouts + failure classification (auth_failed / unreachable /
 // timeout / upstream_error) so the Device Command Center can tell a rejected
 // password apart from a dead server instead of labelling everything "Unreachable".
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const LOGIN_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -30,15 +28,15 @@ function classifyTransport(e: unknown): MipsError {
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
-let cachedBaseUrl = "";
+let cachedCredentialKey = "";
 
 function getBaseUrl(overrideUrl?: string): string {
   return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
 }
 
 async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
-  // Simple cache — only valid if same server
-  if (cachedToken && Date.now() < tokenExpiry && cachedBaseUrl === baseUrl) return cachedToken;
+  const credentialKey = `${baseUrl}\u0000${username}\u0000${password}`;
+  if (cachedToken && Date.now() < tokenExpiry && cachedCredentialKey === credentialKey) return cachedToken;
 
   console.log(`RuoYi auth: POST ${baseUrl}/login`);
 
@@ -67,6 +65,9 @@ async function getRuoYiToken(baseUrl: string, username: string, password: string
   }
 
   if (json.code !== 200 && json.code !== 0) {
+    cachedToken = null;
+    tokenExpiry = 0;
+    cachedCredentialKey = "";
     // The RuoYi gateway answers a bad username/password with code 500 and a
     // "User does not exist/password error" message — that is a credential
     // problem, never a connectivity problem.
@@ -79,8 +80,44 @@ async function getRuoYiToken(baseUrl: string, username: string, password: string
   cachedToken = json.token || json.data?.token;
   if (!cachedToken) throw new MipsError("upstream_error", `No token in RuoYi login response: ${JSON.stringify(json)}`);
   tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
-  cachedBaseUrl = baseUrl;
+  cachedCredentialKey = credentialKey;
   return cachedToken!;
+}
+
+type ConnectionOperation = "get_connection" | "test_connection" | "save_and_test";
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function normalizeServerUrl(value: unknown): string {
+  if (typeof value !== "string" || value.length > 500) throw new MipsError("upstream_error", "Enter a valid MIPS server URL.");
+  const parsed = new URL(value.trim());
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new MipsError("upstream_error", "MIPS server URL must use HTTP or HTTPS.");
+  return parsed.toString().replace(/\/$/, "");
+}
+
+async function testCredentials(baseUrl: string, username: string, password: string) {
+  const token = await getRuoYiToken(baseUrl, username, password);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/through/device/list?pageNum=1&pageSize=20`, {
+      headers: { Authorization: `Bearer ${token}`, "TENANT-ID": "1", Accept: "application/json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw classifyTransport(error);
+  }
+  const payload = await response.json().catch(() => ({}));
+  const code = payload?.code;
+  if (!response.ok || (code !== undefined && code !== 200 && code !== 0)) {
+    throw new MipsError("upstream_error", payload?.msg || `MIPS device check failed (${response.status}).`);
+  }
+  const rows = Array.isArray(payload?.rows) ? payload.rows : Array.isArray(payload?.data) ? payload.data : [];
+  return { device_count: Number(payload?.total ?? rows.length ?? 0) };
 }
 
 
@@ -93,16 +130,17 @@ Deno.serve(async (req) => {
     // ---- AUTH GATE (v1.1.0) ----
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
+    const authClient = createClient(SUPA_URL, SERVICE_KEY);
     const authHeader = req.headers.get("Authorization") || "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "");
     const isService = bearer && bearer === SERVICE_KEY;
+    let roleNames: string[] = isService ? ["service_role"] : [];
     if (!isService) {
       if (!bearer) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const authClient = createClient(SUPA_URL, SERVICE_KEY);
       const { data: userRes } = await authClient.auth.getUser(bearer);
       const uid = userRes?.user?.id;
       if (!uid) {
@@ -112,8 +150,9 @@ Deno.serve(async (req) => {
       }
       const { data: roles } = await authClient
         .from("user_roles").select("role").eq("user_id", uid);
+      roleNames = (roles || []).map((role: { role: string }) => role.role);
       const allowed = new Set(["owner", "admin", "manager", "staff"]);
-      const hasRole = (roles || []).some((r: any) => allowed.has(r.role));
+      const hasRole = roleNames.some((role) => allowed.has(role));
       if (!hasRole) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -122,6 +161,36 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
+
+    const operation = body?.operation as ConnectionOperation | undefined;
+    if (operation) {
+      if (!isService && !roleNames.some((role) => role === "owner" || role === "admin")) return jsonResponse({ error: "Only owners and admins can manage MIPS credentials." }, 403);
+      const branchId = typeof body?.branch_id === "string" ? body.branch_id : "";
+      if (!branchId) return jsonResponse({ error: "Select a branch first." }, 400);
+      const { data: existing, error: lookupError } = await authClient.from("mips_connections")
+        .select("id, branch_id, server_url, username, password, is_active").eq("branch_id", branchId).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (operation === "get_connection") {
+        return jsonResponse({ success: true, connection: existing ? {
+          branch_id: existing.branch_id, server_url: existing.server_url, username: existing.username,
+          is_active: existing.is_active, has_password: Boolean(existing.password),
+        } : null });
+      }
+      const credentials = body?.credentials ?? {};
+      const serverUrl = normalizeServerUrl(credentials.server_url || existing?.server_url || Deno.env.get("MIPS_SERVER_URL"));
+      const username = String(credentials.username || existing?.username || Deno.env.get("MIPS_USERNAME") || "").trim();
+      const password = String(credentials.password || existing?.password || Deno.env.get("MIPS_PASSWORD") || "");
+      if (!username || username.length > 200) return jsonResponse({ error: "Enter a valid MIPS username." }, 400);
+      if (!password || password.length > 500) return jsonResponse({ error: "Enter the MIPS password." }, 400);
+      const test = await testCredentials(serverUrl, username, password);
+      if (operation === "save_and_test") {
+        const { error: saveError } = await authClient.from("mips_connections").upsert({
+          branch_id: branchId, server_url: serverUrl, username, password, is_active: true, updated_at: new Date().toISOString(),
+        }, { onConflict: "branch_id" });
+        if (saveError) throw saveError;
+      }
+      return jsonResponse({ success: true, ...test, message: `Connected to MIPS. Found ${test.device_count} device(s).` });
+    }
 
     const { endpoint, method = "GET", params, data, branch_id } = body as {
       endpoint: string;
@@ -154,11 +223,7 @@ Deno.serve(async (req) => {
 
     if (branch_id) {
       try {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-        );
-        const { data: conn } = await supabase
+        const { data: conn } = await authClient
           .from("mips_connections")
           .select("server_url, username, password")
           .eq("branch_id", branch_id)
