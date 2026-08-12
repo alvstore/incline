@@ -31,6 +31,7 @@ import {
   type LedgerPerson,
   markAttempt,
   markEnrolled,
+  pruneLedger,
   readLedger,
   seedLedger,
 } from "../_shared/mipsFaceState.ts";
@@ -168,19 +169,23 @@ Deno.serve(async (req) => {
       ].filter((p) => !!p.sn);
 
       await seedLedger(supabase, branchId, branchDevices, roster);
+      const pruned = await pruneLedger(supabase, branchId, branchDevices, roster);
       const ledger = await readLedger(supabase, branchId);
 
       const outstanding = ledger.filter((r) => r.state === "pending" || r.state === "missing");
       const rejected = ledger.filter((r) => r.state === "rejected");
+      const unverified = ledger.filter((r) => r.state === "unverified");
 
-      // Nothing to do → do not even touch the MIPS server.
+      // Nothing queued → do not even touch the MIPS server.
       if (outstanding.length === 0 && !force) {
         summary.push({
           branch_id: branchId,
-          at_parity: true,
+          nothing_queued: true,
           expected: roster.length,
-          enrolled: ledger.filter((r) => r.state === "enrolled").length,
+          verified: ledger.filter((r) => r.state === "enrolled").length,
+          unverified: unverified.length,
           rejected: rejected.length,
+          pruned,
           processed: 0,
         });
         continue;
@@ -234,25 +239,45 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // A gate already carrying a face for everyone is trivially at parity —
-      // settle its whole ledger without pushing anything.
+      // A gate whose counter already covers the whole roster is *probably*
+      // carrying everyone — but the firmware never says WHO, so nothing is
+      // marked enrolled here. Untouched rows become `unverified`: counted by
+      // the gate, not attributed to a name. Only a single-person push that
+      // moves the counter ever writes `enrolled`.
       for (const dev of branchDevices) {
         const live = counts.find((c) => c.id === dev.mips_device_id);
         if (live && roster.length > 0 && live.faces >= roster.length) {
           await supabase
             .from("mips_device_face_state")
-            .update({ state: "enrolled", reason: null, enrolled_at: new Date().toISOString() })
+            .update({
+              state: "unverified",
+              reason: "Counted on the gate but never attributed to this person",
+            })
             .eq("branch_id", branchId)
             .eq("mips_device_id", dev.mips_device_id)
-            .neq("state", "enrolled");
+            .in("state", ["pending", "missing"]);
         }
       }
 
       // ---- Pick the next people, one push each -----------------------------
-      // Re-read after the parity settle above, so people a gate has already
-      // proven it carries are not pushed again on this tick.
       const settled = await readLedger(supabase, branchId);
-      const stillOutstanding = settled.filter((r) => r.state === "pending" || r.state === "missing");
+      // Gates that are numerically behind still need real pushes; their
+      // `unverified` rows are fair game (lowest priority) so the ledger keeps
+      // converting guesswork into proof over time.
+      const behindDevices = new Set(
+        branchDevices
+          .filter((d) => {
+            const live = counts.find((c) => c.id === d.mips_device_id);
+            return !live || live.faces < roster.length;
+          })
+          .map((d) => d.mips_device_id),
+      );
+      const stillOutstanding = settled.filter(
+        (r) =>
+          r.state === "pending" ||
+          r.state === "missing" ||
+          (r.state === "unverified" && behindDevices.has(r.mips_device_id)),
+      );
       const perTick = pinned ?? PER_TICK;
       const bySn = new Map<string, typeof stillOutstanding>();
       for (const row of stillOutstanding) {
@@ -343,6 +368,7 @@ Deno.serve(async (req) => {
         enrolled_now: enrolledNow,
         stalled,
         push_failed: pushFailed,
+        pruned,
         notes,
         devices: branchDevices.map((d) => {
           const rows = finalLedger.filter((r) => r.mips_device_id === d.mips_device_id);
@@ -354,6 +380,7 @@ Deno.serve(async (req) => {
             faces_on_device: live?.faces ?? null,
             persons_on_device: live?.persons ?? null,
             enrolled: rows.filter((r) => r.state === "enrolled").length,
+            unverified: rows.filter((r) => r.state === "unverified").length,
             pending: rows.filter((r) => r.state === "pending" || r.state === "missing").length,
             rejected: rows.filter((r) => r.state === "rejected").length,
           };
