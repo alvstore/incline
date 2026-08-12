@@ -367,6 +367,7 @@ Deno.serve(async (req) => {
         enrolled_now: enrolledNow,
         stalled,
         push_failed: pushFailed,
+        pruned,
         notes,
         devices: branchDevices.map((d) => {
           const rows = finalLedger.filter((r) => r.mips_device_id === d.mips_device_id);
