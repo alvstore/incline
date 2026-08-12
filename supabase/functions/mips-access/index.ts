@@ -86,7 +86,7 @@ async function dispatchToDevices(baseUrl: string, token: string, personId: numbe
   await fetch(`${baseUrl}/through/device/syncPerson`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ personId, deviceIds, deviceNumType: "4" }),
+    body: JSON.stringify({ personId, deviceIds, deviceNumType: "3" }),
   });
 }
 
