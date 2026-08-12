@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.create_manual_invoice(uuid,uuid,jsonb,date,text,numeric,boolean,numeric,text);
