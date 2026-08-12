@@ -60,16 +60,28 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
   const openUntil = breaker?.open_until ? new Date(breaker.open_until) : null;
   const paused = Boolean(breaker?.open) && (!openUntil || openUntil.getTime() > Date.now());
   const degraded = !paused && (breaker?.consecutive_failures ?? 0) > 0;
+  const authFailed = !isConnected && connection?.reason === "auth_failed";
 
-  const state: "paused" | "degraded" | "down" | "healthy" = paused
-    ? "paused"
-    : !isConnected
-      ? "down"
-      : degraded
-        ? "degraded"
-        : "healthy";
+  const state: "paused" | "degraded" | "down" | "auth" | "healthy" = authFailed
+    ? "auth"
+    : paused
+      ? "paused"
+      : !isConnected
+        ? "down"
+        : degraded
+          ? "degraded"
+          : "healthy";
 
   const config = {
+    auth: {
+      icon: <KeyRound className="h-5 w-5" aria-hidden="true" />,
+      badge: "Credentials rejected",
+      badgeClass: "bg-red-100 text-red-700",
+      iconClass: "bg-red-50 text-red-600",
+      title: "MIPS server reachable — but the login was rejected",
+      detail:
+        "The server answered, so this is not a network outage. The stored MIPS username/password is wrong or was changed on the server. Open Device Setup (gear icon) and re-enter the credentials to restore sync.",
+    },
     paused: {
       icon: <PauseCircle className="h-5 w-5" aria-hidden="true" />,
       badge: "Sync paused",
@@ -96,6 +108,7 @@ const MipsServerStatusBanner = ({ branchId }: Props) => {
       title: "Intermittent MIPS connectivity",
       detail: `${breaker?.consecutive_failures} consecutive transport failure(s). Sync continues with backoff.`,
     },
+
     healthy: {
       icon: <CheckCircle2 className="h-5 w-5" aria-hidden="true" />,
       badge: "Healthy",
