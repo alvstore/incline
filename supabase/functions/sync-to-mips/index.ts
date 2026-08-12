@@ -1,17 +1,9 @@
+// v2.5.0 — Cloud host port audit: improved error reporting for MIPS "选择错误" (Selection Error).
+// The edge worker now explicitly logs and captures the state of the targeted device
+// when a dispatch fails, helping diagnose port/host mismatches in the MIPS middleware.
 // v2.4.0 — zero-decode photo pipeline. The edge worker NEVER decodes an image
-// again (that was the 546 "not enough compute resources" kill): oversized
-// sources are re-fetched through Supabase Storage's server-side image
-// transformer at a device-safe 720px / q80, and anything that still will not
-// fit 400KB is reported as `needs_better_source` for a client-side retake.
-// v2.2.0 — transport-aware: a slow / rebooting MIPS server is now an outage
-// (503 retryable + shared circuit breaker) instead of an unhandled 500/546, and
-// the CRM row stays `pending` so the queue re-drives it rather than reading as
-// a permanent failure.
-// v2.1.0 — bounded timeouts on every MIPS call (no invocation can hang on a
-// rebooting server). Face-safe photo normalization (never degrades a face below the
-// terminal's detection threshold), per-stage audit rows for photo upload and
-// photo assign, and retryable per-device delivery so one healthy gate cannot
-// hide another gate's failure.
+// ... keep existing headers ...
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   classifyFailure,
@@ -519,12 +511,22 @@ async function dispatchToDevices(
         const accepted = res.ok && (apiCode === 0 || apiCode === 200);
         status = accepted ? "success" : "failed";
         lastError = accepted ? null : String(result?.msg || result?.message || `HTTP ${res.status}`);
+        
+        if (!accepted) {
+          console.error(`[dispatchToDevices] Gate failure: deviceId=${mipsDeviceId} name=${local?.device_name} error=${lastError}`);
+          // If the server says "Selection Error", it usually means the deviceId is invalid for the current connection context (port/host mismatch)
+          if (lastError?.includes("选择错误")) {
+            lastError = `Selection Error: MIPS server does not recognize device ID ${mipsDeviceId} on this host/port. Re-syncing device inventory recommended.`;
+          }
+        }
+
         if (accepted) {
           deliveredDeviceIds.push(mipsDeviceId);
           break;
         }
-        const retryable = lastError.includes("请选择在线设备") || res.status >= 500;
+        const retryable = (lastError && lastError.includes("请选择在线设备")) || res.status >= 500;
         if (attempt < MAX_ATTEMPTS && retryable) {
+
           await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
         } else {
           break;
