@@ -28,7 +28,7 @@ interface LineItem {
 export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvoiceDrawerProps) {
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
-  const [memberId, setMemberId] = useState<string>('');
+  const [member, setMember] = useState<InvoiceMember | null>(null);
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -38,27 +38,32 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
     { description: '', quantity: 1, unit_price: 0 },
   ]);
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['members-for-invoice', branchId],
+  const memberId = member?.id || '';
+
+  const { data: memberGstinRow } = useQuery({
+    queryKey: ['invoice-member-gstin', memberId],
+    enabled: !!memberId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('members')
-        .select('id, member_code, gstin, profiles:user_id(full_name)')
-        .eq('branch_id', branchId)
-        .eq('status', 'active')
-        .limit(100);
+      const { data, error } = await supabase.from('members').select('gstin').eq('id', memberId).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!branchId,
   });
-
-  // Auto-fill member GSTIN when member is selected
-  const selectedMember = members.find((m: any) => m.id === memberId);
-  const memberGstin = selectedMember?.gstin || '';
+  const memberGstin = (memberGstinRow as any)?.gstin || '';
 
   const addItem = () => {
     setItems([...items, { description: '', quantity: 1, unit_price: 0 }]);
+  };
+
+  const addCatalogItem = (c: CatalogItem) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const blank = next.findIndex((i) => !i.description && !i.unit_price);
+      const row: LineItem = { description: c.name, quantity: 1, unit_price: c.price };
+      if (blank >= 0) next[blank] = row;
+      else next.push(row);
+      return next;
+    });
   };
 
   const removeItem = (index: number) => {
@@ -72,6 +77,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
     updated[index] = { ...updated[index], [field]: value };
     setItems(updated);
   };
+
 
   const calculateSubtotal = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
