@@ -505,4 +505,19 @@
     opacity: 0.05;
     z-index: 0;
   }
+
+  /* Lovable Badge Removal */
+  #lovable-badge,
+  [class*="lovable-badge"],
+  iframe[src*="lovable.app/badge"],
+  a[href*="lovable.app"] img[alt*="Lovable"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    position: absolute !important;
+    clip: rect(0, 0, 0, 0) !important;
+  }
 }
