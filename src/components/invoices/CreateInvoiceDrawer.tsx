@@ -176,10 +176,13 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <Label>Line Items</Label>
-              <Button variant="outline" size="sm" onClick={addItem}>
+              <Button variant="outline" size="sm" className="cursor-pointer" onClick={addItem}>
                 <Plus className="h-4 w-4 mr-1" /> Add Item
               </Button>
             </div>
+
+            <InvoiceCatalogPicker branchId={branchId} onPick={addCatalogItem} />
+
 
             {items.map((item, index) => (
               <Card key={index}>
