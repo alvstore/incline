@@ -234,25 +234,45 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // A gate already carrying a face for everyone is trivially at parity —
-      // settle its whole ledger without pushing anything.
+      // A gate whose counter already covers the whole roster is *probably*
+      // carrying everyone — but the firmware never says WHO, so nothing is
+      // marked enrolled here. Untouched rows become `unverified`: counted by
+      // the gate, not attributed to a name. Only a single-person push that
+      // moves the counter ever writes `enrolled`.
       for (const dev of branchDevices) {
         const live = counts.find((c) => c.id === dev.mips_device_id);
         if (live && roster.length > 0 && live.faces >= roster.length) {
           await supabase
             .from("mips_device_face_state")
-            .update({ state: "enrolled", reason: null, enrolled_at: new Date().toISOString() })
+            .update({
+              state: "unverified",
+              reason: "Counted on the gate but never attributed to this person",
+            })
             .eq("branch_id", branchId)
             .eq("mips_device_id", dev.mips_device_id)
-            .neq("state", "enrolled");
+            .in("state", ["pending", "missing"]);
         }
       }
 
       // ---- Pick the next people, one push each -----------------------------
-      // Re-read after the parity settle above, so people a gate has already
-      // proven it carries are not pushed again on this tick.
       const settled = await readLedger(supabase, branchId);
-      const stillOutstanding = settled.filter((r) => r.state === "pending" || r.state === "missing");
+      // Gates that are numerically behind still need real pushes; their
+      // `unverified` rows are fair game (lowest priority) so the ledger keeps
+      // converting guesswork into proof over time.
+      const behindDevices = new Set(
+        branchDevices
+          .filter((d) => {
+            const live = counts.find((c) => c.id === d.mips_device_id);
+            return !live || live.faces < roster.length;
+          })
+          .map((d) => d.mips_device_id),
+      );
+      const stillOutstanding = settled.filter(
+        (r) =>
+          r.state === "pending" ||
+          r.state === "missing" ||
+          (r.state === "unverified" && behindDevices.has(r.mips_device_id)),
+      );
       const perTick = pinned ?? PER_TICK;
       const bySn = new Map<string, typeof stillOutstanding>();
       for (const row of stillOutstanding) {
