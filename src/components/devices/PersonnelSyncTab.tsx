@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import {
   syncPersonToMIPS, fetchAllMIPSPersons, verifyPersonOnMIPS, fetchMIPSDevices,
+  mipsPersonHasPhoto, normalizeMIPSPersonSn, type MIPSPerson,
 } from "@/services/mipsService";
 import { uploadBiometricPhoto } from "@/lib/media/biometricPhotoUrls";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ interface SyncPerson {
   avatarUrl: string | null;
   mipsSyncStatus: string | null;
   mipsPersonId: string | null;
+  mipsPersonSn: string | null;
   verifiedOnDevice?: boolean | null;
   branchId?: string;
 }
@@ -87,7 +89,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let memberQuery = supabase
         .from("members")
-        .select("id, member_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url), leads:lead_id(full_name, avatar_url)")
+        .select("id, member_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, profiles:user_id(full_name, avatar_url), leads:lead_id(full_name, avatar_url)")
         .order("created_at", { ascending: false });
       if (branchId) memberQuery = memberQuery.eq("branch_id", branchId);
       const { data: members } = await memberQuery;
@@ -107,6 +109,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             avatarUrl: avatar,
             mipsSyncStatus: (m as any).mips_sync_status || "pending",
             mipsPersonId: (m as any).mips_person_id || null,
+            mipsPersonSn: (m as any).mips_person_sn || null,
             branchId: m.branch_id,
           });
         }
@@ -114,7 +117,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let empQuery = supabase
         .from("employees")
-        .select("id, employee_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, employee_code, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -133,6 +136,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             avatarUrl: profile?.avatar_url || null,
             mipsSyncStatus: (e as any).mips_sync_status || "pending",
             mipsPersonId: (e as any).mips_person_id || null,
+            mipsPersonSn: (e as any).mips_person_sn || null,
             branchId: e.branch_id,
           });
         }
@@ -140,7 +144,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
 
       let trainerQuery = supabase
         .from("trainers")
-        .select("id, biometric_photo_url, biometric_photo_path, mips_person_id, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
+        .select("id, biometric_photo_url, biometric_photo_path, mips_person_id, mips_person_sn, mips_sync_status, branch_id, is_active, profiles:user_id(full_name, avatar_url)")
         .eq("is_active", true)
         .neq("mips_sync_status", "revoked")
         .order("created_at", { ascending: false });
@@ -159,6 +163,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
             avatarUrl: profile?.avatar_url || null,
             mipsSyncStatus: t.mips_sync_status || "pending",
             mipsPersonId: t.mips_person_id || null,
+            mipsPersonSn: (t as any).mips_person_sn || null,
             branchId: t.branch_id,
           });
         }
@@ -172,22 +177,22 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   // The local `mips_sync_status` column only records what *we* attempted.
   // The only reliable count is the person list on the MIPS server itself, and
   // whether each person actually carries a face image (photoUri / havePhoto).
-  const { data: serverTruth, isFetching: truthLoading, refetch: refetchTruth } = useQuery({
-    queryKey: ["mips-server-truth"],
+  const { data: serverTruth, isFetching: truthLoading, isError: truthError, error: truthErrorDetail, refetch: refetchTruth } = useQuery({
+    queryKey: ["mips-server-truth", branchId || "all"],
     queryFn: async () => {
-      const rows = await fetchAllMIPSPersons();
+      const rows = await fetchAllMIPSPersons(200, branchId);
       const map: Record<string, { exists: boolean; hasFace: boolean }> = {};
-      for (const r of rows as any[]) {
+      for (const r of rows) {
         if (!r?.personSn) continue;
-        map[String(r.personSn)] = {
+        map[normalizeMIPSPersonSn(r.personSn)] = {
           exists: true,
-          hasFace: !!(r.photoUri || r.havePhoto),
+          hasFace: mipsPersonHasPhoto(r as MIPSPerson & Record<string, unknown>),
         };
       }
       return {
         map,
         total: rows.length,
-        withFace: (rows as any[]).filter((r) => r.photoUri || r.havePhoto).length,
+        withFace: rows.filter((r) => mipsPersonHasPhoto(r as MIPSPerson & Record<string, unknown>)).length,
       };
     },
     staleTime: 60_000,
@@ -195,7 +200,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     retry: 1,
   });
 
-  const truthFor = (code: string) => serverTruth?.map[code.replace(/-/g, "")];
+  const truthFor = (person: SyncPerson) =>
+    serverTruth?.map[normalizeMIPSPersonSn(person.mipsPersonSn || person.code)];
 
   // ---- Gate truth: faces actually enrolled on each turnstile ---------------
   const { data: gateTruth } = useQuery({
@@ -249,7 +255,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const handleVerify = async (person: SyncPerson) => {
     setVerifyingIds((prev) => new Set(prev).add(person.id));
     try {
-      const result = await verifyPersonOnMIPS(person.code);
+      const result = await verifyPersonOnMIPS(person.mipsPersonSn || person.code, branchId);
       setVerificationMap((prev) => ({ ...prev, [person.id]: result.exists }));
       if (result.exists) {
         toast.success(`${person.name} verified on MIPS (ID: ${result.mipsId})`);
@@ -266,14 +272,17 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   const handleBulkVerify = async () => {
     toast.info("Re-reading the MIPS person list…");
     try {
-      const allMIPS = await fetchAllMIPSPersons();
+      const allMIPS = await fetchAllMIPSPersons(200, branchId);
       const faceMap = new Map(
-        allMIPS.map((e: any) => [String(e.personSn), !!(e.photoUri || e.havePhoto)])
+        allMIPS.map((entry) => [
+          normalizeMIPSPersonSn(entry.personSn),
+          mipsPersonHasPhoto(entry as MIPSPerson & Record<string, unknown>),
+        ])
       );
       const newMap: Record<string, boolean> = {};
       let withFace = 0, noFace = 0, missing = 0;
       for (const p of personnel) {
-        const stripped = p.code.replace(/-/g, "");
+        const stripped = normalizeMIPSPersonSn(p.mipsPersonSn || p.code);
         const has = faceMap.get(stripped);
         newMap[p.id] = has === true;
         if (has === true) withFace++;
@@ -370,8 +379,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
     );
 
 
-  const onServer = (p: SyncPerson) => !!truthFor(p.code)?.exists;
-  const hasFaceOnServer = (p: SyncPerson) => !!truthFor(p.code)?.hasFace;
+  const onServer = (p: SyncPerson) => !!truthFor(p)?.exists;
+  const hasFaceOnServer = (p: SyncPerson) => !!truthFor(p)?.hasFace;
 
   const stats = {
     totalMembers: members.length,
@@ -396,8 +405,8 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
   );
 
   const renderRow = (person: SyncPerson) => {
-    const strippedCode = person.code.replace(/-/g, "");
-    const truth = truthFor(person.code);
+    const strippedCode = normalizeMIPSPersonSn(person.mipsPersonSn || person.code);
+    const truth = truthFor(person);
     const isSynced = !!truth?.exists && !!truth?.hasFace;
     const isFailed = person.mipsSyncStatus === "failed" && !truth?.exists;
     const verifyStatus = verificationMap[person.id];
@@ -573,6 +582,22 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
         />
       </div>
 
+      {truthError && (
+        <Card className="rounded-2xl border-none bg-red-50 shadow-lg shadow-red-100/50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm font-semibold text-red-700">MIPS roster verification is unavailable</p>
+              <p className="text-xs text-red-600">
+                {truthErrorDetail instanceof Error ? truthErrorDetail.message : "The last verified counts are being preserved."}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="min-h-[36px] rounded-xl" onClick={() => refetchTruth()}>
+              <RefreshCw className="mr-1.5 h-4 w-4" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {(gateTruth?.length ?? 0) > 0 && (
         <Card className="rounded-2xl border-none shadow-lg shadow-muted/30">
           <CardContent className="space-y-3 p-4">
@@ -670,7 +695,7 @@ const PersonnelSyncTab = ({ branchId, mainBranchId }: PersonnelSyncTabProps) => 
               size="sm"
               className="min-h-[36px] rounded-xl"
               onClick={() => bulkSyncMutation.mutate(pendingTargets)}
-              disabled={bulkSyncMutation.isPending || pendingTargets.length === 0}
+              disabled={bulkSyncMutation.isPending || truthError || !serverTruth || pendingTargets.length === 0}
             >
               <Upload className={`mr-1.5 h-4 w-4 ${bulkSyncMutation.isPending ? "animate-pulse" : ""}`} />
               Sync pending ({pendingTargets.length})

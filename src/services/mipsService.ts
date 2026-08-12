@@ -40,6 +40,26 @@ export interface MIPSPerson {
   updateTime: string | null;
 }
 
+/** Canonical identity used by CRM and MIPS, independent of punctuation/case. */
+export function normalizeMIPSPersonSn(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+    : "";
+}
+
+/** MIPS installations return photo flags as booleans, numbers, strings, or URLs. */
+export function mipsPersonHasPhoto(person: Partial<MIPSPerson> & Record<string, unknown>): boolean {
+  const uriCandidates = [person.photoUri, person.photoUrl, person.photo, person.facePhoto, person.faceUrl];
+  if (uriCandidates.some((value) => typeof value === "string" && value.trim().length > 0)) return true;
+
+  const flagCandidates = [person.havePhoto, person.photoFlag, person.faceFlag];
+  return flagCandidates.some((value) => {
+    if (value === true || value === 1) return true;
+    if (typeof value !== "string") return false;
+    return ["1", "true", "yes", "y"].includes(value.trim().toLowerCase());
+  }) || (typeof person.faceCount === "number" && person.faceCount > 0);
+}
+
 export interface MIPSPassRecord {
   id: number;
   personNo: string;
@@ -206,6 +226,9 @@ export async function fetchMIPSEmployees(page = 1, size = 50, branchId?: string)
     pageNum: String(page),
     pageSize: String(size),
   }, undefined, branchId);
+  if (!result.success || (result.data?.code !== undefined && result.data.code !== 200 && result.data.code !== 0)) {
+    throw new Error(result.error || result.data?.msg || result.data?.message || "Failed to fetch the MIPS person list");
+  }
   const rows = result.data?.rows || result.data?.data;
   const total = (result.data?.total as number) || 0;
   return { employees: Array.isArray(rows) ? rows as MIPSPerson[] : [], total };
@@ -392,12 +415,12 @@ export async function assignDevicePermission(
 }
 
 // Fetch all persons from MIPS (for bulk verification)
-export async function fetchAllMIPSPersons(pageSize = 200): Promise<MIPSPerson[]> {
+export async function fetchAllMIPSPersons(pageSize = 200, branchId?: string): Promise<MIPSPerson[]> {
   const all: MIPSPerson[] = [];
   let page = 1;
   let hasMore = true;
   while (hasMore) {
-    const { employees, total } = await fetchMIPSEmployees(page, pageSize);
+    const { employees, total } = await fetchMIPSEmployees(page, pageSize, branchId);
     all.push(...employees);
     hasMore = all.length < total;
     page++;
@@ -407,7 +430,7 @@ export async function fetchAllMIPSPersons(pageSize = 200): Promise<MIPSPerson[]>
 }
 
 // Verify a single person exists on MIPS by personSn (hyphen-stripped)
-export async function verifyPersonOnMIPS(personNo: string): Promise<{
+export async function verifyPersonOnMIPS(personNo: string, branchId?: string): Promise<{
   exists: boolean;
   hasPhoto: boolean;
   mipsId: number | null;
@@ -415,26 +438,33 @@ export async function verifyPersonOnMIPS(personNo: string): Promise<{
   validTimeBegin: string | null;
   validTimeEnd: string | null;
 }> {
-  const stripped = personNo.replace(/-/g, "");
+  const stripped = normalizeMIPSPersonSn(personNo);
   const result = await callMIPSProxy("/personInfo/person/list", "GET", {
     personSn: stripped,
     pageNum: "1",
     pageSize: "10",
-  });
+  }, undefined, branchId);
+
+  if (!result.success || (result.data?.code !== undefined && result.data.code !== 200 && result.data.code !== 0)) {
+    throw new Error(result.error || result.data?.msg || result.data?.message || "Failed to verify person on MIPS");
+  }
 
   const rows = result.data?.rows || result.data?.data;
   if (!Array.isArray(rows) || rows.length === 0) {
     return { exists: false, hasPhoto: false, mipsId: null, personData: null, validTimeBegin: null, validTimeEnd: null };
   }
 
-  const person = rows.find((r: any) => r.personSn === stripped) || rows[0];
+  const person = rows.find((r: MIPSPerson) => normalizeMIPSPersonSn(r.personSn) === stripped);
+  if (!person) {
+    return { exists: false, hasPhoto: false, mipsId: null, personData: null, validTimeBegin: null, validTimeEnd: null };
+  }
   return {
     exists: true,
-    hasPhoto: !!(person as any).photoUri || !!(person as any).havePhoto,
-    mipsId: (person as any).personId || null,
+    hasPhoto: mipsPersonHasPhoto(person as MIPSPerson & Record<string, unknown>),
+    mipsId: person.personId || null,
     personData: person as MIPSPerson,
-    validTimeBegin: (person as any).validTimeBegin || null,
-    validTimeEnd: (person as any).validTimeEnd || null,
+    validTimeBegin: person.validTimeBegin || null,
+    validTimeEnd: person.validTimeEnd || null,
   };
 }
 

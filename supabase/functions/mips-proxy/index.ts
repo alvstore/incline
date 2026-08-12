@@ -1,4 +1,5 @@
-// mips-proxy v1.4.0
+// mips-proxy v1.4.1
+// v1.4.1 — normalize legacy host:port runtime values before constructing URLs.
 // v1.4.0 — secure owner/admin connection management, draft credential testing,
 // and credential-scoped token caching so password rotations take effect immediately.
 // v1.3.0 — explicit timeouts + failure classification (auth_failed / unreachable /
@@ -31,7 +32,10 @@ let tokenExpiry = 0;
 let cachedCredentialKey = "";
 
 function getBaseUrl(overrideUrl?: string): string {
-  return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
+  const raw = String(overrideUrl || Deno.env.get("MIPS_SERVER_URL") || "").trim();
+  if (!raw) throw new MipsError("upstream_error", "No MIPS server URL configured.");
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  return normalizeServerUrl(withScheme);
 }
 
 async function getRuoYiToken(baseUrl: string, username: string, password: string): Promise<string> {
@@ -95,7 +99,8 @@ function jsonResponse(body: unknown, status = 200) {
 
 function normalizeServerUrl(value: unknown): string {
   if (typeof value !== "string" || value.length > 500) throw new MipsError("upstream_error", "Enter a valid MIPS server URL.");
-  const parsed = new URL(value.trim());
+  const trimmed = value.trim();
+  const parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`);
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new MipsError("upstream_error", "MIPS server URL must use HTTP or HTTPS.");
   return parsed.toString().replace(/\/$/, "");
 }
