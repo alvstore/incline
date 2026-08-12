@@ -2245,8 +2245,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
     if (profile?.id) {
       const { data: member } = await supabase
         .from("members")
-        .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
+        .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
         .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (member) {
@@ -2255,6 +2256,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         memberEmail = (profile as any).email || undefined;
       }
     }
+
   }
 
   if (!memberMatch) {
@@ -2281,6 +2283,21 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
         leadPhone = (lead as any).phone || undefined;
         leadEmail = (lead as any).email || undefined;
         leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
+
+        // v8.0.0 — Check if this lead has ALREADY been promoted to a member
+        const { data: memberByLead } = await supabase
+          .from("members")
+          .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+          .eq("captured_lead_id", (lead as any).id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (memberByLead) {
+          memberMatch = memberByLead;
+          memberPhone = (memberByLead as any).profiles?.phone || leadPhone;
+          memberEmail = (memberByLead as any).profiles?.email || leadEmail;
+        }
+
       }
     }
 
@@ -2310,6 +2327,21 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             leadPhone = (lead as any).phone || undefined;
             leadEmail = (lead as any).email || undefined;
             leadContext = `[Lead] ${lead.full_name || "Unknown"}, Status: ${lead.status || "-"}, Goal: ${lead.fitness_goal || "-"}`;
+
+            // v8.0.0 — Re-check for promotion on linked lead ID
+            const { data: memberByLead2 } = await supabase
+              .from("members")
+              .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
+              .eq("captured_lead_id", linkedId)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (memberByLead2) {
+              memberMatch = memberByLead2;
+              memberPhone = (memberByLead2 as any).profiles?.phone || leadPhone;
+              memberEmail = (memberByLead2 as any).profiles?.email || leadEmail;
+            }
+
           }
         }
       } catch (_) { /* non-fatal */ }
@@ -2341,8 +2373,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             if (prof2?.id) {
               const { data: member2 } = await supabase
                 .from("members")
-                .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
+                .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
                 .eq("user_id", prof2.id)
+                .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();
               if (member2) {
@@ -2350,6 +2383,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
                 memberPhone = (prof2 as any).phone || undefined;
                 memberEmail = (prof2 as any).email || undefined;
               }
+
             }
             if (!memberMatch) {
               const { data: lead2 } = await supabase

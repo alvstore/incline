@@ -664,6 +664,31 @@ export async function executeSharedToolCall(
         };
       }
 
+      case "get_my_fitness_plans": {
+        if (!ctx.memberId) return { error: "Not a registered member." };
+        const { data } = await supabase
+          .from("fitness_plans")
+          .select("id, name, type, status, start_date, end_date, difficulty")
+          .eq("member_id", ctx.memberId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (!data || data.length === 0) return { message: "No active diet or workout plans found. You can request one via staff." };
+        return {
+          plans: data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            type: p.type,
+            status: p.status,
+            start_date: p.start_date,
+            end_date: p.end_date,
+            difficulty: p.difficulty,
+            view_url: `https://incline.lovable.app/member-dashboard/fitness/${p.id}`,
+          })),
+        };
+      }
+
+
       default:
         return { error: `Tool not implemented in shared executor: ${toolName}` };
     }
