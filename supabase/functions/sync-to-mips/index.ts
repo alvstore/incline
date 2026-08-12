@@ -509,7 +509,7 @@ async function dispatchToDevices(
         const res = await fetch(`${baseUrl}/through/device/syncPerson`, {
           method: "POST",
           headers: authHeaders(token),
-          body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "4" }),
+          body: JSON.stringify({ personId, deviceIds: [mipsDeviceId], deviceNumType: "3" }),
           signal: AbortSignal.timeout(8_000),
         });
         responseCode = res.status;
