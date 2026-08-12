@@ -198,7 +198,10 @@ function renderUserContext(id: Identity | undefined): string {
 - plan_ends_at: ${id.planEndsAt ?? "(n/a)"}
 - branch: ${id.branchName ?? "(default)"}
 - channel_id: ${id.senderId}
-- IMPORTANT: name, phone and email above are already on file. NEVER re-ask for them. Greet by first name on your first reply.
+- IMPORTANT: You are speaking to an EXISTING MEMBER. They have already joined the gym.
+- NEVER ask for their name, email, or phone — they are already on file above.
+- NEVER treat them as a new inquiry or a lead.
+- Greet them by first name on your first reply.
 </user_context>`;
   }
   if (id.role === "lead") {
