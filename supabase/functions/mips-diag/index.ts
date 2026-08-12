@@ -15,13 +15,13 @@ Deno.serve(async (req) => {
   try {
     const { data: devices, error: devErr } = await supabase
       .from("access_devices")
-      .select("*");
+      .select("id, device_name, mips_device_id, is_online, branch_id");
     
     if (devErr) throw devErr;
 
     const { data: connections, error: connErr } = await supabase
       .from("mips_connections")
-      .select("*");
+      .select("branch_id, server_url, is_active");
     
     if (connErr) throw connErr;
 
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
