@@ -12,6 +12,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Plus, Trash2, FileText, IndianRupee } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
+import { InvoiceMemberPicker, type InvoiceMember } from '@/components/invoices/InvoiceMemberPicker';
+import { InvoiceCatalogPicker, type CatalogItem } from '@/components/invoices/InvoiceCatalogPicker';
 
 interface CreateInvoiceDrawerProps {
   open: boolean;
