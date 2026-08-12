@@ -269,7 +269,6 @@ const InclineAscent = () => {
         <Suspense fallback={null}>
           <RegisterModal />
           <LegalModal />
-          <FoundingChip />
         </Suspense>
       )}
     </div>
