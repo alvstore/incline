@@ -2343,8 +2343,9 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
             if (prof2?.id) {
               const { data: member2 } = await supabase
                 .from("members")
-                .select("id, branch_id, member_code, profiles!inner(full_name, phone, email)")
+                .select("id, branch_id, member_code, status, profiles!inner(full_name, phone, email)")
                 .eq("user_id", prof2.id)
+                .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();
               if (member2) {
@@ -2352,6 +2353,7 @@ async function resolveMemberContext(supabase: any, senderId: string, branchId: s
                 memberPhone = (prof2 as any).phone || undefined;
                 memberEmail = (prof2 as any).email || undefined;
               }
+
             }
             if (!memberMatch) {
               const { data: lead2 } = await supabase
