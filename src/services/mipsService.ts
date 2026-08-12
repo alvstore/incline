@@ -188,21 +188,18 @@ export async function syncPersonToMIPS(
 // Remote open door
 export async function remoteOpenDoor(deviceId: number, branchId?: string): Promise<{ success: boolean; message: string }> {
   try {
-    const result = await callMIPSProxy(`/through/device/control`, "POST", undefined, {
-      deviceId,
-      command: "open"
-    }, branchId);
-    
-    // v2.6.1 — Fallback to /through/device/openDoor/{id} if standard control fails
+    // v2.6.1 — Use /through/device/openDoor/{id} (GET) which is confirmed working for Gate 2
+    const result = await callMIPSProxy(`/through/device/openDoor/${deviceId}`, "GET", undefined, undefined, branchId);
     const isOk = result.success && (result.data?.code === 200 || result.data?.code === 0);
     
     if (!isOk) {
-      console.warn(`Standard control 'open' failed for device ${deviceId}, trying legacy openDoor endpoint...`);
-      const legacyResult = await callMIPSProxy(`/through/device/openDoor/${deviceId}`, "GET", undefined, undefined, branchId);
-      const isLegacyOk = legacyResult.success && (legacyResult.data?.code === 200 || legacyResult.data?.code === 0);
+      console.warn(`Direct openDoor failed for device ${deviceId}, trying 'control' (GET)...`);
+      // Some RuoYi versions use GET /through/device/control?deviceId=X&command=open
+      const fallbackRes = await callMIPSProxy(`/through/device/control`, "GET", { deviceId: String(deviceId), command: "open" }, undefined, branchId);
+      const isFallbackOk = fallbackRes.success && (fallbackRes.data?.code === 200 || fallbackRes.data?.code === 0);
       return {
-        success: isLegacyOk,
-        message: isLegacyOk ? "Door opened successfully (via legacy)" : (legacyResult.data?.msg || "Failed to open door"),
+        success: isFallbackOk,
+        message: isFallbackOk ? "Door opened successfully (fallback)" : (fallbackRes.data?.msg || "Failed to open door"),
       };
     }
 
