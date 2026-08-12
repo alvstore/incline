@@ -332,7 +332,7 @@ const DeviceSetupSheet = ({ open, onClose, branchId }: DeviceSetupSheetProps) =>
                       toast.error("Enter a code first");
                       return;
                     }
-                    run(`Verifying ${memberCode}`, () => verifyPersonOnMIPS(memberCode));
+                    run(`Verifying ${memberCode}`, () => verifyPersonOnMIPS(memberCode, branchId));
                   }}
                 >
                   <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Verify
