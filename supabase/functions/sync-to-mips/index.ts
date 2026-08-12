@@ -1,3 +1,4 @@
+// v2.4.1 — credential-scoped token cache prevents stale/cross-branch sessions.
 // v2.4.0 — zero-decode photo pipeline. The edge worker NEVER decodes an image
 // again (that was the 546 "not enough compute resources" kill): oversized
 // sources are re-fetched through Supabase Storage's server-side image
@@ -45,6 +46,7 @@ const AVATAR_PATH_PREFIX = "avatars/";
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+let cachedCredentialKey = "";
 
 /**
  * Prefer the private biometric bucket path (real face capture) over any
@@ -89,9 +91,9 @@ async function getRuoYiToken(baseUrl?: string, username?: string, password?: str
   const url = baseUrl || getBaseUrl();
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  const cacheKey = `${url}:${user}`;
+  const cacheKey = `${url}\u0000${user}\u0000${pass}`;
   
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  if (cachedToken && Date.now() < tokenExpiry && cachedCredentialKey === cacheKey) return cachedToken;
   const res = await fetch(`${url}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
@@ -105,11 +107,15 @@ async function getRuoYiToken(baseUrl?: string, username?: string, password?: str
     throw new Error(`RuoYi login non-JSON: ${text.substring(0, 300)}`);
   }
   if (json.code !== 200 && json.code !== 0) {
+    cachedToken = null;
+    tokenExpiry = 0;
+    cachedCredentialKey = "";
     throw new Error(`RuoYi login failed: ${json.msg || JSON.stringify(json)}`);
   }
   cachedToken = json.token || json.data?.token;
   if (!cachedToken) throw new Error("No token in login response");
   tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+  cachedCredentialKey = cacheKey;
   return cachedToken!;
 }
 

@@ -1,3 +1,4 @@
+// v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
 // v2.6.0 — Sweep now restores dues-cleared members; revokes tagged with a reason code
 // v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
@@ -16,6 +17,7 @@ const REVOKED_DATE = "2000-01-01 00:00:00";
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+let cachedCredentialKey = "";
 
 function getBaseUrl(overrideUrl?: string): string {
   return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
@@ -25,17 +27,24 @@ async function getRuoYiToken(baseUrl?: string, username?: string, password?: str
   const url = baseUrl || getBaseUrl();
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  const cacheKey = `${url}\u0000${user}\u0000${pass}`;
+  if (cachedToken && Date.now() < tokenExpiry && cachedCredentialKey === cacheKey) return cachedToken;
   const res = await fetch(`${url}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "TENANT-ID": "1" },
     body: JSON.stringify({ username: user, password: pass }),
   });
   const json = await res.json();
-  if (json.code !== 200 && json.code !== 0) throw new Error(`Login failed: ${json.msg}`);
+  if (json.code !== 200 && json.code !== 0) {
+    cachedToken = null;
+    tokenExpiry = 0;
+    cachedCredentialKey = "";
+    throw new Error(`Login failed: ${json.msg}`);
+  }
   cachedToken = json.token || json.data?.token;
   if (!cachedToken) throw new Error("No token in login response");
   tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+  cachedCredentialKey = cacheKey;
   return cachedToken!;
 }
 
