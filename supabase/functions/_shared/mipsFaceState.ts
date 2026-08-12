@@ -161,3 +161,39 @@ export async function resetPersonState(
     .eq("person_sn", personSn)
     .neq("state", "pending");
 }
+
+/**
+ * Drop ledger rows for people who are no longer part of the branch roster
+ * (left the gym, lost their photo, device removed). Without this the panel
+ * keeps counting ghosts.
+ */
+export async function pruneLedger(
+  supabase: any,
+  branchId: string,
+  devices: LedgerDevice[],
+  people: LedgerPerson[],
+): Promise<number> {
+  const validSns = people.map((p) => p.sn).filter(Boolean);
+  const validDeviceIds = devices.map((d) => d.mips_device_id);
+  if (!validDeviceIds.length) return 0;
+
+  const { data, error } = await supabase
+    .from("mips_device_face_state")
+    .select("id, person_sn, mips_device_id")
+    .eq("branch_id", branchId)
+    .limit(5000);
+  if (error) {
+    console.warn("[faceState] prune read error:", error.message);
+    return 0;
+  }
+  const snSet = new Set(validSns);
+  const devSet = new Set(validDeviceIds);
+  const stale = (data || [])
+    .filter((r: any) => !snSet.has(r.person_sn) || !devSet.has(Number(r.mips_device_id)))
+    .map((r: any) => r.id);
+  if (!stale.length) return 0;
+  for (let i = 0; i < stale.length; i += 200) {
+    await supabase.from("mips_device_face_state").delete().in("id", stale.slice(i, i + 200));
+  }
+  return stale.length;
+}
