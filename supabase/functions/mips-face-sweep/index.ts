@@ -379,6 +379,7 @@ Deno.serve(async (req) => {
             faces_on_device: live?.faces ?? null,
             persons_on_device: live?.persons ?? null,
             enrolled: rows.filter((r) => r.state === "enrolled").length,
+            unverified: rows.filter((r) => r.state === "unverified").length,
             pending: rows.filter((r) => r.state === "pending" || r.state === "missing").length,
             rejected: rows.filter((r) => r.state === "rejected").length,
           };
