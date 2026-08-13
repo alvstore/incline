@@ -9,8 +9,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { Plus, Trash2, FileText, IndianRupee } from 'lucide-react';
+import { format, addDays } from 'date-fns';
+import { Plus, Trash2, FileText, IndianRupee, History, Clock, CheckCircle2, Wallet, CreditCard } from 'lucide-react';
 import { useGstRates } from '@/hooks/useGstRates';
 import { InvoiceMemberPicker, type InvoiceMember } from '@/components/invoices/InvoiceMemberPicker';
 import { InvoiceCatalogPicker, type CatalogItem } from '@/components/invoices/InvoiceCatalogPicker';
@@ -27,15 +27,27 @@ interface LineItem {
   unit_price: number;
 }
 
+const DUE_DATE_PRESETS = [
+  { label: 'Today', days: 0 },
+  { label: '3 days', days: 3 },
+  { label: '7 days', days: 7 },
+  { label: '10 days', days: 10 },
+  { label: '15 days', days: 15 },
+];
+
 export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvoiceDrawerProps) {
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
   const [member, setMember] = useState<InvoiceMember | null>(null);
+  const [billDate, setBillDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
   const [gstRate, setGstRate] = useState(5);
   const [includeGst, setIncludeGst] = useState(true);
+  const [isPaid, setIsPaid] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [transactionId, setTransactionId] = useState('');
   const [items, setItems] = useState<LineItem[]>([
     { description: '', quantity: 1, unit_price: 0 },
   ]);
@@ -123,7 +135,23 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
       const result = data as { success: boolean; error?: string; invoice_id?: string };
       if (!result?.success) throw new Error(result?.error || 'Invoice creation failed');
 
-      return { id: result.invoice_id };
+      const invoiceId = result.invoice_id;
+
+      // If marked as paid, record the payment immediately
+      if (isPaid && invoiceId) {
+        const { error: payErr } = await supabase.rpc('record_payment', {
+          p_invoice_id: invoiceId,
+          p_member_id: memberId || null,
+          p_branch_id: branchId,
+          p_amount: calculateTotal(),
+          p_payment_method: paymentMethod,
+          p_payment_date: format(new Date(), 'yyyy-MM-dd'),
+          p_transaction_id: transactionId.trim() || null,
+        } as any);
+        if (payErr) throw payErr;
+      }
+
+      return { id: invoiceId };
     },
     onSuccess: () => {
       toast.success('Invoice created successfully');
@@ -138,9 +166,13 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
 
   const resetForm = () => {
     setMember(null);
+    setBillDate(format(new Date(), 'yyyy-MM-dd'));
     setDueDate(format(new Date(), 'yyyy-MM-dd'));
     setNotes('');
     setDiscountAmount(0);
+    setIsPaid(false);
+    setPaymentMethod('cash');
+    setTransactionId('');
     setItems([{ description: '', quantity: 1, unit_price: 0 }]);
   };
 
@@ -162,14 +194,39 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           </div>
 
 
-          {/* Due Date */}
-          <div className="space-y-2">
-            <Label>Due Date</Label>
-            <Input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Bill Date</Label>
+              <Input
+                type="date"
+                value={billDate}
+                onChange={(e) => setBillDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {DUE_DATE_PRESETS.map((preset) => (
+              <Button
+                key={preset.label}
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] px-2 rounded-full cursor-pointer hover:bg-slate-50 transition-colors"
+                onClick={() => setDueDate(format(addDays(new Date(), preset.days), 'yyyy-MM-dd'))}
+              >
+                <Clock className="h-3 w-3 mr-1 opacity-60" />
+                {preset.label}
+              </Button>
+            ))}
           </div>
 
           {/* Line Items */}
@@ -279,6 +336,69 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
               rows={2}
             />
           </div>
+
+          {/* Quick Payment Settlement */}
+          <Card className="border-indigo-100 bg-indigo-50/30">
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold text-slate-900 cursor-pointer" htmlFor="instant-pay">
+                      Mark as Paid Immediately
+                    </Label>
+                    <p className="text-[10px] text-slate-500">Record settlement now instead of creating as unpaid dues</p>
+                  </div>
+                </div>
+                <Switch 
+                  id="instant-pay"
+                  checked={isPaid} 
+                  onCheckedChange={setIsPaid} 
+                />
+              </div>
+
+              {isPaid && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Payment Method</Label>
+                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">
+                          <div className="flex items-center gap-2">
+                            <Wallet className="h-3.5 w-3.5" /> Cash
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="upi">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="h-3.5 w-3.5" /> UPI
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bank_transfer">
+                          <div className="flex items-center gap-2">
+                            <History className="h-3.5 w-3.5" /> Bank Transfer
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">UTR / Trans ID</Label>
+                    <Input
+                      placeholder="Optional"
+                      className="h-9 text-xs"
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Summary */}
           <Card className="bg-muted/50">
