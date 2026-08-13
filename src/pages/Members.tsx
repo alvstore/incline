@@ -123,13 +123,25 @@ export default function MembersPage() {
 
         if (error) throw error;
 
+        // search_members does not return created_at — hydrate the real joined
+        // date so the profile drawer never falls back to the epoch (01 Jan 1970).
+        const ids = (data || []).map((r: any) => r.id);
+        const joinedMap = new Map<string, string>();
+        if (ids.length > 0) {
+          const { data: joinRows } = await supabase
+            .from('members')
+            .select('id, created_at')
+            .in('id', ids);
+          (joinRows || []).forEach((r: any) => joinedMap.set(r.id, r.created_at));
+        }
+
         return {
           data: (data || []).map((row: any) => ({
             id: row.id,
             member_code: row.member_code,
             user_id: row.user_id,
             branch_id: row.branch_id,
-            joined_at: null,
+            joined_at: joinedMap.get(row.id) ?? null,
             status: row.member_status || 'inactive',
             profiles: {
               full_name: row.full_name,
