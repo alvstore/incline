@@ -290,7 +290,19 @@ export default function PTSessionsPage() {
             <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               Packages
             </TabsTrigger>
+            {canManage && (
+              <TabsTrigger value="commissions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                Commissions
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {canManage && (
+            <TabsContent value="commissions">
+              <CommissionLedger branchId={queryBranchId ?? null} />
+            </TabsContent>
+          )}
+
 
           <TabsContent value="today">
             <TodaySessionsPanel
