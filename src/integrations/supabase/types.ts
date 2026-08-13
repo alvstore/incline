@@ -15630,6 +15630,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      revoke_member_fitness_plan: { Args: { p_plan_id: string }; Returns: Json }
       revoke_membership_free_days: {
         Args: { p_free_days_id: string }
         Returns: Json
