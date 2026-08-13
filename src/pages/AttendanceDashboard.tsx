@@ -635,7 +635,7 @@ export default function AttendanceDashboard() {
               <button
                 type="button"
                 onClick={() => { setActiveTab('members'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab !== 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'members' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <Users className="inline h-3.5 w-3.5 mr-1" />Members
               </button>
@@ -644,15 +644,28 @@ export default function AttendanceDashboard() {
                 onClick={() => { setActiveTab('pt'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Attendance
+                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Sessions
               </button>
-
               <button
                 type="button"
                 onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff
+                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('staff-log'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-log' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Clock className="inline h-3.5 w-3.5 mr-1" />Staff Log
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('history'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'history' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <History className="inline h-3.5 w-3.5 mr-1" />History
               </button>
             </div>
           )}
@@ -905,12 +918,12 @@ export default function AttendanceDashboard() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-4">
-                <TabsTrigger value="members" className="gap-2"><Users className="h-4 w-4" />Members ({filteredMemberAttendance.length})</TabsTrigger>
-                <TabsTrigger value="staff-record" className="gap-2"><UserCheck className="h-4 w-4" />Staff Check-in</TabsTrigger>
-                <TabsTrigger value="staff-log" className="gap-2"><Clock className="h-4 w-4" />Staff Log ({filteredStaffAttendance.length})</TabsTrigger>
-                <TabsTrigger value="pt" className="gap-2"><Dumbbell className="h-4 w-4" />PT Sessions</TabsTrigger>
-                <TabsTrigger value="history" className="gap-2"><History className="h-4 w-4" />History</TabsTrigger>
+              <TabsList className="mb-4 hidden">
+                <TabsTrigger value="members">Members</TabsTrigger>
+                <TabsTrigger value="pt">PT Sessions</TabsTrigger>
+                <TabsTrigger value="staff-record">Staff Check-in</TabsTrigger>
+                <TabsTrigger value="staff-log">Staff Log</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
 
               {/* PT Sessions Tab */}
