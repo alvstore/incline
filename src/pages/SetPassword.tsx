@@ -44,6 +44,18 @@ export default function SetPasswordPage() {
           <div className="absolute bottom-0 -left-20 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
         </div>
 
+        <div className="relative w-full flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSignOut}
+            aria-label="Sign out"
+            className="cursor-pointer text-slate-500 hover:text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          >
+            <LogOut className="h-4 w-4 mr-2" /> Sign out
+          </Button>
+        </div>
+
         <div className="relative w-full flex justify-center">
           <SetPasswordForm />
         </div>
