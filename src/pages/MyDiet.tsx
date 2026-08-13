@@ -56,11 +56,14 @@ export default function MyDiet() {
     enabled: !!member,
     queryFn: async () => {
       // Primary source: unified member_fitness_plans table.
+      // Revoked/expired plans carry a past valid_until — never show them.
+      const todayIso = new Date().toISOString().slice(0, 10);
       const { data: unified, error: unifiedErr } = await supabase
         .from('member_fitness_plans')
         .select('*')
         .eq('member_id', member!.id)
         .eq('plan_type', 'diet')
+        .or(`valid_until.is.null,valid_until.gte.${todayIso}`)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

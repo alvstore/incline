@@ -31,6 +31,8 @@ import { TodaySessionsPanel } from "@/components/pt/TodaySessionsPanel";
 import { ClientsTable } from "@/components/pt/ClientsTable";
 import { InsightsPanel } from "@/components/pt/InsightsPanel";
 import { PackageCard } from "@/components/pt/PackageCard";
+import { CommissionLedger } from "@/components/pt/CommissionLedger";
+
 import type { PTMemberPackageRow } from "@/components/pt/ptTypes";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
@@ -290,7 +292,19 @@ export default function PTSessionsPage() {
             <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               Packages
             </TabsTrigger>
+            {canManage && (
+              <TabsTrigger value="commissions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                Commissions
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {canManage && (
+            <TabsContent value="commissions">
+              <CommissionLedger branchId={queryBranchId ?? null} />
+            </TabsContent>
+          )}
+
 
           <TabsContent value="today">
             <TodaySessionsPanel

@@ -150,6 +150,8 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
       qc.invalidateQueries({ queryKey: ['payroll-items'] });
       qc.invalidateQueries({ queryKey: ['salary-advances'] });
       qc.invalidateQueries({ queryKey: ['pending-advance'] });
+      qc.invalidateQueries({ queryKey: ['pt-commission-ledger'] });
+
     },
     onError: (e: any) => toast.error(e.message),
   });

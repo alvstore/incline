@@ -43,7 +43,7 @@ import { CancelInvoiceDrawer } from '@/components/invoices/CancelInvoiceDrawer';
 import { can } from '@/lib/auth/permissions';
 
 import { CompGiftDrawer } from './CompGiftDrawer';
-import { GiftDaysDrawer } from './GiftDaysDrawer';
+
 import { UpgradeMembershipDrawer } from './UpgradeMembershipDrawer';
 
 import { DocumentVaultTab } from './DocumentVaultTab';
@@ -675,7 +675,7 @@ export function MemberProfileDrawer({
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [compGiftOpen, setCompGiftOpen] = useState(false);
-  const [giftDaysOpen, setGiftDaysOpen] = useState(false);
+  
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const [registrationFormOpen, setRegistrationFormOpen] = useState(false);
@@ -1429,12 +1429,6 @@ export function MemberProfileDrawer({
                 <Gift className="h-4 w-4 mr-2 shrink-0" /> Comp/Gift
               </Button>
             )}
-            {isManagerOrAbove && currentMembership && (
-              <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setGiftDaysOpen(true)}>
-                <Gift className="h-4 w-4 mr-2 shrink-0" /> Gift Days
-              </Button>
-
-            )}
             {isManagerOrAbove && (
               <Button variant="outline" size="sm" className="justify-start min-h-[44px] h-auto py-2 whitespace-normal text-left" onClick={() => setTransferBranchOpen(true)}>
                 <Building2 className="h-4 w-4 mr-2 shrink-0" /> Transfer Branch
@@ -1590,7 +1584,7 @@ export function MemberProfileDrawer({
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>Joined: {format(new Date(member.joined_at), 'dd MMM yyyy')}</span>
+                      <span>Joined: {member.joined_at && !isNaN(new Date(member.joined_at).getTime()) ? format(new Date(member.joined_at), 'dd MMM yyyy') : '—'}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Source:</span>
@@ -2405,14 +2399,6 @@ export function MemberProfileDrawer({
             branchId={member.branch_id}
           />
         )}
-        <GiftDaysDrawer
-
-          open={giftDaysOpen}
-          onOpenChange={setGiftDaysOpen}
-          membershipId={currentMembership?.id}
-
-          memberId={member.id}
-        />
 
         <CompGiftDrawer
           open={compGiftOpen}

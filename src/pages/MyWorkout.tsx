@@ -26,11 +26,14 @@ export default function MyWorkout() {
     queryKey: ['my-workout-plan', member?.id],
     enabled: !!member,
     queryFn: async () => {
+      // Revoked/expired plans carry a past valid_until — never show them.
+      const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from('member_fitness_plans')
         .select('*')
         .eq('member_id', member!.id)
         .eq('plan_type', 'workout')
+        .or(`valid_until.is.null,valid_until.gte.${today}`)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

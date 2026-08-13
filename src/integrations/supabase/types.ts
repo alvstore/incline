@@ -10477,6 +10477,73 @@ export type Database = {
         }
         Relationships: []
       }
+      pt_commission_installments: {
+        Row: {
+          branch_id: string | null
+          commission_id: string
+          created_at: string
+          id: string
+          installment_amount: number
+          installment_index: number
+          paid_at: string | null
+          payout_month: string
+          payroll_item_id: string | null
+          status: string
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          commission_id: string
+          created_at?: string
+          id?: string
+          installment_amount?: number
+          installment_index?: number
+          paid_at?: string | null
+          payout_month: string
+          payroll_item_id?: string | null
+          status?: string
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          commission_id?: string
+          created_at?: string
+          id?: string
+          installment_amount?: number
+          installment_index?: number
+          paid_at?: string | null
+          payout_month?: string
+          payroll_item_id?: string | null
+          status?: string
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt_commission_installments_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "trainer_commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_commission_installments_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pt_commission_installments_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pt_packages: {
         Row: {
           branch_id: string
@@ -12474,57 +12541,84 @@ export type Database = {
           amount: number
           approved_at: string | null
           approved_by: string | null
+          base_commission: number | null
+          branch_id: string | null
           commission_type: string
           created_at: string
+          gst_deduction: number | null
           id: string
           kind: string
+          member_id: string | null
+          net_total_commission: number | null
           notes: string | null
           paid_at: string | null
+          payment_mode: string | null
           percentage: number | null
+          plan_duration_months: number | null
           pt_package_id: string | null
           release_date: string | null
           reverses_commission_id: string | null
+          sale_date: string | null
           session_id: string | null
           source_payment_id: string | null
           status: string
+          total_sale_amount: number | null
           trainer_id: string
         }
         Insert: {
           amount: number
           approved_at?: string | null
           approved_by?: string | null
+          base_commission?: number | null
+          branch_id?: string | null
           commission_type: string
           created_at?: string
+          gst_deduction?: number | null
           id?: string
           kind?: string
+          member_id?: string | null
+          net_total_commission?: number | null
           notes?: string | null
           paid_at?: string | null
+          payment_mode?: string | null
           percentage?: number | null
+          plan_duration_months?: number | null
           pt_package_id?: string | null
           release_date?: string | null
           reverses_commission_id?: string | null
+          sale_date?: string | null
           session_id?: string | null
           source_payment_id?: string | null
           status?: string
+          total_sale_amount?: number | null
           trainer_id: string
         }
         Update: {
           amount?: number
           approved_at?: string | null
           approved_by?: string | null
+          base_commission?: number | null
+          branch_id?: string | null
           commission_type?: string
           created_at?: string
+          gst_deduction?: number | null
           id?: string
           kind?: string
+          member_id?: string | null
+          net_total_commission?: number | null
           notes?: string | null
           paid_at?: string | null
+          payment_mode?: string | null
           percentage?: number | null
+          plan_duration_months?: number | null
           pt_package_id?: string | null
           release_date?: string | null
           reverses_commission_id?: string | null
+          sale_date?: string | null
           session_id?: string | null
           source_payment_id?: string | null
           status?: string
+          total_sale_amount?: number | null
           trainer_id?: string
         }
         Relationships: [
@@ -14473,6 +14567,10 @@ export type Database = {
         Returns: Json
       }
       generate_employee_code: { Args: { p_branch_id: string }; Returns: string }
+      generate_pt_commission: {
+        Args: { _member_package_id: string; _payment_mode: string }
+        Returns: number
+      }
       generate_renewal_invoices: { Args: never; Returns: undefined }
       generate_trainer_code: { Args: { p_branch_id: string }; Returns: string }
       get_ai_purpose: {
@@ -15083,6 +15181,10 @@ export type Database = {
       pt_calendar_expiry: {
         Args: { p_months: number; p_start: string; p_validity_days?: number }
         Returns: string
+      }
+      pt_commission_due_for_period: {
+        Args: { _period_end: string; _period_start: string; _user_id: string }
+        Returns: number
       }
       punch_duty: {
         Args: { p_branch_id?: string; p_shift_type?: string }
