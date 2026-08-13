@@ -190,10 +190,12 @@ export default function MembersPage() {
             return ms.status === 'active' && end >= today;
           });
           const scheduledMembership = m.memberships?.find((ms: any) => {
-            if (ms.status !== 'pending') return false;
+            // A membership is "Scheduled" if its start date is in the future,
+            // regardless of its internal 'status' column (which the RPC might
+            // return as 'pending').
             const start = new Date(ms.start_date);
             start.setHours(0, 0, 0, 0);
-            return start > today;
+            return start > today && ms.status !== 'cancelled' && ms.status !== 'voided';
           });
           const frozenMembership = m.memberships?.find((ms: any) => ms.status === 'frozen');
           let memberStatus = 'inactive';

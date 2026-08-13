@@ -540,19 +540,30 @@ export function PurchaseMembershipDrawer({
                   </Label>
                   {!isMemberMode && (
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="advance-booking" className="text-xs text-muted-foreground cursor-pointer">
-                        Advance booking
-                      </Label>
-                      <Switch
-                        id="advance-booking"
-                        checked={advanceBooking}
-                        onCheckedChange={(v) => {
-                          setAdvanceBooking(v);
-                          if (v && new Date(startDate) <= new Date()) {
-                            setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
-                          }
-                        }}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 cursor-help">
+                            <Label htmlFor="advance-booking" className="text-xs text-muted-foreground cursor-help">
+                              Advance booking
+                            </Label>
+                            <Switch
+                              id="advance-booking"
+                              checked={advanceBooking}
+                              onCheckedChange={(v) => {
+                                setAdvanceBooking(v);
+                                if (v && new Date(startDate) <= new Date()) {
+                                  setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+                                }
+                              }}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          Enable this to schedule a membership for a future date. 
+                          The membership will stay in <strong>Scheduled</strong> status and hardware access 
+                          will only be granted on the start date.
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   )}
                 </div>
@@ -568,15 +579,16 @@ export function PurchaseMembershipDrawer({
                   }
                   onChange={(e) => setStartDate(e.target.value)}
                 />
-                <p className="text-sm text-muted-foreground">
-                  End Date: {calculateEndDate()}
-                  {advanceBooking && ' · Membership stays Scheduled until start date.'}
-                </p>
-                {!isMemberMode && !advanceBooking && (
-                  <p className="text-xs text-muted-foreground">
-                    Staff can backdate up to 90 days for members who started training before registration.
+                <div className="flex flex-col gap-1.5 mt-1.5">
+                  <p className="text-sm font-medium text-primary">
+                    Ends on: {calculateEndDate() || '—'}
                   </p>
-                )}
+                  {!isMemberMode && !advanceBooking && (
+                    <p className="text-xs text-muted-foreground">
+                      Staff can backdate up to 90 days for members who already started training.
+                    </p>
+                  )}
+                </div>
                 {isBackdated && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                     Backdated start: this membership counts as already running since{' '}
