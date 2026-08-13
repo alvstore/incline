@@ -757,11 +757,17 @@ export async function fetchAssignmentsForTemplate(
 }
 
 
-/** Soft-revoke an assignment by setting valid_until = today. */
+/**
+ * Revoke an assignment immediately. `valid_until` is set to yesterday (not
+ * today) so the plan stops being valid the moment it is revoked — otherwise it
+ * stays live for the rest of the day on the member's My Diet / My Workout page.
+ */
 export async function revokeMemberAssignment(assignmentId: string): Promise<void> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
   const { error } = await supabase
     .from('member_fitness_plans')
-    .update({ valid_until: new Date().toISOString().slice(0, 10) })
+    .update({ valid_until: yesterday.toISOString().slice(0, 10) })
     .eq('id', assignmentId);
   if (error) throw error;
 }
