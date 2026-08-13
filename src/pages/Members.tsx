@@ -28,7 +28,7 @@ import { exportToCSV } from '@/lib/csvExport';
 
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useState, useMemo, useEffect } from 'react';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays, format, startOfDay } from 'date-fns';
 import { daysRemaining } from '@/lib/memberships/duration';
 
 
@@ -410,7 +410,7 @@ export default function MembersPage() {
       });
       const scheduled = ms.find((x: any) => {
         if (x.status !== 'pending') return false;
-        const start = new Date(x.start_date); start.setHours(0, 0, 0, 0);
+        const start = startOfDay(new Date(x.start_date));
         return start > today;
       });
       const frozen = ms.find((x: any) => x.status === 'frozen');

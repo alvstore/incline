@@ -22,7 +22,7 @@ import {
   Activity,
   ClipboardList
 } from 'lucide-react';
-import { format, subDays, startOfMonth, endOfMonth, differenceInHours } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, differenceInHours, startOfDay } from 'date-fns';
 
 // Lazy-load below-fold heavy components
 const LazyLiveAccessLog = lazy(() => import('@/components/devices/LiveAccessLog'));
@@ -58,15 +58,25 @@ export default function DashboardPage() {
       const today = new Date().toISOString().split('T')[0];
       const monthStart = startOfMonth(new Date()).toISOString();
       const monthEnd = endOfMonth(new Date()).toISOString();
+      const todayDate = startOfDay(new Date());
 
       // Members count
-      let membersQuery = supabase.from('members').select('id, status', { count: 'exact' });
+      // totalMembers includes EVERYONE (active, scheduled, frozen, inactive, pending_plan)
+      let membersQuery = supabase.from('members').select('id', { count: 'exact' });
       if (branchFilter) membersQuery = membersQuery.eq('branch_id', branchFilter);
       const { count: totalMembers } = await membersQuery;
 
+      // activeMembers: those with a CURRENTLY active membership
+      // Using membership subquery or simple status check if the DB status is reliable.
+      // Based on Members.tsx logic, status='active' is set when a membership is active today.
       let activeMembersQuery = supabase.from('members').select('id', { count: 'exact' }).eq('status', 'active');
       if (branchFilter) activeMembersQuery = activeMembersQuery.eq('branch_id', branchFilter);
       const { count: activeMembers } = await activeMembersQuery;
+
+      // Scheduled: memberships that are pending and start in the future
+      let scheduledQuery = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'pending').gt('start_date', todayDate.toISOString());
+      if (branchFilter) scheduledQuery = scheduledQuery.eq('branch_id', branchFilter);
+      const { count: scheduledMemberships } = await scheduledQuery;
 
       // Frozen memberships count
       let frozenQuery = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'frozen');
@@ -118,6 +128,7 @@ export default function DashboardPage() {
       return {
         totalMembers: totalMembers || 0,
         activeMembers: activeMembers || 0,
+        scheduledMemberships: scheduledMemberships || 0,
         frozenMemberships: frozenMemberships || 0,
         todayCheckins: todayCheckins || 0,
         currentlyIn: currentlyIn || 0,
@@ -127,7 +138,7 @@ export default function DashboardPage() {
         activeTrainers: activeTrainers || 0,
         todayClasses: todayClasses || 0,
         pendingApprovals: pendingApprovals || 0,
-      };
+      } as any;
     },
   });
 
@@ -260,7 +271,7 @@ export default function DashboardPage() {
         .filter((r: any) => r.owed > 0)
         .slice(0, 5);
       const totalOutstanding = items.reduce((sum: number, r: any) => sum + r.owed, 0);
-      return { items, totalOutstanding };
+      return { items, totalOutstanding } as any;
     },
   });
 
@@ -320,21 +331,25 @@ export default function DashboardPage() {
               <h2 className="text-2xl font-bold tracking-tight">Gym Health</h2>
               <p className="text-primary-foreground/70 text-sm mt-1">Real-time overview of your business</p>
             </div>
-            <div className="grid grid-cols-3 gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-8">
               <div className="text-center">
-                <p className="text-3xl font-bold">{stats?.totalMembers || 0}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Total Members</p>
+                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.totalMembers || 0}</p>
+                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Total Members</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold">₹{(stats?.monthlyRevenue || 0).toLocaleString()}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Revenue This Month</p>
+                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.scheduledMemberships || 0}</p>
+                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Scheduled</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold">{stats?.expiringMemberships || 0}</p>
-                {(stats?.expiringMemberships || 0) > 0 && (
-                  <Badge className="bg-destructive text-destructive-foreground text-xs mt-1 border-0">Action Needed</Badge>
+                <p className="text-2xl md:text-3xl font-bold">₹{((stats as any)?.monthlyRevenue || 0).toLocaleString()}</p>
+                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Revenue (MTD)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl md:text-3xl font-bold">{(stats as any)?.expiringMemberships || 0}</p>
+                {((stats as any)?.expiringMemberships || 0) > 0 && (
+                  <Badge className="bg-destructive text-white text-[10px] px-1 py-0 h-4 mt-1 border-0 animate-pulse">Action</Badge>
                 )}
-                <p className="text-primary-foreground/70 text-xs mt-1">Expiring Soon</p>
+                <p className="text-primary-foreground/70 text-[10px] md:text-xs mt-1 uppercase tracking-wider font-semibold">Expiring Soon</p>
               </div>
             </div>
           </div>
@@ -356,26 +371,26 @@ export default function DashboardPage() {
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
             <StatCard
               title="New Leads"
-              value={stats?.newLeads || 0}
+              value={(stats as any)?.newLeads || 0}
               icon={UserPlus}
               description="This month"
               variant="info"
             />
             <StatCard
               title="Active Trainers"
-              value={stats?.activeTrainers || 0}
+              value={(stats as any)?.activeTrainers || 0}
               icon={Dumbbell}
               variant="default"
             />
             <StatCard
               title="Today's Classes"
-              value={stats?.todayClasses || 0}
+              value={(stats as any)?.todayClasses || 0}
               icon={Calendar}
               variant="accent"
             />
             <StatCard
               title="Pending Approvals"
-              value={stats?.pendingApprovals || 0}
+              value={(stats as any)?.pendingApprovals || 0}
               icon={ClipboardList}
               variant="warning"
             />
@@ -402,11 +417,11 @@ export default function DashboardPage() {
         <div ref={crmRef} className="grid gap-6 md:grid-cols-4">
           {crmInView ? (
             <>
-              <OccupancyGauge currentlyIn={stats?.currentlyIn || 0} capacity={branches?.find(b => b.id === branchFilter)?.capacity || 50} />
+              <OccupancyGauge currentlyIn={(stats as any)?.currentlyIn || 0} capacity={branches?.find((b: any) => b.id === branchFilter)?.capacity || 50} />
               <HourlyAttendanceChart data={hourlyAttendanceData} />
               <AccountsReceivableWidget
-                data={receivablesData?.items || []}
-                totalOutstanding={receivablesData?.totalOutstanding || 0}
+                data={(receivablesData as any)?.items || []}
+                totalOutstanding={(receivablesData as any)?.totalOutstanding || 0}
               />
               <ExpiringMembersWidget data={expiringMembers} />
             </>
