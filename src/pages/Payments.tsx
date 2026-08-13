@@ -121,12 +121,18 @@ export default function PaymentsPage() {
       let query = supabase
         .from('invoices')
         .select(`
-          id, invoice_number, total_amount, amount_paid, status, due_date, invoice_type, member_id,
-          members(member_code, profiles:user_id(full_name, phone, email, avatar_url), lead:lead_id(full_name, phone, email, avatar_url))
+          id, invoice_number, total_amount, amount_paid, status, due_date, invoice_type, member_id, tax_amount, gst_rate,
+          members(
+            member_code, 
+            profiles:user_id(full_name, phone, email, avatar_url), 
+            lead:lead_id(full_name, phone, email, avatar_url),
+            payments(payment_method, payment_date, status)
+          ),
+          invoice_items(description, quantity, unit_price)
         `)
         .in('status', ['pending', 'partial', 'overdue'])
         .order('due_date', { ascending: true })
-        .limit(50);
+        .limit(100);
       if (branchFilter) query = query.eq('branch_id', branchFilter);
       const { data, error } = await query;
       if (error) throw error;
@@ -506,16 +512,32 @@ export default function PaymentsPage() {
                       {(() => {
                         // Group invoices by member so a single member with multiple
                         // pending invoices shows up as one row, not five.
-                        const grouped = new Map<string, { name: string; code: string; invoices: any[]; total: number; earliest: Date | null }>();
+                        const grouped = new Map<string, { 
+                          name: string; 
+                          code: string; 
+                          invoices: any[]; 
+                          total: number; 
+                          earliest: Date | null;
+                          lastPayment: { method: string; date: string } | null;
+                        }>();
+                        
                         for (const inv of overdueInvoices as any[]) {
                           const key = inv.member_id || inv.id;
                           const due = (inv.total_amount || 0) - (inv.amount_paid || 0);
+                          
+                          // Resolve last payment from the joined payments on member
+                          const memberPayments = inv.members?.payments || [];
+                          const lastP = memberPayments
+                            .filter((p: any) => p.status === 'completed')
+                            .sort((a: any, b: any) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())[0];
+
                           const existing = grouped.get(key) || {
                             name: resolveMemberDisplay(inv.members).name,
                             code: inv.members?.member_code || '',
                             invoices: [],
                             total: 0,
                             earliest: null,
+                            lastPayment: lastP ? { method: lastP.payment_method, date: lastP.payment_date } : null,
                           };
                           existing.invoices.push(inv);
                           existing.total += due;
@@ -528,32 +550,97 @@ export default function PaymentsPage() {
                         return Array.from(grouped.entries()).map(([key, g]) => {
                           const isOverdue = g.earliest && g.earliest < new Date();
                           return (
-                            <TableRow key={key}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{g.name}</p>
-                                  <p className="text-xs text-muted-foreground">{g.code}</p>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className="rounded-full">
-                                  {g.invoices.length} invoice{g.invoices.length > 1 ? 's' : ''}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-semibold text-destructive">₹{g.total.toLocaleString('en-IN')}</TableCell>
-                              <TableCell>
-                                {g.earliest ? (
-                                  <span className={isOverdue ? 'text-destructive font-medium' : ''}>
-                                    {format(g.earliest, 'dd MMM')}
-                                  </span>
-                                ) : '-'}
-                              </TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleCollectFromDues(g.invoices[0])}>
-                                  <CreditCard className="h-3 w-3" />Collect
-                                </Button>
-                              </TableCell>
-                            </TableRow>
+                            <Collapsible key={key} asChild>
+                              <>
+                                <TableRow className="hover:bg-muted/30 transition-colors">
+                                  <TableCell>
+                                    <div className="flex items-center gap-3">
+                                      <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full shrink-0">
+                                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                                        </Button>
+                                      </CollapsibleTrigger>
+                                      <div>
+                                        <p className="font-semibold text-slate-900">{g.name}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 rounded">{g.code}</span>
+                                          {g.lastPayment && (
+                                            <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 bg-white gap-1 font-normal text-slate-500">
+                                              <History className="h-2.5 w-2.5" />
+                                              Last: {g.lastPayment.method}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border-indigo-100">
+                                      {g.invoices.length} {g.invoices.length > 1 ? 'Bills' : 'Bill'}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-bold text-destructive text-base">₹{g.total.toLocaleString('en-IN')}</TableCell>
+                                  <TableCell>
+                                    {g.earliest ? (
+                                      <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", 
+                                        isOverdue ? "bg-red-50 text-red-700 border border-red-100" : "bg-slate-50 text-slate-600 border border-slate-100")}>
+                                        <Clock className="h-3 w-3" />
+                                        {format(g.earliest, 'dd MMM')}
+                                      </div>
+                                    ) : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button size="sm" className="gap-1.5 text-xs h-8 px-3 rounded-lg shadow-sm" onClick={() => handleCollectFromDues(g.invoices[0])}>
+                                      <CreditCard className="h-3.5 w-3.5" />Record
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                                <CollapsibleContent asChild>
+                                  <TableRow className="bg-muted/20 border-t-0 hover:bg-muted/20">
+                                    <TableCell colSpan={5} className="py-3 px-12">
+                                      <div className="space-y-3">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                          < Receipt className="h-3 w-3" /> Outstanding Breakdown
+                                        </p>
+                                        <div className="grid gap-2">
+                                          {g.invoices.map((inv: any) => {
+                                            const balance = (inv.total_amount || 0) - (inv.amount_paid || 0);
+                                            const isGst = (inv.tax_amount || 0) > 0 || (inv.gst_rate || 0) > 0;
+                                            return (
+                                              <div key={inv.id} className="flex items-start justify-between p-3 rounded-xl bg-white border border-slate-200/60 shadow-sm">
+                                                <div className="space-y-1">
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-semibold text-slate-800">#{inv.invoice_number}</span>
+                                                    {isGst ? (
+                                                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] h-4 py-0 font-medium">GST INVOICE</Badge>
+                                                    ) : (
+                                                      <Badge variant="outline" className="text-[9px] h-4 py-0 font-medium text-slate-400 border-slate-200">CASH / NON-TAX</Badge>
+                                                    )}
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                                    {(inv.invoice_items || []).map((item: any, i: number) => (
+                                                      <div key={i} className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                                                        <Tag className="h-2.5 w-2.5 opacity-60" />
+                                                        {item.description}
+                                                        <span className="text-[10px] opacity-60">x{item.quantity}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                  <div className="text-sm font-bold text-destructive">₹{balance.toLocaleString('en-IN')}</div>
+                                                  <div className="text-[10px] text-muted-foreground mt-0.5">Due {inv.due_date ? format(new Date(inv.due_date), 'dd MMM yy') : 'N/A'}</div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                </CollapsibleContent>
+                              </>
+                            </Collapsible>
                           );
                         });
                       })()}
