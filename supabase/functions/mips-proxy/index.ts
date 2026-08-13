@@ -8,6 +8,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
+async function generateHmacSha256(message: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const msgData = encoder.encode(message);
+  const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, msgData);
+  return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 const LOGIN_TIMEOUT_MS = 15_000;
 const REQUEST_TIMEOUT_MS = 25_000;
 
@@ -167,7 +176,33 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
 
+    // ---- MIPS RELAY SIGNATURE CHECK (v1.5.0) ----
     const operation = body?.operation as ConnectionOperation | undefined;
+    const isRelayOpen = operation === "relay_open" || operation === "remote_open";
+    
+    if (isRelayOpen && !isService) {
+      const signature = req.headers.get("x-mips-signature");
+      const timestamp = req.headers.get("x-mips-timestamp");
+      const secret = Deno.env.get("MIPS_RELAY_SECRET");
+      
+      if (!secret || !signature || !timestamp) {
+        return jsonResponse({ error: "Forbidden: Missing command signature" }, 403);
+      }
+      
+      // Verify signature to prevent unauthorized door opening
+      const msg = `${timestamp}.${JSON.stringify(body)}`;
+      const expected = await generateHmacSha256(msg, secret);
+      if (signature !== expected) {
+        return jsonResponse({ error: "Forbidden: Invalid command signature" }, 403);
+      }
+      
+      // Prevent replay attacks (5 min window)
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - parseInt(timestamp)) > 300) {
+        return jsonResponse({ error: "Forbidden: Command expired" }, 403);
+      }
+    }
+
     if (operation) {
       if (operation === "repair_from_runtime" && !isService) return jsonResponse({ error: "Service authorization required." }, 403);
       if (!isService && !roleNames.some((role) => role === "owner" || role === "admin")) return jsonResponse({ error: "Only owners and admins can manage MIPS credentials." }, 403);
