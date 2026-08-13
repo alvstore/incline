@@ -627,11 +627,21 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
             branchId={branchId}
             mode="staff"
           />
-        </>
+
+          <CompGiftDrawer
+            open={compGiftOpen}
+            onOpenChange={setCompGiftOpen}
+            memberId={memberId}
+            branchId={branchId}
+            membershipId={activeMembership.id}
+            memberName={availableBenefits[0]?.name}
+          />
+        </div>
       )}
     </TabsContent>
   );
 }
+
 
 interface MemberProfileDrawerProps {
   open: boolean;
