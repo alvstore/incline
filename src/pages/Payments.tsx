@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard } from 'lucide-react';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard, History, Clock, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
@@ -36,6 +36,7 @@ import type { ExpenseRow, ExpenseKind } from '@/services/expenseService';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export default function PaymentsPage() {
   const { branchFilter } = useBranchContext();
