@@ -169,12 +169,14 @@ export function CommissionLedger({ branchId }: Props) {
           acc.due += r.due;
           acc.net += r.net_commission;
           acc.pending += r.installments.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0);
+          acc.blocked += r.installments.filter((i) => i.status === 'blocked').reduce((s, i) => s + i.amount, 0);
           return acc;
         },
-        { sales: 0, due: 0, net: 0, pending: 0 },
+        { sales: 0, due: 0, net: 0, pending: 0, blocked: 0 },
       ),
     [filtered],
   );
+
 
   return (
     <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
@@ -250,19 +252,21 @@ export function CommissionLedger({ branchId }: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-4 grid gap-3 sm:grid-cols-4">
+            <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {[
-                ['PT Sales', totals.sales],
-                ['Outstanding Dues', totals.due],
-                ['Net Commission', totals.net],
-                ['Pending Payout', totals.pending],
-              ].map(([label, value]) => (
+                ['PT Sales', totals.sales, 'text-slate-900'],
+                ['Outstanding Dues', totals.due, 'text-red-600'],
+                ['Net Commission', totals.net, 'text-slate-900'],
+                ['Payable Now', totals.pending, 'text-emerald-700'],
+                ['Held (member dues)', totals.blocked, 'text-amber-700'],
+              ].map(([label, value, tone]) => (
                 <div key={label as string} className="rounded-xl bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label as string}</p>
-                  <p className="text-xl font-bold text-slate-900">{inr(value as number)}</p>
+                  <p className={`text-xl font-bold ${tone as string}`}>{inr(value as number)}</p>
                 </div>
               ))}
             </div>
+
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -320,15 +324,28 @@ export function CommissionLedger({ branchId }: Props) {
                           {r.installments.map((i) => (
                             <Badge
                               key={`${r.id}-${i.month}`}
+                              title={
+                                i.status === 'blocked'
+                                  ? 'Held until the member clears their PT dues'
+                                  : i.status === 'paid'
+                                    ? 'Paid out through payroll'
+                                    : 'Payable in this payroll month'
+                              }
                               className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                i.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                                i.status === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : i.status === 'blocked'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-slate-100 text-slate-600'
                               }`}
                             >
                               {formatISTDate(i.month).slice(3)} · {inr(i.amount)}
+                              {i.status === 'blocked' ? ' · held' : ''}
                             </Badge>
                           ))}
                         </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
