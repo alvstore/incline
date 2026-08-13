@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard, History, Clock, Tag } from 'lucide-react';
+import { CreditCard, Wallet, TrendingUp, Receipt, Search, Download, Filter, X, Ban, Pencil, Plus, AlertTriangle, ChevronDown, Send, Activity, HandCoins, ArrowDownRight, ArrowUpRight, Scale, LayoutDashboard, History as HistoryIcon, Clock, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AddExpenseDrawer } from '@/components/finance/AddExpenseDrawer';
 import { EditExpenseDrawer } from '@/components/finance/EditExpenseDrawer';
@@ -567,7 +567,7 @@ export default function PaymentsPage() {
                                           <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 rounded">{g.code}</span>
                                           {g.lastPayment && (
                                             <Badge variant="outline" className="text-[10px] py-0 h-4 border-slate-200 bg-white gap-1 font-normal text-slate-500">
-                                              <History className="h-2.5 w-2.5" />
+                                              <HistoryIcon className="h-2.5 w-2.5" />
                                               Last: {g.lastPayment.method}
                                             </Badge>
                                           )}
