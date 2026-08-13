@@ -90,7 +90,7 @@ export function MarkPtStatusMenu({
             ? `Marked absent${typeof left === 'number' ? ` · ${left} sessions left` : ''}`
             : 'Marked holiday · pack not consumed';
       toast.success(msg, {
-        description: res?.gym_check_in_created ? 'Gym check-in created' : undefined,
+        description: res?.gym_check_in_created ? 'Personal Training attendance recorded + Gym check-in created' : 'Personal Training attendance recorded',
       });
       setPending(null);
       setNotes('');

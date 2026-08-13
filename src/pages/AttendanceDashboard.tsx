@@ -191,6 +191,11 @@ export default function AttendanceDashboard() {
 
   const handleQuickCheckIn = (memberId: string, memberName?: string, avatarUrl?: string) => {
     checkIn({ memberId, method: 'manual' });
+    // Note: We used to rely on PT attendance auto-logging a gym check-in, 
+    // but a gym check-in (mips/manual) should NOT auto-log a PT session.
+    // They are tracked independently via different tables and RPCs.
+
+    checkIn({ memberId, method: 'manual' });
     showFlash({
       type: 'success',
       name: memberName || 'Member',
@@ -201,6 +206,15 @@ export default function AttendanceDashboard() {
     setSearchQuery('');
     searchInputRef.current?.focus();
   };
+
+  const handlePtAttendanceSearch = async (query: string) => {
+    // If we are in the PT tab and searching, we should allow trainers/staff 
+    // to quickly find their PT clients and mark session attendance.
+    // This logic is handled inside PtAttendanceTabContent, which uses its own search.
+    // However, the main search bar currently only targets gym check-ins.
+    return;
+  };
+
 
   const isAlreadyCheckedIn = (memberId: string) => {
     return checkedInMembers.data?.some((a: any) => a.member_id === memberId);
