@@ -442,6 +442,7 @@ export default function ManualWorkoutEditor({ onMetaChange }: ManualWorkoutEdito
     } catch (err2: any) {
       toast.error(err2?.message || 'Failed to update template');
     } finally {
+
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

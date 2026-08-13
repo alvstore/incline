@@ -199,6 +199,8 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
   const [topUpDrawerOpen, setTopUpDrawerOpen] = useState(false);
   const [topUpBenefit, setTopUpBenefit] = useState<any>(null);
   const [addOnOpen, setAddOnOpen] = useState(false);
+  const [compGiftOpen, setCompGiftOpen] = useState(false);
+
 
   // Member-level comps (gifts) — independent of plan
   const { data: comps = [] } = useQuery({

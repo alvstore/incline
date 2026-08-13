@@ -469,6 +469,7 @@ export default function ManualDietEditor({ onMetaChange }: Props) {
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update template');
     } finally {
+
       setSaving(false);
     }
   }, [planName, description, templateId, navigate, queryClient, validateContent, buildContent]);

@@ -56,6 +56,7 @@ export default function SetPasswordPage() {
           </Button>
         </div>
 
+
         <div className="relative w-full flex justify-center">
           <SetPasswordForm />
         </div>
