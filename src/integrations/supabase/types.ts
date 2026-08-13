@@ -15268,29 +15268,53 @@ export type Database = {
         }
         Returns: Json
       }
-      purchase_member_membership: {
-        Args: {
-          p_amount_paying?: number
-          p_assign_locker_id?: string
-          p_branch_id: string
-          p_discount_amount?: number
-          p_discount_reason?: string
-          p_gst_rate?: number
-          p_idempotency_key?: string
-          p_include_gst?: boolean
-          p_member_id: string
-          p_notes?: string
-          p_payment_due_date?: string
-          p_payment_method?: string
-          p_payment_source?: string
-          p_plan_id: string
-          p_received_by?: string
-          p_send_reminders?: boolean
-          p_start_date: string
-          p_transaction_id?: string
-        }
-        Returns: Json
-      }
+      purchase_member_membership:
+        | {
+            Args: {
+              p_amount_paying?: number
+              p_assign_locker_id?: string
+              p_branch_id: string
+              p_discount_amount?: number
+              p_discount_reason?: string
+              p_gst_rate?: number
+              p_idempotency_key?: string
+              p_include_gst?: boolean
+              p_member_id: string
+              p_notes?: string
+              p_payment_due_date?: string
+              p_payment_method?: string
+              p_payment_source?: string
+              p_plan_id: string
+              p_received_by?: string
+              p_send_reminders?: boolean
+              p_start_date: string
+              p_transaction_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_amount_paying?: number
+              p_assign_locker_id?: string
+              p_branch_id: string
+              p_discount_amount?: number
+              p_discount_reason?: string
+              p_gst_rate?: number
+              p_idempotency_key?: string
+              p_include_gst?: boolean
+              p_member_id: string
+              p_notes?: string
+              p_payment_due_date?: string
+              p_payment_method?: string
+              p_payment_source?: string
+              p_plan_id: string
+              p_received_by?: string
+              p_send_reminders?: boolean
+              p_start_date: string
+              p_transaction_id?: string
+            }
+            Returns: Json
+          }
       purchase_membership: {
         Args: {
           p_amount_paid?: number
