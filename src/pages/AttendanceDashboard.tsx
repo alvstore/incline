@@ -660,6 +660,13 @@ export default function AttendanceDashboard() {
               >
                 <Clock className="inline h-3.5 w-3.5 mr-1" />Staff Log
               </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('history'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'history' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <History className="inline h-3.5 w-3.5 mr-1" />History
+              </button>
             </div>
           )}
           <div className="flex gap-3">
