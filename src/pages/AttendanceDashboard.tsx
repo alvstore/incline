@@ -191,6 +191,11 @@ export default function AttendanceDashboard() {
 
   const handleQuickCheckIn = (memberId: string, memberName?: string, avatarUrl?: string) => {
     checkIn({ memberId, method: 'manual' });
+    // Note: We used to rely on PT attendance auto-logging a gym check-in, 
+    // but a gym check-in (mips/manual) should NOT auto-log a PT session.
+    // They are tracked independently via different tables and RPCs.
+
+    checkIn({ memberId, method: 'manual' });
     showFlash({
       type: 'success',
       name: memberName || 'Member',
@@ -201,6 +206,15 @@ export default function AttendanceDashboard() {
     setSearchQuery('');
     searchInputRef.current?.focus();
   };
+
+  const handlePtAttendanceSearch = async (query: string) => {
+    // If we are in the PT tab and searching, we should allow trainers/staff 
+    // to quickly find their PT clients and mark session attendance.
+    // This logic is handled inside PtAttendanceTabContent, which uses its own search.
+    // However, the main search bar currently only targets gym check-ins.
+    return;
+  };
+
 
   const isAlreadyCheckedIn = (memberId: string) => {
     return checkedInMembers.data?.some((a: any) => a.member_id === memberId);
@@ -627,6 +641,14 @@ export default function AttendanceDashboard() {
               </button>
               <button
                 type="button"
+                onClick={() => { setActiveTab('pt'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Attendance
+              </button>
+
+              <button
+                type="button"
                 onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
@@ -639,7 +661,13 @@ export default function AttendanceDashboard() {
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
-                placeholder={activeTab === 'staff-record' ? "Search staff by name or employee code…" : "Scan barcode or type member code / name / phone…"}
+                placeholder={
+                  activeTab === 'pt' 
+                    ? "Search PT Client..." 
+                    : activeTab === 'staff-record' 
+                      ? "Search staff by name or employee code…" 
+                      : "Scan barcode or type member code / name / phone…"
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}

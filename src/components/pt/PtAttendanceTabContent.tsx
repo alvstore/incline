@@ -234,8 +234,9 @@ function ClientRosterCard({
     onSuccess: (res: any) => {
       const left = res?.sessions_remaining;
       toast.success(
-        `Session logged for ${client.memberName}` +
+        `PT Session logged for ${client.memberName}` +
         (typeof left === 'number' ? ` · ${left} sessions left` : ''),
+        { description: res?.gym_check_in_created ? 'Gym check-in also created' : undefined }
       );
       invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: k }));
     },
@@ -355,8 +356,9 @@ function HistoryPanel({ trainerFilterDefault }: { trainerFilterDefault: string }
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState('30');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [trainerFilter, setTrainerFilter] = useState<string>(trainerFilterDefault);
+  const [trainerFilter, setTrainerFilter] = useState<string>(trainerFilterDefault || 'all');
   const [search, setSearch] = useState('');
+
 
   const { from, to } = useMemo(() => {
     const now = new Date();

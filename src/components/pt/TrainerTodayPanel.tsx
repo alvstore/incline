@@ -13,6 +13,9 @@ interface TrainerTodayPanelProps {
  * Compact trainer-side panel: lists active PT clients with a status picker
  * (Present / Late / Absent / Holiday) calling log_pt_session atomically.
  * Present + Late also create today's gym check-in if the member hasn't yet.
+ * 
+ * Audit Note: This logs specifically to the Personal Training ledger.
+ * Gym entry (general attendance) is handled via mips or the main dashboard search.
  */
 export function TrainerTodayPanel({ trainerId, ptClients }: TrainerTodayPanelProps) {
   if (!ptClients || ptClients.length === 0) return null;
