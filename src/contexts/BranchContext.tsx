@@ -133,14 +133,19 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   const branchStatus: BranchStatus = useMemo(() => {
     // 1. Initial Auth Bootstrap: If we don't even have a user or roles yet, we are definitely loading.
     // AuthProvider takes time to hydrate session and fetch roles from DB.
-    if (authLoading || (user && roles.length === 0)) return 'loading';
-    if (!user && !authLoading) return 'ready'; // Public views are fine
+    if (authLoading) return 'loading';
+    
+    // If we have a user, we MUST wait for roles to be populated before deciding we are 'ready'.
+    // AuthContext sets roles=[] initially and fetches them.
+    if (user && (!roles || roles.length === 0)) return 'loading';
+    
+    // If not authenticated, public views are fine.
+    if (!user) return 'ready';
 
     // 2. Data Fetching: If the main branch list is loading, we wait.
     if (branchesLoading) return 'loading';
 
     // 3. Error State: Only show error if we have no branches and a real error occurred.
-    // We ignore transient loading states here.
     const mainError = !!branchesError;
     const roleError = !!(managerError || staffError || memberError);
     if ((mainError || roleError) && branches.length === 0) return 'error';
@@ -159,7 +164,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     }
 
     return 'ready';
-  }, [user, authLoading, roles.length, branchesLoading, branchesError, managerError, staffError, memberError, branches, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole, staffResolving, memberResolving, managerResolving]);
+  }, [user, authLoading, roles, branchesLoading, branchesError, managerError, staffError, memberError, branches, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole, staffResolving, memberResolving, managerResolving]);
 
 
   // Auto-initialize branch selection for restricted roles.
