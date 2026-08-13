@@ -237,7 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Immediately fetch to reduce race conditions
           Promise.all([
             fetchProfile(session.user.id),
             fetchRoles(session.user.id)
