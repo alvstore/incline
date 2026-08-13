@@ -641,6 +641,14 @@ export default function AttendanceDashboard() {
               </button>
               <button
                 type="button"
+                onClick={() => { setActiveTab('pt'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Attendance
+              </button>
+
+              <button
+                type="button"
                 onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
@@ -653,7 +661,13 @@ export default function AttendanceDashboard() {
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
-                placeholder={activeTab === 'staff-record' ? "Search staff by name or employee code…" : "Scan barcode or type member code / name / phone…"}
+                placeholder={
+                  activeTab === 'pt' 
+                    ? "Search PT Client..." 
+                    : activeTab === 'staff-record' 
+                      ? "Search staff by name or employee code…" 
+                      : "Scan barcode or type member code / name / phone…"
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
