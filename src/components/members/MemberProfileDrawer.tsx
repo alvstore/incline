@@ -188,8 +188,9 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
         onCancelled={refresh}
       />
     </>
-
+  );
 }
+
 
 
 // ─── Benefits & Usage Tab ───
