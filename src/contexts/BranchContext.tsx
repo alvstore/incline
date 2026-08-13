@@ -133,10 +133,9 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   const branchStatus: BranchStatus = useMemo(() => {
     // 1. Initial Auth Bootstrap: If we don't even have a user or roles yet, we are definitely loading.
     // AuthProvider takes time to hydrate session and fetch roles from DB.
-    // CRITICAL: We also check if user exists but roles are not yet loaded.
     if (authLoading) return 'loading';
     
-    // If we have a user, we MUST wait for roles to be populated.
+    // If we have a user, we MUST wait for roles to be populated before deciding we are 'ready'.
     // AuthContext sets roles=[] initially and fetches them.
     if (user && (!roles || roles.length === 0)) return 'loading';
     
@@ -157,6 +156,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     if (hasAnyRole(['member']) && !isOwnerOrAdmin && !isManager && !hasAnyRole(['staff', 'trainer']) && memberResolving) return 'loading';
 
     // 5. Assignment Check: If we are fully resolved but have no branches, they are unassigned.
+    // Owners/Admins are never unassigned (they see all).
     if (!isOwnerOrAdmin) {
       if (isManager && managerBranches.length === 0) return 'no_branch_assigned';
       if (hasAnyRole(['staff', 'trainer']) && !staffBranch) return 'no_branch_assigned';
