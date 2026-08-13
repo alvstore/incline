@@ -410,7 +410,7 @@ export default function MembersPage() {
       });
       const scheduled = ms.find((x: any) => {
         if (x.status !== 'pending') return false;
-        const start = new Date(x.start_date); start.setHours(0, 0, 0, 0);
+        const start = startOfDay(new Date(x.start_date));
         return start > today;
       });
       const frozen = ms.find((x: any) => x.status === 'frozen');
