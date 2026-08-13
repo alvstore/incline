@@ -236,12 +236,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Defer profile fetching to avoid deadlock
         if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id).then(setProfile);
-            fetchRoles(session.user.id).then(setRoles);
-          }, 0);
+          // Immediately fetch to reduce race conditions
+          Promise.all([
+            fetchProfile(session.user.id),
+            fetchRoles(session.user.id)
+          ]).then(([profileData, rolesData]) => {
+            setProfile(profileData);
+            setRoles(rolesData || []);
+          });
         } else {
           setProfile(null);
           setRoles([]);
@@ -260,7 +263,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchRoles(session.user.id)
         ]).then(([profileData, rolesData]) => {
           setProfile(profileData);
-          setRoles(rolesData);
+          setRoles(rolesData || []);
+          setIsLoading(false);
+        }).catch(() => {
           setIsLoading(false);
         });
       } else {
