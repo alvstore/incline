@@ -1,28 +1,26 @@
-# Plan: Dashboard Initialization & Branch Context Fix
+---
+title: Project Monitoring & Security Fixes
+description: Fix database triggers, AI keys, and RLS/permission issues.
+---
 
-The user is experiencing a critical issue where the dashboard fails to load data and displays "Unknown" even for admin users. This is caused by race conditions during the application bootstrap phase, where the `BranchContext` and `AuthContext` are not fully synchronized, leading to unauthorized or empty queries before roles are hydrated.
+## Fixes
 
-## Technical Details
+### Database Triggers
+- Update `public.tasks_notify_management()` to use `user_id` instead of `staff_id` (fixes task creation).
 
-### 1. Fix Branch Initialization Race Condition
-The `BranchProvider` currently evaluates `branchStatus` based on `authLoading`, but doesn't explicitly wait for `roles` to be populated when a user session exists. We will modify the state machine to remain in a `loading` state until `roles.length > 0` (for authenticated users).
+### AI Assistant
+- Update `GOOGLE_AI_API_KEY` with a valid key or fallback to Lovable AI Gateway (requires manual user step for custom key, but I'll ensure the code handles the fallback gracefully if possible).
 
-### 2. Harden Auth Role Hydration
-The `AuthProvider` will be updated to fetch roles immediately upon session detection, rather than deferring with a timeout. This ensures the roles are available as early as possible for downstream providers like `BranchContext`.
+### Security & RLS
+- **Fix `has_role` permission denied**: Grant `EXECUTE` on `public.has_role` to `authenticated` and `anon` roles.
+- **Holidays RLS**: Restrict read access to only those with gym roles (owner, admin, manager, staff, trainer), preventing leaks to regular members.
+- **Income/Expense Templates**: Restrict read access to staff roles, preventing regular members from seeing internal financial categories.
+- **Storage Protection**:
+    - Scoped read/write for `member-photos` (avatars, biometric, measurements).
+    - Scoped read/write for `member-media`.
+    - Scoped read/write for `staff-media`.
+    - Scoped read for `policy-pdfs` (only for roles defined in the policy).
+    - Scoped read for `attachments` (owner, admin, or campaign recipients).
 
-### 3. Dashboard Data Resilience
-The main dashboard queries in `DashboardPage.tsx` will be wrapped in tighter checks to ensure they only fire when both `user` and `roles` are stable, preventing "permission denied" or empty result errors during the first few hundred milliseconds of mounting.
-
-## Changes
-
-### Auth & Context
-- **src/contexts/AuthContext.tsx**: Remove `setTimeout` when fetching profile/roles on mount to speed up hydration.
-- **src/contexts/BranchContext.tsx**: Update `branchStatus` logic to wait for `roles` when a `user` is present.
-
-### UI & Layout
-- **src/components/layout/AppLayout.tsx**: Ensure skeletons are shown while `branchStatus` is `loading`, which will now correctly cover the auth hydration window.
-- **src/pages/Dashboard.tsx**: Add an explicit role-readiness check to the main `stats` query.
-
-### Verification
-- I will verify the fix by checking the console logs (using `code--read_console_logs`) to ensure no 403/401 errors occur during bootstrap.
-- I will inspect the network requests for any failed branch-related calls.
+### Cleanup
+- Remove any redundant UI blocks or duplicate buttons found during audit.
