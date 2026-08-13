@@ -12674,6 +12674,7 @@ export type Database = {
           biometric_photo_url: string | null
           branch_id: string
           certifications: string[] | null
+          commission_deduction_percentage: number
           created_at: string
           exit_date: string | null
           exit_notes: string | null
@@ -12707,6 +12708,7 @@ export type Database = {
           biometric_photo_url?: string | null
           branch_id: string
           certifications?: string[] | null
+          commission_deduction_percentage?: number
           created_at?: string
           exit_date?: string | null
           exit_notes?: string | null
@@ -12740,6 +12742,7 @@ export type Database = {
           biometric_photo_url?: string | null
           branch_id?: string
           certifications?: string[] | null
+          commission_deduction_percentage?: number
           created_at?: string
           exit_date?: string | null
           exit_notes?: string | null
