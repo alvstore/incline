@@ -169,12 +169,14 @@ export function CommissionLedger({ branchId }: Props) {
           acc.due += r.due;
           acc.net += r.net_commission;
           acc.pending += r.installments.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0);
+          acc.blocked += r.installments.filter((i) => i.status === 'blocked').reduce((s, i) => s + i.amount, 0);
           return acc;
         },
-        { sales: 0, due: 0, net: 0, pending: 0 },
+        { sales: 0, due: 0, net: 0, pending: 0, blocked: 0 },
       ),
     [filtered],
   );
+
 
   return (
     <Card className="rounded-2xl border-0 shadow-lg shadow-slate-200/50">
