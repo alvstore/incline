@@ -31,6 +31,8 @@ import { TodaySessionsPanel } from "@/components/pt/TodaySessionsPanel";
 import { ClientsTable } from "@/components/pt/ClientsTable";
 import { InsightsPanel } from "@/components/pt/InsightsPanel";
 import { PackageCard } from "@/components/pt/PackageCard";
+import { CommissionLedger } from "@/components/pt/CommissionLedger";
+
 import type { PTMemberPackageRow } from "@/components/pt/ptTypes";
 import { exportToCSV } from '@/lib/csvExport';
 import { cn } from "@/lib/utils";
