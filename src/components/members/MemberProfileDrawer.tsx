@@ -445,7 +445,22 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
           </CardContent>
         </Card>
       ) : (
-        <>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Benefits & Credits
+            </h3>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => setCompGiftOpen(true)}>
+                <Gift className="h-4 w-4" /> Comp / Gift
+              </Button>
+              <Button size="sm" className="gap-2" onClick={() => setUsageDrawerOpen(true)}>
+                <Plus className="h-4 w-4" /> Record Usage
+              </Button>
+            </div>
+          </div>
+
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2">
@@ -458,13 +473,10 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
                     <Plus className="h-3 w-3 mr-1" />
                     Sell Add-On
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setUsageDrawerOpen(true)}>
-                    <Activity className="h-3 w-3 mr-1" />
-                    Log Usage
-                  </Button>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent>
               {availableBenefits.length > 0 ? (
                 <div className="space-y-3">
