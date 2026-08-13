@@ -635,7 +635,7 @@ export default function AttendanceDashboard() {
               <button
                 type="button"
                 onClick={() => { setActiveTab('members'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab !== 'staff-record' && activeTab !== 'pt' && activeTab !== 'staff-log' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'members' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <Users className="inline h-3.5 w-3.5 mr-1" />Members
               </button>
