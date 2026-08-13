@@ -635,7 +635,7 @@ export default function AttendanceDashboard() {
               <button
                 type="button"
                 onClick={() => { setActiveTab('members'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab !== 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab !== 'staff-record' && activeTab !== 'pt' && activeTab !== 'staff-log' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <Users className="inline h-3.5 w-3.5 mr-1" />Members
               </button>
@@ -644,15 +644,21 @@ export default function AttendanceDashboard() {
                 onClick={() => { setActiveTab('pt'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Attendance
+                <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Sessions
               </button>
-
               <button
                 type="button"
                 onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff
+                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('staff-log'); setSearchQuery(''); }}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-log' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Clock className="inline h-3.5 w-3.5 mr-1" />Staff Log
               </button>
             </div>
           )}
