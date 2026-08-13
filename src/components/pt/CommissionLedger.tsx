@@ -324,15 +324,28 @@ export function CommissionLedger({ branchId }: Props) {
                           {r.installments.map((i) => (
                             <Badge
                               key={`${r.id}-${i.month}`}
+                              title={
+                                i.status === 'blocked'
+                                  ? 'Held until the member clears their PT dues'
+                                  : i.status === 'paid'
+                                    ? 'Paid out through payroll'
+                                    : 'Payable in this payroll month'
+                              }
                               className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                i.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                                i.status === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : i.status === 'blocked'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-slate-100 text-slate-600'
                               }`}
                             >
                               {formatISTDate(i.month).slice(3)} · {inr(i.amount)}
+                              {i.status === 'blocked' ? ' · held' : ''}
                             </Badge>
                           ))}
                         </div>
                       </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
