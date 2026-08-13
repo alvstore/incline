@@ -651,6 +651,7 @@ function BenefitsUsageTab({ memberId, activeMembership, branchId, memberGender }
           />
         </div>
       )}
+
     </TabsContent>
   );
 }
