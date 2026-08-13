@@ -187,7 +187,8 @@ function PendingInvoicesSection({ memberId, branchId }: { memberId: string; bran
         invoice={selectedInvoice}
         onCancelled={refresh}
       />
-  );
+    </>
+
 }
 
 
