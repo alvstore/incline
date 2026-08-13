@@ -138,7 +138,7 @@ export default function DashboardPage() {
         activeTrainers: activeTrainers || 0,
         todayClasses: todayClasses || 0,
         pendingApprovals: pendingApprovals || 0,
-      };
+      } as any;
     },
   });
 
@@ -271,7 +271,7 @@ export default function DashboardPage() {
         .filter((r: any) => r.owed > 0)
         .slice(0, 5);
       const totalOutstanding = items.reduce((sum: number, r: any) => sum + r.owed, 0);
-      return { items, totalOutstanding };
+      return { items, totalOutstanding } as any;
     },
   });
 
