@@ -1212,7 +1212,9 @@ export function MemberProfileDrawer({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-nowrap">
                 <h2 className="text-lg sm:text-xl font-semibold truncate min-w-0 flex-1">{profile?.full_name || 'N/A'}</h2>
-                <Badge className={`${getMemberStatusColor(member.status)} shrink-0`}>{member.status}</Badge>
+                <Badge className={`${getMemberStatusColor(member.status)} shrink-0`}>
+                  {member.status === 'pending_plan' ? 'Pending Plan' : member.status}
+                </Badge>
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -1280,16 +1282,14 @@ export function MemberProfileDrawer({
                   )
                 ) : pendingMembership ? (
                   <>
-                    <div className="text-sm sm:text-lg font-bold text-primary">SCHEDULED</div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      Starts {format(new Date(pendingMembership.start_date), 'dd MMM')}
+                    <div className="text-sm sm:text-lg font-bold text-indigo-600">SCHEDULED</div>
+                    <p className="text-[10px] text-muted-foreground truncate px-1">
+                      Starts {format(new Date(pendingMembership.start_date), 'dd MMM yy')}
                     </p>
-                    {freeDaysTotal > 0 && (
-                      <Badge variant="outline" className="mt-1 bg-warning/15 text-warning border-warning/40 text-[10px] gap-1">
-                        <Gift className="h-3 w-3" />
-                        +{freeDaysTotal}d gift
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className="mt-1 bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] gap-1 px-1.5 py-0 leading-none">
+                      <Calendar className="h-2.5 w-2.5" />
+                      Future Plan
+                    </Badge>
                   </>
                 ) : (
                   <>
@@ -1342,10 +1342,18 @@ export function MemberProfileDrawer({
             >
               {activeMembership && daysLeft > 0 ? (
                 <ArrowUpCircle className="h-4 w-4 mr-2 shrink-0" />
+              ) : pendingMembership ? (
+                <Calendar className="h-4 w-4 mr-2 shrink-0" />
               ) : (
                 <CreditCard className="h-4 w-4 mr-2 shrink-0" />
               )}
-              {activeMembership?.status === 'frozen' ? 'Frozen – Cannot Purchase' : activeMembership && daysLeft > 0 ? 'Upgrade Plan' : (activeMembership && daysLeft <= 0 ? 'Renew Plan' : 'Add Plan')}
+              {activeMembership?.status === 'frozen' 
+                ? 'Frozen – Cannot Purchase' 
+                : activeMembership && daysLeft > 0 
+                ? 'Upgrade Plan' 
+                : pendingMembership 
+                ? 'Adjust Future Plan'
+                : (activeMembership && daysLeft <= 0 ? 'Renew Plan' : 'Add Plan')}
             </Button>
 
             <Button 
