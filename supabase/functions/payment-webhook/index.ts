@@ -399,7 +399,7 @@ serve(async (req: Request) => {
       const merchantKey = integration.credentials?.merchant_key;
       const merchantSalt = integration.credentials?.merchant_salt;
 
-      // Fail-closed: reject if merchant key/salt not configured or hash missing/invalid.
+      // STRICT ENFORCEMENT: Fail-closed if signature is missing or misconfigured.
       if (!merchantKey || !merchantSalt) {
         outcome.signatureVerified = false;
         return reply({ error: "Webhook secret not configured" }, 401, "PayU merchant key/salt not configured for branch — refusing to process unsigned webhook");
