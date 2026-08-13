@@ -1584,7 +1584,7 @@ export function MemberProfileDrawer({
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>Joined: {format(new Date(member.joined_at), 'dd MMM yyyy')}</span>
+                      <span>Joined: {member.joined_at && !isNaN(new Date(member.joined_at).getTime()) ? format(new Date(member.joined_at), 'dd MMM yyyy') : '—'}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Source:</span>

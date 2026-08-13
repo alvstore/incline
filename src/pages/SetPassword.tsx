@@ -4,9 +4,17 @@ import { SetPasswordForm } from '@/components/auth/SetPasswordForm';
 import { GymLoader } from '@/components/ui/gym-loader';
 import { AuthVisualPanel } from '@/components/auth/AuthVisualPanel';
 import { getHomePath } from '@/lib/roleRedirect';
+import { Button } from '@/components/ui/button';
+import { LogOut } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function SetPasswordPage() {
   const { user, isLoading, mustSetPassword, roles } = useAuth();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/auth';
+  };
 
   if (isLoading) {
     return (
