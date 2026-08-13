@@ -10479,6 +10479,7 @@ export type Database = {
       }
       pt_commission_installments: {
         Row: {
+          blocked_reason: string | null
           branch_id: string | null
           commission_id: string
           created_at: string
@@ -10488,11 +10489,13 @@ export type Database = {
           paid_at: string | null
           payout_month: string
           payroll_item_id: string | null
+          released_at: string | null
           status: string
           trainer_id: string
           updated_at: string
         }
         Insert: {
+          blocked_reason?: string | null
           branch_id?: string | null
           commission_id: string
           created_at?: string
@@ -10502,11 +10505,13 @@ export type Database = {
           paid_at?: string | null
           payout_month: string
           payroll_item_id?: string | null
+          released_at?: string | null
           status?: string
           trainer_id: string
           updated_at?: string
         }
         Update: {
+          blocked_reason?: string | null
           branch_id?: string | null
           commission_id?: string
           created_at?: string
@@ -10516,6 +10521,7 @@ export type Database = {
           paid_at?: string | null
           payout_month?: string
           payroll_item_id?: string | null
+          released_at?: string | null
           status?: string
           trainer_id?: string
           updated_at?: string
@@ -15456,6 +15462,10 @@ export type Database = {
       release_locker: {
         Args: { p_assignment_id: string; p_release_date?: string }
         Returns: Json
+      }
+      release_pt_commission_for_invoice: {
+        Args: { _invoice_id: string }
+        Returns: number
       }
       release_whatsapp_send_lock: {
         Args: { _phone: string }
