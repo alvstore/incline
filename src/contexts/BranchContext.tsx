@@ -131,35 +131,35 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 
   // Compute branchStatus
   const branchStatus: BranchStatus = useMemo(() => {
-    if (!user) return 'loading';
-    // Roles arrive asynchronously after a hard refresh. Until they do we cannot
-    // tell which branch query matters, so never render "no branch assigned".
-    if (authLoading || roles.length === 0) return 'loading';
+    // 1. Initial Auth Bootstrap: If we don't even have a user or roles yet, we are definitely loading.
+    // AuthProvider takes time to hydrate session and fetch roles from DB.
+    if (authLoading || (user && roles.length === 0)) return 'loading';
+    if (!user && !authLoading) return 'ready'; // Public views are fine
+
+    // 2. Data Fetching: If the main branch list is loading, we wait.
     if (branchesLoading) return 'loading';
 
-    // Check for errors
-    const hasError = branchesError || managerError || staffError || memberError;
-    if (hasError && branches.length === 0) return 'error';
+    // 3. Error State: Only show error if we have no branches and a real error occurred.
+    // We ignore transient loading states here.
+    const mainError = !!branchesError;
+    const roleError = !!(managerError || staffError || memberError);
+    if ((mainError || roleError) && branches.length === 0) return 'error';
 
-    // For restricted roles, check if they have a branch
-    if (isRestrictedRole) {
-      if (hasAnyRole(['staff', 'trainer'])) {
-        if (staffResolving) return 'loading';
-        if (!staffBranch) return 'no_branch_assigned';
-      }
-      if (hasAnyRole(['member'])) {
-        if (memberResolving) return 'loading';
-        if (!memberBranch) return 'no_branch_assigned';
-      }
-    }
+    // 4. Role-Specific Scoping: Check if the user is stuck in a resolving state for their specific role.
+    if (isManager && !isOwnerOrAdmin && managerResolving) return 'loading';
+    if (hasAnyRole(['staff', 'trainer']) && !isOwnerOrAdmin && !isManager && staffResolving) return 'loading';
+    if (hasAnyRole(['member']) && !isOwnerOrAdmin && !isManager && !hasAnyRole(['staff', 'trainer']) && memberResolving) return 'loading';
 
-    if (isManager && !isOwnerOrAdmin) {
-      if (managerResolving) return 'loading';
-      if (managerBranches.length === 0) return 'no_branch_assigned';
+    // 5. Assignment Check: If we are fully resolved but have no branches, they are unassigned.
+    // Owners/Admins are never unassigned (they see all).
+    if (!isOwnerOrAdmin) {
+      if (isManager && managerBranches.length === 0) return 'no_branch_assigned';
+      if (hasAnyRole(['staff', 'trainer']) && !staffBranch) return 'no_branch_assigned';
+      if (hasAnyRole(['member']) && !memberBranch && !hasAnyRole(['staff', 'trainer'])) return 'no_branch_assigned';
     }
 
     return 'ready';
-  }, [user, authLoading, roles.length, branchesLoading, branchesError, managerError, staffError, memberError, branches, isRestrictedRole, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole, staffResolving, memberResolving, managerResolving]);
+  }, [user, authLoading, roles.length, branchesLoading, branchesError, managerError, staffError, memberError, branches, isOwnerOrAdmin, isManager, staffBranch, memberBranch, managerBranches, hasAnyRole, staffResolving, memberResolving, managerResolving]);
 
 
   // Auto-initialize branch selection for restricted roles.
