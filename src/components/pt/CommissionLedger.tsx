@@ -252,19 +252,21 @@ export function CommissionLedger({ branchId }: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-4 grid gap-3 sm:grid-cols-4">
+            <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {[
-                ['PT Sales', totals.sales],
-                ['Outstanding Dues', totals.due],
-                ['Net Commission', totals.net],
-                ['Pending Payout', totals.pending],
-              ].map(([label, value]) => (
+                ['PT Sales', totals.sales, 'text-slate-900'],
+                ['Outstanding Dues', totals.due, 'text-red-600'],
+                ['Net Commission', totals.net, 'text-slate-900'],
+                ['Payable Now', totals.pending, 'text-emerald-700'],
+                ['Held (member dues)', totals.blocked, 'text-amber-700'],
+              ].map(([label, value, tone]) => (
                 <div key={label as string} className="rounded-xl bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label as string}</p>
-                  <p className="text-xl font-bold text-slate-900">{inr(value as number)}</p>
+                  <p className={`text-xl font-bold ${tone as string}`}>{inr(value as number)}</p>
                 </div>
               ))}
             </div>
+
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
