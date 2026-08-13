@@ -22,7 +22,7 @@ import {
   Activity,
   ClipboardList
 } from 'lucide-react';
-import { format, subDays, startOfMonth, endOfMonth, differenceInHours } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, differenceInHours, startOfDay } from 'date-fns';
 
 // Lazy-load below-fold heavy components
 const LazyLiveAccessLog = lazy(() => import('@/components/devices/LiveAccessLog'));
@@ -58,6 +58,7 @@ export default function DashboardPage() {
       const today = new Date().toISOString().split('T')[0];
       const monthStart = startOfMonth(new Date()).toISOString();
       const monthEnd = endOfMonth(new Date()).toISOString();
+      const todayDate = startOfDay(new Date());
 
       // Members count
       // totalMembers includes EVERYONE (active, scheduled, frozen, inactive, pending_plan)
@@ -73,7 +74,7 @@ export default function DashboardPage() {
       const { count: activeMembers } = await activeMembersQuery;
 
       // Scheduled: memberships that are pending and start in the future
-      let scheduledQuery = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'pending').gt('start_date', today);
+      let scheduledQuery = supabase.from('memberships').select('id', { count: 'exact' }).eq('status', 'pending').gt('start_date', todayDate.toISOString());
       if (branchFilter) scheduledQuery = scheduledQuery.eq('branch_id', branchFilter);
       const { count: scheduledMemberships } = await scheduledQuery;
 

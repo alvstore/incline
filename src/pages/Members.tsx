@@ -28,7 +28,7 @@ import { exportToCSV } from '@/lib/csvExport';
 
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useState, useMemo, useEffect } from 'react';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays, format, startOfDay } from 'date-fns';
 import { daysRemaining } from '@/lib/memberships/duration';
 
 
