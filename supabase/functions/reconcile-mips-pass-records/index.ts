@@ -83,7 +83,8 @@ function getString(value: unknown): string {
 }
 
 function getBaseUrl(url: string): string {
-  return url.replace(/\/+$/, "");
+  const trimmed = String(url || "").trim().replace(/\/+$/, "");
+  return trimmed && !/^https?:\/\//i.test(trimmed) ? `http://${trimmed}` : trimmed;
 }
 
 function reinsertHyphen(stripped: string): string | null {
