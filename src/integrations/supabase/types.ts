@@ -14456,26 +14456,60 @@ export type Database = {
             }
             Returns: Json
           }
-      create_pos_sale: {
+      create_pos_sale:
+        | {
+            Args: {
+              p_awaiting_payment?: boolean
+              p_branch_id: string
+              p_discount_amount?: number
+              p_discount_code?: string
+              p_discount_code_id?: string
+              p_guest_email?: string
+              p_guest_name?: string
+              p_guest_phone?: string
+              p_idempotency_key?: string
+              p_items: Json
+              p_member_id: string
+              p_payment_method: string
+              p_slip_url?: string
+              p_sold_by: string
+              p_transaction_id?: string
+              p_wallet_applied?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_awaiting_payment?: boolean
+              p_branch_id: string
+              p_customer_gstin?: string
+              p_discount_amount?: number
+              p_discount_code?: string
+              p_discount_code_id?: string
+              p_gst_percentage?: number
+              p_guest_email?: string
+              p_guest_name?: string
+              p_guest_phone?: string
+              p_idempotency_key?: string
+              p_items: Json
+              p_member_id: string
+              p_payment_method: string
+              p_slip_url?: string
+              p_sold_by: string
+              p_transaction_id?: string
+              p_wallet_applied?: number
+            }
+            Returns: Json
+          }
+      create_system_notification: {
         Args: {
-          p_awaiting_payment?: boolean
-          p_branch_id: string
-          p_discount_amount?: number
-          p_discount_code?: string
-          p_discount_code_id?: string
-          p_guest_email?: string
-          p_guest_name?: string
-          p_guest_phone?: string
-          p_idempotency_key?: string
-          p_items: Json
-          p_member_id: string
-          p_payment_method: string
-          p_slip_url?: string
-          p_sold_by: string
-          p_transaction_id?: string
-          p_wallet_applied?: number
+          p_linked_entity_id?: string
+          p_message: string
+          p_title: string
+          p_type?: string
+          p_user_id: string
         }
-        Returns: Json
+        Returns: string
       }
       credit_member: {
         Args: {

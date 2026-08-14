@@ -299,11 +299,9 @@ export default function PTSessionsPage() {
             )}
           </TabsList>
 
-          {canManage && (
-            <TabsContent value="commissions">
-              <CommissionLedger branchId={queryBranchId ?? null} />
-            </TabsContent>
-          )}
+          <TabsContent value="commissions" className="animate-in fade-in-50 duration-500">
+            <CommissionLedger branchId={queryBranchId ?? null} />
+          </TabsContent>
 
 
           <TabsContent value="today">
