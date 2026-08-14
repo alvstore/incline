@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
     }
 
     const incomplete = deliveries.filter(
-      (delivery) => !["sent", "delivered", "queued"].includes(delivery.status),
+      (delivery) => !["sent", "delivered", "queued", "sent_via_sms_fallback"].includes(delivery.status),
     );
 
     if (incomplete.length > 0) {
