@@ -202,10 +202,6 @@ export default function AttendanceDashboard() {
     setSearchQuery('');
     searchInputRef.current?.focus();
   };
-    setSearchResults([]);
-    setSearchQuery('');
-    searchInputRef.current?.focus();
-  };
 
   const handlePtAttendanceSearch = async (query: string) => {
     // If we are in the PT tab and searching, we should allow trainers/staff 
