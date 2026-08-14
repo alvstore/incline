@@ -130,6 +130,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
         p_include_gst: includeGst,
         p_gst_rate: includeGst ? gstRate : 0,
         p_customer_gstin: includeGst ? memberGstin || null : null,
+        p_invoice_date: billDate || null,
       });
 
       if (error) throw error;
@@ -146,7 +147,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           p_branch_id: branchId,
           p_amount: calculateTotal(),
           p_payment_method: paymentMethod,
-          p_payment_date: format(new Date(), 'yyyy-MM-dd'),
+          p_payment_date: billDate || format(new Date(), 'yyyy-MM-dd'),
           p_transaction_id: transactionId.trim() || null,
         } as any);
         if (payErr) throw payErr;

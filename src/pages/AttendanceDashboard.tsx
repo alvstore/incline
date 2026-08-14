@@ -191,11 +191,7 @@ export default function AttendanceDashboard() {
 
   const handleQuickCheckIn = (memberId: string, memberName?: string, avatarUrl?: string) => {
     checkIn({ memberId, method: 'manual' });
-    // Note: We used to rely on PT attendance auto-logging a gym check-in, 
-    // but a gym check-in (mips/manual) should NOT auto-log a PT session.
-    // They are tracked independently via different tables and RPCs.
-
-    checkIn({ memberId, method: 'manual' });
+    
     showFlash({
       type: 'success',
       name: memberName || 'Member',

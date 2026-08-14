@@ -14424,21 +14424,38 @@ export type Database = {
           request_id: string
         }[]
       }
-      create_manual_invoice: {
-        Args: {
-          p_branch_id: string
-          p_customer_gstin?: string
-          p_discount_amount?: number
-          p_due_date?: string
-          p_gst_inclusive?: boolean
-          p_gst_rate?: number
-          p_include_gst?: boolean
-          p_items: Json
-          p_member_id: string
-          p_notes?: string
-        }
-        Returns: Json
-      }
+      create_manual_invoice:
+        | {
+            Args: {
+              p_branch_id: string
+              p_customer_gstin?: string
+              p_discount_amount?: number
+              p_due_date?: string
+              p_gst_inclusive?: boolean
+              p_gst_rate?: number
+              p_include_gst?: boolean
+              p_items: Json
+              p_member_id: string
+              p_notes?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_branch_id: string
+              p_customer_gstin?: string
+              p_discount_amount?: number
+              p_due_date?: string
+              p_gst_inclusive?: boolean
+              p_gst_rate?: number
+              p_include_gst?: boolean
+              p_invoice_date?: string
+              p_items: Json
+              p_member_id: string
+              p_notes?: string
+            }
+            Returns: Json
+          }
       create_pos_sale: {
         Args: {
           p_awaiting_payment?: boolean
@@ -14690,6 +14707,7 @@ export type Database = {
         Args: { _report_type: string; _token: string }
         Returns: Json
       }
+      get_howbody_scan_by_token: { Args: { p_token: string }; Returns: Json }
       get_hr_settings_admin: {
         Args: { _branch_id: string }
         Returns: {
