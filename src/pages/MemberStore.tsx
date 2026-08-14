@@ -215,12 +215,13 @@ export default function MemberStore() {
       });
 
       const isAwaiting = finalAmount > 0;
+      const paymentMethod = isAwaiting ? 'razorpay' : 'wallet';
 
       const { data, error } = await supabase.rpc('create_pos_sale', {
         p_branch_id: member.branch_id,
         p_member_id: member.id,
         p_items: items,
-        p_payment_method: isAwaiting ? 'upi' : 'wallet',
+        p_payment_method: paymentMethod,
         p_sold_by: member.user_id ?? null,
         p_awaiting_payment: isAwaiting,
         p_discount_amount: discountAmount,
@@ -254,8 +255,11 @@ export default function MemberStore() {
       queryClient.invalidateQueries({ queryKey: ['store-products'] });
 
       if (awaiting && invoiceId) {
-        toast.success('Order placed. Continue to secure checkout…');
-        navigate(`/member/pay?invoice=${invoiceId}`);
+        toast.success('Order placed. Secure checkout opening…');
+        // Small delay so the toast is seen before the redirect paints
+        setTimeout(() => {
+          navigate(`/member/pay?invoice=${invoiceId}`);
+        }, 800);
       } else {
         toast.success('Order placed & paid via wallet!');
         navigate('/my-invoices');
