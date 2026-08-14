@@ -242,7 +242,7 @@ export default function MemberCheckout() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-muted to-muted p-4">
       <Card className="max-w-md w-full rounded-2xl overflow-hidden shadow-xl shadow/50">
-        <div className="bg-gradient-to-r from-warning to-warning text-primary-foreground px-6 py-5">
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-primary-foreground px-6 py-5">
           <h1 className="text-xl font-bold">Secure Payment — Incline Fitness</h1>
           <p className="text-warning text-sm">{invoice.branch_name}</p>
         </div>
@@ -311,7 +311,7 @@ export default function MemberCheckout() {
           ) : (
             <>
               <Button
-                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-warning to-warning hover:from-warning hover:to-warning"
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
                 onClick={startPayment}
                 disabled={submitting}
               >
