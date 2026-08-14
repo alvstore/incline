@@ -92,7 +92,8 @@ function formatDate(dateStr: string | null, fallback: string): string {
 }
 
 async function getRuoYiToken(baseUrl?: string, username?: string, password?: string): Promise<string> {
-  const url = baseUrl || getBaseUrl();
+  // Always normalize — a branch connection may store a bare `HOST:9000`.
+  const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
   const cacheKey = `${url}\u0000${user}\u0000${pass}`;

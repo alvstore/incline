@@ -215,7 +215,9 @@ export default function MemberStore() {
       });
 
       const isAwaiting = finalAmount > 0;
-      const paymentMethod = isAwaiting ? 'razorpay' : 'wallet';
+      // `payment_method` is a Postgres enum — gateway payments are booked as
+      // 'upi' (the Razorpay convention used by payment-webhook), never 'razorpay'.
+      const paymentMethod = isAwaiting ? 'upi' : 'wallet';
 
       const { data, error } = await supabase.rpc('create_pos_sale', {
         p_branch_id: member.branch_id,

@@ -192,9 +192,10 @@ Deno.serve(async (req) => {
         event_key: "daily_ops_summary",
       };
 
-      for (const channel of ["whatsapp", "email"] as const) {
-        const recipient = channel === "email" ? r.email : r.phone;
-        if (!recipient) continue;
+      const send = async (
+        channel: "whatsapp" | "email" | "sms",
+        recipient: string,
+      ): Promise<{ status: string; reason?: string }> => {
         try {
           const res = await fetch(`${SUPABASE_URL}/functions/v1/dispatch-communication`, {
             method: "POST",
@@ -220,30 +221,50 @@ Deno.serve(async (req) => {
             }),
           });
           const j = await res.json().catch(() => ({}));
-          const rawStatus = String(j?.status ?? (res.ok ? "sent" : "failed"));
+          const status = String(j?.status ?? (res.ok ? "sent" : "failed"));
           const reason = typeof j?.reason === "string" ? j.reason : undefined;
+          return { status, reason };
+        } catch (e) {
+          return { status: "failed", reason: e instanceof Error ? e.message : "unknown" };
+        }
+      };
+
+      const OK = ["sent", "delivered", "queued"];
+
+      for (const channel of ["whatsapp", "email"] as const) {
+        const recipient = channel === "email" ? r.email : r.phone;
+        if (!recipient) continue;
+        const { status, reason } = await send(channel, recipient);
+        const normalized =
+          status === "suppressed" && reason === "no_template_for_closed_session"
+            ? "pending_template_approval"
+            : status;
+
+        // WhatsApp needs an approved Meta template for this event. Until
+        // `daily_ops_summary_report` is approved, fall back to SMS so the owner
+        // still gets the report on their phone.
+        if (channel === "whatsapp" && !OK.includes(normalized) && r.phone) {
+          const sms = await send("sms", r.phone);
           deliveries.push({
             recipient_index: recipientIndex + 1,
-            channel,
-            status:
-              rawStatus === "suppressed" && reason === "no_template_for_closed_session"
-                ? "pending_template_approval"
-                : rawStatus,
+            channel: "whatsapp",
+            status: OK.includes(sms.status) ? "sent_via_sms_fallback" : normalized,
             ...(reason ? { reason } : {}),
           });
-        } catch (e) {
-          deliveries.push({
-            recipient_index: recipientIndex + 1,
-            channel,
-            status: "failed",
-            reason: e instanceof Error ? e.message : "unknown",
-          });
+          continue;
         }
+
+        deliveries.push({
+          recipient_index: recipientIndex + 1,
+          channel,
+          status: normalized,
+          ...(reason ? { reason } : {}),
+        });
       }
     }
 
     const incomplete = deliveries.filter(
-      (delivery) => !["sent", "delivered", "queued"].includes(delivery.status),
+      (delivery) => !["sent", "delivered", "queued", "sent_via_sms_fallback"].includes(delivery.status),
     );
 
     if (incomplete.length > 0) {

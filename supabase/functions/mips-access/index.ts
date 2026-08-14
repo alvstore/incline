@@ -20,11 +20,13 @@ let tokenExpiry = 0;
 let cachedCredentialKey = "";
 
 function getBaseUrl(overrideUrl?: string): string {
-  return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
+  let url = String(overrideUrl || Deno.env.get("MIPS_SERVER_URL") || "").trim().replace(/\/+$/, "");
+  if (url && !/^https?:\/\//i.test(url)) url = `http://${url}`;
+  return url;
 }
 
 async function getRuoYiToken(baseUrl?: string, username?: string, password?: string): Promise<string> {
-  const url = baseUrl || getBaseUrl();
+  const url = getBaseUrl(baseUrl);
   const user = username || Deno.env.get("MIPS_USERNAME")!;
   const pass = password || Deno.env.get("MIPS_PASSWORD")!;
   const cacheKey = `${url}\u0000${user}\u0000${pass}`;
