@@ -72,7 +72,11 @@ async function resolveBiometricPhoto(
 }
 
 function getBaseUrl(overrideUrl?: string): string {
-  return (overrideUrl || Deno.env.get("MIPS_SERVER_URL")!).replace(/\/+$/, "");
+  let url = (overrideUrl || Deno.env.get("MIPS_SERVER_URL") || "").replace(/\/+$/, "");
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `http://${url}`;
+  }
+  return url;
 }
 
 function stripHyphens(code: string): string {
