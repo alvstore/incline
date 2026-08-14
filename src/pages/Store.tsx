@@ -119,22 +119,39 @@ export default function StorePage() {
     return colors[status] || 'bg-muted text-muted-foreground';
   };
 
-  // Calculate stats
+  // Calculate stats - exclude awaiting/cancelled for Profit/Revenue
   const onlineOrdersTotal = memberStoreOrders
-    .filter((o: any) => o.status === 'paid')
+    .filter((o: any) => o.status === 'paid' || o.status === 'completed')
     .reduce((sum: number, o: any) => sum + o.total_amount, 0);
 
-  const posTotal = posSales.reduce((sum: number, s: any) => sum + s.total_amount, 0);
+  // Realized revenue = Paid/Completed POS sales
+  const realizedPosTotal = posSales
+    .filter((s: any) => s.payment_status === 'paid' || s.payment_status === 'completed')
+    .reduce((sum: number, s: any) => sum + s.total_amount, 0);
+  
+  // Pending revenue = Awaiting Payment POS sales
+  const pendingPosTotal = posSales
+    .filter((s: any) => s.payment_status === 'awaiting_payment' || s.payment_status === 'pending')
+    .reduce((sum: number, s: any) => sum + s.total_amount, 0);
+
+  const posTotal = realizedPosTotal; // For compatibility with existing cards
   const pendingOrders = memberStoreOrders.filter((o: any) => o.status === 'pending' || o.status === 'partial').length;
+  
   const todayPosSales = posSales.filter((s: any) => {
     const today = new Date().toISOString().split('T')[0];
-    return s.sale_date?.startsWith(today);
+    return s.sale_date?.startsWith(today) && (s.payment_status === 'paid' || s.payment_status === 'completed');
   });
+  
   const todayPosTotal = todayPosSales.reduce((sum: number, s: any) => sum + s.total_amount, 0);
-  const totalRevenue = onlineOrdersTotal + posTotal;
+  const totalRevenue = onlineOrdersTotal + realizedPosTotal;
+  const projectedRevenue = totalRevenue + pendingPosTotal;
 
-  // Sparkline data from last 7 POS sales
-  const sparklineData = posSales.slice(0, 7).reverse().map((s: any) => ({ value: s.total_amount || 0 }));
+  // Sparkline data from last 7 realized POS sales
+  const sparklineData = posSales
+    .filter((s: any) => s.payment_status === 'paid' || s.payment_status === 'completed')
+    .slice(0, 7)
+    .reverse()
+    .map((s: any) => ({ value: s.total_amount || 0 }));
 
   // Stock gauge data
   const stockUsed = inventoryStats?.totalItems || 0;
@@ -207,28 +224,28 @@ export default function StorePage() {
         </div>
 
         {/* Hero Card */}
-        <div className="bg-gradient-to-r from-primary to-primary/80 rounded-2xl shadow-lg shadow-primary/20 p-6 text-primary-foreground">
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl shadow-lg shadow-indigo-500/20 p-6 text-white">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold tracking-tight">Store Overview</h2>
-              <p className="text-primary-foreground/70 text-sm mt-1">In-store POS sales and member online store orders at a glance</p>
+              <p className="text-indigo-100/70 text-sm mt-1">Realized revenue and order performance across all channels</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <div className="text-center">
-                <p className="text-2xl font-bold">{posSales.length}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Total Sales</p>
+                <p className="text-2xl font-bold">{posSales.filter((s: any) => s.payment_status !== 'cancelled').length}</p>
+                <p className="text-indigo-100/70 text-xs mt-1">Total Sales</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">{products.length}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Products</p>
+                <p className="text-indigo-100/70 text-xs mt-1">Products</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{todayPosTotal.toLocaleString()}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Today's POS</p>
+                <p className="text-indigo-100/70 text-xs mt-1">Today's POS</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</p>
-                <p className="text-primary-foreground/70 text-xs mt-1">Total Revenue</p>
+                <p className="text-indigo-100/70 text-xs mt-1">Net Revenue</p>
               </div>
             </div>
           </div>
@@ -327,7 +344,10 @@ export default function StorePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {posSales.slice(0, 8).map((sale: any) => {
+                {posSales
+                  .filter((s: any) => s.payment_status === 'paid' || s.payment_status === 'completed')
+                  .slice(0, 8)
+                  .map((sale: any) => {
                   const customer =
                     sale.customer_name ||
                     sale.members?.profiles?.full_name ||
