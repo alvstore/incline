@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, ShoppingCart, ExternalLink, AlertTriangle, Boxes, TrendingUp, DollarSign, CreditCard } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { ShoppingBag, Package, ShoppingCart, ExternalLink, AlertTriangle, Boxes, TrendingUp, DollarSign, CreditCard, MoreVertical, XCircle, CheckCircle as CheckCircleIcon } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -13,12 +13,19 @@ import { ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recha
 import { AdBannerManager } from '@/components/banners/AdBannerManager';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import { recordPayment, voidPayment } from '@/services/billingService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function StorePage() {
   const { selectedBranch } = useBranchContext();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
   useRealtimeInvalidate({
     channel: 'page-store',
-    tables: ['products', 'inventory', 'invoices', 'pos_sales'],
+    tables: ['products', 'inventory', 'invoices', 'pos_sales', 'payments'],
     invalidateKeys: [
       ['store-products'],
       ['member-store-orders'],
@@ -137,6 +144,42 @@ export default function StorePage() {
     { name: 'Used', value: stockUsed },
     { name: 'Remaining', value: stockCapacity - stockUsed },
   ];
+
+  const settlePaymentMutation = useMutation({
+    mutationFn: async ({ invoiceId, amount, memberId }: { invoiceId: string, amount: number, memberId?: string }) => {
+      await recordPayment({
+        branchId: selectedBranch === 'all' ? undefined : selectedBranch,
+        invoiceId,
+        memberId,
+        amount,
+        paymentMethod: 'cash',
+        notes: 'Manual settlement of POS Awaiting Payment',
+        receivedBy: user?.id,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Invoice settled successfully');
+      queryClient.invalidateQueries({ queryKey: ['store-pos-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['member-store-orders'] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to settle invoice'),
+  });
+
+  const cancelInvoiceMutation = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: 'cancelled', notes: 'Cancelled by admin from store dashboard' })
+        .eq('id', invoiceId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Invoice cancelled');
+      queryClient.invalidateQueries({ queryKey: ['store-pos-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['member-store-orders'] });
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to cancel invoice'),
+  });
 
   return (
     <AppLayout>
@@ -345,6 +388,7 @@ export default function StorePage() {
                             <TableHead>Items</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Payment</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -355,6 +399,9 @@ export default function StorePage() {
                               sale.members?.member_code ||
                               'Walk-in';
                             const customerPhone = sale.customer_phone;
+                            const status = sale.payment_status;
+                            const invoiceId = sale.invoice_id;
+                            
                             return (
                               <TableRow key={sale.id}>
                                 <TableCell>{format(new Date(sale.sale_date), 'dd MMM yyyy HH:mm')}</TableCell>
@@ -368,17 +415,48 @@ export default function StorePage() {
                                 <TableCell>
                                   <div className="flex flex-col gap-1">
                                     <Badge variant="outline" className="capitalize">{sale.payment_method}</Badge>
-                                    {sale.payment_status === 'awaiting_payment' && (
-                                      <Badge variant="secondary" className="text-[10px]">Awaiting</Badge>
+                                    {status === 'awaiting_payment' && (
+                                      <Badge variant="destructive" className="text-[10px] animate-pulse">Awaiting Payment</Badge>
                                     )}
                                   </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {invoiceId && (status === 'awaiting_payment' || status === 'pending') ? (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                        <DropdownMenuItem 
+                                          className="text-success gap-2 cursor-pointer"
+                                          onClick={() => settlePaymentMutation.mutate({ 
+                                            invoiceId, 
+                                            amount: sale.total_amount,
+                                            memberId: sale.member_id 
+                                          })}
+                                        >
+                                          <CheckCircleIcon className="h-4 w-4" />
+                                          Mark as Paid (Cash)
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem 
+                                          className="text-destructive gap-2 cursor-pointer"
+                                          onClick={() => cancelInvoiceMutation.mutate(invoiceId)}
+                                        >
+                                          <XCircle className="h-4 w-4" />
+                                          Cancel Invoice
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  ) : '-'}
                                 </TableCell>
                               </TableRow>
                             );
                           })}
                           {posSales.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                 <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-50" />
                                 No POS sales yet
                               </TableCell>
@@ -414,6 +492,7 @@ export default function StorePage() {
                             <TableHead>Amount</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Date</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -427,11 +506,42 @@ export default function StorePage() {
                                 <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
                               </TableCell>
                               <TableCell>{format(new Date(order.created_at), 'dd MMM yyyy HH:mm')}</TableCell>
+                              <TableCell className="text-right">
+                                {['pending', 'partial', 'overdue'].includes(order.status) && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                      <DropdownMenuItem 
+                                        className="text-success gap-2 cursor-pointer"
+                                        onClick={() => settlePaymentMutation.mutate({ 
+                                          invoiceId: order.id, 
+                                          amount: order.total_amount,
+                                          memberId: order.member_id 
+                                        })}
+                                      >
+                                        <CheckCircleIcon className="h-4 w-4" />
+                                        Mark as Paid (Cash)
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        className="text-destructive gap-2 cursor-pointer"
+                                        onClick={() => cancelInvoiceMutation.mutate(order.id)}
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                        Cancel Order
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                           {memberStoreOrders.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                 <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-40" />
                                 <p className="font-medium text-foreground/70">No member online orders yet</p>
                                 <p className="text-xs mt-1">Once members purchase from their portal, orders will show up here.</p>
