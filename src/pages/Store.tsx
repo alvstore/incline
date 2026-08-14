@@ -541,7 +541,7 @@ export default function StorePage() {
                           ))}
                           {memberStoreOrders.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                              <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                 <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-40" />
                                 <p className="font-medium text-foreground/70">No member online orders yet</p>
                                 <p className="text-xs mt-1">Once members purchase from their portal, orders will show up here.</p>
