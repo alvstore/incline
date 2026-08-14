@@ -492,6 +492,7 @@ export default function StorePage() {
                             <TableHead>Amount</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Date</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -505,6 +506,37 @@ export default function StorePage() {
                                 <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
                               </TableCell>
                               <TableCell>{format(new Date(order.created_at), 'dd MMM yyyy HH:mm')}</TableCell>
+                              <TableCell className="text-right">
+                                {['pending', 'partial', 'overdue'].includes(order.status) && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                      <DropdownMenuItem 
+                                        className="text-success gap-2 cursor-pointer"
+                                        onClick={() => settlePaymentMutation.mutate({ 
+                                          invoiceId: order.id, 
+                                          amount: order.total_amount,
+                                          memberId: order.member_id 
+                                        })}
+                                      >
+                                        <CheckCircleIcon className="h-4 w-4" />
+                                        Mark as Paid (Cash)
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        className="text-destructive gap-2 cursor-pointer"
+                                        onClick={() => cancelInvoiceMutation.mutate(order.id)}
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                        Cancel Order
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                           {memberStoreOrders.length === 0 && (
