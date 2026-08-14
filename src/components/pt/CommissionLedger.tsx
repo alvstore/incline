@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Download, Search, Wallet } from 'lucide-react';
 import { formatISTDate } from '@/lib/utils/datetime';
 import { exportToCSV } from '@/lib/csvExport';
+import { cn } from '@/lib/utils';
 
 interface Props {
   branchId?: string | null;
@@ -320,10 +321,16 @@ export function CommissionLedger({ branchId }: Props) {
                         {inr(r.net_commission)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1.5">
                           {r.installments.map((i) => (
-                            <Badge
+                            <div
                               key={`${r.id}-${i.month}`}
+                              className={cn(
+                                "flex flex-col items-center justify-center rounded-lg border px-2 py-1 transition-all hover:scale-105",
+                                i.status === 'paid' && "bg-emerald-50 border-emerald-200 text-emerald-700",
+                                i.status === 'blocked' && "bg-amber-50 border-amber-200 text-amber-700",
+                                i.status === 'pending' && "bg-slate-50 border-slate-200 text-slate-600"
+                              )}
                               title={
                                 i.status === 'blocked'
                                   ? 'Held until the member clears their PT dues'
@@ -331,17 +338,17 @@ export function CommissionLedger({ branchId }: Props) {
                                     ? 'Paid out through payroll'
                                     : 'Payable in this payroll month'
                               }
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                i.status === 'paid'
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : i.status === 'blocked'
-                                    ? 'bg-amber-100 text-amber-700'
-                                    : 'bg-slate-100 text-slate-600'
-                              }`}
                             >
-                              {formatISTDate(i.month).slice(3)} · {inr(i.amount)}
-                              {i.status === 'blocked' ? ' · held' : ''}
-                            </Badge>
+                              <span className="text-[10px] font-bold uppercase tracking-tight opacity-70">
+                                {formatISTDate(i.month).slice(3)}
+                              </span>
+                              <span className="text-xs font-bold leading-none">
+                                {inr(i.amount)}
+                              </span>
+                              {i.status === 'blocked' && (
+                                <span className="mt-0.5 text-[8px] font-black uppercase tracking-tighter text-amber-600">Held</span>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </TableCell>
