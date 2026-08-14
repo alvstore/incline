@@ -226,7 +226,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, onPayNow }: I
             )}
           </div>
 
-          {invoice.notes && (
+          {invoice.notes && !invoice.notes.includes('[idem:') && (
             <>
               <Separator />
               <div>
