@@ -777,6 +777,9 @@ Deno.serve(async (req) => {
           let templateName: string | null = null;
           let components: Array<Record<string, unknown>> | null | undefined;
           let templateHeaderType: string | null = null;
+          // Meta rejects (#132001) when the requested locale doesn't match the
+          // approved translation (e.g. template approved as en_GB, sent as en).
+          let templateLanguage = 'en';
 
           // ── Unified WhatsApp delivery resolver (v1.16.0) ──
           // If the caller did not supply a template_id, try to auto-resolve one
