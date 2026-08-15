@@ -777,6 +777,9 @@ Deno.serve(async (req) => {
           let templateName: string | null = null;
           let components: Array<Record<string, unknown>> | null | undefined;
           let templateHeaderType: string | null = null;
+          // Meta rejects (#132001) when the requested locale doesn't match the
+          // approved translation (e.g. template approved as en_GB, sent as en).
+          let templateLanguage = 'en';
 
           // ── Unified WhatsApp delivery resolver (v1.16.0) ──
           // If the caller did not supply a template_id, try to auto-resolve one
@@ -930,10 +933,13 @@ Deno.serve(async (req) => {
               // instead of paying the round-trip + opaque Meta rejection.
               const { data: wt } = await supabase
                 .from('whatsapp_templates')
-                .select('status, category, is_stale, rejected_reason, components')
+                .select('status, category, is_stale, rejected_reason, components, language')
                 .eq('name', templateName)
                 .limit(1)
                 .maybeSingle();
+
+              // Always send with the locale Meta actually approved.
+              if (wt?.language) templateLanguage = String(wt.language);
 
               let categoryDrift = false;
               if (wt) {
@@ -1262,7 +1268,7 @@ Deno.serve(async (req) => {
               branch_id: input.branch_id,
               message_type: templateName ? 'template' : messageType,
               template_name: templateName ?? undefined,
-              template_language: 'en',
+              template_language: templateLanguage,
               template_components: components ?? undefined,
               template_id: input.template_id,
               variables: input.payload.variables,
