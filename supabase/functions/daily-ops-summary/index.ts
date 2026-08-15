@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const defaultBranch = (branches ?? [])[0]?.id ?? null;
+    const defaultBranch = (branches ?? []).find(b => b.name.toLowerCase().includes('main'))?.id ?? (branches ?? [])[0]?.id ?? null;
     const deliveries: Array<{
       recipient_index: number;
       channel: "whatsapp" | "email";
@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
         card_received: inr(byMode.get("card") ?? 0),
         dues_collected: inr(duesCollected),
         dues_pending: inr(duesPending),
-        event_key: "daily_ops_summary",
+        event_key: "daily_ops_summary_report",
       };
 
       const send = async (
