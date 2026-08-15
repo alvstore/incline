@@ -1280,6 +1280,7 @@ Deno.serve(async (req) => {
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
               source_caller: input.source_caller ?? null,
+              skip_notification: input.skip_notification ?? false,
               // Route marketing template sends through MM API for WhatsApp when
               // the branch's WA integration has `config.mm_api_enabled=true`.
               // send-whatsapp falls back to Cloud API automatically otherwise.
