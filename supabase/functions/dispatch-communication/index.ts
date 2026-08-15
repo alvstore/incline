@@ -730,6 +730,7 @@ Deno.serve(async (req) => {
           ...((input.payload as any)?.variables?.event_key
             ? { event_key: (input.payload as any).variables.event_key }
             : {}),
+          ...(input.skip_notification ? { skip_notification: true } : {}),
         },
 
       })
