@@ -278,7 +278,7 @@ function resolveVarValue(
   if (k.includes('member') || k === 'name') tryKeys.push('member_name', 'name', 'full_name');
   if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name');
   if (k.includes('trainer')) tryKeys.push('trainer_name');
-  if (k.includes('amount') || k.includes('price')) tryKeys.push('amount', 'price');
+  if (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees')) tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount');
   if (k.includes('invoice')) tryKeys.push('invoice_number', 'invoice_id');
   if (k.includes('branch')) tryKeys.push('branch_name');
   if (k.includes('date')) tryKeys.push('date');
@@ -289,7 +289,7 @@ function resolveVarValue(
   // wamid ships with an empty "Hi ,", i.e. delivered but visibly broken.
   if (/^\d+$/.test(key)) {
     if (index === 0 || key === '1') {
-      tryKeys.push('first_name', 'name', 'full_name', 'member_name');
+      tryKeys.push('member_name', 'first_name', 'name', 'full_name');
     }
     tryKeys.push(`v${key}`, `param${key}`, `p${key}`);
   }

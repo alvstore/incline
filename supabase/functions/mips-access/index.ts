@@ -1,5 +1,5 @@
 // v2.6.1 — credential-scoped token cache prevents stale/cross-branch sessions.
-// v2.6.0 — Sweep now restores dues-cleared members; revokes tagged with a reason code
+// v2.6.2 — sweep now includes overdue/pending invoice revokes with strict grace period.
 // v2.2.0 — Auth gate accepts x-system-call header from automation-brain (cron)
 // v2.0.0 — Unified MIPS hardware-access function (members + staff).
 // Replaces: revoke-mips-access + check-expired-access.
