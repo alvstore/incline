@@ -1521,6 +1521,8 @@ Deno.serve(async (req) => {
         content: input.payload.body,
         sent_at: new Date().toISOString(),
         attempt_count: 1,
+        // v1.27.0: Propagate skip_notification to the edge function router for handoffs
+        skip_notification: input.skip_notification ?? false,
       })
       .eq('id', log!.id);
 
