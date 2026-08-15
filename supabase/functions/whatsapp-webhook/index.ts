@@ -263,15 +263,25 @@ async function processTemplateStatusUpdate(value: any) {
 
 // ─── Incoming Messages ─────────────────────────────────────────────────────────
 
-async function processIncomingMessages(value: any, branchId: string | null, integration: WhatsAppIntegration | null): Promise<{ id: string; phone_number: string }[]> {
+async function processIncomingMessages(value: any, branchId: string | null, integration: WhatsAppIntegration | null): Promise<{ id: string; phone_number: string; direction: string }[]> {
   if (!branchId) return [];
 
   const messages = Array.isArray(value.messages) ? value.messages : [];
   const contactName = value.contacts?.[0]?.profile?.name ?? null;
-  const insertedItems: { id: string; phone_number: string }[] = [];
+  const insertedItems: { id: string; phone_number: string; direction: string }[] = [];
 
   for (const message of messages) {
-    if (!message?.from || !message?.id) continue;
+    if (!message?.id) continue;
+    // v6.6.0: Handle outbound echos. Meta sends echos for messages sent via API
+    // so they can be synced across devices/UIs. If 'from' is our WABA ID,
+    // this is an outbound message.
+    const direction = message.from && value.metadata?.display_phone_number && message.from === value.metadata.display_phone_number.replace(/\D/g, '')
+      ? "outbound" 
+      : (message.from ? "inbound" : "outbound");
+    
+    // For inbounds we definitely need message.from. For echos, message.to is the recipient.
+    const remotePhone = direction === "inbound" ? message.from : message.to;
+    if (!remotePhone) continue;
 
     const { data: existing } = await supabase
       .from("whatsapp_messages")
@@ -288,14 +298,14 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
 
     const msgPayload = {
       branch_id: branchId,
-      phone_number: message.from,
-      contact_name: contactName,
+      phone_number: remotePhone,
+      contact_name: direction === "inbound" ? contactName : null,
       message_type: message.type ?? "text",
       content: extractMessageContent(message),
       media_url: mediaResolved?.storage_path ?? null,
       media_meta: mediaResolved?.meta ?? null,
-      direction: "inbound",
-      status: "received",
+      direction: direction,
+      status: direction === "inbound" ? "received" : "sent",
       whatsapp_message_id: message.id,
     };
 
@@ -303,21 +313,23 @@ async function processIncomingMessages(value: any, branchId: string | null, inte
     if (error) {
       console.error("Failed to insert WhatsApp inbound message", error);
     } else if (data) {
-      insertedItems.push({ id: data.id, phone_number: message.from });
-      await supabase.from("whatsapp_chat_settings").upsert(
-        {
-          branch_id: branchId,
-          phone_number: message.from,
-          is_unread: true,
-        },
-        { onConflict: "branch_id,phone_number" },
-      );
+      insertedItems.push({ id: data.id, phone_number: remotePhone, direction });
+      if (direction === "inbound") {
+        await supabase.from("whatsapp_chat_settings").upsert(
+          {
+            branch_id: branchId,
+            phone_number: remotePhone,
+            is_unread: true,
+          },
+          { onConflict: "branch_id,phone_number" },
+        );
+      }
 
       // Persist contact display name across the thread (and backfill the
       // lead row if one exists). WhatsApp Cloud API does not expose a
       // profile picture, so avatar stays null and the UI falls back to
       // gradient initials.
-      if (contactName) {
+      if (contactName && direction === "inbound") {
         try {
           await supabase.rpc("upsert_meta_contact_profile", {
             p_branch_id: branchId,
