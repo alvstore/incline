@@ -933,10 +933,13 @@ Deno.serve(async (req) => {
               // instead of paying the round-trip + opaque Meta rejection.
               const { data: wt } = await supabase
                 .from('whatsapp_templates')
-                .select('status, category, is_stale, rejected_reason, components')
+                .select('status, category, is_stale, rejected_reason, components, language')
                 .eq('name', templateName)
                 .limit(1)
                 .maybeSingle();
+
+              // Always send with the locale Meta actually approved.
+              if (wt?.language) templateLanguage = String(wt.language);
 
               let categoryDrift = false;
               if (wt) {
