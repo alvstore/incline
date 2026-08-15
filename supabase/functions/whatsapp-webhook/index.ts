@@ -212,7 +212,8 @@ async function handleEvent(req: Request) {
       await processStatusUpdates(value, resolvedBranchId);
 
       if (insertedMessageIds.length > 0 && resolvedBranchId) {
-        for (const { id: msgId, phone_number } of insertedMessageIds) {
+        for (const { id: msgId, phone_number, direction } of insertedMessageIds) {
+          if (direction === "outbound") continue; // Don't AI-reply to echos
           try {
             await triggerAiAutoReply(msgId, phone_number, resolvedBranchId);
           } catch (err) {
