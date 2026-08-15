@@ -1,4 +1,4 @@
-// v6.5.0 — Delivery callback hardening: update communication_logs directly
+// v6.6.0 — Handle outbound echos to prevent AI loops and sync Meta messages.
 //          from Meta statuses after recording the delivery event. The RPC path
 //          is best-effort; direct patch guarantees Communication Hub mirrors
 //          whatsapp_messages for 131049/failed callbacks.
