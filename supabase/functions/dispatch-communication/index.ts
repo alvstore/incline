@@ -1,4 +1,6 @@
-// dispatch-communication v1.26.0
+// dispatch-communication v1.27.0
+// v1.27.0: Propagate `skip_notification` to staff handoffs; detect Meta `echo`
+//          events in `whatsapp-webhook` v6.6.0 to prevent AI loops.
 // v1.26.0: Template picker only considers APPROVED Meta templates and prefers a
 //          DOCUMENT-header template when the send carries a PDF. Body-only
 //          fallbacks now paste a SHORT branded link (/functions/v1/doc?c=…)
@@ -144,6 +146,7 @@ interface DispatchInput {
    * answer "where is this Meta error coming from?" without manual digging.
    */
   source_caller?: string;
+  skip_notification?: boolean;
 }
 
 interface DispatchResult {
@@ -727,6 +730,7 @@ Deno.serve(async (req) => {
           ...((input.payload as any)?.variables?.event_key
             ? { event_key: (input.payload as any).variables.event_key }
             : {}),
+          ...(input.skip_notification ? { skip_notification: true } : {}),
         },
 
       })
@@ -1276,6 +1280,7 @@ Deno.serve(async (req) => {
               skip_log: true,                // dispatcher owns the log
               source_log_id: log!.id,
               source_caller: input.source_caller ?? null,
+              skip_notification: input.skip_notification ?? false,
               // Route marketing template sends through MM API for WhatsApp when
               // the branch's WA integration has `config.mm_api_enabled=true`.
               // send-whatsapp falls back to Cloud API automatically otherwise.
@@ -1517,6 +1522,8 @@ Deno.serve(async (req) => {
         content: input.payload.body,
         sent_at: new Date().toISOString(),
         attempt_count: 1,
+        // v1.27.0: Propagate skip_notification to the edge function router for handoffs
+        skip_notification: input.skip_notification ?? false,
       })
       .eq('id', log!.id);
 
