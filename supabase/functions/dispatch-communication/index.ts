@@ -1268,7 +1268,7 @@ Deno.serve(async (req) => {
               branch_id: input.branch_id,
               message_type: templateName ? 'template' : messageType,
               template_name: templateName ?? undefined,
-              template_language: 'en',
+              template_language: templateLanguage,
               template_components: components ?? undefined,
               template_id: input.template_id,
               variables: input.payload.variables,
