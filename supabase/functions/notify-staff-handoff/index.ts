@@ -10,7 +10,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const { staff_user_id, member_phone, reason, branch_id } = await req.json();
+    const { staff_user_id, member_phone, reason, branch_id, skip_notification } = await req.json();
     if (!member_phone) return json({ error: "member_phone required" }, 400);
     if (!branch_id) return json({ error: "branch_id required" }, 400);
 
@@ -46,13 +46,17 @@ Deno.serve(async (req) => {
 
     let delivered = 0;
     for (const r of routes) {
-      // Always create the in-app notification.
-      await admin.from("notifications").insert({
-        user_id: r.user_id,
-        title: "Chat assigned to you",
-        message: `${member_phone} needs human assistance${reason ? `: ${reason}` : ""}`,
-        action_url: `/whatsapp-chat?phone=${member_phone}`,
-      });
+      // Create the in-app notification unless explicitly skipped (e.g. for registration OTP triggers).
+      // Registration flow alerts staff via notify-lead-created or notify-member-registered separately.
+      const isRegistration = reason?.includes("self-registration") || reason?.includes("otp");
+      if (!skip_notification && !isRegistration) {
+        await admin.from("notifications").insert({
+          user_id: r.user_id,
+          title: "Chat assigned to you",
+          message: `${member_phone} needs human assistance${reason ? `: ${reason}` : ""}`,
+          action_url: `/whatsapp-chat?phone=${member_phone}`,
+        });
+      }
 
       if (!r.personal_phone || !r.is_available) continue;
       const resp = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
