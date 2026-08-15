@@ -185,6 +185,7 @@ export async function requestFounderHandoff(
         },
         dedupe_key: `handoff:${taskId}`,
         force: true,
+        skip_notification: reason?.includes("self-registration") || reason?.includes("otp"),
       }),
     }).catch(() => { /* dispatcher is best-effort */ });
   } catch { /* noop */ }
