@@ -144,6 +144,7 @@ interface DispatchInput {
    * answer "where is this Meta error coming from?" without manual digging.
    */
   source_caller?: string;
+  skip_notification?: boolean;
 }
 
 interface DispatchResult {
