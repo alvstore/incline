@@ -307,12 +307,13 @@ Deno.serve(async (req) => {
             day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata",
           })
         : "";
-      const amountPlain = pendingAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+      const amountPlain = pendingAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 }).replace(/,/g, '');
       const variables: Record<string, string> = {
         member_name: name,
         invoice_number: invoice?.invoice_number || "",
         amount_due: amountPlain,
         amount: amountPlain,
+        amount_plain: amountPlain,
         pending_amount: amountPlain,
         total_amount: totalAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 }),
         item_description: invoice?.invoice_number

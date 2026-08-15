@@ -241,7 +241,14 @@ export function StaffAttendanceBoard({
                           <AvatarFallback className="bg-accent/10 text-xs font-semibold text-accent">{initials(p.name)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-bold text-foreground">{p.name}</p>
+                            {p.shift_type && (
+                              <Badge variant="outline" className="text-[9px] uppercase tracking-tighter h-4 px-1 bg-slate-50 text-slate-500 border-slate-200">
+                                {p.shift_type}
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             In {format(new Date(p.check_in), 'h:mm a')}
                             {p.scheduled_start && ` · scheduled ${fmtSched(p.scheduled_start)}`}

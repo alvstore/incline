@@ -559,11 +559,11 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
             <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl text-slate-500 font-semibold px-6">
               Cancel
             </Button>
-            {step === 'pick' ? (
+            <div className="flex flex-col gap-2 flex-1">
               <Button
                 onClick={generate}
                 disabled={generating || picked.size === 0}
-                className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 text-white font-bold h-12 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 text-white font-bold h-12 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 {generating ? (
                   <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Thinking...</>
@@ -571,6 +571,21 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel: channel
                   <><Sparkles className="mr-2 h-5 w-5" /> Generate {picked.size} Templates</>
                 )}
               </Button>
+              <Button
+                variant="outline"
+                className="w-full rounded-2xl border-slate-200 text-slate-600 font-semibold"
+                onClick={() => {
+                  const qc = queryClient;
+                  supabase.functions.invoke('manage-whatsapp-templates', { body: { action: 'list' } })
+                    .then(() => {
+                      toast.success('Sync triggered in background');
+                      qc.invalidateQueries({ queryKey: ['communication-templates'] });
+                    });
+                }}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" /> Sync Existing from Meta
+              </Button>
+            </div>
             ) : (
               proposals.length > 0 && (
                 <Button
