@@ -12,37 +12,38 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Send, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import { SYSTEM_EVENTS } from '@/lib/templates/systemEvents';
+import { Loader2, Sparkles, Send, RefreshCw } from 'lucide-react';
+import { SYSTEM_EVENTS, type EventChannel } from '@/lib/templates/systemEvents';
 import { toast } from 'sonner';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  channel?: EventChannel;
+  prefilledEvents?: string[];
 }
 
-export function AIGenerateTemplatesDrawer({ open, onOpenChange }: Props) {
+export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whatsapp', prefilledEvents = [] }: Props) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'pick' | 'review'>('pick');
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(new Set(prefilledEvents));
   const [generating, setGenerating] = useState(false);
   const [proposals, setProposals] = useState<any[]>([]);
   const [bulk, setBulk] = useState<{ total: number; done: number } | null>(null);
 
-  // Load existing coverage to highlight gaps
-  const { data: coverage = [] } = useQuery({
-    queryKey: ['template-coverage'],
+  const { data: matrix = [] } = useQuery({
+    queryKey: ['template-coverage-matrix'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('template_coverage_matrix').select('*');
+      const { data, error } = await supabase.from('template_coverage_matrix' as any).select('*');
       if (error) throw error;
       return data || [];
     },
   });
 
   const uncovered = useMemo(() => {
-    const coveredEvents = new Set(coverage.filter(c => c.whatsapp_template_id).map(c => c.event));
-    return SYSTEM_EVENTS.filter(e => !coveredEvents.has(e.event) && e.channels.includes('whatsapp'));
-  }, [coverage]);
+    const coveredEvents = new Set(matrix.filter((c: any) => c.whatsapp_template_id).map((c: any) => c.event));
+    return SYSTEM_EVENTS.filter(e => !coveredEvents.has(e.event) && e.channels.includes(channel));
+  }, [matrix, channel]);
 
   const togglePick = (event: string) => {
     const next = new Set(picked);
