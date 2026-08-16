@@ -997,7 +997,7 @@ export default function AttendanceDashboard() {
                 </Table>
               </TabsContent>
 
-              {/* Staff Check-in Tab */}
+              {/* Staff Check-in Tab — dual-shift roster board */}
               <TabsContent value="staff-record">
                 {!canRecordStaff ? (
                   <div className="text-center py-12 text-muted-foreground">
@@ -1005,132 +1005,14 @@ export default function AttendanceDashboard() {
                     <p>Only admins and managers can record staff attendance</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Hardware-failure fallback banner */}
-                    <div className="flex items-start gap-3 p-3 rounded-lg border border-warning/30 bg-warning/5">
-                      <ShieldAlert className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 text-sm">
-                        <p className="font-medium text-foreground">Biometric-failure fallback only</p>
-                        <p className="text-muted-foreground text-xs mt-0.5">
-                          Use this only when the turnstile is offline. Every entry is audited and tied to your user. Self-attendance is never allowed — even for owners.
-                        </p>
-                      </div>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-7">
-                            <Info className="h-3.5 w-3.5" />
-                            Hierarchy
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80 text-xs space-y-2">
-                          <p className="font-semibold text-sm text-foreground">Who can record attendance for whom</p>
-                          <ul className="space-y-1 text-muted-foreground">
-                            <li><span className="font-medium text-foreground">Owner</span> → Admin, Manager, Staff, Trainer</li>
-                            <li><span className="font-medium text-foreground">Admin</span> → Manager, Staff, Trainer</li>
-                            <li><span className="font-medium text-foreground">Manager</span> → Staff, Trainer</li>
-                            <li><span className="font-medium text-foreground">Staff / Trainer</span> → no manual access</li>
-                          </ul>
-                          <p className="pt-1 border-t text-muted-foreground">Nobody — including the owner — can mark their own attendance. Owner-level entries require a second owner to be present.</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Staff Member</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Weekly Off</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {allStaffProfiles.filter((s: any) => {
-                          if (!searchTerm) return true;
-                          return s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.code.toLowerCase().includes(searchTerm.toLowerCase());
-                        }).map((staff: any) => {
-                          const isCheckedIn = checkedInUserIds.has(staff.user_id);
-                          const isSelf = staff.user_id === user?.id;
-                          const decision = decisionFor(staff);
-                          const today = staffTodaySummary.get(staff.user_id);
-                          const weeklyOff = (staff.weekly_off || 'Sunday').toLowerCase();
-                          const isWeeklyOff = !today && new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === weeklyOff;
-
-                          return (
-                            <TableRow key={staff.user_id}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="h-9 w-9">
-                                    <AvatarImage src={staff.avatar_url} />
-                                    <AvatarFallback className="bg-accent/10 text-accent text-xs font-semibold">{getInitials(staff.name)}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium">{staff.name} {isSelf && <span className="text-xs text-muted-foreground">(You)</span>}</p>
-                                    <p className="text-xs text-muted-foreground">{staff.code}</p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`border ${staff.type === 'Trainer' ? 'bg-info/10 text-info border-info/20' : staff.type === 'Owner' ? 'bg-primary/10 text-primary border-primary/20' : staff.type === 'Admin' ? 'bg-warning/10 text-warning border-warning/20' : staff.type === 'Manager' ? 'bg-accent/10 text-accent border-accent/20' : 'bg-muted text-muted-foreground border-border'}`}>
-                                  {staff.type}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <span className="text-sm capitalize">{staff.weekly_off || 'Sunday'}</span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex flex-col gap-1">
-                                  <Badge className={`border w-fit ${
-                                    isCheckedIn
-                                      ? 'bg-success/10 text-success border-success/20'
-                                      : today
-                                        ? 'bg-info/10 text-info border-info/20'
-                                        : isWeeklyOff
-                                          ? 'bg-muted text-muted-foreground border-border'
-                                          : 'bg-muted text-muted-foreground border-border'
-                                  }`}>
-                                    {isCheckedIn ? 'Checked In' : today ? 'Present' : isWeeklyOff ? 'Weekly Off' : 'Not Checked In'}
-                                  </Badge>
-                                  {today && (
-                                    <span className="text-xs text-muted-foreground">
-                                      in {fmtTime(today.firstIn)}{today.lastOut ? ` · out ${fmtTime(today.lastOut)}` : ''}
-                                      {today.isLate && (
-                                        <span className="ml-1 text-warning font-medium">
-                                          late{today.lateMinutes != null ? ` ${today.lateMinutes}m` : ''}
-                                        </span>
-                                      )}
-                                      {!today.isLate && today.lateMinutes != null && (
-                                        <span className="ml-1 text-success font-medium">on-time</span>
-                                      )}
-                                    </span>
-                                  )}
-                                </div>
-                              </TableCell>
-
-                              <TableCell>
-                                {!decision.allowed ? (
-                                  <span className="text-xs text-muted-foreground italic" title={decision.reason}>{decision.reason}</span>
-                                ) : today ? (
-                                  <span className="text-xs text-muted-foreground italic">Recorded for this shift</span>
-                                ) : (
-                                  <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground" disabled={isStaffCheckingIn} onClick={() => handleStaffCheckIn(staff)}>
-                                    <LogIn className="h-3.5 w-3.5" />Check In
-                                  </Button>
-                                )}
-                              </TableCell>
-
-                            </TableRow>
-                          );
-                        })}
-                        {allStaffProfiles.length === 0 && (
-                          <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No staff found for this branch</TableCell></TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <StaffRosterBoard
+                    branchId={effectiveBranchId}
+                    canManage={canRecordStaff}
+                    currentUserId={user?.id}
+                  />
                 )}
               </TabsContent>
+
 
               {/* Staff Log Tab — shift-aware board */}
               <TabsContent value="staff-log">
