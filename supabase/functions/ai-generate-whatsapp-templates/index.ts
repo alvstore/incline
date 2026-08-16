@@ -7,6 +7,8 @@
 // v2.2.0 — Multi-channel AI template generator (WhatsApp / SMS / Email)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
+import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
+import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,29 +156,14 @@ Deno.serve(async (req) => {
       ].join("\n");
 
       try {
-        const r = await generateOnce({
+        const r = await generateWithToolFallback({
           purpose: "template_generate",
           userMessage: userPrompt,
           systemOverride: SYSTEM_PROMPTS[channel],
           tools: [TOOL_SCHEMA],
           toolChoice: { type: "function", function: { name: "propose_templates" } },
         });
-        let parsed = r.toolCallArgs;
-        // Fallback: provider returned no tool_call (e.g. Lovable AI gateway in
-        // fallback mode sometimes ignores tool_choice). Retry once in JSON mode.
-        if (!parsed) {
-          const jsonRetry = await generateOnce({
-            purpose: "template_generate",
-            userMessage:
-              userPrompt +
-              `\n\nReturn ONLY valid JSON of shape: { "templates": [ ${
-                JSON.stringify(TOOL_SCHEMA.function.parameters.properties.templates.items.properties)
-              } ] }. No prose, no markdown.`,
-            systemOverride: SYSTEM_PROMPTS[channel],
-            responseFormat: "json",
-          });
-          parsed = jsonRetry.json;
-        }
+        const parsed = r.toolCallArgs;
         const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
         for (const t of templates) allTemplates.push(t);
       } catch (e) {

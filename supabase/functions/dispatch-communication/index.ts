@@ -321,7 +321,12 @@ function safeFallbackForKey(key: string): string {
   // Purely numeric keys (Meta positional {{1}}, {{2}}, …) — the first slot is
   // almost always a name/greeting on Incline templates, so fall back to
   // "there" instead of "—" to avoid "Hi —," style output.
-  if (/^\d+$/.test(k)) return k === '1' ? 'there' : '—';
+  if (/^\d+$/.test(k)) {
+    // We treat {{1}} as the greeting name slot by convention.
+    if (k === '1') return 'there';
+    // For other positional slots, "—" is a safer generic placeholder.
+    return '—';
+  }
   if (k.includes('plan')) return 'your plan';
   if (k.includes('trainer')) return 'your trainer';
   if (k.includes('branch')) return 'our club';

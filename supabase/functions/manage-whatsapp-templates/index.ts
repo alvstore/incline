@@ -428,7 +428,10 @@ serve(async (req) => {
       {
         let txt = workingBody.trim();
         if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) txt = `Hi ${txt}`;
-        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) txt = `${txt}\n\n— Incline`;
+        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) {
+          const brand = (activeIntegration.config?.brand_name || activeIntegration.config?.display_name || 'Incline');
+          txt = `${txt}\n\n— ${brand}`;
+        }
         workingBody = txt;
       }
 
@@ -765,7 +768,10 @@ serve(async (req) => {
         // Edge-variable guard (same as create path).
         let txt = String(body_text).trim();
         if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}/.test(txt)) txt = `Hi ${txt}`;
-        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) txt = `${txt}\n\n— Incline`;
+        if (/\{\{\s*[a-zA-Z0-9_]+\s*\}\}\s*$/.test(txt)) {
+          const brand = (activeIntegration.config?.brand_name || activeIntegration.config?.display_name || 'Incline');
+          txt = `${txt}\n\n— ${brand}`;
+        }
         convertedBody = txt;
         const namedVarRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
         const namedVars: string[] = [];
