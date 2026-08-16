@@ -408,7 +408,8 @@ export async function calculatePayrollForStaff(
     const rows = (payrollRows ?? []) as Array<any>;
     dailyBreakdown = rows;
     for (const r of rows) {
-      if (r.payable) payableDays += r.is_half_day ? 0.5 : 1;
+      // payable_fraction is block-accurate (1 of 2 rostered shifts = 0.5)
+      if (r.payable) payableDays += r.payable_fraction != null ? Number(r.payable_fraction) : (r.is_half_day ? 0.5 : 1);
       if (r.is_half_day) halfDays += 1;
       if (r.is_late) lateDays += 1;
       if (r.is_early_out) earlyOutDays += 1;
