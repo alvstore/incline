@@ -42,6 +42,7 @@ export function RecordPaymentDrawer({
   const [amount, setAmount] = useState(dueAmount);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [transactionId, setTransactionId] = useState('');
+  const [utrNumber, setUtrNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [incomeCategoryId, setIncomeCategoryId] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(todayIso);
@@ -91,7 +92,7 @@ export function RecordPaymentDrawer({
         memberId: effectiveMemberId,
         amount,
         paymentMethod,
-        transactionId: transactionId || undefined,
+        transactionId: (transactionId || utrNumber) || undefined,
         notes: notes || undefined,
         receivedBy: user?.id,
         incomeCategoryId: incomeCategoryId || undefined,
@@ -121,6 +122,7 @@ export function RecordPaymentDrawer({
     setAmount(dueAmount);
     setPaymentMethod('cash');
     setTransactionId('');
+    setUtrNumber('');
     setNotes('');
     setIncomeCategoryId('');
     setPaymentDate(todayIso);
@@ -199,24 +201,22 @@ export function RecordPaymentDrawer({
           </div>
 
           {/* Payment date — backdating is restricted to senior roles */}
-          {canBackdate && (
-            <div className="space-y-2">
-              <Label htmlFor="payment-date">Payment Date *</Label>
-              <Input
-                id="payment-date"
-                type="date"
-                value={paymentDate}
-                max={todayIso}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="cursor-pointer"
-              />
-              {paymentDate !== todayIso && (
-                <p className="text-xs text-amber-600 font-medium">
-                  This payment will be recorded against {paymentDate}, not today.
-                </p>
-              )}
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="payment-date">Payment Date *</Label>
+            <Input
+              id="payment-date"
+              type="date"
+              value={paymentDate}
+              max={todayIso}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              className="cursor-pointer rounded-xl"
+            />
+            {paymentDate !== todayIso && (
+              <p className="text-xs text-amber-600 font-medium">
+                This payment will be recorded against {paymentDate}, not today.
+              </p>
+            )}
+          </div>
 
 
 
@@ -287,11 +287,12 @@ export function RecordPaymentDrawer({
 
           {paymentMethod !== 'cash' && paymentMethod !== 'wallet' && (
             <div className="space-y-2">
-              <Label>Transaction ID</Label>
+              <Label>{(paymentMethod === 'upi' || paymentMethod === 'bank_transfer') ? 'UTR / Transaction ID' : 'Transaction ID'}</Label>
               <Input
-                value={transactionId}
-                onChange={(e) => setTransactionId(e.target.value)}
-                placeholder="Reference number"
+                value={paymentMethod === 'upi' || paymentMethod === 'bank_transfer' ? utrNumber : transactionId}
+                onChange={(e) => paymentMethod === 'upi' || paymentMethod === 'bank_transfer' ? setUtrNumber(e.target.value) : setTransactionId(e.target.value)}
+                placeholder={paymentMethod === 'upi' ? "Enter UTR number" : "Reference number"}
+                className="rounded-xl"
               />
             </div>
           )}
