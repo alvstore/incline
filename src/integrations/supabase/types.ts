@@ -9785,7 +9785,10 @@ export type Database = {
       }
       payroll_run_lines: {
         Row: {
+          blocks_attended: number
+          blocks_rostered: number
           created_at: string
+          hours_source: string | null
           hours_worked: number | null
           id: string
           is_early_out: boolean | null
@@ -9798,13 +9801,17 @@ export type Database = {
           notes: string | null
           ot_hours: number | null
           payable: boolean | null
+          payable_fraction: number
           run_id: string | null
           status: string
           user_id: string
           work_date: string
         }
         Insert: {
+          blocks_attended?: number
+          blocks_rostered?: number
           created_at?: string
+          hours_source?: string | null
           hours_worked?: number | null
           id?: string
           is_early_out?: boolean | null
@@ -9817,13 +9824,17 @@ export type Database = {
           notes?: string | null
           ot_hours?: number | null
           payable?: boolean | null
+          payable_fraction?: number
           run_id?: string | null
           status: string
           user_id: string
           work_date: string
         }
         Update: {
+          blocks_attended?: number
+          blocks_rostered?: number
           created_at?: string
+          hours_source?: string | null
           hours_worked?: number | null
           id?: string
           is_early_out?: boolean | null
@@ -9836,6 +9847,7 @@ export type Database = {
           notes?: string | null
           ot_hours?: number | null
           payable?: boolean | null
+          payable_fraction?: number
           run_id?: string | null
           status?: string
           user_id?: string
@@ -11840,6 +11852,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      staff_block_marks: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          marked_by: string | null
+          reason: string | null
+          shift_date: string
+          shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          state: string
+          user_id: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          marked_by?: string | null
+          reason?: string | null
+          shift_date: string
+          shift_type: Database["public"]["Enums"]["attendance_shift_type"]
+          state: string
+          user_id: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          marked_by?: string | null
+          reason?: string | null
+          shift_date?: string
+          shift_type?: Database["public"]["Enums"]["attendance_shift_type"]
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       staff_branches: {
         Row: {
@@ -14319,6 +14367,9 @@ export type Database = {
           p_user_id: string
         }
         Returns: {
+          blocks_attended: number
+          blocks_rostered: number
+          hours_source: string
           hours_worked: number
           is_early_out: boolean
           is_half_day: boolean
@@ -14330,6 +14381,7 @@ export type Database = {
           notes: string
           ot_hours: number
           payable: boolean
+          payable_fraction: number
           status: string
           work_date: string
         }[]
@@ -15869,7 +15921,62 @@ export type Database = {
         Args: { p_check_in?: string; p_id: string; p_notes?: string }
         Returns: string
       }
+      staff_day_blocks: {
+        Args: { p_date: string; p_user_id: string }
+        Returns: {
+          actual_hours: number
+          attendance_id: string
+          check_in: string
+          check_out: string
+          hours: number
+          hours_source: string
+          is_late: boolean
+          is_overnight: boolean
+          late_minutes: number
+          mark_reason: string
+          mark_state: string
+          notes: string
+          rostered: boolean
+          rostered_hours: number
+          scheduled_end: string
+          scheduled_start: string
+          shift_type: string
+          source: string
+          state: string
+        }[]
+      }
       staff_delete_attendance: { Args: { p_id: string }; Returns: boolean }
+      staff_mark_block: {
+        Args: {
+          p_branch_id?: string
+          p_date: string
+          p_reason?: string
+          p_shift_type: string
+          p_state: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      staff_month_summary: {
+        Args: { p_branch_id: string; p_month: string }
+        Returns: {
+          absent_days: number
+          avatar_url: string
+          blocks_attended: number
+          blocks_rostered: number
+          full_name: string
+          half_days: number
+          hours: number
+          late_count: number
+          leave_days: number
+          off_days: number
+          payable_days: number
+          present_days: number
+          staff_code: string
+          staff_kind: string
+          user_id: string
+        }[]
+      }
       staff_record_punch: {
         Args: {
           p_branch_id: string
@@ -15879,6 +15986,30 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
+      }
+      staff_roster_board: {
+        Args: { p_branch_id: string; p_date: string }
+        Returns: {
+          attendance_id: string
+          avatar_url: string
+          check_in: string
+          full_name: string
+          hours: number
+          is_late: boolean
+          late_minutes: number
+          mark_reason: string
+          mark_state: string
+          rostered: boolean
+          rostered_hours: number
+          scheduled_end: string
+          scheduled_start: string
+          shift_type: string
+          source: string
+          staff_code: string
+          staff_kind: string
+          state: string
+          user_id: string
+        }[]
       }
       start_membership_now: {
         Args: { p_membership_id: string; p_reason?: string }
