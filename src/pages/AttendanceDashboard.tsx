@@ -1134,62 +1134,42 @@ export default function AttendanceDashboard() {
               </TabsContent>
 
 
-              {/* History Tab with WO */}
+              {/* History Tab — staff (block accurate) + members */}
               <TabsContent value="history">
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Label>Month</Label>
-                    <Input type="month" value={historyMonth} onChange={(e) => setHistoryMonth(e.target.value)} className="w-[200px]" />
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {historyStaffSummary.map((s) => (
-                      <Card key={s.userId} className="border">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={allStaffProfiles.find((sp: any) => sp.user_id === s.userId)?.avatar_url} />
-                              <AvatarFallback className="bg-accent/10 text-accent text-sm font-semibold">{getInitials(s.name)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{s.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{s.email}</p>
-                            </div>
-                          </div>
-                          <div className="mt-3 grid grid-cols-4 gap-2">
-                            <div className="bg-success/10 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-success">{s.days}</p>
-                              <p className="text-xs text-muted-foreground">Present</p>
-                            </div>
-                            <div className="bg-destructive/10 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-destructive">{s.missedDays}</p>
-                              <p className="text-xs text-muted-foreground">Missed</p>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-foreground">{s.elapsedDays}<span className="text-xs text-muted-foreground">/{s.totalDays}</span></p>
-                              <p className="text-xs text-muted-foreground">Days elapsed</p>
-                            </div>
-                            <div className="bg-muted/50 rounded-lg p-2 text-center">
-                              <p className="text-lg font-bold text-foreground">{Math.round(s.totalHours * 10) / 10}h</p>
-                              <p className="text-xs text-muted-foreground">Hours</p>
-                            </div>
-                          </div>
-                          {s.openShifts > 0 && (
-                            <p className="mt-2 text-xs text-warning">{s.openShifts} day{s.openShifts > 1 ? 's' : ''} without a check-out — hours understated</p>
-                          )}
-                        </CardContent>
-                      </Card>
+                  <div className="inline-flex rounded-full bg-muted p-1">
+                    {([
+                      { key: 'staff', label: 'Staff' },
+                      { key: 'members', label: 'Members' },
+                    ] as const).map((seg) => (
+                      <button
+                        key={seg.key}
+                        type="button"
+                        onClick={() => setHistoryScope(seg.key)}
+                        className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary ${
+                          historyScope === seg.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {seg.label}
+                      </button>
                     ))}
                   </div>
 
-                  {historyStaffSummary.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No attendance records for this month</p>
-                    </div>
+                  {historyScope === 'staff' ? (
+                    canRecordStaff ? (
+                      <StaffMonthHistory branchId={effectiveBranchId} />
+                    ) : (
+                      <div className="py-12 text-center text-muted-foreground">
+                        <ShieldAlert className="mx-auto mb-4 h-12 w-12 opacity-50" />
+                        <p>Only admins and managers can view staff attendance history</p>
+                      </div>
+                    )
+                  ) : (
+                    <MemberAttendanceHistory branchId={effectiveBranchId} />
                   )}
                 </div>
               </TabsContent>
+
             </Tabs>
           </CardContent>
         </Card>
