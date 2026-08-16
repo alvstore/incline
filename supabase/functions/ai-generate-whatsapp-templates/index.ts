@@ -8,7 +8,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
-import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -164,8 +163,12 @@ Deno.serve(async (req) => {
           toolChoice: { type: "function", function: { name: "propose_templates" } },
         });
         const parsed = r.toolCallArgs;
-        const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
-        for (const t of templates) allTemplates.push(t);
+        // If the tool fallback also failed to return a proper structure, skip this batch
+        if (!parsed || !Array.isArray(parsed.templates)) {
+          console.error(`[ai-generate-whatsapp-templates] No templates array in response for batch starting ${slice[0].event}`);
+          continue;
+        }
+        for (const t of parsed.templates) allTemplates.push(t);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI gateway error";
         if (/429|rate/i.test(msg)) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
@@ -264,7 +267,10 @@ Deno.serve(async (req) => {
       t.body_text = txt;
     }
 
-    if (allTemplates.length === 0) return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
+    if (allTemplates.length === 0) {
+      console.error(`[ai-generate-whatsapp-templates] No templates generated for events: ${body.events.map(e => e.event).join(', ')}`);
+      return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
+    }
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
     console.error("ai-generate-whatsapp-templates error:", e);
