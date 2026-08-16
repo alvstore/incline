@@ -160,11 +160,15 @@ export function ReconciliationFindingsCard() {
   const open = findings ?? [];
 
   const invoiceIds = open
-    .filter((f) => f.reference_type === "invoice" && f.reference_id)
-    .map((f) => f.reference_id!) as string[];
+    .filter((f) => (f.reference_type === "invoice" || f.details?.invoice_id) && (f.reference_id || f.details?.invoice_id))
+    .map((f) => (f.reference_id || f.details?.invoice_id)!) as string[];
+
+  const memberIds = open
+    .filter((f) => (f.reference_type === "membership" || f.details?.member_id) && (f.reference_id || f.details?.member_id))
+    .map((f) => (f.details?.member_id || f.reference_id)!) as string[];
 
   const { data: invoices } = useQuery({
-    queryKey: ["reconciliation-finding-invoices", [...invoiceIds].sort().join(",")],
+    queryKey: ["reconciliation-finding-invoices", [...new Set(invoiceIds)].sort().join(",")],
     enabled: invoiceIds.length > 0,
     queryFn: async (): Promise<Record<string, InvoiceLite>> => {
       const { data, error } = await supabase
@@ -174,6 +178,21 @@ export function ReconciliationFindingsCard() {
       if (error) throw error;
       const map: Record<string, InvoiceLite> = {};
       for (const inv of data ?? []) map[inv.id] = inv as InvoiceLite;
+      return map;
+    },
+  });
+
+  const { data: profiles } = useQuery({
+    queryKey: ["reconciliation-finding-profiles", [...new Set(memberIds)].sort().join(",")],
+    enabled: memberIds.length > 0,
+    queryFn: async (): Promise<Record<string, { id: string; full_name: string }>> => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", memberIds);
+      if (error) throw error;
+      const map: Record<string, { id: string; full_name: string }> = {};
+      for (const p of data ?? []) map[p.id] = p;
       return map;
     },
   });
@@ -238,8 +257,13 @@ export function ReconciliationFindingsCard() {
               
               const label =
                 (inv as InvoiceLite)?.invoice_number ??
-                (f.reference_type === 'membership' && f.reference_id ? `Membership ${f.reference_id.slice(0, 8)}` : 
-                 f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
+                (f.reference_type === 'membership' && f.reference_id ? 
+                  (profiles?.[f.reference_id]?.full_name || `Member ${f.reference_id.slice(0, 8)}`) : 
+                  f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
+
+              const memberName = (inv as InvoiceLite)?.customer_name || 
+                                (f.details?.member_id ? profiles?.[f.details.member_id]?.full_name : 
+                                (f.reference_type === 'membership' ? profiles?.[f.reference_id!]?.full_name : null));
               
               const seen = f.first_seen_at ?? f.last_seen_at;
               return (
@@ -253,7 +277,7 @@ export function ReconciliationFindingsCard() {
                       <div className="text-foreground">{meta.explain(f.details)}</div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{label}</span>
-                        {(inv as InvoiceLite)?.customer_name && <span>· {(inv as InvoiceLite).customer_name}</span>}
+                        {memberName && <span>· {memberName}</span>}
                         {(inv as InvoiceLite)?.status && <span>· {(inv as InvoiceLite).status}</span>}
                         {seen && <span>· first seen {format(new Date(seen), "d MMM")}</span>}
                         {(f.occurrence_count ?? 1) > 1 && <span>· seen {f.occurrence_count}×</span>}
@@ -289,9 +313,9 @@ export function ReconciliationFindingsCard() {
                           </Link>
                         </>
                       )}
-                      {f.kind === 'stalled_membership_activation' && f.details?.member_id && (
+                      {(f.reference_type === 'membership' || f.details?.member_id) && (
                          <Link
-                            to={`/members?focus=${f.details.member_id}`}
+                            to={`/members?focus=${f.details?.member_id || f.reference_id}`}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
                           >
                             View Member <ExternalLink className="h-3 w-3" />
