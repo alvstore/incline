@@ -19,8 +19,19 @@ export async function generateWithToolFallback(opts: GenerateOnceOptions): Promi
       const jsonRetry = await generateOnce({
         ...opts,
         userMessage: opts.userMessage + 
-          `\n\nIMPORTANT: Return ONLY a valid JSON object. Do not include prose, markdown blocks, or explanations. 
-          The JSON must follow this EXACT schema (including the "templates" wrapper): { "templates": [ { "event": "...", "name": "...", "category": "...", "body_text": "...", "variables": ["..."] } ] }`,
+          `\n\nCRITICAL: You MUST return a JSON object with a "templates" key containing an array of objects. 
+          Return ONLY valid JSON. The JSON must follow this exact schema: 
+          { 
+            "templates": [ 
+              { 
+                "event": "event_name", 
+                "name": "template_name", 
+                "category": "UTILITY|MARKETING|AUTHENTICATION", 
+                "body_text": "...", 
+                "variables": ["var1", "var2"] 
+              } 
+            ] 
+          }`,
         responseFormat: "json",
         tools: undefined,
         toolChoice: undefined

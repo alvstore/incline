@@ -163,8 +163,12 @@ Deno.serve(async (req) => {
           toolChoice: { type: "function", function: { name: "propose_templates" } },
         });
         const parsed = r.toolCallArgs;
-        const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
-        for (const t of templates) allTemplates.push(t);
+        // If the tool fallback also failed to return a proper structure, skip this batch
+        if (!parsed || !Array.isArray(parsed.templates)) {
+          console.error(`[ai-generate-whatsapp-templates] No templates array in response for batch starting ${slice[0].event}`);
+          continue;
+        }
+        for (const t of parsed.templates) allTemplates.push(t);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "AI gateway error";
         if (/429|rate/i.test(msg)) return json({ error: "AI rate-limited. Try again in a moment." }, 429);
