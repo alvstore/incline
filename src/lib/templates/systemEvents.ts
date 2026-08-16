@@ -63,7 +63,10 @@ export const SYSTEM_EVENTS: SystemEvent[] = [
   // ── Engagement ───────────────────────────────────────────────
   { event: 'birthday', label: 'Birthday Wish', category: 'engagement', description: "On a member's birthday", channels: ALL },
   { event: 'missed_workout_3d', label: 'Missed Workout (3 days)', category: 'engagement', description: "Member hasn't visited in 3+ days", channels: ALL },
+  { event: 'absent_member_motivation_low', label: 'Member Nurture — Motivation (3-5 days)', category: 'engagement', description: 'Gentle nudge for members missing for a few days to stay consistent.', channels: ALL },
+  { event: 'absent_member_motivation_high', label: 'Member Nurture — Re-engagement (7-10 days)', category: 'engagement', description: 'Stronger motivational nudge for members missing for a week+.', channels: ALL },
   { event: 'body_scan_ready', label: 'Body Scan Ready', category: 'engagement', description: 'New HOWBODY scan report available', channels: ALL, headerHint: 'document' },
+
   { event: 'task_assigned', label: 'Task Assigned (Staff / Trainer)', category: 'engagement', description: 'Internal alert to the staff member or trainer a task was just assigned to. Vars: {{assignee_name}} {{task_title}} {{priority}} {{due_date}} {{link}}.', channels: ALL },
   { event: 'diet_plan_ready', label: 'Diet Plan Ready (PDF)', category: 'document', description: 'Trainer published a diet plan', channels: ALL, headerHint: 'document' },
   { event: 'workout_plan_ready', label: 'Workout Plan Ready (PDF)', category: 'document', description: 'Trainer published a workout plan', channels: ALL, headerHint: 'document' },

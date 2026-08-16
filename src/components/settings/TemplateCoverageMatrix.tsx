@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, ShieldAlert, ShieldX, Wand2, Info } from 'lucide-react';
+
 import { AIGenerateTemplatesDrawer } from './AIGenerateTemplatesDrawer';
 import { getEventsForChannel, type EventChannel } from '@/lib/templates/systemEvents';
 
@@ -47,18 +48,25 @@ export function TemplateCoverageMatrix({ channel }: Props) {
             .eq('branch_id', effectiveBranchId!)
         : null;
       const [tplRes, trigRes] = await Promise.all([
-        effectiveBranchId ? tplQ.eq('branch_id', effectiveBranchId) : tplQ,
+        tplQ, // Templates are global, but we can filter by branch_id if it's set on the template
         triggersQ,
       ]);
       if (tplRes.error) throw tplRes.error;
       if (trigRes && (trigRes as any).error) throw (trigRes as any).error;
+      
+      // Filter templates that either have no branch_id (global) or match the effectiveBranchId
+      const filteredTemplates = (tplRes.data || []).filter(t => 
+        !(t as any).branch_id || (t as any).branch_id === effectiveBranchId
+      );
+
       return {
-        templates: tplRes.data || [],
+        templates: filteredTemplates,
         triggers: (trigRes && (trigRes as any).data) || [],
       };
     },
     enabled: !!effectiveBranchId,
   });
+
 
   // Realtime: refresh on templates / triggers changes.
   useEffect(() => {
@@ -115,7 +123,16 @@ export function TemplateCoverageMatrix({ channel }: Props) {
       <div className="space-y-4">
         <Card className="rounded-3xl shadow-2xl shadow-slate-200/50 border-0 bg-white/70 backdrop-blur-xl">
           <CardContent className="pt-8 px-6 pb-8 space-y-6">
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 text-sm mb-4">
+              <Info className="h-5 w-5 shrink-0" />
+              <p>
+                Meta Error <strong>131049 (Pacing Limit)</strong>? Marketing messages are being suppressed to protect engagement. 
+                Switch to <strong>Utility</strong> templates for operational alerts or improve your message quality.
+              </p>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-6">
+
               <div className="flex-1 min-w-[280px]">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Coverage Status</p>

@@ -31,19 +31,24 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
   const [proposals, setProposals] = useState<any[]>([]);
   const [bulk, setBulk] = useState<{ total: number; done: number } | null>(null);
 
-  const { data: matrix = [] } = useQuery({
-    queryKey: ['template-coverage-matrix'],
+  const { data: matrix = [], isLoading: matrixLoading } = useQuery({
+    queryKey: ['template-coverage-matrix', channel],
     queryFn: async () => {
-      const { data, error } = await supabase.from('template_coverage_matrix' as any).select('*');
-      if (error) throw error;
-      return data || [];
+      const { data: templates, error: tplError } = await supabase
+        .from('templates')
+        .select('trigger_event, type, meta_template_status')
+        .eq('type', channel);
+      
+      if (tplError) throw tplError;
+      return templates || [];
     },
   });
 
   const uncovered = useMemo(() => {
-    const coveredEvents = new Set(matrix.filter((c: any) => c.whatsapp_template_id).map((c: any) => c.event));
+    const coveredEvents = new Set(matrix.filter((c: any) => c.meta_template_status === 'APPROVED').map((c: any) => c.trigger_event));
     return SYSTEM_EVENTS.filter(e => !coveredEvents.has(e.event) && e.channels.includes(channel));
   }, [matrix, channel]);
+
 
   const togglePick = (event: string) => {
     const next = new Set(picked);
