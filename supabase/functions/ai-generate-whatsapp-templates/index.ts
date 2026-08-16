@@ -8,7 +8,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
-import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,7 +263,10 @@ Deno.serve(async (req) => {
       t.body_text = txt;
     }
 
-    if (allTemplates.length === 0) return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
+    if (allTemplates.length === 0) {
+      console.error("ai-generate-whatsapp-templates: No templates generated after all attempts.");
+      return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
+    }
     return json({ success: true, channel, templates: allTemplates });
   } catch (e) {
     console.error("ai-generate-whatsapp-templates error:", e);
