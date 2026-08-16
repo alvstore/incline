@@ -313,9 +313,9 @@ export function ReconciliationFindingsCard() {
                           </Link>
                         </>
                       )}
-                      {f.kind === 'stalled_membership_activation' && f.details?.member_id && (
+                      {(f.reference_type === 'membership' || f.details?.member_id) && (
                          <Link
-                            to={`/members?focus=${f.details.member_id}`}
+                            to={`/members?focus=${f.details?.member_id || f.reference_id}`}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
                           >
                             View Member <ExternalLink className="h-3 w-3" />
