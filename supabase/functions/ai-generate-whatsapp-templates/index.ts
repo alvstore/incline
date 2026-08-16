@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateOnce } from "../_shared/ai-runtime.ts";
 import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
+import { generateWithToolFallback } from "../_shared/ai-tool-fallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
