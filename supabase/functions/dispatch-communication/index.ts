@@ -1448,7 +1448,8 @@ Deno.serve(async (req) => {
       const code = matchCode?.[1];
       const META_HINTS: Record<string, string> = {
         '131047': 'Outside 24h customer-service window — submit an APPROVED Meta template and resend.',
-        '131049': 'Meta paced this MARKETING message (ecosystem engagement). Recipient is inactive — lower frequency, improve template quality, or switch to UTILITY.',
+        '131049': 'Meta pacing limit (ecosystem engagement). Recipient is inactive or frequency is too high — retry later or switch to a Utility template.',
+
         '131026': 'Recipient cannot receive this message (likely not on WhatsApp or blocked our number).',
         '131051': 'Unsupported message type for this template — re-check header/body components.',
         '132000': 'Template parameter count mismatch — the body has {{n}} placeholders that were not provided at send time.',
