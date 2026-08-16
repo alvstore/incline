@@ -47,18 +47,25 @@ export function TemplateCoverageMatrix({ channel }: Props) {
             .eq('branch_id', effectiveBranchId!)
         : null;
       const [tplRes, trigRes] = await Promise.all([
-        effectiveBranchId ? tplQ.eq('branch_id', effectiveBranchId) : tplQ,
+        tplQ, // Templates are global, but we can filter by branch_id if it's set on the template
         triggersQ,
       ]);
       if (tplRes.error) throw tplRes.error;
       if (trigRes && (trigRes as any).error) throw (trigRes as any).error;
+      
+      // Filter templates that either have no branch_id (global) or match the effectiveBranchId
+      const filteredTemplates = (tplRes.data || []).filter(t => 
+        !(t as any).branch_id || (t as any).branch_id === effectiveBranchId
+      );
+
       return {
-        templates: tplRes.data || [],
+        templates: filteredTemplates,
         triggers: (trigRes && (trigRes as any).data) || [],
       };
     },
     enabled: !!effectiveBranchId,
   });
+
 
   // Realtime: refresh on templates / triggers changes.
   useEffect(() => {

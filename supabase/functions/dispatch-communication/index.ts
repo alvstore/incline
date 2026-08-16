@@ -889,8 +889,10 @@ Deno.serve(async (req) => {
               retention_nudge: [
                 'retention_stage_1', 'retention_stage_2', 'retention_stage_3',
                 'retention_nudge_t1', 'retention_nudge_t2',
+                'absent_member_motivation_low', 'absent_member_motivation_high',
                 'retention_nudge', 'inactive_member', 'comeback',
               ],
+
               review_request: ['review_request', 'feedback_request'],
               low_stock: ['low_stock_alert'],
               announcement: ['announcement', 'broadcast'],
