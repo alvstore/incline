@@ -102,7 +102,11 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
     for (const p of proposals) {
       try {
         const { error } = await supabase.functions.invoke('manage-whatsapp-templates', {
-          body: { action: 'upsert', template: p }
+          body: { 
+            action: 'upsert', 
+            template: p,
+            branch_id: effectiveBranchId
+          }
         });
         if (error) throw error;
         success++;
