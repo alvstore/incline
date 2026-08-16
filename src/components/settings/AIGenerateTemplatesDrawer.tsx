@@ -34,8 +34,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
   const [bulk, setBulk] = useState<{ total: number; done: number } | null>(null);
 
   const { data: matrix = [], isLoading: matrixLoading } = useQuery({
-    queryKey: ['template-coverage-matrix', channel],
+    queryKey: ['template-coverage-matrix', channel, effectiveBranchId],
     queryFn: async () => {
+      if (!effectiveBranchId) return [];
+      
       const { data: templates, error: tplError } = await supabase
         .from('templates')
         .select('trigger_event, type, meta_template_status')
@@ -46,7 +48,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
       const { data: triggers, error: trigError } = await supabase
         .from('whatsapp_triggers')
         .select('event_name, is_active, template_id, templates(id, meta_template_status)')
-        .eq('branch_id', effectiveBranchId!);
+        .eq('branch_id', effectiveBranchId);
 
       if (trigError) throw trigError;
 
