@@ -44,21 +44,21 @@ export function TemplateCoverageMatrix({ channel }: Props) {
 
       if (tplError) throw tplError;
 
-      const triggersQ = channel === 'whatsapp'
-        ? supabase
-            .from('whatsapp_triggers')
-            .select('event_name, is_active, template_id, templates(id, name, is_active, meta_template_status)')
-            .eq('branch_id', effectiveBranchId!)
-        : null;
-
-      const trigRes = triggersQ ? await triggersQ : { data: [] };
-      if (trigRes.error) throw trigRes.error;
+      let triggersData: any[] = [];
+      if (channel === 'whatsapp' && effectiveBranchId) {
+        const { data: triggers, error: trigError } = await supabase
+          .from('whatsapp_triggers')
+          .select('event_name, is_active, template_id, templates(id, name, is_active, meta_template_status)')
+          .eq('branch_id', effectiveBranchId);
+        if (trigError) throw trigError;
+        triggersData = triggers || [];
+      }
       
       return {
         templates: (templates || []).filter(t => 
           !(t as any).branch_id || (t as any).branch_id === effectiveBranchId
         ),
-        triggers: trigRes.data || [],
+        triggers: triggersData,
       };
     },
     enabled: !!effectiveBranchId,
