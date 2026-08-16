@@ -105,6 +105,13 @@ const KIND_LABELS: Record<string, { title: string; explain: (d: FindingDetails) 
         ? `Recorded payments ${inr(num(d.recorded))} vs actual ${inr(num(d.actual))}.`
         : "Payment ledger does not match invoice paid amount.",
   },
+  stalled_membership_activation: {
+    title: "Stalled membership activation",
+    explain: (d) =>
+      d
+        ? `Membership is still "Pending" despite having ${inr(num(d.amount_paid))} paid against invoice ${d.invoice_number || '—'}. Activate it to resume billing.`
+        : "A payment was received for this membership, but it hasn't been activated yet.",
+  },
 };
 
 export function ReconciliationFindingsCard() {
@@ -220,10 +227,13 @@ export function ReconciliationFindingsCard() {
                 explain: () => "Discrepancy detected.",
               };
               const inv =
-                f.reference_type === "invoice" && f.reference_id ? invoices?.[f.reference_id] : undefined;
+                f.reference_type === "invoice" && f.reference_id 
+                  ? invoices?.[f.reference_id] 
+                  : (f.kind === 'stalled_membership_activation' && f.details?.invoice_number ? { invoice_number: f.details.invoice_number } : undefined);
               const label =
                 inv?.invoice_number ??
-                (f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
+                (f.reference_type === 'membership' && f.reference_id ? `Membership ${f.reference_id.slice(0, 8)}` : 
+                 f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
               const seen = f.first_seen_at ?? f.last_seen_at;
               return (
                 <li key={f.id} className="rounded-xl bg-warning/10 ring-1 ring-warning/15 px-3 py-3">
@@ -265,12 +275,20 @@ export function ReconciliationFindingsCard() {
                             Re-check
                           </Button>
                           <Link
-                            to={`/invoices?focus=${f.reference_id}`}
+                            to={f.reference_type === 'membership' ? `/members?focus=${f.details?.member_id || ''}` : `/invoices?focus=${f.reference_id}`}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
                           >
                             Open <ExternalLink className="h-3 w-3" />
                           </Link>
                         </>
+                      )}
+                      {f.kind === 'stalled_membership_activation' && f.details?.member_id && !f.reference_id && (
+                         <Link
+                            to={`/members?focus=${f.details.member_id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
+                          >
+                            View Member <ExternalLink className="h-3 w-3" />
+                          </Link>
                       )}
                     </div>
                   </div>
