@@ -55,6 +55,67 @@ export const staffAttendanceService = {
     return { success: true };
   },
 
+  /**
+   * Record a punch for one specific roster block.
+   * The RPC resolves the block from the punch time, so we send a timestamp that
+   * falls inside the block: "now" when we are already inside it, otherwise the
+   * block's scheduled start on that date (IST).
+   */
+  async punchBlock(params: {
+    userId: string;
+    branchId: string;
+    shiftDate: string;
+    scheduledStart?: string | null;
+  }) {
+    const { userId, branchId, shiftDate, scheduledStart } = params;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    let checkIn = new Date().toISOString();
+
+    if (scheduledStart) {
+      const nowHm = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+      const insideToday = shiftDate === today && nowHm >= scheduledStart.slice(0, 8);
+      if (!insideToday) {
+        // IST wall-clock -> UTC instant
+        checkIn = new Date(`${shiftDate}T${scheduledStart.slice(0, 8)}+05:30`).toISOString();
+      }
+    } else if (shiftDate !== today) {
+      checkIn = new Date(`${shiftDate}T09:00:00+05:30`).toISOString();
+    }
+
+    const { data, error } = await supabase.rpc('staff_record_punch', {
+      p_user_id: userId,
+      p_branch_id: branchId,
+      p_check_in: checkIn,
+      p_source: 'manual',
+      p_notes: null,
+    });
+    if (error) throw error;
+    return data as unknown as string;
+  },
+
+  /** Mark one roster block as absent / on leave, or clear an existing mark. */
+  async markBlock(params: {
+    userId: string;
+    branchId: string;
+    shiftDate: string;
+    shiftType: string;
+    state: 'absent' | 'leave' | 'clear';
+    reason?: string | null;
+  }) {
+    const { error } = await supabase.rpc('staff_mark_block', {
+      p_user_id: params.userId,
+      p_date: params.shiftDate,
+      p_shift_type: params.shiftType,
+      p_state: params.state,
+      p_reason: params.reason ?? null,
+      p_branch_id: params.branchId,
+    });
+    if (error) throw error;
+    return { success: true };
+  },
+
+
+
 
   // Get today's staff attendance
   async getTodayAttendance(branchId: string) {
