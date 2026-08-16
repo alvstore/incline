@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
     }
 
     if (allTemplates.length === 0) {
-      console.error("ai-generate-whatsapp-templates: No templates generated after all attempts.");
+      console.error(`[ai-generate-whatsapp-templates] No templates generated for events: ${body.events.map(e => e.event).join(', ')}`);
       return json({ error: "AI provider returned no usable output — try again or switch provider in Settings → AI Studio." }, 502);
     }
     return json({ success: true, channel, templates: allTemplates });

@@ -20,7 +20,7 @@ export async function generateWithToolFallback(opts: GenerateOnceOptions): Promi
         ...opts,
         userMessage: opts.userMessage + 
           `\n\nIMPORTANT: Return ONLY a valid JSON object. Do not include prose, markdown blocks, or explanations. 
-          The JSON must follow this exact schema: { "templates": [ ${JSON.stringify(params)} ] }`,
+          The JSON must follow this EXACT schema (including the "templates" wrapper): { "templates": [ { "event": "...", "name": "...", "category": "...", "body_text": "...", "variables": ["..."] } ] }`,
         responseFormat: "json",
         tools: undefined,
         toolChoice: undefined

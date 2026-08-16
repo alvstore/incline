@@ -88,7 +88,12 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
           branch_id: effectiveBranchId 
         }
       });
-      if (error) throw error;
+      
+      if (error) {
+        // Handle Edge Function 502/500/403 specifically if possible
+        const errorMsg = error.message || 'AI provider returned an error';
+        throw new Error(errorMsg);
+      }
       setProposals(data.templates || []);
       setStep('review');
     } catch (err: any) {
