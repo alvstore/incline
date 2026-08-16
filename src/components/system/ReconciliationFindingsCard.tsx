@@ -22,6 +22,11 @@ type FindingDetails = {
   discount_amount?: number;
   effective_rate?: number;
   item_count?: number;
+  // Dynamic fields from various findings
+  invoice_id?: string;
+  invoice_number?: string;
+  amount_paid?: number;
+  member_id?: string;
 } | null;
 
 type Finding = {
@@ -104,6 +109,13 @@ const KIND_LABELS: Record<string, { title: string; explain: (d: FindingDetails) 
       d
         ? `Recorded payments ${inr(num(d.recorded))} vs actual ${inr(num(d.actual))}.`
         : "Payment ledger does not match invoice paid amount.",
+  },
+  stalled_membership_activation: {
+    title: "Stalled membership activation",
+    explain: (d) =>
+      d
+        ? `Membership is still "Pending" despite having ${inr(num(d.amount_paid))} paid against invoice ${d.invoice_number || '—'}. Activate it to resume billing.`
+        : "A payment was received for this membership, but it hasn't been activated yet.",
   },
 };
 
@@ -220,10 +232,15 @@ export function ReconciliationFindingsCard() {
                 explain: () => "Discrepancy detected.",
               };
               const inv =
-                f.reference_type === "invoice" && f.reference_id ? invoices?.[f.reference_id] : undefined;
+                f.reference_type === "invoice" && f.reference_id 
+                  ? invoices?.[f.reference_id] 
+                  : (f.kind === 'stalled_membership_activation' && f.details?.invoice_number ? { invoice_number: f.details.invoice_number } : undefined);
+              
               const label =
-                inv?.invoice_number ??
-                (f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
+                (inv as InvoiceLite)?.invoice_number ??
+                (f.reference_type === 'membership' && f.reference_id ? `Membership ${f.reference_id.slice(0, 8)}` : 
+                 f.reference_id ? `${f.reference_type} ${f.reference_id.slice(0, 8)}` : meta.title);
+              
               const seen = f.first_seen_at ?? f.last_seen_at;
               return (
                 <li key={f.id} className="rounded-xl bg-warning/10 ring-1 ring-warning/15 px-3 py-3">
@@ -236,8 +253,8 @@ export function ReconciliationFindingsCard() {
                       <div className="text-foreground">{meta.explain(f.details)}</div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{label}</span>
-                        {inv?.customer_name && <span>· {inv.customer_name}</span>}
-                        {inv?.status && <span>· {inv.status}</span>}
+                        {(inv as InvoiceLite)?.customer_name && <span>· {(inv as InvoiceLite).customer_name}</span>}
+                        {(inv as InvoiceLite)?.status && <span>· {(inv as InvoiceLite).status}</span>}
                         {seen && <span>· first seen {format(new Date(seen), "d MMM")}</span>}
                         {(f.occurrence_count ?? 1) > 1 && <span>· seen {f.occurrence_count}×</span>}
                       </div>
@@ -271,6 +288,14 @@ export function ReconciliationFindingsCard() {
                             Open <ExternalLink className="h-3 w-3" />
                           </Link>
                         </>
+                      )}
+                      {f.kind === 'stalled_membership_activation' && f.details?.member_id && (
+                         <Link
+                            to={`/members?focus=${f.details.member_id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary"
+                          >
+                            View Member <ExternalLink className="h-3 w-3" />
+                          </Link>
                       )}
                     </div>
                   </div>
