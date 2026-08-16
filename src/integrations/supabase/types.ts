@@ -15957,6 +15957,26 @@ export type Database = {
         }
         Returns: string
       }
+      staff_month_summary: {
+        Args: { p_branch_id: string; p_month: string }
+        Returns: {
+          absent_days: number
+          avatar_url: string
+          blocks_attended: number
+          blocks_rostered: number
+          full_name: string
+          half_days: number
+          hours: number
+          late_count: number
+          leave_days: number
+          off_days: number
+          payable_days: number
+          present_days: number
+          staff_code: string
+          staff_kind: string
+          user_id: string
+        }[]
+      }
       staff_record_punch: {
         Args: {
           p_branch_id: string
@@ -15966,6 +15986,30 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
+      }
+      staff_roster_board: {
+        Args: { p_branch_id: string; p_date: string }
+        Returns: {
+          attendance_id: string
+          avatar_url: string
+          check_in: string
+          full_name: string
+          hours: number
+          is_late: boolean
+          late_minutes: number
+          mark_reason: string
+          mark_state: string
+          rostered: boolean
+          rostered_hours: number
+          scheduled_end: string
+          scheduled_start: string
+          shift_type: string
+          source: string
+          staff_code: string
+          staff_kind: string
+          state: string
+          user_id: string
+        }[]
       }
       start_membership_now: {
         Args: { p_membership_id: string; p_reason?: string }
