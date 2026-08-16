@@ -144,7 +144,15 @@ export default function PaymentsPage() {
   const totalDues = overdueInvoices.reduce((sum: number, inv: any) => sum + ((inv.total_amount || 0) - (inv.amount_paid || 0)), 0);
 
   const recordPaymentMutation = useMutation({
-    mutationFn: async (form: { memberId: string; amount: number; method: string; notes: string; invoiceId?: string }) => {
+    mutationFn: async (form: { memberId: string; amount: number; method: string; notes: string; invoiceId?: string; paymentDate?: string; transactionId?: string }) => {
+      const pDate = form.paymentDate || new Date().toISOString().slice(0, 10);
+      const todayIso = new Date().toISOString().slice(0, 10);
+
+      // Backdated dates keep the wall-clock time so same-day entries stay ordered.
+      const backdated = pDate !== todayIso
+        ? new Date(`${pDate}T12:00:00`).toISOString()
+        : new Date().toISOString();
+
       if (!form.invoiceId) {
         // Standalone payment without invoice — direct insert
         const { error } = await (supabase.from('payments') as any).insert({
@@ -153,7 +161,10 @@ export default function PaymentsPage() {
           amount: form.amount,
           payment_method: normalizePaymentMethod(form.method),
           status: 'completed',
-          payment_date: new Date().toISOString(),
+          payment_date: backdated,
+          notes: form.notes || undefined,
+          transaction_id: form.transactionId || undefined,
+          received_by: user?.id,
         });
         if (error) throw error;
         return;
