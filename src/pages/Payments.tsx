@@ -53,7 +53,7 @@ export default function PaymentsPage() {
   const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ member_search: '', amount: '', payment_method: 'cash', notes: '', payment_date: new Date().toISOString().slice(0, 10), transaction_id: '' });
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [duesOpen, setDuesOpen] = useState(true);
@@ -144,7 +144,15 @@ export default function PaymentsPage() {
   const totalDues = overdueInvoices.reduce((sum: number, inv: any) => sum + ((inv.total_amount || 0) - (inv.amount_paid || 0)), 0);
 
   const recordPaymentMutation = useMutation({
-    mutationFn: async (form: { memberId: string; amount: number; method: string; notes: string; invoiceId?: string }) => {
+    mutationFn: async (form: { memberId: string; amount: number; method: string; notes: string; invoiceId?: string; paymentDate?: string; transactionId?: string }) => {
+      const pDate = form.paymentDate || new Date().toISOString().slice(0, 10);
+      const todayIso = new Date().toISOString().slice(0, 10);
+
+      // Backdated dates keep the wall-clock time so same-day entries stay ordered.
+      const backdated = pDate !== todayIso
+        ? new Date(`${pDate}T12:00:00`).toISOString()
+        : new Date().toISOString();
+
       if (!form.invoiceId) {
         // Standalone payment without invoice — direct insert
         const { error } = await (supabase.from('payments') as any).insert({
@@ -153,7 +161,10 @@ export default function PaymentsPage() {
           amount: form.amount,
           payment_method: normalizePaymentMethod(form.method),
           status: 'completed',
-          payment_date: new Date().toISOString(),
+          payment_date: backdated,
+          notes: form.notes || undefined,
+          transaction_id: form.transactionId || undefined,
+          received_by: user?.id,
         });
         if (error) throw error;
         return;
@@ -167,6 +178,8 @@ export default function PaymentsPage() {
         paymentMethod: form.method,
         notes: form.notes || undefined,
         receivedBy: user?.id,
+        paymentDate: backdated,
+        transactionId: form.transactionId || undefined,
       });
     },
     onSuccess: () => {
@@ -176,7 +189,7 @@ export default function PaymentsPage() {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Payment recorded successfully');
       setRecordPaymentOpen(false);
-      setPaymentForm({ member_search: '', amount: '', payment_method: 'cash', notes: '' });
+      setPaymentForm({ member_search: '', amount: '', payment_method: 'cash', notes: '', payment_date: new Date().toISOString().slice(0, 10), transaction_id: '' });
       setSelectedMember(null);
       setSelectedInvoice(null);
     },
@@ -868,9 +881,30 @@ export default function PaymentsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1">
+              <Label>Payment Date</Label>
+              <Input
+                type="date"
+                value={paymentForm.payment_date}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setPaymentForm(f => ({ ...f, payment_date: e.target.value }))}
+                className="rounded-xl cursor-pointer"
+              />
+            </div>
+            {['upi', 'bank_transfer', 'card'].includes(paymentForm.payment_method) && (
+              <div className="space-y-1">
+                <Label>{paymentForm.payment_method === 'card' ? 'Transaction ID' : 'UTR / Transaction ID'}</Label>
+                <Input
+                  placeholder={paymentForm.payment_method === 'upi' ? "Enter UTR number" : "Reference number"}
+                  value={paymentForm.transaction_id}
+                  onChange={(e) => setPaymentForm(f => ({ ...f, transaction_id: e.target.value }))}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+            <div className="space-y-1">
               <Label>Notes</Label>
-              <Textarea placeholder="Optional notes..." value={paymentForm.notes} onChange={(e) => setPaymentForm(f => ({ ...f, notes: e.target.value }))} />
+              <Textarea placeholder="Optional notes..." value={paymentForm.notes} onChange={(e) => setPaymentForm(f => ({ ...f, notes: e.target.value }))} className="rounded-xl min-h-[80px]" />
             </div>
           </div>
           <SheetFooter>
@@ -882,6 +916,8 @@ export default function PaymentsPage() {
                 amount: parseFloat(paymentForm.amount),
                 method: paymentForm.payment_method,
                 notes: paymentForm.notes,
+                paymentDate: paymentForm.payment_date,
+                transactionId: paymentForm.transaction_id,
                 invoiceId: selectedInvoice?.id,
               })}
             >
