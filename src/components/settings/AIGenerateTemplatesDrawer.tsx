@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useBranchContext } from '@/contexts/BranchContext';
 import {
   Sheet,
   SheetContent,
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whatsapp', prefilledEvents = [] }: Props) {
+  const { effectiveBranchId } = useBranchContext();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'pick' | 'review'>('pick');
   const [picked, setPicked] = useState<Set<string>>(new Set(prefilledEvents));
@@ -40,8 +42,22 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
         .eq('type', channel);
       
       if (tplError) throw tplError;
-      return templates || [];
+
+      const { data: triggers, error: trigError } = await supabase
+        .from('whatsapp_triggers')
+        .select('event_name, is_active, template_id, templates(id, meta_template_status)')
+        .eq('branch_id', effectiveBranchId!);
+
+      if (trigError) throw trigError;
+
+      // Map triggers to the matrix format
+      return (triggers || []).map(trig => ({
+        trigger_event: trig.event_name,
+        type: channel,
+        meta_template_status: trig.templates?.meta_template_status || 'DRAFT'
+      }));
     },
+    enabled: !!effectiveBranchId
   });
 
   const uncovered = useMemo(() => {
@@ -65,7 +81,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-generate-whatsapp-templates', {
-        body: { events: Array.from(picked) }
+        body: { 
+          events: Array.from(picked).map(e => ({ event: e })),
+          branch_id: effectiveBranchId 
+        }
       });
       if (error) throw error;
       setProposals(data.proposals || []);
