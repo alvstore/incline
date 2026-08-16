@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useBranchContext } from '@/contexts/BranchContext';
 import {
   Sheet,
   SheetContent,
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whatsapp', prefilledEvents = [] }: Props) {
+  const { effectiveBranchId } = useBranchContext();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'pick' | 'review'>('pick');
   const [picked, setPicked] = useState<Set<string>>(new Set(prefilledEvents));
@@ -32,16 +34,32 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
   const [bulk, setBulk] = useState<{ total: number; done: number } | null>(null);
 
   const { data: matrix = [], isLoading: matrixLoading } = useQuery({
-    queryKey: ['template-coverage-matrix', channel],
+    queryKey: ['template-coverage-matrix', channel, effectiveBranchId],
     queryFn: async () => {
+      if (!effectiveBranchId) return [];
+      
       const { data: templates, error: tplError } = await supabase
         .from('templates')
         .select('trigger_event, type, meta_template_status')
         .eq('type', channel);
       
       if (tplError) throw tplError;
-      return templates || [];
+
+      const { data: triggers, error: trigError } = await supabase
+        .from('whatsapp_triggers')
+        .select('event_name, is_active, template_id, templates(id, meta_template_status)')
+        .eq('branch_id', effectiveBranchId);
+
+      if (trigError) throw trigError;
+
+      // Map triggers to the matrix format
+      return (triggers || []).map(trig => ({
+        trigger_event: trig.event_name,
+        type: channel,
+        meta_template_status: trig.templates?.meta_template_status || 'DRAFT'
+      }));
     },
+    enabled: !!effectiveBranchId
   });
 
   const uncovered = useMemo(() => {
@@ -65,10 +83,13 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-generate-whatsapp-templates', {
-        body: { events: Array.from(picked) }
+        body: { 
+          events: Array.from(picked).map(e => ({ event: e })),
+          branch_id: effectiveBranchId 
+        }
       });
       if (error) throw error;
-      setProposals(data.proposals || []);
+      setProposals(data.templates || []);
       setStep('review');
     } catch (err: any) {
       toast.error(err.message || 'Failed to generate templates');
@@ -83,7 +104,11 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
     for (const p of proposals) {
       try {
         const { error } = await supabase.functions.invoke('manage-whatsapp-templates', {
-          body: { action: 'upsert', template: p }
+          body: { 
+            action: 'upsert', 
+            template: p,
+            branch_id: effectiveBranchId
+          }
         });
         if (error) throw error;
         success++;
@@ -162,7 +187,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
                     <Badge variant="outline" className="bg-white capitalize">{p.category}</Badge>
                   </div>
                   <div className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap font-medium leading-relaxed">
-                    {p.body}
+                    {p.body_text || p.body}
                   </div>
                   {p.footer && (
                     <div className="text-[10px] text-slate-400 px-1">
