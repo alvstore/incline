@@ -30,6 +30,9 @@ import { notifyStaffAttendanceRecorded } from '@/lib/comms/staffAttendanceNotify
 import { PtAttendanceTabContent } from '@/components/pt/PtAttendanceTabContent';
 import { Dumbbell } from 'lucide-react';
 import { StaffAttendanceBoard } from '@/components/attendance/StaffAttendanceBoard';
+import { StaffRosterBoard } from '@/components/attendance/StaffRosterBoard';
+import { StaffMonthHistory } from '@/components/attendance/StaffMonthHistory';
+import { MemberAttendanceHistory } from '@/components/attendance/MemberAttendanceHistory';
 
 
 type FlashState = {
