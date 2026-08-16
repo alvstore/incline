@@ -181,7 +181,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
                     <Badge variant="outline" className="bg-white capitalize">{p.category}</Badge>
                   </div>
                   <div className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap font-medium leading-relaxed">
-                    {p.body}
+                    {p.body_text || p.body}
                   </div>
                   {p.footer && (
                     <div className="text-[10px] text-slate-400 px-1">
