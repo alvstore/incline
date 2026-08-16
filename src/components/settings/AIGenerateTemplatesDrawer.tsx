@@ -87,7 +87,7 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
         }
       });
       if (error) throw error;
-      setProposals(data.proposals || []);
+      setProposals(data.templates || []);
       setStep('review');
     } catch (err: any) {
       toast.error(err.message || 'Failed to generate templates');
