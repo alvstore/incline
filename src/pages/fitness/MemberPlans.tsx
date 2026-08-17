@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { FitnessHubTabs } from "@/components/fitness/FitnessHubTabs";
 import { format, differenceInDays, parseISO } from "date-fns";
+import { getISTNow, getISTToday } from "@/lib/utils/datetime";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -166,7 +167,7 @@ export default function FitnessMemberPlansPage() {
   }, [grouped, tab]);
 
   const kpis = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getISTToday();
     const active = assignments.filter((a) => !a.is_expired);
     const workouts = active.filter((a) => a.plan_type === "workout").length;
     const diets = active.filter((a) => a.plan_type === "diet").length;
@@ -174,7 +175,7 @@ export default function FitnessMemberPlansPage() {
       (a) =>
         a.valid_until &&
         a.valid_until >= today &&
-        differenceInDays(parseISO(a.valid_until), new Date()) <= 7,
+        differenceInDays(parseISO(a.valid_until), getISTNow()) <= 7,
     ).length;
     const uniqueMembers = new Set(active.map((a) => a.member_id)).size;
     return { workouts, diets, expiring, uniqueMembers };
@@ -193,7 +194,7 @@ export default function FitnessMemberPlansPage() {
   const renderStatusChip = (a: MemberAssignmentRow) => {
     if (a.is_expired) return <Badge variant="secondary" className="text-[10px]">Expired</Badge>;
     if (!a.valid_until) return <Badge className="bg-success/15 text-success border-success/20 text-[10px]">Active</Badge>;
-    const days = differenceInDays(parseISO(a.valid_until), new Date());
+    const days = differenceInDays(parseISO(a.valid_until), getISTNow());
     if (days <= 7) return <Badge className="bg-warning/15 text-warning border-warning/20 text-[10px]">{days}d left</Badge>;
     return <Badge className="bg-success/15 text-success border-success/20 text-[10px]">{days}d left</Badge>;
   };
