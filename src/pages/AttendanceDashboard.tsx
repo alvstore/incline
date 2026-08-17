@@ -948,10 +948,10 @@ export default function AttendanceDashboard() {
               {/* Members Tab */}
               <TabsContent value="members">
                 {/* Bulk Check-out */}
-                {memberAttendance.some((a: any) => !a.check_out) && (
+                {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).some((a: any) => !a.check_out) && (
                   <div className="flex justify-end mb-4">
                     <Button variant="outline" size="sm" className="gap-2" onClick={async () => {
-                      const activeIds = memberAttendance.filter((a: any) => !a.check_out).map((a: any) => a.member_id);
+                      const activeIds = (activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).filter((a: any) => !a.check_out).map((a: any) => a.member_id);
                       let count = 0;
                       for (const mid of activeIds) {
                         try { 
@@ -965,7 +965,7 @@ export default function AttendanceDashboard() {
                       toast.success(`Checked out ${count} member(s)`);
                     }}>
                       <LogOut className="h-4 w-4" />
-                      Bulk Check Out ({memberAttendance.filter((a: any) => !a.check_out).length})
+                      Bulk Check Out ({(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).filter((a: any) => !a.check_out).length})
                     </Button>
                   </div>
                 )}
