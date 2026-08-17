@@ -371,7 +371,7 @@ export async function markAttendance(
   const updates = attended
     ? {
         status: "attended" as BenefitBookingStatus,
-        check_in_at: new Date().toISOString(),
+        check_in_at: getISTNow().toISOString(),
       }
     : {
         status: "no_show" as BenefitBookingStatus,
