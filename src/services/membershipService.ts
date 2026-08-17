@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import type { 
   Membership, 
   MembershipWithPlan, 
@@ -61,7 +62,7 @@ export async function fetchActiveMembership(memberId: string) {
     .select('*, membership_plans(*)')
     .eq('member_id', memberId)
     .eq('status', 'active')
-    .gte('end_date', format(new Date(), 'yyyy-MM-dd'))
+    .gte('end_date', getISTToday())
     .order('end_date', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -71,7 +72,7 @@ export async function fetchActiveMembership(memberId: string) {
 }
 
 export function calculateDaysRemaining(membership: Membership): DaysRemaining {
-  const today = new Date();
+  const today = getISTNow();
   const endDate = parseISO(membership.end_date);
   const startDate = parseISO(membership.start_date);
   
@@ -219,14 +220,14 @@ export async function approveFreeze(freezeId: string, approvedBy: string) {
     .update({
       status: 'approved',
       approved_by: approvedBy,
-      approved_at: new Date().toISOString(),
+      approved_at: getISTNow().toISOString(),
     })
     .eq('id', freezeId);
 
   if (updateError) throw updateError;
 
   // Update membership status to frozen if freeze starts today or earlier
-  const today = new Date();
+  const today = getISTNow();
   const freezeStart = parseISO(freeze.start_date);
   
   if (!isAfter(freezeStart, today)) {

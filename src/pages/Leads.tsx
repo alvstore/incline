@@ -8,7 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportToCSV } from '@/lib/csvExport';
 import { leadService, type LeadFilters } from '@/services/leadService';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, subHours } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, subHours, parseISO } from 'date-fns';
+import { getISTNow } from '@/lib/utils/datetime';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -41,7 +42,7 @@ export default function LeadsPage() {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'calendar' | 'analytics' | 'ai_audit'>('kanban');
   const [page, setPage] = useState(0);
-  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarMonth, setCalendarMonth] = useState(getISTNow());
   const [showSaveView, setShowSaveView] = useState(false);
   const [newViewName, setNewViewName] = useState('');
 
@@ -103,7 +104,7 @@ export default function LeadsPage() {
   const { data: aiAuditData = [], isLoading: aiAuditLoading } = useQuery({
     queryKey: ['ai-audit-leads', branchFilter],
     queryFn: async () => {
-      const since = subHours(new Date(), 24).toISOString();
+      const since = subHours(getISTNow(), 24).toISOString();
       // Get inbound WhatsApp messages from last 24h
       const { data: messages } = await supabase
         .from('whatsapp_messages')
@@ -198,7 +199,7 @@ export default function LeadsPage() {
     if (!ACTIVE_STAGES.includes(l.status)) return false;
     const ref = l.last_contacted_at || l.created_at;
     if (!ref) return false;
-    const ageMs = Date.now() - new Date(ref).getTime();
+    const ageMs = getISTNow().getTime() - parseISO(ref).getTime();
     return ageMs > STALE_DAYS * 24 * 60 * 60 * 1000;
   };
 
@@ -214,7 +215,7 @@ export default function LeadsPage() {
       const matchesStatus = statusFilter.length === 0 || statusFilter.includes(lead.status);
       const matchesTemp = temperatureFilter.length === 0 || temperatureFilter.includes(lead.temperature);
       const matchesOwner = !filters.ownerId || (filters.ownerId === 'unassigned' ? !lead.owner_id : lead.owner_id === filters.ownerId);
-      const matchesOverdue = !filters.overdueOnly || (lead.next_action_at && new Date(lead.next_action_at) < new Date());
+      const matchesOverdue = !filters.overdueOnly || (lead.next_action_at && parseISO(lead.next_action_at) < getISTNow());
       const matchesStale = !showStaleOnly || isStale(lead);
       return matchesSearch && matchesSource && matchesStatus && matchesTemp && matchesOwner && matchesOverdue && matchesStale;
     });
@@ -235,7 +236,7 @@ export default function LeadsPage() {
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  const getLeadsForDay = (day: Date) => filteredLeads.filter((l: any) => isSameDay(new Date(l.created_at), day));
+  const getLeadsForDay = (day: Date) => filteredLeads.filter((l: any) => isSameDay(parseISO(l.created_at), day));
 
   return (
     <AppLayout>
@@ -319,7 +320,7 @@ export default function LeadsPage() {
               const rows = filteredLeads.map((l: any) => ({
                 Name: l.full_name || '', Phone: l.phone || '', Email: l.email || '',
                 Source: l.source || 'Direct', Status: l.status || '', Temperature: l.temperature || '',
-                Score: l.score || 0, 'Created At': l.created_at ? format(new Date(l.created_at), 'yyyy-MM-dd') : '',
+                Score: l.score || 0, 'Created At': l.created_at ? format(parseISO(l.created_at), 'yyyy-MM-dd') : '',
                 Notes: l.notes || '', 'UTM Source': l.utm_source || '', 'UTM Campaign': l.utm_campaign || '',
               }));
               exportToCSV(rows, 'leads');

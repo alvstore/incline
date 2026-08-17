@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
+import { getISTToday } from '@/lib/utils/datetime';
 import { Search, History, AlertTriangle, CalendarDays } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,7 +40,7 @@ function durationLabel(inIso: string, outIso: string | null) {
 }
 
 export function MemberAttendanceHistory({ branchId }: { branchId: string | undefined }) {
-  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [search, setSearch] = useState('');
 
   const { data: visits = [], isLoading, isError } = useQuery({

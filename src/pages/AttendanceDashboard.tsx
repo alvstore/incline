@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,13 +78,13 @@ export default function AttendanceDashboard() {
   // Dashboard state
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('members');
-  const [dateFilter, setDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [dateFilter, setDateFilter] = useState(getISTToday());
   const [forceEntryOpen, setForceEntryOpen] = useState(false);
   const [forceEntrySearch, setForceEntrySearch] = useState('');
   const [forceEntryReason, setForceEntryReason] = useState('');
   const [forceEntrySubmitting, setForceEntrySubmitting] = useState(false);
   const [selectedForceEntryMember, setSelectedForceEntryMember] = useState<any>(null);
-  const [historyMonth, setHistoryMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [historyMonth, setHistoryMonth] = useState(getISTToday().substring(0, 7));
   const [historyScope, setHistoryScope] = useState<'staff' | 'members'>('staff');
 
   // Member attendance hook (rapid check-in)
@@ -340,7 +341,7 @@ export default function AttendanceDashboard() {
     queryFn: async () => {
       const days = [];
       for (let i = 6; i >= 0; i--) {
-        const date = new Date();
+        const date = getISTNow();
         date.setDate(date.getDate() - i);
         const start = startOfDay(date).toISOString();
         const end = endOfDay(date).toISOString();

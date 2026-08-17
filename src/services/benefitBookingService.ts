@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getISTNow } from "@/lib/utils/datetime";
 import { Database } from "@/integrations/supabase/types";
 import { safeBenefitEnum } from "@/lib/benefitEnums";
 
@@ -352,7 +353,7 @@ export async function cancelBooking(
     .from("benefit_bookings")
     .update({
       status: "cancelled" as BenefitBookingStatus,
-      cancelled_at: new Date().toISOString(),
+      cancelled_at: getISTNow().toISOString(),
       cancellation_reason: reason,
     })
     .eq("id", bookingId)
@@ -370,11 +371,11 @@ export async function markAttendance(
   const updates = attended
     ? {
         status: "attended" as BenefitBookingStatus,
-        check_in_at: new Date().toISOString(),
+        check_in_at: getISTNow().toISOString(),
       }
     : {
         status: "no_show" as BenefitBookingStatus,
-        no_show_marked_at: new Date().toISOString(),
+        no_show_marked_at: getISTNow().toISOString(),
       };
   
   const { data, error } = await supabase
@@ -448,7 +449,7 @@ export async function getMemberCredits(
     .from("member_benefit_credits")
     .select("*")
     .eq("member_id", memberId)
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", getISTNow().toISOString())
     .gt("credits_remaining", 0);
   
   if (benefitType) {

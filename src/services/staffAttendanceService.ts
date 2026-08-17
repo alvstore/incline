@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getISTToday } from '@/lib/utils/datetime';
 import type { Database } from '@/integrations/supabase/types';
 
 type StaffAttendance = Database['public']['Tables']['staff_attendance']['Row'];
@@ -119,7 +120,7 @@ export const staffAttendanceService = {
 
   // Get today's staff attendance
   async getTodayAttendance(branchId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getISTToday();
 
     const { data, error } = await supabase
       .from('staff_attendance')

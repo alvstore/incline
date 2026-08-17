@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { getISTToday } from '@/lib/utils/datetime';
 import { AlertTriangle, History, Layers, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,7 +40,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export function StaffMonthHistory({ branchId }: { branchId: string | undefined }) {
-  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [detail, setDetail] = useState<MonthRow | null>(null);
 
   const { data: rows = [], isLoading, isError } = useQuery({

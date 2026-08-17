@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getISTToday, getISTNow } from "@/lib/utils/datetime";
 import type { Json } from "@/integrations/supabase/types";
 import type { WorkoutPlanContent, DietPlanContent } from "@/types/fitnessPlan";
 
@@ -356,7 +357,7 @@ export async function assignPlanToMember(params: {
       plan_data: toJsonContent(params.plan_data),
       is_custom: params.is_custom ?? true,
       is_public: false,
-      valid_from: params.valid_from || new Date().toISOString().split('T')[0],
+      valid_from: params.valid_from || getISTToday(),
       valid_until: params.valid_until,
       branch_id: params.branch_id,
       created_by: user?.id,
@@ -691,7 +692,7 @@ async function mapAssignmentRows(rows: any[]): Promise<MemberAssignmentRow[]> {
   const templateMap = new Map<string, string>();
   for (const t of templatesRes.data || []) templateMap.set((t as any).id, (t as any).name);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTToday();
   return rows.map((r: any) => {
     const member: any = memberMap.get(r.member_id);
     const profile: any = member?.profiles;
@@ -763,11 +764,11 @@ export async function fetchAssignmentsForTemplate(
  * stays live for the rest of the day on the member's My Diet / My Workout page.
  */
 export async function revokeMemberAssignment(assignmentId: string): Promise<void> {
-  const yesterday = new Date();
+  const yesterday = getISTNow();
   yesterday.setDate(yesterday.getDate() - 1);
   const { error } = await supabase
     .from('member_fitness_plans')
-    .update({ valid_until: yesterday.toISOString().slice(0, 10) })
+    .update({ valid_until: yesterday.toISOString().split('T')[0] })
     .eq('id', assignmentId);
   if (error) throw error;
 }

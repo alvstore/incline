@@ -11,7 +11,8 @@ import { AvatarUpload } from '@/components/auth/AvatarUpload';
 import { useMemberData } from '@/hooks/useMemberData';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Loader2, KeyRound, HeartPulse } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { getISTNow, getISTToday } from '@/lib/utils/datetime';
 import { toast } from 'sonner';
 import { CommunicationPreferences } from '@/components/profile/CommunicationPreferences';
 import { useQuery } from '@tanstack/react-query';
@@ -236,7 +237,7 @@ export default function MemberProfile() {
                   Member Since
                 </Label>
                 <Input
-                  value={member.joined_at ? format(new Date(member.joined_at), 'dd MMM yyyy') : 'Not set'}
+                  value={member.joined_at ? format(parseISO(member.joined_at), 'dd MMM yyyy') : 'Not set'}
                   disabled
                 />
               </div>
@@ -301,11 +302,11 @@ export default function MemberProfile() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Start Date</p>
-                  <p className="font-medium">{format(new Date(activeMembership.start_date), 'dd MMM yyyy')}</p>
+                  <p className="font-medium">{format(parseISO(activeMembership.start_date), 'dd MMM yyyy')}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">End Date</p>
-                  <p className="font-medium">{format(new Date(activeMembership.end_date), 'dd MMM yyyy')}</p>
+                  <p className="font-medium">{format(parseISO(activeMembership.end_date), 'dd MMM yyyy')}</p>
                 </div>
               </div>
             </CardContent>
@@ -371,7 +372,7 @@ export default function MemberProfile() {
                   </UIBadge>
                   {healthData.signed_at && (
                     <span className="text-xs text-muted-foreground ml-auto">
-                      {format(new Date(healthData.signed_at), 'dd MMM yyyy')}
+                      {format(parseISO(healthData.signed_at), 'dd MMM yyyy')}
                     </span>
                   )}
                 </div>

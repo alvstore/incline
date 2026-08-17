@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getISTNow } from '@/lib/utils/datetime';
 
 async function checkAuth() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -263,7 +264,7 @@ export const leadService = {
     if (branchId) query = query.eq('branch_id', branchId);
     const { data, error } = await query;
     if (error) throw error;
-    const now = new Date();
+    const now = getISTNow();
     const stats = { total: data?.length || 0, new: 0, contacted: 0, qualified: 0, negotiation: 0, converted: 0, lost: 0, hot: 0, warm: 0, cold: 0, unassigned: 0, overdue: 0 };
     data?.forEach((lead: any) => {
       if (lead.status in stats) (stats as any)[lead.status]++;

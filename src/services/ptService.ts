@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getISTToday, getISTNow } from "@/lib/utils/datetime";
 import type { Database } from "@/integrations/supabase/types";
 
 type PTPackage = Database["public"]["Tables"]["pt_packages"]["Row"];
@@ -646,7 +647,7 @@ async function firePtReceipt(r: LogPtSessionResult) {
 
   const body =
     `Hi ${name}, your PT session has been logged on ` +
-    `${_fmtDate(new Date(), 'd MMM yyyy, h:mm a')}. ${detail} — Incline Fitness`;
+    `${_fmtDate(getISTNow(), 'd MMM yyyy, h:mm a')}. ${detail} — Incline Fitness`;
 
   await dispatchCommunication({
     branch_id: r.branch_id,

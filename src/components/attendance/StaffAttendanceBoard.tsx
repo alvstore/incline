@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import {
   Clock, Sunrise, Sunset, Moon, CalendarDays, AlertTriangle,
   PencilLine, Trash2, UserCheck, Loader2,
@@ -75,7 +76,7 @@ export function StaffAttendanceBoard({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [dateISO, setDateISO] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [dateISO, setDateISO] = useState(getISTToday());
   const [editing, setEditing] = useState<StaffPunch | null>(null);
   const [editTime, setEditTime] = useState('');
   const [editNotes, setEditNotes] = useState('');
