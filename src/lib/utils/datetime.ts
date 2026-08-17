@@ -10,6 +10,41 @@ function asDate(input: string | number | Date | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/** 
+ * Returns a new Date object representing the current moment in IST, 
+ * but shifted so that its UTC components match local IST components.
+ * Useful for legacy code that calls .toISOString().split('T')[0] 
+ * and expects the local date.
+ */
+export function getISTNow(): Date {
+  const now = new Date();
+  // We use the Intl API to get a string in IST, then parse it back to a date
+  // that has the "correct" YYYY-MM-DD in its UTC representation.
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: IST_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const getPart = (type: string) => parts.find(p => p.type === type)?.value;
+  
+  const isoStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}Z`;
+  return new Date(isoStr);
+}
+
+/** 
+ * Returns the current YYYY-MM-DD in IST.
+ */
+export function getISTToday(): string {
+  return getISTNow().toISOString().split('T')[0];
+}
+
 /** Format as IST (e.g. "12 Jun 2026, 8:25 PM"). */
 export function formatIST(
   input: string | number | Date | null | undefined,
