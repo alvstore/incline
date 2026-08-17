@@ -427,7 +427,7 @@ export default function AttendanceDashboard() {
   }, [staffTodayAttendance.data]);
 
   const fmtTime = (iso?: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+    iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }) : '--:--';
 
 
   const decisionFor = (staff: any) =>
@@ -948,10 +948,10 @@ export default function AttendanceDashboard() {
               {/* Members Tab */}
               <TabsContent value="members">
                 {/* Bulk Check-out */}
-                {memberAttendance.some((a: any) => !a.check_out) && (
+                {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).some((a: any) => !a.check_out) && (
                   <div className="flex justify-end mb-4">
                     <Button variant="outline" size="sm" className="gap-2" onClick={async () => {
-                      const activeIds = memberAttendance.filter((a: any) => !a.check_out).map((a: any) => a.member_id);
+                      const activeIds = (activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).filter((a: any) => !a.check_out).map((a: any) => a.member_id);
                       let count = 0;
                       for (const mid of activeIds) {
                         try { 
@@ -965,7 +965,7 @@ export default function AttendanceDashboard() {
                       toast.success(`Checked out ${count} member(s)`);
                     }}>
                       <LogOut className="h-4 w-4" />
-                      Bulk Check Out ({memberAttendance.filter((a: any) => !a.check_out).length})
+                      Bulk Check Out ({(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).filter((a: any) => !a.check_out).length})
                     </Button>
                   </div>
                 )}
@@ -995,8 +995,8 @@ export default function AttendanceDashboard() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{format(new Date(attendance.check_in), 'HH:mm')}</TableCell>
-                        <TableCell>{attendance.check_out ? format(new Date(attendance.check_out), 'HH:mm') : '-'}</TableCell>
+                        <TableCell>{fmtTime(attendance.check_in)}</TableCell>
+                        <TableCell>{attendance.check_out ? fmtTime(attendance.check_out) : '-'}</TableCell>
                         <TableCell>{formatDuration(attendance.check_in, attendance.check_out)}</TableCell>
                         <TableCell>{getSourceBadge(attendance)}</TableCell>
                         <TableCell>
