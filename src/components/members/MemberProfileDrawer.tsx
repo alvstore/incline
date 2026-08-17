@@ -1178,7 +1178,7 @@ export function MemberProfileDrawer({
   if (!member) return null;
 
   const daysLeft = activeMembership 
-    ? differenceInDays(new Date(activeMembership.end_date), new Date())
+    ? daysRemaining(activeMembership.end_date) ?? 0
     : 0;
 
   const getDaysLeftColor = (days: number) => {
