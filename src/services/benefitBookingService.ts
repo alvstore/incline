@@ -449,7 +449,7 @@ export async function getMemberCredits(
     .from("member_benefit_credits")
     .select("*")
     .eq("member_id", memberId)
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", getISTNow().toISOString())
     .gt("credits_remaining", 0);
   
   if (benefitType) {
