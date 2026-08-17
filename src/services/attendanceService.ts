@@ -72,7 +72,7 @@ export const attendanceService = {
 
   // Get today's attendance for a branch
   async getTodayAttendance(branchId: string): Promise<MemberAttendanceWithDetails[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getISTToday();
     
     const { data, error } = await supabase
       .from('member_attendance')
