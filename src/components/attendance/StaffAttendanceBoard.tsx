@@ -76,7 +76,7 @@ export function StaffAttendanceBoard({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [dateISO, setDateISO] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [dateISO, setDateISO] = useState(getISTToday());
   const [editing, setEditing] = useState<StaffPunch | null>(null);
   const [editTime, setEditTime] = useState('');
   const [editNotes, setEditNotes] = useState('');
