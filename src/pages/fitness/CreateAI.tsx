@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Sparkles, Dumbbell, UtensilsCrossed, User, Users } from 'lucide-react';
+import { getISTNow } from '@/lib/utils/datetime';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { CreateFlowLayout } from '@/components/fitness/create/CreateFlowLayout';
@@ -320,7 +321,7 @@ export default function CreateAIPage() {
         daysPerWeek: type === 'workout' ? daysPerWeek : undefined,
         rotationIntervalDays: type === 'workout' ? rotationIntervalDays : undefined,
         content: plan,
-        createdAt: new Date().toISOString(),
+        createdAt: getISTNow().toISOString(),
       });
 
       toast.success('Plan generated!');
