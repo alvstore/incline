@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { getISTToday, getISTNow } from '@/lib/utils/datetime';
 import {
   Sunrise, Sunset, Moon, CalendarDays, LogIn, ShieldAlert, Loader2,
   CheckCircle2, XCircle, Clock, CalendarOff, Info,
