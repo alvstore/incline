@@ -40,6 +40,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
   const queryClient = useQueryClient();
   const { data: gstRates = [5, 12, 18, 28] } = useGstRates();
   const [member, setMember] = useState<InvoiceMember | null>(null);
+  const [walkinDetails, setWalkinDetails] = useState({ name: '', phone: '', email: '', address: '' });
   const [billDate, setBillDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dueDate, setDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
@@ -125,7 +126,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
           unit_price: it.unit_price,
         })) as never,
         p_due_date: dueDate || null,
-        p_notes: notes || null,
+        p_notes: (notes || '') + (walkinDetails.name ? `\nCustomer: ${walkinDetails.name}${walkinDetails.phone ? ` (${walkinDetails.phone})` : ''}${walkinDetails.email ? ` [${walkinDetails.email}]` : ''}${walkinDetails.address ? ` Addr: ${walkinDetails.address}` : ''}` : ''),
         p_discount_amount: discountAmount,
         p_include_gst: includeGst,
         p_gst_rate: includeGst ? gstRate : 0,
@@ -168,6 +169,7 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
 
   const resetForm = () => {
     setMember(null);
+    setWalkinDetails({ name: '', phone: '', email: '', address: '' });
     setBillDate(format(new Date(), 'yyyy-MM-dd'));
     setDueDate(format(new Date(), 'yyyy-MM-dd'));
     setNotes('');
@@ -190,9 +192,57 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
 
         <div className="mt-6 space-y-6">
           {/* Member Selection */}
-          <div className="space-y-2">
-            <Label>Member (optional)</Label>
-            <InvoiceMemberPicker branchId={branchId} value={member} onChange={setMember} />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Customer / Member Selection</Label>
+              <InvoiceMemberPicker branchId={branchId} value={member} onChange={setMember} />
+            </div>
+
+            {!member && (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Walk-in Customer Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px]">Name</Label>
+                    <Input 
+                      placeholder="Guest Name" 
+                      value={walkinDetails.name} 
+                      onChange={e => setWalkinDetails(prev => ({ ...prev, name: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px]">Mobile</Label>
+                    <Input 
+                      placeholder="+91..." 
+                      value={walkinDetails.phone} 
+                      onChange={e => setWalkinDetails(prev => ({ ...prev, phone: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px]">Email</Label>
+                    <Input 
+                      placeholder="guest@example.com" 
+                      value={walkinDetails.email} 
+                      onChange={e => setWalkinDetails(prev => ({ ...prev, email: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px]">Address</Label>
+                    <Input 
+                      placeholder="City, Area" 
+                      value={walkinDetails.address} 
+                      onChange={e => setWalkinDetails(prev => ({ ...prev, address: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
 

@@ -86,5 +86,6 @@ export function useAttendance(branchId: string | undefined) {
     searchMember: searchMemberMutation.mutateAsync,
     isCheckingIn: checkInMutation.isPending,
     isCheckingOut: checkOutMutation.isPending,
+    refetchToday: todayAttendance.refetch,
   };
 }
