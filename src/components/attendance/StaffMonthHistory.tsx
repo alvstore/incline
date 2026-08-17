@@ -40,7 +40,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export function StaffMonthHistory({ branchId }: { branchId: string | undefined }) {
-  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [detail, setDetail] = useState<MonthRow | null>(null);
 
   const { data: rows = [], isLoading, isError } = useQuery({
