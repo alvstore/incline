@@ -353,7 +353,7 @@ export async function cancelBooking(
     .from("benefit_bookings")
     .update({
       status: "cancelled" as BenefitBookingStatus,
-      cancelled_at: new Date().toISOString(),
+      cancelled_at: getISTNow().toISOString(),
       cancellation_reason: reason,
     })
     .eq("id", bookingId)
