@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchGovernmentId } from '@/lib/profiles/governmentId';
 import { differenceInDays, format } from 'date-fns';
+import { daysRemaining } from '@/lib/memberships/duration';
 import { toast } from 'sonner';
 import { signMemberDocument, signOnboardingDocument } from '@/lib/documents/signMemberDocument';
 import { FreezeMembershipDrawer } from './FreezeMembershipDrawer';
