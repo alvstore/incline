@@ -692,7 +692,7 @@ async function mapAssignmentRows(rows: any[]): Promise<MemberAssignmentRow[]> {
   const templateMap = new Map<string, string>();
   for (const t of templatesRes.data || []) templateMap.set((t as any).id, (t as any).name);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTToday();
   return rows.map((r: any) => {
     const member: any = memberMap.get(r.member_id);
     const profile: any = member?.profiles;
