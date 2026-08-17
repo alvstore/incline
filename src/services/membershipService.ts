@@ -62,7 +62,7 @@ export async function fetchActiveMembership(memberId: string) {
     .select('*, membership_plans(*)')
     .eq('member_id', memberId)
     .eq('status', 'active')
-    .gte('end_date', format(new Date(), 'yyyy-MM-dd'))
+    .gte('end_date', getISTToday())
     .order('end_date', { ascending: false })
     .limit(1)
     .maybeSingle();
