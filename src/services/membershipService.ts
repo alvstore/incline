@@ -72,7 +72,7 @@ export async function fetchActiveMembership(memberId: string) {
 }
 
 export function calculateDaysRemaining(membership: Membership): DaysRemaining {
-  const today = new Date();
+  const today = getISTNow();
   const endDate = parseISO(membership.end_date);
   const startDate = parseISO(membership.start_date);
   
