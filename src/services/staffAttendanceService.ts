@@ -120,7 +120,7 @@ export const staffAttendanceService = {
 
   // Get today's staff attendance
   async getTodayAttendance(branchId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getISTToday();
 
     const { data, error } = await supabase
       .from('staff_attendance')
