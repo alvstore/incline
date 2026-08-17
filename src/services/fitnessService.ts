@@ -357,7 +357,7 @@ export async function assignPlanToMember(params: {
       plan_data: toJsonContent(params.plan_data),
       is_custom: params.is_custom ?? true,
       is_public: false,
-      valid_from: params.valid_from || new Date().toISOString().split('T')[0],
+      valid_from: params.valid_from || getISTToday(),
       valid_until: params.valid_until,
       branch_id: params.branch_id,
       created_by: user?.id,
