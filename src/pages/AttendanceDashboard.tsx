@@ -195,13 +195,16 @@ export default function AttendanceDashboard() {
   };
 
   const handleQuickCheckIn = (memberId: string, memberName?: string, avatarUrl?: string) => {
-    checkIn({ memberId, method: 'manual' });
-    
-    showFlash({
-      type: 'success',
-      name: memberName || 'Member',
-      message: 'Check-in successful · Source: Manual',
-      avatar: avatarUrl,
+    checkIn({ memberId, method: 'manual' }, {
+      onSuccess: () => {
+        showFlash({
+          type: 'success',
+          name: memberName || 'Member',
+          message: 'Check-in successful · Source: Manual',
+          avatar: avatarUrl,
+        });
+        refetchMemberToday();
+      }
     });
     setSearchResults([]);
     setSearchQuery('');
@@ -764,8 +767,12 @@ export default function AttendanceDashboard() {
                     <Button 
                       variant="outline" 
                       onClick={() => {
-                        checkOut(member.id);
-                        setSearchResults(prev => prev.filter(m => m.id !== member.id));
+                        checkOut(member.id, {
+                          onSuccess: () => {
+                            setSearchResults(prev => prev.filter(m => m.id !== member.id));
+                            refetchMemberToday();
+                          }
+                        });
                       }} 
                       disabled={isCheckingOut} 
                       size="lg" 
@@ -947,8 +954,14 @@ export default function AttendanceDashboard() {
                       const activeIds = memberAttendance.filter((a: any) => !a.check_out).map((a: any) => a.member_id);
                       let count = 0;
                       for (const mid of activeIds) {
-                        try { await checkOut(mid); count++; } catch {}
+                        try { 
+                          await new Promise((resolve, reject) => {
+                            checkOut(mid, { onSuccess: resolve, onError: reject });
+                          });
+                          count++; 
+                        } catch {}
                       }
+                      refetchMemberToday();
                       toast.success(`Checked out ${count} member(s)`);
                     }}>
                       <LogOut className="h-4 w-4" />
@@ -990,7 +1003,15 @@ export default function AttendanceDashboard() {
                           {attendance.check_out ? (
                             <Badge className="bg-muted text-muted-foreground border-border">Completed</Badge>
                           ) : (
-                            <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" disabled={isCheckingOut} onClick={() => checkOut(attendance.member_id)}>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="gap-1.5 h-7 text-xs" 
+                              disabled={isCheckingOut} 
+                              onClick={() => checkOut(attendance.member_id, {
+                                onSuccess: () => refetchMemberToday()
+                              })}
+                            >
                               <LogOut className="h-3 w-3" /> Check Out
                             </Button>
                           )}
