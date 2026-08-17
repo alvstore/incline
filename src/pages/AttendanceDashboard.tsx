@@ -981,7 +981,7 @@ export default function AttendanceDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).map((attendance: any) => (
+                    {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).length > 0 ? (activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).map((attendance: any) => (
                       <TableRow key={attendance.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
