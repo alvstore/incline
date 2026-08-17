@@ -220,7 +220,7 @@ export async function approveFreeze(freezeId: string, approvedBy: string) {
     .update({
       status: 'approved',
       approved_by: approvedBy,
-      approved_at: new Date().toISOString(),
+      approved_at: getISTNow().toISOString(),
     })
     .eq('id', freezeId);
 
