@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { getISTNow } from '@/lib/utils/datetime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranchContext } from '@/contexts/BranchContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -182,7 +183,7 @@ export function AppHeader({ variant = 'standalone', showBrand = false }: AppHead
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar className="h-10 w-10 border-2 border-transparent hover:border-accent transition-colors">
-                <AvatarImage src={profile?.avatar_url ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(String((profile as any).updated_at ?? Date.now()))}` : undefined} />
+                <AvatarImage src={profile?.avatar_url ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(String((profile as any).updated_at ?? getISTNow().getTime()))}` : undefined} />
                 <AvatarFallback className="bg-accent text-accent-foreground font-semibold">
                   {getInitials(profile?.full_name)}
                 </AvatarFallback>
