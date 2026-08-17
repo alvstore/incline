@@ -768,7 +768,7 @@ export async function revokeMemberAssignment(assignmentId: string): Promise<void
   yesterday.setDate(yesterday.getDate() - 1);
   const { error } = await supabase
     .from('member_fitness_plans')
-    .update({ valid_until: yesterday.toISOString().slice(0, 10) })
+    .update({ valid_until: yesterday.toISOString().split('T')[0] })
     .eq('id', assignmentId);
   if (error) throw error;
 }
