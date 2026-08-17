@@ -341,7 +341,7 @@ export default function AttendanceDashboard() {
     queryFn: async () => {
       const days = [];
       for (let i = 6; i >= 0; i--) {
-        const date = new Date();
+        const date = getISTNow();
         date.setDate(date.getDate() - i);
         const start = startOfDay(date).toISOString();
         const end = endOfDay(date).toISOString();
