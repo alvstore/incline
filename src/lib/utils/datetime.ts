@@ -1,6 +1,6 @@
 // Single source of truth for displaying timestamps in IST (Asia/Kolkata).
-// All Postgres/edge timestamps remain UTC at rest; this helper formats them
-// for Indian users without changing any stored values.
+// The database is now configured to use 'Asia/Kolkata' as its default timezone.
+// These helpers remain to provide explicit formatting and legacy compatibility.
 
 const IST_TZ = 'Asia/Kolkata';
 
@@ -11,38 +11,23 @@ function asDate(input: string | number | Date | null | undefined): Date | null {
 }
 
 /** 
- * Returns a new Date object representing the current moment in IST, 
- * but shifted so that its UTC components match local IST components.
- * Useful for legacy code that calls .toISOString().split('T')[0] 
- * and expects the local date.
+ * Returns the current date/time as a Date object.
+ * With the backend now defaulting to IST, this primarily ensures
+ * consistent local object handling if needed.
  */
 export function getISTNow(): Date {
-  const now = new Date();
-  // We use the Intl API to get a string in IST, then parse it back to a date
-  // that has the "correct" YYYY-MM-DD in its UTC representation.
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: IST_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  
-  const parts = formatter.formatToParts(now);
-  const getPart = (type: string) => parts.find(p => p.type === type)?.value;
-  
-  const isoStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}Z`;
-  return new Date(isoStr);
+  return new Date();
 }
 
 /** 
  * Returns the current YYYY-MM-DD in IST.
  */
 export function getISTToday(): string {
-  return getISTNow().toISOString().split('T')[0];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** Format as IST (e.g. "12 Jun 2026, 8:25 PM"). */
