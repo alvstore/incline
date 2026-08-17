@@ -84,7 +84,7 @@ export default function AttendanceDashboard() {
   const [forceEntryReason, setForceEntryReason] = useState('');
   const [forceEntrySubmitting, setForceEntrySubmitting] = useState(false);
   const [selectedForceEntryMember, setSelectedForceEntryMember] = useState<any>(null);
-  const [historyMonth, setHistoryMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [historyMonth, setHistoryMonth] = useState(getISTToday().substring(0, 7));
   const [historyScope, setHistoryScope] = useState<'staff' | 'members'>('staff');
 
   // Member attendance hook (rapid check-in)
