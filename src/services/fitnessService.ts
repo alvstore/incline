@@ -764,7 +764,7 @@ export async function fetchAssignmentsForTemplate(
  * stays live for the rest of the day on the member's My Diet / My Workout page.
  */
 export async function revokeMemberAssignment(assignmentId: string): Promise<void> {
-  const yesterday = new Date();
+  const yesterday = getISTNow();
   yesterday.setDate(yesterday.getDate() - 1);
   const { error } = await supabase
     .from('member_fitness_plans')
