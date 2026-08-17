@@ -111,7 +111,10 @@ export function AIGenerateTemplatesDrawer({ open, onOpenChange, channel = 'whats
         const { error } = await supabase.functions.invoke('manage-whatsapp-templates', {
           body: { 
             action: 'upsert', 
-            template: p,
+            template: {
+              ...p,
+              body_text: p.body_text || p.body // Normalize body field
+            },
             branch_id: effectiveBranchId
           }
         });

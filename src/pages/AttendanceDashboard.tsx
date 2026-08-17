@@ -95,6 +95,7 @@ export default function AttendanceDashboard() {
     searchMember,
     isCheckingIn,
     isCheckingOut,
+    refetchToday: refetchMemberToday,
   } = useAttendance(effectiveBranchId);
 
   // Staff attendance hook
@@ -374,8 +375,8 @@ export default function AttendanceDashboard() {
       const result = data as { success: boolean; reason?: string; message?: string };
       if (!result?.success) throw new Error(result?.message || 'Force entry rejected');
       toast.success(`Force entry recorded for ${selectedForceEntryMember.full_name}`);
+      refetchMemberToday();
       queryClient.invalidateQueries({ queryKey: ['member-attendance-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance'] });
       setForceEntryOpen(false);
       setForceEntrySearch('');
       setForceEntryReason('');
@@ -450,8 +451,11 @@ export default function AttendanceDashboard() {
       toast.error(decision.reason || 'Not allowed');
       return;
     }
-    staffCheckIn({ userId: staff.user_id });
-    fireAttendanceNotify(staff, 'check_in');
+    staffCheckIn({ userId: staff.user_id }, {
+      onSuccess: () => {
+        fireAttendanceNotify(staff, 'check_in');
+      }
+    });
   };
 
   const handleStaffCheckOut = (staff: any) => {
@@ -460,8 +464,11 @@ export default function AttendanceDashboard() {
       toast.error(decision.reason || 'Not allowed');
       return;
     }
-    staffCheckOut(staff.user_id);
-    fireAttendanceNotify(staff, 'check_out');
+    staffCheckOut(staff.user_id, {
+      onSuccess: () => {
+        fireAttendanceNotify(staff, 'check_out');
+      }
+    });
   };
 
   const filteredMemberAttendance = memberAttendance.filter((a: any) => {
@@ -961,7 +968,7 @@ export default function AttendanceDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredMemberAttendance.map((attendance: any) => (
+                    {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).map((attendance: any) => (
                       <TableRow key={attendance.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
