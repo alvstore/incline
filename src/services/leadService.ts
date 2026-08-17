@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getISTNow } from '@/lib/utils/datetime';
 
 async function checkAuth() {
   const { data: { user } } = await supabase.auth.getUser();
