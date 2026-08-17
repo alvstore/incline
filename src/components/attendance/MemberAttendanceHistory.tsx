@@ -40,7 +40,7 @@ function durationLabel(inIso: string, outIso: string | null) {
 }
 
 export function MemberAttendanceHistory({ branchId }: { branchId: string | undefined }) {
-  const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [month, setMonth] = useState(getISTToday().substring(0, 7));
   const [search, setSearch] = useState('');
 
   const { data: visits = [], isLoading, isError } = useQuery({
