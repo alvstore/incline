@@ -997,7 +997,7 @@ export default function AttendanceDashboard() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filteredMemberAttendance.length === 0 && (
+                    {(activeTab === 'members' ? filteredMemberAttendance : memberTodayAttendance.data || []).length === 0 && (
                       <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No member attendance records</TableCell></TableRow>
                     )}
                   </TableBody>
