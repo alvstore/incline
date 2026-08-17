@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getISTToday } from '@/lib/utils/datetime';
 import type { Database } from '@/integrations/supabase/types';
 
 type StaffAttendance = Database['public']['Tables']['staff_attendance']['Row'];
