@@ -375,7 +375,7 @@ export async function markAttendance(
       }
     : {
         status: "no_show" as BenefitBookingStatus,
-        no_show_marked_at: new Date().toISOString(),
+        no_show_marked_at: getISTNow().toISOString(),
       };
   
   const { data, error } = await supabase
