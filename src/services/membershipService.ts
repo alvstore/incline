@@ -227,7 +227,7 @@ export async function approveFreeze(freezeId: string, approvedBy: string) {
   if (updateError) throw updateError;
 
   // Update membership status to frozen if freeze starts today or earlier
-  const today = new Date();
+  const today = getISTNow();
   const freezeStart = parseISO(freeze.start_date);
   
   if (!isAfter(freezeStart, today)) {
