@@ -603,7 +603,8 @@ Deno.serve(async (req) => {
             error_message: reason ?? 'preference_block',
           })
           .select('id')
-          .single();
+          .maybeSingle();
+
 
         return ok({ status: 'suppressed', log_id: log?.id, reason: reason ?? 'preference_block' });
       }
@@ -645,7 +646,8 @@ Deno.serve(async (req) => {
               delivery_metadata: { suppressed_by: 'pacing_cooldown', meta_code: 131049 } as any,
             })
             .select('id')
-            .single();
+            .maybeSingle();
+
           return ok({ status: 'suppressed', log_id: log?.id, reason: 'pacing_cooldown_24h' });
         }
       }
@@ -673,7 +675,8 @@ Deno.serve(async (req) => {
               error_message: 'quiet_hours_deferred',
             })
             .select('id')
-            .single();
+            .maybeSingle();
+
           // Producer-side retry queue insert; process-comm-retry-queue will pick it up.
           // v1.27.0: use the real column names (the previous insert referenced
           // `retry_after`/`attempt_count`, which do not exist, so quiet-hours
@@ -955,9 +958,11 @@ Deno.serve(async (req) => {
               let categoryDrift = false;
               if (wt) {
                 const liveStatus = String(wt.status || '').toUpperCase();
-                if (liveStatus !== 'APPROVED' || wt.is_stale) {
+                if ((liveStatus !== 'APPROVED' && liveStatus !== 'PENDING_DELETION') || wt.is_stale) {
                   const reason = wt.is_stale
                     ? 'template_stale_in_meta'
+                    : liveStatus === 'PENDING_DELETION'
+                    ? 'template_being_deleted_in_meta'
                     : `template_not_approved:${liveStatus || 'UNKNOWN'}`;
                   await supabase
                     .from('communication_logs')
@@ -1219,10 +1224,11 @@ Deno.serve(async (req) => {
                   source_log_id: log!.id,
                   dispatch_dedupe_key: input.dedupe_key,
                   template_id: input.template_id ?? null,
-                },
-              })
-              .select('id')
-              .single();
+        },
+      })
+      .select('id')
+      .maybeSingle();
+
             if (waErr) throw new Error(waErr.message);
             const r = await supabase.functions.invoke('send-whatsapp', {
               body: {

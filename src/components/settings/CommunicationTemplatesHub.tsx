@@ -69,7 +69,7 @@ function HealthStrip({ channel }: { channel: Channel }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('v_template_with_meta_status' as any)
-        .select('type, is_active, approval_status');
+        .select('type, is_active, approval_status, meta_template_status, is_stale');
       if (error) throw error;
       return (data || []) as any[];
     },
@@ -81,10 +81,10 @@ function HealthStrip({ channel }: { channel: Channel }) {
     return {
       total: rows.length,
       active: rows.filter((r: any) => r.is_active).length,
-      approved: rows.filter((r: any) => r.approval_status === 'approved').length,
-      pending: rows.filter((r: any) => r.approval_status === 'pending').length,
-      rejected: rows.filter((r: any) => r.approval_status === 'rejected').length,
-      draft: rows.filter((r: any) => !r.approval_status || r.approval_status === 'draft').length,
+      approved: rows.filter((r: any) => (r.approval_status === 'approved' || r.meta_template_status === 'APPROVED') && !r.is_stale).length,
+      pending: rows.filter((r: any) => r.approval_status === 'pending' || r.meta_template_status === 'PENDING').length,
+      rejected: rows.filter((r: any) => r.approval_status === 'rejected' || r.meta_template_status === 'REJECTED' || r.is_stale).length,
+      draft: rows.filter((r: any) => (!r.approval_status || r.approval_status === 'draft') && !r.meta_template_status).length,
     };
   }, [data, channel]);
 
