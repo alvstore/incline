@@ -51,11 +51,12 @@ interface Props {
 function metaStatusBadge(status: string | null | undefined) {
   if (!status) return <span className="text-xs text-muted-foreground">—</span>;
   const map: Record<string, { label: string; icon: any; className: string }> = {
-    APPROVED: { label: 'Approved', icon: CheckCircle, className: 'bg-success/10 text-success border-success/20' },
-    PENDING: { label: 'Pending', icon: Clock, className: 'bg-warning/10 text-warning border-warning/20' },
-    REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/20' },
-    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
-    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-muted text-muted-foreground border-border' },
+    APPROVED: { label: 'Approved', icon: CheckCircle, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    PENDING: { label: 'Pending', icon: Clock, className: 'bg-amber-50 text-amber-700 border-amber-200' },
+    PENDING_DELETION: { label: 'Deleting', icon: Trash2, className: 'bg-red-50 text-red-700 border-red-200 animate-pulse' },
+    REJECTED: { label: 'Rejected', icon: XCircle, className: 'bg-red-50 text-red-700 border-red-200' },
+    PAUSED: { label: 'Paused', icon: PauseCircle, className: 'bg-slate-100 text-slate-600 border-slate-200' },
+    DISABLED: { label: 'Disabled', icon: PauseCircle, className: 'bg-slate-100 text-slate-600 border-slate-200' },
   };
   const cfg = map[String(status).toUpperCase()];
   if (!cfg) return <span className="text-xs text-muted-foreground">—</span>;
@@ -99,8 +100,8 @@ export function TemplateTable({
 
   const alignmentState = (t: TemplateRow) => {
     if (channel !== 'whatsapp') return 'ready';
-    if (!t.meta_template_name || !t.live_meta_status || t.live_meta_stale) return 'missing';
-    if (String(t.live_meta_status).toUpperCase() !== 'APPROVED') return 'pending';
+    if (!t.meta_template_name || !t.live_meta_status || t.live_meta_stale || t.live_meta_status === 'PENDING_DELETION') return 'missing';
+    if (String(t.live_meta_status).toUpperCase() !== 'APPROVED' && t.live_meta_status !== 'PENDING_DELETION') return 'pending';
     if (t.header_type && t.live_meta_header_type && t.header_type !== t.live_meta_header_type) return 'mismatch';
     return 'ready';
   };

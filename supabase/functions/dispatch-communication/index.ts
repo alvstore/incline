@@ -958,9 +958,11 @@ Deno.serve(async (req) => {
               let categoryDrift = false;
               if (wt) {
                 const liveStatus = String(wt.status || '').toUpperCase();
-                if (liveStatus !== 'APPROVED' || wt.is_stale) {
+                if ((liveStatus !== 'APPROVED' && liveStatus !== 'PENDING_DELETION') || wt.is_stale) {
                   const reason = wt.is_stale
                     ? 'template_stale_in_meta'
+                    : liveStatus === 'PENDING_DELETION'
+                    ? 'template_being_deleted_in_meta'
                     : `template_not_approved:${liveStatus || 'UNKNOWN'}`;
                   await supabase
                     .from('communication_logs')
