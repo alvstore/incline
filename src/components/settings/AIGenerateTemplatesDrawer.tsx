@@ -94,9 +94,10 @@ export function AIGenerateTemplatesDrawer({
 
       for (const t of templates || []) {
         // WhatsApp templates are only "covered" if Meta has approved them.
+        // We also check that a meta template name exists to avoid counting drafts.
         // SMS/Email are covered if they are active.
         const approved = channel === 'whatsapp'
-          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED'
+          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED' && !!t.meta_template_name
           : t.is_active !== false;
         
         if (approved && t.trigger_event) covered.add(t.trigger_event);
