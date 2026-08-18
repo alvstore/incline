@@ -745,13 +745,14 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
                     key={s.v}
                     type="button"
                     onClick={() => setStatusFilter(s.v as any)}
-                    className={`cursor-pointer text-xs px-3 py-1 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary ${statusFilter === s.v ? 'ring-2 ring-primary/40 ' : ''}${s.cls}`}
+                    className={`cursor-pointer text-xs px-3 py-1 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary inline-flex items-center gap-1.5 ${statusFilter === s.v ? 'ring-2 ring-primary/40 ' : ''}${s.cls}`}
                     title={s.v === 'draft' ? 'Local-only template — not sent to Meta yet.' : ''}
                   >
                     {s.label}
-                    <span className="ml-1.5 opacity-70">{statusCounts[s.v] ?? 0}</span>
+                    <span className="opacity-70 font-bold">{statusCounts[s.v] ?? 0}</span>
                   </button>
                 ))}
+                <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block" />
                 <MetaSyncControls />
               </div>
             )}

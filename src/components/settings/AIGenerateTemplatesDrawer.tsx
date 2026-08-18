@@ -83,24 +83,33 @@ export function AIGenerateTemplatesDrawer({
     queryFn: async () => {
       const covered = new Set<string>();
 
+      // Coverage = an APPROVED template exists for the event on this channel.
+      // We look at the 'templates' table which contains local mappings.
       const { data: templates, error: tplError } = await supabase
         .from('templates')
-        .select('trigger_event, type, meta_template_status, is_active')
+        .select('trigger_event, type, meta_template_status, is_active, meta_template_name')
         .eq('type', channel);
+      
       if (tplError) throw tplError;
 
       for (const t of templates || []) {
+        // WhatsApp templates are only "covered" if Meta has approved them.
+        // We also check that a meta template name exists to avoid counting drafts.
+        // SMS/Email are covered if they are active.
         const approved = channel === 'whatsapp'
-          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED'
+          ? (t.meta_template_status || '').toUpperCase() === 'APPROVED' && !!t.meta_template_name
           : t.is_active !== false;
+        
         if (approved && t.trigger_event) covered.add(t.trigger_event);
       }
 
+      // Also check explicit triggers in whatsapp_triggers for cross-check.
       if (channel === 'whatsapp' && effectiveBranchId) {
         const { data: triggers, error: trigError } = await supabase
           .from('whatsapp_triggers')
-          .select('event_name, is_active, templates(meta_template_status)')
+          .select('event_name, templates(meta_template_status)')
           .eq('branch_id', effectiveBranchId);
+        
         if (trigError) throw trigError;
         for (const trig of triggers || []) {
           const status = (trig as any).templates?.meta_template_status;
@@ -328,9 +337,9 @@ export function AIGenerateTemplatesDrawer({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <Badge className="bg-indigo-600">{p.name}</Badge>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-white capitalize">
+                    <Badge className="bg-indigo-600 truncate max-w-[200px]">{p.name}</Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="outline" className="bg-white capitalize text-[10px]">
                         {p.category}
                       </Badge>
                       {p.state === 'submitting' && (
