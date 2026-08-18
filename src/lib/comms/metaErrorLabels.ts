@@ -41,8 +41,8 @@ const META_ERROR_MAP: Record<number, { short: string; hint: string }> = {
     hint: 'Last user message is >24h old — must send a template to re-open the session.',
   },
   131049: {
-    short: 'Meta pacing limit',
-    hint: 'Meta accepted the template but did not deliver it to protect WhatsApp engagement health. Retry later or use a less frequent/warmer audience.',
+    short: 'Meta Pacing Limit',
+    hint: 'Meta accepted the template but did not deliver it to maintain healthy ecosystem engagement. This usually happens when the template is sent too frequently or engagement is low. Wait 24h before retrying.',
   },
   131051: {
     short: 'Unsupported message type',
