@@ -15,7 +15,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Plus, Edit, Trash2, MessageSquare, Mail, Phone, Copy, Send, CheckCircle, Clock, XCircle, PauseCircle, Info, AlertCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { TEMPLATE_EVENTS, getEvent, validateTemplate, renderPreview } from '@/lib/templates/eventRegistry';
-import { DYNAMIC_PDF_PRESETS, type TemplatePreset } from '@/lib/templates/dynamicAttachment';
+import { type TemplatePreset } from '@/lib/templates/dynamicAttachment';
+import { QuickPresetsMenu } from './QuickPresetsMenu';
+
 import { FileText, Image as ImageIcon, Video as VideoIcon, Sparkles } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -683,29 +685,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
           </div>
           <div className="flex items-center gap-2">
             <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" className="bg-card/15 hover:bg-card/25 text-primary-foreground border-0 backdrop-blur-sm">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Quick Presets
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {DYNAMIC_PDF_PRESETS.map((p) => (
-                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                    <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{p.label}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {p.attachment_filename_template}
-                      </p>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <QuickPresetsMenu onSelect={applyPreset} filterType={filterType} variant="header" />
+
             <Button onClick={() => openEditor()} className="bg-card text-primary hover:bg-card/90 shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Template
@@ -726,27 +707,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
           </p>
           <div className="flex items-center gap-2">
             <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="rounded-xl">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Quick Presets
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {DYNAMIC_PDF_PRESETS.map((p) => (
-                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                    <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{p.label}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{p.attachment_filename_template}</p>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <QuickPresetsMenu onSelect={applyPreset} filterType={filterType} />
+
             <Button size="sm" className="rounded-xl shadow-sm" onClick={() => openEditor()}>
               <Plus className="mr-2 h-4 w-4" />
               Add Template
