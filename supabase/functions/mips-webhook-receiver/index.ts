@@ -312,6 +312,11 @@ async function handleMemberCheckin(
           console.warn("dues denial notification failed:", notifyErr);
         }
       }
+      // If the check-in is invalid (dues overdue, expired, etc.), return a "deny" result.
+      // This will be used in the main webhook handler to send a command back to the relay.
+      if (checkinResult && !(checkinResult as any).valid) {
+        return { result: "member_denied", message };
+      }
     }
   } catch (e) {
     console.warn("Check-in RPC failed:", e);
