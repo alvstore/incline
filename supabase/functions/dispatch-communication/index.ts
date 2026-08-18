@@ -362,6 +362,14 @@ function requiredKeysMissing(
     const raw = resolveVarValue(keys[i], values, i);
     if (String(raw ?? '').trim()) continue;
     const k = String(keys[i] || '').toLowerCase();
+    // v1.28.0: Meta positional slots ({{1}}, {{2}} …) carry no semantics, so we
+    // cannot tell a name slot from an amount slot. Any empty positional slot
+    // produces visibly broken copy ("Hi , we received ₹ for on .") — treat all
+    // of them as required.
+    if (/^\d+$/.test(k)) {
+      missing.push(keys[i]);
+      continue;
+    }
     // Name-like slots.
     if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') {
       missing.push(keys[i]);
@@ -371,10 +379,16 @@ function requiredKeysMissing(
     // half-written sends like "your booking for the class on at is confirmed".
     if (/(^|_)(date|time|datetime|slot_date|slot_time|start|when)(_|$)/.test(k)) {
       missing.push(keys[i]);
+      continue;
+    }
+    // v1.28.0: money/reference slots — an empty one renders a bare "₹".
+    if (/(amount|price|total|due|fees|invoice|payment_for|item_description)/.test(k)) {
+      missing.push(keys[i]);
     }
   }
   return missing;
 }
+
 
 
 function appendAttachmentLinkForBodyOnlyTemplate(
