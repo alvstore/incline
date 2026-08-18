@@ -100,8 +100,11 @@ export function TemplateTable({
 
   const alignmentState = (t: TemplateRow) => {
     if (channel !== 'whatsapp') return 'ready';
+    // APPROVED local status but Missing in Meta (stale)
     if (!t.meta_template_name || !t.live_meta_status || t.live_meta_stale || t.live_meta_status === 'PENDING_DELETION') return 'missing';
-    if (String(t.live_meta_status).toUpperCase() !== 'APPROVED' && t.live_meta_status !== 'PENDING_DELETION') return 'pending';
+    // Meta says it's Rejected or Pending (not Approved)
+    if (String(t.live_meta_status).toUpperCase() !== 'APPROVED') return 'pending';
+    // Header format mismatch between local config and Meta
     if (t.header_type && t.live_meta_header_type && t.header_type !== t.live_meta_header_type) return 'mismatch';
     return 'ready';
   };
@@ -151,7 +154,7 @@ export function TemplateTable({
                   onClick={() => setAlignment(value)} 
                   className={`h-8 rounded-xl capitalize px-3 text-xs ${alignment === value ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-600 hover:bg-slate-200/50'}`}
                 >
-                  {value === 'missing' ? 'Missing / Stale' : value}
+                  {value === 'missing' ? 'Missing / Stale' : value === 'mismatch' ? 'Header mismatch' : value}
                 </Button>
               ))}
             </div>
