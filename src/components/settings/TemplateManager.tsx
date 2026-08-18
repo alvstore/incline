@@ -705,27 +705,8 @@ export function TemplateManager({ prefill, onPrefillConsumed, filterType, hideHe
           </p>
           <div className="flex items-center gap-2">
             <SubmitPendingDocsButton templates={templates} branchId={effectiveBranchId} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="rounded-xl">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Quick Presets
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Dynamic PDF Presets</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {DYNAMIC_PDF_PRESETS.map((p) => (
-                  <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="flex items-start gap-2 py-2">
-                    <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{p.label}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{p.attachment_filename_template}</p>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <QuickPresetsMenu onSelect={applyPreset} filterType={filterType} />
+
             <Button size="sm" className="rounded-xl shadow-sm" onClick={() => openEditor()}>
               <Plus className="mr-2 h-4 w-4" />
               Add Template
