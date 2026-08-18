@@ -30,9 +30,10 @@ interface QuickPresetsMenuProps {
  * filename. It never creates or submits a template on its own.
  */
 export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: QuickPresetsMenuProps) {
-  const presets = filterType
-    ? DYNAMIC_PDF_PRESETS.filter((p) => p.type === filterType)
-    : DYNAMIC_PDF_PRESETS;
+  const presets = DYNAMIC_PDF_PRESETS.filter((p) => {
+    const channelMatch = !filterType || p.type === filterType;
+    return channelMatch;
+  });
 
   const grouped = presets.reduce<Record<string, TemplatePreset[]>>((acc, p) => {
     (acc[p.type] ||= []).push(p);
@@ -74,27 +75,42 @@ export function QuickPresetsMenu({ onSelect, filterType, variant = 'compact' }: 
         {channels.map((channel, idx) => {
           const meta = CHANNEL_META[channel] ?? { label: channel, icon: FileText };
           const ChannelIcon = meta.icon;
+          
+          // Group by category/trigger for better UX
+          const presetsByTrigger = grouped[channel].reduce<Record<string, TemplatePreset[]>>((acc, p) => {
+            (acc[p.trigger] ||= []).push(p);
+            return acc;
+          }, {});
+
           return (
             <div key={channel}>
               {idx > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground bg-slate-50/50 py-1.5 px-3">
                 <ChannelIcon className="h-3 w-3" />
                 {meta.label}
               </DropdownMenuLabel>
-              {grouped[channel].map((p) => (
-                <DropdownMenuItem
-                  key={p.id}
-                  onClick={() => onSelect(p)}
-                  className="flex items-start gap-2 py-2 cursor-pointer"
-                >
-                  <FileText className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{p.label}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      Event: {p.trigger} · {p.attachment_filename_template}
-                    </p>
+              
+              {Object.entries(presetsByTrigger).map(([trigger, items]) => (
+                <div key={trigger} className="py-1">
+                  <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                    Trigger: {trigger}
                   </div>
-                </DropdownMenuItem>
+                  {items.map((p) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      onClick={() => onSelect(p)}
+                      className="flex items-start gap-2 py-2 px-4 cursor-pointer hover:bg-indigo-50/50"
+                    >
+                      <FileText className="h-4 w-4 mt-0.5 text-indigo-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{p.label}</p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {p.attachment_filename_template ? `Attach: ${p.attachment_filename_template}` : 'Text only'}
+                        </p>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
               ))}
             </div>
           );
