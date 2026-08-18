@@ -87,7 +87,7 @@ export function AIGenerateTemplatesDrawer({
       // We look at the 'templates' table which contains local mappings.
       const { data: templates, error: tplError } = await supabase
         .from('templates')
-        .select('trigger_event, type, meta_template_status, is_active')
+        .select('trigger_event, type, meta_template_status, is_active, meta_template_name')
         .eq('type', channel);
       
       if (tplError) throw tplError;
