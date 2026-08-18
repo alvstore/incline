@@ -682,6 +682,32 @@ Deno.serve(async (req) => {
       console.warn("Relay lookup failed:", relayErr);
     }
 
+    // *** CRITICAL HARDENING: Real-time Block Signal ***
+    // If the check-in was denied (dues overdue, blacklisted, etc.), and we have a relay URL,
+    // we send an immediate "deny/block" command back to the relay to force the gate shut.
+    // This handles cases where the local device validTimeEnd hasn't synced yet.
+    if (result === "member_denied" || result === "staff_denied" || result === "not_found" || result === "stranger") {
+      try {
+        const relayUrl = await getRelayUrl(supabase, branchId);
+        if (relayUrl) {
+          const denyUrl = `${relayUrl}/api/command/deny`;
+          console.log(`[REAL-TIME BLOCK] Sending deny command to relay for ${personNo}: ${denyUrl}`);
+          fetch(denyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personSn: personNo,
+              reason: message,
+              timestamp: scanTime,
+              deviceKey: deviceKey,
+            }),
+          }).catch((e) => console.warn("[REAL-TIME BLOCK] Command failed:", e));
+        }
+      } catch (blockErr) {
+        console.warn("[REAL-TIME BLOCK] Failed to send deny signal:", blockErr);
+      }
+    }
+
     return new Response(DEVICE_ACK, {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
