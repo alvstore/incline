@@ -205,7 +205,26 @@ export function ReconciliationFindingsCard() {
   });
 
   const handleRecheck = async (finding: Finding) => {
-    if (finding.reference_type !== "invoice" || !finding.reference_id) return;
+    const isMipsFinding = finding.kind === 'mips_sync_drift';
+    const refId = finding.reference_id || finding.details?.invoice_id || finding.details?.member_id;
+    
+    if (!refId) return;
+    
+    setRechecking(finding.id);
+    try {
+      if (isMipsFinding) {
+        const { error } = await supabase.rpc("force_mips_reconcile", {
+          _member_id: refId,
+        });
+        if (error) throw error;
+        toast.success("MIPS sync forced successfully");
+      } else {
+        const { error } = await supabase.rpc("recheck_invoice_reconciliation", {
+          p_invoice_id: refId,
+        });
+        if (error) throw error;
+        toast.success("Re-checked against the live ledger");
+      }
     setRechecking(finding.id);
     try {
       const { error } = await supabase.rpc("recheck_invoice_reconciliation", {
