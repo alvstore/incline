@@ -345,7 +345,7 @@ export default function SystemHealth() {
               {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
                                         
                                             
-                                            same issue with the whatsapp message its not fetching variable names or might be having issue with templates varibable , can you cinduct a deep audit to resolve the issue.`}
+                                            Load the security issues from the scan results and fix the selected issues.`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
