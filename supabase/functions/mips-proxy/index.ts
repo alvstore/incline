@@ -178,6 +178,7 @@ Deno.serve(async (req) => {
 
     // ---- MIPS RELAY SIGNATURE CHECK (v1.5.0) ----
     const operation = body?.operation as ConnectionOperation | undefined;
+    // remote_open is used by MIPS v3 / MIPS-middleware
     const isRelayOpen = operation === "relay_open" || operation === "remote_open";
     
     if (isRelayOpen && !isService) {
@@ -186,19 +187,22 @@ Deno.serve(async (req) => {
       const secret = Deno.env.get("MIPS_RELAY_SECRET");
       
       if (!secret || !signature || !timestamp) {
+        console.error("mips-proxy: Forbidden - Missing command signature for relay_open");
         return jsonResponse({ error: "Forbidden: Missing command signature" }, 403);
       }
       
-      // Verify signature to prevent unauthorized door opening
+      // Verify signature to prevent unauthorized door opening (HMAC-SHA256)
       const msg = `${timestamp}.${JSON.stringify(body)}`;
       const expected = await generateHmacSha256(msg, secret);
       if (signature !== expected) {
+        console.error("mips-proxy: Forbidden - Invalid command signature for relay_open");
         return jsonResponse({ error: "Forbidden: Invalid command signature" }, 403);
       }
       
       // Prevent replay attacks (5 min window)
       const now = Math.floor(Date.now() / 1000);
       if (Math.abs(now - parseInt(timestamp)) > 300) {
+        console.error("mips-proxy: Forbidden - Command expired (replay protection)");
         return jsonResponse({ error: "Forbidden: Command expired" }, 403);
       }
     }
