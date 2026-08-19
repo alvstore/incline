@@ -345,7 +345,14 @@ export default function SystemHealth() {
               {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
                                         
                                             
-                                            can you test daily ops template for whatsapp which you have corrected - try to trigger the message`}
+                                            Hi —, here is the daily operations summary for —. Total Check-ins: —. New Memberships: —. Total Revenue: ₹—. Active PT Sessions: —. Please review the dashboard for a detailed breakdown.
+
+
+Hi —, a new lead has been generated. Name: —, Interest: —, Source: —. Please reach out to them at the earliest to schedule a tour.
+
+
+
+this is message we are getting without information all "-"`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
