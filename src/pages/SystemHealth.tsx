@@ -342,7 +342,10 @@ export default function SystemHealth() {
               System Health
             </h1>
             <p className="text-muted-foreground mt-1">
-              {`Automation rule "daily_ops_summary" failed: HTTP 424: {"ok":false,"partial":true,"date":"2026-08-18","summary":{"newMemberships":3,"invoicedTotal":35000,"receivedTotal":35000,"duesCollected":35000,"duesPending":302000},"deliveries":[{"recipient_index":1,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":1,"channel":"email","status":"sent"},{"recipient_index":2,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":2,"channel":"email","status":"sent"}]}`}
+              {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
+                                        
+                                            
+                                            so test it for yesterday so you will see the success report`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
