@@ -225,19 +225,13 @@ export function ReconciliationFindingsCard() {
         if (error) throw error;
         toast.success("Re-checked against the live ledger");
       }
-    setRechecking(finding.id);
-    try {
-      const { error } = await supabase.rpc("recheck_invoice_reconciliation", {
-        p_invoice_id: finding.reference_id,
-      });
-      if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ["reconciliation-findings"] });
-      toast.success("Re-checked against the live ledger");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Re-check failed");
     } finally {
       setRechecking(null);
     }
+  };
   };
 
   const totalOpen = open.length;
