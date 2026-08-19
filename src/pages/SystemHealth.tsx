@@ -345,7 +345,7 @@ export default function SystemHealth() {
               {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
                                         
                                             
-                                            i am asking you to set the template for daily ops which was falling and nto sending- so you can test it by sending message for now so will come to know it working or not`}
+                                            can you test daily ops template for whatsapp which you have corrected - try to trigger the message`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
