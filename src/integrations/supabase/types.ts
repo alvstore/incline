@@ -14652,6 +14652,7 @@ export type Database = {
         Args: { _path: string }
         Returns: string
       }
+      force_mips_reconcile: { Args: { _member_id: string }; Returns: Json }
       freeze_membership: {
         Args: {
           p_freeze_days: number

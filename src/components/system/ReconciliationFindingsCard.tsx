@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, CheckCircle2, FileText, ExternalLink, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, ExternalLink, RefreshCw, Cpu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -117,6 +117,13 @@ const KIND_LABELS: Record<string, { title: string; explain: (d: FindingDetails) 
         ? `Membership is still "Pending" despite having ${inr(num(d.amount_paid))} paid against invoice ${d.invoice_number || '—'}. Activate it to resume billing.`
         : "A payment was received for this membership, but it hasn't been activated yet.",
   },
+  mips_sync_drift: {
+    title: "MIPS Sync Drift",
+    explain: (d) =>
+      d
+        ? `Member status is "${d.recorded}" but MIPS access is still active or mismatch detected. Force-sync to reconcile.`
+        : "Hardware access status in CRM does not match MIPS middleware records.",
+  },
 };
 
 export function ReconciliationFindingsCard() {
@@ -198,15 +205,27 @@ export function ReconciliationFindingsCard() {
   });
 
   const handleRecheck = async (finding: Finding) => {
-    if (finding.reference_type !== "invoice" || !finding.reference_id) return;
+    const isMipsFinding = finding.kind === 'mips_sync_drift';
+    const refId = finding.reference_id || finding.details?.invoice_id || finding.details?.member_id;
+    
+    if (!refId) return;
+    
     setRechecking(finding.id);
     try {
-      const { error } = await supabase.rpc("recheck_invoice_reconciliation", {
-        p_invoice_id: finding.reference_id,
-      });
-      if (error) throw error;
+      if (isMipsFinding) {
+        const { error } = await supabase.rpc("force_mips_reconcile", {
+          _member_id: refId,
+        });
+        if (error) throw error;
+        toast.success("MIPS sync forced successfully");
+      } else {
+        const { error } = await supabase.rpc("recheck_invoice_reconciliation", {
+          p_invoice_id: refId,
+        });
+        if (error) throw error;
+        toast.success("Re-checked against the live ledger");
+      }
       await queryClient.invalidateQueries({ queryKey: ["reconciliation-findings"] });
-      toast.success("Re-checked against the live ledger");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Re-check failed");
     } finally {
@@ -271,7 +290,11 @@ export function ReconciliationFindingsCard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-warning shrink-0" />
+                        {f.kind === 'mips_sync_drift' ? (
+                          <Cpu className="h-4 w-4 text-warning shrink-0" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-warning shrink-0" />
+                        )}
                         <span className="font-semibold text-foreground">{meta.title}</span>
                       </div>
                       <div className="text-foreground">{meta.explain(f.details)}</div>
