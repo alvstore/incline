@@ -195,7 +195,10 @@ async function applyMemberAction(
     return { success: true, action, message: "Person not found in MIPS, status updated locally" };
   }
 
+  // FORCE-REVOKE: If dues are detected, we use REVOKED_DATE regardless of the requested action
+  // to ensure the gate is terminal in the middleware.
   let newValidTimeEnd = REVOKED_DATE;
+  
   if (action === "restore") {
     const { data: membership } = await supabase
       .from("memberships")
@@ -218,8 +221,16 @@ async function applyMemberAction(
     }
   }
 
+  // Double Check: Even if CRM asked for restore, if DB says dues, we force revoke date.
+  const { data: accessStatus } = await supabase.rpc("member_access_status", { _member_id: member_id, _branch_id: effectiveBranchId || null });
+  if (accessStatus && accessStatus.allowed === false) {
+    console.warn(`Override: CRM requested ${action} but dues detected. Forcing revocation date.`);
+    newValidTimeEnd = REVOKED_DATE;
+  }
+
   const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
-  console.log(`${action} access for ${personSn}: validTimeEnd → ${newValidTimeEnd}`);
+  console.log(`[MIPS-ACCESS] Updating ${personSn} (${existing.personName}): validTimeEnd → ${newValidTimeEnd} (Action: ${action})`);
+
 
   const putRes = await fetch(`${baseUrl}/personInfo/person`, {
     method: "PUT",
