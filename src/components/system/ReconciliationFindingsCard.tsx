@@ -291,7 +291,11 @@ export function ReconciliationFindingsCard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-warning shrink-0" />
+                        {f.kind === 'mips_sync_drift' ? (
+                          <Cpu className="h-4 w-4 text-warning shrink-0" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-warning shrink-0" />
+                        )}
                         <span className="font-semibold text-foreground">{meta.title}</span>
                       </div>
                       <div className="text-foreground">{meta.explain(f.details)}</div>
