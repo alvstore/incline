@@ -346,15 +346,6 @@ export default function SystemHealth() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={handleExport}>
-              <Download className="h-4 w-4" /> Export CSV
-            </Button>
-            {openErrors.length > 0 && (
-              <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setResolveAllDialog(true)}>
-                <CheckCheck className="h-4 w-4" />
-                Resolve All Open
-              </Button>
-            )}
             {resolvedErrors.length > 0 && (
               <>
                 <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => clearOldResolvedMutation.mutate()} disabled={clearOldResolvedMutation.isPending}>
