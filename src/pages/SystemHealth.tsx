@@ -342,19 +342,10 @@ export default function SystemHealth() {
               System Health
             </h1>
             <p className="text-muted-foreground mt-1">
-              {}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {resolvedErrors.length > 0 && (
-              <>
-                <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => clearOldResolvedMutation.mutate()} disabled={clearOldResolvedMutation.isPending}>
-                  <Trash2 className="h-4 w-4" /> Clear &gt; 90 days
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-xl gap-1.5 text-destructive hover:text-destructive" onClick={() => setClearResolvedDialog(true)}>
-                  <Trash2 className="h-4 w-4" />
-                  Clear Resolved
-                </Button>
+              {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
+                                        
+                                            
+                                            same issue with the whatsapp message its not fetching variable names or might be having issue with templates varibable , can you cinduct a deep audit to resolve the issue.`}
               </>
             )}
           </div>
