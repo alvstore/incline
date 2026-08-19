@@ -93,3 +93,50 @@ USING (
     )
   )
 );
+
+-- 4. Storage Bucket Hardening (Security ID: attachments_bucket_read_leak, policy_pdfs_bucket_broad_authenticated_read)
+
+-- Attachments bucket: Granular read based on branch scoping and ownership
+DROP POLICY IF EXISTS "Public read for attachments" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated read for attachments" ON storage.objects;
+
+CREATE POLICY "Branch-scoped read for attachments"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'attachments'
+  AND (
+    (storage.foldername(name))[1] IN ('public', 'branding')
+    OR has_any_role(auth.uid(), ARRAY['owner'::app_role, 'admin'::app_role])
+    OR (
+      has_any_role(auth.uid(), ARRAY['manager'::app_role, 'staff'::app_role])
+      AND (storage.foldername(name))[1] IN (SELECT user_visible_branch_ids(auth.uid())::text[])
+    )
+    OR (
+      role_name(auth.uid()) = 'trainer'
+      AND (storage.foldername(name))[1] IN (SELECT user_visible_branch_ids(auth.uid())::text[])
+    )
+    OR (
+      role_name(auth.uid()) = 'member'
+      AND (storage.foldername(name))[2] = auth.uid()::text
+    )
+  )
+);
+
+-- Policy PDFs bucket: Management and scoped access
+DROP POLICY IF EXISTS "Authenticated read for policy-pdfs" ON storage.objects;
+CREATE POLICY "Management read policy-pdfs"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'policy-pdfs'
+  AND (
+    has_any_role(auth.uid(), ARRAY['owner'::app_role, 'admin'::app_role])
+    OR (
+      has_any_role(auth.uid(), ARRAY['manager'::app_role, 'staff'::app_role])
+      AND (storage.foldername(name))[1] IN (SELECT user_visible_branch_ids(auth.uid())::text[])
+    )
+  )
+);
