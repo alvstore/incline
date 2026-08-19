@@ -374,8 +374,63 @@ serve(async (req) => {
       );
     }
 
+    // ── ACTION: upsert ──
+    // Creates a local template row and whatsapp_triggers mapping before submitting to Meta.
+    if (action === "upsert") {
+      if (!template_data) {
+        return new Response(JSON.stringify({ error: "Missing template_data" }), { status: 400, headers: corsHeaders });
+      }
+
+      const { name, category, body_text, trigger_event } = template_data;
+      let localId = template_data.local_template_id;
+
+      // 1. Create or ensure local template row exists
+      if (!localId) {
+        const { data: existing } = await supabase
+          .from("templates")
+          .select("id")
+          .eq("branch_id", branch_id)
+          .eq("name", name)
+          .eq("type", "whatsapp")
+          .maybeSingle();
+
+        if (existing) {
+          localId = existing.id;
+        } else {
+          const { data: newTpl, error: insErr } = await supabase
+            .from("templates")
+            .insert({
+              branch_id,
+              type: "whatsapp",
+              name: name,
+              content: body_text,
+              meta_template_name: name.toLowerCase().replace(/[\s\-]+/g, "_").replace(/[^a-z0-9_]/g, ""),
+              meta_template_status: "DRAFT",
+              is_active: false,
+            })
+            .select("id")
+            .single();
+          if (insErr) throw insErr;
+          localId = newTpl.id;
+        }
+      }
+
+      // 2. Ensure whatsapp_triggers mapping exists if trigger_event is present
+      if (trigger_event && trigger_event !== "custom") {
+        await supabase.from("whatsapp_triggers").upsert({
+          branch_id,
+          event_name: trigger_event,
+          template_id: localId,
+        }, { onConflict: "branch_id,event_name" });
+      }
+
+      // 3. Chain to create logic
+      template_data.local_template_id = localId;
+      // Fall through to create...
+    }
+
     // ── ACTION: create ──
-    if (action === "create") {
+    if (action === "create" || action === "upsert") {
       if (!template_data) {
         return new Response(
           JSON.stringify({ error: "Missing template_data for create action" }),

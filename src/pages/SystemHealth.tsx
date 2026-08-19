@@ -361,7 +361,7 @@ export default function SystemHealth() {
             {resolvedErrors.length > 0 && (
               <>
                 <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => clearOldResolvedMutation.mutate()} disabled={clearOldResolvedMutation.isPending}>
-                  <Trash2 className="h-4 w-4" /> Clear > 90 days
+                  <Trash2 className="h-4 w-4" /> Clear {'>'} 90 days
                 </Button>
                 <Button variant="outline" size="sm" className="rounded-xl gap-1.5 text-destructive hover:text-destructive" onClick={() => setClearResolvedDialog(true)}>
                   <Trash2 className="h-4 w-4" />
