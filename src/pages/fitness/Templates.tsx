@@ -397,7 +397,21 @@ export default function FitnessTemplatesPage() {
           <div>
             <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
               <Library className="h-5 w-5 text-primary" />
-              Plan Templates
+              '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
+                                        
+                                            
+                                            <html> <head><title>400 Bad Request</title></head> <body> <center><h1>400 Bad Request</h1></center> </body> </html>
+Route
+
+/fitness/templates
+
+Time
+
+19 Aug 2026, 11:27:03 am IST
+
+Stack Trace
+
+400  — https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/attachments/fitness-plans/f363e15d-6bb9-4aff-9e1e-7f279bbc1e5d/1787119020353-Workout-Plan-FAT_LOSS_PROGRAM.pdf
             </h2>
             <p className="text-sm text-muted-foreground">
               Browse, preview, and assign workout & diet templates. Common plans are reusable across
