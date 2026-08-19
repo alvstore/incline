@@ -52,7 +52,7 @@ export default function Templates() {
           <div>
             <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
               <Library className="h-5 w-5 text-primary" />
-              Plan Templates
+              {`400 — https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/attachments/fitness-plans/f363e15d-6bb9-4aff-9e1e-7f279bbc1e5d/1787119020353-Workout-Plan-FAT_LOSS_PROGRAM.pdf`}
             </h2>
             <p className="text-sm text-muted-foreground">
               Browse, preview, and assign workout & diet templates.
