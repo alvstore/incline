@@ -400,18 +400,7 @@ export default function FitnessTemplatesPage() {
               '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
                                         
                                             
-                                            <html> <head><title>400 Bad Request</title></head> <body> <center><h1>400 Bad Request</h1></center> </body> </html>
-Route
-
-/fitness/templates
-
-Time
-
-19 Aug 2026, 11:27:03 am IST
-
-Stack Trace
-
-400  — https://iyqqpbvnszyrrgerniog.supabase.co/storage/v1/object/attachments/fitness-plans/f363e15d-6bb9-4aff-9e1e-7f279bbc1e5d/1787119020353-Workout-Plan-FAT_LOSS_PROGRAM.pdf
+                                            Automation rule "daily_ops_summary" failed: HTTP 424: {"ok":false,"partial":true,"date":"2026-08-18","summary":{"newMemberships":3,"invoicedTotal":35000,"receivedTotal":35000,"duesCollected":35000,"duesPending":302000},"deliveries":[{"recipient_index":1,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":1,"channel":"email","status":"sent"},{"recipient_index":2,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":2,"channel":"email","status":"sent"}]}
             </h2>
             <p className="text-sm text-muted-foreground">
               Browse, preview, and assign workout & diet templates. Common plans are reusable across
