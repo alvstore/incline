@@ -112,15 +112,35 @@ Team Incline Fitness`;
   // Email attachments are byte-identical to the Drawer download and the
   // Invoices list download — single source of truth for branding + benefits.
 
-  /** Build a `{{var}}` context for invoice templates. */
-  const buildTemplateVars = () => ({
-    member_name: memberName,
-    member_code: (invoice.members as any)?.member_code || '',
-    invoice_number: invoice.invoice_number,
-    amount: Number(invoice.total_amount || 0).toLocaleString(),
-    date: format(new Date(invoice.created_at), 'dd MMM yyyy'),
-    branch_name: branch.name || 'Incline Fitness',
-  });
+  /** Build a `{{var}}` context for invoice templates.
+   *  Amounts stay symbol-free — approved Meta bodies already print "₹". */
+  const buildTemplateVars = () => {
+    const total = Number(invoice.total_amount || 0);
+    const paid = Number(invoice.amount_paid || 0);
+    const outstanding = Math.max(0, total - paid);
+    const isPaid = invoice.status === 'paid';
+    const dateStr = format(new Date(invoice.created_at), 'dd MMM yyyy');
+    const dueStr = invoice.due_date ? format(new Date(invoice.due_date), 'dd MMM yyyy') : dateStr;
+    return {
+      event_key: isPaid ? 'payment_received' : 'invoice_generated',
+      member_name: memberName,
+      name: memberName,
+      first_name: (memberName || '').split(' ')[0] || memberName,
+      member_code: (invoice.members as any)?.member_code || '',
+      invoice_number: invoice.invoice_number,
+      amount: (isPaid ? total : outstanding).toLocaleString('en-IN'),
+      amount_due: (isPaid ? total : outstanding).toLocaleString('en-IN'),
+      amount_paid: paid.toLocaleString('en-IN'),
+      total_amount: total.toLocaleString('en-IN'),
+      item_description: `invoice ${invoice.invoice_number}`,
+      payment_for: `invoice ${invoice.invoice_number}`,
+      date: dateStr,
+      payment_date: dateStr,
+      due_date: dueStr,
+      branch_name: branch.name || 'Incline Fitness',
+    };
+  };
+
 
   const handleWhatsAppShare = async () => {
     if (!invoice.branch_id) {
