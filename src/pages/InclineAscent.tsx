@@ -220,8 +220,8 @@ const InclineAscent = () => {
                 OF <span className="text-primary">STRENGTH & RECOVERY.</span>
               </h1>
               <p className="text-muted-foreground text-base leading-relaxed">
-                Now open in Udaipur. Experience Rajasthan's premier fitness destination featuring Italian 
-                Panatta biomechanics and clinical recovery suites.
+                Experience Rajasthan's premier luxury fitness destination in Udaipur. Featuring elite Italian 
+                Panatta biomechanics, clinical recovery suites, and precision 3D body analysis.
               </p>
             </div>
           </div>

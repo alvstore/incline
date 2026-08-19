@@ -1,124 +1,7 @@
 # ============================================================
 # robots.txt — The Incline Life by Incline
-# Public site is open to search engines, social previews, and
-# trusted AI crawlers. Private app routes are blocked.
 # ============================================================
 
-# --- Search engines ---
-User-agent: Googlebot
-Allow: /
-
-User-agent: Googlebot-Image
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: DuckDuckBot
-Allow: /
-
-User-agent: YandexBot
-Allow: /
-
-User-agent: Baiduspider
-Allow: /
-
-# --- Social link preview crawlers (open graph, app review) ---
-User-agent: facebookexternalhit
-Allow: /
-
-User-agent: Facebot
-Allow: /
-
-User-agent: Meta-ExternalAgent
-Allow: /
-
-User-agent: Meta-ExternalFetcher
-Allow: /
-
-User-agent: meta-externalagent
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: LinkedInBot
-Allow: /
-
-User-agent: Slackbot
-Allow: /
-
-User-agent: Slackbot-LinkExpanding
-Allow: /
-
-User-agent: WhatsApp
-Allow: /
-
-User-agent: TelegramBot
-Allow: /
-
-User-agent: Discordbot
-Allow: /
-
-User-agent: Pinterest
-Allow: /
-
-# --- AI crawlers (AEO — explicitly allowed) ---
-User-agent: GPTBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: OAI-SearchBot
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: anthropic-ai
-Allow: /
-
-User-agent: Claude-Web
-Allow: /
-
-User-agent: Google-Extended
-Allow: /
-
-User-agent: Applebot
-Allow: /
-
-User-agent: Applebot-Extended
-Allow: /
-
-User-agent: Amazonbot
-Allow: /
-
-User-agent: Bytespider
-Allow: /
-
-User-agent: CCBot
-Allow: /
-
-User-agent: cohere-ai
-Allow: /
-
-User-agent: Diffbot
-Allow: /
-
-User-agent: YouBot
-Allow: /
-
-User-agent: Omgilibot
-Allow: /
-
-User-agent: MistralAI-User
-Allow: /
-
-# --- Default: allow public site, block private app routes ---
 User-agent: *
 Allow: /
 Disallow: /admin
@@ -136,7 +19,21 @@ Disallow: /unauthorized
 Disallow: /contract-sign/
 Disallow: /embed/
 
+# Trusted Search & AI Crawlers (AEO/GEO Optimization)
+User-agent: Googlebot
+Allow: /
+User-agent: GPTBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Applebot
+Allow: /
+
 Sitemap: https://theincline.in/sitemap.xml
 Sitemap: https://theincline.in/llms.txt
 Host: https://theincline.in
-Sitemap: https://theincline.in/llms-full.txt
+
