@@ -341,7 +341,9 @@ export default function SystemHealth() {
               </div>
               System Health
             </h1>
-            <p className="text-muted-foreground mt-1">Monitor errors across frontend, backend functions, and database</p>
+            <p className="text-muted-foreground mt-1">
+              {`Automation rule "daily_ops_summary" failed: HTTP 424: {"ok":false,"partial":true,"date":"2026-08-18","summary":{"newMemberships":3,"invoicedTotal":35000,"receivedTotal":35000,"duesCollected":35000,"duesPending":302000},"deliveries":[{"recipient_index":1,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":1,"channel":"email","status":"sent"},{"recipient_index":2,"channel":"whatsapp","status":"pending_template_approval","reason":"no_template_for_closed_session"},{"recipient_index":2,"channel":"email","status":"sent"}]}`}
+            </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={handleExport}>
