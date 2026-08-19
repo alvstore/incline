@@ -342,18 +342,7 @@ export default function SystemHealth() {
               System Health
             </h1>
             <p className="text-muted-foreground mt-1">
-              {`'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
-                                        
-                                            
-                                            please audit for whatsapp message through template through edge fundtion we are sending. 
-i want you to audit that 
-
-[16/08/26, 7:42:25 AM] \u202a+91\u00a082982\u00a093003\u202c: Hi —, a new lead has been generated. Name: —, Interest: —, Source: —. Please reach out to them at the earliest to schedule a tour.
-
-[19/08/26, 5:37:15 PM] \u202a+91\u00a082982\u00a093003\u202c: Hi —, here is the daily operations summary for —. Total Check-ins: —. New Memberships: —. Total Revenue: ₹—. Active PT Sessions: —. Please review the dashboard for a detailed breakdown.
-
-
-this was message recived through whatsapp for daily ops and lead alert but its incomplete please audit.`}
+              {}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
