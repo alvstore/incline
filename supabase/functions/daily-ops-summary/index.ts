@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
       { data: payments },
       { data: openInvoices },
       { data: branches },
+      { data: attendanceCount },
+      { data: activePtCredits },
     ] = await Promise.all([
       supabase
         .from("memberships")
@@ -76,8 +78,20 @@ Deno.serve(async (req) => {
         .select("total_amount, amount_paid, refund_amount")
         .in("status", ["pending", "partial", "overdue"]),
       supabase.from("branches").select("id, name"),
+      supabase
+        .from("attendance")
+        .select("id", { count: "exact", head: true })
+        .gte("check_in", startUtc.toISOString())
+        .lt("check_in", endUtc.toISOString()),
+      supabase
+        .from("member_benefit_credits")
+        .select("id", { count: "exact", head: true })
+        .eq("benefit_type", "pt_session")
+        .gt("remaining_count", 0),
     ]);
 
+    const totalCheckins = attendanceCount ?? 0;
+    const activePtSessions = activePtCredits ?? 0;
     const branchName = new Map((branches ?? []).map((b: any) => [b.id, b.name]));
 
     const newMemberships = (memberships ?? []).length;
@@ -123,9 +137,11 @@ Deno.serve(async (req) => {
 
     const body =
       `The Incline — Daily Report (${dateLabel})\n\n` +
+      `Total Check-ins: ${totalCheckins}\n` +
       `New memberships enrolled: ${newMemberships}\n` +
       `Total sales invoiced: ₹${inr(invoicedTotal)}\n` +
       `Amount received: ₹${inr(receivedTotal)}\n${modeLines}\n\n` +
+      `Active PT Sessions: ${activePtSessions}\n` +
       `Dues collected today: ₹${inr(duesCollected)}\n` +
       `Dues still outstanding: ₹${inr(duesPending)}` +
       (perBranch ? `\n\nBy branch:\n${perBranch}` : "");
@@ -182,6 +198,9 @@ Deno.serve(async (req) => {
         member_name: r.name ?? "there",
         report_date: dateLabel,
         new_memberships: String(newMemberships),
+        total_checkins: String(totalCheckins),
+        active_pt_sessions: String(activePtSessions),
+        total_revenue: inr(invoicedTotal),
         total_sales: inr(invoicedTotal),
         amount_received: inr(receivedTotal),
         cash_received: inr(byMode.get("cash") ?? 0),

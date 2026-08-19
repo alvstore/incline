@@ -159,12 +159,14 @@ Deno.serve(async (req) => {
 
     const vars: Record<string, string> = {
       lead_name: lead.full_name || "Guest",
+      member_name: lead.full_name || "Guest",
       lead_phone: lead.phone || "",
       lead_email: lead.email || "",
       lead_source: lead.source || "direct",
       source: lead.source || "direct",
       branch_name: branchName,
       plan_interest: lead.plan_interest || "",
+      interest: lead.plan_interest || "",
       fitness_goal: fitnessGoalCombined,
       goals: lead.goals || "",
       budget: lead.budget || "",
