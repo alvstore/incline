@@ -187,7 +187,7 @@ export function AIGenerateTemplatesDrawer({
         // why every submit used to fail silently.
         const { data, error } = await supabase.functions.invoke('manage-whatsapp-templates', {
           body: {
-            action: 'create',
+            action: 'upsert',
             branch_id: effectiveBranchId,
             template_data: {
               name: p.name,
