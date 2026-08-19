@@ -117,6 +117,13 @@ const KIND_LABELS: Record<string, { title: string; explain: (d: FindingDetails) 
         ? `Membership is still "Pending" despite having ${inr(num(d.amount_paid))} paid against invoice ${d.invoice_number || '—'}. Activate it to resume billing.`
         : "A payment was received for this membership, but it hasn't been activated yet.",
   },
+  mips_sync_drift: {
+    title: "MIPS Sync Drift",
+    explain: (d) =>
+      d
+        ? `Member status is "${d.recorded}" but MIPS access is still active or mismatch detected. Force-sync to reconcile.`
+        : "Hardware access status in CRM does not match MIPS middleware records.",
+  },
 };
 
 export function ReconciliationFindingsCard() {
