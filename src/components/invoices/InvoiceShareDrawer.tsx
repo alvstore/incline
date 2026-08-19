@@ -173,7 +173,10 @@ Team Incline Fitness`;
         folder: 'invoices',
         dedupeKey: `invoice:${invoice.id}:wa`,
         category: 'payment_receipt',
+        triggerEvent: String(vars.event_key),
+        variables: vars,
       });
+
       if (result.status === 'failed' || result.status === 'suppressed') {
         throw new Error(result.status === 'suppressed' ? 'WhatsApp send was suppressed by preferences' : 'WhatsApp failed to send the PDF');
       }
