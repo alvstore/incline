@@ -278,13 +278,16 @@ function resolveVarValue(
   ];
   // Common aliases
   const k = key.toLowerCase();
-  if (k.includes('member') || k === 'name') tryKeys.push('member_name', 'name', 'full_name');
-  if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name');
+  if (k.includes('member') || k === 'name' || k.includes('lead_name')) tryKeys.push('member_name', 'name', 'full_name', 'lead_name');
+  if (k.includes('plan_title') || k.includes('plan_name') || k === 'plan') tryKeys.push('plan_title', 'plan_name', 'plan');
   if (k.includes('trainer')) tryKeys.push('trainer_name');
-  if (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees')) tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount');
+  if (k.includes('interest')) tryKeys.push('interest', 'plan_interest', 'interest_name');
+  if (k.includes('source')) tryKeys.push('source', 'lead_source', 'utm_source');
+  if (k.includes('amount') || k.includes('price') || k.includes('total') || k.includes('due') || k.includes('fees') || k === 'revenue') tryKeys.push('amount_due', 'pending_amount', 'amount', 'price', 'total_amount', 'total_revenue');
   if (k.includes('invoice')) tryKeys.push('invoice_number', 'invoice_id');
-  if (k.includes('branch')) tryKeys.push('branch_name');
-  if (k.includes('date')) tryKeys.push('date');
+  if (k.includes('branch')) tryKeys.push('branch_name', 'branch');
+  if (k.includes('date')) tryKeys.push('date', 'report_date');
+  if (k.includes('checkins')) tryKeys.push('checkins', 'total_checkins');
   if (k.includes('document') || k.includes('link') || k.includes('url')) tryKeys.push('document_link', 'url', 'link');
   // Meta positional slots ({{1}}, {{2}}, …). By convention slot #1 is the
   // recipient's first name (matches CampaignWizard's variable legend and
