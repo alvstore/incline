@@ -325,8 +325,9 @@ function safeFallbackForKey(key: string): string {
   // almost always a name/greeting on Incline templates, so fall back to
   // "there" instead of "—" to avoid "Hi —," style output.
   if (/^\d+$/.test(k)) {
-    // We treat {{1}} as the greeting name slot by convention.
-    if (k === '1') return 'there';
+    // We treat {{1}} as the greeting name slot by convention on many templates.
+    // v1.29.0: If it's the first slot, use "there" to avoid "Hi —,".
+    if (k === '1' || index === 0) return 'there';
     // For other positional slots, "—" is a safer generic placeholder.
     return '—';
   }

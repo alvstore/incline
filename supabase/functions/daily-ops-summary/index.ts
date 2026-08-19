@@ -207,6 +207,7 @@ Deno.serve(async (req) => {
         total_sales: inr(invoicedTotal),
         amount: inr(receivedTotal),
         amount_received: inr(receivedTotal),
+        revenue: inr(receivedTotal),
         cash_received: inr(byMode.get("cash") ?? 0),
         upi_received: inr(byMode.get("upi") ?? 0),
         card_received: inr(byMode.get("card") ?? 0),
