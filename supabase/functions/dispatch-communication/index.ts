@@ -897,6 +897,20 @@ Deno.serve(async (req) => {
               if (eventTpl?.id) {
                 input.template_id = eventTpl.id;
                 (input as any).__auto_resolved_template = 'event_key';
+              } else {
+                // v1.28.0: Check whatsapp_triggers for explicit event_key -> template mapping.
+                const { data: trigger } = await supabase
+                  .from('whatsapp_triggers')
+                  .select('template_id')
+                  .eq('event_name', eventKey)
+                  .or(`branch_id.eq.${input.branch_id},branch_id.is.null`)
+                  .order('branch_id', { ascending: false, nullsFirst: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (trigger?.template_id) {
+                  input.template_id = trigger.template_id;
+                  (input as any).__auto_resolved_template = 'whatsapp_triggers';
+                }
               }
             }
           }
