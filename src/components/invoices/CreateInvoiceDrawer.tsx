@@ -156,12 +156,20 @@ export function CreateInvoiceDrawer({ open, onOpenChange, branchId }: CreateInvo
 
       return { id: invoiceId };
     },
-    onSuccess: () => {
+    onSuccess: ({ id }) => {
       toast.success('Invoice created successfully');
+      // Auto-deliver the invoice PDF over WhatsApp + Email (fire-and-forget).
+      // `paidOnly: false` so unpaid invoices are still sent to the member.
+      if (id) {
+        import('@/lib/invoices/sendInvoicePdf')
+          .then((m) => m.sendInvoicePdfToMember(id, { paidOnly: false }))
+          .catch((e) => console.warn('[CreateInvoiceDrawer] auto-send invoice failed', e));
+      }
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       onOpenChange(false);
       resetForm();
     },
+
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to create invoice');
     },
