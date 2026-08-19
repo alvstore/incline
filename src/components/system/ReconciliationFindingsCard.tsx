@@ -232,7 +232,6 @@ export function ReconciliationFindingsCard() {
       setRechecking(null);
     }
   };
-  };
 
   const totalOpen = open.length;
 
