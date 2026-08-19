@@ -44,7 +44,7 @@ export async function sendInvoicePdfToMember(
     const { data: inv, error } = await supabase
       .from('invoices')
       .select(`
-        id, invoice_number, branch_id, member_id, total_amount, amount_paid, status,
+        id, invoice_number, branch_id, member_id, total_amount, amount_paid, status, due_date,
         customer_email, customer_phone,
         members(profiles:user_id(full_name, email, phone)),
         branch:branch_id(name)
@@ -75,26 +75,40 @@ export async function sendInvoicePdfToMember(
       contentType: 'application/pdf',
     });
 
+    const isPaid = inv.status === 'paid';
     const amountPlain = Number(inv.total_amount).toLocaleString('en-IN');
+    const outstandingPlain = Number(
+      Math.max(0, Number(inv.total_amount || 0) - Number(inv.amount_paid || 0)),
+    ).toLocaleString('en-IN');
+    const fmtDate = (d?: string | null) =>
+      d
+        ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     // NOTE: approved Meta bodies already print "₹" before the amount slot, so
     // these values must stay symbol-free. Aliases cover every approved
     // invoice/receipt template variant (amount_due, item_description, due_date).
     const variables = {
+      event_key: isPaid ? 'payment_received' : 'invoice_generated',
       name,
       member_name: name,
+      first_name: name.split(' ')[0] || name,
       invoice_number: inv.invoice_number,
-      amount: amountPlain,
-      amount_due: amountPlain,
-      amount_paid: amountPlain,
+      amount: isPaid ? amountPlain : outstandingPlain,
+      amount_due: isPaid ? amountPlain : outstandingPlain,
+      amount_paid: Number(inv.amount_paid || 0).toLocaleString('en-IN'),
       total_amount: amountPlain,
       item_description: `invoice ${inv.invoice_number}`,
       payment_for: `invoice ${inv.invoice_number}`,
-      due_date: 'today',
-      payment_date: new Date().toLocaleDateString('en-IN'),
+      due_date: fmtDate(inv.due_date),
+      date: fmtDate(null),
+      payment_date: fmtDate(null),
       branch_name: branchName,
       document_link: url,
     };
-    const fallback = `Hi ${name}, your invoice ${inv.invoice_number} for ₹${amountPlain} is ready. Download: ${url}`;
+    const fallback = isPaid
+      ? `Hi ${name}, we've received your payment for invoice ${inv.invoice_number} (₹${amountPlain}). Download: ${url}`
+      : `Hi ${name}, your invoice ${inv.invoice_number} for ₹${amountPlain} is ready (due ${fmtDate(inv.due_date)}). Download: ${url}`;
+
 
 
     const results: SendInvoicePdfResult = { ok: true };
