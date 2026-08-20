@@ -319,9 +319,10 @@ export default function ProfilePage() {
                         <div className="sm:col-span-2">
                           <Label className="text-muted-foreground">Address</Label>
                           <p className="text-sm font-medium mt-1">
-                            {member?.address ? `${member.address}${member.city ? `, ${member.city}` : ''}${member.state ? `, ${member.state}` : ''}` : '—'}
+                            {staff.profile?.address ? `${staff.profile.address}${staff.profile.city ? `, ${staff.profile.city}` : ''}${staff.profile.state ? `, ${staff.profile.state}` : ''}` : '—'}
                           </p>
                         </div>
+
 
                       </div>
                     );
