@@ -616,6 +616,7 @@ export async function logPtSession(
     p_status: input.status ?? 'completed',
     p_notes: input.notes ?? null,
     p_session_id: input.existingSessionId ?? null,
+    p_session_date: input.sessionDate ?? null,
   });
   if (error) {
     const friendly = PT_LOG_ERROR_MAP[error.message] ?? error.message;
