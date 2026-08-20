@@ -318,17 +318,17 @@ function resolveVarValue(
 /** Safe visible fallback per variable-key type. Meta rejects whitespace-only
  *  or leading/trailing-space body params on many marketing templates (132018),
  *  so we substitute a real, sensible token instead of " ". */
-function safeFallbackForKey(key: string): string {
+function safeFallbackForKey(key: string, index: number): string {
   const k = String(key || '').toLowerCase();
   if (k.includes('member') || k.includes('name') || k === 'first' || k === 'first_name') return 'there';
   // Purely numeric keys (Meta positional {{1}}, {{2}}, …) — the first slot is
   // almost always a name/greeting on Incline templates, so fall back to
-  // "there" instead of "—" to avoid "Hi —," style output.
+  // \"there\" instead of \"—\" to avoid \"Hi —,\" style output.
   if (/^\d+$/.test(k)) {
     // We treat {{1}} as the greeting name slot by convention on many templates.
-    // v1.29.0: If it's the first slot, use "there" to avoid "Hi —,".
+    // v1.29.1: If it's the first slot, use \"there\" to avoid \"Hi —,\".
     if (k === '1' || index === 0) return 'there';
-    // For other positional slots, "—" is a safer generic placeholder.
+    // For other positional slots, \"—\" is a safer generic placeholder.
     return '—';
   }
   if (k.includes('plan')) return 'your plan';
@@ -348,7 +348,7 @@ function templateComponents(keys: string[], values: Record<string, unknown> | un
     const trimmed = String(raw ?? '').trim();
     // Never send whitespace-only or empty text params — Meta returns 132018.
     // Substitute a safe visible fallback based on key semantics.
-    const text = trimmed || safeFallbackForKey(key);
+    const text = trimmed || safeFallbackForKey(key, index);
     return { type: 'text', text: text || 'there' };
   });
   return [{ type: 'body', parameters: params }];
