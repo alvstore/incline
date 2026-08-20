@@ -89,8 +89,8 @@ export const trainerMenuConfig: MenuSection[] = [
   {
     title: 'Work',
     items: [
-      { label: 'My Attendance', href: '/attendance-dashboard', icon: Clock, roles: ['trainer'] },
-      { label: 'Announcements', href: '/announcements', icon: Megaphone, roles: ['trainer'] },
+      { label: 'My Attendance', href: '/my-attendance', icon: Clock, roles: ['trainer'] },
+      { label: 'Announcements', href: '/member-announcements', icon: Megaphone, roles: ['trainer'] },
     ],
   },
   {
