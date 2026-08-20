@@ -581,6 +581,8 @@ export interface LogPtSessionInput {
   trainerId: string;
   notes?: string | null;
   status?: PtSessionStatusInput;
+  /** ISO date (yyyy-MM-dd). Defaults to today on the server. */
+  sessionDate?: string | null;
   /** Finish an already-scheduled pt_sessions row instead of creating a new one. */
   existingSessionId?: string | null;
 }
