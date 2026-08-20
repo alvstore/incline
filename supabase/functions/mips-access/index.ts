@@ -60,6 +60,8 @@ function authHeaders(token: string): Record<string, string> {
 }
 
 async function lookupPerson(baseUrl: string, token: string, personSn: string): Promise<any | null> {
+  // All persons (members, employees, trainers) are found via person/list.
+  // We search by personSn which is unique across the catalog.
   const res = await fetch(`${baseUrl}/personInfo/person/list?personSn=${personSn}&pageNum=1&pageSize=5`, {
     method: "GET",
     headers: authHeaders(token),
@@ -451,19 +453,21 @@ async function applyStaffAction(
     return {
       success: true,
       action: action === "revoke_staff" ? "revoke" : "restore",
-      message: "Person not found in MIPS, status updated locally",
+      message: "Person not found in MIPS catalog, status updated locally",
     };
   }
 
   const newValidTimeEnd = action === "revoke_staff" ? REVOKED_DATE : PERMANENT_END;
   const updatedPerson = { ...existing, validTimeEnd: newValidTimeEnd };
 
+  // Use the canonical person endpoint for updates as discovered.
   const putRes = await fetch(`${baseUrl}/personInfo/person`, {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(updatedPerson),
   });
   const putJson = await putRes.json();
+
   const putSuccess = putJson.code === 200 || putJson.code === 0;
   if (!putSuccess) {
     return {
