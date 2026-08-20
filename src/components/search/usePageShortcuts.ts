@@ -7,12 +7,20 @@ import { getMenuForRole, type MenuItem } from '@/config/menu';
  * derived from the existing role-aware menu config (no hardcoding).
  */
 export function usePageShortcuts(query: string) {
-  const { roles } = useAuth();
+  const { roles, hasAnyRole } = useAuth();
+  const isTrainerOnly = hasAnyRole(['trainer']) && !hasAnyRole(['owner', 'admin', 'manager', 'staff']);
 
   const allItems = useMemo<MenuItem[]>(() => {
     const sections = getMenuForRole(roles);
-    return sections.flatMap((s) => s.items);
-  }, [roles]);
+    let items = sections.flatMap((s) => s.items);
+    
+    // Trainers should not see the full Attendance Dashboard, just their personal one
+    if (isTrainerOnly) {
+      items = items.filter(i => i.href !== '/attendance-dashboard');
+    }
+    
+    return items;
+  }, [roles, isTrainerOnly]);
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
