@@ -56,7 +56,7 @@ export default function MyAttendance() {
 
   const checkOutMutation = useMutation({
     mutationFn: async (attendanceId: string) => {
-      const isTrainer = !!trainer && !member;
+      const isTrainer = !!trainer;
       const table = isTrainer ? 'staff_attendance' : 'member_attendance';
       
       const { error } = await supabase
