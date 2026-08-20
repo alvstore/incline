@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemberData } from '@/hooks/useMemberData';
+import { useMemberData, useTrainerData } from '@/hooks/useMemberData';
 import { AlertCircle, CalendarCheck, Flame, LogOut, Timer, Trophy } from 'lucide-react';
 import { format, eachMonthOfInterval, eachDayOfInterval, isAfter } from 'date-fns';
 import { toast } from 'sonner';
@@ -21,19 +22,26 @@ import {
 export default function MyAttendance() {
   const queryClient = useQueryClient();
   const { member, isLoading: memberLoading } = useMemberData();
+  const { trainer, isLoading: trainerLoading } = useTrainerData();
+  const actor = member || trainer;
+  
   const [range, setRange] = useState<AttendanceRange>('month');
   const [anchor, setAnchor] = useState(new Date());
 
   const bounds = useMemo(() => resolveBounds(range, anchor), [range, anchor]);
 
   const { data: attendance = [], isLoading: attendanceLoading } = useQuery({
-    queryKey: ['my-attendance', member?.id, range, bounds.start?.toISOString() ?? 'all'],
-    enabled: !!member,
+    queryKey: ['my-attendance', actor?.id, range, bounds.start?.toISOString() ?? 'all'],
+    enabled: !!actor,
     queryFn: async () => {
+      const isTrainer = !!trainer && !member;
+      const table = isTrainer ? 'staff_attendance' : 'member_attendance';
+      const idColumn = isTrainer ? 'staff_id' : 'member_id';
+
       let query = supabase
-        .from('member_attendance')
+        .from(table as any)
         .select('id, check_in, check_out')
-        .eq('member_id', member!.id)
+        .eq(idColumn, actor!.id)
         .order('check_in', { ascending: false });
 
       if (bounds.start) {
@@ -42,14 +50,17 @@ export default function MyAttendance() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as VisitRecord[];
+      return (data || []) as unknown as VisitRecord[];
     },
   });
 
   const checkOutMutation = useMutation({
     mutationFn: async (attendanceId: string) => {
+      const isTrainer = !!trainer && !member;
+      const table = isTrainer ? 'staff_attendance' : 'member_attendance';
+      
       const { error } = await supabase
-        .from('member_attendance')
+        .from(table as any)
         .update({ check_out: new Date().toISOString() })
         .eq('id', attendanceId);
       if (error) throw error;
@@ -100,7 +111,7 @@ export default function MyAttendance() {
 
   const canStepForward = isAfter(new Date(), bounds.end);
 
-  if (memberLoading) {
+  if (memberLoading || trainerLoading) {
     return (
       <AppLayout>
         <div className="space-y-4 p-1">
@@ -112,12 +123,21 @@ export default function MyAttendance() {
     );
   }
 
-  if (!member) {
+  if (!actor) {
     return (
       <AppLayout>
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
-          <AlertCircle className="h-12 w-12 text-amber-500" />
-          <h2 className="text-xl font-semibold">No member profile found</h2>
+        <div className="flex min-h-[50vh] items-center justify-center px-4">
+          <Card className="w-full max-w-lg rounded-2xl border-border/60 shadow-lg">
+            <CardContent className="space-y-4 p-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/10">
+                <AlertCircle className="h-7 w-7 text-warning" aria-hidden="true" />
+              </div>
+              <h1 className="text-xl font-bold">No member profile found</h1>
+              <p className="text-sm text-muted-foreground">
+                Your account is not linked to a member profile yet. Please contact the front desk.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </AppLayout>
     );

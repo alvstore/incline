@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Megaphone, AlertCircle, Sparkles, Clock3, ShieldAlert, ChevronRight, Paperclip } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemberData } from '@/hooks/useMemberData';
+import { useMemberData, useTrainerData } from '@/hooks/useMemberData';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AnnouncementAttachment } from '@/components/announcements/AnnouncementAttachment';
 
@@ -17,17 +17,18 @@ type Filter = 'all' | 'important' | 'expiring';
 
 export default function MemberAnnouncements() {
   const { member, isLoading: memberLoading } = useMemberData();
-  const branchName = member?.branch?.name || 'your branch';
+  const { trainer, isLoading: trainerLoading } = useTrainerData();
+  const actor = member || trainer;
+  
+  const branchName = actor?.branch?.name || 'your branch';
   const [filter, setFilter] = useState<Filter>('all');
   const [active, setActive] = useState<any | null>(null);
 
   const { data: announcements = [], isLoading: announcementsLoading } = useQuery({
-    queryKey: ['member-announcements', member?.branch_id],
-    enabled: !!member,
+    queryKey: ['member-announcements', actor?.branch_id],
+    enabled: !!actor,
     queryFn: async () => {
       const nowIso = new Date().toISOString();
-      // Fetch broadly, then filter in JS — chained PostgREST .or() calls
-      // override each other and silently drop matches.
       const { data, error } = await supabase
         .from('announcements')
         .select('*')
@@ -40,7 +41,7 @@ export default function MemberAnnouncements() {
         return [];
       }
       return (data || []).filter((a: any) => {
-        const branchOk = !a.branch_id || a.branch_id === member!.branch_id;
+        const branchOk = !a.branch_id || a.branch_id === actor!.branch_id;
         const audienceOk = !a.target_audience || ['all', 'members'].includes(a.target_audience);
         const publishOk = !a.publish_at || a.publish_at <= nowIso;
         const expireOk = !a.expire_at || a.expire_at > nowIso;
@@ -66,7 +67,7 @@ export default function MemberAnnouncements() {
 
   const featured = filtered[0];
   const rest = filtered.slice(1);
-  const isLoading = memberLoading || announcementsLoading;
+  const isLoading = memberLoading || announcementsLoading || trainerLoading;
 
   const metaBadges = (a: any) => (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -91,7 +92,23 @@ export default function MemberAnnouncements() {
     </div>
   );
 
-  if (!memberLoading && !member) {
+  if (memberLoading || trainerLoading) {
+    return (
+      <AppLayout>
+        <div className="mx-auto max-w-4xl space-y-5 pb-6 px-4 sm:px-0">
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-10 w-48 rounded-xl" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!actor) {
     return (
       <AppLayout>
         <div className="flex min-h-[50vh] items-center justify-center px-4">
