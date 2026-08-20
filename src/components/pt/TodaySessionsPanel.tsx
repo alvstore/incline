@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Check, X, Clock, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { avatarColor, initialsOf, type PTSessionRow } from './ptTypes';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   sessions: PTSessionRow[];
@@ -30,9 +31,21 @@ export function TodaySessionsPanel({
   onSchedule,
 }: Props) {
   const now = new Date();
+  const { user, roles } = useAuth();
+  const isTrainer = roles.some(r => r.role === 'trainer');
+  const isAdmin = roles.some(r => ['owner', 'admin', 'manager'].includes(r.role));
+
+  const filteredSessions = useMemo(() => {
+    // If user is a trainer and NOT an admin/manager, filter sessions to only show their own.
+    // The session data comes from fetchTrainerSessions which includes trainer_id.
+    if (isTrainer && !isAdmin && user?.id) {
+      return sessions.filter(s => (s as any).trainer_id === user.id);
+    }
+    return sessions;
+  }, [sessions, isTrainer, isAdmin, user?.id]);
 
   const { today, upcoming } = useMemo(() => {
-    const sorted = [...sessions].sort(
+    const sorted = [...filteredSessions].sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
     );
     return {
@@ -42,7 +55,7 @@ export function TodaySessionsPanel({
       ),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions]);
+  }, [filteredSessions]);
 
   if (loading) {
     return (
