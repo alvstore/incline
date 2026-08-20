@@ -1,35 +1,39 @@
-# Plan: Trainer Profile & Payroll Enhancements
+# Plan: HRM Payroll Adjustments & Previews
 
-Enhance the trainer experience by providing transparent profile details, fixed Store access, and accurate payroll calculations including dual-shift bonuses.
+Enhance the HRM payroll workflow to allow manual adjustments via a side drawer and provide a detailed preview before processing payments.
+
+## User Requirements
+- Manual adjustment action should be in a side drawer (Sheet).
+- Adjustments must be pre-filled with current calculations.
+- The "Process" button should show a preview before finalizing the payment processing.
+- Restricted to Admin, Owner, and Manager roles.
 
 ## Technical Details
 
-### 1. Trainer Profile Enhancements
-- **File**: `src/pages/Profile.tsx`
-- **Action**: Add a "Staff Information" section for users with `trainer` or `staff` roles.
-- **Fields**: Address, Commission (PT Share %), Base Salary, and Aadhaar (last 4 digits).
-- **Data Source**: Fetched via `useUnifiedStaff` mapping or direct query to `trainers`/`employees` tables.
-- **Security**: These fields will be **read-only** for the trainer, consistent with HR management policy.
+### 1. Manual Adjustment Side Drawer
+- Create `PayrollAdjustmentDrawer.tsx` in `src/components/hrm/`.
+- Pre-fill fields: Base Salary, PT Commission, OT, Bonus, Deductions, Advance Recovery, and Penalty.
+- Include a "Reason" field for audit trails.
+- Trigger this from the "Manual adjust..." dropdown menu item in `HRM.tsx` (or where the payroll list is rendered).
 
-### 2. Member Store Access Fix
-- **File**: `src/hooks/useMemberData.ts` (specifically `useUnifiedActor`)
-- **Action**: Correct the branch resolution logic. Currently, `MemberStore.tsx` relies on `member.branch_id`. For trainers, this should fall back to `trainer.branch_id`.
-- **Validation**: Ensure `actor.branch_id` is used consistently across the Store component.
+### 2. Process Preview Sheet
+- Create `PayrollProcessPreviewDrawer.tsx`.
+- This drawer will open when the "Process" button is clicked for a staff member.
+- Display a summary of all components (Gross, Deductions, Net).
+- Include a final "Confirm & Process" action.
 
-### 3. Payroll Logic Refinement
-- **File**: `src/pages/TrainerEarnings.tsx`
-- **Calculation Logic**:
-    - **Base Salary**: From `trainers.fixed_salary`.
-    - **Dual Shift Bonus**: Query `staff_attendance` for the selected month. For every day where `shift_date` has 2 or more records (morning + evening), add `(Fixed Salary / 30)` as a bonus.
-    - **PF Deduction**: 12% of `fixed_salary` only.
-- **UI Update**: Show a breakdown of "Standard Salary", "Dual Shift Bonuses", "PT Commissions", and "PF Deduction".
-- **Payslip Update**: Update `buildPayslipPdf` in `src/utils/pdfBlob.ts` (or the input passed from `TrainerEarnings.tsx`) to include these line items.
+### 3. Implementation in HRM.tsx
+- Integrate the new drawers into the `HRM.tsx` (Payroll tab).
+- Replace the existing `Dialog` for adjustments with the new `Sheet`.
+- Update the "Process" button logic to trigger the preview drawer.
 
-### 4. Identity Resolution Hardening
-- **File**: `src/hooks/useUnifiedStaff.ts`
-- **Action**: Ensure `aadhaar_last4` and `government_id_number` are correctly mapped and masked (e.g., `XXXX XXXX 6519`) before reaching the UI.
+### 4. Logic & Security
+- Ensure RBAC checks (`owner`, `admin`, `manager`) for these actions.
+- Use `payroll_adjust_item` RPC for saving adjustments.
+- Use `payroll_process_items` RPC for final processing.
 
-## User Review Required
-
-> [!IMPORTANT]
-> - Should dual shifts be calculated automatically based on any 2 check-ins per day, or only if they belong to different `shift_type` (morning vs evening)?
+## File Changes
+- `src/components/hrm/PayrollAdjustmentDrawer.tsx`: New component.
+- `src/components/hrm/PayrollProcessPreviewDrawer.tsx`: New component.
+- `src/pages/HRM.tsx`: Integrate new components and update button logic.
+- `src/components/hrm/StaffRowActions.tsx`: (If applicable) Update actions for payroll items.
