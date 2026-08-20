@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemberData } from '@/hooks/useMemberData';
+import { useUnifiedActor } from '@/hooks/useMemberData';
 import { useWallet } from '@/hooks/useWallet';
 import { ShoppingBag, Search, Package, AlertCircle, Loader2, Plus, Minus, ShoppingCart, Check, Tag, Wallet, Gift, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
