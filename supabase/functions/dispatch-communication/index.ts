@@ -1,4 +1,4 @@
-// dispatch-communication v1.27.0
+// dispatch-communication v1.29.0 — freeform placeholder guard (email/SMS/in-app).
 // v1.27.0: Propagate `skip_notification` to staff handoffs; detect Meta `echo`
 //          events in `whatsapp-webhook` v6.6.0 to prevent AI loops.
 // v1.26.0: Template picker only considers APPROVED Meta templates and prefers a
@@ -500,6 +500,20 @@ Deno.serve(async (req) => {
   const validChannels: Channel[] = ['whatsapp', 'sms', 'email', 'in_app', 'rcs'];
   if (!validChannels.includes(input.channel)) return bad(400, { error: 'invalid_channel' });
   if (!input.payload?.body) return bad(400, { error: 'missing_payload_body' });
+
+  // Freeform guard: email/SMS/in-app bodies are sent verbatim, so an unresolved
+  // placeholder ("Dear {{1}}", "₹{{2}}") would reach the recipient. WhatsApp is
+  // exempt — its {{n}} slots are filled by Meta from the template variables.
+  if (input.channel !== 'whatsapp' && !input.template_id) {
+    const remaining = String(input.payload.body).match(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g);
+    if (remaining?.length) {
+      return bad(400, {
+        error: 'unresolved_placeholders',
+        details: Array.from(new Set(remaining)).join(', '),
+      });
+    }
+  }
+
 
   // Normalize phone recipients to E.164 (digits only) for whatsapp/sms/rcs.
   // Defaults to India (+91) when no country code is present.

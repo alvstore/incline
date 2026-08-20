@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { signAttachmentUrl } from '@/lib/documents/signAttachment';
+import { PlanViewerSheet } from '@/components/fitness/PlanViewerSheet';
 
 interface PlanTemplateRow {
   id: string;
@@ -20,21 +21,27 @@ interface PlanTemplateRow {
   goal: string | null;
   difficulty: string | null;
   source_kind: string | null;
+  content: unknown;
   pdf_url: string | null;
   pdf_filename: string | null;
   created_at: string;
 }
 
+
 export default function Templates() {
   const [planType, setPlanType] = useState<'workout' | 'diet'>('workout');
   const [search, setSearch] = useState('');
+
+  const [preview, setPreview] = useState<PlanTemplateRow | null>(null);
 
   const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['fitness-templates', planType],
     queryFn: async (): Promise<PlanTemplateRow[]> => {
       const { data, error } = await supabase
         .from('fitness_plan_templates')
-        .select('id,name,type,description,goal,difficulty,source_kind,pdf_url,pdf_filename,created_at')
+        .select(
+          'id,name,type,description,goal,difficulty,source_kind,content,pdf_url,pdf_filename,created_at',
+        )
         .eq('type', planType)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
@@ -51,18 +58,19 @@ export default function Templates() {
   );
 
   const handleOpen = async (template: PlanTemplateRow) => {
-    if (!template.pdf_url) {
-      toast.error('No PDF attached to this template');
+    if (template.source_kind === 'pdf' || template.pdf_url) {
+      try {
+        const signed = await signAttachmentUrl(template.pdf_url);
+        if (!signed) throw new Error('Could not create a download link');
+        window.open(signed, '_blank', 'noopener,noreferrer');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not open the PDF');
+      }
       return;
     }
-    try {
-      const signed = await signAttachmentUrl(template.pdf_url);
-      if (!signed) throw new Error('Could not create a download link');
-      window.open(signed, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not open the PDF');
-    }
+    setPreview(template);
   };
+
 
   return (
     <AppLayout>
@@ -143,7 +151,7 @@ export default function Templates() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-4 border-t border-border/50">
                     <span>Added {new Date(t.created_at).toLocaleDateString()}</span>
                     <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg group-hover:bg-primary group-hover:text-primary-foreground">
-                      {t.pdf_url ? 'View PDF' : 'No PDF'}
+                      {t.pdf_url ? 'View PDF' : 'View plan'}
                     </Button>
                   </div>
                 </CardContent>
@@ -152,7 +160,25 @@ export default function Templates() {
           </div>
         )}
 
+        <PlanViewerSheet
+          open={Boolean(preview)}
+          onOpenChange={(o) => !o && setPreview(null)}
+          plan={
+            preview
+              ? {
+                  id: preview.id,
+                  name: preview.name,
+                  type: preview.type,
+                  description: preview.description,
+                  data: preview.content,
+                  template_name: preview.name,
+                  source_kind: 'structured',
+                }
+              : null
+          }
+        />
       </div>
+
     </AppLayout>
   );
 }

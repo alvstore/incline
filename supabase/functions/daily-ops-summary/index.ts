@@ -287,9 +287,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Outcomes that mean "nothing went wrong": delivered, in-flight, already
+    // sent today (deduped), recipient opted out (suppressed), or deferred by
+    // quiet hours. Only genuine errors should fail the run.
+    const ACCEPTABLE_STATUSES = [
+      "sent",
+      "delivered",
+      "queued",
+      "sent_via_sms_fallback",
+      "deduped",
+      "suppressed",
+      "skipped_quiet_hours",
+      "skipped",
+      "read",
+    ];
     const incomplete = deliveries.filter(
-      (delivery) => !["sent", "delivered", "queued", "sent_via_sms_fallback"].includes(delivery.status),
+      (delivery) => !ACCEPTABLE_STATUSES.includes(delivery.status),
     );
+
 
     if (incomplete.length > 0) {
       // Surface silent suppressions (e.g. missing WhatsApp template, email

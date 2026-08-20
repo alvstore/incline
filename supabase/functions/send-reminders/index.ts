@@ -1,4 +1,4 @@
-// send-reminders v2.2 — skip payment reminders when invoice is paid / void / zero balance.
+// send-reminders v2.3 — channel-correct template resolution + local variable substitution.
 import { captureEdgeError } from "../_shared/capture-edge-error.ts";
 // Honest-delivery for ALL reminder types: payment, membership_expiry, class,
 // PT, benefit. Each reminder honors the per-branch reminder_configurations
@@ -344,20 +344,41 @@ Deno.serve(async (req) => {
         type: "warning", category: "payment", action_url: "/my-invoices",
       });
 
-      // Resolve approved WhatsApp template for this event so Meta accepts it.
-      const { data: tpl } = await adminClient
+      const channel = (reminder.channel as Channel) || getChannel(reminder.branch_id, "payment_due");
+
+      // Resolve the template for THIS channel. The WhatsApp template body is
+      // only meaningful to Meta (positional {{1}} slots) — reusing it as the
+      // email/SMS body leaked "Dear {{1}}" / "₹{{2}}" to recipients.
+      let tplQuery = adminClient
         .from("templates")
         .select("id, content, subject")
-        .eq("type", "whatsapp")
-        .eq("trigger_event", triggerEvent)
-        .eq("meta_template_status", "APPROVED")
+        .eq("type", channel)
+        .eq("trigger_event", triggerEvent);
+      if (channel === "whatsapp") {
+        tplQuery = tplQuery.eq("meta_template_status", "APPROVED");
+      }
+      const { data: tpl } = await tplQuery
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      const whatsappApproved = channel === "whatsapp" ? tpl : null;
+
+
       const subject = "Payment Reminder";
       const fallbackMsg = `Hi ${name}, ₹${pendingAmt.toFixed(0)} is ${reminderCopy} on invoice ${invoice?.invoice_number || ""}.${paymentLink ? ` Pay now: ${paymentLink}` : " Open the app to pay."}`;
-      const channel = (reminder.channel as Channel) || getChannel(reminder.branch_id, "payment_due");
+
+      // Substitute named variables locally; never let a raw placeholder ship.
+      const renderBody = (raw?: string | null): string => {
+        if (!raw) return fallbackMsg;
+        const rendered = raw.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key: string) =>
+          Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match,
+        );
+        return rendered.includes("{{") ? fallbackMsg : rendered;
+      };
+
+      const outboundBody =
+        channel === "whatsapp" ? whatsappApproved?.content || fallbackMsg : renderBody(tpl?.content);
 
       // Use dispatcher directly so we can pass template_id + variables.
       let deliveryStatus: "sent" | "failed" | "skipped" = "skipped";
@@ -369,10 +390,10 @@ Deno.serve(async (req) => {
             channel,
             category: "transactional",
             recipient: channel === "email" ? member.profiles?.email : member.profiles?.phone,
-            template_id: channel === "whatsapp" ? tpl?.id ?? null : null,
+            template_id: channel === "whatsapp" ? whatsappApproved?.id ?? null : null,
             payload: {
               subject: tpl?.subject || subject,
-              body: tpl?.content || fallbackMsg,
+              body: outboundBody,
               variables,
             },
             dedupe_key: `payment_reminder:${reminder.id}`,
@@ -385,6 +406,7 @@ Deno.serve(async (req) => {
       } catch (e) {
         deliveryStatus = "failed"; deliveryErr = (e as Error).message;
       }
+
 
       await adminClient
         .from("payment_reminders")
