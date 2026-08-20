@@ -714,6 +714,7 @@ export default function AttendanceDashboard() {
             </Button>
           </div>
         </div>
+        )}
 
         {/* Staff Search Results from top bar */}
         {activeTab === 'staff-record' && staffSearchResults.length > 0 && searchQuery.length >= 2 && (
