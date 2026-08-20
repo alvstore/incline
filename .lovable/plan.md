@@ -1,42 +1,35 @@
-# Plan: Trainer Dashboard & Security Audit
+# Plan: Trainer Profile & Payroll Enhancements
 
-Hardening the application for Trainers by strictly scoping access to assigned clients, tasks, and branch resources.
+Enhance the trainer experience by providing transparent profile details, fixed Store access, and accurate payroll calculations including dual-shift bonuses.
+
+## Technical Details
+
+### 1. Trainer Profile Enhancements
+- **File**: `src/pages/Profile.tsx`
+- **Action**: Add a "Staff Information" section for users with `trainer` or `staff` roles.
+- **Fields**: Address, Commission (PT Share %), Base Salary, and Aadhaar (last 4 digits).
+- **Data Source**: Fetched via `useUnifiedStaff` mapping or direct query to `trainers`/`employees` tables.
+- **Security**: These fields will be **read-only** for the trainer, consistent with HR management policy.
+
+### 2. Member Store Access Fix
+- **File**: `src/hooks/useMemberData.ts` (specifically `useUnifiedActor`)
+- **Action**: Correct the branch resolution logic. Currently, `MemberStore.tsx` relies on `member.branch_id`. For trainers, this should fall back to `trainer.branch_id`.
+- **Validation**: Ensure `actor.branch_id` is used consistently across the Store component.
+
+### 3. Payroll Logic Refinement
+- **File**: `src/pages/TrainerEarnings.tsx`
+- **Calculation Logic**:
+    - **Base Salary**: From `trainers.fixed_salary`.
+    - **Dual Shift Bonus**: Query `staff_attendance` for the selected month. For every day where `shift_date` has 2 or more records (morning + evening), add `(Fixed Salary / 30)` as a bonus.
+    - **PF Deduction**: 12% of `fixed_salary` only.
+- **UI Update**: Show a breakdown of "Standard Salary", "Dual Shift Bonuses", "PT Commissions", and "PF Deduction".
+- **Payslip Update**: Update `buildPayslipPdf` in `src/utils/pdfBlob.ts` (or the input passed from `TrainerEarnings.tsx`) to include these line items.
+
+### 4. Identity Resolution Hardening
+- **File**: `src/hooks/useUnifiedStaff.ts`
+- **Action**: Ensure `aadhaar_last4` and `government_id_number` are correctly mapped and masked (e.g., `XXXX XXXX 6519`) before reaching the UI.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - Trainers will no longer see "New Task" button; they can only manage tasks assigned to them.
-> - Trainers will only see PT Clients assigned to them in the Coaching Studio.
-> - The "Member Store" will be fixed for Trainer roles to ensure they can access it like members.
-
-- **Tasks**: Confirm if trainers should *ever* be allowed to create tasks for themselves (currently blocking creation entirely).
-- **PT Sessions**: Confirm if trainers should see the "Today's Sessions" tab (currently restricting to assigned clients).
-
-## Proposed Changes
-
-### Work & Tasks
-- **Hardening**: Modify `TasksHeader.tsx` to hide the "New Task" button for trainers.
-- **Workflow**: Ensure the `/tasks` route remains accessible but scoped via existing RLS.
-
-### Training & PT Studio
-- **Access Control**: Restrict `PTSessionsPage` so trainers only see the "Clients" tab by default, and only for their assigned clients.
-- **Privacy**: Hide "Insights & Revenue" (Analytics) from trainers in the Coaching Studio.
-
-### Client Management
-- **Progress Recording**: Update `MyClients.tsx` to ensure "Record Progress" (Measurements) works for both General and PT clients.
-- **Navigation**: Ensure trainers can see and record progress for clients who purchased packages from them.
-
-### Services & Store
-- **Identity Resolution**: Fix the `useUnifiedActor` hook to ensure trainers are recognized correctly as valid actors for the `MemberStore`.
-- **Route Fix**: Audit and fix the `/member-store` link in the sidebar for trainers.
-
-## Technical Details
-
-### Frontend Changes
-- **src/components/tasks/TasksHeader.tsx**: Add RBAC check for the "New Task" button.
-- **src/pages/PTSessions.tsx**: Update `Tabs` and `InsightsPanel` visibility based on `canManage`.
-- **src/pages/MyClients.tsx**: Verify measurement triggers for all client types.
-- **src/hooks/useMemberData.ts**: Harden `useUnifiedActor` to prevent identity resolution failures when a user has both trainer and staff/admin roles.
-
-### Security & RLS
-- **PII Protection**: Verify that the `search_members` and `member_measurements` policies allow trainers to read data for their assigned clients only.
+> - Should dual shifts be calculated automatically based on any 2 check-ins per day, or only if they belong to different `shift_type` (morning vs evening)?
