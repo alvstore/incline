@@ -581,6 +581,8 @@ export interface LogPtSessionInput {
   trainerId: string;
   notes?: string | null;
   status?: PtSessionStatusInput;
+  /** ISO date (yyyy-MM-dd). Defaults to today on the server. */
+  sessionDate?: string | null;
   /** Finish an already-scheduled pt_sessions row instead of creating a new one. */
   existingSessionId?: string | null;
 }
@@ -614,6 +616,7 @@ export async function logPtSession(
     p_status: input.status ?? 'completed',
     p_notes: input.notes ?? null,
     p_session_id: input.existingSessionId ?? null,
+    p_session_date: input.sessionDate ?? null,
   });
   if (error) {
     const friendly = PT_LOG_ERROR_MAP[error.message] ?? error.message;
