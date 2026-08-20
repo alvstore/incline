@@ -119,6 +119,15 @@ export default function AttendanceDashboard() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const tabParam = url.searchParams.get('tab');
+    
+    // Safety check for trainer role: if they try to access a protected tab, redirect to personal attendance
+    if (actorRoles.includes('trainer') && !actorRoles.includes('staff') && !actorRoles.includes('manager') && !actorRoles.includes('admin') && !actorRoles.includes('owner')) {
+      if (tabParam !== 'pt' && activeTab !== 'pt') {
+        window.location.href = '/my-attendance';
+        return;
+      }
+    }
+
     if (tabParam && ['members','staff-record','staff-log','pt','history'].includes(tabParam)) {
       setActiveTab(tabParam);
       url.searchParams.delete('tab');
@@ -134,7 +143,7 @@ export default function AttendanceDashboard() {
       url.searchParams.delete('checkin');
       window.history.replaceState({}, '', url.toString());
     }
-  }, []);
+  }, [actorRoles, activeTab]);
 
   // Staff search results for top bar
   const [staffSearchResults, setStaffSearchResults] = useState<any[]>([]);
@@ -580,7 +589,7 @@ export default function AttendanceDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {canForceEntry && (
+            {isAdmin && canForceEntry && (
               <Button variant="outline" className="gap-2 border-warning text-warning hover:bg-warning/10" onClick={() => setForceEntryOpen(true)}>
                 <ShieldAlert className="h-4 w-4" />
                 Force Entry
@@ -639,9 +648,9 @@ export default function AttendanceDashboard() {
           </div>
         )}
 
-        {/* Rapid-Entry Search Bar */}
-        <div className="space-y-2">
-          {canRecordStaff && (
+        {/* Rapid-Entry Search Bar (Management Roles Only) */}
+        {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+          <div className="space-y-2">
             <div className="inline-flex items-center gap-1 p-1 rounded-full bg-muted/60 border">
               <button
                 type="button"
@@ -657,13 +666,15 @@ export default function AttendanceDashboard() {
               >
                 <Dumbbell className="inline h-3.5 w-3.5 mr-1" />PT Sessions
               </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
-              </button>
+              {hasAnyRole(['owner', 'admin', 'manager']) && (
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('staff-record'); setSearchQuery(''); }}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${activeTab === 'staff-record' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <UserCheck className="inline h-3.5 w-3.5 mr-1" />Staff Check-in
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { setActiveTab('staff-log'); setSearchQuery(''); }}
@@ -679,7 +690,6 @@ export default function AttendanceDashboard() {
                 <History className="inline h-3.5 w-3.5 mr-1" />History
               </button>
             </div>
-          )}
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Scan className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -704,6 +714,7 @@ export default function AttendanceDashboard() {
             </Button>
           </div>
         </div>
+        )}
 
         {/* Staff Search Results from top bar */}
         {activeTab === 'staff-record' && staffSearchResults.length > 0 && searchQuery.length >= 2 && (
@@ -933,12 +944,30 @@ export default function AttendanceDashboard() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-4 hidden">
-                <TabsTrigger value="members">Members</TabsTrigger>
-                <TabsTrigger value="pt">PT Sessions</TabsTrigger>
-                <TabsTrigger value="staff-record">Staff Check-in</TabsTrigger>
-                <TabsTrigger value="staff-log">Staff Log</TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
+              <TabsList className="bg-muted/50 rounded-xl p-1 h-auto flex-wrap mb-4">
+                {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+                  <TabsTrigger value="members" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                    <Users className="h-3.5 w-3.5" />Members
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="pt" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                  <Dumbbell className="h-3.5 w-3.5" />PT Clients
+                </TabsTrigger>
+                {hasAnyRole(['owner', 'admin', 'manager']) && (
+                  <TabsTrigger value="staff-record" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                    <UserCheck className="h-3.5 w-3.5" />Record Staff
+                  </TabsTrigger>
+                )}
+                {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
+                  <>
+                    <TabsTrigger value="staff-log" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <Clock className="h-3.5 w-3.5" />Staff Log
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="rounded-lg gap-2 data-[state=active]:shadow-md py-2">
+                      <History className="h-3.5 w-3.5" />History
+                    </TabsTrigger>
+                  </>
+                )}
               </TabsList>
 
               {/* PT Sessions Tab */}
