@@ -273,7 +273,7 @@ function RoutedContent() {
           <Route path="/equipment-maintenance" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><EquipmentMaintenancePage /></ProtectedRoute>} />
           <Route path="/lockers" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><LockersPage /></ProtectedRoute>} />
           <Route path="/hrm" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><HRMPage /></ProtectedRoute>} />
-          <Route path="/tasks" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff']}><TasksPage /></ProtectedRoute>} />
+          <Route path="/tasks" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager', 'staff', 'trainer']}><TasksPage /></ProtectedRoute>} />
           <Route path="/employees" element={<Navigate to="/hrm?tab=employees" replace />} />
           <Route path="/trainers" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><TrainersPage /></ProtectedRoute>} />
           <Route path="/staff-roster" element={<ProtectedRoute requiredRoles={['owner', 'admin', 'manager']}><StaffRosterPage /></ProtectedRoute>} />

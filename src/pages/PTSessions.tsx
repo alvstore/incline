@@ -284,21 +284,25 @@ export default function PTSessionsPage() {
           onCancelInvoice={setCancelInvoiceTarget}
         />
 
-        <Tabs defaultValue="today" className="space-y-4">
+        <Tabs defaultValue={canManage ? "today" : "clients"} className="space-y-4">
           <TabsList className="rounded-xl bg-muted p-1">
-            <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              Today's Sessions
-            </TabsTrigger>
+            {canManage && (
+              <TabsTrigger value="today" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                Today's Sessions
+              </TabsTrigger>
+            )}
             <TabsTrigger value="clients" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
               Clients
             </TabsTrigger>
-            <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-              Packages
-            </TabsTrigger>
             {canManage && (
-              <TabsTrigger value="commissions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                Commissions
-              </TabsTrigger>
+              <>
+                <TabsTrigger value="packages" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  Packages
+                </TabsTrigger>
+                <TabsTrigger value="commissions" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  Commissions
+                </TabsTrigger>
+              </>
             )}
           </TabsList>
 

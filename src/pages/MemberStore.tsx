@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemberData } from '@/hooks/useMemberData';
+import { useUnifiedActor } from '@/hooks/useMemberData';
 import { useWallet } from '@/hooks/useWallet';
 import { ShoppingBag, Search, Package, AlertCircle, Loader2, Plus, Minus, ShoppingCart, Check, Tag, Wallet, Gift, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,7 +34,7 @@ interface AppliedDiscount {
 export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { member, activeMembership, isLoading: memberLoading } = useMemberData();
+  const { actor, member, activeMembership, isLoading: actorLoading } = useUnifiedActor();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -46,18 +46,18 @@ export default function MemberStore() {
   
 
   // Wallet data
-  const { data: wallet } = useWallet(member?.id || '');
+  const { data: wallet } = useWallet(actor?.id || '');
   const walletBalance = wallet?.balance || 0;
 
   // Fetch unclaimed referral rewards
   const { data: unclaimedRewards = [] } = useQuery({
-    queryKey: ['unclaimed-rewards', member?.id],
-    enabled: !!member?.id,
+    queryKey: ['unclaimed-rewards', actor?.id],
+    enabled: !!actor?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('referral_rewards')
         .select('*')
-        .eq('member_id', member!.id)
+        .eq('member_id', actor!.id)
         .eq('is_claimed', false);
       if (error) throw error;
       return data || [];
@@ -66,8 +66,8 @@ export default function MemberStore() {
 
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['store-products', member?.branch_id],
-    enabled: !!member,
+    queryKey: ['store-products', actor?.branch_id],
+    enabled: !!actor,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
@@ -272,7 +272,7 @@ export default function MemberStore() {
     },
   });
 
-  if (memberLoading || productsLoading) {
+  if (actorLoading || productsLoading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
@@ -499,10 +499,10 @@ export default function MemberStore() {
 
         {/* Recovery & add-ons */}
         <AddOnShowcase
-          memberId={member.id}
-          memberName={(member as any).profiles?.full_name}
+          memberId={actor.id}
+          memberName={(actor as any).profiles?.full_name || (actor as any).full_name}
           membershipId={activeMembership?.id ?? null}
-          branchId={member.branch_id}
+          branchId={actor.branch_id}
         />
 
 
