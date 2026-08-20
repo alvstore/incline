@@ -113,7 +113,7 @@ export default function MemberAnnouncements() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-4xl space-y-5 pb-6">
+      <div className="mx-auto max-w-4xl space-y-5 pb-6 px-4 sm:px-0">
         {/* Hero */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-accent p-6 text-primary-foreground shadow-lg shadow-primary/20 sm:p-7">
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary-foreground/10 blur-2xl" aria-hidden="true" />

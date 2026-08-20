@@ -125,7 +125,7 @@ export default function MyAttendance() {
 
   return (
     <AppLayout>
-      <div className="space-y-5 pb-8">
+      <div className="space-y-5 pb-8 p-1 sm:p-0">
         <PlanPageHero
           eyebrow="My attendance"
           title="Your training history"

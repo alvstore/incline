@@ -513,9 +513,10 @@ function DutyStatusCard({ userId }: { userId: string }) {
         )}
 
         <div className="flex flex-wrap gap-3 pt-1">
+          {/* Synchronized with MIPS: only manual override button shown for edge cases */}
           <Button
             size="lg"
-            disabled={punch.isPending || (isOff && !openPunch)}
+            disabled={punch.isPending}
             onClick={onPunch}
             className={openPunch
               ? 'bg-destructive hover:bg-destructive text-primary-foreground'
@@ -523,12 +524,15 @@ function DutyStatusCard({ userId }: { userId: string }) {
           >
             {punch.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> :
               openPunch ? <Square className="h-4 w-4 mr-2 fill-current" /> : <Play className="h-4 w-4 mr-2 fill-current" />}
-            {openPunch ? `Clock Out · ${labelFor(openPunch.shift_type)}` : `Clock In · ${labelFor(suggested)} Shift`}
+            {openPunch ? `Manual Clock Out` : `Manual Clock In`}
           </Button>
           {isOff && !openPunch && (
             <p className="text-sm text-muted-foreground self-center">Enjoy your rest day — no shift scheduled.</p>
           )}
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          Attendance is primary synchronized via Biometric MIPS. Use manual punch only if the turnstile is unreachable.
+        </p>
       </CardContent>
     </Card>
   );

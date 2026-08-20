@@ -210,7 +210,7 @@ export function AppHeader({ variant = 'standalone', showBrand = false }: AppHead
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
-            {isAdmin && (
+            {hasAnyRole(['owner', 'admin', 'manager', 'staff']) && (
               <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>

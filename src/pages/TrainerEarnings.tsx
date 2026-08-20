@@ -90,7 +90,9 @@ export default function TrainerEarnings() {
   const estimatedEarnings = totalSessionsCompleted * sessionRate;
   const totalCommissions = commissions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
   const baseSalary = (trainer as any)?.salary || 0;
+  // Payroll Audit FIX: Total pay = Base Salary + (Completed Sessions × Hourly Rate) + Commissions
   const grossPay = baseSalary + estimatedEarnings + totalCommissions;
+  // PF is 12% of Base Salary only
   const pfDeduction = Math.round(baseSalary * 0.12);
   const netPay = grossPay - pfDeduction;
 
