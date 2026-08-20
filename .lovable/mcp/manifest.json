@@ -1,0 +1,302 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://iyqqpbvnszyrrgerniog.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "incline-rise-reflect-repeat",
+      "version": "0.1.0",
+      "title": "Incline - Rise. Reflect.Repeat."
+    },
+    "tools": [
+      {
+        "name": "search_members",
+        "title": "Search members",
+        "description": "Find gym members by name, member code, phone or email. Returns member code, name, contact, branch and status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name, member code, phone or email fragment."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "Max results (default 20)."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_member_overview",
+        "title": "Get member overview",
+        "description": "Full snapshot for one member by member code: profile, current membership dates and status, outstanding invoice dues and recent gym check-ins.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member_code": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Member code, e.g. INC-26-0042."
+            }
+          },
+          "required": [
+            "member_code"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_outstanding_dues",
+        "title": "List outstanding dues",
+        "description": "List invoices with money still to collect (unpaid, partially paid or overdue), newest first, with the pending amount per invoice.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Max invoices (default 25)."
+            },
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Restrict to one branch."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "attendance_summary",
+        "title": "Attendance summary",
+        "description": "Gym check-in activity for one calendar day (IST). Returns the check-in count and the individual check-in/check-out records.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Day in YYYY-MM-DD (IST). Defaults to today."
+            },
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Restrict to one branch."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_leads",
+        "title": "List leads",
+        "description": "List CRM leads, newest first, optionally filtered by status or branch. Returns name, contact, source, status and next action.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Lead status filter, e.g. new, contacted, won, lost."
+            },
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Restrict to one branch."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Max leads (default 25)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_lead",
+        "title": "Create lead",
+        "description": "Add a new enquiry/lead to the CRM with name, phone and optional email, branch, source and notes.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "full_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Lead's full name."
+            },
+            "phone": {
+              "type": "string",
+              "minLength": 6,
+              "description": "Contact number, ideally in +91XXXXXXXXXX form."
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "description": "Email address."
+            },
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Branch the lead belongs to."
+            },
+            "source": {
+              "type": "string",
+              "description": "Where the lead came from, e.g. walk_in, instagram, referral."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Free-text context about the enquiry."
+            }
+          },
+          "required": [
+            "full_name",
+            "phone"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_tasks",
+        "title": "List staff tasks",
+        "description": "List operational staff tasks with title, priority, status, due date and assignee. Optionally filter by status or branch.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Task status filter, e.g. pending, in_progress, completed."
+            },
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Restrict to one branch."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Max tasks (default 25)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_branches",
+        "title": "List branches",
+        "description": "List gym branches the signed-in user can see, with id, name, code, city and opening hours. Use the id to scope other tools.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "active_only": {
+              "type": "boolean",
+              "description": "Only active branches (default true)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_membership_plans",
+        "title": "List membership plans",
+        "description": "List membership plans with duration, price, discounted price and GST settings for a branch.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "branch_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Restrict to one branch."
+            },
+            "active_only": {
+              "type": "boolean",
+              "description": "Only active plans (default true)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
