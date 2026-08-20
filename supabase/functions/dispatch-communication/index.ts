@@ -501,6 +501,20 @@ Deno.serve(async (req) => {
   if (!validChannels.includes(input.channel)) return bad(400, { error: 'invalid_channel' });
   if (!input.payload?.body) return bad(400, { error: 'missing_payload_body' });
 
+  // Freeform guard: email/SMS/in-app bodies are sent verbatim, so an unresolved
+  // placeholder ("Dear {{1}}", "₹{{2}}") would reach the recipient. WhatsApp is
+  // exempt — its {{n}} slots are filled by Meta from the template variables.
+  if (input.channel !== 'whatsapp' && !input.template_id) {
+    const remaining = String(input.payload.body).match(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g);
+    if (remaining?.length) {
+      return bad(400, {
+        error: 'unresolved_placeholders',
+        details: Array.from(new Set(remaining)).join(', '),
+      });
+    }
+  }
+
+
   // Normalize phone recipients to E.164 (digits only) for whatsapp/sms/rcs.
   // Defaults to India (+91) when no country code is present.
   if (input.channel === 'whatsapp' || input.channel === 'sms' || input.channel === 'rcs') {
