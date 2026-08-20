@@ -142,7 +142,12 @@ export function MarkPtStatusMenu({
               <DropdownMenuItem
                 key={opt.value}
                 className="cursor-pointer gap-2"
-                onSelect={(e) => { e.preventDefault(); setNotes(''); setPending(opt.value); }}
+                onSelect={(e) => { 
+                  e.preventDefault(); 
+                  setNotes(''); 
+                  setSessionDate(new Date().toISOString().split('T')[0]);
+                  setPending(opt.value); 
+                }}
               >
                 <Icon className={`h-4 w-4 ${opt.cls}`} />
                 {opt.label}
