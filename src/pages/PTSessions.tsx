@@ -100,6 +100,9 @@ export default function PTSessionsPage() {
   const trainerRevenue = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; clients: number }>();
     activePackages?.forEach((pkg: any) => {
+      // If trainer, only include own revenue
+      if (isTrainer && !canManage && pkg.trainer?.user_id !== user?.id) return;
+      
       const id = pkg.trainer_id || 'unknown';
       const existing = map.get(id) || { name: pkg.trainer_name || 'Unassigned', revenue: 0, clients: 0 };
       existing.revenue += pkg.price_paid || 0;
@@ -107,7 +110,7 @@ export default function PTSessionsPage() {
       map.set(id, existing);
     });
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [activePackages]);
+  }, [activePackages, isTrainer, canManage, user?.id]);
 
   const totalRevenue = trainerRevenue.reduce((sum, t) => sum + t.revenue, 0);
 
