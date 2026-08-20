@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { signAttachmentUrl } from '@/lib/documents/signAttachment';
+import { PlanViewerSheet } from '@/components/fitness/PlanViewerSheet';
 
 interface PlanTemplateRow {
   id: string;
@@ -20,10 +21,12 @@ interface PlanTemplateRow {
   goal: string | null;
   difficulty: string | null;
   source_kind: string | null;
+  content: unknown;
   pdf_url: string | null;
   pdf_filename: string | null;
   created_at: string;
 }
+
 
 export default function Templates() {
   const [planType, setPlanType] = useState<'workout' | 'diet'>('workout');
