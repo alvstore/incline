@@ -15037,16 +15037,28 @@ export type Database = {
         }
         Returns: undefined
       }
-      log_pt_session: {
-        Args: {
-          p_member_pt_package_id: string
-          p_notes?: string
-          p_session_id?: string
-          p_status?: string
-          p_trainer_id: string
-        }
-        Returns: Json
-      }
+      log_pt_session:
+        | {
+            Args: {
+              p_member_pt_package_id: string
+              p_notes?: string
+              p_session_id?: string
+              p_status?: string
+              p_trainer_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_member_pt_package_id: string
+              p_notes?: string
+              p_session_date?: string
+              p_session_id?: string
+              p_status?: string
+              p_trainer_id: string
+            }
+            Returns: Json
+          }
       manages_branch: {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
