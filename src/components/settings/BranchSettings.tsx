@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Building2, Pencil, UserCircle } from 'lucide-react';
 import { useBranches } from '@/hooks/useBranches';
-import { AddBranchDialog } from '@/components/branches/AddBranchDialog';
+import { AddBranchDrawer } from '@/components/branches/AddBranchDrawer';
 import { EditBranchDrawer } from '@/components/branches/EditBranchDrawer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,7 +60,7 @@ export function BranchSettings() {
           <Plus className="mr-2 h-4 w-4" />
           Add Branch
         </Button>
-        <AddBranchDialog open={addBranchOpen} onOpenChange={setAddBranchOpen} />
+        <AddBranchDrawer open={addBranchOpen} onOpenChange={setAddBranchOpen} />
       </div>
 
       <Card>

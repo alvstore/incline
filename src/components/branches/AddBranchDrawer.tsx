@@ -12,12 +12,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, MapPin, Clock, Phone, Mail, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface AddBranchDialogProps {
+interface AddBranchDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function AddBranchDialog({ open, onOpenChange }: AddBranchDialogProps) {
+export function AddBranchDrawer({ open, onOpenChange }: AddBranchDrawerProps) {
   const { hasAnyRole } = useAuth();
   const canCreateBranch = hasAnyRole(['owner', 'admin']);
 

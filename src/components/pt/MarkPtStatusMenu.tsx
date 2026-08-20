@@ -6,9 +6,8 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Clock, XCircle, Sun, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -157,21 +156,21 @@ export function MarkPtStatusMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={!!pending} onOpenChange={(v) => !v && !isLoading && setPending(null)}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
+      <Sheet open={!!pending} onOpenChange={(v) => !v && !isLoading && setPending(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
               Mark {pending ? OPTIONS.find(o => o.value === pending)?.label : ''} — {memberName}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
+            </SheetTitle>
+            <SheetDescription>
               {pending === 'holiday'
                 ? 'Logs a holiday entry. Does not consume a session.'
                 : pending === 'absent'
                   ? 'Logs an absent session. Consumes one session. No attendance check required for absence.'
                   : 'Logs completion. Verification: Member and Trainer MUST have checked in to the gym on the selected date.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-4 py-2">
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 py-6">
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">Session Date</label>
               <input 
@@ -192,23 +191,26 @@ export function MarkPtStatusMenu({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Focus: legs · 4 sets squat …"
-                rows={3}
+                rows={4}
               />
             </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+          <SheetFooter className="mt-auto pt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setPending(null)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
               disabled={isLoading}
               onClick={(e) => { e.preventDefault(); if (pending) mark.mutate(pending); }}
             >
               {isLoading
                 ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Logging…</>)
                 : 'Confirm'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
