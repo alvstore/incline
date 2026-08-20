@@ -24,7 +24,7 @@ interface Props {
   title?: string;
 }
 
-export function WhatsAppShareDialog({
+export function WhatsAppShareDrawer({
   open,
   onOpenChange,
   defaultPhone,
