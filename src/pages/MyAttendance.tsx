@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemberData } from '@/hooks/useMemberData';
+import { useMemberData, useTrainerData } from '@/hooks/useMemberData';
 import { AlertCircle, CalendarCheck, Flame, LogOut, Timer, Trophy } from 'lucide-react';
 import { format, eachMonthOfInterval, eachDayOfInterval, isAfter } from 'date-fns';
 import { toast } from 'sonner';
@@ -24,6 +24,7 @@ export default function MyAttendance() {
   const { member, isLoading: memberLoading } = useMemberData();
   const { trainer, isLoading: trainerLoading } = useTrainerData();
   const actor = member || trainer;
+  
   const [range, setRange] = useState<AttendanceRange>('month');
   const [anchor, setAnchor] = useState(new Date());
 
@@ -49,14 +50,17 @@ export default function MyAttendance() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as VisitRecord[];
+      return (data || []) as unknown as VisitRecord[];
     },
   });
 
   const checkOutMutation = useMutation({
     mutationFn: async (attendanceId: string) => {
+      const isTrainer = !!trainer && !member;
+      const table = isTrainer ? 'staff_attendance' : 'member_attendance';
+      
       const { error } = await supabase
-        .from('member_attendance')
+        .from(table as any)
         .update({ check_out: new Date().toISOString() })
         .eq('id', attendanceId);
       if (error) throw error;
@@ -107,7 +111,7 @@ export default function MyAttendance() {
 
   const canStepForward = isAfter(new Date(), bounds.end);
 
-  if (memberLoading) {
+  if (memberLoading || trainerLoading) {
     return (
       <AppLayout>
         <div className="space-y-4 p-1">
@@ -119,7 +123,7 @@ export default function MyAttendance() {
     );
   }
 
-  if (!member) {
+  if (!actor) {
     return (
       <AppLayout>
         <div className="flex min-h-[50vh] items-center justify-center px-4">
