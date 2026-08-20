@@ -149,8 +149,8 @@ export default function TrainerDashboard() {
               icon={Wallet}
               description={
                 monthEarnings
-                  ? `${monthEarnings.completedSessions} sessions${monthEarnings.commissionsTotal > 0 ? ` · ₹${monthEarnings.commissionsTotal.toLocaleString()} commission` : ''}`
-                  : 'View payslip'
+                  ? `Base salary + sessions + commissions`
+                  : 'View detailed breakdown'
               }
               variant="info"
             />
