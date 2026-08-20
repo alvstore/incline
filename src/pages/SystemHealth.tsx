@@ -26,7 +26,7 @@ import { StalledConversationsCard } from '@/components/system/StalledConversatio
 import { NurtureVarietyCard } from '@/components/system/NurtureVarietyCard';
 import { PolicyAuditCard } from '@/components/system/PolicyAuditCard';
 import { SystemAuditTab } from '@/components/system/SystemAuditTab';
-import { BulkAIPromptDialog } from '@/components/system/BulkAIPromptDialog';
+import { BulkAIPromptDrawer } from '@/components/system/BulkAIPromptDrawer';
 
 
 interface ErrorLog {
@@ -701,7 +701,7 @@ export default function SystemHealth() {
         </SheetContent>
       </Sheet>
 
-      <BulkAIPromptDialog
+      <BulkAIPromptDrawer
         open={bulkPromptOpen}
         onOpenChange={setBulkPromptOpen}
         errors={bulkPromptErrors as any}

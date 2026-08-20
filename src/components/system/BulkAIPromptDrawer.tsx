@@ -63,7 +63,7 @@ function buildGroupPrompt(errors: ErrorRow[], groupedBy: 'fingerprint' | 'select
   return `${header}\n\n${blocks.join('\n\n')}\n\nFor each cluster, list: (1) most likely root cause, (2) exact file(s) to edit, (3) the minimal code fix. If two clusters share a cause, say so and give one fix.`;
 }
 
-export function BulkAIPromptDialog({ open, onOpenChange, errors, groupedBy = 'selection' }: Props) {
+export function BulkAIPromptDrawer({ open, onOpenChange, errors, groupedBy = 'selection' }: Props) {
   const prompt = useMemo(() => (errors.length ? buildGroupPrompt(errors, groupedBy) : ''), [errors, groupedBy]);
   const [copied, setCopied] = useState(false);
 

@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
-} from '@/components/ui/dialog';
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription,
+} from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { pendingAdvanceForUser, applyAdvanceRecovery } from '@/services/expenseService';
 import { ClipboardCheck, CheckCircle2, Send, Banknote, PlusCircle, Loader2, Pencil, HandCoins, Eye } from 'lucide-react';
@@ -293,32 +293,32 @@ export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
         item={previewItem}
       />
 
-      {/* Pay dialog */}
-      <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mark {selectedIds.length} item(s) as Paid</DialogTitle>
-            <DialogDescription>Only items currently in <strong>processed</strong> status will be marked paid.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
+      {/* Pay Drawer */}
+      <Sheet open={payOpen} onOpenChange={setPayOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Mark {selectedIds.length} item(s) as Paid</SheetTitle>
+            <SheetDescription>Only items currently in <strong>processed</strong> status will be marked paid.</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 py-6">
+            <div className="space-y-2">
               <Label>Payment Method</Label>
               <Input value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label>Reference</Label>
               <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="UTR / Cheque / Txn ID" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
-            <Button onClick={() => payMut.mutate()} disabled={payMut.isPending}>
+          <SheetFooter className="mt-auto pt-4 flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setPayOpen(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={() => payMut.mutate()} disabled={payMut.isPending}>
               {payMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirm Paid
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

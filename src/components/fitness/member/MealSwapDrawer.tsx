@@ -21,7 +21,7 @@ import {
 import type { MealEntry } from '@/types/fitnessPlan';
 import { toast } from 'sonner';
 
-interface MealSwapDialogProps {
+interface MealSwapDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memberId: string;
@@ -45,7 +45,7 @@ function macroFromMeal(meal: MealEntry): number {
   return 0;
 }
 
-export function MealSwapDialog({
+export function MealSwapDrawer({
   open,
   onOpenChange,
   memberId,
@@ -56,7 +56,7 @@ export function MealSwapDialog({
   dietaryType,
   cuisine,
   onSwapComplete,
-}: MealSwapDialogProps) {
+}: MealSwapDrawerProps) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState<string | null>(null);

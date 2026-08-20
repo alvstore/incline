@@ -16,9 +16,9 @@ import { useQuery } from '@tanstack/react-query';
 import { buildShoppingList } from '@/services/memberPlanProgressService';
 import type { DietPlanContent } from '@/types/fitnessPlan';
 import { toast } from 'sonner';
-import { WhatsAppShareDialog } from './WhatsAppShareDialog';
+import { WhatsAppShareDrawer } from './WhatsAppShareDrawer';
 
-interface ShoppingListDialogProps {
+interface ShoppingListDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   diet: DietPlanContent | null;
@@ -28,7 +28,7 @@ interface ShoppingListDialogProps {
   defaultPhone?: string | null;
 }
 
-export function ShoppingListDialog({
+export function ShoppingListDrawer({
   open,
   onOpenChange,
   diet,
@@ -36,7 +36,7 @@ export function ShoppingListDialog({
   branchId,
   memberId,
   defaultPhone,
-}: ShoppingListDialogProps) {
+}: ShoppingListDrawerProps) {
   const [days, setDays] = useState(7);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -157,7 +157,7 @@ export function ShoppingListDialog({
         </ResponsiveSheetFooter>
       </ResponsiveSheet>
 
-      <WhatsAppShareDialog
+      <WhatsAppShareDrawer
         open={shareOpen}
         onOpenChange={setShareOpen}
         branchId={branchId ?? null}
