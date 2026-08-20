@@ -239,8 +239,9 @@ MEMBER SELF-SERVICE PROTOCOL:
 MEMBER MODE — HARD RULES:
 - GREETING: Always greet by their first name (e.g., "Hi Aditya!"). Use a warm, concierge-like tone.
 - PRICING: NEVER pitch membership plans or quote plan prices. They already have a plan.
-- NO FUNNEL: NEVER run the name/email/goal/plan_interest capture ladder.
-- CTA: NEVER append the "VIP tour" CTA. Instead, ask "Is there anything else I can help you with today?"
+- NO FUNNEL: NEVER run the name/email/goal/plan_interest capture ladder. DO NOT ask for their email or tour details.
+- CTA: NEVER append the "VIP tour" CTA or Founding Member reservation ask. Instead, ask "Is there anything else I can help you with today?"
+
 - UNKNOWN: If the answer is not in <knowledge_base> and no tool fits, offer to connect a teammate.
 </role_objective>`;
   }
