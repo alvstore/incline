@@ -349,17 +349,21 @@ Deno.serve(async (req) => {
       // Resolve the template for THIS channel. The WhatsApp template body is
       // only meaningful to Meta (positional {{1}} slots) — reusing it as the
       // email/SMS body leaked "Dear {{1}}" / "₹{{2}}" to recipients.
-      const { data: tpl } = await adminClient
+      let tplQuery = adminClient
         .from("templates")
         .select("id, content, subject")
-        .eq("type", channel === "whatsapp" ? "whatsapp" : channel)
-        .eq("trigger_event", triggerEvent)
+        .eq("type", channel)
+        .eq("trigger_event", triggerEvent);
+      if (channel === "whatsapp") {
+        tplQuery = tplQuery.eq("meta_template_status", "APPROVED");
+      }
+      const { data: tpl } = await tplQuery
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      const whatsappApproved =
-        channel === "whatsapp" ? tpl : null;
+      const whatsappApproved = channel === "whatsapp" ? tpl : null;
+
 
       const subject = "Payment Reminder";
       const fallbackMsg = `Hi ${name}, ₹${pendingAmt.toFixed(0)} is ${reminderCopy} on invoice ${invoice?.invoice_number || ""}.${paymentLink ? ` Pay now: ${paymentLink}` : " Open the app to pay."}`;
