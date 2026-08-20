@@ -82,8 +82,9 @@ export default function MemberStore() {
       
       return (data || []).map(product => ({
         ...product,
-        inventory: product.inventory?.filter((inv: any) => inv.branch_id === member!.branch_id) || []
+        inventory: product.inventory?.filter((inv: any) => inv.branch_id === actor!.branch_id) || []
       }));
+
     },
   });
 
