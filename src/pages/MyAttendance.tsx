@@ -22,19 +22,25 @@ import {
 export default function MyAttendance() {
   const queryClient = useQueryClient();
   const { member, isLoading: memberLoading } = useMemberData();
+  const { trainer, isLoading: trainerLoading } = useTrainerData();
+  const actor = member || trainer;
   const [range, setRange] = useState<AttendanceRange>('month');
   const [anchor, setAnchor] = useState(new Date());
 
   const bounds = useMemo(() => resolveBounds(range, anchor), [range, anchor]);
 
   const { data: attendance = [], isLoading: attendanceLoading } = useQuery({
-    queryKey: ['my-attendance', member?.id, range, bounds.start?.toISOString() ?? 'all'],
-    enabled: !!member,
+    queryKey: ['my-attendance', actor?.id, range, bounds.start?.toISOString() ?? 'all'],
+    enabled: !!actor,
     queryFn: async () => {
+      const isTrainer = !!trainer && !member;
+      const table = isTrainer ? 'staff_attendance' : 'member_attendance';
+      const idColumn = isTrainer ? 'staff_id' : 'member_id';
+
       let query = supabase
-        .from('member_attendance')
+        .from(table as any)
         .select('id, check_in, check_out')
-        .eq('member_id', member!.id)
+        .eq(idColumn, actor!.id)
         .order('check_in', { ascending: false });
 
       if (bounds.start) {
