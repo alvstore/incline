@@ -65,7 +65,13 @@ export function MarkPtStatusMenu({
 
   const mark = useMutation({
     mutationFn: (status: PtSessionStatusInput) =>
-      logPtSession({ memberPackageId, trainerId, status, notes: notes.trim() || undefined }),
+      logPtSession({ 
+        memberPackageId, 
+        trainerId, 
+        status, 
+        notes: notes.trim() || undefined,
+        sessionDate: sessionDate
+      }),
     onMutate: async (status) => {
       // Snapshot + optimistically patch every cache that could hold this row
       const snapshots: Array<[readonly unknown[], unknown]> = [];
