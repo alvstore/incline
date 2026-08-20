@@ -15059,6 +15059,7 @@ export type Database = {
             }
             Returns: Json
           }
+      maintain_log_sizes: { Args: never; Returns: undefined }
       manages_branch: {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
