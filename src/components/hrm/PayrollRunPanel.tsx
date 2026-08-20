@@ -36,10 +36,16 @@ interface Props {
 
 export function PayrollRunPanel({ branchId, periodStart, periodEnd }: Props) {
   const qc = useQueryClient();
+  const { hasAnyRole } = useAuth();
+  const isAdmin = hasAnyRole(['admin', 'owner', 'manager']);
+  
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adjustItem, setAdjustItem] = useState<any | null>(null);
-  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustDrawerOpen, setAdjustDrawerOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<any | null>(null);
+  const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false);
+  
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [payRef, setPayRef] = useState('');
   const [payOpen, setPayOpen] = useState(false);
