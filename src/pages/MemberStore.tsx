@@ -34,7 +34,7 @@ interface AppliedDiscount {
 export default function MemberStore() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { actor, member, activeMembership, isLoading: memberLoading } = useMemberData();
+  const { actor, isLoading: actorLoading } = useUnifiedActor();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -272,7 +272,7 @@ export default function MemberStore() {
     },
   });
 
-  if (memberLoading || productsLoading) {
+  if (actorLoading || productsLoading) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
