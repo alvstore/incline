@@ -29,12 +29,16 @@ export default function Templates() {
   const [planType, setPlanType] = useState<'workout' | 'diet'>('workout');
   const [search, setSearch] = useState('');
 
+  const [preview, setPreview] = useState<PlanTemplateRow | null>(null);
+
   const { data: templates, isLoading, isError } = useQuery({
     queryKey: ['fitness-templates', planType],
     queryFn: async (): Promise<PlanTemplateRow[]> => {
       const { data, error } = await supabase
         .from('fitness_plan_templates')
-        .select('id,name,type,description,goal,difficulty,source_kind,pdf_url,pdf_filename,created_at')
+        .select(
+          'id,name,type,description,goal,difficulty,source_kind,content,pdf_url,pdf_filename,created_at',
+        )
         .eq('type', planType)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
@@ -51,18 +55,19 @@ export default function Templates() {
   );
 
   const handleOpen = async (template: PlanTemplateRow) => {
-    if (!template.pdf_url) {
-      toast.error('No PDF attached to this template');
+    if (template.source_kind === 'pdf' || template.pdf_url) {
+      try {
+        const signed = await signAttachmentUrl(template.pdf_url);
+        if (!signed) throw new Error('Could not create a download link');
+        window.open(signed, '_blank', 'noopener,noreferrer');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not open the PDF');
+      }
       return;
     }
-    try {
-      const signed = await signAttachmentUrl(template.pdf_url);
-      if (!signed) throw new Error('Could not create a download link');
-      window.open(signed, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not open the PDF');
-    }
+    setPreview(template);
   };
+
 
   return (
     <AppLayout>
